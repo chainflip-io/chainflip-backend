@@ -18,10 +18,10 @@ import { send } from 'shared/send';
 import { AccountRole, setupAccount } from 'shared/setup_account';
 import { Enum, Bytes as TsBytes } from 'scale-ts';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
-import { environmentNonNativeSignedCall } from 'generated/events/environment/nonNativeSignedCall';
-import { accountRolesAccountRoleRegistered } from 'generated/events/accountRoles/accountRoleRegistered';
-import { environmentBatchCompleted } from 'generated/events/environment/batchCompleted';
-import { swappingAccountCreationDepositAddressReady } from 'generated/events/swapping/accountCreationDepositAddressReady';
+import { environmentNonNativeSignedCallEvent } from 'generated/events/environment/nonNativeSignedCall';
+import { accountRolesAccountRoleRegisteredEvent } from 'generated/events/accountRoles/accountRoleRegistered';
+import { environmentBatchCompletedEvent } from 'generated/events/environment/batchCompleted';
+import { swappingAccountCreationDepositAddressReadyEvent } from 'generated/events/swapping/accountCreationDepositAddressReady';
 
 /// Codecs for the special LP deposit channel opening
 const encodedAddressCodec = Enum({
@@ -72,16 +72,10 @@ const blocksToExpiry = 120;
 
 async function observeNonNativeSignedCallAndRole<A = []>(cf: ChainflipIO<A>, scAccount: string) {
   await cf.stepUntilAllEventsOf({
-    nonNativeSignedCallEvent: {
-      name: 'Environment.NonNativeSignedCall',
-      schema: environmentNonNativeSignedCall,
-    },
-    accountRoleRegisteredEvent: {
-      name: 'AccountRoles.AccountRoleRegistered',
-      schema: accountRolesAccountRoleRegistered.refine(
-        (event) => event.accountId === scAccount && event.role === 'Operator',
-      ),
-    },
+    nonNativeSignedCallEvent: environmentNonNativeSignedCallEvent,
+    accountRoleRegisteredEvent: accountRolesAccountRoleRegisteredEvent.refine(
+      (event) => event.accountId === scAccount && event.role === 'Operator',
+    ),
   });
 }
 
@@ -233,7 +227,7 @@ async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
 
   await cf.all([
     (subcf) => observeNonNativeSignedCallAndRole(subcf, svmScAccount),
-    (subcf) => subcf.stepUntilEvent('Environment.BatchCompleted', environmentBatchCompleted),
+    (subcf) => subcf.stepUntilEvent(environmentBatchCompletedEvent),
   ]);
 }
 
@@ -440,12 +434,9 @@ async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Ass
         0,
         { [shortChainFromAsset(asset).toLowerCase()]: refundAddress },
       ),
-    expectedEvent: {
-      name: 'Swapping.AccountCreationDepositAddressReady',
-      schema: swappingAccountCreationDepositAddressReady.refine(
-        (event) => event.requestedBy === broker.address && event.requestedFor === evmScAccount,
-      ),
-    },
+    expectedEvent: swappingAccountCreationDepositAddressReadyEvent.refine(
+      (event) => event.requestedBy === broker.address && event.requestedFor === evmScAccount,
+    ),
   });
 
   const depositAddress = accountCreationAddressReadyEvent.depositAddress.address;

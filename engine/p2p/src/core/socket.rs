@@ -29,7 +29,13 @@ pub const RECONNECT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 /// Maximum incoming message size: if a remote tries sending a message larger than
 /// this they get disconnected (TODO: make sure this is slightly more that the
 /// theoretical maximum needed for multisig; 2MB is a conservative estimate.)
-const MAX_MESSAGE_SIZE: i64 = 2 * 1024 * 1024;
+pub(crate) const MAX_MESSAGE_SIZE: i64 = 2 * 1024 * 1024;
+
+/// Receive high-water mark for the incoming (ROUTER) socket. ZMQ buffers at most
+/// this many messages *per connected peer* before dropping further incoming
+/// messages from that peer. This bounds the memory ZMQ itself holds while our
+/// receive thread is busy (e.g. blocked on a full downstream queue).
+pub(crate) const INCOMING_MESSAGES_BUFFER_SIZE: i32 = 250;
 
 /// How often should ZMQ send heartbeat messages in order to detect
 /// dead connections sooner (setting this to 0 disables heartbeats)

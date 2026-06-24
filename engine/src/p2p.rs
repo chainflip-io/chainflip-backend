@@ -92,7 +92,7 @@ where
 	let own_peer_info = current_peers.iter().find(|pi| pi.account_id == our_account_id).cloned();
 
 	let (incoming_message_sender, incoming_message_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
+		engine_p2p::fair_channel::fair_channel(engine_p2p::core::INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 	let (outgoing_message_sender, outgoing_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();

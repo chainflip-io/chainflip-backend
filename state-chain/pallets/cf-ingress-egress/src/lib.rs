@@ -1303,31 +1303,78 @@ pub mod pallet {
 			if T::AllowTransactionReports::get() {
 				// A report gets cleaned up after approx 1 hour and needs to be re-reported by the
 				// broker if necessary. This is needed as some kind of garbage collection mechanism.
-				for (account_id, tx_id) in ReportExpiresAt::<T, I>::take(now) {
-					let _ = TransactionsMarkedForRejection::<T, I>::try_mutate(
+				//
+				// The cleanup is metered against the remaining on_idle weight: only as many
+				// entries as fit in the budget are processed and any remainder is deferred to the
+				// next block. This stops a broker from scheduling an unbounded amount of "free"
+				// cleanup work onto a single future block.
+				//
+				// Per-entry worst case: read the status, plus a possible reschedule append for a
+				// report whose expiry was extended after this index entry was queued. This is the
+				// same cost charged up-front when the report is marked.
+				let cleanup_weight_per_entry = Self::report_cleanup_weight();
+				let bookkeeping_weight =
+					frame_support::weights::constants::ParityDbWeight::get().reads_writes(1, 1);
+
+				let mut expiring = ReportExpiresAt::<T, I>::take(now);
+				// Account for the take above.
+				used_weight = used_weight.saturating_add(bookkeeping_weight);
+
+				// Reserve one bookkeeping write for the possible requeue below, so the cleanup
+				// never exceeds the remaining budget.
+				let to_process = remaining_weight
+					.saturating_sub(used_weight)
+					.saturating_sub(bookkeeping_weight)
+					.ref_time()
+					.checked_div(cleanup_weight_per_entry.ref_time())
+					.unwrap_or_default()
+					.saturated_into::<usize>()
+					.min(expiring.len());
+
+				for (account_id, tx_id) in expiring.drain(..to_process) {
+					// `Err(Some(new_expiry))` signals that the report was extended and its single
+					// index entry must be rescheduled rather than dropped.
+					let outcome = TransactionsMarkedForRejection::<T, I>::try_mutate(
 						&account_id,
 						&tx_id,
-						|status| {
-							match status.take() {
-								Some(TransactionRejectionStatus { prewitnessed, expires_at })
-									if !prewitnessed && expires_at == now =>
-								{
-									Self::deposit_event(
-										Event::<T, I>::TransactionRejectionRequestExpired {
-											account_id: account_id.clone(),
-											tx_id: tx_id.clone(),
-										},
-									);
-									Ok(())
-								},
-								_ => {
-									// Don't apply the mutation. We expect the pre-witnessed
-									// transaction to eventually be fully witnessed.
-									Err(())
-								},
-							}
+						|status| match status.take() {
+							Some(TransactionRejectionStatus { prewitnessed, expires_at })
+								if !prewitnessed && expires_at <= now =>
+							{
+								Self::deposit_event(
+									Event::<T, I>::TransactionRejectionRequestExpired {
+										account_id: account_id.clone(),
+										tx_id: tx_id.clone(),
+									},
+								);
+								Ok(())
+							},
+							// The report was extended after this entry was queued: keep the mark
+							// (Err rolls back the take) and reschedule the index entry.
+							Some(TransactionRejectionStatus {
+								prewitnessed: false,
+								expires_at,
+							}) => Err(Some(expires_at)),
+							// Pre-witnessed (await full witness) or already gone: keep the mark and
+							// drop this stale index entry.
+							_ => Err(None),
 						},
 					);
+					if let Err(Some(new_expiry)) = outcome {
+						ReportExpiresAt::<T, I>::append(new_expiry, (&account_id, &tx_id));
+					}
+				}
+				used_weight = used_weight
+					.saturating_add(cleanup_weight_per_entry.saturating_mul(to_process as u64));
+
+				// Defer any entries we couldn't afford to process to the next block, so the
+				// remaining cleanup is retried within budget rather than dropped.
+				if !expiring.is_empty() {
+					ReportExpiresAt::<T, I>::mutate(
+						now.saturating_add(BlockNumberFor::<T>::from(1u32)),
+						|next| next.append(&mut expiring),
+					);
+					used_weight = used_weight.saturating_add(bookkeeping_weight);
 				}
 			}
 
@@ -1655,7 +1702,12 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(12)]
-		#[pallet::weight(T::WeightInfo::mark_transaction_for_rejection())]
+		// The base benchmark covers the on-chain mark; the surcharge pre-pays the deferred
+		// `on_idle` cleanup that this report schedules (see `Pallet::report_cleanup_weight`).
+		#[pallet::weight(
+			T::WeightInfo::mark_transaction_for_rejection()
+				.saturating_add(Pallet::<T, I>::report_cleanup_weight())
+		)]
 		pub fn mark_transaction_for_rejection(
 			origin: OriginFor<T>,
 			tx_id: TransactionInIdFor<T, I>,
@@ -1724,6 +1776,11 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Weight to clean up a single expired transaction-rejection report in `on_idle`.
+	fn report_cleanup_weight() -> Weight {
+		frame_support::weights::constants::ParityDbWeight::get().reads_writes(2, 2)
+	}
+
 	fn mark_transaction_for_rejection_inner(
 		account_id: T::AccountId,
 		tx_id: TransactionInIdFor<T, I>,
@@ -1737,16 +1794,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 		let expires_at = <frame_system::Pallet<T>>::block_number()
 			.saturating_add(BlockNumberFor::<T>::from(MARKED_TX_EXPIRATION_BLOCKS));
-		TransactionsMarkedForRejection::<T, I>::try_mutate(&lookup_id, &tx_id, |opt| {
-			ensure!(
-				!opt.replace(TransactionRejectionStatus { prewitnessed: false, expires_at })
-					.map(|s| s.prewitnessed)
-					.unwrap_or_default(),
-				Error::<T, I>::TransactionAlreadyPrewitnessed
-			);
-			Ok::<_, DispatchError>(())
-		})?;
-		ReportExpiresAt::<T, I>::append(expires_at, (&lookup_id, &tx_id));
+		// Re-marking an already-marked transaction extends its expiry window, but must not add
+		// a second ReportExpiresAt entry. The single existing index entry is rescheduled to the
+		// new expiry when its current bucket is processed in `on_idle`, so repeated reports for
+		// the same transaction can't multiply the future cleanup work.
+		let is_new = TransactionsMarkedForRejection::<T, I>::try_mutate(
+			&lookup_id,
+			&tx_id,
+			|opt| match opt {
+				Some(status) => {
+					ensure!(!status.prewitnessed, Error::<T, I>::TransactionAlreadyPrewitnessed);
+					status.expires_at = expires_at;
+					Ok::<_, DispatchError>(false)
+				},
+				None => {
+					*opt = Some(TransactionRejectionStatus { prewitnessed: false, expires_at });
+					Ok(true)
+				},
+			},
+		)?;
+		if is_new {
+			ReportExpiresAt::<T, I>::append(expires_at, (&lookup_id, &tx_id));
+		}
 		Self::deposit_event(Event::<T, I>::TransactionRejectionRequestReceived {
 			account_id,
 			tx_id,

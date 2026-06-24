@@ -1,25 +1,20 @@
 #!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
-// This command takes 4 arguments:
-// 1 - Asset
-// 2 - Tier
-// 3 - Amount
-// 4 (optional) - Account URI (Default: "//LP_BOOST")
+// This command takes 2 arguments:
+// 1 - Amount
+// 2 (optional) - Account URI (Default: "//LP_BOOST")
 //
-// Adds existing funds to the specified boost pool and waits until it is confirmed via an event.
-// For example: ./commands/add_boost_funds.ts Btc 5 0.1 "//LP_2"
+// Adds existing funds to the BTC 5bps boost pool and waits until it is confirmed via an event.
+// For example: ./commands/add_boost_funds.ts 0.1 "//LP_2"
 
-import { runWithTimeoutAndExit, Asset } from 'shared/utils';
+import { runWithTimeoutAndExit } from 'shared/utils';
 import { addBoostFunds } from 'tests/boost';
 import { globalLogger } from 'shared/utils/logger';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 const cf = await newChainflipIO(globalLogger, {
-  account: fullAccountFromUri((process.argv[5] as `//LP${string}`) ?? '//LP_BOOST', 'LP'),
+  account: fullAccountFromUri((process.argv[3] as `//LP${string}`) ?? '//LP_BOOST', 'LP'),
 });
 
-await runWithTimeoutAndExit(
-  addBoostFunds(cf, process.argv[2] as Asset, Number(process.argv[3]), Number(process.argv[4])),
-  80,
-);
+await runWithTimeoutAndExit(addBoostFunds(cf, Number(process.argv[2])), 80);

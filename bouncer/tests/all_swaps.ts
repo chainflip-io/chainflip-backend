@@ -80,14 +80,13 @@ export function testAllSwaps(timeoutPerSwap: number) {
 
   // If we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
-  // BscUsdc and BscWbtc exist in the SDK but are not yet supported in the runtime.
-  const unsupportedBscAssets = new Set(['BscUsdc', 'BscWbtc']);
-  const AssetsWithoutAssethub = Object.values(Assets).filter(
-    (id) => chainFromAsset(id) !== 'Assethub' && !unsupportedBscAssets.has(id),
-  );
+  const AssetsForTesting = Object.values(Assets).filter((id) => {
+    const chain: string = chainFromAsset(id);
+    return chain !== 'Assethub';
+  });
 
-  AssetsWithoutAssethub.sort().forEach((sourceAsset) => {
-    AssetsWithoutAssethub.sort()
+  AssetsForTesting.sort().forEach((sourceAsset) => {
+    AssetsForTesting.sort()
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
@@ -118,7 +117,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
   // `testSwapsToAssethub`.
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
   assethubAssets.sort().forEach((hubAsset) => {
-    appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
+    appendSwap(hubAsset, randomElement(AssetsForTesting), testSwap);
   });
 
   for (const swap of allSwaps) {

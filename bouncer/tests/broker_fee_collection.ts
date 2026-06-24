@@ -29,10 +29,10 @@ import {
   newChainflipIO,
   WithBrokerAccount,
 } from 'shared/utils/chainflip_io';
-import { swappingSwapExecuted } from 'generated/events/swapping/swapExecuted';
+import { swappingSwapExecutedEvent } from 'generated/events/swapping/swapExecuted';
 import { AccountRole, setupAccount } from 'shared/setup_account';
-import { swappingWithdrawalRequested } from 'generated/events/swapping/withdrawalRequested';
-import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
+import { swappingWithdrawalRequestedEvent } from 'generated/events/swapping/withdrawalRequested';
+import { swappingSwapDepositAddressReadyEvent } from 'generated/events/swapping/swapDepositAddressReady';
 
 const commissionBps = 1000; // 10%
 
@@ -47,12 +47,9 @@ export async function submitBrokerWithdrawal<A extends WithBrokerAccount>(
 
   const withdrawalRequestedEvent = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.swapping.withdraw(asset, addressObject),
-    expectedEvent: {
-      name: 'Swapping.WithdrawalRequested',
-      schema: swappingWithdrawalRequested.refine(
-        (event) => event.accountId === broker.address && event.egressAsset === asset,
-      ),
-    },
+    expectedEvent: swappingWithdrawalRequestedEvent.refine(
+      (event) => event.accountId === broker.address && event.egressAsset === asset,
+    ),
   });
 
   cf.debug(
@@ -123,16 +120,13 @@ async function testBrokerFees<A extends WithBrokerAccount>(
         0,
         refundParams,
       ),
-    expectedEvent: {
-      name: 'Swapping.SwapDepositAddressReady',
-      schema: swappingSwapDepositAddressReady.refine(
-        (event) =>
-          event.destinationAddress.chain === chainFromAsset(destAsset) &&
-          event.destinationAddress.address === observeDestinationAddress.toLowerCase() &&
-          event.destinationAsset === destAsset &&
-          event.sourceAsset === inputAsset,
-      ),
-    },
+    expectedEvent: swappingSwapDepositAddressReadyEvent.refine(
+      (event) =>
+        event.destinationAddress.chain === chainFromAsset(destAsset) &&
+        event.destinationAddress.address === observeDestinationAddress.toLowerCase() &&
+        event.destinationAsset === destAsset &&
+        event.sourceAsset === inputAsset,
+    ),
   });
 
   const depositAddress = swapDepositAddressReadyEvent.depositAddress.address;
@@ -151,8 +145,7 @@ async function testBrokerFees<A extends WithBrokerAccount>(
   const requestId = swapRequestedEvent.swapRequestId;
 
   const swapExecutedEvent = await cf.stepUntilEvent(
-    'Swapping.SwapExecuted',
-    swappingSwapExecuted.refine((event) => event.swapRequestId === requestId),
+    swappingSwapExecutedEvent.refine((event) => event.swapRequestId === requestId),
   );
 
   cf.debug('brokerFee:', swapExecutedEvent.brokerFee);

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import * as ss58 from '@chainflip/utils/ss58';
 import * as base58 from '@chainflip/utils/base58';
 import { hexToBytes } from '@chainflip/utils/bytes';
+import { hexToTronAddress } from '@chainflip/utils/tron';
 
 export const numericString = z
   .string()
@@ -670,7 +671,7 @@ export const cfChainsAddressEncodedAddress = z
       case 'Hub':
         return { chain: 'Assethub', address: ss58.encode({ data: value, ss58Format: 0 }) } as const;
       case 'Tron':
-        return { chain: 'Tron', address: value } as const;
+        return { chain: 'Tron', address: hexToTronAddress(value) } as const;
       case 'Bsc':
         return { chain: 'Bsc', address: value } as const;
       default:
@@ -1730,6 +1731,12 @@ export const cfChainsSolSolTrackedData = z.object({ priorityFee: numberOrHex });
 export const cfChainsChainStateSolana = z.object({
   blockHeight: numberOrHex,
   trackedData: cfChainsSolSolTrackedData,
+});
+
+export const palletCfAssetBalancesPalletConfigUpdate = z.object({
+  __kind: z.literal('RefundFeeMultiple'),
+  chain: cfPrimitivesChainsForeignChain,
+  multiple: z.number().nullish(),
 });
 
 export const cfChainsHubAssethubTrackedData = z.object({

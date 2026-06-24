@@ -24,7 +24,7 @@ import { globalLogger, Logger } from 'shared/utils/logger';
 import { afterAll, beforeAll, describe } from 'vitest';
 import { concurrentTest } from 'shared/utils/vitest';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
-import { tronBroadcasterBroadcastAborted } from 'generated/events/tronBroadcaster/broadcastAborted';
+import { tronBroadcasterBroadcastAbortedEvent } from 'generated/events/tronBroadcaster/broadcastAborted';
 
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
@@ -431,8 +431,7 @@ async function testTronInsufficientGas<A = []>(
     }
   });
   await cf.stepUntilEvent(
-    'TronBroadcaster.BroadcastAborted',
-    tronBroadcasterBroadcastAborted.refine(
+    tronBroadcasterBroadcastAbortedEvent.refine(
       (data) => Number(data.broadcastId) === Number(broadcastId),
     ),
   );

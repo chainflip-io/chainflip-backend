@@ -4,6 +4,7 @@ import {
   cfChainsEvmSchnorrVerificationComponents,
   cfChainsEvmTransaction,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const bscBroadcasterTransactionBroadcastRequest = z.object({
   broadcastId: z.number(),
@@ -11,3 +12,8 @@ export const bscBroadcasterTransactionBroadcastRequest = z.object({
   transactionPayload: cfChainsEvmTransaction,
   transactionOutId: cfChainsEvmSchnorrVerificationComponents,
 });
+
+export const bscBroadcasterTransactionBroadcastRequestEvent = defineEvent(
+  'BscBroadcaster.TransactionBroadcastRequest',
+  bscBroadcasterTransactionBroadcastRequest,
+);

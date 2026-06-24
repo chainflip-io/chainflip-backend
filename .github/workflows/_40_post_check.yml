@@ -109,6 +109,7 @@ jobs:
           DEBUG_OUTPUT_DESTINATION: /dev/stdout
         run: |
           set -x
+          export BROKER_API_PORT="${BROKER_ENDPOINT##*:}"
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc

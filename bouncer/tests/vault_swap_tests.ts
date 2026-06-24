@@ -18,7 +18,7 @@ import {
   newChainflipIO,
   WithBrokerAccount,
 } from 'shared/utils/chainflip_io';
-import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
+import { bitcoinIngressEgressDepositFinalisedEvent } from 'generated/events/bitcoinIngressEgress/depositFinalised';
 
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
@@ -212,8 +212,9 @@ async function testInvalidBtcVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   cf.debug(`BTC vault swap txid is ${txId}, awaiting deposit finalised event...`);
 
   await cf.stepUntilEvent(
-    'BitcoinIngressEgress.DepositFinalised',
-    bitcoinIngressEgressDepositFinalised.refine((event) => event.action.__kind === 'Unrefundable'),
+    bitcoinIngressEgressDepositFinalisedEvent.refine(
+      (event) => event.action.__kind === 'Unrefundable',
+    ),
   );
 
   cf.info('Invalid BTC vault swap ingressed ✅.');

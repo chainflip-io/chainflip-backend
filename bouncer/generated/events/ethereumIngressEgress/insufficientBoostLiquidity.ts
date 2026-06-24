@@ -4,6 +4,7 @@ import {
   cfPrimitivesChainsAssetsEthAsset,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const ethereumIngressEgressInsufficientBoostLiquidity = z.object({
   prewitnessedDepositId: numberOrHex,
@@ -12,3 +13,8 @@ export const ethereumIngressEgressInsufficientBoostLiquidity = z.object({
   channelId: numberOrHex.nullish(),
   originType: cfChainsDepositOriginType,
 });
+
+export const ethereumIngressEgressInsufficientBoostLiquidityEvent = defineEvent(
+  'EthereumIngressEgress.InsufficientBoostLiquidity',
+  ethereumIngressEgressInsufficientBoostLiquidity,
+);

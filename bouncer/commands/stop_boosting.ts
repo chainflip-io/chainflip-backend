@@ -1,25 +1,23 @@
 #!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
-// This command takes 3 arguments:
-// 1 - Asset
-// 2 - Tier
-// 3 (optional) - Account URI (Default: "//LP_BOOST")
+// This command takes 1 argument:
+// 1 (optional) - Account URI (Default: "//LP_BOOST")
 //
-// Stops boosting for the specified boost pool, then waits for the `StoppedBoosting` event and prints it.
-// For example: ./commands/stop_boosting.ts Btc 5 "//LP_2"
+// Stops boosting BTC at the 5bps tier, then waits for the `StoppedBoosting` event and prints it.
+// For example: ./commands/stop_boosting.ts "//LP_2"
 
-import { runWithTimeoutAndExit, Asset } from 'shared/utils';
+import { runWithTimeoutAndExit } from 'shared/utils';
 import { stopBoosting } from 'tests/boost';
 import { globalLogger } from 'shared/utils/logger';
 import { newChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
 const cf = await newChainflipIO(globalLogger, {
-  account: fullAccountFromUri((process.argv[5] as `//LP${string}`) ?? '//LP_BOOST', 'LP'),
+  account: fullAccountFromUri((process.argv[2] as `//LP${string}`) ?? '//LP_BOOST', 'LP'),
 });
 
 async function main(): Promise<void> {
-  const event = await stopBoosting(cf, process.argv[2] as Asset, Number(process.argv[3]));
+  const event = await stopBoosting(cf);
   globalLogger.info(`Stopped boosting event: ${JSON.stringify(event)}`);
 }
 

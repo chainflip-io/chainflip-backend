@@ -5,6 +5,7 @@ import {
   cfTraitsScheduledEgressDetailsBitcoin,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const bitcoinIngressEgressTransferFallbackRequested = z.object({
   asset: cfPrimitivesChainsAssetsBtcAsset,
@@ -13,3 +14,8 @@ export const bitcoinIngressEgressTransferFallbackRequested = z.object({
   broadcastId: z.number(),
   egressDetails: cfTraitsScheduledEgressDetailsBitcoin.nullish(),
 });
+
+export const bitcoinIngressEgressTransferFallbackRequestedEvent = defineEvent(
+  'BitcoinIngressEgress.TransferFallbackRequested',
+  bitcoinIngressEgressTransferFallbackRequested,
+);

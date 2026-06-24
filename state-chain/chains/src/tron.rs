@@ -22,10 +22,10 @@ pub mod benchmarking;
 pub mod fees {
 	pub const ENERGY_BASE_COST_PER_BATCH: u128 = 40_000; // Base energy transaction cost
 	pub const ENERGY_COST_PER_FETCH_NATIVE: u128 = 5_000; // Cost to fetch tokens from deposit channel
-	pub const ENERGY_COST_PER_FETCH_TOKEN: u128 = 65_000; // Cost to fetch tokens from deposit channel
-	pub const ENERGY_COST_PER_TRANSFER_NATIVE: u128 = 10_000; // Native TRX transfer
-	pub const ENERGY_COST_PER_TRANSFER_TOKEN: u128 = 75_000; // TRC-20 token transfer
-	pub const ENERGY_CCM_OVERHEAD: u128 = 40_000;
+	pub const ENERGY_COST_PER_FETCH_TOKEN: u128 = 66_000; // Cost to fetch tokens from deposit channel
+	pub const ENERGY_COST_PER_TRANSFER_NATIVE: u128 = 15_000; // Native TRX transfer
+	pub const ENERGY_COST_PER_TRANSFER_TOKEN: u128 = 80_000; // TRC-20 token transfer
+	pub const ENERGY_CCM_OVERHEAD: u128 = 45_000;
 
 	// Bandwidth in out case depends on the length. Both types of fetches have the same length
 	// and transferring and fetching is the same length for native and token assets.

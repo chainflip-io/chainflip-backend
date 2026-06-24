@@ -15,7 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-	extract_liquidity_deposit_channel_details, fetch_preallocated_channels, SimpleSubmissionApi,
+	extract_liquidity_deposit_channel_details, fetch_preallocated_channels,
+	ExpectedLiquidityDepositChannel, SimpleSubmissionApi,
 };
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
@@ -180,6 +181,9 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		wait_for: WaitFor,
 		boost_fee: Option<BasisPoints>,
 	) -> Result<ApiWaitForResult<LiquidityDepositChannelDetails>> {
+		let expected_channel =
+			ExpectedLiquidityDepositChannel { asset, account_id: self.account_id() };
+
 		let wait_for_result = self
 			.submit_signed_extrinsic_wait_for(
 				pallet_cf_lp::Call::request_liquidity_deposit_address {
@@ -193,8 +197,10 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		Ok(match wait_for_result {
 			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
 			WaitForResult::Details(extrinsic_data) => {
-				let (_, details) =
-					extract_liquidity_deposit_channel_details(extrinsic_data.events)?;
+				let (_, details) = extract_liquidity_deposit_channel_details(
+					extrinsic_data.events,
+					&expected_channel,
+				)?;
 				ApiWaitForResult::TxDetails { tx_hash: extrinsic_data.tx_hash, response: details }
 			},
 		})
@@ -205,6 +211,9 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		asset: Asset,
 		boost_fee: Option<BasisPoints>,
 	) -> Result<ExtrinsicResponse<LiquidityDepositChannelDetails>> {
+		let expected_channel =
+			ExpectedLiquidityDepositChannel { asset, account_id: self.account_id() };
+
 		let submit_signed_extrinsic_fut = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_lp::Call::request_liquidity_deposit_address {
@@ -212,18 +221,23 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					boost_fee: boost_fee.unwrap_or_default(),
 				},
 			)
-			.and_then(|(_, (block_fut, finalized_fut))| async move {
-				let extrinsic_data = block_fut.until_in_block().await?;
-				let (channel_id, details) =
-					extract_liquidity_deposit_channel_details(extrinsic_data.events)?;
-				Ok((
-					channel_id,
-					details,
-					extrinsic_data.header,
-					extrinsic_data.tx_index,
-					extrinsic_data.block_hash,
-					finalized_fut,
-				))
+			.and_then({
+				let expected_channel = expected_channel.clone();
+				move |(_, (block_fut, finalized_fut))| async move {
+					let extrinsic_data = block_fut.until_in_block().await?;
+					let (channel_id, details) = extract_liquidity_deposit_channel_details(
+						extrinsic_data.events,
+						&expected_channel,
+					)?;
+					Ok((
+						channel_id,
+						details,
+						extrinsic_data.header,
+						extrinsic_data.tx_index,
+						extrinsic_data.block_hash,
+						finalized_fut,
+					))
+				}
 			})
 			.boxed();
 
@@ -250,7 +264,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		// Worst case, we need to wait for the transaction to be finalized.
 		let extrinsic_data = finalized_fut.until_finalized().await?;
 		let (_channel_id, details) =
-			extract_liquidity_deposit_channel_details(extrinsic_data.events)?;
+			extract_liquidity_deposit_channel_details(extrinsic_data.events, &expected_channel)?;
 		Ok(ExtrinsicResponse {
 			response: details,
 			tx_index: extrinsic_data.tx_index,

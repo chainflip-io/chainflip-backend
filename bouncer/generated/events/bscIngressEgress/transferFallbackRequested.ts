@@ -5,6 +5,7 @@ import {
   hexString,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const bscIngressEgressTransferFallbackRequested = z.object({
   asset: cfPrimitivesChainsAssetsBscAsset,
@@ -13,3 +14,8 @@ export const bscIngressEgressTransferFallbackRequested = z.object({
   broadcastId: z.number(),
   egressDetails: cfTraitsScheduledEgressDetailsBsc.nullish(),
 });
+
+export const bscIngressEgressTransferFallbackRequestedEvent = defineEvent(
+  'BscIngressEgress.TransferFallbackRequested',
+  bscIngressEgressTransferFallbackRequested,
+);

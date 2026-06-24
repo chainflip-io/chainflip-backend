@@ -24,6 +24,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
 	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, ScheduledEgressDetails,
 };
+use cf_utilities::derive_common_traits;
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::traits::{Saturating, Zero},
@@ -44,8 +45,6 @@ mod tests;
 
 pub const STORAGE_VERSION_U16: u16 = 1;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
-
-pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
 #[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum ExternalOwner {
@@ -81,12 +80,20 @@ impl core::cmp::PartialOrd for ExternalOwner {
 	}
 }
 
+derive_common_traits! {
+	#[derive(TypeInfo)]
+	pub enum PalletConfigUpdate {
+		RefundFeeMultiple { chain: ForeignChain, multiple: Option<u32> },
+	}
+}
+
 impl_pallet_safe_mode!(PalletSafeMode; reconciliation_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::{dot::PolkadotCrypto, ForeignChain};
 	use cf_primitives::EgressId;
+	use frame_system::pallet_prelude::OriginFor;
 
 	use super::*;
 	#[pallet::config]
@@ -128,7 +135,11 @@ pub mod pallet {
 			amount: AssetAmount,
 		},
 		/// The refund was skipped because of the given reason.
-		RefundSkipped { reason: DispatchError, chain: ForeignChain, address: ForeignChainAddress },
+		RefundSkipped {
+			reason: DispatchError,
+			chain: ForeignChain,
+			address: ForeignChainAddress,
+		},
 		/// The Vault is running a deficit: we owe more than we have set aside for refunds.
 		VaultDeficitDetected {
 			chain: ForeignChain,
@@ -148,6 +159,9 @@ pub mod pallet {
 			asset: Asset,
 			amount_credited: AssetAmount,
 			new_balance: AssetAmount,
+		},
+		PalletConfigUpdated {
+			update: PalletConfigUpdate,
 		},
 	}
 
@@ -177,6 +191,36 @@ pub mod pallet {
 		AssetAmount,
 		ValueQuery,
 	>;
+
+	#[pallet::storage]
+	pub type RefundFeeMultiple<T> =
+		StorageMap<_, Twox64Concat, ForeignChain, u32, ValueQuery, ConstU32<100>>;
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
+		#[pallet::weight(Weight::zero())]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			update: PalletConfigUpdate,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			match update {
+				PalletConfigUpdate::RefundFeeMultiple { chain, multiple } => {
+					if let Some(value) = multiple {
+						RefundFeeMultiple::<T>::insert(chain, value);
+					} else {
+						RefundFeeMultiple::<T>::remove(chain);
+					}
+				},
+			}
+
+			Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
+
+			Ok(())
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -190,7 +234,9 @@ impl<T: Config> Pallet<T> {
 				.map_err(Into::into)
 				.and_then(
 					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
-						if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
+						if egress_amount <
+							(RefundFeeMultiple::<T>::get(chain) as AssetAmount) * fee_withheld
+						{
 							Err(Error::<T>::RefundAmountTooLow.into())
 						} else {
 							Ok(result)

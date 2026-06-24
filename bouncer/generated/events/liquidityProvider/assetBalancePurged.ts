@@ -6,6 +6,7 @@ import {
   cfPrimitivesChainsForeignChain,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const liquidityProviderAssetBalancePurged = z.object({
   accountId,
@@ -15,3 +16,8 @@ export const liquidityProviderAssetBalancePurged = z.object({
   destinationAddress: cfChainsAddressEncodedAddress,
   fee: numberOrHex,
 });
+
+export const liquidityProviderAssetBalancePurgedEvent = defineEvent(
+  'LiquidityProvider.AssetBalancePurged',
+  liquidityProviderAssetBalancePurged,
+);
