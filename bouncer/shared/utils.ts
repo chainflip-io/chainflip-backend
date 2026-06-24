@@ -54,7 +54,7 @@ import {
 import z from 'zod';
 import { swappingSwapRequestedEvent } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
-import type { ChainflipClient } from 'shared/utils/dedot';
+import { type ChainflipClient, formatDispatchError } from 'shared/utils/dedot';
 import { randomBytes } from 'crypto';
 import { HexString } from '@polkadot/util/types';
 import bitcoin from 'bitcoinjs-lib';
@@ -393,6 +393,14 @@ export function chainGasAsset(chain: Chain): Asset {
       throw new Error(`Unsupported chain: ${chain}`);
   }
 }
+
+// JSON has no BigInt. Decode decimal-string values to BigInt so large u64/u128 amounts survive;
+// non-numeric strings (asset names, addresses) and JS numbers are left as-is.
+export const bigintReviver = (_key: string, value: unknown) =>
+  typeof value === 'string' && /^-?\d+$/.test(value) ? BigInt(value) : value;
+
+export const bigintReplacer = (_key: string, value: unknown) =>
+  typeof value === 'bigint' ? value.toString() : value;
 
 export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
   const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
@@ -1358,15 +1366,10 @@ export function decodeModuleError(
   module: z.infer<typeof spRuntimeModuleError>,
   api: ChainflipClient,
 ): string {
-  const meta = api.registry.findErrorMeta({
+  return formatDispatchError(api, {
     type: 'Module',
     value: { index: module.index, error: module.error },
   });
-  if (!meta) {
-    return `Module(${module.index}, ${module.error})`;
-  }
-  const pallet = meta.pallet.charAt(0).toLowerCase() + meta.pallet.slice(1);
-  return `${pallet}.${meta.name}: ${meta.docs.join(' ')}`;
 }
 
 export function decodeDispatchError(

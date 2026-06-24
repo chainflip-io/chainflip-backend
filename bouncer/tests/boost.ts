@@ -8,6 +8,7 @@ import {
   amountToFineAmountBigInt,
 } from 'shared/utils';
 import { send } from 'shared/send';
+import { isDispatchError } from 'shared/utils/dedot';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { requestNewSwap } from 'shared/perform_swap';
 import { jsonRpc } from 'shared/json_rpc';
@@ -48,7 +49,7 @@ export async function stopBoosting(
       ),
     });
   } catch (err) {
-    if (err instanceof Error && err.message.includes('lendingPools.AccountNotFoundInPool')) {
+    if (isDispatchError(err, { pallet: 'lendingPools', name: 'AccountNotFoundInPool' })) {
       cf.debug(
         `Already stopped boosting Btc at ${boostPoolFee}bps booster: ${cf.requirements.account.uri}`,
       );

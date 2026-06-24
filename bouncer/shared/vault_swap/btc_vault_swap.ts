@@ -2,6 +2,7 @@ import assert from 'assert';
 import { sendVaultTransaction } from 'shared/send_btc';
 import { Asset, assetDecimals, Assets, cfMutex, fineAmountToAmount } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
+import { isDispatchError } from 'shared/utils/dedot';
 import { fundFlip } from 'shared/fund_flip';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingAffiliateRegistrationEvent } from 'generated/events/swapping/affiliateRegistration';
@@ -73,7 +74,7 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
     return Number(privateBrokerChannelOpenedEvent.channelId);
   } catch (err) {
     // Fetch the private channel instead, if the extrinsic fails
-    if (err instanceof Error && err.message.includes('swapping.PrivateChannelExistsForBroker')) {
+    if (isDispatchError(err, { pallet: 'swapping', name: 'PrivateChannelExistsForBroker' })) {
       const privateChannel = await getExistingPrivateBtcChannel(broker.keypair.address);
       if (privateChannel) {
         return privateChannel;

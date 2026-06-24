@@ -8,7 +8,7 @@ import type {
 } from 'dedot/types';
 import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
 import type { ChainSubmittableExtrinsic } from 'generated/chaintypes/chainflip-node/tx';
-import { cfMutex, sleep } from 'shared/utils';
+import { bigintReplacer, cfMutex, sleep } from 'shared/utils';
 
 /** A fully-typed dedot client for the Chainflip state chain. */
 export type ChainflipClient = DedotClient<ChainflipNodeApi>;
@@ -21,9 +21,6 @@ export type ChainflipExtrinsic = ChainSubmittableExtrinsic<
   IRuntimeTxCall,
   ChainflipNodeApi['types']
 >;
-
-const bigintReplacer = (_key: string, value: unknown) =>
-  typeof value === 'bigint' ? value.toString() : value;
 
 /** A human-readable `pallet.call(args)` description of a dedot extrinsic, for logging. */
 export function extrinsicToHumanReadable(ext: ChainflipExtrinsic): string {
@@ -38,16 +35,78 @@ export function extrinsicToHumanReadable(ext: ChainflipExtrinsic): string {
   return `${pallet}.${palletCall.name}(${JSON.stringify(params ?? {}, bigintReplacer)})`;
 }
 
-/** Formats a dedot `DispatchError` as `pallet.Error: docs`. */
-export function formatDispatchError(client: ChainflipClient, err: DispatchError): string {
+/** The pallet + variant names (and docs) of a `Module` dispatch error; undefined for other kinds. */
+export function moduleErrorMeta(
+  client: ChainflipClient,
+  err: DispatchError,
+): { pallet: string; name: string; docs: string[] } | undefined {
   if (err.type === 'Module') {
     const meta = client.registry.findErrorMeta(err);
     if (meta) {
+      // Lower-case the first char to match dedot's `client.errors` keys (the `DispatchErrorMatch`
+      // pallet names) and the historical `pallet.Error` message format.
       const pallet = meta.pallet.charAt(0).toLowerCase() + meta.pallet.slice(1);
-      return `${pallet}.${meta.name}: ${meta.docs.join(' ')}`;
+      return { pallet, name: meta.name, docs: meta.docs };
     }
   }
+  return undefined;
+}
+
+/** Formats a dedot `DispatchError` as `pallet.Error: docs`. */
+export function formatDispatchError(client: ChainflipClient, err: DispatchError): string {
+  const meta = moduleErrorMeta(client, err);
+  if (meta) {
+    return `${meta.pallet}.${meta.name}: ${meta.docs.join(' ')}`;
+  }
   return JSON.stringify(err, bigintReplacer);
+}
+
+/**
+ * Thrown by {@link signSendAndWait} when an extrinsic's dispatch fails. For a `Module` error it
+ * carries the pallet/variant names so callers can match structurally via {@link isDispatchError}
+ * rather than substring-matching the message.
+ */
+export class ExtrinsicSubmissionError extends Error {
+  declare readonly module?: { pallet: string; name: string };
+
+  constructor(message: string, module?: { pallet: string; name: string }) {
+    super(message);
+    this.name = 'ExtrinsicSubmissionError';
+    Object.defineProperty(this, 'module', { value: module, enumerable: false });
+  }
+}
+
+/**
+ * `client.errors` with dedot's bare-`string` index signatures dropped (cf. {@link StrictChainTx}),
+ * so the pallet keys and per-pallet variant names are exact string literals rather than `string`.
+ */
+type StrictChainErrors = {
+  [Pallet in keyof RemoveIndex<ChainflipNodeApi['errors']>]: RemoveIndex<
+    ChainflipNodeApi['errors'][Pallet]
+  >;
+};
+type ErrorPallet = keyof StrictChainErrors & string;
+type ErrorNameOf<P extends ErrorPallet> = keyof StrictChainErrors[P] & string;
+type AnyErrorName = { [P in ErrorPallet]: ErrorNameOf<P> }[ErrorPallet];
+
+/**
+ * A compile-time-checked dispatch-error selector. `name` must be a real error variant of `pallet`
+ * (a typo or wrong pallet is a compile error). Omit `pallet` to match a variant regardless of which
+ * (instanced) pallet emitted it — e.g. `{ name: 'BelowEgressDustLimit' }` matches any chain's
+ * ingress-egress pallet.
+ */
+export type DispatchErrorMatch =
+  | { [P in ErrorPallet]: { pallet: P; name: ErrorNameOf<P> } }[ErrorPallet]
+  | { pallet?: undefined; name: AnyErrorName };
+
+/** True if `err` is a dispatch failure matching `match` (see {@link DispatchErrorMatch}). */
+export function isDispatchError(err: unknown, match: DispatchErrorMatch): boolean {
+  return (
+    err instanceof ExtrinsicSubmissionError &&
+    err.module !== undefined &&
+    (match.pallet === undefined || err.module.pallet === match.pallet) &&
+    err.module.name === match.name
+  );
 }
 
 /**
@@ -204,8 +263,10 @@ export async function signSendAndWait(
         });
 
         if (result.dispatchError) {
-          throw new Error(
+          const meta = moduleErrorMeta(client, result.dispatchError);
+          throw new ExtrinsicSubmissionError(
             `'${extrinsicToHumanReadable(ext)}' failed (${formatDispatchError(client, result.dispatchError)})`,
+            meta && { pallet: meta.pallet, name: meta.name },
           );
         }
 
