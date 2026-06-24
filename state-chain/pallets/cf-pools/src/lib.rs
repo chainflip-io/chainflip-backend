@@ -1098,7 +1098,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_minimum_limit_order_amounts(minimums.len() as u32))]
 		pub fn set_minimum_limit_order_amounts(
 			origin: OriginFor<T>,
-			minimums: BoundedVec<(Asset, AssetAmount), ConstU32<20>>,
+			minimums: BoundedVec<(Asset, AssetAmount), ConstU32<100>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -1767,6 +1767,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Updates limit order closing the previous one if necessary (in case of tick change)
+	// Transactional so that, if the resulting amount fails the per-asset minimum check below, the
+	// applied change (including balance debits/credits) is rolled back. This matters in particular
+	// for scheduled updates, which are dispatched from `on_initialize` and so are not otherwise
+	// wrapped in a storage layer.
+	#[transactional]
 	fn inner_update_limit_order(
 		lp: &T::AccountId,
 		base_asset: Asset,
@@ -1783,21 +1788,6 @@ impl<T: Config> Pallet<T> {
 				.get(lp)
 				.and_then(|limit_orders| limit_orders.get(&id))
 				.copied();
-			// Resolve the existing order amount (in the sold asset) before any mutation, so
-			// that we can validate the resulting amount against the per-asset minimum.
-			let existing_amount: AssetAmount = match existing_tick {
-				Some(tick) => pool
-					.pool_state
-					.limit_order(&(lp.clone(), id), side, tick)
-					.map(|(_, position)| position.amount.saturated_into::<AssetAmount>())
-					.unwrap_or(0),
-				None => 0,
-			};
-			let resulting_amount = match amount_change {
-				IncreaseOrDecrease::Increase(delta) => existing_amount.saturating_add(delta),
-				IncreaseOrDecrease::Decrease(delta) => existing_amount.saturating_sub(delta),
-			};
-			Self::ensure_min_order_amount(base_asset, quote_asset, side, resulting_amount)?;
 
 			let tick = match (existing_tick, option_tick) {
 				(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
@@ -1839,6 +1829,13 @@ impl<T: Config> Pallet<T> {
 				amount_change.map(|amount| amount.into()),
 				NoOpStatus::Error,
 			)?;
+
+			let resulting_amount = pool
+				.pool_state
+				.limit_order(&(lp.clone(), id), side, tick)
+				.map(|(_, position)| position.amount.saturated_into::<AssetAmount>())
+				.unwrap_or(0);
+			Self::ensure_min_order_amount(base_asset, quote_asset, side, resulting_amount)?;
 
 			Ok(())
 		})

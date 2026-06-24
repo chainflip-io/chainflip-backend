@@ -301,7 +301,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn set_minimum_limit_order_amounts(n: Linear<1, 20>) {
+	fn set_minimum_limit_order_amounts(n: Linear<1, 100>) {
 		const MIN: AssetAmount = 1_000;
 		let minimums = Asset::all()
 			.take(n as usize)
