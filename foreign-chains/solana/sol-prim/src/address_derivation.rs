@@ -134,7 +134,8 @@ mod tests {
 	#[test]
 	fn recover_com113_bump() {
 		// COM-113: Solana deposit channel 107338 reproduces its on-chain address with bump 254
-		// (vault_program = Berghain mainnet sol_vault_program). Confirms channel_id + recovers bump.
+		// (vault_program = Berghain mainnet sol_vault_program). Confirms channel_id + recovers
+		// bump.
 		assert_eq!(
 			derive_deposit_address(
 				107338u64,

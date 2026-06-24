@@ -63,7 +63,8 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 				// 107338 and transfer them to the channel's refund address.
 				log::info!("🧹 Solana USDT refund for Berghain housekeeping...");
 				// Amount: 10,000 USDT (10_000_000_000 base units, 6 dp)
-				// Destination: 8PebjHbmGomKQ3SJSFwyVRFuxDf9M6wfmTgqmbZY1Rkw (channel refund address)
+				// Destination: 8PebjHbmGomKQ3SJSFwyVRFuxDf9M6wfmTgqmbZY1Rkw (channel refund
+				// address)
 				let Ok(res) =
 					<cf_chains::sol::api::SolanaApi<SolEnvironment> as AllBatch<_>>::new_unsigned(
 						vec![FetchAssetParams {
