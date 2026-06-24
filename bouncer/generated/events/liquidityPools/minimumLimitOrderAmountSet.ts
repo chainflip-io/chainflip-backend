@@ -8,6 +8,6 @@ export const liquidityPoolsMinimumLimitOrderAmountSet = z.object({
 });
 
 export const liquidityPoolsLimitOrderUpdatedEvent = defineEvent(
-  'LiquidityPools.liquidityPoolsMinimumLimitOrderAmountSetEvent',
+  'LiquidityPools.MinimumLimitOrderAmountSetEvent',
   liquidityPoolsMinimumLimitOrderAmountSet,
 );
