@@ -1812,6 +1812,7 @@ version = "0.1.0"
 dependencies = [
  "cf-proc-macros",
  "derive-where",
+ "duplicate",
  "frame-support",
  "hex",
  "n-functor",
