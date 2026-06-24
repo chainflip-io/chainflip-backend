@@ -24,6 +24,18 @@ import { solanaBroadcasterBroadcastAbortedEvent } from 'generated/events/solanaB
 import { assethubBroadcasterBroadcastAbortedEvent } from 'generated/events/assethubBroadcaster/broadcastAborted';
 import { polkadotBroadcasterBroadcastAbortedEvent } from 'generated/events/polkadotBroadcaster/broadcastAborted';
 import { tronBroadcasterBroadcastAbortedEvent } from 'generated/events/tronBroadcaster/broadcastAborted';
+import { ethereumIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/ethereumIngressEgress/ccmBroadcastRequested';
+import { arbitrumIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/arbitrumIngressEgress/ccmBroadcastRequested';
+import { solanaIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/solanaIngressEgress/ccmBroadcastRequested';
+import { tronIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/tronIngressEgress/ccmBroadcastRequested';
+import { ethereumIngressEgressCcmEgressInvalidEvent } from 'generated/events/ethereumIngressEgress/ccmEgressInvalid';
+import { arbitrumIngressEgressCcmEgressInvalidEvent } from 'generated/events/arbitrumIngressEgress/ccmEgressInvalid';
+import { solanaIngressEgressCcmEgressInvalidEvent } from 'generated/events/solanaIngressEgress/ccmEgressInvalid';
+import { tronIngressEgressCcmEgressInvalidEvent } from 'generated/events/tronIngressEgress/ccmEgressInvalid';
+import { ethereumIngressEgressCcmBroadcastFailedEvent } from 'generated/events/ethereumIngressEgress/ccmBroadcastFailed';
+import { arbitrumIngressEgressCcmBroadcastFailedEvent } from 'generated/events/arbitrumIngressEgress/ccmBroadcastFailed';
+import { solanaIngressEgressCcmBroadcastFailedEvent } from 'generated/events/solanaIngressEgress/ccmBroadcastFailed';
+import { tronIngressEgressCcmBroadcastFailedEvent } from 'generated/events/tronIngressEgress/ccmBroadcastFailed';
 import { Chain } from 'shared/utils';
 import { Logger, throwError } from 'shared/utils/logger';
 
@@ -57,6 +69,27 @@ const broadcastAbortedEvents = {
   Tron: tronBroadcasterBroadcastAbortedEvent,
 } as const;
 
+// CCM events are only emitted on chains that support contract calls.
+const ccmBroadcastRequestedEvents = {
+  Ethereum: ethereumIngressEgressCcmBroadcastRequestedEvent,
+  Arbitrum: arbitrumIngressEgressCcmBroadcastRequestedEvent,
+  Solana: solanaIngressEgressCcmBroadcastRequestedEvent,
+  Tron: tronIngressEgressCcmBroadcastRequestedEvent,
+} as const;
+
+const ccmEgressInvalidEvents = {
+  Ethereum: ethereumIngressEgressCcmEgressInvalidEvent,
+  Arbitrum: arbitrumIngressEgressCcmEgressInvalidEvent,
+  Solana: solanaIngressEgressCcmEgressInvalidEvent,
+  Tron: tronIngressEgressCcmEgressInvalidEvent,
+} as const;
+
+const ccmBroadcastFailedEvents = {
+  Ethereum: ethereumIngressEgressCcmBroadcastFailedEvent,
+  Arbitrum: arbitrumIngressEgressCcmBroadcastFailedEvent,
+  Solana: solanaIngressEgressCcmBroadcastFailedEvent,
+  Tron: tronIngressEgressCcmBroadcastFailedEvent,
+} as const;
 
 // Look up a per-chain generated event descriptor from one of the tables below, throwing (with the
 // table's `label`) if the chain has no entry. The return type is the union of the table's
@@ -66,12 +99,12 @@ function eventForChain<T extends Partial<Record<Chain, unknown>>>(
   label: string,
   table: T,
   chain: Chain,
-): NonNullable<T[Chain]> {
-  const event = table[chain];
+): NonNullable<T[keyof T]> {
+  const event = table[chain as keyof T];
   if (!event) {
     throwError(logger, new Error(`${label}: unsupported chain ${chain}`));
   }
-  return event as NonNullable<T[Chain]>;
+  return event as NonNullable<T[keyof T]>;
 }
 
 export function batchBroadcastRequestedEventFor(logger: Logger, chain: Chain) {
@@ -84,4 +117,16 @@ export function broadcastSuccessEventFor(logger: Logger, chain: Chain) {
 
 export function broadcastAbortedEventFor(logger: Logger, chain: Chain) {
   return eventForChain(logger, 'broadcastAborted', broadcastAbortedEvents, chain);
+}
+
+export function ccmBroadcastRequestedEventFor(logger: Logger, chain: Chain) {
+  return eventForChain(logger, 'ccmBroadcastRequested', ccmBroadcastRequestedEvents, chain);
+}
+
+export function ccmEgressInvalidEventFor(logger: Logger, chain: Chain) {
+  return eventForChain(logger, 'ccmEgressInvalid', ccmEgressInvalidEvents, chain);
+}
+
+export function ccmBroadcastFailedEventFor(logger: Logger, chain: Chain) {
+  return eventForChain(logger, 'ccmBroadcastFailed', ccmBroadcastFailedEvents, chain);
 }
