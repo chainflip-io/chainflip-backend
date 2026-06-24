@@ -13,7 +13,7 @@ import {
 } from 'shared/utils';
 import { approveErc20 } from 'shared/approve_erc20';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
-import { fundingFunded } from 'generated/events/funding/funded';
+import { fundingFundedEvent } from 'generated/events/funding/funded';
 
 export async function fundFlip<A = []>(cf: ChainflipIO<A>, scAddress: string, flipAmount: string) {
   // Doing effectively infinite approvals to prevent race conditions between tests
@@ -68,7 +68,6 @@ export async function fundFlip<A = []>(cf: ChainflipIO<A>, scAddress: string, fl
   );
 
   await cf.stepUntilEvent(
-    'Funding.Funded',
-    fundingFunded.refine((event) => event.accountId === hexPubkeyToFlipAddress(pubkey)),
+    fundingFundedEvent.refine((event) => event.accountId === hexPubkeyToFlipAddress(pubkey)),
   );
 }

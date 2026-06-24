@@ -4,8 +4,8 @@ import { Asset, assetDecimals, Assets, cfMutex, fineAmountToAmount } from 'share
 import { getChainflipApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
-import { swappingAffiliateRegistration } from 'generated/events/swapping/affiliateRegistration';
-import { swappingPrivateBrokerChannelOpened } from 'generated/events/swapping/privateBrokerChannelOpened';
+import { swappingAffiliateRegistrationEvent } from 'generated/events/swapping/affiliateRegistration';
+import { swappingPrivateBrokerChannelOpenedEvent } from 'generated/events/swapping/privateBrokerChannelOpened';
 import { requestSwapParameterEncoding } from './vault_swap';
 
 interface BtcVaultSwapDetails {
@@ -65,12 +65,9 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
   try {
     const privateBrokerChannelOpenedEvent = await cf.submitExtrinsic({
       extrinsic: (api) => api.tx.swapping.openPrivateBtcChannel(),
-      expectedEvent: {
-        name: 'Swapping.PrivateBrokerChannelOpened',
-        schema: swappingPrivateBrokerChannelOpened.refine(
-          (event) => event.brokerId === broker.keypair.address,
-        ),
-      },
+      expectedEvent: swappingPrivateBrokerChannelOpenedEvent.refine(
+        (event) => event.brokerId === broker.keypair.address,
+      ),
     });
 
     cf.debug(
@@ -201,14 +198,11 @@ export async function registerAffiliate<A extends WithBrokerAccount>(
   cf.trace('Registering affiliate');
   const affiliateRegistration = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.swapping.registerAffiliate(withdrawalAddress),
-    expectedEvent: {
-      name: 'Swapping.AffiliateRegistration',
-      schema: swappingAffiliateRegistration.refine(
-        (event) =>
-          event.brokerId === cf.requirements.account.keypair.address &&
-          event.withdrawalAddress === withdrawalAddress.toLowerCase(),
-      ),
-    },
+    expectedEvent: swappingAffiliateRegistrationEvent.refine(
+      (event) =>
+        event.brokerId === cf.requirements.account.keypair.address &&
+        event.withdrawalAddress === withdrawalAddress.toLowerCase(),
+    ),
   });
 
   cf.debug(

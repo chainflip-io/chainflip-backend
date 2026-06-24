@@ -6,6 +6,7 @@ import {
   hexString,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const bitcoinThresholdSignerThresholdSignatureRequest = z.object({
   requestId: z.number(),
@@ -15,3 +16,8 @@ export const bitcoinThresholdSignerThresholdSignatureRequest = z.object({
   signatories: z.array(accountId),
   payload: z.array(z.tuple([cfChainsBtcPreviousOrCurrent, hexString])),
 });
+
+export const bitcoinThresholdSignerThresholdSignatureRequestEvent = defineEvent(
+  'BitcoinThresholdSigner.ThresholdSignatureRequest',
+  bitcoinThresholdSignerThresholdSignatureRequest,
+);

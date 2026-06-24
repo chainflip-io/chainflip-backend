@@ -38,10 +38,10 @@ import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { encodeEvmVaultSwapParams } from 'shared/vault_swap/evm_vault_swap';
 import { SwapContext } from 'shared/utils/swap_context';
-import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
+import { swappingSwapRequestedEvent } from 'generated/events/swapping/swapRequested';
 import assert from 'assert';
-import { arbitrumIngressEgressDepositFinalised } from 'generated/events/arbitrumIngressEgress/depositFinalised';
-import { arbitrumIngressEgressUnknownBroker } from 'generated/events/arbitrumIngressEgress/unknownBroker';
+import { arbitrumIngressEgressDepositFinalisedEvent } from 'generated/events/arbitrumIngressEgress/depositFinalised';
+import { arbitrumIngressEgressUnknownBrokerEvent } from 'generated/events/arbitrumIngressEgress/unknownBroker';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfEvmVaultAbi = await getEvmVaultAbi();
@@ -162,8 +162,7 @@ async function testTxMultipleVaultSwaps<A = []>(
   // TODO: Set the loop limit back to numSwaps, once the deduplication ingress issue is fixed
   for (let i = 1; i <= numSwaps - 1; i++) {
     const swapRequestedEvent = await cf.stepUntilEvent(
-      'Swapping.SwapRequested',
-      swappingSwapRequested.refine((event) => {
+      swappingSwapRequestedEvent.refine((event) => {
         const channelMatches = checkTransactionInMatches(event.origin, txOrigin);
         const sourceAssetMatches = sourceAsset === event.inputAsset;
         const destAssetMatches = destAsset === event.outputAsset;
@@ -282,8 +281,7 @@ async function testTronTxMultipleVaultSwaps<A = []>(
 
   for (let i = 1; i <= numSwaps - 1; i++) {
     const swapRequestedEvent = await cf.stepUntilEvent(
-      'Swapping.SwapRequested',
-      swappingSwapRequested.refine((event) => {
+      swappingSwapRequestedEvent.refine((event) => {
         const channelMatches = checkTransactionInMatches(event.origin, txOrigin);
         const sourceAssetMatches = sourceAsset === event.inputAsset;
         const destAssetMatches = destAsset === event.outputAsset;
@@ -411,26 +409,19 @@ async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<
     // but the swap is observed correctly.
     if (vaultSwapDetails.broker) {
       await subcf.stepUntilAllEventsOf({
-        depositFinalized: {
-          name: 'ArbitrumIngressEgress.DepositFinalised',
-          schema: arbitrumIngressEgressDepositFinalised.refine(
-            (event) =>
-              event.depositDetails.txHashes &&
-              event.depositDetails.txHashes[0] === receipt.transactionHash &&
-              event.originType === 'Vault',
-          ),
-        },
-        unknownBroker: {
-          name: 'ArbitrumIngressEgress.UnknownBroker',
-          schema: arbitrumIngressEgressUnknownBroker.refine(
-            (event) => event.brokerId === vaultSwapDetails.broker,
-          ),
-        },
+        depositFinalized: arbitrumIngressEgressDepositFinalisedEvent.refine(
+          (event) =>
+            event.depositDetails.txHashes &&
+            event.depositDetails.txHashes[0] === receipt.transactionHash &&
+            event.originType === 'Vault',
+        ),
+        unknownBroker: arbitrumIngressEgressUnknownBrokerEvent.refine(
+          (event) => event.brokerId === vaultSwapDetails.broker,
+        ),
       });
     } else {
       await subcf.stepUntilEvent(
-        'ArbitrumIngressEgress.DepositFinalised',
-        arbitrumIngressEgressDepositFinalised.refine(
+        arbitrumIngressEgressDepositFinalisedEvent.refine(
           (event) =>
             event.depositDetails.txHashes &&
             event.depositDetails.txHashes[0] === receipt.transactionHash &&

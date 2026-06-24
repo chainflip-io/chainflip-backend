@@ -1,11 +1,12 @@
 import { cfMutex, createStateChainKeypair, isValidHexHash, sleep, waitForExt } from 'shared/utils';
 import { z } from 'zod';
+import type { EventDescriptor } from '@chainflip/processor/event';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { submitExistingGovernanceExtrinsic } from 'shared/cf_governance';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
-import { governanceProposed } from 'generated/events/governance/proposed';
-import { governanceExecuted } from 'generated/events/governance/executed';
+import { governanceProposedEvent } from 'generated/events/governance/proposed';
+import { governanceExecutedEvent } from 'generated/events/governance/executed';
 import { assertUnreachable } from '@polkadot/util';
 import { DisposableApiPromise, getChainflipApi } from 'shared/utils/substrate';
 import {
@@ -134,8 +135,8 @@ export class ChainflipIO<Requirements> {
    * Submits an extrinsic and updates the `lastIoBlockHeight` to the block height were the extrinsic was included.
    * @param this Automatically provided by typescript when called as a method on a ChainflipIO object.
    * @param arg.extrinsic Function that takes a `DisposableApiPromise` and builds the extrinsic that should be submitted.
-   * @param arg.expectedEvent Optional event description containing `name` and optionally `schema`, describing the event
-   * that's expected to be emitted during execution of the extrinsic
+   * @param arg.expectedEvent Optional description of the event expected to be emitted during
+   * execution of the extrinsic.
    * @returns The well-typed event data of the expected event if one was provided. Otherwise the full, untyped result object
    * that was returned by the extrinsic.
    */
@@ -146,7 +147,7 @@ export class ChainflipIO<Requirements> {
     this: ChainflipIO<Data>,
     arg: {
       extrinsic: ExtrinsicFromApi;
-      expectedEvent?: { name: EventName; schema?: Schema };
+      expectedEvent?: EventDescriptor<EventName, Schema>;
     },
   ): Promise<z.infer<Schema>> {
     return this.runExclusively('submitExtrinsic', async () => {
@@ -181,16 +182,17 @@ export class ChainflipIO<Requirements> {
 
       // extract event data if expected
       if (arg.expectedEvent) {
+        const { name, schema } = arg.expectedEvent;
         const txHash = `${result.value.txHash}`;
         this.debug(
-          `Searching for event ${arg.expectedEvent.name} caused by call to extrinsic ${readable} (tx hash: ${txHash})`,
+          `Searching for event ${name} caused by call to extrinsic ${readable} (tx hash: ${txHash})`,
         );
         const event = await findOneEventOfMany(
           this.logger,
           {
             event: {
-              name: arg.expectedEvent.name,
-              schema: arg.expectedEvent.schema ?? z.any(),
+              name,
+              schema,
               txHash,
             },
           },
@@ -200,7 +202,7 @@ export class ChainflipIO<Requirements> {
           },
         );
         this.debug(
-          `Found event ${arg.expectedEvent.name} caused by call to extrinsic ${readable}\nEvent data is: ${JSON.stringify(event)}`,
+          `Found event ${name} caused by call to extrinsic ${readable}\nEvent data is: ${JSON.stringify(event)}`,
         );
         return event.data;
       }
@@ -236,17 +238,11 @@ export class ChainflipIO<Requirements> {
       return submitExistingGovernanceExtrinsic(extrinsic);
     });
 
-    await this.stepUntilEvent(
-      'Governance.Proposed',
-      governanceProposed.refine((id) => id === proposalId),
-    );
+    await this.stepUntilEvent(governanceProposedEvent.refine((id) => id === proposalId));
     this.debug(
       `Governance proposal has id ${proposalId} and was found in block ${this.lastIoBlockHeight}`,
     );
-    await this.stepUntilEvent(
-      'Governance.Executed',
-      governanceExecuted.refine((id) => id === proposalId),
-    );
+    await this.stepUntilEvent(governanceExecutedEvent.refine((id) => id === proposalId));
     this.debug(
       `Governance proposal with id ${proposalId} executed in block ${this.lastIoBlockHeight}`,
     );
@@ -297,12 +293,12 @@ export class ChainflipIO<Requirements> {
   private wrapWithExpectEvent<A extends object>(
     f: (a: A) => Promise<void>,
   ): <Schema extends z.ZodTypeAny>(
-    a: A & { expectedEvent?: { name: EventName; schema?: Schema } },
+    a: A & { expectedEvent?: EventDescriptor<EventName, Schema> },
   ) => Promise<z.infer<Schema>> {
     return async (arg) => {
       await f(arg);
       if (arg.expectedEvent) {
-        return this.expectEvent(arg.expectedEvent.name, arg.expectedEvent.schema ?? z.any());
+        return this.expectEvent(arg.expectedEvent);
       }
       return Promise.resolve();
     };
@@ -323,18 +319,18 @@ export class ChainflipIO<Requirements> {
   }
 
   /**
-   * Advance the current chainflip block height until an event
-   * is found that matches the provided name and schema.
-   * @param name Name of the event to search for. Can be provided with, or without pallet name.
-   * @param schema Expected zod schema that the event data should match. This describes both
-   * the shape of the data (e.g. which fields of which types exist), but can also require
-   * various to fields to have specific values (e.g. ChannelId should have a certain expected value).
+   * Advance the current chainflip block height until a matching event is found.
+   *
+   * Pass a generated event descriptor (`defineEvent('Pallet.Event', schema)`, optionally
+   * narrowed with `.refine(...)`). The name and schema travel together, so they can never drift
+   * apart.
+   *
    * @returns The data of the first matching event, well-typed according to the provided schema.
    */
-  async stepUntilEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
-    name: EventName,
-    schema: Z,
-  ): Promise<z.infer<Z>> {
+  async stepUntilEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>({
+    name,
+    schema,
+  }: EventDescriptor<EventName, Z>): Promise<z.infer<Z>> {
     return this.runExclusively('stepUntilEvent', async () => {
       const event = await this.waitFor(
         `event ${name} from block ${this.lastIoBlockHeight}`,
@@ -352,23 +348,21 @@ export class ChainflipIO<Requirements> {
   }
 
   /**
-   * Find event with the provided name and schema in the current chainflip block. This method
-   * does not update the current chainflip block height.
-   * @param name Name of the event to search for. Can be provided with, or without pallet name.
-   * @param schema Expected zod schema that the event data should match. This describes both
-   * the shape of the data (e.g. which fields of which types exist), but can also require
-   * various to fields to have specific values (e.g. ChannelId should have a certain expected value).
-   * @returns The data of the first matching event, well-typed according to the provided schema.
+   * Find an event in the current chainflip block (does not advance the block height).
+   *
+   * Pass a generated event descriptor (optionally `.refine(...)`d).
+   *
+   * @returns The data of the first matching event, well-typed according to the schema.
    */
-  async expectEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
-    name: EventName,
-    schema?: Z,
-  ): Promise<z.infer<Z>> {
+  async expectEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>({
+    name,
+    schema,
+  }: EventDescriptor<EventName, Z>): Promise<z.infer<Z>> {
     return this.runExclusively('expectEvent', async () => {
       this.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
       const event = await findOneEventOfMany(
         this.logger,
-        { event: { name, schema: schema ?? z.any() } },
+        { event: { name, schema } },
         {
           startFromBlock: this.lastIoBlockHeight,
           endBeforeBlock: this.lastIoBlockHeight + 1,

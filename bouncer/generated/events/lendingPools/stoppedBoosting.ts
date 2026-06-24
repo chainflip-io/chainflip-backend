@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { accountId, numberOrHex, palletCfLendingPoolsBoostBoostPoolId } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const lendingPoolsStoppedBoosting = z.object({
   boosterId: accountId,
@@ -7,3 +8,8 @@ export const lendingPoolsStoppedBoosting = z.object({
   unlockedAmount: numberOrHex,
   pendingBoosts: z.array(numberOrHex),
 });
+
+export const lendingPoolsStoppedBoostingEvent = defineEvent(
+  'LendingPools.StoppedBoosting',
+  lendingPoolsStoppedBoosting,
+);

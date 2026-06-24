@@ -23,8 +23,6 @@ It is expected we "disagree and commit" with the contents of this document. If y
 
 These practices should be used to help resolve disagreements. If that is not possible, the disagreement should be escalated so it can be resolved. If possible the resolution should result in modifications to this document.
 
-# Template
-
 # Principles
 
 ## Reviewers First
@@ -89,16 +87,6 @@ We use a variation on conventional commits to keep our commits clear for reviewe
 `doc`: Comments, READMEs and any other form of documentation e.g. diagrams have been changed.
 
 The order of precedence is as listed. So if a commit includes a feature and test changes you'd use `feature`.
-
-## Code
-
-## Development Operations
-
-### Submitting Code Changes
-
-### Issues
-
-### Release Process
 
 # Code Reviews
 

@@ -30,16 +30,12 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountId, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters, IngressOrEgress,
-	OrderId,
+	OrderId, STABLE_ASSET,
 };
-use cf_traits::AssetConverter;
 use pallet_cf_ingress_egress::AmountAndFeesWithheld;
-use pallet_cf_swapping::{BatchExecutionError, FeeType, NetworkFeeTracker};
+use pallet_cf_swapping::{BatchExecutionError, FeeType};
 use scale_info::prelude::format;
-use sp_runtime::{
-	traits::{Saturating, UniqueSaturatedInto},
-	DispatchError,
-};
+use sp_runtime::{traits::UniqueSaturatedInto, DispatchError};
 use sp_std::{collections::btree_set::BTreeSet, vec, vec::Vec};
 
 /// Simulates a swap in order to estimate the output amount and fees.
@@ -90,7 +86,7 @@ pub fn simulate_swap(
 	let include_fee = |fee_type: FeeTypes| !exclude_fees.contains(&fee_type);
 
 	// Default to using the DepositChannel fee unless specified.
-	let AmountAndFeesWithheld { amount_after_fees: mut amount_to_swap, fees_withheld: ingress_fee } =
+	let AmountAndFeesWithheld { amount_after_fees: amount_to_swap, fees_withheld: ingress_fee } =
 		if include_fee(FeeTypes::IngressDepositChannel) {
 			take_ingress_or_egress_fee(
 				IngressOrEgress::IngressDepositChannel,
@@ -109,65 +105,72 @@ pub fn simulate_swap(
 		.unwrap_or(1u32)
 		.into();
 
-	// Calculate the network fee in both USDC and in terms of the input asset.
-	// We manually calculate the minimum network fee to avoid complications with the network fee
-	// minimum affecting the simulated chunk.
-	let (network_fee_amount_input_asset, network_fee_usdc) = if include_fee(FeeTypes::Network) {
-		let network_fee = pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
+	let amount_per_chunk: u128 = amount_to_swap / number_of_chunks;
+
+	// We simulate each leg of the swap (input -> USDC, then USDC -> output) separately rather than
+	// as a single swap. This lets us:
+	//  - apply the network fee exactly where it is charged in a real swap (on the stable asset,
+	//    between the two legs) instead of approximating it in input-asset terms,
+	//  - account for the network fee minimum at the level of the whole swap (it does not apply
+	//    per-chunk), and
+	//  - attribute a failure to a specific leg.
+
+	// First leg: input -> USDC. The network fee does not affect this leg, so the stable amount
+	// here is the gross (pre-network-fee) value of the swap.
+	let stable_amount = if input_asset == STABLE_ASSET {
+		amount_per_chunk
+	} else {
+		Swapping::simulate_swap(input_asset, STABLE_ASSET, amount_per_chunk, vec![])
+			.map_err(|e| -> DispatchErrorWithMessage {
+				match e {
+					BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other(
+						"Simulated swap failed on the input leg: swap leg failed.",
+					)
+					.into(),
+					BatchExecutionError::PriceViolation { violating_swaps, .. } =>
+						if let Some((_, reason)) = violating_swaps.first() {
+							DispatchErrorWithMessage::RawMessage(
+								format!("Simulated swap failed on the input leg due to a price violation: {reason:?}")
+									.into_bytes(),
+							)
+						} else {
+							// Should be unreachable
+							DispatchError::Other(
+								"Simulated swap failed on the input leg due to a price violation.",
+							)
+							.into()
+						},
+					BatchExecutionError::DispatchError { error } => error.into(),
+				}
+			})?
+			.first()
+			.and_then(|swap| swap.stable_amount)
+			.unwrap_or_default()
+	}
+	.saturating_mul(number_of_chunks);
+
+	// Network fee: charged on the gross stable amount, taking the larger of the rate-based fee and
+	// the minimum (which applies to the swap as a whole), capped at the available stable amount.
+	let network_fee = if include_fee(FeeTypes::Network) {
+		let fee = pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
 			input_asset,
 			output_asset,
 			is_internal,
 		);
-
-		let min_network_fee_input_asset =
-			pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_desired_output_or_default_to_zero(
-				input_asset,
-				Asset::Usdc,
-				network_fee.minimum,
-				false, // Do not apply network fee to this calculation
-				false, // Not internal
-			);
-		let network_fee_input_asset = network_fee.rate * amount_to_swap;
-		if min_network_fee_input_asset > network_fee_input_asset {
-			(min_network_fee_input_asset, network_fee.minimum)
-		} else {
-			let amount_per_chunk: u128 = amount_to_swap / number_of_chunks;
-			let swap_output = &Swapping::simulate_swap(
-				input_asset,
-				output_asset,
-				amount_per_chunk,
-				vec![FeeType::NetworkFee(NetworkFeeTracker::new_without_minimum(
-					network_fee.clone(),
-				))],
-			)
-			.map_err(|e| -> DispatchErrorWithMessage { match e {
-				BatchExecutionError::SwapLegFailed { .. } =>
-					DispatchError::Other("Failed to calculate network fee: Swap leg failed.").into(),
-				BatchExecutionError::PriceViolation { .. } => DispatchError::Other(
-					"Failed to calculate network fee: Price Violation, some swaps failed due to Price Impact Limitations.",
-				).into(),
-				BatchExecutionError::DispatchError { error } => DispatchErrorWithMessage::RawMessage(
-					format!("Failed to calculate network fee: {error:?}").into_bytes(),
-				),
-			}})?;
-
-			(
-				network_fee_input_asset,
-				swap_output[0].network_fee_taken.unwrap_or_default() * number_of_chunks,
-			)
-		}
+		core::cmp::min(core::cmp::max(fee.rate * stable_amount, fee.minimum), stable_amount)
 	} else {
-		(0, 0)
+		0
 	};
 
-	amount_to_swap.saturating_reduce(network_fee_amount_input_asset);
+	let stable_amount_after_network_fee_per_chunk =
+		stable_amount.saturating_sub(network_fee) / number_of_chunks;
 
-	let amount_per_chunk: u128 = amount_to_swap / number_of_chunks;
-
-	let swap_output = &Swapping::simulate_swap(
-		input_asset,
+	// Second leg: USDC -> output. The broker fee is charged on the stable asset at the start of
+	// this leg, so we let the swap simulation apply it for us.
+	let second_leg = Swapping::simulate_swap(
+		STABLE_ASSET,
 		output_asset,
-		amount_per_chunk,
+		stable_amount_after_network_fee_per_chunk,
 		if broker_commission > 0 {
 			vec![FeeType::BrokerFee(
 				vec![Beneficiary { account: AccountId::new([0xbb; 32]), bps: broker_commission }]
@@ -178,19 +181,51 @@ pub fn simulate_swap(
 			vec![]
 		},
 	)
-	.map_err(|e| match e {
-		BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
-		BatchExecutionError::PriceViolation { .. } => DispatchError::Other(
-			"Price Violation: Some swaps failed due to Price Impact Limitations.",
-		),
-		BatchExecutionError::DispatchError { error } => error,
+	.map_err(|e| -> DispatchErrorWithMessage {
+		match e {
+			BatchExecutionError::SwapLegFailed { .. } =>
+				DispatchError::Other("Simulated swap failed on the output leg: swap leg failed.")
+					.into(),
+			BatchExecutionError::PriceViolation { violating_swaps, .. } =>
+				if let Some((_, reason)) = violating_swaps.first() {
+					DispatchErrorWithMessage::RawMessage(
+						format!("Simulated swap failed on the output leg due to a price violation: {reason:?}")
+							.into_bytes(),
+					)
+				} else {
+					// Should be unreachable
+					DispatchError::Other(
+						"Simulated swap failed on the output leg due to a price violation.",
+					)
+					.into()
+				},
+			BatchExecutionError::DispatchError { error } => error.into(),
+		}
 	})?;
-	let swap = &swap_output[0];
+	let second_leg = second_leg.first();
 
-	// Extrapolate the total by multiplying the chunk by the number of chunks
-	let intermediary = swap.intermediate_amount().map(|amount| amount * number_of_chunks);
-	let output = swap.final_output.unwrap_or_default() * number_of_chunks;
-	let broker_fee = swap.broker_fee_taken.unwrap_or_default() * number_of_chunks;
+	// Extrapolate the per-chunk results to the whole swap.
+	let broker_fee = second_leg
+		.and_then(|swap| swap.broker_fee_taken)
+		.unwrap_or_default()
+		.saturating_mul(number_of_chunks);
+	let output = second_leg
+		.and_then(|swap| swap.final_output)
+		.unwrap_or_default()
+		.saturating_mul(number_of_chunks);
+
+	// The intermediary (stable) amount only exists for swaps that neither start nor end on the
+	// stable asset. It reflects the amount actually swapped on the second leg, i.e. after all fees.
+	let intermediary = if input_asset == STABLE_ASSET || output_asset == STABLE_ASSET {
+		None
+	} else {
+		Some(
+			second_leg
+				.and_then(|swap| swap.stable_amount)
+				.unwrap_or_default()
+				.saturating_mul(number_of_chunks),
+		)
+	};
 
 	let AmountAndFeesWithheld { amount_after_fees: output, fees_withheld: egress_fee } =
 		if include_fee(FeeTypes::Egress) {
@@ -209,7 +244,7 @@ pub fn simulate_swap(
 	Ok(SimulatedSwapInformation {
 		intermediary,
 		output,
-		network_fee: network_fee_usdc,
+		network_fee,
 		ingress_fee,
 		egress_fee,
 		broker_fee,

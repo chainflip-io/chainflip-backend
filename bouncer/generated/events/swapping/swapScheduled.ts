@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { cfTraitsSwappingSwapType, numberOrHex } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const swappingSwapScheduled = z.object({
   swapRequestId: numberOrHex,
@@ -8,3 +9,8 @@ export const swappingSwapScheduled = z.object({
   swapType: cfTraitsSwappingSwapType,
   executeAt: z.number(),
 });
+
+export const swappingSwapScheduledEvent = defineEvent(
+  'Swapping.SwapScheduled',
+  swappingSwapScheduled,
+);

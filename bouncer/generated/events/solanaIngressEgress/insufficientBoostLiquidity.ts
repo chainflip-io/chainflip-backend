@@ -4,6 +4,7 @@ import {
   cfPrimitivesChainsAssetsSolAsset,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const solanaIngressEgressInsufficientBoostLiquidity = z.object({
   prewitnessedDepositId: numberOrHex,
@@ -12,3 +13,8 @@ export const solanaIngressEgressInsufficientBoostLiquidity = z.object({
   channelId: numberOrHex.nullish(),
   originType: cfChainsDepositOriginType,
 });
+
+export const solanaIngressEgressInsufficientBoostLiquidityEvent = defineEvent(
+  'SolanaIngressEgress.InsufficientBoostLiquidity',
+  solanaIngressEgressInsufficientBoostLiquidity,
+);

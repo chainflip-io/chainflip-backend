@@ -5,8 +5,9 @@ import { decodeDispatchError, sleep } from 'shared/utils';
 import { tryRuntimeUpgrade } from 'shared/try_runtime_upgrade';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { throwError } from 'shared/utils/logger';
-import { systemCodeUpdated } from 'generated/events/system/codeUpdated';
-import { governanceFailedExecution } from 'generated/events/governance/failedExecution';
+import { systemCodeUpdatedEvent } from 'generated/events/system/codeUpdated';
+import { governanceFailedExecutionEvent } from 'generated/events/governance/failedExecution';
+import { reputationPenaltyUpdatedEvent } from 'generated/events/reputation/penaltyUpdated';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
@@ -46,7 +47,7 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
         reputation: 0,
         suspension: 0,
       }),
-    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
+    expectedEvent: reputationPenaltyUpdatedEvent,
   });
 
   cf.info(`Submitting runtime upgrade. WASM size is ${wasmStats.size} bytes.`);
@@ -56,14 +57,8 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
 
   cf.info('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
   const resultEvent = await cf.stepUntilOneEventOf({
-    codeUpdated: {
-      name: 'System.CodeUpdated',
-      schema: systemCodeUpdated,
-    },
-    failedExecution: {
-      name: 'Governance.FailedExecution',
-      schema: governanceFailedExecution,
-    },
+    codeUpdated: systemCodeUpdatedEvent,
+    failedExecution: governanceFailedExecutionEvent,
   });
 
   if (resultEvent.key === 'failedExecution') {
@@ -83,7 +78,7 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
         reputation: 120,
         suspension: 150,
       }),
-    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
+    expectedEvent: reputationPenaltyUpdatedEvent,
   });
 }
 

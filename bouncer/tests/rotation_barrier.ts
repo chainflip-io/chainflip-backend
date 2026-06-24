@@ -10,9 +10,9 @@ import {
   observeBalanceIncrease,
 } from 'shared/utils';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
-import { liquidityProviderWithdrawalEgressScheduled } from 'generated/events/liquidityProvider/withdrawalEgressScheduled';
-import { arbitrumIngressEgressBatchBroadcastRequested } from 'generated/events/arbitrumIngressEgress/batchBroadcastRequested';
-import { arbitrumBroadcasterTransactionBroadcastRequest } from 'generated/events/arbitrumBroadcaster/transactionBroadcastRequest';
+import { liquidityProviderWithdrawalEgressScheduledEvent } from 'generated/events/liquidityProvider/withdrawalEgressScheduled';
+import { arbitrumIngressEgressBatchBroadcastRequestedEvent } from 'generated/events/arbitrumIngressEgress/batchBroadcastRequested';
+import { arbitrumBroadcasterTransactionBroadcastRequestEvent } from 'generated/events/arbitrumBroadcaster/transactionBroadcastRequest';
 
 // Testing broadcast through vault rotations
 export async function testRotationBarrier(testContext: TestContext) {
@@ -47,12 +47,9 @@ export async function testRotationBarrier(testContext: TestContext) {
           Arb: withdrawalAddress,
         },
       ),
-    expectedEvent: {
-      name: 'LiquidityProvider.WithdrawalEgressScheduled',
-      schema: liquidityProviderWithdrawalEgressScheduled.refine(
-        (event) => event.asset === Assets.ArbEth,
-      ),
-    },
+    expectedEvent: liquidityProviderWithdrawalEgressScheduledEvent.refine(
+      (event) => event.asset === Assets.ArbEth,
+    ),
   });
 
   const egressId = depositAddressReadyEvent.egressId;
@@ -62,8 +59,7 @@ export async function testRotationBarrier(testContext: TestContext) {
   );
 
   const batchBroadcastEvent = await cf.stepUntilEvent(
-    'ArbitrumIngressEgress.BatchBroadcastRequested',
-    arbitrumIngressEgressBatchBroadcastRequested.refine((event) =>
+    arbitrumIngressEgressBatchBroadcastRequestedEvent.refine((event) =>
       JSON.stringify(event.egressIds).includes(JSON.stringify(egressId)),
     ),
   );
@@ -71,8 +67,7 @@ export async function testRotationBarrier(testContext: TestContext) {
   const broadcastId = Number(batchBroadcastEvent.broadcastId);
 
   await cf.stepUntilEvent(
-    'ArbitrumBroadcaster.TransactionBroadcastRequest',
-    arbitrumBroadcasterTransactionBroadcastRequest.refine(
+    arbitrumBroadcasterTransactionBroadcastRequestEvent.refine(
       (event) => Number(event.broadcastId) === broadcastId,
     ),
   );
