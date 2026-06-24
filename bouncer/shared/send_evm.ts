@@ -6,6 +6,7 @@ import {
   getEvmWhaleKeypair,
   assetDecimals,
   getContractAddress,
+  isEvmChain,
 } from 'shared/utils';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { Logger } from 'shared/utils/logger';
@@ -33,7 +34,7 @@ export async function getNextEvmNonce(
     privkey: string;
   },
 ): Promise<number> {
-  if (chain !== 'Ethereum' && chain !== 'Arbitrum' && chain !== 'Bsc') {
+  if (!isEvmChain(chain)) {
     throw new Error('Invalid chain');
   }
 
@@ -79,7 +80,7 @@ function isNonceError(error: unknown): boolean {
 }
 
 export async function warnIfEvmAddressHasNoCode(logger: Logger, chain: Chain, address: string) {
-  if (chain !== 'Ethereum' && chain !== 'Arbitrum' && chain !== 'Bsc') return;
+  if (!isEvmChain(chain)) return;
 
   try {
     const web3 = getWeb3(chain);

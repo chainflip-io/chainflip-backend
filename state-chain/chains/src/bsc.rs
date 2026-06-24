@@ -43,13 +43,13 @@ pub const CHAIN_ID_TESTNET: u64 = 97;
 
 impl ChainWitnessConfig for Bsc {
 	type ChainBlockNumber = u64;
-	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 14;
 }
 
 impl Chain for Bsc {
 	const NAME: &'static str = "Bsc";
 	const GAS_ASSET: Self::ChainAsset = assets::bsc::Asset::Bnb;
-	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 14;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = eth::ONE_ETH;
 	const BURN_ADDRESS: Self::ChainAccount = H160([0; 20]);
 	const IS_EVM_CHAIN: bool = true;
@@ -104,6 +104,9 @@ impl Default for BscTrackedData {
 	}
 }
 
+/// Minimum gas price (wei) BSC validators will accept; below this, txs are likely dropped.
+const MIN_FEE_PER_GAS: <Bsc as Chain>::ChainAmount = 20_000_000_000;
+
 impl BscTrackedData {
 	pub fn max_fee_per_gas(
 		&self,
@@ -113,7 +116,7 @@ impl BscTrackedData {
 		// tx will likely be rejected by the validator
 		priority_fee_multiplier
 			.saturating_mul_int(self.priority_fee)
-			.max(20_000_000_000)
+			.max(MIN_FEE_PER_GAS)
 	}
 
 	pub fn calculate_ccm_gas_limit(
