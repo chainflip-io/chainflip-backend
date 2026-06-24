@@ -29,7 +29,6 @@ import {
   getContractAddress,
   decodeDispatchError,
   Asset,
-  Chain,
   getTronWhaleKeyPair,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
@@ -37,7 +36,7 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { executeEvmVaultSwap } from 'shared/vault_swap/evm_vault_swap';
 import { executeSolVaultSwap } from 'shared/vault_swap/sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from 'shared/vault_swap/btc_vault_swap';
-import { throwError, Logger } from 'shared/utils/logger';
+import { throwError } from 'shared/utils/logger';
 import { swappingSwapDepositAddressReadyEvent } from 'generated/events/swapping/swapDepositAddressReady';
 import { swappingSwapRequestCompletedEvent } from 'generated/events/swapping/swapRequestCompleted';
 import {
@@ -64,23 +63,11 @@ import { tronIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/tr
 import { tronIngressEgressCcmEgressInvalidEvent } from 'generated/events/tronIngressEgress/ccmEgressInvalid';
 import { tronIngressEgressCcmBroadcastFailedEvent } from 'generated/events/tronIngressEgress/ccmBroadcastFailed';
 import { tronBroadcasterBroadcastSuccessEvent } from 'generated/events/tronBroadcaster/broadcastSuccess';
-import { ethereumIngressEgressBatchBroadcastRequestedEvent } from 'generated/events/ethereumIngressEgress/batchBroadcastRequested';
-import { arbitrumIngressEgressBatchBroadcastRequestedEvent } from 'generated/events/arbitrumIngressEgress/batchBroadcastRequested';
-import { bitcoinIngressEgressBatchBroadcastRequestedEvent } from 'generated/events/bitcoinIngressEgress/batchBroadcastRequested';
-import { solanaIngressEgressBatchBroadcastRequestedEvent } from 'generated/events/solanaIngressEgress/batchBroadcastRequested';
-import { assethubIngressEgressBatchBroadcastRequestedEvent } from 'generated/events/assethubIngressEgress/batchBroadcastRequested';
-import { polkadotIngressEgressBatchBroadcastRequestedEvent } from 'generated/events/polkadotIngressEgress/batchBroadcastRequested';
-import { tronIngressEgressBatchBroadcastRequestedEvent } from 'generated/events/tronIngressEgress/batchBroadcastRequested';
-import { bitcoinBroadcasterBroadcastSuccessEvent } from 'generated/events/bitcoinBroadcaster/broadcastSuccess';
-import { assethubBroadcasterBroadcastSuccessEvent } from 'generated/events/assethubBroadcaster/broadcastSuccess';
-import { polkadotBroadcasterBroadcastSuccessEvent } from 'generated/events/polkadotBroadcaster/broadcastSuccess';
-import { ethereumBroadcasterBroadcastAbortedEvent } from 'generated/events/ethereumBroadcaster/broadcastAborted';
-import { arbitrumBroadcasterBroadcastAbortedEvent } from 'generated/events/arbitrumBroadcaster/broadcastAborted';
-import { bitcoinBroadcasterBroadcastAbortedEvent } from 'generated/events/bitcoinBroadcaster/broadcastAborted';
-import { solanaBroadcasterBroadcastAbortedEvent } from 'generated/events/solanaBroadcaster/broadcastAborted';
-import { assethubBroadcasterBroadcastAbortedEvent } from 'generated/events/assethubBroadcaster/broadcastAborted';
-import { polkadotBroadcasterBroadcastAbortedEvent } from 'generated/events/polkadotBroadcaster/broadcastAborted';
-import { tronBroadcasterBroadcastAbortedEvent } from 'generated/events/tronBroadcaster/broadcastAborted';
+import {
+  batchBroadcastRequestedEventFor,
+  broadcastSuccessEventFor,
+  broadcastAbortedEventFor,
+} from 'shared/utils/events_lookup';
 import { executeTronVaultSwap } from './vault_swap/tron_vault_swap';
 
 export type SwapParams = {
@@ -342,47 +329,6 @@ async function waitForCcmExecution<A = []>(
     default:
       throw new Error(`Unsupported CCM destination chain: ${destChain}`);
   }
-}
-
-// Per-chain generated event descriptor lookups. The name and schema travel together so they can
-// never drift apart; each function's return type is the union of the chain-specific descriptors.
-function batchBroadcastRequestedEventFor(logger: Logger, chain: Chain) {
-  const events = {
-    Ethereum: ethereumIngressEgressBatchBroadcastRequestedEvent,
-    Arbitrum: arbitrumIngressEgressBatchBroadcastRequestedEvent,
-    Bitcoin: bitcoinIngressEgressBatchBroadcastRequestedEvent,
-    Solana: solanaIngressEgressBatchBroadcastRequestedEvent,
-    Assethub: assethubIngressEgressBatchBroadcastRequestedEvent,
-    Polkadot: polkadotIngressEgressBatchBroadcastRequestedEvent,
-    Tron: tronIngressEgressBatchBroadcastRequestedEvent,
-  } as const;
-  return events[chain] ?? throwError(logger, new Error(`Unsupported destination chain: ${chain}`));
-}
-
-function broadcastSuccessEventFor(logger: Logger, chain: Chain) {
-  const events = {
-    Ethereum: ethereumBroadcasterBroadcastSuccessEvent,
-    Arbitrum: arbitrumBroadcasterBroadcastSuccessEvent,
-    Bitcoin: bitcoinBroadcasterBroadcastSuccessEvent,
-    Solana: solanaBroadcasterBroadcastSuccessEvent,
-    Assethub: assethubBroadcasterBroadcastSuccessEvent,
-    Polkadot: polkadotBroadcasterBroadcastSuccessEvent,
-    Tron: tronBroadcasterBroadcastSuccessEvent,
-  } as const;
-  return events[chain] ?? throwError(logger, new Error(`Unsupported destination chain: ${chain}`));
-}
-
-function broadcastAbortedEventFor(logger: Logger, chain: Chain) {
-  const events = {
-    Ethereum: ethereumBroadcasterBroadcastAbortedEvent,
-    Arbitrum: arbitrumBroadcasterBroadcastAbortedEvent,
-    Bitcoin: bitcoinBroadcasterBroadcastAbortedEvent,
-    Solana: solanaBroadcasterBroadcastAbortedEvent,
-    Assethub: assethubBroadcasterBroadcastAbortedEvent,
-    Polkadot: polkadotBroadcasterBroadcastAbortedEvent,
-    Tron: tronBroadcasterBroadcastAbortedEvent,
-  } as const;
-  return events[chain] ?? throwError(logger, new Error(`Unsupported destination chain: ${chain}`));
 }
 
 // Wait for the broadcast that fulfils the given (non-CCM) egress to either succeed or be aborted
