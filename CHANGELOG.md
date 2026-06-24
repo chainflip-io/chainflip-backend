@@ -2,6 +2,16 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.5] - 2026-06-24
+
+### Fixes
+
+- Updated Tron refund multiple
+- Apply message size limits in p2p protocol ([#6673](https://github.com/chainflip-io/chainflip-backend/issues/6673))
+- Track screening report cleanup weights ([#6648](https://github.com/chainflip-io/chainflip-backend/issues/6648))
+- Better error output for swap simulation ([#6672](https://github.com/chainflip-io/chainflip-backend/issues/6672))
+- Update assethub metadata to 2.3 ([#6666](https://github.com/chainflip-io/chainflip-backend/issues/6666))
+
 ## [2.2.4] - 2026-06-17
 
 ### Fixes
