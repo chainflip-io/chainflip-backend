@@ -199,6 +199,10 @@ services:
       - --rpc-methods=unsafe
       - --state-pruning=archive
       - --rpc-max-connections=100000
+      # Large transaction pool so egress txs aren't evicted under the bouncer's burst of
+      # concurrent swaps (eviction is what triggers the broadcast abort / nonce stall).
+      - --pool-limit=100000
+      - --pool-kbytes=250000
       - --node-key=808c85fab7ea8391de83fd0a16d069f9d5b43faa380886e439d76c4307d06039
       - --
       - --chain=/chainspecs/polkadot.raw.json
