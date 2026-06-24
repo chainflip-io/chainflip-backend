@@ -154,14 +154,12 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
 
   switch (destChain) {
     case 'Ethereum':
+    case 'Tron':
     case 'Bsc':
       length = MAX_CCM_MSG_LENGTH;
       break;
     case 'Arbitrum':
       length = ARB_MAX_CCM_MSG_LENGTH;
-      break;
-    case 'Tron':
-      length = MAX_CCM_MSG_LENGTH;
       break;
     case 'Solana':
       if (destAsset === 'Sol') {

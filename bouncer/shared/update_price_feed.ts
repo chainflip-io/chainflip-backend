@@ -97,10 +97,8 @@ export async function updatePriceFeed(logger: Logger, chain: Chain, asset: Asset
 
   switch (chain) {
     case 'Ethereum':
-      await updateEvmPriceFeed(logger, 'Ethereum', asset, price);
-      break;
     case 'Arbitrum':
-      await updateEvmPriceFeed(logger, 'Arbitrum', asset, price);
+      await updateEvmPriceFeed(logger, chain, asset, price);
       break;
     default:
       throw new Error(`Unsupported chain for price feed update: ${chain}`);

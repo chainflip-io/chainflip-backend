@@ -284,6 +284,11 @@ export function getContractAddress(chain: Chain, contract: string): string {
   }
 }
 
+export function chainFromAsset(asset: Asset): Chain {
+  if (isSDKAsset(asset)) return assetConstants[asset].chain;
+  throw new Error(`Unsupported asset: ${asset}`);
+}
+
 export function shortChainFromChain(chain: Chain) {
   switch (chain) {
     case 'Ethereum':
@@ -306,36 +311,7 @@ export function shortChainFromChain(chain: Chain) {
 }
 
 export function shortChainFromAsset(asset: Asset) {
-  switch (asset) {
-    case 'Eth':
-    case 'Flip':
-    case 'Usdc':
-    case 'Usdt':
-    case 'Wbtc':
-      return 'Eth';
-    case 'Btc':
-      return 'Btc';
-    case 'ArbUsdc':
-    case 'ArbUsdt':
-    case 'ArbEth':
-      return 'Arb';
-    case 'Sol':
-    case 'SolUsdc':
-    case 'SolUsdt':
-      return 'Sol';
-    case 'HubDot':
-    case 'HubUsdc':
-    case 'HubUsdt':
-      return 'Hub';
-    case 'Trx':
-    case 'TrxUsdt':
-      return 'Tron';
-    case 'Bnb':
-    case 'BscUsdt':
-      return 'Bsc';
-    default:
-      throw new Error(`Unsupported asset: ${asset}`);
-  }
+  return shortChainFromChain(chainFromAsset(asset));
 }
 
 export function amountToFineAmount(amount: string, decimals: number | string): string {
@@ -804,51 +780,30 @@ export function doAddressesMatch(
   }
 }
 
-export async function newAddress(
-  asset: Asset,
-  seed: string,
-  type?: BtcAddressType,
-): Promise<string> {
+async function newAddress(asset: Asset, seed: string, type?: BtcAddressType): Promise<string> {
+  const chain = chainFromAsset(asset);
   let rawAddress;
 
-  switch (asset) {
-    case Assets.Flip:
-    case Assets.Eth:
-    case Assets.Usdc:
-    case Assets.Usdt:
-    case Assets.Wbtc:
-    case Assets.ArbEth:
-    case Assets.ArbUsdc:
-    case Assets.ArbUsdt:
-    case Assets.Trx:
-    case Assets.TrxUsdt:
-    case Assets.Bnb:
-    case Assets.BscUsdt:
+  switch (chain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+    case 'Tron':
       rawAddress = newEvmAddress(seed);
       break;
-    case Assets.HubDot:
-    case Assets.HubUsdc:
-    case Assets.HubUsdt:
+    case 'Assethub':
       rawAddress = await newDotAddress(seed);
       break;
-    case Assets.Btc:
+    case 'Bitcoin':
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
-    case Assets.Sol:
-    case Assets.SolUsdc:
-    case Assets.SolUsdt:
+    case 'Solana':
       rawAddress = newSolAddress(seed);
       break;
     default:
-      throw new Error(`Unsupported asset: ${asset}`);
+      throw new Error(`Unsupported chain: ${chain}`);
   }
 
   return String(rawAddress).trim();
-}
-
-export function chainFromAsset(asset: Asset): Chain {
-  if (isSDKAsset(asset)) return assetConstants[asset].chain;
-  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function isEvmChain(chain: Chain): boolean {
