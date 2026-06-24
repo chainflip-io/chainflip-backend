@@ -12,7 +12,7 @@ run-name: Cherry pick `${{ github.event.pull_request.title }}` to release branch
 
 jobs:
   cherry-pick:
-    if: ${{ (github.event.pull_request.merged == true) && (contains(github.event.pull_request.labels.*.name, 'non-breaking')) }}
+    if: ${{ (github.event.pull_request.merged == true) && (contains(github.event.pull_request.labels.*.name, 'pick-to-release')) }}
     runs-on: namespace-profile-default-light
     steps:
       - name: Checkout branch
@@ -50,9 +50,9 @@ jobs:
             This is an automated cherry-pick of ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}.
             Please review and merge if appropriate.
             Original PR: ${{ github.event.pull_request.html_url }}
-          branch: pick/non-breaking
-          base: '${{ env.RELEASE_BRANCH }}'
-          reviewers: 'dandanlen'
+          branch: pick/pick-to-release
+          base: "${{ env.RELEASE_BRANCH }}"
+          reviewers: "dandanlen"
           labels: cherry-pick
           branch-suffix: timestamp
           delete-branch: true
