@@ -1959,6 +1959,45 @@ mod minimum_limit_order_amount {
 	const MIN_ETH: AssetAmount = 1_000;
 	const MIN_USDC: AssetAmount = 2_000;
 
+	// Helpers that expose only the fields relevant to these tests (assets, side, amount) and use
+	// fixed defaults for the rest (order id 0, tick 0, no scheduling).
+	fn set_order(
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		sell_amount: AssetAmount,
+	) -> DispatchResult {
+		LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			base_asset,
+			quote_asset,
+			side,
+			0,
+			Some(0),
+			sell_amount,
+			None,
+			None,
+		)
+	}
+
+	fn update_order(
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		amount_change: IncreaseOrDecrease<AssetAmount>,
+	) -> DispatchResult {
+		LiquidityPools::update_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			base_asset,
+			quote_asset,
+			side,
+			0,
+			Some(0),
+			amount_change,
+			None,
+		)
+	}
+
 	fn setup_pool_with_minimums() {
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
@@ -2012,31 +2051,11 @@ mod minimum_limit_order_amount {
 			setup_pool_with_minimums();
 			// Sell base asset (ETH) below the ETH minimum -> rejected.
 			assert_noop!(
-				LiquidityPools::set_limit_order(
-					RuntimeOrigin::signed(ALICE),
-					Asset::Eth,
-					STABLE_ASSET,
-					Side::Sell,
-					0,
-					Some(0),
-					MIN_ETH - 1,
-					None,
-					None,
-				),
+				set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH - 1),
 				Error::<Test>::BelowMinimumOrderAmount,
 			);
 			// At the minimum: accepted.
-			assert_ok!(LiquidityPools::set_limit_order(
-				RuntimeOrigin::signed(ALICE),
-				Asset::Eth,
-				STABLE_ASSET,
-				Side::Sell,
-				0,
-				Some(0),
-				MIN_ETH,
-				None,
-				None,
-			));
+			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH));
 		});
 	}
 
@@ -2046,31 +2065,11 @@ mod minimum_limit_order_amount {
 			setup_pool_with_minimums();
 			// Buy: selling quote asset (USDC). Below USDC min -> rejected.
 			assert_noop!(
-				LiquidityPools::set_limit_order(
-					RuntimeOrigin::signed(ALICE),
-					Asset::Eth,
-					STABLE_ASSET,
-					Side::Buy,
-					0,
-					Some(0),
-					MIN_USDC - 1,
-					None,
-					None,
-				),
+				set_order(Asset::Eth, STABLE_ASSET, Side::Buy, MIN_USDC - 1),
 				Error::<Test>::BelowMinimumOrderAmount,
 			);
 			// At the minimum: accepted.
-			assert_ok!(LiquidityPools::set_limit_order(
-				RuntimeOrigin::signed(ALICE),
-				Asset::Eth,
-				STABLE_ASSET,
-				Side::Buy,
-				0,
-				Some(0),
-				MIN_USDC,
-				None,
-				None,
-			));
+			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Buy, MIN_USDC));
 		});
 	}
 
@@ -2079,30 +2078,10 @@ mod minimum_limit_order_amount {
 		new_test_ext().execute_with(|| {
 			setup_pool_with_minimums();
 
-			assert_ok!(LiquidityPools::set_limit_order(
-				RuntimeOrigin::signed(ALICE),
-				Asset::Eth,
-				STABLE_ASSET,
-				Side::Sell,
-				0,
-				Some(0),
-				MIN_ETH,
-				None,
-				None,
-			));
+			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH));
 
 			// Even though MIN_ETH > 0, setting sell_amount = 0 closes the order and is accepted.
-			assert_ok!(LiquidityPools::set_limit_order(
-				RuntimeOrigin::signed(ALICE),
-				Asset::Eth,
-				STABLE_ASSET,
-				Side::Sell,
-				0,
-				None,
-				0,
-				None,
-				None,
-			));
+			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, 0));
 		});
 	}
 
@@ -2118,17 +2097,7 @@ mod minimum_limit_order_amount {
 				Price::at_tick_zero(),
 			));
 			MockBalance::credit_account(&ALICE, Asset::Eth, 1_000);
-			assert_ok!(LiquidityPools::set_limit_order(
-				RuntimeOrigin::signed(ALICE),
-				Asset::Eth,
-				STABLE_ASSET,
-				Side::Sell,
-				0,
-				Some(0),
-				1,
-				None,
-				None,
-			));
+			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, 1));
 		});
 	}
 
@@ -2139,15 +2108,11 @@ mod minimum_limit_order_amount {
 			// No existing order at this id. An Increase by less than the minimum must fail
 			// because the resulting amount would be below MIN_ETH.
 			assert_noop!(
-				LiquidityPools::update_limit_order(
-					RuntimeOrigin::signed(ALICE),
+				update_order(
 					Asset::Eth,
 					STABLE_ASSET,
 					Side::Sell,
-					0,
-					Some(0),
 					IncreaseOrDecrease::Increase(MIN_ETH - 1),
-					None,
 				),
 				Error::<Test>::BelowMinimumOrderAmount,
 			);
@@ -2158,15 +2123,11 @@ mod minimum_limit_order_amount {
 	fn update_increase_to_min_succeeds() {
 		new_test_ext().execute_with(|| {
 			setup_pool_with_minimums();
-			assert_ok!(LiquidityPools::update_limit_order(
-				RuntimeOrigin::signed(ALICE),
+			assert_ok!(update_order(
 				Asset::Eth,
 				STABLE_ASSET,
 				Side::Sell,
-				0,
-				Some(0),
 				IncreaseOrDecrease::Increase(MIN_ETH),
-				None,
 			));
 		});
 	}
@@ -2176,28 +2137,14 @@ mod minimum_limit_order_amount {
 		new_test_ext().execute_with(|| {
 			setup_pool_with_minimums();
 			// Open an order well above the minimum.
-			assert_ok!(LiquidityPools::set_limit_order(
-				RuntimeOrigin::signed(ALICE),
-				Asset::Eth,
-				STABLE_ASSET,
-				Side::Sell,
-				0,
-				Some(0),
-				MIN_ETH * 2,
-				None,
-				None,
-			));
+			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH * 2));
 			// Decreasing such that the remainder is non-zero and below the minimum is rejected.
 			assert_noop!(
-				LiquidityPools::update_limit_order(
-					RuntimeOrigin::signed(ALICE),
+				update_order(
 					Asset::Eth,
 					STABLE_ASSET,
 					Side::Sell,
-					0,
-					None,
 					IncreaseOrDecrease::Decrease(MIN_ETH + 1),
-					None,
 				),
 				Error::<Test>::BelowMinimumOrderAmount,
 			);
@@ -2208,28 +2155,55 @@ mod minimum_limit_order_amount {
 	fn update_decrease_to_zero_allowed() {
 		new_test_ext().execute_with(|| {
 			setup_pool_with_minimums();
-			assert_ok!(LiquidityPools::set_limit_order(
-				RuntimeOrigin::signed(ALICE),
-				Asset::Eth,
-				STABLE_ASSET,
-				Side::Sell,
-				0,
-				Some(0),
-				MIN_ETH * 10,
-				None,
-				None,
-			));
+			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH * 10));
 			// Closing the order in full is allowed even though the min is > 0.
-			assert_ok!(LiquidityPools::update_limit_order(
-				RuntimeOrigin::signed(ALICE),
+			assert_ok!(update_order(
 				Asset::Eth,
 				STABLE_ASSET,
 				Side::Sell,
-				0,
-				None,
 				IncreaseOrDecrease::Decrease(MIN_ETH * 10),
-				None,
 			));
 		});
+	}
+
+	#[test]
+	fn scheduled_update_below_min_fails_and_rolls_back() {
+		const DISPATCH_AT: u64 = 2;
+
+		new_test_ext()
+			.execute_with(|| {
+				setup_pool_with_minimums();
+				// Open a sell order well above the minimum.
+				assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH * 2));
+				let balance_after_open = MockBalance::get_balance(&ALICE, Asset::Eth);
+
+				// Schedule a decrease that would leave a non-zero remainder below the minimum.
+				assert_ok!(LiquidityPools::update_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Eth,
+					STABLE_ASSET,
+					Side::Sell,
+					0,
+					Some(0),
+					IncreaseOrDecrease::Decrease(MIN_ETH + 1),
+					Some(DISPATCH_AT),
+				));
+				balance_after_open
+			})
+			.then_process_blocks_until_block(DISPATCH_AT)
+			.then_execute_with(|balance_after_open| {
+				// The scheduled dispatch failed on the min check...
+				assert_eq!(
+					last_event::<Test>(),
+					RuntimeEvent::LiquidityPools(Event::ScheduledLimitOrderUpdateDispatchFailure {
+						lp: ALICE,
+						order_id: 0,
+						error: Error::<Test>::BelowMinimumOrderAmount.into(),
+					})
+				);
+				// ...and the balance debit from the decrease was rolled back (no Eth credited
+				// back to ALICE), proving the transactional wrapper works on the scheduled path.
+				assert_eq!(MockBalance::get_balance(&ALICE, Asset::Eth), balance_after_open);
+			});
 	}
 }

@@ -7,7 +7,7 @@ export const liquidityPoolsMinimumLimitOrderAmountSet = z.object({
   amount: numberOrHex,
 });
 
-export const liquidityPoolsLimitOrderUpdatedEvent = defineEvent(
-  'LiquidityPools.MinimumLimitOrderAmountSetEvent',
+export const liquidityPoolsMinimumLimitOrderAmountSetEvent = defineEvent(
+  'LiquidityPools.MinimumLimitOrderAmountSet',
   liquidityPoolsMinimumLimitOrderAmountSet,
 );
