@@ -82,7 +82,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0118: DoS vector in hickory-proto which is used by libp2p. Dependency of substrate, related to DNS resolution. Low risk.
 # - RUSTSEC-2026-0119: DoS vector in hickory-proto which is used by libp2p. Dependency of substrate, related to DNS resolution. Low risk.
 # - RUSTSEC-2026-0173: proc-macro-error2 unmaintained. Build-time proc-macro helper, transitive dependency of `subxt-macro`. Not a runtime security concern.
-
+# - RUSTSEC-2026-0186: Unchecked pointer offset in memmap2 0.5.10. Transitive via parity-db. Unsound, not a known exploitable path. out of our control.
 #
 cf-audit = '''
 audit -D unmaintained -D unsound
@@ -131,6 +131,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0118
 	--ignore RUSTSEC-2026-0119
 	--ignore RUSTSEC-2026-0173
+	--ignore RUSTSEC-2026-0186
 '''
 
 [build]
