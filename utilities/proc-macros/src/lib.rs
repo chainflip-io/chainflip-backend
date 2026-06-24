@@ -16,6 +16,39 @@
 
 use proc_macro::TokenStream;
 
+mod better_modules;
+
+/// Proc macro that takes a "telescope" of type parameters and threads them
+/// through all items in the block.
+///
+/// Usage:
+/// ```ignore
+/// better_modules! {
+///     mod (A: Trait) (B: Trait) {
+///         pub type Alias = (A::Assoc, B::Assoc);
+///
+///         pub struct Foo {
+///             field: A::Assoc,
+///         }
+///
+///         impl SomeTrait for Foo {
+///             // ...
+///         }
+///
+///         if (condition) {
+///             // emitted when condition is non-empty
+///         } else {
+///             // emitted when condition is empty
+///         }
+///     }
+/// }
+/// ```
+#[proc_macro]
+pub fn better_modules(input: TokenStream) -> TokenStream {
+	let input = syn::parse_macro_input!(input as better_modules::Input);
+	better_modules::expand(input).into()
+}
+
 /// Attribute macro that wraps the annotated struct in a `cf_utilities::generate_module!`
 /// invocation, automatically generating the module name as `_StructName`.
 ///
