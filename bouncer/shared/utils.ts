@@ -788,6 +788,7 @@ async function newAddress(asset: Asset, seed: string, type?: BtcAddressType): Pr
     case 'Ethereum':
     case 'Arbitrum':
     case 'Tron':
+    case 'Bsc':
       rawAddress = newEvmAddress(seed);
       break;
     case 'Assethub':
