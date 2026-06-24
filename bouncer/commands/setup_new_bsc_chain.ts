@@ -13,7 +13,7 @@ import { depositLiquidity, registerLiquidityRefundAddressForChain } from 'shared
 import { rangeOrder } from 'shared/range_order';
 import { initializeBscChain, initializeBscContracts } from 'shared/initialize_new_chains';
 import { getKeyManagerAbi } from 'shared/contract_interfaces';
-import { bscVaultVaultRotatedExternally } from 'generated/events/bscVault/vaultRotatedExternally';
+import { bscVaultVaultRotatedExternallyEvent } from 'generated/events/bscVault/vaultRotatedExternally';
 
 async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up vaults for Bsc');
@@ -45,7 +45,7 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
   // Step 3: the engine witnesses the gov-key set on the BSC KeyManager, which activates the
   // Bsc vault on the state chain via `inner_vault_key_rotated_externally`. No rotation needed.
   cf.info('Waiting for Bsc vault activation to be witnessed');
-  await cf.stepUntilEvent('BscVault.VaultRotatedExternally', bscVaultVaultRotatedExternally);
+  await cf.stepUntilEvent(bscVaultVaultRotatedExternallyEvent);
   cf.info('Vault Setup completed');
 
   // Setup swaps
