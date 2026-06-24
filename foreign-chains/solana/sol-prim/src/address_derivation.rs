@@ -132,6 +132,24 @@ mod tests {
 	const VAULT_SWAP_SEED: &[u8] = &[1; 32];
 
 	#[test]
+	fn recover_com113_bump() {
+		// COM-113: Solana deposit channel 107338 reproduces its on-chain address with bump 254
+		// (vault_program = Berghain mainnet sol_vault_program). Confirms channel_id + recovers
+		// bump.
+		assert_eq!(
+			derive_deposit_address(
+				107338u64,
+				Address::from_str("AusZPVXPoUM8QJJ2SL4KwvRGCQ22cDg6Y4rg7EvFrxi7").unwrap(),
+			)
+			.unwrap(),
+			PdaAndBump {
+				address: Address::from_str("Ea9DPpvasokfDKx3Bd9szQPyPLF22rFRDhZSXFiVEKkW").unwrap(),
+				bump: 254u8,
+			},
+		);
+	}
+
+	#[test]
 	fn derive_associated_token_account_on_curve() {
 		let wallet_address =
 			Address::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
