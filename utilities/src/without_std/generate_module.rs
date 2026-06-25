@@ -348,7 +348,7 @@ macro_rules! generate_module {
 
             /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
-            #[derive(Copy, Clone, PartialEq, Eq, Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen)]
+            #[derive(Copy, Clone, PartialEq, Eq, Hash, scale_info::TypeInfo)]
             #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
             #[scale_info(skip_type_params(Ty))]
             pub enum Enum<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
@@ -359,6 +359,98 @@ macro_rules! generate_module {
             }
 
             // --------------------- custom implemenations of external traits --------------------------
+
+            //
+            // Encode / Decode / DecodeWithMemTracking
+            //
+            // These traits have to be implemented manually because empty variants (containing the `Never` type)
+            // must be completely skipped and must not consume discriminant indices.
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::Encode for Enum<Ty, $($($T,)+)?>
+            where
+                $(
+                    Ty::$variant: codec::Encode + cf_utilities::type_introspection::HasTypeIntrospection,
+                )*
+            {
+                fn size_hint(&self) -> usize {
+                    match self {
+                        $(
+                            Self::$variant(val) => 1usize + codec::Encode::size_hint(val),
+                        )*
+                        Self::_phantom(_) => 0,
+                    }
+                }
+
+                fn encode_to<__W: codec::Output + ?Sized>(&self, dest: &mut __W) {
+                    let mut _compact_idx: u8 = 0;
+                    $(
+                        let $variant = _compact_idx;
+                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                            _compact_idx += 1;
+                        }
+                    )*
+
+                    match self {
+                        $(
+                            Self::$variant(val) => {
+                                codec::Encode::encode_to(&$variant, dest);
+                                codec::Encode::encode_to(val, dest);
+                            }
+                        )*
+                        Self::_phantom(_) => {}
+                    }
+                }
+            }
+
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::Decode for Enum<Ty, $($($T,)+)?>
+            where
+                $(
+                    Ty::$variant: codec::Decode + cf_utilities::type_introspection::HasTypeIntrospection,
+                )*
+            {
+                fn decode<__I: codec::Input>(input: &mut __I) -> Result<Self, codec::Error> {
+                    let idx = <u8 as codec::Decode>::decode(input)?;
+                    let mut _compact_idx: u8 = 0;
+                    $(
+                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                            if idx == _compact_idx {
+                                return Ok(Self::$variant(<Ty::$variant as codec::Decode>::decode(input)?));
+                            }
+                            _compact_idx += 1;
+                        }
+                    )*
+                    Err(codec::Error::from("Invalid variant index"))
+                }
+            }
+
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::DecodeWithMemTracking for Enum<Ty, $($($T,)+)?>
+            where
+                $(
+                    Ty::$variant: codec::DecodeWithMemTracking + cf_utilities::type_introspection::HasTypeIntrospection,
+                )*
+                Self: codec::Decode,
+            {}
+
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::MaxEncodedLen for Enum<Ty, $($($T,)+)?>
+            where
+                $(
+                    Ty::$variant: codec::MaxEncodedLen + cf_utilities::type_introspection::HasTypeIntrospection,
+                )*
+                Self: codec::Encode,
+            {
+                fn max_encoded_len() -> usize {
+                    let mut max_variant_size: usize = 0;
+                    $(
+                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                            let size = <Ty::$variant as codec::MaxEncodedLen>::max_encoded_len();
+                            if size > max_variant_size {
+                                max_variant_size = size;
+                            }
+                        }
+                    )*
+                    // 1 byte for the discriminant + max variant payload
+                    1usize + max_variant_size
+                }
+            }
 
             //
             // Arbitrary
