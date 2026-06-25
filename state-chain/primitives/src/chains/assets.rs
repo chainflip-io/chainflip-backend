@@ -90,7 +90,7 @@ macro_rules! assets {
 			use core::ops::{Index, IndexMut};
 			use core::iter::FromIterator;
 
-            cf_utilities::generate_module! {
+            // cf_utilities::generate_module! {
                 #[derive(
                     Copy,
                     Clone,
@@ -113,8 +113,8 @@ macro_rules! assets {
                         $($asset_variant = $asset_index,)+
                     )+
                 }
-                mod _Asset { #![migrations] }
-            }
+            //     mod _Asset { #![migrations] }
+            // }
 			impl TryFrom<u32> for Asset {
 				type Error = &'static str;
 
