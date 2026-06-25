@@ -51,7 +51,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN => {
-				if crate::VERSION.spec_version != 2_02_04 {
+				if crate::VERSION.spec_version != 2_02_06 {
 					log::info!("🧹 No housekeeping required for Berghain.");
 					return Weight::zero();
 				}
