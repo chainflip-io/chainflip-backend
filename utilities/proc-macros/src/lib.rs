@@ -17,6 +17,7 @@
 use proc_macro::TokenStream;
 
 mod better_modules;
+mod enum_elim;
 mod type_introspection;
 
 /// Proc macro that takes a "telescope" of type parameters and threads them
@@ -89,4 +90,10 @@ pub fn generate_module(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn derive_has_type_introspection(input: TokenStream) -> TokenStream {
 	let input = syn::parse_macro_input!(input as syn::DeriveInput);
 	type_introspection::derive(input).into()
+}
+
+#[proc_macro_derive(EnumElim)]
+pub fn derive_enum_elim(input: TokenStream) -> TokenStream {
+	let input = syn::parse_macro_input!(input as syn::DeriveInput);
+	enum_elim::derive(input).into()
 }
