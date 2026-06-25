@@ -345,9 +345,8 @@ macro_rules! generate_module {
 
             /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
-            #[derive(Copy, Clone, PartialEq, Eq, Hash, scale_info::TypeInfo)]
+            #[derive(Copy, Clone, PartialEq, Eq, Hash)]
             #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
-            #[scale_info(skip_type_params(Ty))]
             pub enum Enum<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
                 $(
                     $variant(Ty::$variant),
@@ -358,10 +357,53 @@ macro_rules! generate_module {
             // --------------------- custom implemenations of external traits --------------------------
 
             //
+            // TypeInfo
+            //
+            // Implemented manually so that the variant indices in the type registry match
+            // the actual Encode/Decode discriminants (which skip empty variants and respect
+            // user-provided discriminant values). The `_phantom` variant is excluded from
+            // the type info since it's not a real variant.
+            impl<$( $($T: 'static $(+ $TBound)?,)+ )? Ty: Types + 'static> scale_info::TypeInfo for Enum<Ty, $($($T,)+)?>
+            where
+                $(
+                    Ty::$variant: scale_info::TypeInfo + cf_utilities::type_introspection::HasTypeIntrospection + 'static,
+                )*
+            {
+                type Identity = Self;
+
+                fn type_info() -> scale_info::Type {
+                    let mut _disc: u8 = 0;
+                    let mut variants = scale_info::build::Variants::new();
+                    $(
+                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                            $( _disc = $variant_discriminant as u8; )?
+                            let disc = _disc;
+                            variants = variants.variant(stringify!($variant), |v| {
+                                v.index(disc)
+                                 .fields(scale_info::build::Fields::unnamed()
+                                     .field(|f| f.ty::<Ty::$variant>()))
+                            });
+                            _disc += 1;
+                        }
+                    )*
+
+                    scale_info::Type::builder()
+                        .path(scale_info::Path::new(stringify!(Enum), module_path!()))
+                        .variant(variants)
+                }
+            }
+
+            //
             // Encode / Decode / DecodeWithMemTracking
             //
             // These traits have to be implemented manually because empty variants (containing the `Never` type)
             // must be completely skipped and must not consume discriminant indices.
+            //
+            // Discriminant handling: when variants have explicit discriminants (`= N`), those values
+            // are used as SCALE encoding indices (matching parity-scale-codec's derive behavior).
+            // Empty variants are treated as if removed from the source code: they don't consume a
+            // discriminant slot, and subsequent implicit discriminants are computed from the last
+            // non-empty variant.
             impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::Encode for Enum<Ty, $($($T,)+)?>
             where
                 $(
@@ -378,11 +420,15 @@ macro_rules! generate_module {
                 }
 
                 fn encode_to<__W: codec::Output + ?Sized>(&self, dest: &mut __W) {
-                    let mut _compact_idx: u8 = 0;
+                    let mut _disc: u8 = 0;
                     $(
-                        let $variant = _compact_idx;
+                        let $variant;
                         if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
-                            _compact_idx += 1;
+                            $( _disc = $variant_discriminant as u8; )?
+                            $variant = _disc;
+                            _disc += 1;
+                        } else {
+                            $variant = 0; // dummy value, variant will never be encoded
                         }
                     )*
 
@@ -406,13 +452,14 @@ macro_rules! generate_module {
             {
                 fn decode<__I: codec::Input>(input: &mut __I) -> Result<Self, codec::Error> {
                     let idx = <u8 as codec::Decode>::decode(input)?;
-                    let mut _compact_idx: u8 = 0;
+                    let mut _disc: u8 = 0;
                     $(
                         if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
-                            if idx == _compact_idx {
+                            $( _disc = $variant_discriminant as u8; )?
+                            if idx == _disc {
                                 return Ok(Self::$variant(<Ty::$variant as codec::Decode>::decode(input)?));
                             }
-                            _compact_idx += 1;
+                            _disc += 1;
                         }
                     )*
                     Err(codec::Error::from("Invalid variant index"))
