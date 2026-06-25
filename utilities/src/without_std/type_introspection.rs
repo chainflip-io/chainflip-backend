@@ -10,3 +10,9 @@ impl HasTypeIntrospection for Type {
 		false
 	}
 }
+
+impl<A> HasTypeIntrospection for sp_std::marker::PhantomData<A> {
+	fn is_empty_type() -> bool {
+		false
+	}
+}
