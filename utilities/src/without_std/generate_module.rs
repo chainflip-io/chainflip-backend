@@ -18,7 +18,7 @@
 macro_rules! generate_module {
     (
 		$(#[$($Attributes:tt)*])*
-        $vis:vis struct $struct:ident$(<$T:ident $(: $TBound:path)?>)? {
+        $vis:vis struct $struct:ident$(< $($T:ident $(: $TBound:path)?),+ >)? {
             $(
 		        $(#[$($Field_Attributes:tt)*])*
                 $field_vis:vis $field:ident: $field_ty:ty,
@@ -29,7 +29,7 @@ macro_rules! generate_module {
         $(
             #[$($Attributes)*]
         )*
-        $vis struct $struct$(<$T $(: $TBound)?>)? {
+        $vis struct $struct$(< $($T $(: $TBound)?),+ >)? {
             $(
                 $( #[$($Field_Attributes)*])*
                 $field_vis $field: $field_ty,
@@ -120,32 +120,32 @@ macro_rules! generate_module {
             #[derive_where(Eq; $(Ty::$field: Eq),*)]
             #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
             #[scale_info(skip_type_params(Ty))]
-            pub struct Struct<Ty: Types, $( $T $(: $TBound)?, )? > {
+            pub struct Struct<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
                 $(
                     pub $field: Ty::$field,
                 )+
                 // In order for `proptest_derive::Arbitrary` to work, we're not allowed to mention `sp_std` in the following type,
                 // since the macro has manual filters for `std::marker::PhantomData`, and `PhantomData`, but not for `sp_std::...`.
                 // That's why we import it above.
-                pub _phantom: PhantomData<($($T,)?)>,
+                pub _phantom: PhantomData<($($($T,)+)?)>,
             }
 
-            impl<$( $T $(: $TBound)?, )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($T)?>
-            where $struct$(<$T>)?: HasChangelog
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($($T,)+)?>
+            where $struct$(< $($T,)+ >)?: HasChangelog
             {
-                type GetCurrentType = $struct$(<$T>)?;
+                type GetCurrentType = $struct$(< $($T,)+ >)?;
             }
 
             pub type see_field_changelogs = see_field_changelogs_and_also<()>;
             pub struct see_field_changelogs_and_also<M>(M);
 
-            impl<M: CustomMigration<To, V>, $( $T $(: $TBound)?, )? To: HistoricalTypesAt<V>, V: Version> Migration<Struct<To, $($T)?>, V> for see_field_changelogs_and_also<M>
+            impl<M: CustomMigration<To, V>, $( $($T $(: $TBound)?,)+ )? To: HistoricalTypesAt<V>, V: Version> Migration<Struct<To, $($($T,)+)?>, V> for see_field_changelogs_and_also<M>
             where
-                Struct< source_of_custom_migration<To, V, M> , $($T)?  >: IsHistoricalType
+                Struct< source_of_custom_migration<To, V, M> , $($($T,)+)?  >: IsHistoricalType
             {
-                type From = Struct< source_of_custom_migration<To, V, M> , $($T)?  >;
+                type From = Struct< source_of_custom_migration<To, V, M> , $($($T,)+)?  >;
 
-                fn forwards(x: Self::From) -> Struct<To, $($T)?> {
+                fn forwards(x: Self::From) -> Struct<To, $($($T,)+)?> {
                     Struct {
                         $(
                             $field: <ResolveCustomMigration::<To, V, M> as Types>::$field::forwards(x.$field),
@@ -154,7 +154,7 @@ macro_rules! generate_module {
                     }
                 }
 
-                fn backwards(x: Struct<To, $($T)?>) -> Self::From {
+                fn backwards(x: Struct<To, $($($T,)+)?>) -> Self::From {
                     Struct {
                         $(
                             $field: <ResolveCustomMigration::<To, V, M> as Types>::$field::backwards(x.$field),
@@ -184,45 +184,45 @@ macro_rules! generate_module {
 
             // ----------------- connection with default struct ------------------ //
 
-            pub struct DefaultTypes$(<$T $(: $TBound)?>)?($($T)?);
+            pub struct DefaultTypes$(< $($T $(: $TBound)?),+ >)?($($($T,)+)?);
 
-            impl$(<$T $(: $TBound)?>)? Types for DefaultTypes$(<$T>)? {
+            impl$(< $($T $(: $TBound)?),+ >)? Types for DefaultTypes$(< $($T,)+ >)? {
                 $(
                     type $field = $field_ty;
                 )*
             }
 
-            impl $(< $T $(: $TBound)?, >)? HasGenericVariant for $struct $(<$T>)?
+            impl $(< $($T $(: $TBound)?),+ >)? HasGenericVariant for $struct $(< $($T,)+ >)?
             where $( $field_ty: HasGenericVariant,)*
                 Struct<(
                     $(
                         GetGenericVariant<$field_ty>,
                     )*
-                ), $($T)?>: IsHistoricalType
+                ), $($($T,)+)?>: IsHistoricalType
             {
                 type GenericType = Struct<(
                     $(
                         GetGenericVariant<$field_ty>,
                     )*
-                ), $($T)?>;
+                ), $($($T,)+)?>;
                 type MigrationFromGeneric = GlobalMigrationFromGeneric;
             }
 
-            impl $(< $T $(: $TBound)? >)? Migration<$struct $(<$T>)?, vCurrent> for GlobalMigrationFromGeneric
+            impl $(< $($T $(: $TBound)?),+ >)? Migration<$struct $(< $($T,)+ >)?, vCurrent> for GlobalMigrationFromGeneric
             where $( $field_ty: HasGenericVariant,)*
                 Struct<(
                     $(
                         GetGenericVariant<$field_ty>,
                     )*
-                ), $($T)?>: IsHistoricalType
+                ), $($($T,)+)?>: IsHistoricalType
             {
                 type From = Struct<(
                     $(
                         GetGenericVariant<$field_ty>,
                     )*
-                ), $($T)?>;
+                ), $($($T,)+)?>;
 
-                fn forwards(x: Self::From) -> $struct $(<$T>)? {
+                fn forwards(x: Self::From) -> $struct $(< $($T,)+ >)? {
                     $struct {
                         $(
                             $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field),
@@ -230,7 +230,7 @@ macro_rules! generate_module {
                     }
                 }
 
-                fn backwards(x: $struct $(<$T>)?) -> Self::From {
+                fn backwards(x: $struct $(< $($T,)+ >)?) -> Self::From {
                     Struct {
                         $(
                             $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
