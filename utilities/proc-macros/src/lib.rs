@@ -17,6 +17,7 @@
 use proc_macro::TokenStream;
 
 mod better_modules;
+mod type_introspection;
 
 /// Proc macro that takes a "telescope" of type parameters and threads them
 /// through all items in the block.
@@ -82,4 +83,10 @@ pub fn generate_module(_attr: TokenStream, item: TokenStream) -> TokenStream {
 		}
 	};
 	output.into()
+}
+
+#[proc_macro_derive(HasTypeIntrospection)]
+pub fn derive_has_type_introspection(input: TokenStream) -> TokenStream {
+	let input = syn::parse_macro_input!(input as syn::DeriveInput);
+	type_introspection::derive(input).into()
 }
