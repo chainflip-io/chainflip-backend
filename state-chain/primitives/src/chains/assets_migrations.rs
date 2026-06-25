@@ -14,7 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_utilities::migrations::{basics::HasVersion, v20100, v20200, v20300, HasChangelog};
+use cf_utilities::migrations::{
+	basics::{HasGenericVariant, HasVersion, IdentityMigration},
+	v20100, v20200, v20300, HasChangelog,
+};
+
+use crate::Asset;
 
 use super::assets::*;
 
@@ -80,6 +85,10 @@ where
 		any::_AssetMap::see_field_changelogs_and_also<any::_AssetMap::field::bsc::Added>;
 }
 
+impl HasChangelog for Asset {
+	type if_unspecified = IdentityMigration;
+}
+
 // --------- testing ------------
 
 pub trait T1 {
@@ -99,11 +108,44 @@ cf_utilities::generate_module! {
 	mod _MyTestValues { #![migrations] }
 }
 
-type XX = _MyTestValues::variants::Variant1<u8>;
+// type XX = _MyTestValues::variants::Variant1<u8>;
 
 // duplicate::substitute! {
 // 	[
 // 		typ1 [T: T1, T2: Copy];
 // 	]
 // 	type X<typ1> = T::XY;
+// }
+
+trait Good {
+	type Bad;
+}
+
+cf_proc_macros::better_modules! {
+	mod (A: T1) {
+		type MyType = A::XY;
+		type Bla = u16;
+		struct ThisIsS {
+			value: A::XY,
+		}
+		struct Without {
+			value: bool,
+		}
+		impl Good for ThisIsS {
+			type Bad = u8;
+		}
+	}
+}
+
+type X = Bla;
+
+// cf_proc_macros::better_modules! {
+// 	mod (A: T1) {
+// 		struct ThisIsS {
+// 			value: A::XY,
+// 		}
+// 		impl std::fmt::Debug for ThisIsS {
+
+// 		}
+// 	}
 // }

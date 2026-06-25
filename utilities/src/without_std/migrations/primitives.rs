@@ -212,6 +212,16 @@ impl_migrations_for_container! {
 	|x| x.into_iter().map(M::backwards).collect(),
 }
 
+pub type TupleWith1Entry<A> = (A,);
+
+impl_migrations_for_container! {
+	TupleWith1Entry<A>,
+	impl_changelog_for_tuple1,
+	[M1],
+	|x| (M1::forwards(x.0),),
+	|x| (M1::backwards(x.0),),
+}
+
 pub type TupleWith2Entries<A, B> = (A, B);
 
 impl_migrations_for_container! {
