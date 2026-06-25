@@ -24,7 +24,9 @@ use cf_amm::{
 	PoolState,
 };
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
+use cf_primitives::{
+	chains::assets::any, Asset, AssetAmount, AssetAndAmount, OrderId, STABLE_ASSET,
+};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
@@ -1098,11 +1100,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_minimum_limit_order_amounts(minimums.len() as u32))]
 		pub fn set_minimum_limit_order_amounts(
 			origin: OriginFor<T>,
-			minimums: BoundedVec<(Asset, AssetAmount), ConstU32<100>>,
+			minimums: BoundedVec<AssetAndAmount<AssetAmount>, ConstU32<100>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			for (asset, amount) in minimums {
+			for AssetAndAmount { asset, amount } in minimums {
 				MinimumLimitOrderAmount::<T>::set(asset, amount);
 				Self::deposit_event(Event::<T>::MinimumLimitOrderAmountSet { asset, amount });
 			}
