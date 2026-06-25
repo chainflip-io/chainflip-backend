@@ -78,9 +78,9 @@ where
 		any::_AssetMap::see_field_changelogs_and_also<any::_AssetMap::field::tron::Added>;
 }
 
-impl HasChangelog for Asset {
-	type if_unspecified = IdentityMigration;
-}
+// impl HasChangelog for Asset {
+// 	type if_unspecified = IdentityMigration;
+// }
 
 // --------- testing ------------
 
@@ -88,18 +88,18 @@ pub trait T1 {
 	type XY;
 }
 
-cf_utilities::generate_module! {
-	pub enum MyTestValues<T: T1> {
-		Variant1(T::XY),
-		// Variant2(u8,u16),
-		// Variant3(T::XY),
-		// Variant4 {
-		// 	myfield: u8,
-		// 	field2: (T::XY, T::XY, u16),
-		// },
-	}
-	mod _MyTestValues { #![migrations] }
+// cf_utilities::generate_module! {
+pub enum MyTestValues<T: T1> {
+	Variant1(T::XY),
+	// Variant2(u8,u16),
+	// Variant3(T::XY),
+	// Variant4 {
+	// 	myfield: u8,
+	// 	field2: (T::XY, T::XY, u16),
+	// },
 }
+// 	mod _MyTestValues { #![migrations] }
+// }
 
 // type XX = _MyTestValues::variants::Variant1<u8>;
 
