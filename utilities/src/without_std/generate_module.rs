@@ -346,16 +346,47 @@ macro_rules! generate_module {
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
             #[derive(Copy, Clone, PartialEq, Eq, Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen)]
             #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
-            #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
             #[scale_info(skip_type_params(Ty))]
             pub enum Enum<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
                 $(
                     $variant(Ty::$variant),
                 )*
-                // In order for `proptest_derive::Arbitrary` to work, we're not allowed to mention `sp_std` in the following type,
-                // since the macro has manual filters for `std::marker::PhantomData`, and `PhantomData`, but not for `sp_std::...`.
-                // That's why we import it above.
                 _phantom(PhantomData<($($($T,)+)?)>),
+            }
+
+            // --------------------- custom implemenations of external traits --------------------------
+
+            //
+            // Arbitrary
+            //
+            // This trait has to be implemented manually because the standard derive doesn't properly deal with variants that
+            // cannot be instantiated (e.g. because they contain `!`, the "Never" type).
+            #[cfg(any(test, all(feature = "proptest", feature = "std")))]
+            impl<$( $($T: 'static $(+ $TBound)?,)+ )? Ty: Types + 'static> proptest::arbitrary::Arbitrary for Enum<Ty, $($($T,)+)?>
+            where
+                $(
+                    Ty::$variant: proptest::arbitrary::Arbitrary + cf_utilities::type_introspection::HasTypeIntrospection + sp_std::fmt::Debug + 'static,
+                )*
+            {
+                type Parameters = ();
+                type Strategy = proptest::strategy::BoxedStrategy<Self>;
+
+                fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+                    use proptest::strategy::Strategy;
+
+                    let mut strategies: Vec<proptest::strategy::BoxedStrategy<Self>> = Vec::new();
+                    $(
+                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                            strategies.push(
+                                proptest::arbitrary::any::<Ty::$variant>()
+                                    .prop_map(|val| Enum::$variant(val))
+                                    .boxed()
+                            );
+                        }
+                    )*
+                    assert!(!strategies.is_empty(), "All variants of Enum are empty types — cannot generate arbitrary values");
+                    proptest::strategy::Union::new(strategies).boxed()
+                }
             }
 
             impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($variant: IsHistoricalType,)*>> IsHistoricalType for Enum<Ty, $($($T,)+)?>
