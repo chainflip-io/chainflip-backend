@@ -2010,21 +2010,36 @@ mod minimum_limit_order_amount {
 		MockBalance::credit_account(&ALICE, STABLE_ASSET, 1_000_000);
 		assert_ok!(LiquidityPools::set_minimum_limit_order_amounts(
 			RuntimeOrigin::root(),
-			bounded_vec![(Asset::Eth, MIN_ETH), (STABLE_ASSET, MIN_USDC)],
+			bounded_vec![
+				AssetAndAmount { asset: Asset::Eth, amount: MIN_ETH },
+				AssetAndAmount { asset: STABLE_ASSET, amount: MIN_USDC },
+			],
 		));
 	}
 
 	#[test]
-	fn governance_can_set_minimums_and_emits_event() {
+	fn set_minimum_limit_order_amounts_governance_only_and_emits_event() {
 		new_test_ext().execute_with(|| {
+			// Non-governance origin is rejected.
+			assert_noop!(
+				LiquidityPools::set_minimum_limit_order_amounts(
+					RuntimeOrigin::signed(ALICE),
+					bounded_vec![AssetAndAmount { asset: Asset::Eth, amount: MIN_ETH }],
+				),
+				sp_runtime::traits::BadOrigin,
+			);
+
+			// Governance sets the configured minimums (and only those), one event each.
 			assert_ok!(LiquidityPools::set_minimum_limit_order_amounts(
 				RuntimeOrigin::root(),
-				bounded_vec![(Asset::Eth, MIN_ETH), (Asset::Usdc, MIN_USDC)],
+				bounded_vec![
+					AssetAndAmount { asset: Asset::Eth, amount: MIN_ETH },
+					AssetAndAmount { asset: Asset::Usdc, amount: MIN_USDC },
+				],
 			));
 			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Eth), MIN_ETH);
 			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdc), MIN_USDC);
 			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Btc), 0);
-
 			assert_matching_event_count!(
 				Test,
 				RuntimeEvent::LiquidityPools(Event::MinimumLimitOrderAmountSet { .. }) => 2
@@ -2033,54 +2048,28 @@ mod minimum_limit_order_amount {
 	}
 
 	#[test]
-	fn governance_only() {
-		new_test_ext().execute_with(|| {
-			assert_noop!(
-				LiquidityPools::set_minimum_limit_order_amounts(
-					RuntimeOrigin::signed(ALICE),
-					bounded_vec![(Asset::Eth, MIN_ETH)],
-				),
-				sp_runtime::traits::BadOrigin,
-			);
-		});
-	}
-
-	#[test]
-	fn sell_side_checks_base_asset_min() {
+	fn set_limit_order_enforces_minimum() {
 		new_test_ext().execute_with(|| {
 			setup_pool_with_minimums();
-			// Sell base asset (ETH) below the ETH minimum -> rejected.
+
+			// Sell checks the base asset (ETH): below the ETH minimum is rejected, at it is
+			// accepted.
 			assert_noop!(
 				set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH - 1),
 				Error::<Test>::BelowMinimumOrderAmount,
 			);
-			// At the minimum: accepted.
 			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH));
-		});
-	}
 
-	#[test]
-	fn buy_side_checks_quote_asset_min() {
-		new_test_ext().execute_with(|| {
-			setup_pool_with_minimums();
-			// Buy: selling quote asset (USDC). Below USDC min -> rejected.
+			// Buy sells the quote asset (USDC): below the USDC minimum is rejected, at it is
+			// accepted.
 			assert_noop!(
 				set_order(Asset::Eth, STABLE_ASSET, Side::Buy, MIN_USDC - 1),
 				Error::<Test>::BelowMinimumOrderAmount,
 			);
-			// At the minimum: accepted.
 			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Buy, MIN_USDC));
-		});
-	}
 
-	#[test]
-	fn set_limit_order_zero_always_allowed() {
-		new_test_ext().execute_with(|| {
-			setup_pool_with_minimums();
-
-			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH));
-
-			// Even though MIN_ETH > 0, setting sell_amount = 0 closes the order and is accepted.
+			// A sell_amount of 0 closes the order and is always allowed, even with a non-zero
+			// minimum.
 			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, 0));
 		});
 	}
@@ -2102,11 +2091,11 @@ mod minimum_limit_order_amount {
 	}
 
 	#[test]
-	fn update_increase_below_min_fails() {
+	fn update_limit_order_enforces_minimum() {
 		new_test_ext().execute_with(|| {
 			setup_pool_with_minimums();
-			// No existing order at this id. An Increase by less than the minimum must fail
-			// because the resulting amount would be below MIN_ETH.
+
+			// Increasing from no order to below the minimum is rejected; reaching it is accepted.
 			assert_noop!(
 				update_order(
 					Asset::Eth,
@@ -2116,52 +2105,53 @@ mod minimum_limit_order_amount {
 				),
 				Error::<Test>::BelowMinimumOrderAmount,
 			);
-		});
-	}
-
-	#[test]
-	fn update_increase_to_min_succeeds() {
-		new_test_ext().execute_with(|| {
-			setup_pool_with_minimums();
 			assert_ok!(update_order(
 				Asset::Eth,
 				STABLE_ASSET,
 				Side::Sell,
 				IncreaseOrDecrease::Increase(MIN_ETH),
 			));
-		});
-	}
 
-	#[test]
-	fn update_decrease_to_dust_fails() {
-		new_test_ext().execute_with(|| {
-			setup_pool_with_minimums();
-			// Open an order well above the minimum.
-			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH * 2));
-			// Decreasing such that the remainder is non-zero and below the minimum is rejected.
+			// Decreasing such that a non-zero remainder is left below the minimum is rejected...
 			assert_noop!(
-				update_order(
-					Asset::Eth,
-					STABLE_ASSET,
-					Side::Sell,
-					IncreaseOrDecrease::Decrease(MIN_ETH + 1),
-				),
+				update_order(Asset::Eth, STABLE_ASSET, Side::Sell, IncreaseOrDecrease::Decrease(1),),
 				Error::<Test>::BelowMinimumOrderAmount,
 			);
-		});
-	}
-
-	#[test]
-	fn update_decrease_to_zero_allowed() {
-		new_test_ext().execute_with(|| {
-			setup_pool_with_minimums();
-			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH * 10));
-			// Closing the order in full is allowed even though the min is > 0.
+			// ...but closing it in full is allowed.
 			assert_ok!(update_order(
 				Asset::Eth,
 				STABLE_ASSET,
 				Side::Sell,
-				IncreaseOrDecrease::Decrease(MIN_ETH * 10),
+				IncreaseOrDecrease::Decrease(MIN_ETH),
+			));
+		});
+	}
+
+	#[test]
+	fn already_sub_minimum_order_can_be_closed() {
+		new_test_ext().execute_with(|| {
+			setup_pool_with_minimums();
+
+			// Open a sell order at the minimum, then let a swap consume most of it so the remainder
+			// sits below the minimum. This is the one way an order can legitimately become
+			// sub-minimum: no check is applied to swap fills.
+			assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH));
+			assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, MIN_ETH - 100));
+
+			let remaining =
+				LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &ALICE, false)
+					.unwrap()
+					.limit_orders
+					.asks[0]
+					.sell_amount;
+			assert!(remaining > 0u128.into() && remaining < MIN_ETH.into());
+
+			// Closing the already-sub-minimum order in full is still allowed.
+			assert_ok!(update_order(
+				Asset::Eth,
+				STABLE_ASSET,
+				Side::Sell,
+				IncreaseOrDecrease::Decrease(AssetAmount::MAX),
 			));
 		});
 	}
@@ -2176,6 +2166,13 @@ mod minimum_limit_order_amount {
 				// Open a sell order well above the minimum.
 				assert_ok!(set_order(Asset::Eth, STABLE_ASSET, Side::Sell, MIN_ETH * 2));
 				let balance_after_open = MockBalance::get_balance(&ALICE, Asset::Eth);
+				let order_after_open = LiquidityPools::pool_orders_for_account(
+					Asset::Eth,
+					STABLE_ASSET,
+					&ALICE,
+					false,
+				)
+				.unwrap();
 
 				// Schedule a decrease that would leave a non-zero remainder below the minimum.
 				assert_ok!(LiquidityPools::update_limit_order(
@@ -2188,10 +2185,10 @@ mod minimum_limit_order_amount {
 					IncreaseOrDecrease::Decrease(MIN_ETH + 1),
 					Some(DISPATCH_AT),
 				));
-				balance_after_open
+				(balance_after_open, order_after_open)
 			})
 			.then_process_blocks_until_block(DISPATCH_AT)
-			.then_execute_with(|balance_after_open| {
+			.then_execute_with(|(balance_after_open, order_after_open)| {
 				// The scheduled dispatch failed on the min check...
 				assert_eq!(
 					last_event::<Test>(),
@@ -2201,9 +2198,19 @@ mod minimum_limit_order_amount {
 						error: Error::<Test>::BelowMinimumOrderAmount.into(),
 					})
 				);
-				// ...and the balance debit from the decrease was rolled back (no Eth credited
-				// back to ALICE), proving the transactional wrapper works on the scheduled path.
+				// ...and both the balance debit and the order itself were rolled back, proving the
+				// transactional wrapper works on the scheduled path.
 				assert_eq!(MockBalance::get_balance(&ALICE, Asset::Eth), balance_after_open);
+				assert_eq!(
+					LiquidityPools::pool_orders_for_account(
+						Asset::Eth,
+						STABLE_ASSET,
+						&ALICE,
+						false
+					)
+					.unwrap(),
+					order_after_open,
+				);
 			});
 	}
 }

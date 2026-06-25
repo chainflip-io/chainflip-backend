@@ -305,7 +305,7 @@ mod benchmarks {
 		const MIN: AssetAmount = 1_000;
 		let minimums = Asset::all()
 			.take(n as usize)
-			.zip(sp_std::iter::repeat(MIN))
+			.map(|asset| AssetAndAmount { asset, amount: MIN })
 			.collect::<Vec<_>>()
 			.try_into()
 			.unwrap();
