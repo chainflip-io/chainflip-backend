@@ -533,3 +533,43 @@ macro_rules! tuple_into_enum_variant {
 	};
 }
 pub use tuple_into_enum_variant;
+
+/// Helper macro to call another macro with a comma-separated list of fresh identifiers, one for
+/// each type.
+///
+/// Declarative macros cannot generate numbered identifiers, so this macro uses a fixed pool of
+/// identifiers and consumes one per provided type. Because a `macro_rules!` invocation cannot
+/// reliably expand to a bare comma-separated fragment in pattern/expression contexts, the generated
+/// identifiers are passed to a callback macro.
+///
+/// Usage:
+/// ```text
+/// comma_separated_identifiers_for!(some_callback; Type1, Type2, Type3)
+/// ```
+/// Expands to the equivalent of:
+/// ```text
+/// some_callback!(_tv0, _tv1, _tv2)
+/// ```
+#[macro_export]
+macro_rules! comma_separated_identifiers_for {
+    ($callback:ident; $($ty:ty),* $(,)?) => {
+        $crate::comma_separated_identifiers_for!(
+            @acc
+            $callback;
+            [] [$($ty),*];
+            [_tv0 _tv1 _tv2 _tv3 _tv4 _tv5 _tv6 _tv7 _tv8 _tv9 _tv10 _tv11 _tv12 _tv13 _tv14 _tv15]
+        )
+    };
+    (@acc $callback:ident; [$($id:ident)*] []; [$($pool:ident)*]) => {
+        $callback!($($id),*)
+    };
+    (@acc $callback:ident; [$($id:ident)*] [$_ty:ty $(, $rest:ty)*]; [$next:ident $($pool:ident)*]) => {
+        $crate::comma_separated_identifiers_for!(
+            @acc
+            $callback;
+            [$($id)* $next] [$($rest),*];
+            [$($pool)*]
+        )
+    };
+}
+pub use comma_separated_identifiers_for;

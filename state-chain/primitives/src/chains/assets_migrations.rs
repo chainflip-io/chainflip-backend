@@ -142,3 +142,12 @@ type X = Bla;
 // 		}
 // 	}
 // }
+
+pub fn mytset() {
+	macro_rules! dothis {
+        ($($x:ident),*) => {
+            $(let $x = 0;)*
+        };
+    }
+	cf_utilities::comma_separated_identifiers_for! {dothis; u8, u32}
+}

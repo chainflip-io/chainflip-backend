@@ -70,7 +70,7 @@ macro_rules! generate_module {
             > {
                 $(
                     type $field: MaybeMigration<To::$field, V> = DefaultMigration;
-                )+
+                )*
             }
 
             // this extracts the From types (per field) from a CustomMigration
@@ -82,13 +82,13 @@ macro_rules! generate_module {
                         <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>
                         as Migration<To::$field, V>
                     >::From;
-                )+
+                )*
             }
 
             type ResolveCustomMigration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> = (
                 $(
                     <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>,
-                )+
+                )*
             );
 
             impl <
@@ -102,7 +102,7 @@ macro_rules! generate_module {
             {
                 $(
                     type $field = (M1::$field, M2::$field);
-                )+
+                )*
             }
 
             // This has to be used here because of how the `proptest_derive::Arbitrary` derive macro works.
@@ -118,7 +118,7 @@ macro_rules! generate_module {
             pub struct Struct<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
                 $(
                     pub $field: Ty::$field,
-                )+
+                )*
                 // In order for `proptest_derive::Arbitrary` to work, we're not allowed to mention `sp_std` in the following type,
                 // since the macro has manual filters for `std::marker::PhantomData`, and `PhantomData`, but not for `sp_std::...`.
                 // That's why we import it above.
@@ -144,7 +144,7 @@ macro_rules! generate_module {
                     Struct {
                         $(
                             $field: <ResolveCustomMigration::<To, V, M> as Types>::$field::forwards(x.$field),
-                        )+
+                        )*
                         _phantom: Default::default(),
                     }
                 }
@@ -153,7 +153,7 @@ macro_rules! generate_module {
                     Struct {
                         $(
                             $field: <ResolveCustomMigration::<To, V, M> as Types>::$field::backwards(x.$field),
-                        )+
+                        )*
                         _phantom: Default::default(),
                     }
                 }
@@ -173,7 +173,7 @@ macro_rules! generate_module {
                             type $field = OverrideMigrationWith<NewFieldWithDefault>;
                         }
                     }
-                )+
+                )*
             }
 
             // ----------------- connection with default struct ------------------ //
@@ -583,12 +583,8 @@ macro_rules! generate_module {
                                     use super::*;
                                     $crate::generate_module! {
                                         pub struct variant_struct {
-                                            pub value: ( $($($variant_ty,)*)? ),
-                                            $(
-                                                $(
-                                                    pub $variant_field: $variant_field_ty,
-                                                )*
-                                            )?
+                                            $( pub value: ( $($variant_ty,)* ), )?
+                                            $( $( pub $variant_field: $variant_field_ty,)*)?
                                         }
                                         mod variant_mod { #![migrations] }
                                     }
@@ -695,7 +691,16 @@ macro_rules! generate_module {
                         }
 
                         fn backwards(x: RealEnum) -> Self::From {
-                            todo!()
+                            x.elim(
+                                $(
+                                    |x| Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(
+                                        variants::$variant {
+                                            $(value: x as ($($variant_ty, )*),)?
+                                            $( $( $variant_field: x.$variant_field, )*)?
+                                        }
+                                    )),
+                                )*
+                            )
                         }
                     }
 

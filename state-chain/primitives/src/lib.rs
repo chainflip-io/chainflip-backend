@@ -21,6 +21,7 @@
 #![feature(decl_macro)]
 #![feature(never_type)]
 #![feature(lazy_type_alias)]
+#![feature(macro_metavar_expr)]
 #![allow(incomplete_features)]
 
 //! Chainflip Primitives
