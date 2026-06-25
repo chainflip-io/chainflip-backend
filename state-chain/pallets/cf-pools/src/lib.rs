@@ -1796,7 +1796,7 @@ impl<T: Config> Pallet<T> {
 				(None, Some(tick)) | (Some(tick), None) => Ok(tick),
 				(Some(previous_tick), Some(new_tick)) => {
 					if previous_tick != new_tick {
-						let withdrawn_asset_amount = Self::inner_update_limit_order_at_tick(
+						let (withdrawn_asset_amount, _) = Self::inner_update_limit_order_at_tick(
 							pool,
 							lp,
 							asset_pair,
@@ -1821,7 +1821,7 @@ impl<T: Config> Pallet<T> {
 					Ok(new_tick)
 				},
 			}?;
-			Self::inner_update_limit_order_at_tick(
+			let (_, resulting_amount) = Self::inner_update_limit_order_at_tick(
 				pool,
 				lp,
 				asset_pair,
@@ -1831,12 +1831,6 @@ impl<T: Config> Pallet<T> {
 				amount_change.map(|amount| amount.into()),
 				NoOpStatus::Error,
 			)?;
-
-			let resulting_amount = pool
-				.pool_state
-				.limit_order(&(lp.clone(), id), side, tick)
-				.map(|(_, position)| position.amount.saturated_into::<AssetAmount>())
-				.unwrap_or(0);
 			Self::ensure_min_order_amount(base_asset, quote_asset, side, resulting_amount)?;
 
 			Ok(())
@@ -1851,7 +1845,7 @@ impl<T: Config> Pallet<T> {
 		id: OrderId,
 		tick: Tick,
 	) -> DispatchResult {
-		let sold_amount_change = Self::inner_update_limit_order_at_tick(
+		let (sold_amount_change, _) = Self::inner_update_limit_order_at_tick(
 			pool,
 			lp,
 			asset_pair,
@@ -1871,7 +1865,10 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Updates limit order assuming that tick stays the same
+	/// Updates limit order assuming that tick stays the same.
+	///
+	/// Returns `(sold_amount_change, resulting_position_amount)`: the absolute change in the sold
+	/// amount (minted or burned) and the order's remaining sold amount after the update.
 	fn inner_update_limit_order_at_tick(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
@@ -1881,7 +1878,7 @@ impl<T: Config> Pallet<T> {
 		tick: Tick,
 		sold_amount_change: IncreaseOrDecrease<Amount>,
 		noop_status: NoOpStatus,
-	) -> Result<AssetAmount, DispatchError> {
+	) -> Result<(AssetAmount, AssetAmount), DispatchError> {
 		let (sold_amount_change, position_info, collected) = match sold_amount_change {
 			IncreaseOrDecrease::Increase(sold_amount) => {
 				let (collected, position_info) =
@@ -1933,6 +1930,8 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
+		let resulting_amount: AssetAmount = position_info.amount.saturated_into();
+
 		// Process the update
 		Self::process_limit_order_update(
 			pool,
@@ -1946,7 +1945,7 @@ impl<T: Config> Pallet<T> {
 			sold_amount_change,
 		)?;
 
-		Ok(*sold_amount_change.abs())
+		Ok((*sold_amount_change.abs(), resulting_amount))
 	}
 
 	fn inner_update_range_order(
