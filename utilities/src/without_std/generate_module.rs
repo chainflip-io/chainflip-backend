@@ -351,7 +351,7 @@ macro_rules! generate_module {
                 $(
                     $variant(Ty::$variant),
                 )*
-                _phantom(PhantomData<($($($T,)+)?)>),
+                _phantom(!, PhantomData<($($($T,)+)?)>),
             }
 
             // --------------------- custom implemenations of external traits --------------------------
@@ -415,7 +415,7 @@ macro_rules! generate_module {
                         $(
                             Self::$variant(val) => 1usize + codec::Encode::size_hint(val),
                         )*
-                        Self::_phantom(_) => 0,
+                        Self::_phantom(never, _) => match *never {},
                     }
                 }
 
@@ -439,7 +439,7 @@ macro_rules! generate_module {
                                 codec::Encode::encode_to(val, dest);
                             }
                         )*
-                        Self::_phantom(_) => {}
+                        Self::_phantom(never, _) => match *never {}
                     }
                 }
             }
@@ -550,7 +550,7 @@ macro_rules! generate_module {
                         $(
                             Enum::$variant(val) => Enum::$variant(<ResolveCustomMigration::<To, V, M> as Types>::$variant::forwards(val)),
                         )*
-                        Enum::_phantom(_) => Enum::_phantom(Default::default()),
+                        Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
                     }
                 }
 
@@ -559,7 +559,7 @@ macro_rules! generate_module {
                         $(
                             Enum::$variant(val) => Enum::$variant(<ResolveCustomMigration::<To, V, M> as Types>::$variant::backwards(val)),
                         )*
-                        Enum::_phantom(_) => Enum::_phantom(Default::default()),
+                        Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
                     }
                 }
             }
@@ -607,6 +607,14 @@ macro_rules! generate_module {
 
                             impl Into<RealEnum> for $variant {
                                 fn into(self) -> RealEnum {
+                                    // $( let (cf_utilities::comma_separated_identifiers_for!($($variant_ty)*)) = self; )?
+                                    // $enum::variant
+                                    //     $(
+                                    //         (cf_utilities::comma_separated_identifiers_for!($($variant_ty)*))
+                                    //     )?
+                                    //     $(
+                                    //         $( $variant_field: self.$variant_field, )*
+                                    //     )?
                                         $crate::or_else! {
                                             ($(
                                                 cf_utilities::tuple_into_enum_variant!(self.value; $enum::$variant; $($variant_ty),*)
@@ -682,25 +690,12 @@ macro_rules! generate_module {
                                     Enum::$variant(val) =>
                                         (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::forwards(val)).into(),
                                 )*
-                                Enum::_phantom(_) => panic!(),
+                                Enum::_phantom(never, _) => match never {},
                             }
                         }
 
                         fn backwards(x: RealEnum) -> Self::From {
-                            // match x {
-                            //     $(
-                            //         $enum::$variant(val) =>
-                            //             (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(val)).into(),
-                            //     )*
-                            //     Enum::_phantom(_) => panic!(),
-                            // }
                             todo!()
-                            // Struct {
-                            //     $(
-                            //         $field: <<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(x.$field),
-                            //     )*
-                            //     _phantom: Default::default(),
-                            // }
                         }
                     }
 
