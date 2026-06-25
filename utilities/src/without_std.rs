@@ -18,6 +18,7 @@ pub mod bounded_vec;
 pub mod conditional;
 pub mod generate_module;
 pub mod migrations;
+pub mod never;
 pub mod select;
 pub mod type_introspection;
 
