@@ -124,15 +124,15 @@ impl OnRuntimeUpgrade for Migration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let accounts_to_reap = pallet_cf_flip::Account::<Runtime>::iter()
-			.filter_map(
-				|(account_id, account)| {
-					if account.total() == 0u128 {
-						Some(account_id)
-					} else {
-						None
-					}
-				},
-			)
+			.filter_map(|(account_id, account)| {
+				if account.total() == 0u128 {
+					let account_info = frame_system::Pallet::<Runtime>::account(&account_id);
+					(account_info.providers == 1 && account_info.consumers == 1)
+						.then_some(account_id)
+				} else {
+					None
+				}
+			})
 			.collect::<Vec<_>>();
 		Ok(accounts_to_reap.encode())
 	}

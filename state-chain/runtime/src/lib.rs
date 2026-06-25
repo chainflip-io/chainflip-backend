@@ -523,7 +523,6 @@ type MigrationsForV2_2 = (
 	migrations::tron_integration::TronElectionsInit,
 	migrations::tron_integration::TronIngressEgressInit,
 	migrations::tron_integration::TronChainstate,
-	migrations::delete_pre_allocated_tron_channels::DeletePreAllocatedTronChannels,
 );
 
 #[cfg(test)]
