@@ -1781,7 +1781,12 @@ where
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 16 {
 				#[expect(deprecated)]
-				api.cf_free_balances_before_version_16(hash, account_id).map(Into::into)
+				api.cf_free_balances_before_version_16(hash, account_id).map(|x| {
+					cf_utilities::migrations::basics::migrate_from_historical_type(
+						cf_utilities::migrations::v20000,
+						x,
+					)
+				})
 			} else if version < 17 {
 				#[expect(deprecated)]
 				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
@@ -1800,7 +1805,12 @@ where
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 16 {
 				#[expect(deprecated)]
-				api.cf_lp_total_balances_before_version_16(hash, account_id).map(Into::into)
+				api.cf_lp_total_balances_before_version_16(hash, account_id).map(|x| {
+					cf_utilities::migrations::basics::migrate_from_historical_type(
+						cf_utilities::migrations::v20000,
+						x,
+					)
+				})
 			} else if version < 17 {
 				#[expect(deprecated)]
 				api.cf_lp_total_balances_before_version_17(hash, account_id).map(Into::into)
@@ -2167,7 +2177,10 @@ where
 				let balance = api.cf_account_flip_balance(hash, &account_id)?;
 				#[expect(deprecated)]
 				let asset_balances: AssetMap<_> =
-					api.cf_free_balances_before_version_16(hash, account_id.clone())?.into();
+					cf_utilities::migrations::basics::migrate_from_historical_type(
+						cf_utilities::migrations::v20000,
+						api.cf_free_balances_before_version_16(hash, account_id.clone())?,
+					);
 
 				Ok::<_, CfApiError>(RpcAccountInfoWrapper::from(
 					match api
