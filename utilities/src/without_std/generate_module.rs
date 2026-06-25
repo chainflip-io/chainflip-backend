@@ -246,18 +246,21 @@ macro_rules! generate_module {
                 $variant:ident
                     $( ( $($variant_ty:ty),* ) )?
                     $( { $($variant_field:ident : $variant_field_ty:ty ,)* } )?
+                    $(= $variant_discriminant:literal)?
                     ,
             )*
         }
         mod $mod:ident { #![migrations] }
     ) => {
 
+        $(#[$($Attributes)*])*
         $vis enum $enum$(< $($T $(: $TBound)?),+ >)? {
             $(
                 $( #[$($Variant_Attributes)*])*
                 $variant
                     $( ( $($variant_ty),* ) )?
                     $( { $($variant_field : $variant_field_ty ,)* } )?
+                    $(= $variant_discriminant)?
                     ,
             )*
         }
@@ -395,29 +398,139 @@ macro_rules! generate_module {
 
             // ----------------- connection with default enum ------------------ //
 
-            $crate::macros::better_modules! {
+            cf_proc_macros::better_modules! {
                 mod $( $( ($T $(: $TBound)?) )+ )?
                 {
+                    type RealEnum = $enum $(< $($T,)+ >)?;
+
                     pub mod variants {
                         use super::*;
+                        pub mod __impls {
+                            use super::*;
+                            $(
+                                pub mod $variant {
+                                    use super::*;
+                                    $crate::generate_module! {
+                                        pub struct variant_struct {
+                                            pub value: ( $($($variant_ty,)*)? ),
+                                            $(
+                                                $(
+                                                    pub $variant_field: $variant_field_ty,
+                                                )*
+                                            )?
+                                        }
+                                        mod variant_mod { #![migrations] }
+                                    }
+                                    impl HasChangelog for variant_struct
+                                    where
+                                        $( ($($variant_ty, )*) : HasChangelog )?
+                                    {
+                                        type if_unspecified = variant_mod::see_field_changelogs;
+                                    }
+                                }
+                            )*
+                        }
+
                         $(
-                            pub struct $variant {
-                                value: $( ( $($variant_ty),* ),)?
-                                $(
-                                    $(
-                                        $variant_field: $variant_field_ty,
-                                    )*
-                                )?
+                            pub type $variant = __impls::$variant::variant_struct;
+
+                            impl Into<RealEnum> for $variant {
+                                fn into(self) -> RealEnum {
+                                        $crate::or_else! {
+                                            ($(
+                                                cf_utilities::tuple_into_enum_variant!(self.value; $enum::$variant; $($variant_ty),*)
+                                            )? ) or (
+                                                $crate::or_else! {
+                                                    ($(
+                                                        $enum::$variant {
+                                                            $(
+                                                                $variant_field: self.$variant_field,
+                                                            )*
+                                                        }
+                                                    )? ) or (
+                                                        $enum::$variant
+                                                    )
+                                                }
+                                            )
+                                        }
+                                }
                             }
                         )*
                     }
 
                     pub struct DefaultTypes {}
 
-                    impl Types for DefaultTypes$(< $($T,)+ >)? {
+                    impl Types for DefaultTypes {
                         $(
-                            type $variant = variants::$variant<Parameters>;
+                            type $variant = variants::$variant;
                         )*
+                    }
+
+                    impl HasGenericVariant for RealEnum
+                        where
+                            $(
+                                $( ($($variant_ty, )*) : HasChangelog ,)?
+                                $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
+                            )*
+                            Enum<(
+                                $(
+                                    GetGenericVariant<variants::$variant>,
+                                )*
+                            ), $($($T,)+)?>: IsHistoricalType
+                    {
+                        type GenericType = Enum<(
+                            $(
+                                GetGenericVariant<variants::$variant>,
+                            )*
+                        ), $($($T,)+)?>;
+                        type MigrationFromGeneric = GlobalMigrationFromGeneric;
+                    }
+
+
+                    impl Migration<RealEnum, vCurrent> for GlobalMigrationFromGeneric
+                    where
+                            $(
+                                $( ($($variant_ty, )*) : HasChangelog ,)?
+                                $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
+                            )*
+                        Enum<(
+                            $(
+                                GetGenericVariant<variants::$variant>,
+                            )*
+                        ), $($($T,)+)?>: IsHistoricalType
+                    {
+                        type From = Enum<(
+                            $(
+                                GetGenericVariant<variants::$variant>,
+                            )*
+                        ), $($($T,)+)?>;
+
+                        fn forwards(x: Self::From) -> RealEnum {
+                            match x {
+                                $(
+                                    Enum::$variant(val) =>
+                                        (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::forwards(val)).into(),
+                                )*
+                                Enum::_phantom(_) => panic!(),
+                            }
+                        }
+
+                        fn backwards(x: RealEnum) -> Self::From {
+                            // match x {
+                            //     $(
+                            //         $enum::$variant(val) =>
+                            //             (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(val)).into(),
+                            //     )*
+                            //     Enum::_phantom(_) => panic!(),
+                            // }
+                            todo!()
+                            // Struct {
+                            //     $(
+                            //         $field: <<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(x.$field),
+                            //     )*
+                            //     _phantom: Default::default(),
+                            // }
+                        }
                     }
 
                 }

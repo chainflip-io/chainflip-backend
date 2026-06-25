@@ -491,3 +491,45 @@ better_modules! {
 		}
 	}
 }
+
+/// Helper macro to construct an enum tuple variant from a tuple expression.
+///
+/// Declarative macros cannot generate numbered identifiers for destructuring,
+/// so this macro uses a fixed pool of identifiers and consumes one per tuple element.
+///
+/// Usage:
+/// ```ignore
+/// tuple_into_enum_variant!(self.value; MyEnum::MyVariant; Type1, Type2, Type3)
+/// ```
+/// Expands to the equivalent of:
+/// ```ignore
+/// { let (_0, _1, _2) = self.value; MyEnum::MyVariant(_0, _1, _2) }
+/// ```
+#[macro_export]
+macro_rules! tuple_into_enum_variant {
+	// Entry point: start recursive accumulation
+	($tuple:expr; $Enum:ident :: $Variant:ident; $($ty:ty),* $(,)?) => {
+		$crate::tuple_into_enum_variant!(
+			@acc $tuple; $Enum::$Variant;
+			[] [$($ty),*];
+			[_tv0 _tv1 _tv2 _tv3 _tv4 _tv5 _tv6 _tv7 _tv8 _tv9 _tv10 _tv11 _tv12 _tv13 _tv14 _tv15]
+		)
+	};
+	// Base case: all types consumed, emit the destructure + construction
+	(@acc $tuple:expr; $Enum:ident :: $Variant:ident; [$($id:ident)*] []; [$($pool:ident)*]) => {
+		{
+			#[allow(unused)]
+			let ($($id,)*) = $tuple;
+			$Enum::$Variant($($id),*)
+		}
+	};
+	// Recursive case: consume one type, take one identifier from the pool
+	(@acc $tuple:expr; $Enum:ident :: $Variant:ident; [$($id:ident)*] [$_ty:ty $(, $rest:ty)*]; [$next:ident $($pool:ident)*]) => {
+		$crate::tuple_into_enum_variant!(
+			@acc $tuple; $Enum::$Variant;
+			[$($id)* $next] [$($rest),*];
+			[$($pool)*]
+		)
+	};
+}
+pub use tuple_into_enum_variant;
