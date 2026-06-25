@@ -19,7 +19,9 @@
 #![feature(associated_type_defaults)]
 #![feature(trait_alias)]
 #![feature(decl_macro)]
+#![feature(never_type)]
 #![feature(lazy_type_alias)]
+#![allow(incomplete_features)]
 
 //! Chainflip Primitives
 //!
