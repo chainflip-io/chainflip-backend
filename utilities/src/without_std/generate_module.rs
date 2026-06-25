@@ -118,6 +118,7 @@ macro_rules! generate_module {
             #[derive_where(Eq; $(Ty::$field: Eq),*)]
             #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
             #[scale_info(skip_type_params(Ty))]
+            #[derive(cf_proc_macros::HasTypeIntrospection)]
             pub struct Struct<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
                 $(
                     pub $field: Ty::$field,
