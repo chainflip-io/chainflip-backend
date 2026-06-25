@@ -164,7 +164,7 @@ fn test_all_historical_runtime_calls(
                     CanonicalPatchVersion::Unreleased => None,
                 }.unwrap() > 20200 {
                     incompatibilities.append(
-                        &mut tester.test_call::<$version, (), Asset>($version, "CustomRuntimeApi", "cf_supported_assets"),
+                        &mut tester.test_call::<$version, (), Vec<Asset>>($version, "CustomRuntimeApi", "cf_supported_assets"),
                     );
                 }
 
