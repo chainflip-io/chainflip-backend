@@ -64,9 +64,6 @@ macro_rules! generate_module {
                 )*
             }
 
-            // This has to be used here because of how the `proptest_derive::Arbitrary` derive macro works.
-            use sp_std::marker::PhantomData;
-
             cf_proc_macros::better_modules! {
                 mod (Ty: Types) {
                     mod $( $( ($T $(: $TBound)?) )+ )? {
@@ -84,15 +81,35 @@ macro_rules! generate_module {
                             $(
                                 pub $field: Ty::$field,
                             )*
-                            // In order for `proptest_derive::Arbitrary` to work, we're not allowed to mention `sp_std` in the following type,
-                            // since the macro has manual filters for `std::marker::PhantomData`, and `PhantomData`, but not for `sp_std::...`.
-                            // That's why we import it above.
-                            pub _phantom: PhantomData<($($($T,)+)?)>,
                         }
 
+                        #[cfg(any(test, all(feature = "proptest", feature = "std")))]
+                        impl proptest::arbitrary::Arbitrary for Struct where
+                            Ty: 'static,
+                            $( $($T: 'static, )+ )?
+                            $( Ty::$field: proptest::arbitrary::Arbitrary + 'static, )*
+                        {
+                            type Parameters = ();
+                            type Strategy = proptest::strategy::BoxedStrategy<Self>;
+
+                            fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+                                use proptest::strategy::{Strategy, Just};
+                                use proptest::arbitrary::any;
+
+                                (Just(()), $( any::<Ty::$field>(), )* )
+                                    .prop_map(|(_, $( $field, )* )| Struct {
+                                        $(
+                                            $field,
+                                        )*
+                                        _phantom: Default::default(),
+                                    })
+                                    .boxed()
+                            }
+                        }
                     }
                 }
             }
+
 
             impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($($T,)+)?>
                 where $struct$(< $($T,)+ >)?: HasChangelog
