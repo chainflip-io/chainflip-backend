@@ -73,24 +73,6 @@ macro_rules! generate_module {
                 )*
             }
 
-            // this extracts the From types (per field) from a CustomMigration
-            #[derive_where::derive_where(Debug, Default; )]
-            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>>(sp_std::marker::PhantomData<(To, V, M)>);
-            impl<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
-                $(
-                    type $field = <
-                        <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>
-                        as Migration<To::$field, V>
-                    >::From;
-                )*
-            }
-
-            type ResolveCustomMigration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> = (
-                $(
-                    <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>,
-                )*
-            );
-
             impl <
                 To: HistoricalTypesAt<V>,
                 V: Version
@@ -138,27 +120,49 @@ macro_rules! generate_module {
             pub type see_field_changelogs = see_field_changelogs_and_also<()>;
             pub struct see_field_changelogs_and_also<M>(M);
 
-            impl<M: CustomMigration<To, V>, $( $($T $(: $TBound)?,)+ )? To: HistoricalTypesAt<V>, V: Version> Migration<Struct<To, $($($T,)+)?>, V> for see_field_changelogs_and_also<M>
-            where
-                Struct< source_of_custom_migration<To, V, M> , $($($T,)+)?  >: IsHistoricalType
-            {
-                type From = Struct< source_of_custom_migration<To, V, M> , $($($T,)+)?  >;
+            cf_proc_macros::better_modules! {
+                mod (M: CustomMigration<To, V>) (To: HistoricalTypesAt<V>) (V: Version) {
 
-                fn forwards(x: Self::From) -> Struct<To, $($($T,)+)?> {
-                    Struct {
+                    mod field_migrations
+                    {
+                        use super::*;
                         $(
-                            $field: <ResolveCustomMigration::<To, V, M> as Types>::$field::forwards(x.$field),
+                            pub type $field = <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>;
                         )*
-                        _phantom: Default::default(),
                     }
-                }
 
-                fn backwards(x: Struct<To, $($($T,)+)?>) -> Self::From {
-                    Struct {
+                    mod field_migration_sources
+                    {
+                        use super::*;
                         $(
-                            $field: <ResolveCustomMigration::<To, V, M> as Types>::$field::backwards(x.$field),
+                            pub type $field = <field_migrations::$field as Migration<To::$field, V>>::From;
                         )*
-                        _phantom: Default::default(),
+                        pub type Types = ( $( $field, )*);
+                    }
+
+                    impl<$( $($T $(: $TBound)?,)+ )?> Migration<Struct<To, $($($T,)+)?>, V> for see_field_changelogs_and_also<M>
+                    where
+                        Struct< field_migration_sources::Types , $($($T,)+)?  >: IsHistoricalType
+                    {
+                        type From = Struct< field_migration_sources::Types , $($($T,)+)?  >;
+
+                        fn forwards(x: Self::From) -> Struct<To, $($($T,)+)?> {
+                            Struct {
+                                $(
+                                    $field: field_migrations::$field::forwards(x.$field),
+                                )*
+                                _phantom: Default::default(),
+                            }
+                        }
+
+                        fn backwards(x: Struct<To, $($($T,)+)?>) -> Self::From {
+                            Struct {
+                                $(
+                                    $field: field_migrations::$field::backwards(x.$field),
+                                )*
+                                _phantom: Default::default(),
+                            }
+                        }
                     }
                 }
             }
