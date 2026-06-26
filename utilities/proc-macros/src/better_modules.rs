@@ -7,15 +7,15 @@ use syn::{
 	parse::{Parse, ParseStream},
 	token,
 	visit_mut::{self, VisitMut},
-	ExprPath, GenericArgument, Generics, Ident, Item, ItemImpl, ItemMacro, ItemMod, ItemStruct,
-	ItemType, ItemUse, PathArguments, Token, TypeParam, UseTree,
+	Attribute, ExprPath, GenericArgument, Generics, Ident, Item, ItemImpl, ItemMacro, ItemMod,
+	ItemStruct, ItemType, ItemUse, PathArguments, Token, TypeParam, UseTree, Visibility,
 };
 
 // ─── Input parsing ────────────────────────────────────────────────────────────
 
-/// Top-level input: `mod (A: Trait) (B: Trait) { ... }`
+/// Top-level input: a sequence of Rust items plus optional telescope scopes like
+/// `mod (A: Trait) (B: Trait) { ... }`.
 pub struct Input {
-	pub telescope: Vec<TypeParam>,
 	pub items: Vec<ModuleItem>,
 }
 
@@ -25,10 +25,26 @@ pub enum ModuleItem {
 	Struct(ItemStruct),
 	Impl(ItemImpl),
 	Mod(ItemMod),
+	PlainMod(PlainMod),
+	TelescopeMod(TelescopeMod),
 	Use(ItemUse),
 	MacroCall(ItemMacro),
 	Conditional(Conditional),
 	Other(Item),
+}
+
+/// `mod foo { ... }` or `mod foo;` parsed with `better_modules` items in the body.
+pub struct PlainMod {
+	pub attrs: Vec<Attribute>,
+	pub vis: Visibility,
+	pub ident: Ident,
+	pub items: Option<Vec<ModuleItem>>,
+}
+
+/// `mod (A: Trait) (B: Trait) { ... }`
+pub struct TelescopeMod {
+	pub telescope: Vec<TypeParam>,
+	pub items: Vec<ModuleItem>,
 }
 
 /// `if (condition) { ... } else { ... }` or `if () { ... } else { ... }`
@@ -42,23 +58,47 @@ pub struct Conditional {
 
 impl Parse for Input {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
-		input.parse::<Token![mod]>()?;
+		let items = parse_module_items(input)?;
 
-		// Parse telescope: (A: Trait) (B: Trait) ...
-		let mut telescope = Vec::new();
-		while input.peek(token::Paren) {
-			let content;
-			parenthesized!(content in input);
-			telescope.push(content.parse::<TypeParam>()?);
-		}
+		Ok(Input { items })
+	}
+}
 
-		// Parse braced body
+fn parse_telescope_mod(input: ParseStream) -> syn::Result<TelescopeMod> {
+	input.parse::<Token![mod]>()?;
+
+	// Parse telescope: (A: Trait) (B: Trait) ...
+	let mut telescope = Vec::new();
+	while input.peek(token::Paren) {
+		let content;
+		parenthesized!(content in input);
+		telescope.push(content.parse::<TypeParam>()?);
+	}
+
+	// Parse braced body
+	let body;
+	braced!(body in input);
+	let items = parse_module_items(&body)?;
+
+	Ok(TelescopeMod { telescope, items })
+}
+
+fn parse_plain_mod(input: ParseStream) -> syn::Result<PlainMod> {
+	let attrs = input.call(Attribute::parse_outer)?;
+	let vis = input.parse::<Visibility>()?;
+	input.parse::<Token![mod]>()?;
+	let ident = input.parse::<Ident>()?;
+
+	let items = if input.peek(Token![;]) {
+		input.parse::<Token![;]>()?;
+		None
+	} else {
 		let body;
 		braced!(body in input);
-		let items = parse_module_items(&body)?;
+		Some(parse_module_items(&body)?)
+	};
 
-		Ok(Input { telescope, items })
-	}
+	Ok(PlainMod { attrs, vis, ident, items })
 }
 
 fn parse_module_items(input: ParseStream) -> syn::Result<Vec<ModuleItem>> {
@@ -73,6 +113,23 @@ fn parse_module_item(input: ParseStream) -> syn::Result<ModuleItem> {
 	// Check for `if` conditional
 	if input.peek(Token![if]) {
 		return Ok(ModuleItem::Conditional(parse_conditional(input)?));
+	}
+
+	{
+		let fork = input.fork();
+		let attrs = fork.call(Attribute::parse_outer)?;
+		let vis = fork.parse::<Visibility>()?;
+
+		if fork.peek(Token![mod]) {
+			fork.parse::<Token![mod]>()?;
+			if fork.peek(token::Paren) {
+				if attrs.is_empty() && matches!(vis, Visibility::Inherited) {
+					return Ok(ModuleItem::TelescopeMod(parse_telescope_mod(input)?));
+				}
+			} else {
+				return Ok(ModuleItem::PlainMod(parse_plain_mod(input)?));
+			}
+		}
 	}
 
 	// Otherwise parse as a standard Rust item and classify
@@ -437,7 +494,7 @@ fn used_telescope_params<'a>(
 pub fn expand(input: Input) -> TokenStream {
 	let mut defs = Definitions::default();
 	defs.modules.insert(Vec::new());
-	expand_items(&input.telescope, &input.items, &mut defs, &[])
+	expand_items(&[], &input.items, &mut defs, &[])
 }
 
 fn expand_items(
@@ -464,11 +521,49 @@ fn expand_item(
 		ModuleItem::Struct(s) => expand_struct(telescope, s, defs, scope),
 		ModuleItem::Impl(i) => expand_impl(telescope, i, defs, scope),
 		ModuleItem::Mod(m) => expand_mod(telescope, m, defs, scope),
+		ModuleItem::PlainMod(m) => expand_plain_mod(telescope, m, defs, scope),
+		ModuleItem::TelescopeMod(m) => expand_telescope_mod(telescope, m, defs, scope),
 		ModuleItem::Use(u) => expand_use(u, defs, scope),
 		ModuleItem::MacroCall(m) => expand_macro_call(telescope, m, defs, scope),
 		ModuleItem::Conditional(c) => expand_conditional(telescope, c, defs, scope),
 		ModuleItem::Other(item) => quote! { #item },
 	}
+}
+
+fn expand_plain_mod(
+	telescope: &[TypeParam],
+	item: &PlainMod,
+	defs: &mut Definitions,
+	scope: &[String],
+) -> TokenStream {
+	let attrs = &item.attrs;
+	let vis = &item.vis;
+	let ident = &item.ident;
+	match &item.items {
+		Some(items) => {
+			let inner_scope = defs.register_module(scope, ident);
+			let expanded = expand_items(telescope, items, defs, &inner_scope);
+
+			quote! {
+				#(#attrs)*
+				#vis mod #ident {
+					#expanded
+				}
+			}
+		},
+		None => quote! { #(#attrs)* #vis mod #ident; },
+	}
+}
+
+fn expand_telescope_mod(
+	telescope: &[TypeParam],
+	item: &TelescopeMod,
+	defs: &mut Definitions,
+	scope: &[String],
+) -> TokenStream {
+	let mut combined_telescope = telescope.to_vec();
+	combined_telescope.extend(item.telescope.iter().cloned());
+	expand_items(&combined_telescope, &item.items, defs, scope)
 }
 
 fn expand_type_alias(

@@ -21,13 +21,20 @@ mod enum_elim;
 mod type_introspection;
 
 /// Proc macro that takes a "telescope" of type parameters and threads them
-/// through all items in the block.
+/// through items in telescope scopes. Telescope scopes can appear anywhere in
+/// the macro input and can be nested.
 ///
 /// Usage:
 /// ```ignore
 /// better_modules! {
+///     pub type Plain = u8;
+///
 ///     mod (A: Trait) (B: Trait) {
 ///         pub type Alias = (A::Assoc, B::Assoc);
+///
+///         mod (C: OtherTrait) {
+///             pub type Nested = (Alias, C::Assoc);
+///         }
 ///
 ///         pub struct Foo {
 ///             field: A::Assoc,
