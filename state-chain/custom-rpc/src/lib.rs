@@ -47,7 +47,10 @@ use cf_rpc_apis::{
 	call_error, internal_error, CfErrorCode, NotificationBehaviour, OrderFills,
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
-use cf_utilities::rpc::NumberOrHex;
+use cf_utilities::{
+	migrations::{basics::migrate_from_historical_type, v20000, v20100},
+	rpc::NumberOrHex,
+};
 use core::ops::Range;
 use ethereum_eip712::build_eip712_data::to_ethers_typed_data;
 use itertools::Itertools;
@@ -1778,7 +1781,12 @@ where
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 16 {
 				#[expect(deprecated)]
-				api.cf_free_balances_before_version_16(hash, account_id).map(Into::into)
+				api.cf_free_balances_before_version_16(hash, account_id).map(|x| {
+					cf_utilities::migrations::basics::migrate_from_historical_type(
+						cf_utilities::migrations::v20000,
+						x,
+					)
+				})
 			} else if version < 17 {
 				#[expect(deprecated)]
 				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
@@ -1797,7 +1805,12 @@ where
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 16 {
 				#[expect(deprecated)]
-				api.cf_lp_total_balances_before_version_16(hash, account_id).map(Into::into)
+				api.cf_lp_total_balances_before_version_16(hash, account_id).map(|x| {
+					cf_utilities::migrations::basics::migrate_from_historical_type(
+						cf_utilities::migrations::v20000,
+						x,
+					)
+				})
 			} else if version < 17 {
 				#[expect(deprecated)]
 				api.cf_lp_total_balances_before_version_17(hash, account_id).map(Into::into)
@@ -2164,7 +2177,10 @@ where
 				let balance = api.cf_account_flip_balance(hash, &account_id)?;
 				#[expect(deprecated)]
 				let asset_balances: AssetMap<_> =
-					api.cf_free_balances_before_version_16(hash, account_id.clone())?.into();
+					cf_utilities::migrations::basics::migrate_from_historical_type(
+						cf_utilities::migrations::v20000,
+						api.cf_free_balances_before_version_16(hash, account_id.clone())?,
+					);
 
 				Ok::<_, CfApiError>(RpcAccountInfoWrapper::from(
 					match api
@@ -2217,10 +2233,16 @@ where
 
 				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
+					migrate_from_historical_type(
+						v20000,
+						api.cf_common_account_info_before_version_16(hash, &account_id)?,
+					)
 				} else if api_version < 17 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_17(hash, &account_id)?.into()
+					migrate_from_historical_type(
+						v20100,
+						api.cf_common_account_info_before_version_17(hash, &account_id)?,
+					)
 				} else {
 					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}
@@ -2589,10 +2611,10 @@ where
 			let swap_limits = api.cf_swap_limits(hash)?;
 			let network_fees = if version < 16 {
 				#[expect(deprecated)]
-				api.cf_network_fees_before_version_16(hash)?.into()
+				migrate_from_historical_type(v20000, api.cf_network_fees_before_version_16(hash)?)
 			} else if version < 17 {
 				#[expect(deprecated)]
-				api.cf_network_fees_before_version_17(hash)?.into()
+				migrate_from_historical_type(v20100, api.cf_network_fees_before_version_17(hash)?)
 			} else {
 				api.cf_network_fees(hash)?
 			};

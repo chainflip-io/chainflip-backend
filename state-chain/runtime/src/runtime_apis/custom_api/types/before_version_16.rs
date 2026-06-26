@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use codec::{DecodeWithMemTracking, MaxEncodedLen};
+use cf_utilities::migrations::{basics::migrate_from_historical_type, v20000};
 
 #[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct VaultAddresses {
@@ -56,154 +56,12 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, Default, Debug)]
-pub struct RpcAccountInfoCommonItems<Balance> {
-	pub vanity_name: VanityName,
-	pub flip_balance: Balance,
-	pub asset_balances: AssetMap<Balance>,
-	pub bond: Balance,
-	pub estimated_redeemable_balance: Balance,
-	pub bound_redeem_address: Option<EvmAddress>,
-	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-	pub current_delegation_status: Option<DelegationInfo<Balance>>,
-	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
-}
+pub type RpcAccountInfoCommonItems<Balance> =
+	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20000>>::HistoricalType;
 
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Hash,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Default,
-)]
-pub struct AssetMap<T> {
-	pub eth: EthAssetMap<T>,
-	pub dot: cf_primitives::chains::assets::dot::AssetMap<T>,
-	pub btc: cf_primitives::chains::assets::btc::AssetMap<T>,
-	pub arb: ArbAssetMap<T>,
-	pub sol: SolAssetMap<T>,
-	pub hub: cf_primitives::chains::assets::hub::AssetMap<T>,
-}
+pub type AssetMap<T> = <super::AssetMap<T> as HasVersion<v20000>>::HistoricalType;
 
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Hash,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Default,
-)]
-pub struct EthAssetMap<T> {
-	pub eth: T,
-	pub flip: T,
-	pub usdc: T,
-	pub usdt: T,
-}
-impl<T: Default> From<EthAssetMap<T>> for cf_primitives::chains::assets::eth::AssetMap<T> {
-	fn from(value: EthAssetMap<T>) -> Self {
-		Self {
-			eth: value.eth,
-			flip: value.flip,
-			usdc: value.usdc,
-			usdt: value.usdt,
-			wbtc: T::default(),
-		}
-	}
-}
-
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Hash,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Default,
-)]
-pub struct ArbAssetMap<T> {
-	pub eth: T,
-	pub usdc: T,
-}
-impl<T: Default> From<ArbAssetMap<T>> for cf_primitives::chains::assets::arb::AssetMap<T> {
-	fn from(value: ArbAssetMap<T>) -> Self {
-		Self { eth: value.eth, usdc: value.usdc, usdt: T::default() }
-	}
-}
-
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Hash,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Default,
-)]
-pub struct SolAssetMap<T> {
-	pub sol: T,
-	pub usdc: T,
-}
-impl<T: Default> From<SolAssetMap<T>> for cf_primitives::chains::assets::sol::AssetMap<T> {
-	fn from(value: SolAssetMap<T>) -> Self {
-		Self { sol: value.sol, usdc: value.usdc, usdt: T::default() }
-	}
-}
-
-impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::AssetMap<T> {
-	fn from(value: AssetMap<T>) -> Self {
-		Self {
-			eth: value.eth.into(),
-			dot: value.dot,
-			btc: value.btc,
-			arb: value.arb.into(),
-			sol: value.sol.into(),
-			hub: value.hub,
-			tron: Default::default(),
-		}
-	}
-}
-
-impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCommonItems<B> {
-	fn from(value: RpcAccountInfoCommonItems<B>) -> Self {
-		Self {
-			account_id: None,
-			vanity_name: value.vanity_name,
-			flip_balance: value.flip_balance,
-			asset_balances: value.asset_balances.into(),
-			bond: value.bond,
-			estimated_redeemable_balance: value.estimated_redeemable_balance,
-			bound_redeem_address: value.bound_redeem_address,
-			restricted_balances: value.restricted_balances,
-			current_delegation_status: value.current_delegation_status,
-			upcoming_delegation_status: value.upcoming_delegation_status,
-		}
-	}
-}
-
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
+#[derive(Encode, Decode, TypeInfo, Default)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
@@ -218,8 +76,8 @@ impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
 		Self {
 			refund_addresses: value.refund_addresses,
 			balances: value.balances,
-			earned_fees: value.earned_fees.into(),
-			boost_balances: value.boost_balances.into(),
+			earned_fees: migrate_from_historical_type(v20000, value.earned_fees),
+			boost_balances: migrate_from_historical_type(v20000, value.boost_balances),
 			lending_positions: value.lending_positions,
 			collateral_balances: value.collateral_balances,
 		}
@@ -235,38 +93,16 @@ pub struct TradingStrategyLimits {
 impl From<TradingStrategyLimits> for super::TradingStrategyLimits {
 	fn from(value: TradingStrategyLimits) -> Self {
 		Self {
-			minimum_deployment_amount: value.minimum_deployment_amount.into(),
-			minimum_added_funds_amount: value.minimum_added_funds_amount.into(),
+			minimum_deployment_amount: migrate_from_historical_type(
+				v20000,
+				value.minimum_deployment_amount,
+			),
+			minimum_added_funds_amount: migrate_from_historical_type(
+				v20000,
+				value.minimum_added_funds_amount,
+			),
 		}
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone)]
-pub struct NetworkFeeDetails {
-	pub standard_rate_and_minimum: FeeRateAndMinimum,
-	pub rates: AssetMap<Permill>,
-}
-
-impl From<NetworkFeeDetails> for super::NetworkFeeDetails {
-	fn from(value: NetworkFeeDetails) -> Self {
-		Self {
-			standard_rate_and_minimum: value.standard_rate_and_minimum,
-			rates: value.rates.into(),
-		}
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone)]
-pub struct NetworkFees {
-	pub regular_network_fee: NetworkFeeDetails,
-	pub internal_swap_network_fee: NetworkFeeDetails,
-}
-
-impl From<NetworkFees> for super::NetworkFees {
-	fn from(value: NetworkFees) -> Self {
-		Self {
-			regular_network_fee: value.regular_network_fee.into(),
-			internal_swap_network_fee: value.internal_swap_network_fee.into(),
-		}
-	}
-}
+pub type NetworkFees = <super::NetworkFees as HasVersion<v20000>>::HistoricalType;

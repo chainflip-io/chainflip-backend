@@ -54,8 +54,8 @@ pallet-cf-flip = { workspace = true, default-features = true }
 # Note: we should agree on one property testing framework...
 quickcheck = { workspace = true }
 quickcheck_macros = { workspace = true }
-proptest = { version = "1.6" }
-proptest-derive = { version = "0.5.1" }
+proptest = { workspace = true }
+proptest-derive = { workspace = true }
 
 [features]
 std = [
