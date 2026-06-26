@@ -2,7 +2,6 @@ import { newCcmMetadata, prepareSwap } from 'shared/swapping';
 import {
   ccmSupportedChains,
   chainFromAsset,
-  EgressId,
   getWeb3,
   getEvmWhaleKeypair,
   getSolConnection,
@@ -19,13 +18,18 @@ import {
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { estimateCcmCfTesterGas, signAndSendTxEvm } from 'shared/send_evm';
-import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
+import { observeBadEvent } from 'shared/utils/substrate';
 import { CcmDepositMetadata } from 'shared/new_swap';
-import { globalLogger, Logger } from 'shared/utils/logger';
+import { globalLogger } from 'shared/utils/logger';
 import { afterAll, beforeAll, describe } from 'vitest';
 import { concurrentTest } from 'shared/utils/vitest';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
-import { tronBroadcasterBroadcastAbortedEvent } from 'generated/events/tronBroadcaster/broadcastAborted';
+import { swappingSwapEgressScheduledEvent } from 'generated/events/swapping/swapEgressScheduled';
+import { chainTrackingChainStateUpdatedEvent } from 'generated/events/aggregated/chainTracking/chainStateUpdated';
+import { ingressEgressCcmBroadcastRequestedEvent } from 'generated/events/aggregated/ingressEgress/ccmBroadcastRequested';
+import { broadcasterTransactionBroadcastRequestEvent } from 'generated/events/aggregated/broadcaster/transactionBroadcastRequest';
+import { broadcasterTransactionFeeDeficitRecordedEvent } from 'generated/events/aggregated/broadcaster/transactionFeeDeficitRecorded';
+import { broadcasterBroadcastAbortedEvent } from 'generated/events/aggregated/broadcaster/broadcastAborted';
 
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
@@ -34,9 +38,6 @@ const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> =
   Arbitrum: { min: 3000000, max: 5000000 },
   Bsc: { min: 150000, max: 1000000 },
 };
-
-// After the swap is complete, we search for the expected swap event in this many past blocks.
-const CHECK_PAST_BLOCKS_FOR_EVENTS = 30;
 
 function getEngineBroadcastLimit(chain: Chain): number {
   switch (chain) {
@@ -65,27 +66,37 @@ function getChainMinFee(chain: Chain): number {
   }
 }
 
-async function getChainFees(
-  logger: Logger,
-  chain: Chain,
+// CCM is only supported on Ethereum, Arbitrum, Solana and Bsc, and each chain's ChainStateUpdated
+// has a different trackedData shape.
+async function getChainFees<A = []>(
+  cf: ChainflipIO<A>,
+  chain: 'Ethereum' | 'Arbitrum' | 'Solana' | 'Bsc',
 ): Promise<{ baseFee: number; priorityFee: number }> {
-  // Only supported for Ethereum, Arbitrum, Bsc and Solana
-  if (!['Ethereum', 'Arbitrum', 'Bsc', 'Solana'].includes(chain)) {
-    throw new Error(`${chain} does not support CCM`);
+  switch (chain) {
+    case 'Ethereum': {
+      const { newChainState } = await cf.stepUntilEvent(
+        chainTrackingChainStateUpdatedEvent.Ethereum,
+      );
+      const { baseFee, priorityFee } = newChainState.trackedData;
+      return { baseFee: Number(baseFee), priorityFee: Number(priorityFee) };
+    }
+    case 'Arbitrum': {
+      const { newChainState } = await cf.stepUntilEvent(
+        chainTrackingChainStateUpdatedEvent.Arbitrum,
+      );
+      return { baseFee: Number(newChainState.trackedData.baseFee), priorityFee: 0 };
+    }
+    case 'Solana': {
+      const { newChainState } = await cf.stepUntilEvent(chainTrackingChainStateUpdatedEvent.Solana);
+      return { baseFee: 0, priorityFee: Number(newChainState.trackedData.priorityFee) };
+    }
+    case 'Bsc': {
+      const { newChainState } = await cf.stepUntilEvent(chainTrackingChainStateUpdatedEvent.Bsc);
+      return { baseFee: 0, priorityFee: Number(newChainState.trackedData.priorityFee) };
+    }
+    default:
+      throw new Error(`Chain ${chain} does not support CCM`);
   }
-
-  const eventData = (
-    await observeEvent(logger, `${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
-  ).data;
-
-  logger.debug(`${chain} fees: ${JSON.stringify(eventData)}`);
-
-  const { baseFee, priorityFee } = eventData.newChainState.trackedData as {
-    baseFee: number | undefined;
-    priorityFee: number;
-  };
-
-  return { baseFee: baseFee || 0, priorityFee };
 }
 
 async function executeAndTrackCcmSwap<A = []>(
@@ -128,36 +139,61 @@ async function executeAndTrackCcmSwap<A = []>(
   const swapRequestId = (await swapRequestedHandle).swapRequestId;
 
   // Find all of the swap events
-  const egressId = (
-    await observeEvent(cf.logger, 'swapping:SwapEgressScheduled', {
-      test: (event) => BigInt(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
-    }).event
-  ).data.egressId as EgressId;
+  const { egressId } = await cf.stepUntilEvent(
+    swappingSwapEgressScheduledEvent.refine((event) => event.swapRequestId === swapRequestId),
+  );
   cf.debug(`${tag} Found egressId: ${egressId}`);
 
-  const broadcastId = (
-    await observeEvent(cf.logger, `${destChain.toLowerCase()}IngressEgress:CcmBroadcastRequested`, {
-      test: (event) =>
-        event.data.egressId[0] === egressId[0] && event.data.egressId[1] === egressId[1],
-      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
-    }).event
-  ).data.broadcastId;
+  const { broadcastId } = await cf.stepUntilEvent(
+    ingressEgressCcmBroadcastRequestedEvent[destChain].refine(
+      (event) => event.egressId[0] === egressId[0] && event.egressId[1] === egressId[1],
+    ),
+  );
   cf.debug(`${tag} Found broadcastId: ${broadcastId}`);
 
-  const txPayload = (
-    await observeEvent(
-      cf.logger,
-      `${destChain.toLowerCase()}Broadcaster:TransactionBroadcastRequest`,
-      {
-        test: (event) => event.data.broadcastId === broadcastId,
-        historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
-      },
-    ).event
-  ).data.transactionPayload;
-  cf.debug(`${tag} Found txPayload: ${txPayload}`);
-
-  return { tag, destAddress, broadcastId, txPayload };
+  // transactionPayload is chain-specific
+  switch (destChain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+    case 'Bsc': {
+      const { transactionPayload } = await cf.stepUntilEvent(
+        broadcasterTransactionBroadcastRequestEvent[destChain].refine(
+          (event) => event.broadcastId === broadcastId,
+        ),
+      );
+      return {
+        tag,
+        destAddress,
+        broadcastId,
+        maxFeePerGas: Number(transactionPayload.maxFeePerGas),
+        gasLimitBudget: Number(transactionPayload.gasLimit),
+      };
+    }
+    case 'Tron': {
+      const { transactionPayload } = await cf.stepUntilEvent(
+        broadcasterTransactionBroadcastRequestEvent.Tron.refine(
+          (event) => event.broadcastId === broadcastId,
+        ),
+      );
+      return {
+        tag,
+        destAddress,
+        broadcastId,
+        maxFeePerGas: 0,
+        gasLimitBudget: Number(transactionPayload.feeLimit),
+      };
+    }
+    case 'Solana': {
+      await cf.stepUntilEvent(
+        broadcasterTransactionBroadcastRequestEvent.Solana.refine(
+          (event) => event.broadcastId === broadcastId,
+        ),
+      );
+      return { tag, destAddress, broadcastId, maxFeePerGas: 0, gasLimitBudget: 0 };
+    }
+    default:
+      throw new Error(`Chain ${destChain} is not supported for CCM`);
+  }
 }
 
 async function testGasLimitSwapToSolana<A = []>(
@@ -183,7 +219,7 @@ async function testGasLimitSwapToSolana<A = []>(
 
   cf.debug(`${tag} Finished tracking events`);
 
-  const { priorityFee: computePrice } = await getChainFees(cf.logger, 'Solana');
+  const { priorityFee: computePrice } = await getChainFees(cf, 'Solana');
 
   if (computePrice === 0) {
     throw new Error('Compute price should not be 0');
@@ -208,14 +244,13 @@ async function testGasLimitSwapToSolana<A = []>(
   if (transaction?.meta?.err !== null) {
     throw new Error(`${tag} Transaction should not have reverted!`);
   }
-  const feeDeficitHandle = observeEvent(
-    cf.logger,
-    `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
-    { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
-  );
   cf.debug(`${tag} CCM Swap success! TxHash: ${txSignature}!`);
   cf.debug(`${tag} Waiting for a fee deficit of ${totalFee} to be recorded...`);
-  await feeDeficitHandle.event;
+  await cf.stepUntilEvent(
+    broadcasterTransactionFeeDeficitRecordedEvent[destChain].refine(
+      (event) => Number(event.amount) === totalFee,
+    ),
+  );
   cf.debug(`${tag} Fee deficit recorded!`);
 }
 
@@ -271,17 +306,9 @@ async function testGasLimitSwapToEvm<A = []>(
 
   const testTag = abortTest ? `InsufficientGas` : '';
 
-  const { tag, destAddress, broadcastId, txPayload } = await executeAndTrackCcmSwap(
-    cf,
-    sourceAsset,
-    destAsset,
-    ccmMetadata,
-    testTag,
-  );
+  const { tag, destAddress, broadcastId, maxFeePerGas, gasLimitBudget } =
+    await executeAndTrackCcmSwap(cf, sourceAsset, destAsset, ccmMetadata, testTag);
   cf.debug(`${tag} Finished tracking events`);
-
-  const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
-  const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
 
   cf.debug(
     `Expecting broadcast ${abortTest ? 'abort' : 'success'}. Broadcast gas budget: ${gasLimitBudget}, user gasBudget ${ccmMetadata.gasBudget} cfTester gasConsumption ${gasConsumption}`,
@@ -306,13 +333,16 @@ async function testGasLimitSwapToEvm<A = []>(
         throw new Error(`$CCM event emitted. Transaction should not have been broadcasted!`);
       }
     });
-    await observeEvent(cf.logger, `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
-      test: (event) => event.data.broadcastId === broadcastId,
-    }).event;
+    await cf.stepUntilEvent(
+      broadcasterBroadcastAbortedEvent[destChain].refine(
+        (event) => event.broadcastId === broadcastId,
+      ),
+    );
     stopObservingCcmReceived = true;
     cf.debug(`Broadcast Aborted found! broadcastId: ${broadcastId}`);
   } else {
-    // Check that broadcast is not aborted
+    // Check that broadcast is not aborted.
+    // TODO: add ChainflipIO version of observeBadEvent.
     const observeBroadcastFailure = observeBadEvent(
       cf.logger,
       `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
@@ -348,15 +378,6 @@ async function testGasLimitSwapToEvm<A = []>(
     const gasPrice = tx.gasPrice as unknown as number;
     const totalFee = gasUsed * gasPrice;
 
-    const feeDeficitHandle = observeEvent(
-      cf.logger,
-      `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
-      {
-        test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee,
-        historicalCheckBlocks: 10,
-      },
-    );
-
     if (tx.maxFeePerGas !== maxFeePerGas.toString()) {
       throw new Error(
         `${tag} Tx Max fee per gas ${tx.maxFeePerGas} different than expected ${maxFeePerGas}`,
@@ -369,7 +390,11 @@ async function testGasLimitSwapToEvm<A = []>(
     cf.debug(`${tag} Swap success! TxHash: ${ccmReceived?.txHash}!`);
 
     cf.debug(`${tag} Waiting for a fee deficit of ${totalFee} to be recorded...`);
-    await feeDeficitHandle.event;
+    await cf.stepUntilEvent(
+      broadcasterTransactionFeeDeficitRecordedEvent[destChain].refine(
+        (event) => Number(event.amount) === totalFee,
+      ),
+    );
     cf.debug(`${tag} Fee deficit recorded!`);
   }
 }
@@ -404,14 +429,13 @@ async function testTronInsufficientGas<A = []>(
     tronWeb.utils.abi.encodeParams(['string', 'uint256'], ['GasTest', numberOfStores]),
   );
 
-  const { tag, destAddress, broadcastId, txPayload } = await executeAndTrackCcmSwap(
+  const { tag, destAddress, broadcastId, gasLimitBudget } = await executeAndTrackCcmSwap(
     cf,
     sourceAsset,
     destAsset,
     ccmMetadata,
     `InsufficientGas`,
   );
-  const gasLimitBudget = Number(txPayload.feeLimit.replace(/,/g, ''));
 
   cf.debug(`${tag} Finished tracking events`);
   cf.debug(
@@ -432,7 +456,7 @@ async function testTronInsufficientGas<A = []>(
     }
   });
   await cf.stepUntilEvent(
-    tronBroadcasterBroadcastAbortedEvent.refine(
+    broadcasterBroadcastAbortedEvent[destChain].refine(
       (data) => Number(data.broadcastId) === Number(broadcastId),
     ),
   );
@@ -487,9 +511,9 @@ describe('GasLimitCcmSwaps', async () => {
 
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        const [ethFees, arbFees] = await Promise.all([
-          getChainFees(cf.logger, 'Ethereum'),
-          getChainFees(cf.logger, 'Arbitrum'),
+        const [ethFees, arbFees] = await cf.all([
+          (c) => getChainFees(c, 'Ethereum'),
+          (c) => getChainFees(c, 'Arbitrum'),
         ]);
 
         if (ethFees.priorityFee < ethMinPriorityFee || arbFees.baseFee < arbMinBaseFee) {
@@ -504,6 +528,9 @@ describe('GasLimitCcmSwaps', async () => {
         }
 
         await sleep(6_000);
+        // stepUntilEvent searches from (and including) the current block height, so advance past
+        // the ChainStateUpdated we just read to force the next poll to fetch fresh fees.
+        await cf.stepOneBlock();
       }
     },
     // ETH fees can take a few blocks to increase.
