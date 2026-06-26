@@ -412,19 +412,19 @@ pub fn initial_state() -> InitialStateOf<Runtime, BscInstance> {
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 1,
+				safety_margin: 2,
 				safety_buffer: BSC_MAINNET_SAFETY_BUFFER,
 			},
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 1,
+				safety_margin: 2,
 				safety_buffer: BSC_MAINNET_SAFETY_BUFFER,
 			},
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 1,
+				safety_margin: 2,
 				safety_buffer: BSC_MAINNET_SAFETY_BUFFER,
 			},
 			Default::default(),
