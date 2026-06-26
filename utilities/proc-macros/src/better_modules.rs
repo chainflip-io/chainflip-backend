@@ -213,25 +213,40 @@ type ScopePath = Vec<String>;
 
 #[derive(Clone)]
 enum ImportTarget {
-	Definition(Vec<Ident>),
+	Definition(DefinitionInfo),
 	Module(ScopePath),
+}
+
+#[derive(Clone)]
+struct DefinitionInfo {
+	telescope_params: Vec<Ident>,
+	explicit_generic_count: usize,
 }
 
 /// Tracks local items produced by the macro. Definitions are keyed by module
 /// path so qualified paths can be resolved before telescope params are added.
 #[derive(Clone, Default)]
 struct Definitions {
-	definitions: HashMap<ScopePath, Vec<Ident>>,
+	definitions: HashMap<ScopePath, DefinitionInfo>,
 	modules: HashSet<ScopePath>,
 	imports: HashMap<ScopePath, HashMap<String, ImportTarget>>,
 }
 
 impl Definitions {
-	fn register(&mut self, scope: &[String], name: &Ident, tele_params: &[&TypeParam]) {
-		let idents: Vec<Ident> = tele_params.iter().map(|p| p.ident.clone()).collect();
+	fn register(
+		&mut self,
+		scope: &[String],
+		name: &Ident,
+		tele_params: &[&TypeParam],
+		explicit_generic_count: usize,
+	) {
+		let info = DefinitionInfo {
+			telescope_params: tele_params.iter().map(|p| p.ident.clone()).collect(),
+			explicit_generic_count,
+		};
 		let mut path = scope.to_vec();
 		path.push(name.to_string());
-		self.definitions.insert(path, idents);
+		self.definitions.insert(path, info);
 	}
 
 	fn register_module(&mut self, scope: &[String], name: &Ident) -> ScopePath {
@@ -312,7 +327,7 @@ impl Definitions {
 		scope: &[String],
 		path: &syn::Path,
 		generic_idents: &[Ident],
-	) -> Option<(usize, Vec<Ident>)> {
+	) -> Option<(usize, DefinitionInfo)> {
 		if path.leading_colon.is_some() {
 			return None;
 		}
@@ -336,7 +351,11 @@ impl Definitions {
 		None
 	}
 
-	fn resolve_definition_path(&self, scope: &[String], segments: &[String]) -> Option<Vec<Ident>> {
+	fn resolve_definition_path(
+		&self,
+		scope: &[String],
+		segments: &[String],
+	) -> Option<DefinitionInfo> {
 		if segments.is_empty() {
 			return None;
 		}
@@ -457,34 +476,58 @@ impl VisitMut for RewriteVisitor<'_> {
 
 impl RewriteVisitor<'_> {
 	fn rewrite_path(&self, path: &mut syn::Path) {
-		let Some((segment_index, tele_idents)) =
+		let Some((segment_index, definition)) =
 			self.defs.resolve_path_prefix(self.scope, path, &self.generic_idents)
 		else {
 			return;
 		};
 
-		if tele_idents.is_empty() {
+		if definition.telescope_params.is_empty() {
 			return;
 		}
 
 		if let Some(segment) = path.segments.iter_mut().nth(segment_index) {
-			let args = match &mut segment.arguments {
-				PathArguments::None => {
-					let args: syn::AngleBracketedGenericArguments = syn::parse_quote! {
-						< #(#tele_idents),* >
-					};
-					segment.arguments = PathArguments::AngleBracketed(args);
-					return;
+			let (mut retained_args, explicit_telescope_args) = match &segment.arguments {
+				PathArguments::None => (Vec::new(), Vec::new()),
+				PathArguments::AngleBracketed(existing) => {
+					let args: Vec<GenericArgument> = existing.args.iter().cloned().collect();
+					let split_index = definition.explicit_generic_count.min(args.len());
+					(args[..split_index].to_vec(), args[split_index..].to_vec())
 				},
-				PathArguments::AngleBracketed(existing) => existing,
 				PathArguments::Parenthesized(_) => return,
 			};
-			for ident in tele_idents {
-				let arg: GenericArgument = syn::parse_quote! { #ident };
-				args.args.push(arg);
+
+			let mut explicit_telescope_args = explicit_telescope_args.into_iter().peekable();
+			for ident in &definition.telescope_params {
+				let in_scope =
+					self.generic_idents.iter().any(|generic_ident| generic_ident == ident);
+				if in_scope {
+					let arg: GenericArgument = syn::parse_quote! { #ident };
+					if explicit_telescope_args
+						.peek()
+						.is_some_and(|explicit| same_tokens(explicit, &arg))
+					{
+						explicit_telescope_args.next();
+					}
+					retained_args.push(arg);
+				} else if let Some(arg) = explicit_telescope_args.next() {
+					retained_args.push(arg);
+				} else {
+					return;
+				}
 			}
+			retained_args.extend(explicit_telescope_args);
+
+			let args: syn::AngleBracketedGenericArguments = syn::parse_quote! {
+				< #(#retained_args),* >
+			};
+			segment.arguments = PathArguments::AngleBracketed(args);
 		}
 	}
+}
+
+fn same_tokens(left: &GenericArgument, right: &GenericArgument) -> bool {
+	quote! { #left }.to_string() == quote! { #right }.to_string()
 }
 
 fn generic_idents(telescope: &[TypeParam], generics: &Generics) -> Vec<Ident> {
@@ -715,7 +758,7 @@ fn expand_type_alias(
 	let used = used_telescope_params(telescope, &ty_tokens);
 
 	// Register this definition before adding params to generics
-	defs.register(scope, &item.ident, &used);
+	defs.register(scope, &item.ident, &used, item.generics.params.len());
 
 	for param in &used {
 		item.generics.params.push(syn::GenericParam::Type((*param).clone()));
@@ -747,7 +790,7 @@ fn expand_struct(
 
 	// Register this definition with ALL telescope params
 	let all_params: Vec<&TypeParam> = telescope.iter().collect();
-	defs.register(scope, &item.ident, &all_params);
+	defs.register(scope, &item.ident, &all_params, item.generics.params.len());
 
 	// Determine which telescope params are used in the struct fields
 	let fields_tokens = match &item.fields {
@@ -804,7 +847,7 @@ fn expand_trait(
 	// arity stable even when a macro-generated body is empty.
 	let all_params: Vec<&TypeParam> = telescope.iter().collect();
 
-	defs.register(scope, &item.ident, &all_params);
+	defs.register(scope, &item.ident, &all_params, item.generics.params.len());
 
 	for param in &all_params {
 		item.generics.params.push(syn::GenericParam::Type((*param).clone()));
