@@ -1,5 +1,11 @@
 import { HDNodeWallet } from 'ethers';
-import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
+import {
+  DcaParams,
+  newSwap,
+  FillOrKillParamsX128,
+  CcmDepositMetadata,
+  formatCcmDepositMetadata,
+} from 'shared/new_swap';
 import { send, sendViaCfTester } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
 import {
@@ -41,22 +47,14 @@ import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingSwapEgressIgnoredEvent } from 'generated/events/swapping/swapEgressIgnored';
 import z from 'zod';
 import { hexToTronAddress } from '@chainflip/utils/tron';
-import { ethereumIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/ethereumIngressEgress/ccmBroadcastRequested';
-import { ethereumIngressEgressCcmEgressInvalidEvent } from 'generated/events/ethereumIngressEgress/ccmEgressInvalid';
-import { ethereumIngressEgressCcmBroadcastFailedEvent } from 'generated/events/ethereumIngressEgress/ccmBroadcastFailed';
-import { ethereumBroadcasterBroadcastSuccessEvent } from 'generated/events/ethereumBroadcaster/broadcastSuccess';
-import { arbitrumIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/arbitrumIngressEgress/ccmBroadcastRequested';
-import { arbitrumIngressEgressCcmEgressInvalidEvent } from 'generated/events/arbitrumIngressEgress/ccmEgressInvalid';
-import { arbitrumIngressEgressCcmBroadcastFailedEvent } from 'generated/events/arbitrumIngressEgress/ccmBroadcastFailed';
-import { arbitrumBroadcasterBroadcastSuccessEvent } from 'generated/events/arbitrumBroadcaster/broadcastSuccess';
-import { solanaIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/solanaIngressEgress/ccmBroadcastRequested';
-import { solanaIngressEgressCcmEgressInvalidEvent } from 'generated/events/solanaIngressEgress/ccmEgressInvalid';
-import { solanaIngressEgressCcmBroadcastFailedEvent } from 'generated/events/solanaIngressEgress/ccmBroadcastFailed';
-import { solanaBroadcasterBroadcastSuccessEvent } from 'generated/events/solanaBroadcaster/broadcastSuccess';
-import { tronIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/tronIngressEgress/ccmBroadcastRequested';
-import { tronIngressEgressCcmEgressInvalidEvent } from 'generated/events/tronIngressEgress/ccmEgressInvalid';
-import { tronIngressEgressCcmBroadcastFailedEvent } from 'generated/events/tronIngressEgress/ccmBroadcastFailed';
-import { tronBroadcasterBroadcastSuccessEvent } from 'generated/events/tronBroadcaster/broadcastSuccess';
+import {
+  batchBroadcastRequestedEventFor,
+  broadcastSuccessEventFor,
+  broadcastAbortedEventFor,
+  ccmBroadcastRequestedEventFor,
+  ccmEgressInvalidEventFor,
+  ccmBroadcastFailedEventFor,
+} from 'shared/utils/events_lookup';
 import { executeTronVaultSwap } from './vault_swap/tron_vault_swap';
 
 export type SwapParams = {
@@ -79,7 +77,7 @@ export async function requestNewSwap<A = []>(
   dcaParams?: DcaParams,
 ): Promise<SwapParams> {
   cf.debug(
-    `Requesting swap with sourceAsset ${sourceAsset}, destinationAsset ${destAsset}, destinationAddress ${destAddress} and metadata ${JSON.stringify(messageMetadata)}`,
+    `Requesting swap with sourceAsset ${sourceAsset}, destinationAsset ${destAsset}, destinationAddress ${destAddress} and metadata ${formatCcmDepositMetadata(messageMetadata)}`,
   );
   await newSwap(
     cf,
@@ -176,148 +174,80 @@ async function waitForCcmExecution<A = []>(
   egressId: z.infer<typeof swappingSwapEgressScheduled>['egressId'],
 ) {
   const destChain = chainFromAsset(destAsset);
-  let broadcastId: number;
 
-  switch (destChain) {
-    case 'Ethereum': {
-      const ccmEgressResult = await cf.stepUntilOneEventOf({
-        ccmBroadcastRequested: ethereumIngressEgressCcmBroadcastRequestedEvent.refine(
-          (event) =>
-            event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
-        ),
-        ccmEgressInvalid: ethereumIngressEgressCcmEgressInvalidEvent.refine(
-          (event) =>
-            event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
-        ),
-      });
+  const ccmBroadcastRequested = ccmBroadcastRequestedEventFor(cf.logger, destChain);
+  const ccmEgressInvalid = ccmEgressInvalidEventFor(cf.logger, destChain);
+  const ccmBroadcastFailed = ccmBroadcastFailedEventFor(cf.logger, destChain);
+  const broadcastSuccess = broadcastSuccessEventFor(cf.logger, destChain);
 
-      if (ccmEgressResult.key === 'ccmEgressInvalid') {
-        throw new Error(
-          `CCM egress invalid for egress ${JSON.stringify(egressId)}: ${JSON.stringify(ccmEgressResult.data.error)}`,
-        );
-      }
+  const egressMatches = (e: z.infer<typeof swappingSwapEgressScheduled>['egressId']) =>
+    e[0] === egressId[0] && `${e[1]}` === `${egressId[1]}`;
 
-      broadcastId = ccmEgressResult.data.broadcastId;
+  const ccmEgressResult = await cf.stepUntilOneEventOf({
+    ccmBroadcastRequested: ccmBroadcastRequested.refine((event) => egressMatches(event.egressId)),
+    ccmEgressInvalid: ccmEgressInvalid.refine((event) => egressMatches(event.egressId)),
+  });
 
-      const broadcastResult = await cf.stepUntilOneEventOf({
-        broadcastSuccess: ethereumBroadcasterBroadcastSuccessEvent.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-        ccmBroadcastFailed: ethereumIngressEgressCcmBroadcastFailedEvent.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-      });
-
-      if (broadcastResult.key === 'ccmBroadcastFailed') {
-        throw new Error(`CCM broadcast failed for ${destAsset} broadcast ${broadcastId}`);
-      }
-      break;
-    }
-    case 'Arbitrum': {
-      const ccmEgressResult = await cf.stepUntilOneEventOf({
-        ccmBroadcastRequested: arbitrumIngressEgressCcmBroadcastRequestedEvent.refine(
-          (event) =>
-            event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
-        ),
-        ccmEgressInvalid: arbitrumIngressEgressCcmEgressInvalidEvent.refine(
-          (event) =>
-            event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
-        ),
-      });
-
-      if (ccmEgressResult.key === 'ccmEgressInvalid') {
-        throw new Error(
-          `CCM egress invalid for egress ${JSON.stringify(egressId)}: ${JSON.stringify(ccmEgressResult.data.error)}`,
-        );
-      }
-
-      broadcastId = ccmEgressResult.data.broadcastId;
-
-      const broadcastResult = await cf.stepUntilOneEventOf({
-        broadcastSuccess: arbitrumBroadcasterBroadcastSuccessEvent.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-        ccmBroadcastFailed: arbitrumIngressEgressCcmBroadcastFailedEvent.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-      });
-
-      if (broadcastResult.key === 'ccmBroadcastFailed') {
-        throw new Error(`CCM broadcast failed for ${destAsset} broadcast ${broadcastId}`);
-      }
-      break;
-    }
-    case 'Solana': {
-      const ccmEgressResult = await cf.stepUntilOneEventOf({
-        ccmBroadcastRequested: solanaIngressEgressCcmBroadcastRequestedEvent.refine(
-          (event) =>
-            event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
-        ),
-        ccmEgressInvalid: solanaIngressEgressCcmEgressInvalidEvent.refine(
-          (event) =>
-            event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
-        ),
-      });
-
-      if (ccmEgressResult.key === 'ccmEgressInvalid') {
-        throw new Error(
-          `CCM egress invalid for egress ${JSON.stringify(egressId)}: ${JSON.stringify(ccmEgressResult.data.error)}`,
-        );
-      }
-
-      broadcastId = ccmEgressResult.data.broadcastId;
-
-      const broadcastResult = await cf.stepUntilOneEventOf({
-        broadcastSuccess: solanaBroadcasterBroadcastSuccessEvent.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-        ccmBroadcastFailed: solanaIngressEgressCcmBroadcastFailedEvent.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-      });
-
-      if (broadcastResult.key === 'ccmBroadcastFailed') {
-        throw new Error(`CCM broadcast failed for ${destAsset} broadcast ${broadcastId}`);
-      }
-      break;
-    }
-    case 'Tron': {
-      const ccmEgressResult = await cf.stepUntilOneEventOf({
-        ccmBroadcastRequested: tronIngressEgressCcmBroadcastRequestedEvent.refine(
-          (event) =>
-            event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
-        ),
-        ccmEgressInvalid: tronIngressEgressCcmEgressInvalidEvent.refine(
-          (event) =>
-            event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
-        ),
-      });
-
-      if (ccmEgressResult.key === 'ccmEgressInvalid') {
-        throw new Error(
-          `CCM egress invalid for egress ${JSON.stringify(egressId)}: ${JSON.stringify(ccmEgressResult.data.error)}`,
-        );
-      }
-
-      broadcastId = ccmEgressResult.data.broadcastId;
-
-      const broadcastResult = await cf.stepUntilOneEventOf({
-        broadcastSuccess: tronBroadcasterBroadcastSuccessEvent.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-        ccmBroadcastFailed: tronIngressEgressCcmBroadcastFailedEvent.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-      });
-
-      if (broadcastResult.key === 'ccmBroadcastFailed') {
-        throw new Error(`CCM broadcast failed for ${destAsset} broadcast ${broadcastId}`);
-      }
-      break;
-    }
-    default:
-      throw new Error(`Unsupported CCM destination chain: ${destChain}`);
+  if (ccmEgressResult.key === 'ccmEgressInvalid') {
+    throw new Error(
+      `CCM egress invalid for egress ${JSON.stringify(egressId)}: ${JSON.stringify(ccmEgressResult.data.error)}`,
+    );
   }
+
+  const { broadcastId } = ccmEgressResult.data;
+
+  const broadcastResult = await cf.stepUntilOneEventOf({
+    broadcastSuccess: broadcastSuccess.refine((event) => event.broadcastId === broadcastId),
+    ccmBroadcastFailed: ccmBroadcastFailed.refine((event) => event.broadcastId === broadcastId),
+  });
+
+  if (broadcastResult.key === 'ccmBroadcastFailed') {
+    throw new Error(`CCM broadcast failed for ${destAsset} broadcast ${broadcastId}`);
+  }
+}
+
+// Wait for the broadcast that fulfils the given (non-CCM) egress to either succeed or be aborted
+// on the state chain. This lets a swap fail fast on BroadcastAborted (e.g. an Assethub nonce
+// stall where all authorities failed to broadcast) instead of silently waiting out the
+// destination balance timeout
+async function waitForBroadcastOutcome<A = []>(
+  cf: ChainflipIO<A>,
+  destAsset: Asset,
+  egressId: z.infer<typeof swappingSwapEgressScheduled>['egressId'],
+): Promise<void> {
+  const destChain = chainFromAsset(destAsset);
+
+  const batchBroadcastRequested = batchBroadcastRequestedEventFor(cf.logger, destChain);
+  const broadcastSuccess = broadcastSuccessEventFor(cf.logger, destChain);
+  const broadcastAborted = broadcastAbortedEventFor(cf.logger, destChain);
+
+  // Map the egress to the broadcast that carries it
+  const { broadcastId } = await cf.stepUntilEvent(
+    batchBroadcastRequested.refine((event) =>
+      event.egressIds.some((e) => e[0] === egressId[0] && `${e[1]}` === `${egressId[1]}`),
+    ),
+  );
+  cf.debug(
+    `${destChain}IngressEgress.BatchBroadcastRequestedBroadcast found with broadcastId: ${broadcastId}`,
+  );
+
+  // Wait for the broadcaster to report success or give up (abort).
+  const outcome = await cf.stepUntilOneEventOf({
+    broadcastSuccess: broadcastSuccess.refine((e) => e.broadcastId === broadcastId),
+    broadcastAborted: broadcastAborted.refine((e) => e.broadcastId === broadcastId),
+  });
+
+  if (outcome.key === 'broadcastAborted') {
+    throwError(
+      cf.logger,
+      new Error(
+        `Broadcast ${broadcastId} to ${destChain} was ABORTED (egress ${JSON.stringify(
+          egressId,
+        )}). All authorities failed to broadcast — likely a stuck/burned nonce.`,
+      ),
+    );
+  }
+  cf.debug(`Broadcast ${broadcastId} to ${destChain} succeeded.`);
 }
 
 // Note: if using the swap context, the logger must contain the tag
@@ -369,6 +299,10 @@ export async function doPerformSwap<A = []>(
   const egressId = await waitForEgressScheduled(cf, swapRequestId, swapContext);
   if (messageMetadata) {
     await waitForCcmExecution(cf, destAsset, egressId);
+  } else {
+    // Fail fast on BroadcastAborted (e.g. a stuck Assethub nonce) instead of waiting out the
+    // balance timeout.
+    await waitForBroadcastOutcome(cf, destAsset, egressId);
   }
 
   try {

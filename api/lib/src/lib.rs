@@ -16,10 +16,13 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
-pub use cf_chains::address::AddressString;
-use cf_chains::{evm::to_evm_address, CcmChannelMetadataUnchecked, TransactionInId};
+pub use cf_chains::address::{AddressString, EncodedAddress};
+use cf_chains::{
+	evm::to_evm_address, CcmChannelMetadataUnchecked, ChannelRefundParametersUncheckedEncoded,
+	TransactionInId,
+};
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{DcaParameters, ForeignChain};
 use cf_rpc_apis::grandpa::GrandpaExtApiClient;
@@ -518,29 +521,46 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
+		let destination_address =
+			destination_address.try_parse_to_encoded_address(destination_asset.into())?;
+		let refund_parameters = refund_parameters
+			.try_map_address(|addr| addr.try_parse_to_encoded_address(source_asset.into()))?;
+
+		// The critical fields the opened channel must match before we return it (PRO-2926).
+		let expected_channel = ExpectedSwapDepositChannel {
+			source_asset,
+			destination_asset,
+			destination_address: destination_address.clone(),
+			refund_parameters: refund_parameters.clone(),
+		};
+
 		let submit_signed_extrinsic_fut = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
 					destination_asset,
-					destination_address: destination_address
-						.try_parse_to_encoded_address(destination_asset.into())?,
+					destination_address,
 					broker_commission,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees: affiliate_fees.unwrap_or_default(),
-					refund_parameters: refund_parameters.try_map_address(|addr| {
-						addr.try_parse_to_encoded_address(source_asset.into())
-					})?,
+					refund_parameters,
 					dca_parameters,
 				},
 			)
-			.and_then(|(_, (block_fut, finalized_fut))| async move {
-				let extrinsic_data = block_fut.until_in_block().await?;
-				Ok((
-					extract_swap_deposit_address(extrinsic_data.events, extrinsic_data.header)?,
-					finalized_fut,
-				))
+			.and_then({
+				let expected_channel = expected_channel.clone();
+				move |(_, (block_fut, finalized_fut))| async move {
+					let extrinsic_data = block_fut.until_in_block().await?;
+					Ok((
+						extract_swap_deposit_address(
+							extrinsic_data.events,
+							extrinsic_data.header,
+							&expected_channel,
+						)?,
+						finalized_fut,
+					))
+				}
 			})
 			.boxed();
 
@@ -562,7 +582,11 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 		// Worst case, we need to wait for the transaction to be finalized.
 		let extrinsic_data = finalized_fut.until_finalized().await?;
-		extract_swap_deposit_address(extrinsic_data.events, extrinsic_data.header)
+		extract_swap_deposit_address(
+			extrinsic_data.events,
+			extrinsic_data.header,
+			&expected_channel,
+		)
 	}
 	async fn withdraw_fees(
 		&self,
@@ -1033,34 +1057,58 @@ fn fetch_preallocated_channels(
 	}
 }
 
+/// The critical fields of a swap deposit channel that we requested. These are checked
+/// against the observed event before returning the result to the user.
+#[derive(Clone)]
+struct ExpectedSwapDepositChannel {
+	source_asset: Asset,
+	destination_asset: Asset,
+	destination_address: EncodedAddress,
+	refund_parameters: ChannelRefundParametersUncheckedEncoded,
+}
+
 fn extract_swap_deposit_address(
 	events: Vec<RuntimeEvent>,
 	header: state_chain_runtime::Header,
+	expected: &ExpectedSwapDepositChannel,
 ) -> Result<SwapDepositAddress> {
-	extract_event!(
-		events,
-		state_chain_runtime::RuntimeEvent::Swapping,
-		pallet_cf_swapping::Event::SwapDepositAddressReady,
-		{
+	for event in events {
+		if let RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapDepositAddressReady {
 			deposit_address,
+			destination_address,
+			source_asset,
+			destination_asset,
 			channel_id,
 			source_chain_expiry_block,
 			channel_opening_fee,
 			refund_parameters,
 			..
-		},
-		SwapDepositAddress {
-			address: AddressString::from_encoded_address(deposit_address),
-			issued_block: header.number,
-			channel_id: *channel_id,
-			source_chain_expiry_block: (*source_chain_expiry_block).into(),
-			channel_opening_fee: (*channel_opening_fee).into(),
-			refund_parameters: refund_parameters.clone()
-				.map_address(|refund_address| {
+		}) = event
+		{
+			// Defence in depth (PRO-2926): the opened channel must match the critical fields we
+			// requested.
+			ensure!(
+				source_asset == expected.source_asset &&
+					destination_asset == expected.destination_asset &&
+					destination_address == expected.destination_address &&
+					refund_parameters == expected.refund_parameters,
+				"Opened deposit channel (channel_id: {channel_id}) does not match the request",
+			);
+
+			return Ok(SwapDepositAddress {
+				address: AddressString::from_encoded_address(&deposit_address),
+				issued_block: header.number,
+				channel_id,
+				source_chain_expiry_block: source_chain_expiry_block.into(),
+				channel_opening_fee: channel_opening_fee.into(),
+				refund_parameters: refund_parameters.map_address(|refund_address| {
 					AddressString::from_encoded_address(&refund_address)
 				}),
+			});
 		}
-	)
+	}
+
+	bail!("No SwapDepositAddressReady event was found")
 }
 
 fn extract_account_creation_deposit_address(
@@ -1092,29 +1140,48 @@ fn extract_account_creation_deposit_address(
 	)
 }
 
+/// The critical fields of a liquidity deposit channel that we requested. These are compared against
+/// the event before returning result to the user.
+#[derive(Clone)]
+struct ExpectedLiquidityDepositChannel {
+	asset: Asset,
+	account_id: AccountId32,
+}
+
 fn extract_liquidity_deposit_channel_details(
 	events: Vec<RuntimeEvent>,
+	expected: &ExpectedLiquidityDepositChannel,
 ) -> Result<(ChannelId, LiquidityDepositChannelDetails)> {
-	events
-		.into_iter()
-		.find_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::LiquidityProvider(
-				pallet_cf_lp::Event::LiquidityDepositAddressReady {
-					channel_id,
-					deposit_address,
-					deposit_chain_expiry_block,
-					..
-				},
-			) => Some((
+	for event in events {
+		if let RuntimeEvent::LiquidityProvider(
+			pallet_cf_lp::Event::LiquidityDepositAddressReady {
+				channel_id,
+				asset,
+				deposit_address,
+				account_id,
+				deposit_chain_expiry_block,
+				..
+			},
+		) = event
+		{
+			// Defence in depth (PRO-2926): the opened channel must be for the asset we requested
+			// and be credited to our own account.
+			ensure!(
+				asset == expected.asset && account_id == expected.account_id,
+				"Opened deposit channel (channel_id: {channel_id}) does not match the request",
+			);
+
+			return Ok((
 				channel_id,
 				LiquidityDepositChannelDetails {
-					deposit_address: AddressString::from_encoded_address(deposit_address),
+					deposit_address: AddressString::from_encoded_address(&deposit_address),
 					deposit_chain_expiry_block,
 				},
-			)),
-			_ => None,
-		})
-		.ok_or_else(|| anyhow!("No LiquidityDepositAddressReady event was found"))
+			));
+		}
+	}
+
+	bail!("No LiquidityDepositAddressReady event was found")
 }
 
 #[cfg(test)]

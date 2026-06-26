@@ -320,6 +320,110 @@ fn do_not_expire_marked_transactions_if_prewitnessed() {
 }
 
 #[test]
+fn report_expiry_cleanup_respects_remaining_weight() {
+	use frame_support::weights::constants::ParityDbWeight;
+	new_test_ext().execute_with(|| {
+		let expiry_at = 100u64;
+		System::set_block_number(expiry_at);
+
+		let tx_ids = [Hash::random(), Hash::random(), Hash::random()];
+		for tx_id in tx_ids {
+			TransactionsMarkedForRejection::<Test, Instance2>::insert(
+				BROKER,
+				tx_id,
+				TransactionRejectionStatus { prewitnessed: false, expires_at: expiry_at },
+			);
+		}
+		ReportExpiresAt::<Test, Instance2>::insert(
+			expiry_at,
+			tx_ids.iter().map(|tx_id| (BROKER, *tx_id)).collect::<Vec<_>>(),
+		);
+
+		// Budget large enough for the recycling overhead + the take + a couple of entries,
+		// but not all three.
+		let budget = ParityDbWeight::get().reads_writes(7, 7);
+		let used = BitcoinIngressEgress::on_idle(expiry_at, budget);
+
+		// The hook must stay within its budget (allowing a single bookkeeping op for the
+		// requeue write) rather than draining the whole bucket unconditionally.
+		assert!(
+			used.ref_time() <=
+				budget
+					.ref_time()
+					.saturating_add(ParityDbWeight::get().reads_writes(1, 1).ref_time()),
+			"on_idle used {used:?} which exceeds the budget {budget:?}",
+		);
+
+		// The current bucket is drained...
+		assert!(ReportExpiresAt::<Test, Instance2>::get(expiry_at).is_empty());
+		// ...but not every entry was processed: the remainder is deferred to the next block
+		// instead of being cleaned up for free this block.
+		let requeued = ReportExpiresAt::<Test, Instance2>::get(expiry_at + 1);
+		assert!(!requeued.is_empty(), "unprocessed entries must be requeued");
+		assert!(requeued.len() < tx_ids.len());
+
+		// Deferred entries are still marked (not yet expired).
+		assert_eq!(
+			tx_ids
+				.iter()
+				.filter(|tx_id| TransactionsMarkedForRejection::<Test, Instance2>::contains_key(
+					BROKER, tx_id
+				))
+				.count(),
+			requeued.len(),
+		);
+
+		// The next block drains the requeued remainder.
+		System::set_block_number(expiry_at + 1);
+		BitcoinIngressEgress::on_idle(expiry_at + 1, Weight::MAX);
+
+		assert!(ReportExpiresAt::<Test, Instance2>::get(expiry_at + 1).is_empty());
+		for tx_id in tx_ids {
+			assert!(!TransactionsMarkedForRejection::<Test, Instance2>::contains_key(
+				BROKER, tx_id
+			));
+		}
+	});
+}
+
+#[test]
+fn repeated_reports_do_not_multiply_expiry_entries() {
+	new_test_ext().execute_with(|| {
+		let tx_id = Hash::random();
+		let expiry_at = System::block_number() + MARKED_TX_EXPIRATION_BLOCKS as u64;
+
+		// Report the same transaction repeatedly within the same block.
+		for _ in 0..5 {
+			assert_ok!(BitcoinIngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+		}
+
+		// The expiry index must not accumulate duplicate cleanup work.
+		assert_eq!(ReportExpiresAt::<Test, Instance2>::get(expiry_at).len(), 1);
+		assert!(TransactionsMarkedForRejection::<Test, Instance2>::contains_key(BROKER, tx_id));
+	});
+}
+
+#[test]
+fn mark_transaction_for_rejection_charges_for_deferred_cleanup() {
+	use frame_support::{dispatch::GetDispatchInfo, weights::constants::ParityDbWeight};
+	// Marking a transaction schedules one expiry-cleanup entry that runs later in `on_idle`.
+	// The extrinsic's declared weight must include that deferred per-entry cleanup cost so the
+	// reporting broker pays for the work they queue rather than offloading it onto the network.
+	let declared =
+		crate::Call::<Test, Instance2>::mark_transaction_for_rejection { tx_id: Hash::random() }
+			.get_dispatch_info()
+			.call_weight;
+	assert_eq!(
+		declared,
+		<() as crate::WeightInfo>::mark_transaction_for_rejection()
+			.saturating_add(ParityDbWeight::get().reads_writes(2, 2)),
+	);
+}
+
+#[test]
 fn can_not_report_transaction_after_witnessing() {
 	new_test_ext().execute_with(|| {
 		let unreported = Hash::random();
@@ -393,62 +497,55 @@ fn send_funds_back_after_they_have_been_rejected() {
 }
 
 #[test]
-fn test_mark_transaction_expiry_and_deposit() {
-	let tx_id = Hash::random();
+fn remarking_a_transaction_extends_expiry_without_duplicating() {
+	new_test_ext().execute_with(|| {
+		let tx_id = Hash::random();
+		let first_expiry = System::block_number() + MARKED_TX_EXPIRATION_BLOCKS as u64;
 
-	let ext = new_test_ext()
-		// Mark a transaction
-		.then_apply_extrinsics(|_| {
-			[(
-				OriginTrait::signed(BROKER),
-				crate::Call::<Test, Instance2>::mark_transaction_for_rejection { tx_id },
-				Ok(()),
-			)]
-		})
-		// Advance 10 blocks
-		.then_process_blocks(10)
-		// Mark the same transaction again
-		.then_apply_extrinsics(|_| {
-			[(
-				OriginTrait::signed(BROKER),
-				crate::Call::<Test, Instance2>::mark_transaction_for_rejection { tx_id },
-				Ok(()),
-			)]
-		})
-		// Get expiry block of the first report
-		.then_execute_with(|_| {
-			let mut expiries = ReportExpiresAt::<Test, Instance2>::iter().collect::<Vec<_>>();
-			expiries.sort_by_key(|(block, _)| *block);
-			(expiries[0].0, expiries[1].0)
-		});
-	let (first_expiry, second_expiry) = *ext.context();
+		assert_ok!(BitcoinIngressEgress::mark_transaction_for_rejection(
+			OriginTrait::signed(BROKER),
+			tx_id,
+		));
 
-	ext
-		// Advance to the block after expiry block
-		.then_execute_at_block(first_expiry, |_| {
-			// First expiry should be triggered, but ignored.
-		})
-		.then_process_events(|_, event| {
-			if let RuntimeEvent::BitcoinIngressEgress(Event::TransactionRejectionRequestExpired {
-				..
-			}) = event
-			{
-				panic!("Rejection Request Expired prematurely");
-			}
-			None::<()>
-		})
-		.then_execute_at_block(second_expiry, |_| {
-			// Second expiry should be triggered, expiry is processed.
-		})
-		.then_execute_with_keep_context(|_| {
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::BitcoinIngressEgress(Event::TransactionRejectionRequestExpired {
-					account_id: BROKER,
-					..
-				})
-			);
-		});
+		// Re-mark the same transaction ten blocks later: this extends the window to a fresh
+		// expiry.
+		System::set_block_number(System::block_number() + 10);
+		let second_expiry = System::block_number() + MARKED_TX_EXPIRATION_BLOCKS as u64;
+		assert_ok!(BitcoinIngressEgress::mark_transaction_for_rejection(
+			OriginTrait::signed(BROKER),
+			tx_id,
+		));
+
+		// Still exactly one index entry (at the original block), and the status now carries
+		// the extended expiry.
+		let entries = ReportExpiresAt::<Test, Instance2>::iter().collect::<Vec<_>>();
+		assert_eq!(entries.len(), 1);
+		assert_eq!(entries[0].0, first_expiry);
+		assert_eq!(
+			TransactionsMarkedForRejection::<Test, Instance2>::get(BROKER, tx_id)
+				.unwrap()
+				.expires_at,
+			second_expiry,
+		);
+
+		// At the original expiry the mark is NOT expired; its index entry is rescheduled to
+		// the extended expiry.
+		System::set_block_number(first_expiry);
+		BitcoinIngressEgress::on_idle(first_expiry, Weight::MAX);
+
+		assert!(TransactionsMarkedForRejection::<Test, Instance2>::contains_key(BROKER, tx_id));
+		assert!(ReportExpiresAt::<Test, Instance2>::get(first_expiry).is_empty());
+		assert_eq!(ReportExpiresAt::<Test, Instance2>::get(second_expiry), vec![(BROKER, tx_id)],);
+
+		// At the extended expiry the mark is finally removed.
+		System::set_block_number(second_expiry);
+		BitcoinIngressEgress::on_idle(second_expiry, Weight::MAX);
+
+		assert!(!TransactionsMarkedForRejection::<Test, Instance2>::contains_key(BROKER, tx_id));
+		assert_has_event::<Test>(RuntimeEvent::BitcoinIngressEgress(
+			Event::TransactionRejectionRequestExpired { account_id: BROKER, tx_id },
+		));
+	});
 }
 
 #[test]

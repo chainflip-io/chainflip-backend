@@ -26,6 +26,7 @@ Before marking this as ready for review, consider the following:
 
 * The PR is complete:
   * [ ] Scope is clear and fully implemented.
+  * [ ] Reviewers are assigned.
   * Tests:
     * [ ] Unit tests for isolated local conditions.
     * [ ] Proptests for important invariants.
