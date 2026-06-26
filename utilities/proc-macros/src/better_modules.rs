@@ -8,7 +8,7 @@ use syn::{
 	token,
 	visit_mut::{self, VisitMut},
 	Attribute, ExprPath, GenericArgument, Generics, Ident, Item, ItemImpl, ItemMacro, ItemMod,
-	ItemStruct, ItemType, ItemUse, PathArguments, Token, TypeParam, UseTree, Visibility,
+	ItemStruct, ItemTrait, ItemType, ItemUse, PathArguments, Token, TypeParam, UseTree, Visibility,
 };
 
 // ─── Input parsing ────────────────────────────────────────────────────────────
@@ -23,6 +23,7 @@ pub struct Input {
 pub enum ModuleItem {
 	TypeAlias(ItemType),
 	Struct(ItemStruct),
+	Trait(ItemTrait),
 	Impl(ItemImpl),
 	Mod(ItemMod),
 	PlainMod(PlainMod),
@@ -137,6 +138,7 @@ fn parse_module_item(input: ParseStream) -> syn::Result<ModuleItem> {
 	Ok(match item {
 		Item::Type(t) => ModuleItem::TypeAlias(t),
 		Item::Struct(s) => ModuleItem::Struct(s),
+		Item::Trait(t) => ModuleItem::Trait(t),
 		Item::Impl(i) => ModuleItem::Impl(i),
 		Item::Mod(m) => ModuleItem::Mod(m),
 		Item::Use(u) => ModuleItem::Use(u),
@@ -381,6 +383,14 @@ struct RewriteVisitor<'a> {
 }
 
 impl VisitMut for RewriteVisitor<'_> {
+	fn visit_item_impl_mut(&mut self, item_impl: &mut ItemImpl) {
+		visit_mut::visit_item_impl_mut(self, item_impl);
+
+		if let Some((_bang, trait_path, _for_token)) = &mut item_impl.trait_ {
+			self.rewrite_path(trait_path);
+		}
+	}
+
 	fn visit_type_path_mut(&mut self, type_path: &mut syn::TypePath) {
 		// Visit nested types first
 		visit_mut::visit_type_path_mut(self, type_path);
@@ -465,6 +475,17 @@ fn rewrite_item_struct(
 	visitor.visit_item_struct_mut(item);
 }
 
+fn rewrite_item_trait(
+	item: &mut ItemTrait,
+	defs: &Definitions,
+	telescope: &[TypeParam],
+	scope: &[String],
+) {
+	let mut visitor =
+		RewriteVisitor { defs, scope, generic_idents: generic_idents(telescope, &item.generics) };
+	visitor.visit_item_trait_mut(item);
+}
+
 fn rewrite_item_impl(
 	item: &mut ItemImpl,
 	defs: &Definitions,
@@ -519,6 +540,7 @@ fn expand_item(
 	match item {
 		ModuleItem::TypeAlias(t) => expand_type_alias(telescope, t, defs, scope),
 		ModuleItem::Struct(s) => expand_struct(telescope, s, defs, scope),
+		ModuleItem::Trait(t) => expand_trait(telescope, t, defs, scope),
 		ModuleItem::Impl(i) => expand_impl(telescope, i, defs, scope),
 		ModuleItem::Mod(m) => expand_mod(telescope, m, defs, scope),
 		ModuleItem::PlainMod(m) => expand_plain_mod(telescope, m, defs, scope),
@@ -642,6 +664,31 @@ fn expand_struct(
 	quote! { #item }
 }
 
+fn expand_trait(
+	telescope: &[TypeParam],
+	item: &ItemTrait,
+	defs: &mut Definitions,
+	scope: &[String],
+) -> TokenStream {
+	let mut item = item.clone();
+
+	// First rewrite references to previously defined items in bounds and trait items.
+	rewrite_item_trait(&mut item, defs, telescope, scope);
+
+	// Only add telescope params that appear in the (rewritten) trait definition.
+	let trait_tokens = quote! { #item };
+	let used = used_telescope_params(telescope, &trait_tokens);
+
+	// Register this definition before adding params to generics.
+	defs.register(scope, &item.ident, &used);
+
+	for param in &used {
+		item.generics.params.push(syn::GenericParam::Type((*param).clone()));
+	}
+
+	quote! { #item }
+}
+
 fn expand_impl(
 	telescope: &[TypeParam],
 	item: &ItemImpl,
@@ -745,6 +792,7 @@ fn classify_item(item: Item) -> ModuleItem {
 	match item {
 		Item::Type(t) => ModuleItem::TypeAlias(t),
 		Item::Struct(s) => ModuleItem::Struct(s),
+		Item::Trait(t) => ModuleItem::Trait(t),
 		Item::Impl(i) => ModuleItem::Impl(i),
 		Item::Mod(m) => ModuleItem::Mod(m),
 		Item::Use(u) => ModuleItem::Use(u),
