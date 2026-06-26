@@ -8,6 +8,7 @@ import {
   solVersionedCcmAdditionalDataCodec,
   newAssetAddress,
   Asset,
+  isEvmChain,
 } from 'shared/utils';
 import { BtcAddressType } from 'shared/new_btc_address';
 import { CcmDepositMetadata } from 'shared/new_swap';
@@ -196,7 +197,7 @@ export async function newCcmMetadata(
   const destChain = chainFromAsset(destAsset);
 
   let userLogicGasBudget;
-  if (destChain === 'Arbitrum' || destChain === 'Ethereum' || destChain === 'Bsc') {
+  if (isEvmChain(destChain)) {
     // Do the gas estimation of the call to the CF Tester contract. CF will then add the extra
     // overhead on top. This is particularly relevant for Arbitrum where estimating the gas here
     // required for execution is very complicated without using `eth_estimateGas` on the user's side.

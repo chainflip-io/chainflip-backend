@@ -14,6 +14,7 @@ import {
   TransactionOrigin,
   Asset,
   Chain,
+  isEvmChain,
 } from 'shared/utils';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
@@ -242,8 +243,8 @@ async function testGasLimitSwapToEvm<A = []>(
   const destChain = chainFromAsset(destAsset);
   const web3 = getWeb3(chainFromAsset(destAsset));
 
-  if (destChain !== 'Arbitrum' && destChain !== 'Ethereum' && destChain !== 'Bsc') {
-    throw new Error(`Destination chain ${destChain} is not Ethereum, Arbitrum, nor Bsc`);
+  if (!isEvmChain(destChain)) {
+    throw new Error(`Destination chain ${destChain} is not an evm chain`);
   }
 
   const gasConsumption = getRandomGasConsumption(chainFromAsset(destAsset));
