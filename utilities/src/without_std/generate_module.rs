@@ -132,56 +132,58 @@ macro_rules! generate_module {
                             type $field = (M1::$field, M2::$field);
                         )*
                     }
-                }
-            }
 
+                    mod (M: CustomMigration<To, V>) {
 
-            cf_proc_macros::better_modules! {
-                mod (M: CustomMigration<To, V>) (To: HistoricalTypesAt<V>) (V: Version) {
-
-                    mod field_migrations
-                    {
-                        use super::*;
-                        $(
-                            pub type $field = <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>;
-                        )*
-                    }
-
-                    mod field_migration_sources
-                    {
-                        use super::*;
-                        $(
-                            pub type $field = <field_migrations::$field as Migration<To::$field, V>>::From;
-                        )*
-                        pub type Types = ( $( $field, )*);
-                    }
-
-                    impl<$( $($T $(: $TBound)?,)+ )?> Migration<Struct<To, $($($T,)+)?>, V> for see_field_changelogs_and_also<M>
-                    where
-                        Struct< field_migration_sources::Types , $($($T,)+)?  >: IsHistoricalType
-                    {
-                        type From = Struct< field_migration_sources::Types , $($($T,)+)?  >;
-
-                        fn forwards(x: Self::From) -> Struct<To, $($($T,)+)?> {
-                            Struct {
-                                $(
-                                    $field: field_migrations::$field::forwards(x.$field),
-                                )*
-                                _phantom: Default::default(),
-                            }
+                        mod field_migrations
+                        {
+                            use super::*;
+                            $(
+                                pub type $field = <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>;
+                            )*
                         }
 
-                        fn backwards(x: Struct<To, $($($T,)+)?>) -> Self::From {
-                            Struct {
-                                $(
-                                    $field: field_migrations::$field::backwards(x.$field),
-                                )*
-                                _phantom: Default::default(),
+                        mod field_migration_sources
+                        {
+                            use super::*;
+                            $(
+                                pub type $field = <field_migrations::$field as Migration<To::$field, V>>::From;
+                            )*
+                            pub type Types = ( $( $field, )*);
+                        }
+
+                        impl<$( $($T $(: $TBound)?,)+ )?> Migration<Struct<To, $($($T,)+)?>, V> for see_field_changelogs_and_also<M>
+                        where
+                            Struct< field_migration_sources::Types , $($($T,)+)?  >: IsHistoricalType
+                        {
+                            type From = Struct< field_migration_sources::Types , $($($T,)+)?  >;
+
+                            fn forwards(x: Self::From) -> Struct<To, $($($T,)+)?> {
+                                Struct {
+                                    $(
+                                        $field: field_migrations::$field::forwards(x.$field),
+                                    )*
+                                    _phantom: Default::default(),
+                                }
+                            }
+
+                            fn backwards(x: Struct<To, $($($T,)+)?>) -> Self::From {
+                                Struct {
+                                    $(
+                                        $field: field_migrations::$field::backwards(x.$field),
+                                    )*
+                                    _phantom: Default::default(),
+                                }
                             }
                         }
                     }
                 }
             }
+
+            // cf_proc_macros::better_modules! {
+            //     mod (M: CustomMigration<To, V>) (To: HistoricalTypesAt<V>) (V: Version) {
+
+            // }
 
             // ----------------- predefined migrations ------------------ //
             pub mod field {
