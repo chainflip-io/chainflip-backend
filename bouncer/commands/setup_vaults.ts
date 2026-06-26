@@ -19,9 +19,8 @@ import {
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import {
   initializeArbitrumChain,
-  initializeArbitrumContracts,
   initializeBscChain,
-  initializeBscContracts,
+  initializeEvmContracts,
   initializeSolanaChain,
   initializeSolanaPrograms,
   initializeTronChain,
@@ -214,13 +213,13 @@ async function main(): Promise<void> {
 
   const insertArbitrumKey = async () => {
     cf.info('Inserting Arbitrum key in the contracts');
-    await initializeArbitrumContracts(cf.logger, arbClient, arbKey);
+    await initializeEvmContracts(cf.logger, 'Arbitrum', arbClient, arbKey);
     cf.debug('Arbitrum key inserted');
   };
 
   const insertBscKey = async () => {
     cf.info('Inserting BSC key in the contracts');
-    await initializeBscContracts(cf.logger, bscClient, bscKey);
+    await initializeEvmContracts(cf.logger, 'Bsc', bscClient, bscKey);
     cf.debug('BSC key inserted');
   };
 

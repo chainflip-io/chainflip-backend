@@ -7,6 +7,7 @@ import {
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import {
+  Chain,
   getContractAddress,
   getTronWhaleKeyPair,
   getSolWhaleKeyPair,
@@ -57,46 +58,26 @@ export async function initializeBscChain(logger: Logger) {
   await bscInitializationRequest;
 }
 
-export async function initializeBscContracts(
+export async function initializeEvmContracts(
   logger: Logger,
-  bscClient: Web3,
-  bscKey: { pubKeyX: string; pubKeyYParity: string },
+  chain: Chain,
+  client: Web3,
+  key: { pubKeyX: string; pubKeyYParity: string },
 ) {
-  const keyManagerAddress = getContractAddress('Bsc', 'KEY_MANAGER');
+  const keyManagerAddress = getContractAddress(chain, 'KEY_MANAGER');
 
-  const keyManagerContract = new bscClient.eth.Contract(
+  const keyManagerContract = new client.eth.Contract(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (await getKeyManagerAbi()) as any,
     keyManagerAddress,
   );
   const txData = keyManagerContract.methods
     .setAggKeyWithGovKey({
-      pubKeyX: bscKey.pubKeyX,
-      pubKeyYParity: bscKey.pubKeyYParity === 'Odd' ? 1 : 0,
+      pubKeyX: key.pubKeyX,
+      pubKeyYParity: key.pubKeyYParity === 'Odd' ? 1 : 0,
     })
     .encodeABI();
-  await signAndSendTxEvm(logger, 'Bsc', { to: keyManagerAddress, value: '0', data: txData });
-}
-
-export async function initializeArbitrumContracts(
-  logger: Logger,
-  arbClient: Web3,
-  arbKey: { pubKeyX: string; pubKeyYParity: string },
-) {
-  const keyManagerAddress = getContractAddress('Arbitrum', 'KEY_MANAGER');
-
-  const keyManagerContract = new arbClient.eth.Contract(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await getKeyManagerAbi()) as any,
-    keyManagerAddress,
-  );
-  const txData = keyManagerContract.methods
-    .setAggKeyWithGovKey({
-      pubKeyX: arbKey.pubKeyX,
-      pubKeyYParity: arbKey.pubKeyYParity === 'Odd' ? 1 : 0,
-    })
-    .encodeABI();
-  await signAndSendTxEvm(logger, 'Arbitrum', { to: keyManagerAddress, value: '0', data: txData });
+  await signAndSendTxEvm(logger, chain, { to: keyManagerAddress, value: '0', data: txData });
 }
 
 export async function initializeTronContracts(

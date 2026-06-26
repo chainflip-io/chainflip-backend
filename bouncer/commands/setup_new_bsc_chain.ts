@@ -11,7 +11,7 @@ import { deposits, price } from 'shared/setup_swaps';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity, registerLiquidityRefundAddressForChain } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
-import { initializeBscChain, initializeBscContracts } from 'shared/initialize_new_chains';
+import { initializeBscChain, initializeEvmContracts } from 'shared/initialize_new_chains';
 import { getKeyManagerAbi } from 'shared/contract_interfaces';
 import { bscVaultVaultRotatedExternallyEvent } from 'generated/events/bscVault/vaultRotatedExternally';
 
@@ -36,7 +36,7 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
   const aggKey = await ethKeyManager.methods.getAggregateKey().call();
 
   cf.info('Inserting BSC key in the contracts');
-  await initializeBscContracts(cf.logger, bscClient, {
+  await initializeEvmContracts(cf.logger, 'Bsc', bscClient, {
     pubKeyX: aggKey.pubKeyX,
     pubKeyYParity: Number(aggKey.pubKeyYParity) === 1 ? 'Odd' : 'Even',
   });

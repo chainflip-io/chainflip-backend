@@ -80,10 +80,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
 
   // If we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
-  const AssetsForTesting = Object.values(Assets).filter((id) => {
-    const chain: string = chainFromAsset(id);
-    return chain !== 'Assethub';
-  });
+  const AssetsForTesting = Object.values(Assets).filter((id) => chainFromAsset(id) !== 'Assethub');
 
   AssetsForTesting.sort().forEach((sourceAsset) => {
     AssetsForTesting.sort()
