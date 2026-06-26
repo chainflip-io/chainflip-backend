@@ -197,29 +197,52 @@ macro_rules! generate_module {
 
             // ----------------- connection with default struct ------------------ //
 
-            pub struct DefaultTypes$(< $($T $(: $TBound)?),+ >)?($($($T,)+)?);
+            cf_proc_macros::better_modules! {
+                mod $( $( ($T $(: $TBound)?) )+ )? {
+                    type UserStruct = $struct $(< $($T,)+ >)?;
+                    pub type GenericStruct
+                    = Struct<(
+                            $(
+                                GetGenericVariant<$field_ty>,
+                            )*
+                        ), $($($T,)+)?
+                    > where
+                        $( $field_ty: HasGenericVariant,)*
+                    ;
 
-            impl$(< $($T $(: $TBound)?),+ >)? Types for DefaultTypes$(< $($T,)+ >)? {
-                $(
-                    type $field = $field_ty;
-                )*
+                    pub struct DefaultTypes {}
+                    impl Types for DefaultTypes {
+                        $(
+                            type $field = $field_ty;
+                        )*
+                    }
+
+                    impl HasGenericVariant for UserStruct where
+                        GenericStruct: IsHistoricalType,
+                        $( $field_ty: HasGenericVariant,)*
+                    {
+                        type GenericType = GenericStruct;
+                        type MigrationFromGeneric = GlobalMigrationFromGeneric;
+                    }
+
+                }
             }
 
-            impl $(< $($T $(: $TBound)?),+ >)? HasGenericVariant for $struct $(< $($T,)+ >)?
-            where $( $field_ty: HasGenericVariant,)*
-                Struct<(
-                    $(
-                        GetGenericVariant<$field_ty>,
-                    )*
-                ), $($($T,)+)?>: IsHistoricalType
-            {
-                type GenericType = Struct<(
-                    $(
-                        GetGenericVariant<$field_ty>,
-                    )*
-                ), $($($T,)+)?>;
-                type MigrationFromGeneric = GlobalMigrationFromGeneric;
-            }
+            // impl $(< $($T $(: $TBound)?),+ >)? HasGenericVariant for $struct $(< $($T,)+ >)?
+            // where $( $field_ty: HasGenericVariant,)*
+            //     Struct<(
+            //         $(
+            //             GetGenericVariant<$field_ty>,
+            //         )*
+            //     ), $($($T,)+)?>: IsHistoricalType
+            // {
+            //     type GenericType = Struct<(
+            //         $(
+            //             GetGenericVariant<$field_ty>,
+            //         )*
+            //     ), $($($T,)+)?>;
+            //     type MigrationFromGeneric = GlobalMigrationFromGeneric;
+            // }
 
             impl $(< $($T $(: $TBound)?),+ >)? Migration<$struct $(< $($T,)+ >)?, vCurrent> for GlobalMigrationFromGeneric
             where $( $field_ty: HasGenericVariant,)*
