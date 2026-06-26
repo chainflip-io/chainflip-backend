@@ -20,9 +20,54 @@ mod better_modules;
 mod enum_elim;
 mod type_introspection;
 
-/// Proc macro that takes a "telescope" of type parameters and threads them
-/// through items in telescope scopes. Telescope scopes can appear anywhere in
-/// the macro input and can be nested.
+/// Proc macro for writing groups of local items under a shared type-parameter
+/// telescope without repeating those parameters at every local reference.
+///
+/// A telescope scope is written as `mod (A: Bound) (B) { ... }`. It is not emitted
+/// as a Rust module. Instead, its type parameters are threaded into generated
+/// structs, traits, impls, and aliases inside the scope. Telescope scopes can
+/// appear anywhere in the macro input, can be empty (`mod { ... }`), and can be
+/// nested. Nested scopes inherit the outer telescope parameters and append their
+/// own.
+///
+/// Local definitions are tracked by scope. When a later local path refers to one
+/// of them, `better_modules!` adds the definition's telescope arguments for you:
+///
+/// ```ignore
+/// better_modules! {
+///     mod (A: Trait) {
+///         pub struct Local { value: A::Value }
+///         pub type Alias = Local; // expands as Local<A>
+///     }
+/// }
+/// ```
+///
+/// If a local definition is referenced outside the telescope that introduced one
+/// of its parameters, that parameter is not in scope anymore. In that case an
+/// explicitly supplied generic argument is used for the out-of-scope telescope
+/// parameter instead:
+///
+/// ```ignore
+/// better_modules! {
+///     mod (A: Trait) {
+///         pub struct Local { value: A::Value }
+///     }
+///
+///     pub type Concrete<X: Trait> = Local<X>;
+/// }
+/// ```
+///
+/// Telescope scopes can also carry additional where predicates:
+/// `mod (A: Trait) where (A::Value: Clone) { ... }`. Each predicate is wrapped in
+/// parentheses, matching the type-parameter syntax. These predicates are added to
+/// generated structs, traits, and impls, preserving any user-written where
+/// clauses. For type aliases, telescope where predicates are added only when the
+/// alias actually inherits one of the telescope parameters mentioned by the
+/// predicate.
+///
+/// The macro also supports local `use` imports, nested real Rust modules,
+/// expression paths in impl bodies, trait bounds, and lazy type aliases with a
+/// `where` clause after the aliased type.
 ///
 /// Usage:
 /// ```ignore
