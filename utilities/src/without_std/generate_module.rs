@@ -138,36 +138,39 @@ macro_rules! generate_module {
                         mod field_migrations {
                             use super::*;
                             $(
-                                pub type $field = <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>;
+                                type $field = <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>;
                             )*
-                            pub type SourceTypes = (
+                            pub type From = (
                                 $(
                                     <field_migrations::$field as Migration<To::$field, V>>::From,
                                 )*
                             );
-                        }
 
-                        impl<$( $($T $(: $TBound)?,)+ )?> Migration<Struct<To, $($($T,)+)?>, V> for see_field_changelogs_and_also<M>
-                        where
-                            Struct< field_migrations::SourceTypes , $($($T,)+)?  >: IsHistoricalType
-                        {
-                            type From = Struct< field_migrations::SourceTypes , $($($T,)+)?  >;
+                            mod $( $( ($T $(: $TBound)?) )+ )? {
+                                pub type StructVariant<Target: Types> = Struct<Target, $($($T,)+)?>;
 
-                            fn forwards(x: Self::From) -> Struct<To, $($($T,)+)?> {
-                                Struct {
-                                    $(
-                                        $field: field_migrations::$field::forwards(x.$field),
-                                    )*
-                                    _phantom: Default::default(),
-                                }
-                            }
+                                impl Migration<Struct<To, $($($T,)+)?>, V> for see_field_changelogs_and_also<M> where
+                                    StructVariant<From>: IsHistoricalType
+                                {
+                                    type From = StructVariant<From>;
 
-                            fn backwards(x: Struct<To, $($($T,)+)?>) -> Self::From {
-                                Struct {
-                                    $(
-                                        $field: field_migrations::$field::backwards(x.$field),
-                                    )*
-                                    _phantom: Default::default(),
+                                    fn forwards(x: StructVariant<From>) -> StructVariant<To> {
+                                        Struct {
+                                            $(
+                                                $field: $field::forwards(x.$field),
+                                            )*
+                                            _phantom: Default::default(),
+                                        }
+                                    }
+
+                                    fn backwards(x: StructVariant<To>) -> StructVariant<From> {
+                                        Struct {
+                                            $(
+                                                $field: $field::backwards(x.$field),
+                                            )*
+                                            _phantom: Default::default(),
+                                        }
+                                    }
                                 }
                             }
                         }
