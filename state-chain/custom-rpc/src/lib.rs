@@ -1488,6 +1488,20 @@ where
 		self.with_state_backend(hash, || M::iter().collect::<I>())
 	}
 
+	/// Like [`Self::collect_from_storage_map`], but collects only the keys. Useful when the values
+	/// may fail to decode (e.g. across a storage-layout change) but the keys are still needed.
+	pub fn collect_keys_from_storage_map<
+		M: frame_support::storage::IterableStorageMap<K, V> + 'static,
+		K: codec::FullEncode + codec::Decode,
+		V: codec::FullCodec,
+		I: FromIterator<K>,
+	>(
+		&self,
+		hash: <B as BlockT>::Hash,
+	) -> RpcResult<I> {
+		self.with_state_backend(hash, || M::iter_keys().collect::<I>())
+	}
+
 	/// Execute a function that requires access to the state backend externalities environment.
 	///
 	/// Note that anything that requires access to the state backend should be executed within this
