@@ -15609,6 +15609,7 @@ dependencies = [
  "cf-test-utilities",
  "cf-traits",
  "derive-where",
+ "duplicate",
  "ethereum-eip712",
  "frame-benchmarking",
  "frame-executive",

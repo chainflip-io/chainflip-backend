@@ -101,6 +101,7 @@ use state_chain_runtime::{
 			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
 			VaultAddresses, VaultSwapDetails,
 		},
+		custom_api_with_transparent_rpc::generate_transparent_custom_rpc,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash,
@@ -112,6 +113,7 @@ use std::{
 	time::Duration,
 };
 
+pub mod transparent_rpcs;
 pub mod backend;
 pub mod broker;
 pub mod grandpa_ext;
@@ -825,6 +827,7 @@ pub use ingress_egress_tracker::{
 	BroadcastWitnessInfo, DepositDetails, RpcDepositWitnessInfo, RpcTransactionId,
 	RpcTransactionRef, RpcVaultDepositWitnessInfo, RpcWitnessedEventsResponse,
 };
+
 
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.

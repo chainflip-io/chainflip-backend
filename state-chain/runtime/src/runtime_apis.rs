@@ -17,6 +17,9 @@
 pub mod custom_api;
 pub mod elections_api;
 pub mod monitoring_api;
+pub mod transparent_rpc_generator;
+pub mod custom_api_with_transparent_rpc;
+
 
 pub mod impl_api;
 
