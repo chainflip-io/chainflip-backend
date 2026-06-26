@@ -88,7 +88,6 @@ macro_rules! generate_module {
 
                     }
                 }
-
             }
 
             impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($($T,)+)?>

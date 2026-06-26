@@ -86,7 +86,7 @@ where
 
 #[cf_proc_macros::generate_module]
 pub struct MyS {
-	pub a: u8,
+	// pub a: u8,
 }
 
 impl HasChangelog for MyS {
