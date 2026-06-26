@@ -124,7 +124,7 @@ fn parse_module_item(input: ParseStream) -> syn::Result<ModuleItem> {
 
 		if fork.peek(Token![mod]) {
 			fork.parse::<Token![mod]>()?;
-			if fork.peek(token::Paren) {
+			if fork.peek(token::Paren) || fork.peek(token::Brace) {
 				if attrs.is_empty() && matches!(vis, Visibility::Inherited) {
 					return Ok(ModuleItem::TelescopeMod(parse_telescope_mod(input)?));
 				}
