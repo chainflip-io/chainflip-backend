@@ -153,6 +153,24 @@ cf_proc_macros::better_modules! {
 	}
 }
 
+// cf_proc_macros::better_modules! {
+// 	trait Test<X> {
+// 		fn myfun(x: X) -> X;
+// 	}
+// 	mod (A) {
+// 		struct S1 {
+// 			a: A
+// 		}
+// 	}
+// 	mod (B) {
+// 		impl Test<S1> for bool {
+// 			fn myfun(x: S1) -> S1 {
+// 				x
+// 			}
+// 		}
+// 	}
+// }
+
 type X = Bla;
 
 // cf_proc_macros::better_modules! {

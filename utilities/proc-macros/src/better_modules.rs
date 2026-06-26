@@ -8,8 +8,8 @@ use syn::{
 	token,
 	visit_mut::{self, VisitMut},
 	Attribute, ExprPath, GenericArgument, Generics, Ident, Item, ItemImpl, ItemMacro, ItemMod,
-	ItemStruct, ItemTrait, ItemType, ItemUse, PathArguments, Token, TraitBound, TypeParam, UseTree,
-	Visibility,
+	ItemStruct, ItemTrait, ItemType, ItemUse, PathArguments, Token, TraitBound, Type, TypeParam,
+	UseTree, Visibility,
 };
 
 // ─── Input parsing ────────────────────────────────────────────────────────────
@@ -122,6 +122,10 @@ fn parse_module_item(input: ParseStream) -> syn::Result<ModuleItem> {
 		let attrs = fork.call(Attribute::parse_outer)?;
 		let vis = fork.parse::<Visibility>()?;
 
+		if fork.peek(Token![type]) {
+			return Ok(ModuleItem::TypeAlias(parse_type_alias(input)?));
+		}
+
 		if fork.peek(Token![mod]) {
 			fork.parse::<Token![mod]>()?;
 			if fork.peek(token::Paren) || fork.peek(token::Brace) {
@@ -146,6 +150,27 @@ fn parse_module_item(input: ParseStream) -> syn::Result<ModuleItem> {
 		Item::Macro(m) => ModuleItem::MacroCall(m),
 		other => ModuleItem::Other(other),
 	})
+}
+
+fn parse_type_alias(input: ParseStream) -> syn::Result<ItemType> {
+	let attrs = input.call(Attribute::parse_outer)?;
+	let vis = input.parse::<Visibility>()?;
+	let type_token = input.parse::<Token![type]>()?;
+	let ident = input.parse::<Ident>()?;
+	let mut generics = input.parse::<Generics>()?;
+	let eq_token = input.parse::<Token![=]>()?;
+	let ty = input.parse::<Type>()?;
+
+	if input.peek(Token![where]) {
+		if generics.where_clause.is_some() {
+			return Err(input.error("duplicate where clause in type alias"));
+		}
+		generics.where_clause = Some(input.parse()?);
+	}
+
+	let semi_token = input.parse::<Token![;]>()?;
+
+	Ok(ItemType { attrs, vis, type_token, ident, generics, eq_token, ty: Box::new(ty), semi_token })
 }
 
 fn parse_conditional(input: ParseStream) -> syn::Result<Conditional> {
@@ -467,7 +492,30 @@ fn rewrite_item_type_with_telescope(
 ) {
 	let mut visitor =
 		RewriteVisitor { defs, scope, generic_idents: generic_idents(telescope, &item.generics) };
-	visitor.visit_type_mut(&mut item.ty);
+	visitor.visit_item_type_mut(item);
+}
+
+fn type_alias_dependency_tokens(item: &ItemType) -> TokenStream {
+	let generics = &item.generics;
+	let ty = &item.ty;
+	quote! { #generics #ty }
+}
+
+fn quote_item_type(item: &ItemType) -> TokenStream {
+	let attrs = &item.attrs;
+	let vis = &item.vis;
+	let type_token = &item.type_token;
+	let ident = &item.ident;
+	let mut generics = item.generics.clone();
+	let where_clause = generics.where_clause.take();
+	let eq_token = &item.eq_token;
+	let ty = &item.ty;
+	let semi_token = &item.semi_token;
+
+	quote! {
+		#(#attrs)*
+		#vis #type_token #ident #generics #eq_token #ty #where_clause #semi_token
+	}
 }
 
 fn rewrite_item_struct(
@@ -605,8 +653,9 @@ fn expand_type_alias(
 	// First rewrite references to previously defined items
 	rewrite_item_type_with_telescope(&mut item, defs, telescope, scope);
 
-	// Only add telescope params that appear in the (rewritten) type definition
-	let ty_tokens = quote! { #item.ty };
+	// Only add telescope params that appear in the (rewritten) type definition,
+	// including generic bounds and where clauses.
+	let ty_tokens = type_alias_dependency_tokens(&item);
 	let used = used_telescope_params(telescope, &ty_tokens);
 
 	// Register this definition before adding params to generics
@@ -616,7 +665,7 @@ fn expand_type_alias(
 		item.generics.params.push(syn::GenericParam::Type((*param).clone()));
 	}
 
-	quote! { #item }
+	quote_item_type(&item)
 }
 
 fn expand_struct(
