@@ -8,7 +8,8 @@ use syn::{
 	token,
 	visit_mut::{self, VisitMut},
 	Attribute, ExprPath, GenericArgument, Generics, Ident, Item, ItemImpl, ItemMacro, ItemMod,
-	ItemStruct, ItemTrait, ItemType, ItemUse, PathArguments, Token, TypeParam, UseTree, Visibility,
+	ItemStruct, ItemTrait, ItemType, ItemUse, PathArguments, Token, TraitBound, TypeParam, UseTree,
+	Visibility,
 };
 
 // ─── Input parsing ────────────────────────────────────────────────────────────
@@ -383,6 +384,11 @@ struct RewriteVisitor<'a> {
 }
 
 impl VisitMut for RewriteVisitor<'_> {
+	fn visit_trait_bound_mut(&mut self, trait_bound: &mut TraitBound) {
+		visit_mut::visit_trait_bound_mut(self, trait_bound);
+		self.rewrite_path(&mut trait_bound.path);
+	}
+
 	fn visit_item_impl_mut(&mut self, item_impl: &mut ItemImpl) {
 		visit_mut::visit_item_impl_mut(self, item_impl);
 
