@@ -130,6 +130,13 @@ cf_proc_macros::better_modules! {
 		struct ThisIsS {
 			value: A::XY,
 		}
+		mod (B: Clone) {
+			struct InnerWithBoth {
+				a: A,
+				b: B,
+			}
+			type MyVal = InnerWithBoth;
+		}
 		struct Without {
 			value: bool,
 		}

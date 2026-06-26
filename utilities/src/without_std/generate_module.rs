@@ -64,19 +64,17 @@ macro_rules! generate_module {
                 )*
             }
 
-            pub trait CustomMigration<
-                To: HistoricalTypesAt<V>,
-                V: Version,
-            > {
-                $(
-                    type $field: MaybeMigration<To::$field, V> = DefaultMigration;
-                )*
+            cf_proc_macros::better_modules! {
+                mod (To: HistoricalTypesAt<V>) (V: Version)
+                {
+                    pub trait CustomMigration {
+                        $(
+                            type $field: MaybeMigration<To::$field, V> = DefaultMigration;
+                        )*
+                    }
+                    impl CustomMigration for () {}
+                }
             }
-
-            impl <
-                To: HistoricalTypesAt<V>,
-                V: Version
-            > CustomMigration<To, V> for () {}
 
             impl<To: HistoricalTypesAt<V>, V: Version, M1: CustomMigration<To, V>, M2: CustomMigration<To, V>>
             CustomMigration<To,V>
