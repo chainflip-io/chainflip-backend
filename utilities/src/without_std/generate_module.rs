@@ -67,21 +67,28 @@ macro_rules! generate_module {
             // This has to be used here because of how the `proptest_derive::Arbitrary` derive macro works.
             use sp_std::marker::PhantomData;
 
-            /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
-            /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
-            #[derive(Copy, Clone, PartialEq, Eq, Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen, Default)]
-            #[derive_where::derive_where(Debug; $(Ty::$field: sp_std::fmt::Debug),*)]
-            #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
-            #[scale_info(skip_type_params(Ty))]
-            #[derive(cf_proc_macros::HasTypeIntrospection)]
-            pub struct Struct<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
-                $(
-                    pub $field: Ty::$field,
-                )*
-                // In order for `proptest_derive::Arbitrary` to work, we're not allowed to mention `sp_std` in the following type,
-                // since the macro has manual filters for `std::marker::PhantomData`, and `PhantomData`, but not for `sp_std::...`.
-                // That's why we import it above.
-                pub _phantom: PhantomData<($($($T,)+)?)>,
+            cf_proc_macros::better_modules! {
+                mod (Ty: Types) {
+                    mod $( $( ($T $(: $TBound)?) )+ )? {
+
+                        #[derive(Copy, Clone, PartialEq, Eq, Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen, Default)]
+                        #[derive_where::derive_where(Debug; $(Ty::$field: sp_std::fmt::Debug),*)]
+                        #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
+                        #[scale_info(skip_type_params(Ty))]
+                        #[derive(cf_proc_macros::HasTypeIntrospection)]
+                        pub struct Struct {
+                            $(
+                                pub $field: Ty::$field,
+                            )*
+                            // In order for `proptest_derive::Arbitrary` to work, we're not allowed to mention `sp_std` in the following type,
+                            // since the macro has manual filters for `std::marker::PhantomData`, and `PhantomData`, but not for `sp_std::...`.
+                            // That's why we import it above.
+                            pub _phantom: PhantomData<($($($T,)+)?)>,
+                        }
+
+                    }
+                }
+
             }
 
             impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($($T,)+)?>
