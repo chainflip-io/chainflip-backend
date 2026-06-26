@@ -52,11 +52,42 @@ where
 			internal_error(format!("Could not fetch block header for block {:?}", hash))
 		})?;
 
-	let pools = StorageQueryApi::new(client)
-		.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(hash)?;
+	let pools: BTreeMap<_, _> = StorageQueryApi::new(client)
+		.collect_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, _>(hash)?;
 
-	let prev_pools = StorageQueryApi::new(client)
-		.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(header.parent_hash)?;
+	let prev_pools: BTreeMap<_, _> = StorageQueryApi::new(client)
+		.collect_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, _>(header.parent_hash)?;
+
+	// Pools present now but missing from the previous block can't yield a fill delta, so they're
+	// skipped below. Log why rather than dropping them silently: across a runtime upgrade the
+	// parent block's pool storage may not decode under the current `Pool` type.
+	let new_or_undecodable_pools = pools
+		.keys()
+		.filter(|pair| !prev_pools.contains_key(*pair))
+		.copied()
+		.collect::<Vec<_>>();
+	if !new_or_undecodable_pools.is_empty() {
+		// Key present in the parent but value missing from `prev_pools` => decode failure;
+		// key absent => pool newly created. Only scan keys in this rare branch.
+		let prev_pool_keys = StorageQueryApi::new(client)
+			.collect_keys_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, HashSet<_>>(
+				header.parent_hash,
+			)?;
+		for pair in new_or_undecodable_pools {
+			if prev_pool_keys.contains(&pair) {
+				log::warn!(
+					"order_fills: previous pool state for {pair:?} failed to decode at block #{} \
+					 ({hash:?}); skipping its order fills for this block.",
+					header.number,
+				);
+			} else {
+				// Strictly speaking it might be logically possible that there are fills in the
+				// first block of a pool's existence, but is so unlikely that we can assume it won't
+				// happen in practice.
+				log::info!("order_fills: pool {pair:?} newly created at block #{}.", header.number,);
+			}
+		}
+	}
 
 	let lp_events = client.runtime_api().cf_lp_events(hash).map_err(CfApiError::from)?;
 
