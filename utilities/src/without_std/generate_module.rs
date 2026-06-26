@@ -198,7 +198,7 @@ macro_rules! generate_module {
             // ----------------- connection with default struct ------------------ //
 
             cf_proc_macros::better_modules! {
-                mod $( $( ($T $(: $TBound)?) )+ )? {
+                mod $( $( ($T $(: $TBound)?) )+ )? where $(( $field_ty: HasGenericVariant ))* {
                     type UserStruct = $struct $(< $($T,)+ >)?;
                     pub type GenericStruct
                     = Struct<(
@@ -206,21 +206,17 @@ macro_rules! generate_module {
                                 GetGenericVariant<$field_ty>,
                             )*
                         ), $($($T,)+)?
-                    > where
-                        $( $field_ty: HasGenericVariant,)*
-                    ;
+                    >;
 
-                    impl HasGenericVariant for UserStruct where
-                        GenericStruct: IsHistoricalType,
-                        $( $field_ty: HasGenericVariant,)*
+                    impl HasGenericVariant for UserStruct
+                    where GenericStruct: IsHistoricalType,
                     {
                         type GenericType = GenericStruct;
                         type MigrationFromGeneric = GlobalMigrationFromGeneric;
                     }
 
                     impl Migration<UserStruct, vCurrent> for GlobalMigrationFromGeneric
-                    where $( $field_ty: HasGenericVariant,)*
-                            GenericStruct: IsHistoricalType,
+                    where GenericStruct: IsHistoricalType,
                     {
                         type From = GenericStruct;
 
