@@ -106,16 +106,17 @@ macro_rules! generate_module {
                                     .boxed()
                             }
                         }
+
+                        impl IsHistoricalType for Struct where
+                            $( Ty::$field: IsHistoricalType,)*
+                            $struct$(< $($T,)+ >)?: HasChangelog
+                        {
+                            type GetCurrentType = $struct$(< $($T,)+ >)?;
+                        }
                     }
                 }
             }
 
-
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($($T,)+)?>
-                where $struct$(< $($T,)+ >)?: HasChangelog
-            {
-                type GetCurrentType = $struct$(< $($T,)+ >)?;
-            }
 
             pub type see_field_changelogs = see_field_changelogs_and_also<()>;
             pub struct see_field_changelogs_and_also<M>(M);
