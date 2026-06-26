@@ -130,7 +130,7 @@ cf_proc_macros::better_modules! {
 		struct ThisIsS {
 			value: A::XY,
 		}
-		mod (B: Clone) {
+		mod (B: Clone) where (B: Clone) {
 			struct InnerWithBoth {
 				a: A,
 				b: B,

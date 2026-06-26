@@ -9,7 +9,7 @@ use syn::{
 	visit_mut::{self, VisitMut},
 	Attribute, ExprPath, GenericArgument, Generics, Ident, Item, ItemImpl, ItemMacro, ItemMod,
 	ItemStruct, ItemTrait, ItemType, ItemUse, PathArguments, Token, TraitBound, Type, TypeParam,
-	UseTree, Visibility,
+	UseTree, Visibility, WherePredicate,
 };
 
 // ─── Input parsing ────────────────────────────────────────────────────────────
@@ -43,9 +43,10 @@ pub struct PlainMod {
 	pub items: Option<Vec<ModuleItem>>,
 }
 
-/// `mod (A: Trait) (B: Trait) { ... }`
+/// `mod (A: Trait) (B: Trait) where (A: Bound) { ... }`
 pub struct TelescopeMod {
 	pub telescope: Vec<TypeParam>,
+	pub where_predicates: Vec<WherePredicate>,
 	pub items: Vec<ModuleItem>,
 }
 
@@ -77,12 +78,22 @@ fn parse_telescope_mod(input: ParseStream) -> syn::Result<TelescopeMod> {
 		telescope.push(content.parse::<TypeParam>()?);
 	}
 
+	let mut where_predicates = Vec::new();
+	if input.peek(Token![where]) {
+		input.parse::<Token![where]>()?;
+		while input.peek(token::Paren) {
+			let content;
+			parenthesized!(content in input);
+			where_predicates.push(content.parse::<WherePredicate>()?);
+		}
+	}
+
 	// Parse braced body
 	let body;
 	braced!(body in input);
 	let items = parse_module_items(&body)?;
 
-	Ok(TelescopeMod { telescope, items })
+	Ok(TelescopeMod { telescope, where_predicates, items })
 }
 
 fn parse_plain_mod(input: ParseStream) -> syn::Result<PlainMod> {
@@ -495,6 +506,42 @@ fn rewrite_item_type_with_telescope(
 	visitor.visit_item_type_mut(item);
 }
 
+fn rewrite_where_predicates(
+	where_predicates: &[WherePredicate],
+	defs: &Definitions,
+	telescope: &[TypeParam],
+	generics: &Generics,
+	scope: &[String],
+) -> Vec<WherePredicate> {
+	let mut visitor =
+		RewriteVisitor { defs, scope, generic_idents: generic_idents(telescope, generics) };
+	where_predicates
+		.iter()
+		.cloned()
+		.map(|mut predicate| {
+			visitor.visit_where_predicate_mut(&mut predicate);
+			predicate
+		})
+		.collect()
+}
+
+fn add_where_predicates(
+	generics: &mut Generics,
+	where_predicates: impl IntoIterator<Item = WherePredicate>,
+) {
+	for predicate in where_predicates {
+		generics.make_where_clause().predicates.push(predicate);
+	}
+}
+
+fn predicate_mentions_any_telescope_param(
+	predicate: &WherePredicate,
+	telescope_params: &[&TypeParam],
+) -> bool {
+	let tokens = quote! { #predicate };
+	telescope_params.iter().any(|param| tokens_contain_ident(&tokens, &param.ident))
+}
+
 fn type_alias_dependency_tokens(item: &ItemType) -> TokenStream {
 	let generics = &item.generics;
 	let ty = &item.ty;
@@ -569,45 +616,50 @@ fn used_telescope_params<'a>(
 pub fn expand(input: Input) -> TokenStream {
 	let mut defs = Definitions::default();
 	defs.modules.insert(Vec::new());
-	expand_items(&[], &input.items, &mut defs, &[])
+	expand_items(&[], &[], &input.items, &mut defs, &[])
 }
 
 fn expand_items(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	items: &[ModuleItem],
 	defs: &mut Definitions,
 	scope: &[String],
 ) -> TokenStream {
 	let mut output = TokenStream::new();
 	for item in items {
-		output.extend(expand_item(telescope, item, defs, scope));
+		output.extend(expand_item(telescope, where_predicates, item, defs, scope));
 	}
 	output
 }
 
 fn expand_item(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	item: &ModuleItem,
 	defs: &mut Definitions,
 	scope: &[String],
 ) -> TokenStream {
 	match item {
-		ModuleItem::TypeAlias(t) => expand_type_alias(telescope, t, defs, scope),
-		ModuleItem::Struct(s) => expand_struct(telescope, s, defs, scope),
-		ModuleItem::Trait(t) => expand_trait(telescope, t, defs, scope),
-		ModuleItem::Impl(i) => expand_impl(telescope, i, defs, scope),
-		ModuleItem::Mod(m) => expand_mod(telescope, m, defs, scope),
-		ModuleItem::PlainMod(m) => expand_plain_mod(telescope, m, defs, scope),
-		ModuleItem::TelescopeMod(m) => expand_telescope_mod(telescope, m, defs, scope),
+		ModuleItem::TypeAlias(t) => expand_type_alias(telescope, where_predicates, t, defs, scope),
+		ModuleItem::Struct(s) => expand_struct(telescope, where_predicates, s, defs, scope),
+		ModuleItem::Trait(t) => expand_trait(telescope, where_predicates, t, defs, scope),
+		ModuleItem::Impl(i) => expand_impl(telescope, where_predicates, i, defs, scope),
+		ModuleItem::Mod(m) => expand_mod(telescope, where_predicates, m, defs, scope),
+		ModuleItem::PlainMod(m) => expand_plain_mod(telescope, where_predicates, m, defs, scope),
+		ModuleItem::TelescopeMod(m) =>
+			expand_telescope_mod(telescope, where_predicates, m, defs, scope),
 		ModuleItem::Use(u) => expand_use(u, defs, scope),
-		ModuleItem::MacroCall(m) => expand_macro_call(telescope, m, defs, scope),
-		ModuleItem::Conditional(c) => expand_conditional(telescope, c, defs, scope),
+		ModuleItem::MacroCall(m) => expand_macro_call(telescope, where_predicates, m, defs, scope),
+		ModuleItem::Conditional(c) =>
+			expand_conditional(telescope, where_predicates, c, defs, scope),
 		ModuleItem::Other(item) => quote! { #item },
 	}
 }
 
 fn expand_plain_mod(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	item: &PlainMod,
 	defs: &mut Definitions,
 	scope: &[String],
@@ -618,7 +670,7 @@ fn expand_plain_mod(
 	match &item.items {
 		Some(items) => {
 			let inner_scope = defs.register_module(scope, ident);
-			let expanded = expand_items(telescope, items, defs, &inner_scope);
+			let expanded = expand_items(telescope, where_predicates, items, defs, &inner_scope);
 
 			quote! {
 				#(#attrs)*
@@ -633,17 +685,21 @@ fn expand_plain_mod(
 
 fn expand_telescope_mod(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	item: &TelescopeMod,
 	defs: &mut Definitions,
 	scope: &[String],
 ) -> TokenStream {
 	let mut combined_telescope = telescope.to_vec();
 	combined_telescope.extend(item.telescope.iter().cloned());
-	expand_items(&combined_telescope, &item.items, defs, scope)
+	let mut combined_where_predicates = where_predicates.to_vec();
+	combined_where_predicates.extend(item.where_predicates.iter().cloned());
+	expand_items(&combined_telescope, &combined_where_predicates, &item.items, defs, scope)
 }
 
 fn expand_type_alias(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	item: &ItemType,
 	defs: &mut Definitions,
 	scope: &[String],
@@ -665,11 +721,21 @@ fn expand_type_alias(
 		item.generics.params.push(syn::GenericParam::Type((*param).clone()));
 	}
 
+	let rewritten_where_predicates =
+		rewrite_where_predicates(where_predicates, defs, telescope, &item.generics, scope);
+	add_where_predicates(
+		&mut item.generics,
+		rewritten_where_predicates
+			.into_iter()
+			.filter(|predicate| predicate_mentions_any_telescope_param(predicate, &used)),
+	);
+
 	quote_item_type(&item)
 }
 
 fn expand_struct(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	item: &ItemStruct,
 	defs: &mut Definitions,
 	scope: &[String],
@@ -695,6 +761,9 @@ fn expand_struct(
 	for param in telescope {
 		item.generics.params.push(syn::GenericParam::Type(param.clone()));
 	}
+	let rewritten_where_predicates =
+		rewrite_where_predicates(where_predicates, defs, telescope, &item.generics, scope);
+	add_where_predicates(&mut item.generics, rewritten_where_predicates);
 
 	// Always add PhantomData for telescope types that are NOT used in fields. Use
 	// an empty tuple when all telescope types already occur in the fields, so the
@@ -721,6 +790,7 @@ fn expand_struct(
 
 fn expand_trait(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	item: &ItemTrait,
 	defs: &mut Definitions,
 	scope: &[String],
@@ -739,12 +809,16 @@ fn expand_trait(
 	for param in &all_params {
 		item.generics.params.push(syn::GenericParam::Type((*param).clone()));
 	}
+	let rewritten_where_predicates =
+		rewrite_where_predicates(where_predicates, defs, telescope, &item.generics, scope);
+	add_where_predicates(&mut item.generics, rewritten_where_predicates);
 
 	quote! { #item }
 }
 
 fn expand_impl(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	item: &ItemImpl,
 	defs: &mut Definitions,
 	scope: &[String],
@@ -753,6 +827,9 @@ fn expand_impl(
 
 	// Rewrite references (self type, trait path, body)
 	rewrite_item_impl(&mut item, defs, telescope, scope);
+	let rewritten_where_predicates =
+		rewrite_where_predicates(where_predicates, defs, telescope, &item.generics, scope);
+	add_where_predicates(&mut item.generics, rewritten_where_predicates);
 
 	// Determine which telescope params are used in the (rewritten) impl
 	let impl_tokens = quote! { #item };
@@ -767,6 +844,7 @@ fn expand_impl(
 
 fn expand_mod(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	item: &ItemMod,
 	defs: &mut Definitions,
 	scope: &[String],
@@ -787,7 +865,7 @@ fn expand_mod(
 		Some((_brace, items)) => {
 			let inner_scope = defs.register_module(scope, ident);
 			let inner: Vec<ModuleItem> = items.iter().map(|i| classify_item(i.clone())).collect();
-			let expanded = expand_items(telescope, &inner, defs, &inner_scope);
+			let expanded = expand_items(telescope, where_predicates, &inner, defs, &inner_scope);
 
 			quote! {
 				#(#outer_attrs)*
@@ -808,6 +886,7 @@ fn expand_use(item: &ItemUse, defs: &mut Definitions, scope: &[String]) -> Token
 
 fn expand_conditional(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	cond: &Conditional,
 	defs: &mut Definitions,
 	scope: &[String],
@@ -816,11 +895,12 @@ fn expand_conditional(
 		Some(_) => &cond.true_branch,
 		None => &cond.false_branch,
 	};
-	expand_items(telescope, branch, defs, scope)
+	expand_items(telescope, where_predicates, branch, defs, scope)
 }
 
 fn expand_macro_call(
 	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
 	item: &ItemMacro,
 	defs: &mut Definitions,
 	scope: &[String],
@@ -835,7 +915,7 @@ fn expand_macro_call(
 
 	if let Ok(file) = parsed {
 		let module_items: Vec<ModuleItem> = file.items.into_iter().map(classify_item).collect();
-		let expanded_body = expand_items(telescope, &module_items, defs, scope);
+		let expanded_body = expand_items(telescope, where_predicates, &module_items, defs, scope);
 		item.mac.tokens = expanded_body;
 	}
 

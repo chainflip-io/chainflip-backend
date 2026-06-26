@@ -29,7 +29,7 @@ mod type_introspection;
 /// better_modules! {
 ///     pub type Plain = u8;
 ///
-///     mod (A: Trait) (B: Trait) {
+///     mod (A: Trait) (B: Trait) where (A::Assoc: Clone) (B: Copy) {
 ///         pub type Alias = (A::Assoc, B::Assoc);
 ///
 ///         mod (C: OtherTrait) {
