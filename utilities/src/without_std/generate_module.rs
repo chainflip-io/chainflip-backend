@@ -64,25 +64,6 @@ macro_rules! generate_module {
                 )*
             }
 
-            cf_proc_macros::better_modules! {
-                mod (To: HistoricalTypesAt<V>) (V: Version)
-                {
-                    pub trait CustomMigration {
-                        $(
-                            type $field: MaybeMigration<To::$field, V> = DefaultMigration;
-                        )*
-                    }
-
-                    impl CustomMigration for () {}
-
-                    impl<M1: CustomMigration, M2: CustomMigration> CustomMigration for (M1, M2) {
-                        $(
-                            type $field = (M1::$field, M2::$field);
-                        )*
-                    }
-                }
-            }
-
             // This has to be used here because of how the `proptest_derive::Arbitrary` derive macro works.
             use sp_std::marker::PhantomData;
 
@@ -111,6 +92,26 @@ macro_rules! generate_module {
 
             pub type see_field_changelogs = see_field_changelogs_and_also<()>;
             pub struct see_field_changelogs_and_also<M>(M);
+
+            cf_proc_macros::better_modules! {
+                mod (To: HistoricalTypesAt<V>) (V: Version)
+                {
+                    pub trait CustomMigration {
+                        $(
+                            type $field: MaybeMigration<To::$field, V> = DefaultMigration;
+                        )*
+                    }
+
+                    impl CustomMigration for () {}
+
+                    impl<M1: CustomMigration, M2: CustomMigration> CustomMigration for (M1, M2) {
+                        $(
+                            type $field = (M1::$field, M2::$field);
+                        )*
+                    }
+                }
+            }
+
 
             cf_proc_macros::better_modules! {
                 mod (M: CustomMigration<To, V>) (To: HistoricalTypesAt<V>) (V: Version) {
