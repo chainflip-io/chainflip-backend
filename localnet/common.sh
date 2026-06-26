@@ -232,6 +232,8 @@ build-localnet() {
   echo "🗂️ Starting Indexer ..."
   $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
+  create_webstack_databases
+
   echo "📐 Updating event schemas ..."
   cd bouncer && ./commands/generate_event_schemas.ts && cd ..
 
