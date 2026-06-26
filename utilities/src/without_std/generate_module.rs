@@ -65,8 +65,8 @@ macro_rules! generate_module {
             }
 
             cf_proc_macros::better_modules! {
-                mod (Ty: Types) {
-                    mod $( $( ($T $(: $TBound)?) )+ )? {
+                mod $( $( ($T $(: $TBound)?) )+ )? {
+                    mod (Ty: Types) {
 
                         #[derive(Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen, Default)]
                         #[derive_where::derive_where(Debug; $(Ty::$field: sp_std::fmt::Debug),*)]
@@ -114,6 +114,42 @@ macro_rules! generate_module {
                             type GetCurrentType = $struct$(< $($T,)+ >)?;
                         }
                     }
+
+                    // ----------------- connection with default struct ------------------ //
+                    mod where $(( $field_ty: HasGenericVariant ))* {
+                        type UserStruct = $struct $(< $($T,)+ >)?;
+                        pub type GenericStruct = Struct<( $( GetGenericVariant<$field_ty>,)*)>;
+
+                        impl HasGenericVariant for UserStruct
+                        where GenericStruct: IsHistoricalType,
+                        {
+                            type GenericType = GenericStruct;
+                            type MigrationFromGeneric = GlobalMigrationFromGeneric;
+                        }
+
+                        impl Migration<UserStruct, vCurrent> for GlobalMigrationFromGeneric
+                        where GenericStruct: IsHistoricalType,
+                        {
+                            type From = GenericStruct;
+
+                            fn forwards(x: GenericStruct) -> UserStruct {
+                                $struct {
+                                    $(
+                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field),
+                                    )*
+                                }
+                            }
+
+                            fn backwards(x: UserStruct) -> GenericStruct {
+                                Struct {
+                                    $(
+                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
+                                    )*
+                                    _phantom: Default::default(),
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -152,9 +188,9 @@ macro_rules! generate_module {
                             );
 
                             mod $( $( ($T $(: $TBound)?) )+ )? {
-                                pub type StructVariant<Target: Types> = Struct<Target, $($($T,)+)?>;
+                                pub type StructVariant<Target: Types> = Struct<$($($T,)+)? Target>;
 
-                                impl Migration<Struct<To, $($($T,)+)?>, V> for see_field_changelogs_and_also<M> where
+                                impl Migration<Struct<$($($T,)+)? To>, V> for see_field_changelogs_and_also<M> where
                                     StructVariant<From>: IsHistoricalType
                                 {
                                     type From = StructVariant<From>;
@@ -198,51 +234,6 @@ macro_rules! generate_module {
                         }
                     }
                 )*
-            }
-
-            // ----------------- connection with default struct ------------------ //
-
-            cf_proc_macros::better_modules! {
-                mod $( $( ($T $(: $TBound)?) )+ )? where $(( $field_ty: HasGenericVariant ))* {
-                    type UserStruct = $struct $(< $($T,)+ >)?;
-                    pub type GenericStruct
-                    = Struct<(
-                            $(
-                                GetGenericVariant<$field_ty>,
-                            )*
-                        ), $($($T,)+)?
-                    >;
-
-                    impl HasGenericVariant for UserStruct
-                    where GenericStruct: IsHistoricalType,
-                    {
-                        type GenericType = GenericStruct;
-                        type MigrationFromGeneric = GlobalMigrationFromGeneric;
-                    }
-
-                    impl Migration<UserStruct, vCurrent> for GlobalMigrationFromGeneric
-                    where GenericStruct: IsHistoricalType,
-                    {
-                        type From = GenericStruct;
-
-                        fn forwards(x: GenericStruct) -> UserStruct {
-                            $struct {
-                                $(
-                                    $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field),
-                                )*
-                            }
-                        }
-
-                        fn backwards(x: UserStruct) -> GenericStruct {
-                            Struct {
-                                $(
-                                    $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
-                                )*
-                                _phantom: Default::default(),
-                            }
-                        }
-                    }
-                }
             }
         }
     };
