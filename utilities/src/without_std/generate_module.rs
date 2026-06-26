@@ -210,13 +210,6 @@ macro_rules! generate_module {
                         $( $field_ty: HasGenericVariant,)*
                     ;
 
-                    pub struct DefaultTypes {}
-                    impl Types for DefaultTypes {
-                        $(
-                            type $field = $field_ty;
-                        )*
-                    }
-
                     impl HasGenericVariant for UserStruct where
                         GenericStruct: IsHistoricalType,
                         $( $field_ty: HasGenericVariant,)*
