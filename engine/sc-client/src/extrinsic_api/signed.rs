@@ -194,7 +194,6 @@ impl SignedExtrinsicClient {
 							scope,
 							signer,
 							account_nonce,
-							state_chain_stream.cache().hash,
 							state_chain_stream.cache().number,
 							latest_finalized_block_watcher,
 							base_rpc_client.runtime_version(None).await?,

@@ -155,7 +155,6 @@ async fn should_remove_terminated_submission_from_tracking() {
 				scope,
 				signer::PairSigner::new(sp_core::Pair::generate().0),
 				INITIAL_NONCE,
-				H256::default(),
 				0,
 				finalized_watch(0),
 				Default::default(),
@@ -282,7 +281,6 @@ async fn should_retry_after_dropped_on_next_finalized_block() {
 				scope,
 				signer::PairSigner::new(sp_core::Pair::generate().0),
 				0,
-				H256::default(),
 				0,
 				finalized_watch(0),
 				Default::default(),
@@ -360,7 +358,6 @@ async fn should_recover_from_ancient_birth_block() {
 					scope,
 					signer::PairSigner::new(sp_core::Pair::generate().0),
 					INITIAL_NONCE,
-					H256::default(),
 					INITIAL_FINALIZED_BLOCK_NUMBER,
 					finalized_watch(REFRESHED_FINALIZED_BLOCK_NUMBER),
 					Default::default(),
@@ -371,9 +368,8 @@ async fn should_recover_from_ancient_birth_block() {
 				let mut request = new_test_request(0, false);
 				watcher.submit_extrinsic(&mut request).await.unwrap();
 
-				// The watcher's tracked finalized block must NOT have changed — only
+				// The watcher's tracked finalized block (scan cursor) must NOT have changed — only
 				// `on_block_finalized` is allowed to advance it.
-				assert_eq!(watcher.finalized_block_hash, H256::default());
 				assert_eq!(watcher.finalized_block_number, INITIAL_FINALIZED_BLOCK_NUMBER);
 
 				// The successful retry must have been signed with the era anchor from the
@@ -592,7 +588,6 @@ async fn dropped_submission_invalidates_nonce_so_next_submission_refills_gap() {
 				scope,
 				signer::PairSigner::new(sp_core::Pair::generate().0),
 				GAP_NONCE,
-				H256::default(),
 				0,
 				finalized_watch(0),
 				Default::default(),
@@ -687,7 +682,6 @@ async fn new_watcher_with_mock_rpc_api<'a, 'env>(
 		scope,
 		signer::PairSigner::new(sp_core::Pair::generate().0),
 		finalized_nonce,
-		H256::default(),
 		finalized_block_number,
 		finalized_watch(finalized_block_number),
 		Default::default(),

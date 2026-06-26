@@ -154,7 +154,6 @@ pub struct SubmissionWatcher<
 		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<SubmissionStatus>>,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: Nonce,
-	finalized_block_hash: state_chain_runtime::Hash,
 	finalized_block_number: BlockNumber,
 	// Node's latest finalized block, kept fresh by a dedicated subscription task. Used only as
 	// the era (mortality) anchor when signing, so it can't go stale behind the contiguous
@@ -282,7 +281,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		scope: &'a Scope<'env, anyhow::Error>,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
 		finalized_nonce: Nonce,
-		finalized_block_hash: state_chain_runtime::Hash,
 		finalized_block_number: BlockNumber,
 		latest_finalized_block_watcher: watch::Receiver<BlockInfo>,
 		runtime_version: sp_version::RuntimeVersion,
@@ -298,7 +296,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				submission_status_futures: Default::default(),
 				signer,
 				finalized_nonce,
-				finalized_block_hash,
 				finalized_block_number,
 				latest_finalized_block_watcher,
 				runtime_version,
@@ -535,12 +532,13 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			self.base_rpc_client.runtime_version(Some(hash)),
 		)?;
 
+		let latest_finalized = *self.latest_finalized_block_watcher.borrow();
 		let (signed_extrinsic, _) = self.signer.new_signed_extrinsic(
 			call.clone(),
 			&runtime_version,
 			self.genesis_hash,
-			self.finalized_block_hash,
-			self.finalized_block_number,
+			latest_finalized.hash,
+			latest_finalized.number,
 			self.extrinsic_lifetime,
 			account_info.nonce,
 		);
@@ -792,7 +790,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		} else {
 			// Update the finalized data
 			self.finalized_block_number = block.header.number;
-			self.finalized_block_hash = block_hash;
 			self.finalized_nonce = nonce;
 
 			for (extrinsic_index, extrinsic_events) in events
