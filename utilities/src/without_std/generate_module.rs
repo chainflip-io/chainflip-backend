@@ -230,53 +230,28 @@ macro_rules! generate_module {
                         type MigrationFromGeneric = GlobalMigrationFromGeneric;
                     }
 
-                }
-            }
+                    impl Migration<UserStruct, vCurrent> for GlobalMigrationFromGeneric
+                    where $( $field_ty: HasGenericVariant,)*
+                            GenericStruct: IsHistoricalType,
+                    {
+                        type From = GenericStruct;
 
-            // impl $(< $($T $(: $TBound)?),+ >)? HasGenericVariant for $struct $(< $($T,)+ >)?
-            // where $( $field_ty: HasGenericVariant,)*
-            //     Struct<(
-            //         $(
-            //             GetGenericVariant<$field_ty>,
-            //         )*
-            //     ), $($($T,)+)?>: IsHistoricalType
-            // {
-            //     type GenericType = Struct<(
-            //         $(
-            //             GetGenericVariant<$field_ty>,
-            //         )*
-            //     ), $($($T,)+)?>;
-            //     type MigrationFromGeneric = GlobalMigrationFromGeneric;
-            // }
+                        fn forwards(x: GenericStruct) -> UserStruct {
+                            $struct {
+                                $(
+                                    $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field),
+                                )*
+                            }
+                        }
 
-            impl $(< $($T $(: $TBound)?),+ >)? Migration<$struct $(< $($T,)+ >)?, vCurrent> for GlobalMigrationFromGeneric
-            where $( $field_ty: HasGenericVariant,)*
-                Struct<(
-                    $(
-                        GetGenericVariant<$field_ty>,
-                    )*
-                ), $($($T,)+)?>: IsHistoricalType
-            {
-                type From = Struct<(
-                    $(
-                        GetGenericVariant<$field_ty>,
-                    )*
-                ), $($($T,)+)?>;
-
-                fn forwards(x: Self::From) -> $struct $(< $($T,)+ >)? {
-                    $struct {
-                        $(
-                            $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field),
-                        )*
-                    }
-                }
-
-                fn backwards(x: $struct $(< $($T,)+ >)?) -> Self::From {
-                    Struct {
-                        $(
-                            $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
-                        )*
-                        _phantom: Default::default(),
+                        fn backwards(x: UserStruct) -> GenericStruct {
+                            Struct {
+                                $(
+                                    $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
+                                )*
+                                _phantom: Default::default(),
+                            }
+                        }
                     }
                 }
             }
