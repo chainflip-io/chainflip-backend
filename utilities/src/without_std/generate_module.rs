@@ -72,17 +72,15 @@ macro_rules! generate_module {
                             type $field: MaybeMigration<To::$field, V> = DefaultMigration;
                         )*
                     }
-                    impl CustomMigration for () {}
-                }
-            }
 
-            impl<To: HistoricalTypesAt<V>, V: Version, M1: CustomMigration<To, V>, M2: CustomMigration<To, V>>
-            CustomMigration<To,V>
-            for (M1, M2)
-            {
-                $(
-                    type $field = (M1::$field, M2::$field);
-                )*
+                    impl CustomMigration for () {}
+
+                    impl<M1: CustomMigration, M2: CustomMigration> CustomMigration for (M1, M2) {
+                        $(
+                            type $field = (M1::$field, M2::$field);
+                        )*
+                    }
+                }
             }
 
             // This has to be used here because of how the `proptest_derive::Arbitrary` derive macro works.
