@@ -323,48 +323,6 @@ macro_rules! generate_module {
 
 
 
-            pub trait VariantCustomMigration<
-                To: HistoricalTypesAt<V>,
-                V: Version,
-            > {
-                $(
-                    type $variant: MaybeMigration<To::$variant, V> = DefaultMigration;
-                )+
-            }
-
-
-            // this extracts the From types (per variant) from a VariantCustomMigration
-            #[derive_where::derive_where(Debug, Default; )]
-            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: Version, M: VariantCustomMigration<To, V>>(sp_std::marker::PhantomData<(To, V, M)>);
-            impl<To: HistoricalTypesAt<V>, V: Version, M: VariantCustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
-                $(
-                    type $variant = <
-                        <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>
-                        as Migration<To::$variant, V>
-                    >::From;
-                )+
-            }
-
-            type ResolveCustomMigration<To: HistoricalTypesAt<V>, V: Version, M: VariantCustomMigration<To, V>> = (
-                $(
-                    <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>,
-                )+
-            );
-
-            impl <
-                To: HistoricalTypesAt<V>,
-                V: Version
-            > VariantCustomMigration<To, V> for () {}
-
-            impl<To: HistoricalTypesAt<V>, V: Version, M1: VariantCustomMigration<To, V>, M2: VariantCustomMigration<To, V>>
-            VariantCustomMigration<To,V>
-            for (M1, M2)
-            {
-                $(
-                    type $variant = (M1::$variant, M2::$variant);
-                )+
-            }
-
             // end generic fibered type helpers
             ///////////////
 
@@ -567,28 +525,64 @@ macro_rules! generate_module {
             pub type see_variant_changelogs = see_variant_changelogs_and_also<()>;
             pub struct see_variant_changelogs_and_also<M>(M);
 
-
-            impl<M: VariantCustomMigration<To, V>, $( $($T $(: $TBound)?,)+ )? To: HistoricalTypesAt<V>, V: Version> Migration<Enum<$($($T,)+)? To>, V> for see_variant_changelogs_and_also<M>
-            where
-                Enum<$($($T,)+)? source_of_custom_migration<To, V, M>>: IsHistoricalType
-            {
-                type From = Enum<$($($T,)+)? source_of_custom_migration<To, V, M>>;
-
-                fn forwards(x: Self::From) -> Enum<$($($T,)+)? To> {
-                    match x {
+            cf_proc_macros::better_modules! {
+                mod (To: HistoricalTypesAt<V>) (V: Version)
+                {
+                    pub trait VariantCustomMigration {
                         $(
-                            Enum::$variant(val) => Enum::$variant(<ResolveCustomMigration::<To, V, M> as Types>::$variant::forwards(val)),
-                        )*
-                        Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                            type $variant: MaybeMigration<To::$variant, V> = DefaultMigration;
+                        )+
                     }
-                }
 
-                fn backwards(x: Enum<$($($T,)+)? To>) -> Self::From {
-                    match x {
+                    impl VariantCustomMigration for () {}
+
+                    impl<M1: VariantCustomMigration, M2: VariantCustomMigration> VariantCustomMigration for (M1, M2) {
                         $(
-                            Enum::$variant(val) => Enum::$variant(<ResolveCustomMigration::<To, V, M> as Types>::$variant::backwards(val)),
-                        )*
-                        Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                            type $variant = (M1::$variant, M2::$variant);
+                        )+
+                    }
+
+                    mod (M: VariantCustomMigration<To, V>)
+                    {
+                        mod variant_migrations {
+                            use super::*;
+                            $(
+                                type $variant = <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>;
+                            )*
+                            pub type From = (
+                                $(
+                                    <variant_migrations::$variant as Migration<To::$variant, V>>::From,
+                                )*
+                            );
+
+                            mod $( $( ($T $(: $TBound)?) )+ )? {
+                                pub type EnumVariant<Target: Types> = Enum<$($($T,)+)? Target>;
+
+                                impl Migration<Enum<$($($T,)+)? To>, V> for see_variant_changelogs_and_also<M> where
+                                    EnumVariant<From>: IsHistoricalType
+                                {
+                                    type From = EnumVariant<From>;
+
+                                    fn forwards(x: EnumVariant<From>) -> EnumVariant<To> {
+                                        match x {
+                                            $(
+                                                Enum::$variant(val) => Enum::$variant($variant::forwards(val)),
+                                            )*
+                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                                        }
+                                    }
+
+                                    fn backwards(x: EnumVariant<To>) -> EnumVariant<From> {
+                                        match x {
+                                            $(
+                                                Enum::$variant(val) => Enum::$variant($variant::backwards(val)),
+                                            )*
+                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
