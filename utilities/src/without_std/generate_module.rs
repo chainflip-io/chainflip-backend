@@ -312,6 +312,13 @@ macro_rules! generate_module {
                                 $variant(Ty::$variant),
                             )*
                         }
+
+                        impl IsHistoricalType for Enum where
+                            $( Ty::$variant: IsHistoricalType,)*
+                            $enum$(< $($T,)+ >)?: HasChangelog
+                        {
+                            type GetCurrentType = $enum$(< $($T,)+ >)?;
+                        }
                     }
                 }
             }
@@ -326,20 +333,6 @@ macro_rules! generate_module {
             // end generic fibered type helpers
             ///////////////
 
-
-            // This has to be used here because of how the `proptest_derive::Arbitrary` derive macro works.
-            // use sp_std::marker::PhantomData;
-
-            // /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
-            // /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
-            // #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-            // #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
-            // pub enum Enum<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
-            //     $(
-            //         $variant(Ty::$variant),
-            //     )*
-            //     _phantom(!, PhantomData<($($($T,)+)?)>),
-            // }
 
             // --------------------- custom implemenations of external traits --------------------------
 
@@ -514,12 +507,6 @@ macro_rules! generate_module {
                     assert!(!strategies.is_empty(), "All variants of Enum are empty types — cannot generate arbitrary values");
                     proptest::strategy::Union::new(strategies).boxed()
                 }
-            }
-
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($variant: IsHistoricalType,)*>> IsHistoricalType for Enum<$($($T,)+)? Ty>
-                where $enum$(< $($T,)+ >)?: HasChangelog
-            {
-                type GetCurrentType = $enum$(< $($T,)+ >)?;
             }
 
             pub type see_variant_changelogs = see_variant_changelogs_and_also<()>;
