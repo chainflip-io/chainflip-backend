@@ -152,7 +152,9 @@ impl<T: HasGenericVariant<EF, EB> + HasChangelog<EF, EB>, EF, EB> IsHistoricalTy
 }
 
 pub struct NewTypeWithDefault;
-impl<V: Version, T: HasChangelog<EF, EB> + Default, EF, EB> Migration<T, V, EF, EB> for NewTypeWithDefault {
+impl<V: Version, T: HasChangelog<EF, EB> + Default, EF, EB> Migration<T, V, EF, EB>
+	for NewTypeWithDefault
+{
 	type From = HistoricalEmptyPlaceholder<T>;
 
 	fn forwards(_: Self::From) -> Result<T, EF> {
@@ -270,7 +272,13 @@ impl<
 		V: Version,
 		EF,
 		EB,
-		M1: Migration<A, V, EF, EB, From: IsHistoricalType<EF, EB, GetCurrentType: OrdMigrations<EF, EB> + Ord> + Ord>,
+		M1: Migration<
+			A,
+			V,
+			EF,
+			EB,
+			From: IsHistoricalType<EF, EB, GetCurrentType: OrdMigrations<EF, EB> + Ord> + Ord,
+		>,
 		M2: Migration<B, V, EF, EB>,
 	> Migration<BTreeMap<A, B>, V, EF, EB> for MapMigration<(M1, M2)>
 {

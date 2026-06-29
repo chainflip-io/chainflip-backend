@@ -16,7 +16,7 @@
 
 // ---------- definition of migrations ------------
 
-use crate::migrations::HasChangelog;
+use crate::{migrations::HasChangelog, never::Never};
 
 pub trait Version: Copy {
 	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<CanonicalPatchVersion>;
@@ -32,30 +32,50 @@ pub enum MigrationError {
 	EnumVariantDoesntExist,
 }
 
-pub trait Migration<To, V: Version, EF = MigrationError, EB = MigrationError> {
+pub trait Migration<To, V: Version, EF, EB> {
 	type From: IsHistoricalType<EF, EB>;
 	fn forwards(x: Self::From) -> Result<To, EF>;
 	fn backwards(x: To) -> Result<Self::From, EB>;
 }
 
-pub trait HasVersion<V: Version, EF = MigrationError, EB = MigrationError>: Sized {
+pub trait HasVersion<V: Version, EF, EB>: Sized {
 	type HistoricalType;
 	type HistoricalMigration: Migration<Self::HistoricalType, V, EF, EB>;
 	type MigrationToCurrent: Migration<Self, vCurrent, EF, EB, From = Self::HistoricalType>;
 }
 
-pub fn migrate_from_historical_type<V: Version, X: HasVersion<V, EF, EB>, EF, EB>(
+pub fn try_migrate_from_historical_type<V: Version, X: HasVersion<V, EF, EB>, EF, EB>(
 	_v: V,
 	x: X::HistoricalType,
 ) -> Result<X, EF> {
 	X::MigrationToCurrent::forwards(x)
 }
 
-pub fn migrate_to_historical_type<V: Version, X: HasVersion<V, EF, EB>, EF, EB>(
+pub fn migrate_from_historical_type<V: Version, X: HasVersion<V, Never, EB>, EB>(
+	_v: V,
+	x: X::HistoricalType,
+) -> X {
+	match X::MigrationToCurrent::forwards(x) {
+		Ok(x) => x,
+		Err(never) => match never {},
+	}
+}
+
+pub fn try_migrate_to_historical_type<V: Version, X: HasVersion<V, EF, EB>, EF, EB>(
 	_v: V,
 	x: X,
 ) -> Result<X::HistoricalType, EB> {
 	X::MigrationToCurrent::backwards(x)
+}
+
+pub fn migrate_to_historical_type<V: Version, X: HasVersion<V, EF, Never>, EF>(
+	_v: V,
+	x: X,
+) -> X::HistoricalType {
+	match X::MigrationToCurrent::backwards(x) {
+		Ok(x) => x,
+		Err(never) => match never {},
+	}
 }
 // -------- identity migration --------
 pub struct IdentityMigration;
