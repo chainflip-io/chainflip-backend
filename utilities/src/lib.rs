@@ -20,6 +20,12 @@
 #![feature(async_fn_track_caller)]
 #![feature(iterator_try_collect)]
 #![feature(decl_macro)]
+#![feature(associated_type_defaults)]
+#![feature(trait_alias)]
+#![feature(lazy_type_alias)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(macro_metavar_expr)]
+#![allow(incomplete_features)]
 
 #[cfg(feature = "std")]
 mod with_std;

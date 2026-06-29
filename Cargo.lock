@@ -1716,6 +1716,7 @@ dependencies = [
  "chainflip-node",
  "custom-rpc",
  "frame-executive",
+ "frame-metadata 16.0.0",
  "frame-metadata-hash-extension",
  "frame-support",
  "frame-system",
@@ -1752,9 +1753,16 @@ dependencies = [
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
+ "proptest",
  "rand 0.8.5",
+ "reqwest 0.11.27",
+ "scale-decode",
  "scale-info",
+ "scale-json",
  "secp256k1 0.29.1",
+ "serde_json",
+ "similar 3.1.1",
+ "sp-arithmetic 28.0.0",
  "sp-block-builder",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
@@ -1802,6 +1810,8 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
+ "cf-proc-macros",
+ "derive-where",
  "frame-support",
  "hex",
  "n-functor",
@@ -1818,6 +1828,15 @@ dependencies = [
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "utilities",
+]
+
+[[package]]
+name = "cf-proc-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -3540,7 +3559,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -5019,7 +5038,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7cb8796f93fa038f979a014234d632e9688a120e745f936e2635123c77537f7"
 dependencies = [
- "frame-metadata 21.0.0",
+ "frame-metadata 20.0.0",
  "parity-scale-codec",
  "scale-decode",
  "scale-info",
@@ -5109,17 +5128,6 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
-]
-
-[[package]]
-name = "frame-metadata"
-version = "21.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20dfd1d7eae1d94e32e869e2fb272d81f52dd8db57820a373adb83ea24d7d862"
-dependencies = [
- "cfg-if",
- "parity-scale-codec",
- "scale-info",
 ]
 
 [[package]]
@@ -6690,7 +6698,7 @@ dependencies = [
  "console",
  "once_cell",
  "serde",
- "similar",
+ "similar 2.7.0",
  "tempfile",
 ]
 
@@ -9571,9 +9579,11 @@ dependencies = [
  "cf-amm-math",
  "cf-chains",
  "cf-primitives",
+ "cf-proc-macros",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
+ "derive-where",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -9582,6 +9592,8 @@ dependencies = [
  "pallet-cf-account-roles",
  "pallet-cf-environment",
  "parity-scale-codec",
+ "proptest",
+ "proptest-derive",
  "scale-info",
  "serde",
  "sp-arithmetic 28.0.0",
@@ -9589,6 +9601,7 @@ dependencies = [
  "sp-io 43.0.0",
  "sp-runtime 44.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2509-2.2.0)",
+ "utilities",
 ]
 
 [[package]]
@@ -13982,6 +13995,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
+name = "similar"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6505efef05804732ed8a3f2d4f279429eb485bd69d5b0cc6b19cc02005cda16"
+dependencies = [
+ "bstr",
+]
+
+[[package]]
 name = "simple-dns"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15604,6 +15626,7 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "cf-proc-macros",
  "cf-runtime-utilities",
  "cf-session-benchmarking",
  "cf-test-utilities",
@@ -17355,6 +17378,7 @@ dependencies = [
  "async-channel 1.9.0",
  "bs58",
  "clap",
+ "duplicate",
  "futures",
  "futures-util",
  "hex",
@@ -17368,6 +17392,8 @@ dependencies = [
  "pin-project",
  "predicates",
  "prometheus",
+ "proptest",
+ "proptest-derive",
  "regex",
  "reqwest 0.11.27",
  "scale-info",
@@ -17375,6 +17401,7 @@ dependencies = [
  "scopeguard",
  "serde",
  "serde_json",
+ "sp-arithmetic 28.0.0",
  "sp-core 38.1.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2509-2.2.0)",
  "tempfile",

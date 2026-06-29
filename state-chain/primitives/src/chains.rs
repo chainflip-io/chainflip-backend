@@ -19,6 +19,7 @@ pub use frame_support::traits::Get;
 use sp_std::{fmt, fmt::Display, str::FromStr};
 
 pub mod assets;
+pub mod assets_migrations;
 
 macro_rules! chains {
 	( $( $chain:ident = $index:literal),+ ) => {

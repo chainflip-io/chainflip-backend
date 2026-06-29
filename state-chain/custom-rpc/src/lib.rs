@@ -47,7 +47,10 @@ use cf_rpc_apis::{
 	call_error, internal_error, CfErrorCode, NotificationBehaviour, OrderFills,
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
-use cf_utilities::rpc::NumberOrHex;
+use cf_utilities::{
+	migrations::{basics::migrate_from_historical_type, v20000, v20100},
+	rpc::NumberOrHex,
+};
 use core::ops::Range;
 use ethereum_eip712::build_eip712_data::to_ethers_typed_data;
 use itertools::Itertools;
@@ -1503,6 +1506,20 @@ where
 		self.with_state_backend(hash, || M::iter().collect::<I>())
 	}
 
+	/// Like [`Self::collect_from_storage_map`], but collects only the keys. Useful when the values
+	/// may fail to decode (e.g. across a storage-layout change) but the keys are still needed.
+	pub fn collect_keys_from_storage_map<
+		M: frame_support::storage::IterableStorageMap<K, V> + 'static,
+		K: codec::FullEncode + codec::Decode,
+		V: codec::FullCodec,
+		I: FromIterator<K>,
+	>(
+		&self,
+		hash: <B as BlockT>::Hash,
+	) -> RpcResult<I> {
+		self.with_state_backend(hash, || M::iter_keys().collect::<I>())
+	}
+
 	/// Execute a function that requires access to the state backend externalities environment.
 	///
 	/// Note that anything that requires access to the state backend should be executed within this
@@ -1796,7 +1813,12 @@ where
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 16 {
 				#[expect(deprecated)]
-				api.cf_free_balances_before_version_16(hash, account_id).map(Into::into)
+				api.cf_free_balances_before_version_16(hash, account_id).map(|x| {
+					cf_utilities::migrations::basics::migrate_from_historical_type(
+						cf_utilities::migrations::v20000,
+						x,
+					)
+				})
 			} else if version < 17 {
 				#[expect(deprecated)]
 				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
@@ -1818,7 +1840,12 @@ where
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 16 {
 				#[expect(deprecated)]
-				api.cf_lp_total_balances_before_version_16(hash, account_id).map(Into::into)
+				api.cf_lp_total_balances_before_version_16(hash, account_id).map(|x| {
+					cf_utilities::migrations::basics::migrate_from_historical_type(
+						cf_utilities::migrations::v20000,
+						x,
+					)
+				})
 			} else if version < 17 {
 				#[expect(deprecated)]
 				api.cf_lp_total_balances_before_version_17(hash, account_id).map(Into::into)
@@ -2201,7 +2228,10 @@ where
 				let balance = api.cf_account_flip_balance(hash, &account_id)?;
 				#[expect(deprecated)]
 				let asset_balances: AssetMap<_> =
-					api.cf_free_balances_before_version_16(hash, account_id.clone())?.into();
+					cf_utilities::migrations::basics::migrate_from_historical_type(
+						cf_utilities::migrations::v20000,
+						api.cf_free_balances_before_version_16(hash, account_id.clone())?,
+					);
 
 				Ok::<_, CfApiError>(RpcAccountInfoWrapper::from(
 					match api
@@ -2254,10 +2284,16 @@ where
 
 				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
-				} else if api_version < 18 {
+					migrate_from_historical_type(
+						v20000,
+						api.cf_common_account_info_before_version_16(hash, &account_id)?,
+					)
+				} else if api_version < 17 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_17(hash, &account_id)?.into()
+					migrate_from_historical_type(
+						v20100,
+						api.cf_common_account_info_before_version_17(hash, &account_id)?,
+					)
 				} else if api_version < 19 {
 					#[expect(deprecated)]
 					api.cf_common_account_info_before_version_19(
@@ -2335,7 +2371,7 @@ where
 									account_id.clone(),
 								)?
 								.into()
-							} else if api_version < 18 {
+							} else if api_version < 17 {
 								#[expect(deprecated)]
 								api.cf_liquidity_provider_info_before_version_17(
 									hash,
@@ -2656,10 +2692,10 @@ where
 			let swap_limits = api.cf_swap_limits(hash)?;
 			let network_fees = if version < 16 {
 				#[expect(deprecated)]
-				api.cf_network_fees_before_version_16(hash)?.into()
+				migrate_from_historical_type(v20000, api.cf_network_fees_before_version_16(hash)?)
 			} else if version < 17 {
 				#[expect(deprecated)]
-				api.cf_network_fees_before_version_17(hash)?.into()
+				migrate_from_historical_type(v20100, api.cf_network_fees_before_version_17(hash)?)
 			} else if version < 19 {
 				#[expect(deprecated)]
 				api.cf_network_fees_before_version_19(hash)?.into()

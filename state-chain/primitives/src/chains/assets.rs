@@ -359,6 +359,11 @@ macro_rules! assets {
 				type Asset;
 				fn from_fn<F: FnMut(Self::Asset) -> T>(f: F) -> Self;
 			}
+			$(
+				use super::$chain_member_and_module as $chain_member_and_module;
+			)*
+
+			#[cf_proc_macros::generate_module]
 			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
 			#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 			pub struct AssetMap<T> {
@@ -368,6 +373,7 @@ macro_rules! assets {
 					pub $chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>,
 				)*
 			}
+
 			impl<T> AssetMap<T> {
 				pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
 					Self {
@@ -571,6 +577,7 @@ macro_rules! assets {
 					Unsupported,
 				}
 
+				#[cf_proc_macros::generate_module]
 				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
 				#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 				pub struct AssetMap<T> {
@@ -580,6 +587,7 @@ macro_rules! assets {
 						pub $asset_member: T,
 					)+
 				}
+
 				impl<T> AssetMap<T> {
 					pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
 						Self {
@@ -592,6 +600,7 @@ macro_rules! assets {
 							$($asset_member: f(Asset::$asset_variant)?,)+
 						})
 					}
+
 
 					pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
 						AssetMap {

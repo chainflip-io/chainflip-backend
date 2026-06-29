@@ -16,7 +16,11 @@ workspace = true
 
 [dev-dependencies]
 log = { workspace = true }
-state-chain-runtime = { workspace = true, features = ["mocks", "runtime-integration-tests"] }
+state-chain-runtime = { workspace = true, features = [
+	"mocks",
+	"runtime-integration-tests",
+	"proptest",
+] }
 libsecp256k1 = { workspace = true, default-features = true, features = [
 	"static-context",
 ] }
@@ -25,6 +29,17 @@ hex = { workspace = true }
 hex-literal = { workspace = true, default-features = true }
 secp256k1 = { workspace = true, features = ["rand-std"] }
 arrayref = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "json"] }
+serde_json = { workspace = true, default-features = true }
+proptest = { workspace = true }
+sp-arithmetic = { workspace = true }
+frame-metadata = { workspace = true, default-features = true, features = [
+	"current",
+	"decode",
+] }
+scale-decode = { workspace = true }
+scale-json = { workspace = true }
+similar = { version = "3" }
 
 # Chainflip local dependencies
 # Additional FRAME pallets

@@ -96,6 +96,16 @@ pub struct InterestBreakdown {
 	low_ltv_penalty: ScaledAmountHP,
 }
 
+impl InterestBreakdown {
+	/// The total pending interest across all types.
+	fn total(&self) -> ScaledAmountHP {
+		self.network
+			.saturating_add(self.pool)
+			.saturating_add(self.broker)
+			.saturating_add(self.low_ltv_penalty)
+	}
+}
+
 #[derive(Clone, Copy, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 pub enum LiquidationCompletionReason {
 	/// Full liquidation (loans are fully repaid and/or all collateral has been swapped)
@@ -969,6 +979,13 @@ impl<T: Config> GeneralLoan<T> {
 		price_cache.usd_value_of(self.asset, self.owed_principal)
 	}
 
+	/// The total amount owed on the loan, in the loan's asset: the principal plus all pending
+	/// interest (whole units only — sub-unit interest remainders are excluded).
+	fn total_owed(&self) -> AssetAmount {
+		self.owed_principal
+			.saturating_add(self.pending_interest.total().into_asset_amount())
+	}
+
 	fn collect_pending_interest(&mut self) {
 		if self
 			.collect_pending_interest_if_above_threshold(None /* no threshold */)
@@ -1085,21 +1102,17 @@ impl<T: Config> GeneralLoan<T> {
 			provided_amount.saturating_sub(liquidation_fee)
 		};
 
-		self.repay_principal(
+		self.repay_principal_and_pending_interest(
 			provided_amount_after_fees,
 			LoanRepaidActionType::Liquidation { swap_request_id },
 		)
 	}
 
-	/// Repays (fully or partially) the loan with `provided_amount` (that was either debited from
-	/// the account or received during liquidation). Returns any unused amount. The caller is
-	/// responsible for making sure that all pending interest has already been collected (via
-	/// [collect_pending_interest]) and that the provided asset is the same as the loan's asset.
-	pub(super) fn repay_principal(
-		&mut self,
-		provided_amount: AssetAmount,
-		action_type: LoanRepaidActionType,
-	) -> AssetAmount {
+	/// Repays (fully or partially) the loan's principal with `provided_amount` (that was either
+	/// debited from the account or received during liquidation). Returns any unused amount. Does
+	/// NOT emit a `LoanRepaid` event — the caller is responsible for that (so several repayment
+	/// steps in one operation can be reported as a single event).
+	pub(super) fn repay_principal(&mut self, provided_amount: AssetAmount) -> AssetAmount {
 		// Making sure the user doesn't pay more than the total principal plus liquidation fee:
 		let repayment_amount = core::cmp::min(provided_amount, self.owed_principal);
 
@@ -1109,15 +1122,36 @@ impl<T: Config> GeneralLoan<T> {
 			});
 
 			self.owed_principal.saturating_reduce(repayment_amount);
+		}
 
+		provided_amount.saturating_sub(repayment_amount)
+	}
+
+	/// Repays the principal and any uncollected interest with `provided_amount`.
+	/// The total amount repaid is reported in a single `LoanRepaid` event. Returns any leftover
+	/// funds.
+	fn repay_principal_and_pending_interest(
+		&mut self,
+		provided_amount: AssetAmount,
+		action_type: LoanRepaidActionType,
+	) -> AssetAmount {
+		// First repayment ensures we have liquidity to collect interest
+		let excess = self.repay_principal(provided_amount);
+		// This "collects" interest by adding it to the owed principal
+		self.collect_pending_interest();
+		// Second repayment covers any outstanding interest
+		let excess = self.repay_principal(excess);
+
+		let repaid = provided_amount.saturating_sub(excess);
+		if repaid > 0 {
 			Pallet::<T>::deposit_event(Event::LoanRepaid {
 				loan_id: self.id,
-				amount: repayment_amount,
+				amount: repaid,
 				action_type,
 			});
 		}
 
-		provided_amount.saturating_sub(repayment_amount)
+		excess
 	}
 
 	#[transactional]
@@ -1626,16 +1660,16 @@ impl<T: Config> LendingApi for Pallet<T> {
 				fail!(Error::<T>::LoanNotFound);
 			};
 
-			loan.collect_pending_interest();
-
 			let config = LendingConfig::<T>::get();
 
 			let loan_asset = loan.asset;
 
+			let total_owed = loan.total_owed();
+
 			let repayment_amount = match repayment_amount {
-				RepaymentAmount::Full => loan.owed_principal,
+				RepaymentAmount::Full => total_owed,
 				RepaymentAmount::Exact(amount) => {
-					if amount < loan.owed_principal {
+					if amount < total_owed {
 						ensure!(
 							price_cache.usd_value_of_allow_stale(loan_asset, amount)? >=
 								config.minimum_update_loan_amount_usd,
@@ -1649,8 +1683,10 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			T::Balance::try_debit_account(borrower_id, loan_asset, repayment_amount)?;
 
-			let excess_amount =
-				loan.repay_principal(repayment_amount, LoanRepaidActionType::Manual);
+			let excess_amount = loan.repay_principal_and_pending_interest(
+				repayment_amount,
+				LoanRepaidActionType::Manual,
+			);
 
 			if excess_amount > 0 {
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
