@@ -93,34 +93,45 @@ async function waitForEvmTransactionRejection<A = []>(
   cf: ChainflipIO<A>,
   chain: Chain,
   txHash: string,
+  depositAddress?: string,
+  depositChannelId?: bigint,
 ) {
+  // For native EVM gas assets, deposits are witnessed via balance diff / fetch events, so the
+  // finalised event never carries the deposit tx hash (`depositDetails` is empty). Matching the
+  // `depositFinalized` branch by tx hash alone would therefore never fire if the deposit is
+  // ingressed instead of rejected, and the test would hang until timeout. When the deposit channel
+  // is known, also match by channel so we surface the "ingressed instead of rejected" error.
+  const wasIngressed = (event: {
+    depositDetails: { txHashes?: readonly string[] | null };
+    depositAddress?: string | null;
+    channelId?: bigint | null;
+  }) =>
+    (event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash) ||
+    (depositAddress !== undefined &&
+      event.depositAddress === depositAddress &&
+      event.channelId === depositChannelId);
+
   let resultEvent;
   if (chain === 'Ethereum') {
     resultEvent = await cf.stepUntilOneEventOf({
       transactionRejected: ethereumIngressEgressTransactionRejectedByBrokerEvent.refine(
         (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
       ),
-      depositFinalized: ethereumIngressEgressDepositFinalisedEvent.refine(
-        (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
-      ),
+      depositFinalized: ethereumIngressEgressDepositFinalisedEvent.refine(wasIngressed),
     });
   } else if (chain === 'Arbitrum') {
     resultEvent = await cf.stepUntilOneEventOf({
       transactionRejected: arbitrumIngressEgressTransactionRejectedByBrokerEvent.refine(
         (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
       ),
-      depositFinalized: arbitrumIngressEgressDepositFinalisedEvent.refine(
-        (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
-      ),
+      depositFinalized: arbitrumIngressEgressDepositFinalisedEvent.refine(wasIngressed),
     });
   } else if (chain === 'Bsc') {
     resultEvent = await cf.stepUntilOneEventOf({
       transactionRejected: bscIngressEgressTransactionRejectedByBrokerEvent.refine(
         (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
       ),
-      depositFinalized: bscIngressEgressDepositFinalisedEvent.refine(
-        (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
-      ),
+      depositFinalized: bscIngressEgressDepositFinalisedEvent.refine(wasIngressed),
     });
   } else {
     throw Error('Unsupported broker level screening EVM chain');
@@ -209,7 +220,13 @@ export async function testEvm<A = []>(
   cf.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
   // Observe the TransactionRejectedByBroker event
-  await waitForEvmTransactionRejection(cf, chain, txHash);
+  await waitForEvmTransactionRejection(
+    cf,
+    chain,
+    txHash,
+    swapParams.depositAddress,
+    BigInt(swapParams.channelId),
+  );
 
   await Promise.all([
     observeBalanceIncrease(
@@ -372,7 +389,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   await reportFunction(txHash);
   cf.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
-  await waitForEvmTransactionRejection(cf, chain, txHash);
+  await waitForEvmTransactionRejection(cf, chain, txHash, depositAddress, depositChannelId);
 
   let receivedRefund = false;
 
