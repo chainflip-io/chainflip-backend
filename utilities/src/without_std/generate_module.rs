@@ -314,13 +314,179 @@ macro_rules! generate_module {
                         {
                             type GetCurrentType = $enum$(< $($T,)+ >)?;
                         }
+
+                        mod where $( (Ty::$variant: cf_utilities::type_introspection::HasTypeIntrospection) )* {
+                            //
+                            // TypeInfo
+                            //
+                            // Implemented manually so that the variant indices in the type registry match
+                            // the actual Encode/Decode discriminants (which skip empty variants and respect
+                            // user-provided discriminant values). The `_phantom` variant is excluded from
+                            // the type info since it's not a real variant.
+                            impl scale_info::TypeInfo for Enum
+                            where
+                                Ty: 'static,
+                                $( $($T: 'static,)+ )?
+                                $(
+                                    Ty::$variant: scale_info::TypeInfo + 'static,
+                                )*
+                            {
+                                type Identity = Self;
+
+                                fn type_info() -> scale_info::Type {
+                                    let mut _disc: u8 = 0;
+                                    let mut variants = scale_info::build::Variants::new();
+                                    $(
+                                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                                            $( _disc = $variant_discriminant as u8; )?
+                                            let disc = _disc;
+                                            variants = variants.variant(stringify!($variant), |v| {
+                                                v.index(disc)
+                                                .fields(scale_info::build::Fields::unnamed()
+                                                    .field(|f| f.ty::<Ty::$variant>()))
+                                            });
+                                            _disc += 1;
+                                        }
+                                    )*
+
+                                    scale_info::Type::builder()
+                                        .path(scale_info::Path::new(stringify!(Enum), module_path!()))
+                                        .variant(variants)
+                                }
+                            }
+
+                            //
+                            // Encode / Decode / DecodeWithMemTracking
+                            //
+                            // These traits have to be implemented manually because empty variants (containing the `Never` type)
+                            // must be completely skipped and must not consume discriminant indices.
+                            //
+                            // Discriminant handling: when variants have explicit discriminants (`= N`), those values
+                            // are used as SCALE encoding indices (matching parity-scale-codec's derive behavior).
+                            // Empty variants are treated as if removed from the source code: they don't consume a
+                            // discriminant slot, and subsequent implicit discriminants are computed from the last
+                            // non-empty variant.
+                            impl codec::Encode for Enum
+                                where $( Ty::$variant: codec::Encode,)*
+                            {
+
+                                fn size_hint(&self) -> usize {
+                                    match self {
+                                        $(
+                                            Self::$variant(val) => 1usize + codec::Encode::size_hint(val),
+                                        )*
+                                        Self::_phantom(never, _) => match *never {},
+                                    }
+                                }
+
+                                fn encode_to<__W: codec::Output + ?Sized>(&self, dest: &mut __W) {
+                                    let mut _disc: u8 = 0;
+                                    $(
+                                        let $variant;
+                                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                                            $( _disc = $variant_discriminant as u8; )?
+                                            $variant = _disc;
+                                            _disc += 1;
+                                        } else {
+                                            $variant = 0; // dummy value, variant will never be encoded
+                                        }
+                                    )*
+
+                                    match self {
+                                        $(
+                                            Self::$variant(val) => {
+                                                codec::Encode::encode_to(&$variant, dest);
+                                                codec::Encode::encode_to(val, dest);
+                                            }
+                                        )*
+                                        Self::_phantom(never, _) => match *never {}
+                                    }
+                                }
+                            }
+
+                            impl codec::Decode for Enum
+                                where $( Ty::$variant: codec::Decode,)*
+                            {
+                                fn decode<__I: codec::Input>(input: &mut __I) -> Result<Self, codec::Error> {
+                                    let idx = <u8 as codec::Decode>::decode(input)?;
+                                    let mut _disc: u8 = 0;
+                                    $(
+                                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                                            $( _disc = $variant_discriminant as u8; )?
+                                            if idx == _disc {
+                                                return Ok(Self::$variant(<Ty::$variant as codec::Decode>::decode(input)?));
+                                            }
+                                            _disc += 1;
+                                        }
+                                    )*
+                                    Err(codec::Error::from("Invalid variant index"))
+                                }
+                            }
+
+                            impl codec::DecodeWithMemTracking for Enum
+                                where
+                                    $( Ty::$variant: codec::DecodeWithMemTracking,)*
+                                    Self: codec::Decode,
+                            {}
+
+                            impl codec::MaxEncodedLen for Enum
+                                where
+                                    $( Ty::$variant: codec::MaxEncodedLen,)*
+                                    Self: codec::Encode,
+                            {
+                                fn max_encoded_len() -> usize {
+                                    let mut max_variant_size: usize = 0;
+                                    $(
+                                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                                            let size = <Ty::$variant as codec::MaxEncodedLen>::max_encoded_len();
+                                            if size > max_variant_size {
+                                                max_variant_size = size;
+                                            }
+                                        }
+                                    )*
+                                    // 1 byte for the discriminant + max variant payload
+                                    1usize + max_variant_size
+                                }
+                            }
+
+                            //
+                            // Arbitrary
+                            //
+                            // This trait has to be implemented manually because the standard derive doesn't properly deal with variants that
+                            // cannot be instantiated (e.g. because they contain `!`, the "Never" type).
+                            #[cfg(any(test, all(feature = "proptest", feature = "std")))]
+                            impl proptest::arbitrary::Arbitrary for Enum
+                            where
+                                Ty: 'static,
+                                $( $($T: 'static,)+ )?
+                                $(
+                                    Ty::$variant: proptest::arbitrary::Arbitrary + sp_std::fmt::Debug + 'static,
+                                )*
+                            {
+                                type Parameters = ();
+                                type Strategy = proptest::strategy::BoxedStrategy<Self>;
+
+                                fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+                                    use proptest::strategy::Strategy;
+
+                                    let mut strategies: Vec<proptest::strategy::BoxedStrategy<Self>> = Vec::new();
+                                    $(
+                                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                                            strategies.push(
+                                                proptest::arbitrary::any::<Ty::$variant>()
+                                                    .prop_map(|val| Enum::$variant(val))
+                                                    .boxed()
+                                            );
+                                        }
+                                    )*
+                                    assert!(!strategies.is_empty(), "All variants of Enum are empty types — cannot generate arbitrary values");
+                                    proptest::strategy::Union::new(strategies).boxed()
+                                }
+                            }
+                        }
                     }
                 }
             }
-
-
-
-
 
 
 
@@ -328,181 +494,6 @@ macro_rules! generate_module {
             // end generic fibered type helpers
             ///////////////
 
-
-            // --------------------- custom implemenations of external traits --------------------------
-
-            //
-            // TypeInfo
-            //
-            // Implemented manually so that the variant indices in the type registry match
-            // the actual Encode/Decode discriminants (which skip empty variants and respect
-            // user-provided discriminant values). The `_phantom` variant is excluded from
-            // the type info since it's not a real variant.
-            impl<$( $($T: 'static $(+ $TBound)?,)+ )? Ty: Types + 'static> scale_info::TypeInfo for Enum<$($($T,)+)? Ty>
-            where
-                $(
-                    Ty::$variant: scale_info::TypeInfo + cf_utilities::type_introspection::HasTypeIntrospection + 'static,
-                )*
-            {
-                type Identity = Self;
-
-                fn type_info() -> scale_info::Type {
-                    let mut _disc: u8 = 0;
-                    let mut variants = scale_info::build::Variants::new();
-                    $(
-                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
-                            $( _disc = $variant_discriminant as u8; )?
-                            let disc = _disc;
-                            variants = variants.variant(stringify!($variant), |v| {
-                                v.index(disc)
-                                 .fields(scale_info::build::Fields::unnamed()
-                                     .field(|f| f.ty::<Ty::$variant>()))
-                            });
-                            _disc += 1;
-                        }
-                    )*
-
-                    scale_info::Type::builder()
-                        .path(scale_info::Path::new(stringify!(Enum), module_path!()))
-                        .variant(variants)
-                }
-            }
-
-            //
-            // Encode / Decode / DecodeWithMemTracking
-            //
-            // These traits have to be implemented manually because empty variants (containing the `Never` type)
-            // must be completely skipped and must not consume discriminant indices.
-            //
-            // Discriminant handling: when variants have explicit discriminants (`= N`), those values
-            // are used as SCALE encoding indices (matching parity-scale-codec's derive behavior).
-            // Empty variants are treated as if removed from the source code: they don't consume a
-            // discriminant slot, and subsequent implicit discriminants are computed from the last
-            // non-empty variant.
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::Encode for Enum<$($($T,)+)? Ty>
-            where
-                $(
-                    Ty::$variant: codec::Encode + cf_utilities::type_introspection::HasTypeIntrospection,
-                )*
-            {
-                fn size_hint(&self) -> usize {
-                    match self {
-                        $(
-                            Self::$variant(val) => 1usize + codec::Encode::size_hint(val),
-                        )*
-                        Self::_phantom(never, _) => match *never {},
-                    }
-                }
-
-                fn encode_to<__W: codec::Output + ?Sized>(&self, dest: &mut __W) {
-                    let mut _disc: u8 = 0;
-                    $(
-                        let $variant;
-                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
-                            $( _disc = $variant_discriminant as u8; )?
-                            $variant = _disc;
-                            _disc += 1;
-                        } else {
-                            $variant = 0; // dummy value, variant will never be encoded
-                        }
-                    )*
-
-                    match self {
-                        $(
-                            Self::$variant(val) => {
-                                codec::Encode::encode_to(&$variant, dest);
-                                codec::Encode::encode_to(val, dest);
-                            }
-                        )*
-                        Self::_phantom(never, _) => match *never {}
-                    }
-                }
-            }
-
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::Decode for Enum<$($($T,)+)? Ty>
-            where
-                $(
-                    Ty::$variant: codec::Decode + cf_utilities::type_introspection::HasTypeIntrospection,
-                )*
-            {
-                fn decode<__I: codec::Input>(input: &mut __I) -> Result<Self, codec::Error> {
-                    let idx = <u8 as codec::Decode>::decode(input)?;
-                    let mut _disc: u8 = 0;
-                    $(
-                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
-                            $( _disc = $variant_discriminant as u8; )?
-                            if idx == _disc {
-                                return Ok(Self::$variant(<Ty::$variant as codec::Decode>::decode(input)?));
-                            }
-                            _disc += 1;
-                        }
-                    )*
-                    Err(codec::Error::from("Invalid variant index"))
-                }
-            }
-
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::DecodeWithMemTracking for Enum<$($($T,)+)? Ty>
-            where
-                $(
-                    Ty::$variant: codec::DecodeWithMemTracking + cf_utilities::type_introspection::HasTypeIntrospection,
-                )*
-                Self: codec::Decode,
-            {}
-
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::MaxEncodedLen for Enum<$($($T,)+)? Ty>
-            where
-                $(
-                    Ty::$variant: codec::MaxEncodedLen + cf_utilities::type_introspection::HasTypeIntrospection,
-                )*
-                Self: codec::Encode,
-            {
-                fn max_encoded_len() -> usize {
-                    let mut max_variant_size: usize = 0;
-                    $(
-                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
-                            let size = <Ty::$variant as codec::MaxEncodedLen>::max_encoded_len();
-                            if size > max_variant_size {
-                                max_variant_size = size;
-                            }
-                        }
-                    )*
-                    // 1 byte for the discriminant + max variant payload
-                    1usize + max_variant_size
-                }
-            }
-
-            //
-            // Arbitrary
-            //
-            // This trait has to be implemented manually because the standard derive doesn't properly deal with variants that
-            // cannot be instantiated (e.g. because they contain `!`, the "Never" type).
-            #[cfg(any(test, all(feature = "proptest", feature = "std")))]
-            impl<$( $($T: 'static $(+ $TBound)?,)+ )? Ty: Types + 'static> proptest::arbitrary::Arbitrary for Enum<$($($T,)+)? Ty>
-            where
-                $(
-                    Ty::$variant: proptest::arbitrary::Arbitrary + cf_utilities::type_introspection::HasTypeIntrospection + sp_std::fmt::Debug + 'static,
-                )*
-            {
-                type Parameters = ();
-                type Strategy = proptest::strategy::BoxedStrategy<Self>;
-
-                fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-                    use proptest::strategy::Strategy;
-
-                    let mut strategies: Vec<proptest::strategy::BoxedStrategy<Self>> = Vec::new();
-                    $(
-                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
-                            strategies.push(
-                                proptest::arbitrary::any::<Ty::$variant>()
-                                    .prop_map(|val| Enum::$variant(val))
-                                    .boxed()
-                            );
-                        }
-                    )*
-                    assert!(!strategies.is_empty(), "All variants of Enum are empty types — cannot generate arbitrary values");
-                    proptest::strategy::Union::new(strategies).boxed()
-                }
-            }
 
             pub type see_variant_changelogs = see_variant_changelogs_and_also<()>;
             pub struct see_variant_changelogs_and_also<M>(M);
@@ -667,8 +658,8 @@ macro_rules! generate_module {
                             $(
                                 $( ($($variant_ty, )*) : HasChangelog ,)?
                                 $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
-                                    $( $( $variant_field_ty: HasChangelog, )* )?
-                                    $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
+                                $( $( $variant_field_ty: HasChangelog, )* )?
+                                $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                             )*
                         Enum<$($($T,)+)? (
                             $(
