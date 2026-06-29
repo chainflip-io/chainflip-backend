@@ -1692,24 +1692,21 @@ impl<T: Config> Pallet<T> {
 		Ok((collected, position_info))
 	}
 
-	/// Enforce the per-asset minimum on the resulting amount of a limit order. The asset
-	/// checked is the one being sold by the order (`base_asset` for `Side::Sell`,
-	/// `quote_asset` for `Side::Buy`). A `resulting_sold_amount` of `0` is always allowed
-	/// (the order is being closed); any other value below the configured minimum is
-	/// rejected.
+	/// Enforce the per-asset minimum on the resulting amount of a limit order. The order size is
+	/// denominated in the asset being sold. A `order_size` of `0` is always allowed (the order is
+	/// being closed); any other value below the configured minimum is rejected.
 	fn ensure_min_order_amount(
 		base_asset: Asset,
 		quote_asset: Asset,
 		side: Side,
-		resulting_sold_amount: AssetAmount,
+		order_size: AssetAmount,
 	) -> DispatchResult {
 		let sold_asset = match side {
 			Side::Buy => quote_asset,
 			Side::Sell => base_asset,
 		};
-		let min = MinimumLimitOrderAmount::<T>::get(sold_asset);
 		ensure!(
-			resulting_sold_amount == 0 || resulting_sold_amount >= min,
+			order_size == 0 || order_size >= MinimumLimitOrderAmount::<T>::get(sold_asset),
 			Error::<T>::BelowMinimumOrderAmount,
 		);
 		Ok(())
@@ -1821,7 +1818,7 @@ impl<T: Config> Pallet<T> {
 					Ok(new_tick)
 				},
 			}?;
-			let (_, resulting_amount) = Self::inner_update_limit_order_at_tick(
+			let (_, order_size) = Self::inner_update_limit_order_at_tick(
 				pool,
 				lp,
 				asset_pair,
@@ -1831,7 +1828,7 @@ impl<T: Config> Pallet<T> {
 				amount_change.map(|amount| amount.into()),
 				NoOpStatus::Error,
 			)?;
-			Self::ensure_min_order_amount(base_asset, quote_asset, side, resulting_amount)?;
+			Self::ensure_min_order_amount(base_asset, quote_asset, side, order_size)?;
 
 			Ok(())
 		})
@@ -1930,7 +1927,7 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		let resulting_amount: AssetAmount = position_info.amount.saturated_into();
+		let order_size: AssetAmount = position_info.amount.saturated_into();
 
 		// Process the update
 		Self::process_limit_order_update(
@@ -1945,7 +1942,7 @@ impl<T: Config> Pallet<T> {
 			sold_amount_change,
 		)?;
 
-		Ok((*sold_amount_change.abs(), resulting_amount))
+		Ok((*sold_amount_change.abs(), order_size))
 	}
 
 	fn inner_update_range_order(
