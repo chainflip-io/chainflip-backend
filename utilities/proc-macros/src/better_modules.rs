@@ -822,10 +822,23 @@ fn expand_struct(
 		.collect();
 
 	if let syn::Fields::Named(ref mut fields) = item.fields {
-		let phantom_field: syn::Field = syn::parse_quote! {
-			_phantom: core::marker::PhantomData<( #(#unused_idents,)* )>
+		let phantom_type: syn::Type = syn::parse_quote! {
+			core::marker::PhantomData<( #(#unused_idents,)* )>
 		};
-		fields.named.push(phantom_field);
+
+		if let Some(existing_phantom) = fields
+			.named
+			.iter_mut()
+			.find(|field| field.ident.as_ref().is_some_and(|ident| ident == "_phantom"))
+		{
+			let existing_type = existing_phantom.ty.clone();
+			existing_phantom.ty = syn::parse_quote! { (#existing_type, #phantom_type) };
+		} else {
+			let phantom_field: syn::Field = syn::parse_quote! {
+				_phantom: #phantom_type
+			};
+			fields.named.push(phantom_field);
+		}
 	}
 
 	quote! { #item }
