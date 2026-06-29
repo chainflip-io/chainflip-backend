@@ -45,6 +45,7 @@ use tracing::{error, info, info_span, Instrument};
 use zeroize::Zeroizing;
 
 use cf_utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
+use engine_p2p::fair_channel::fair_channel;
 
 pub async fn start<StateChainClient, BlockStream: StreamApi<FINALIZED>>(
 	state_chain_client: Arc<StateChainClient>,
@@ -85,7 +86,7 @@ where
 	let own_peer_info = current_peers.iter().find(|pi| pi.account_id == our_account_id).cloned();
 
 	let (incoming_message_sender, incoming_message_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
+		fair_channel(engine_p2p::INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 	let (outgoing_message_sender, outgoing_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
