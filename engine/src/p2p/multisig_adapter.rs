@@ -26,9 +26,14 @@ use cf_chains::{
 	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto, ChainCrypto,
 };
 use cf_primitives::AccountId;
-use engine_p2p::{OutgoingMessage, ProtocolHandle, Topic, TopicMuxer};
+use engine_p2p::{FairReceiver, OutgoingMessage, ProtocolHandle, Topic, TopicMuxer};
 use multisig::{p2p::OutgoingMultisigStageMessages, ChainTag};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{Receiver, UnboundedSender};
+
+/// Bounded channel capacity feeding the ceremony manager. The ceremony manager is the slowest
+/// consumer on the inbound path, so this stage uses a bounded channel with backpressure rather
+/// than the per-peer fair channel used at earlier stages.
+const FORWARDER_BUFFER_SIZE: usize = 4;
 
 /// Wrapper around ChainTag that implements the Topic trait.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -62,21 +67,19 @@ impl<C: ChainCrypto> MultisigMessageSender<C> {
 
 /// Receiver for multisig messages, typed by the chain crypto.
 pub struct MultisigMessageReceiver<C: ChainCrypto> {
-	pub receiver: UnboundedReceiver<(AccountId, multisig::p2p::VersionedCeremonyMessage)>,
+	pub receiver: Receiver<(AccountId, multisig::p2p::VersionedCeremonyMessage)>,
 	_phantom: PhantomData<C>,
 }
 
 impl<C: ChainCrypto> MultisigMessageReceiver<C> {
-	pub fn new(
-		receiver: UnboundedReceiver<(AccountId, multisig::p2p::VersionedCeremonyMessage)>,
-	) -> Self {
+	pub fn new(receiver: Receiver<(AccountId, multisig::p2p::VersionedCeremonyMessage)>) -> Self {
 		Self { receiver, _phantom: PhantomData }
 	}
 
 	/// Take ownership of the underlying receiver for passing to CeremonyManager
 	pub fn into_inner(
 		self,
-	) -> UnboundedReceiver<(AccountId, multisig::p2p::VersionedCeremonyMessage)> {
+	) -> Receiver<(AccountId, multisig::p2p::VersionedCeremonyMessage)> {
 		self.receiver
 	}
 }
@@ -92,11 +95,12 @@ pub fn create_multisig_channels<C: ChainCrypto>(
 	let (outgoing_multisig_tx, mut outgoing_multisig_rx) =
 		tokio::sync::mpsc::unbounded_channel::<OutgoingMultisigStageMessages>();
 
-	// Channel for incoming multisig messages (after removing topic header)
-	let (incoming_multisig_tx, incoming_multisig_rx) = tokio::sync::mpsc::unbounded_channel::<(
-		AccountId,
-		multisig::p2p::VersionedCeremonyMessage,
-	)>();
+	// Bounded channel feeding the ceremony manager. Backpressure here lets the fair channels
+	// upstream apply their per-peer drop policy rather than buffering unboundedly.
+	let (incoming_multisig_tx, incoming_multisig_rx) =
+		tokio::sync::mpsc::channel::<(AccountId, multisig::p2p::VersionedCeremonyMessage)>(
+			FORWARDER_BUFFER_SIZE,
+		);
 
 	let outgoing_sender = handle.outgoing_sender;
 
@@ -115,16 +119,17 @@ pub fn create_multisig_channels<C: ChainCrypto>(
 		}
 	});
 
-	let mut incoming_receiver = handle.incoming_receiver;
+	let mut incoming_receiver: FairReceiver<AccountId, _> = handle.incoming_receiver;
 
-	// Task to translate incoming generic P2P messages to multisig format
+	// Task to translate incoming generic P2P messages to multisig format, with backpressure
+	// to the fair channel upstream.
 	tokio::spawn(async move {
-		while let Some(msg) = incoming_receiver.recv().await {
+		while let Some((sender, msg)) = incoming_receiver.recv().await {
 			let versioned_msg = multisig::p2p::VersionedCeremonyMessage {
 				version: msg.version,
 				payload: msg.payload,
 			};
-			if incoming_multisig_tx.send((msg.sender, versioned_msg)).is_err() {
+			if incoming_multisig_tx.send((sender, versioned_msg)).await.is_err() {
 				break;
 			}
 		}
@@ -161,7 +166,7 @@ impl MultisigChannels {
 	/// This registers all multisig topics with the muxer and returns the channels
 	/// along with the muxer future that must be spawned.
 	pub fn new(
-		incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+		incoming_receiver: FairReceiver<AccountId, Vec<u8>>,
 		outgoing_sender: UnboundedSender<OutgoingMessage>,
 	) -> (Self, impl std::future::Future<Output = ()>) {
 		let (muxer_future, mut handles) =
