@@ -3618,7 +3618,7 @@ where
 			result.insert(ForeignChain::Bsc, vec![AddressAndExplanation {
 				name: "bsc_vault_contract".into(),
 				address: AddressString::from_encoded_address(bsc),
-				explanation: none_if_compact("Holds BNB and all tokens on Tron. Directly receives user funds in case of smart contract-based vault swaps.".into()),
+				explanation: none_if_compact("Holds BNB and all tokens on BSC. Directly receives user funds in case of smart contract-based vault swaps.".into()),
 				rotation_policy: rotates_never.clone(),
 				next_predicted_rotation: None,
 			}]);
