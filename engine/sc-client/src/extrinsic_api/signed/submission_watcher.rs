@@ -404,10 +404,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							}
 							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refreshing runtime version and resubmitting (attempt {recovery_resubmissions}/{MAX_RECOVERY_RESUBMISSIONS}).");
 
-							// Refetch the runtime version at most once per finalized block. Use the best known 
-							// finalized hash, not the stream's latest, to avoid reading a stale runtime version.
-							if self.last_runtime_version_refresh_block != Some(latest_finalized.number)
-							{
+							// Refetch the runtime version at most once per finalized block (it only changes on runtime upgrades).
+							if self.last_runtime_version_refresh_block != Some(latest_finalized.number) {
 								self.last_runtime_version_refresh_block = Some(latest_finalized.number);
 								let new_runtime_version =
 									self.base_rpc_client.runtime_version(None).await?;
