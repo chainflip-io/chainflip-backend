@@ -202,6 +202,8 @@ export async function testEvm<A = []>(
       swapParams.depositAddress,
       BigInt(swapParams.channelId),
     );
+    // Step past the initial deposit's block so the reject check (which searches inclusively from
+    // the current block) doesn't re-match this deposit's DepositFinalised.
     await cf.stepOneBlock();
 
     cf.debug(`Initial deposit ${sourceAsset} received...`);
@@ -379,6 +381,10 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
       ),
     );
     cf.debug(`Account credited for ${observeAccountCreditedEvent.asset}...`);
+    // Step past the initial deposit's block so the reject check (which searches inclusively from
+    // the current block) doesn't re-match this deposit's DepositFinalised.
+    await cf.stepOneBlock();
+
     await waitForDepositContractDeployment(chain, depositAddress);
   }
 
