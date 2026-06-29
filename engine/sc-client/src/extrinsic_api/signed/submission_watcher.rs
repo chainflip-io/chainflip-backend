@@ -337,7 +337,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				self.extrinsic_lifetime,
 				nonce,
 			);
-			assert!(lifetime.contains(&(self.finalized_block_number + 1)));
 
 			let tx_hash: H256 = {
 				let encoded = signed_extrinsic.encode();
