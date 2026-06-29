@@ -26,7 +26,7 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
-use tokio::sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tracing::{debug, info_span, trace, warn, Instrument};
 
 use crate::{
@@ -445,7 +445,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 	pub async fn run(
 		mut self,
 		mut ceremony_request_receiver: UnboundedReceiver<CeremonyRequest<Chain::CryptoScheme>>,
-		mut incoming_p2p_message_receiver: Receiver<(AccountId, VersionedCeremonyMessage)>,
+		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
 	) -> Result<()> {
 		task_scope(|scope| {
 			async {

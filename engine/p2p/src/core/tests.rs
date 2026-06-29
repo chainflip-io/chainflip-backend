@@ -17,13 +17,15 @@
 use super::{PeerInfo, PeerUpdate};
 use crate::{
 	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
-	fair_channel::{fair_channel, FairReceiver},
 	OutgoingMultisigStageMessages, P2PKey,
 };
 use cf_primitives::AccountId;
-use cf_utilities::Port;
+use cf_utilities::{
+	testing::{expect_recv_with_timeout, recv_with_custom_timeout},
+	Port,
+};
 use sp_core::ed25519::Public;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 
 fn create_node_info(id: AccountId, node_key: &ed25519_dalek::SigningKey, port: Port) -> PeerInfo {
@@ -44,15 +46,7 @@ struct Node {
 	account_id: AccountId,
 	msg_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-	msg_receiver: FairReceiver<AccountId, Vec<u8>>,
-}
-
-/// Receive the next message from a node's incoming channel, or `None` on timeout.
-async fn recv_from_node(
-	receiver: &mut FairReceiver<AccountId, Vec<u8>>,
-	timeout: Duration,
-) -> Option<(AccountId, Vec<u8>)> {
-	tokio::time::timeout(timeout, receiver.recv()).await.ok().flatten()
+	msg_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 }
 
 fn spawn_node(
@@ -64,7 +58,7 @@ fn spawn_node(
 	let account_id = AccountId::new([idx as u8 + 1; 32]);
 
 	let (incoming_message_sender, incoming_message_receiver) =
-		fair_channel(super::INCOMING_MESSAGE_PER_PEER_LIMIT);
+		tokio::sync::mpsc::unbounded_channel();
 
 	let (outgoing_message_sender, outgoing_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -154,9 +148,7 @@ async fn connect_two_nodes() {
 		)]))
 		.unwrap();
 
-	recv_from_node(&mut node2.msg_receiver, MAX_CONNECTION_DELAY)
-		.await
-		.expect("timed out waiting for message");
+	let _ = expect_recv_with_timeout(&mut node2.msg_receiver).await;
 }
 
 async fn send_and_receive_message(from: &Node, to: &mut Node) -> Option<(AccountId, Vec<u8>)> {
@@ -167,7 +159,7 @@ async fn send_and_receive_message(from: &Node, to: &mut Node) -> Option<(Account
 		)]))
 		.unwrap();
 
-	recv_from_node(&mut to.msg_receiver, MAX_CONNECTION_DELAY).await
+	recv_with_custom_timeout(&mut to.msg_receiver, MAX_CONNECTION_DELAY).await
 }
 
 #[tokio::test]

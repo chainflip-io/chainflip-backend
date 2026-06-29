@@ -129,11 +129,11 @@ fn spawn_ceremony_manager<Chain: ChainSigning>(
 	latest_ceremony_id: CeremonyId,
 ) -> (
 	mpsc::UnboundedSender<CeremonyRequest<Chain::CryptoScheme>>,
-	mpsc::Sender<(AccountId32, VersionedCeremonyMessage)>,
+	mpsc::UnboundedSender<(AccountId32, VersionedCeremonyMessage)>,
 	mpsc::UnboundedReceiver<OutgoingMultisigStageMessages>,
 ) {
 	let (ceremony_request_sender, ceremony_request_receiver) = mpsc::unbounded_channel();
-	let (incoming_p2p_sender, incoming_p2p_receiver) = mpsc::channel(100);
+	let (incoming_p2p_sender, incoming_p2p_receiver) = mpsc::unbounded_channel();
 	let (outgoing_p2p_sender, outgoing_p2p_receiver) = mpsc::unbounded_channel();
 	let ceremony_manager =
 		CeremonyManager::<Chain>::new(our_account_id, outgoing_p2p_sender, latest_ceremony_id);
@@ -343,7 +343,8 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 			let our_account_id = ACCOUNT_IDS[0].clone();
 
 			// Create a ceremony manager but don't run it yet
-			let (_incoming_p2p_sender, incoming_p2p_receiver) = tokio::sync::mpsc::channel(100);
+			let (_incoming_p2p_sender, incoming_p2p_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
 			let (ceremony_request_sender, ceremony_request_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 			let (outgoing_p2p_sender, _outgoing_p2p_receiver) =
@@ -461,7 +462,6 @@ async fn should_route_p2p_message() {
 			sender_account_id,
 			VersionedCeremonyMessage { version: CURRENT_PROTOCOL_VERSION, payload },
 		))
-		.await
 		.unwrap();
 
 	// Small delay to let the ceremony manager process the message
