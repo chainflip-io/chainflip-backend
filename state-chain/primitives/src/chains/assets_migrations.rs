@@ -101,7 +101,7 @@ cf_utilities::generate_module! {
 pub enum MyTestValues<T: T1> {
 	Variant1(T::XY),
 	Variant2(u8,u16),
-	// Variant3(T::XY),
+	Variant3(T::XY),
 	Variant4 {
 		myfield: u8,
 		field2: (T::XY, T::XY),

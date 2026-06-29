@@ -615,6 +615,7 @@ macro_rules! generate_module {
                                     impl HasChangelog for variant_struct
                                     where
                                         $( ($($variant_ty, )*) : HasChangelog )?
+                                        $( $( $variant_field_ty: HasChangelog, )* )?
                                     {
                                         type if_unspecified = variant_mod::see_field_changelogs;
                                     }
@@ -670,6 +671,8 @@ macro_rules! generate_module {
                             $(
                                 $( ($($variant_ty, )*) : HasChangelog ,)?
                                 $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
+                                $( $( $variant_field_ty: HasChangelog, )* )?
+                                $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                             )*
                             Enum<$($($T,)+)? (
                                 $(
@@ -691,6 +694,8 @@ macro_rules! generate_module {
                             $(
                                 $( ($($variant_ty, )*) : HasChangelog ,)?
                                 $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
+                                    $( $( $variant_field_ty: HasChangelog, )* )?
+                                    $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                             )*
                         Enum<$($($T,)+)? (
                             $(
