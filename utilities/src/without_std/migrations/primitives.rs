@@ -16,7 +16,7 @@
 
 // --------- primitives --------
 
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
 use crate::migrations::{
 	basics::{IdentityMigration, Migration, Version},
@@ -45,6 +45,19 @@ macro_rules! impl_identity_migrations {
 }
 
 impl_identity_migrations! {(), u8, u16, u32, u64, u128, bool,}
+
+impl<T> IsHistoricalType for PhantomData<T> {
+	type GetCurrentType = Self;
+}
+
+impl<T> HasGenericVariant for PhantomData<T> {
+	type GenericType = Self;
+	type MigrationFromGeneric = IdentityMigration;
+}
+
+impl<T> HasChangelog for PhantomData<T> {
+	type if_unspecified = IdentityMigration;
+}
 
 // ----------- wrapped types -------------
 

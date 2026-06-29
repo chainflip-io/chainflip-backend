@@ -18,6 +18,7 @@ use proc_macro::TokenStream;
 
 mod better_modules;
 mod enum_elim;
+mod intro_elim;
 mod type_introspection;
 
 /// Proc macro for writing groups of local items under a shared type-parameter
@@ -148,4 +149,10 @@ pub fn derive_has_type_introspection(input: TokenStream) -> TokenStream {
 pub fn derive_enum_elim(input: TokenStream) -> TokenStream {
 	let input = syn::parse_macro_input!(input as syn::DeriveInput);
 	enum_elim::derive(input).into()
+}
+
+#[proc_macro_derive(IntroElim)]
+pub fn derive_intro_elim(input: TokenStream) -> TokenStream {
+	let input = syn::parse_macro_input!(input as syn::DeriveInput);
+	intro_elim::derive(input).into()
 }

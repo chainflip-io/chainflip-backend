@@ -19,15 +19,14 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 
 	let body = match &input.data {
 		Data::Struct(data) => struct_body(&data.fields),
-		Data::Enum(data) => {
+		Data::Enum(data) =>
 			if data.variants.is_empty() {
 				quote! { true }
 			} else {
 				let variant_checks: Vec<TokenStream> =
 					data.variants.iter().map(|v| variant_is_empty(&v.fields)).collect();
 				quote! { #( #variant_checks )&&* }
-			}
-		},
+			},
 		Data::Union(_) => {
 			return syn::Error::new_spanned(
 				name,
@@ -53,11 +52,10 @@ fn collect_field_types(data: &Data) -> Vec<syn::Type> {
 		Data::Struct(data) => {
 			collect_from_fields(&data.fields, &mut types);
 		},
-		Data::Enum(data) => {
+		Data::Enum(data) =>
 			for variant in &data.variants {
 				collect_from_fields(&variant.fields, &mut types);
-			}
-		},
+			},
 		Data::Union(_) => {},
 	}
 	types
@@ -65,16 +63,14 @@ fn collect_field_types(data: &Data) -> Vec<syn::Type> {
 
 fn collect_from_fields(fields: &Fields, types: &mut Vec<syn::Type>) {
 	match fields {
-		Fields::Named(f) => {
+		Fields::Named(f) =>
 			for field in &f.named {
 				types.push(field.ty.clone());
-			}
-		},
-		Fields::Unnamed(f) => {
+			},
+		Fields::Unnamed(f) =>
 			for field in &f.unnamed {
 				types.push(field.ty.clone());
-			}
-		},
+			},
 		Fields::Unit => {},
 	}
 }

@@ -24,14 +24,16 @@ macro_rules! generate_module {
         $vis:vis struct $struct:ident$(< $($T:ident $(: $TBound:path)?),+ >)? {
             $(
 		        $(#[$($Field_Attributes:tt)*])*
-                $field_vis:vis $field:ident: $field_ty:ty,
-            )*
+                $field_vis:vis $field:ident: $field_ty:ty
+            ),*
+            $(,)?
         }
         mod $mod:ident { #![migrations] }
     ) => {
         $(
             #[$($Attributes)*]
         )*
+        #[derive(cf_proc_macros::IntroElim)]
         $vis struct $struct$(< $($T $(: $TBound)?),+ >)? {
             $(
                 $( #[$($Field_Attributes)*])*
@@ -77,6 +79,7 @@ macro_rules! generate_module {
                         #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
                         #[scale_info(skip_type_params(Ty))]
                         #[derive(cf_proc_macros::HasTypeIntrospection)]
+                        #[derive(cf_proc_macros::IntroElim)]
                         pub struct Struct {
                             $(
                                 pub $field: Ty::$field,
@@ -97,12 +100,12 @@ macro_rules! generate_module {
                                 use proptest::arbitrary::any;
 
                                 (Just(()), $( any::<Ty::$field>(), )* )
-                                    .prop_map(|(_, $( $field, )* )| Struct {
+                                    .prop_map(|(_, $( $field, )* )| Struct::intro(
                                         $(
                                             $field,
                                         )*
-                                        _phantom: Default::default(),
-                                    })
+                                        Default::default(),
+                                    ))
                                     .boxed()
                             }
                         }
@@ -141,12 +144,12 @@ macro_rules! generate_module {
                             }
 
                             fn backwards(x: UserStruct) -> GenericStruct {
-                                Struct {
+                                Struct::intro(
                                     $(
-                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
+                                        <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
                                     )*
-                                    _phantom: Default::default(),
-                                }
+                                    Default::default(),
+                                )
                             }
                         }
                     }
@@ -196,21 +199,21 @@ macro_rules! generate_module {
                                     type From = StructVariant<From>;
 
                                     fn forwards(x: StructVariant<From>) -> StructVariant<To> {
-                                        Struct {
+                                        Struct::intro(
                                             $(
-                                                $field: $field::forwards(x.$field),
+                                                $field::forwards(x.$field),
                                             )*
-                                            _phantom: Default::default(),
-                                        }
+                                            Default::default(),
+                                        )
                                     }
 
                                     fn backwards(x: StructVariant<To>) -> StructVariant<From> {
-                                        Struct {
+                                        Struct::intro (
                                             $(
-                                                $field: $field::backwards(x.$field),
+                                                $field::backwards(x.$field),
                                             )*
-                                            _phantom: Default::default(),
-                                        }
+                                            Default::default(),
+                                        )
                                     }
                                 }
                             }
@@ -257,6 +260,7 @@ macro_rules! generate_module {
     ) => {
 
         $(#[$($Attributes)*])*
+        #[derive(cf_proc_macros::EnumElim)]
         $vis enum $enum$(< $($T $(: $TBound)?),+ >)? {
             $(
                 $( #[$($Variant_Attributes)*])*
@@ -295,6 +299,29 @@ macro_rules! generate_module {
                     type $variant = $variant;
                 )*
             }
+
+            cf_proc_macros::better_modules! {
+                mod $( $( ($T $(: $TBound)?) )+ )? {
+                    mod (Ty: Types) {
+
+                        #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+                        #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
+                        // #[derive(cf_proc_macros::HasTypeIntrospection)]
+                        pub enum Enum {
+                            $(
+                                $variant(Ty::$variant),
+                            )*
+                        }
+                    }
+                }
+            }
+
+
+
+
+
+
+
 
             pub trait CustomMigration<
                 To: HistoricalTypesAt<V>,
@@ -343,18 +370,18 @@ macro_rules! generate_module {
 
 
             // This has to be used here because of how the `proptest_derive::Arbitrary` derive macro works.
-            use sp_std::marker::PhantomData;
+            // use sp_std::marker::PhantomData;
 
-            /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
-            /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
-            #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-            #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
-            pub enum Enum<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
-                $(
-                    $variant(Ty::$variant),
-                )*
-                _phantom(!, PhantomData<($($($T,)+)?)>),
-            }
+            // /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
+            // /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
+            // #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+            // #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
+            // pub enum Enum<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
+            //     $(
+            //         $variant(Ty::$variant),
+            //     )*
+            //     _phantom(!, PhantomData<($($($T,)+)?)>),
+            // }
 
             // --------------------- custom implemenations of external traits --------------------------
 
@@ -365,7 +392,7 @@ macro_rules! generate_module {
             // the actual Encode/Decode discriminants (which skip empty variants and respect
             // user-provided discriminant values). The `_phantom` variant is excluded from
             // the type info since it's not a real variant.
-            impl<$( $($T: 'static $(+ $TBound)?,)+ )? Ty: Types + 'static> scale_info::TypeInfo for Enum<Ty, $($($T,)+)?>
+            impl<$( $($T: 'static $(+ $TBound)?,)+ )? Ty: Types + 'static> scale_info::TypeInfo for Enum<$($($T,)+)? Ty>
             where
                 $(
                     Ty::$variant: scale_info::TypeInfo + cf_utilities::type_introspection::HasTypeIntrospection + 'static,
@@ -406,7 +433,7 @@ macro_rules! generate_module {
             // Empty variants are treated as if removed from the source code: they don't consume a
             // discriminant slot, and subsequent implicit discriminants are computed from the last
             // non-empty variant.
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::Encode for Enum<Ty, $($($T,)+)?>
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::Encode for Enum<$($($T,)+)? Ty>
             where
                 $(
                     Ty::$variant: codec::Encode + cf_utilities::type_introspection::HasTypeIntrospection,
@@ -446,7 +473,7 @@ macro_rules! generate_module {
                 }
             }
 
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::Decode for Enum<Ty, $($($T,)+)?>
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::Decode for Enum<$($($T,)+)? Ty>
             where
                 $(
                     Ty::$variant: codec::Decode + cf_utilities::type_introspection::HasTypeIntrospection,
@@ -468,7 +495,7 @@ macro_rules! generate_module {
                 }
             }
 
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::DecodeWithMemTracking for Enum<Ty, $($($T,)+)?>
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::DecodeWithMemTracking for Enum<$($($T,)+)? Ty>
             where
                 $(
                     Ty::$variant: codec::DecodeWithMemTracking + cf_utilities::type_introspection::HasTypeIntrospection,
@@ -476,7 +503,7 @@ macro_rules! generate_module {
                 Self: codec::Decode,
             {}
 
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::MaxEncodedLen for Enum<Ty, $($($T,)+)?>
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types> codec::MaxEncodedLen for Enum<$($($T,)+)? Ty>
             where
                 $(
                     Ty::$variant: codec::MaxEncodedLen + cf_utilities::type_introspection::HasTypeIntrospection,
@@ -504,7 +531,7 @@ macro_rules! generate_module {
             // This trait has to be implemented manually because the standard derive doesn't properly deal with variants that
             // cannot be instantiated (e.g. because they contain `!`, the "Never" type).
             #[cfg(any(test, all(feature = "proptest", feature = "std")))]
-            impl<$( $($T: 'static $(+ $TBound)?,)+ )? Ty: Types + 'static> proptest::arbitrary::Arbitrary for Enum<Ty, $($($T,)+)?>
+            impl<$( $($T: 'static $(+ $TBound)?,)+ )? Ty: Types + 'static> proptest::arbitrary::Arbitrary for Enum<$($($T,)+)? Ty>
             where
                 $(
                     Ty::$variant: proptest::arbitrary::Arbitrary + cf_utilities::type_introspection::HasTypeIntrospection + sp_std::fmt::Debug + 'static,
@@ -531,7 +558,7 @@ macro_rules! generate_module {
                 }
             }
 
-            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($variant: IsHistoricalType,)*>> IsHistoricalType for Enum<Ty, $($($T,)+)?>
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($variant: IsHistoricalType,)*>> IsHistoricalType for Enum<$($($T,)+)? Ty>
                 where $enum$(< $($T,)+ >)?: HasChangelog
             {
                 type GetCurrentType = $enum$(< $($T,)+ >)?;
@@ -541,13 +568,13 @@ macro_rules! generate_module {
             pub struct see_variant_changelogs_and_also<M>(M);
 
 
-            impl<M: CustomMigration<To, V>, $( $($T $(: $TBound)?,)+ )? To: HistoricalTypesAt<V>, V: Version> Migration<Enum<To, $($($T,)+)?>, V> for see_variant_changelogs_and_also<M>
+            impl<M: CustomMigration<To, V>, $( $($T $(: $TBound)?,)+ )? To: HistoricalTypesAt<V>, V: Version> Migration<Enum<$($($T,)+)? To>, V> for see_variant_changelogs_and_also<M>
             where
-                Enum< source_of_custom_migration<To, V, M> , $($($T,)+)?  >: IsHistoricalType
+                Enum<$($($T,)+)? source_of_custom_migration<To, V, M>>: IsHistoricalType
             {
-                type From = Enum< source_of_custom_migration<To, V, M> , $($($T,)+)?  >;
+                type From = Enum<$($($T,)+)? source_of_custom_migration<To, V, M>>;
 
-                fn forwards(x: Self::From) -> Enum<To, $($($T,)+)?> {
+                fn forwards(x: Self::From) -> Enum<$($($T,)+)? To> {
                     match x {
                         $(
                             Enum::$variant(val) => Enum::$variant(<ResolveCustomMigration::<To, V, M> as Types>::$variant::forwards(val)),
@@ -556,7 +583,7 @@ macro_rules! generate_module {
                     }
                 }
 
-                fn backwards(x: Enum<To, $($($T,)+)?>) -> Self::From {
+                fn backwards(x: Enum<$($($T,)+)? To>) -> Self::From {
                     match x {
                         $(
                             Enum::$variant(val) => Enum::$variant(<ResolveCustomMigration::<To, V, M> as Types>::$variant::backwards(val)),
@@ -649,17 +676,17 @@ macro_rules! generate_module {
                                 $( ($($variant_ty, )*) : HasChangelog ,)?
                                 $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
                             )*
-                            Enum<(
+                            Enum<$($($T,)+)? (
                                 $(
                                     GetGenericVariant<variants::$variant>,
                                 )*
-                            ), $($($T,)+)?>: IsHistoricalType
+                            )>: IsHistoricalType
                     {
-                        type GenericType = Enum<(
+                        type GenericType = Enum<$($($T,)+)? (
                             $(
                                 GetGenericVariant<variants::$variant>,
                             )*
-                        ), $($($T,)+)?>;
+                        )>;
                         type MigrationFromGeneric = GlobalMigrationFromGeneric;
                     }
 
@@ -670,17 +697,17 @@ macro_rules! generate_module {
                                 $( ($($variant_ty, )*) : HasChangelog ,)?
                                 $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
                             )*
-                        Enum<(
+                        Enum<$($($T,)+)? (
                             $(
                                 GetGenericVariant<variants::$variant>,
                             )*
-                        ), $($($T,)+)?>: IsHistoricalType
+                        )>: IsHistoricalType
                     {
-                        type From = Enum<(
+                        type From = Enum<$($($T,)+)? (
                             $(
                                 GetGenericVariant<variants::$variant>,
                             )*
-                        ), $($($T,)+)?>;
+                        )>;
 
                         fn forwards(x: Self::From) -> RealEnum {
                             match x {
@@ -696,10 +723,11 @@ macro_rules! generate_module {
                             x.elim(
                                 $(
                                     |x| Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(
-                                        variants::$variant {
-                                            $(value: x as ($($variant_ty, )*),)?
-                                            $( $( $variant_field: x.$variant_field, )*)?
-                                        }
+                                        variants::$variant::intro(
+                                            $( { let _ = core::marker::PhantomData::<($($variant_ty,)*)>; (x,) }, )?
+                                            $( $( x.$variant_field, )*)?
+                                            Default::default(),
+                                        )
                                     )),
                                 )*
                             )

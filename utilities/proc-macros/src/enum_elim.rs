@@ -50,10 +50,12 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 
 		match &variant.fields {
 			Fields::Named(fields) => {
-				let patterns = fields.named.iter().zip(field_bindings.iter()).map(|(field, binding)| {
-					let field_ident = field.ident.as_ref().expect("named fields have identifiers");
-					quote! { #field_ident: #binding }
-				});
+				let patterns =
+					fields.named.iter().zip(field_bindings.iter()).map(|(field, binding)| {
+						let field_ident =
+							field.ident.as_ref().expect("named fields have identifiers");
+						quote! { #field_ident: #binding }
+					});
 				quote! {
 					Self::#variant_ident { #(#patterns),* } => #handler(#(#field_bindings),*)
 				}

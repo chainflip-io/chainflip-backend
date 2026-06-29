@@ -104,7 +104,7 @@ pub trait T1 {
 	type XY;
 }
 
-// cf_utilities::generate_module! {
+cf_utilities::generate_module! {
 pub enum MyTestValues<T: T1> {
 	Variant1(T::XY),
 	// Variant2(u8,u16),
@@ -114,8 +114,8 @@ pub enum MyTestValues<T: T1> {
 	// 	field2: (T::XY, T::XY, u16),
 	// },
 }
-// 	mod _MyTestValues { #![migrations] }
-// }
+	mod _MyTestValues { #![migrations] }
+}
 
 // type XX = _MyTestValues::variants::Variant1<u8>;
 

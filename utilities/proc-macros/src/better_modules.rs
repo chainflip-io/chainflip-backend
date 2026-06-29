@@ -1,15 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{
 	braced, parenthesized,
 	parse::{Parse, ParseStream},
 	token,
 	visit_mut::{self, VisitMut},
-	Attribute, ExprPath, GenericArgument, Generics, Ident, Item, ItemImpl, ItemMacro, ItemMod,
-	ItemStruct, ItemTrait, ItemType, ItemUse, PathArguments, Token, TraitBound, Type, TypeParam,
-	UseTree, Visibility, WherePredicate,
+	Attribute, ExprPath, GenericArgument, Generics, Ident, Item, ItemEnum, ItemImpl, ItemMacro,
+	ItemMod, ItemStruct, ItemTrait, ItemType, ItemUse, PathArguments, Token, TraitBound, Type,
+	TypeParam, UseTree, Visibility, WherePredicate,
 };
 
 // ─── Input parsing ────────────────────────────────────────────────────────────
@@ -24,6 +24,7 @@ pub struct Input {
 pub enum ModuleItem {
 	TypeAlias(ItemType),
 	Struct(ItemStruct),
+	Enum(ItemEnum),
 	Trait(ItemTrait),
 	Impl(ItemImpl),
 	Mod(ItemMod),
@@ -154,6 +155,7 @@ fn parse_module_item(input: ParseStream) -> syn::Result<ModuleItem> {
 	Ok(match item {
 		Item::Type(t) => ModuleItem::TypeAlias(t),
 		Item::Struct(s) => ModuleItem::Struct(s),
+		Item::Enum(e) => ModuleItem::Enum(e),
 		Item::Trait(t) => ModuleItem::Trait(t),
 		Item::Impl(i) => ModuleItem::Impl(i),
 		Item::Mod(m) => ModuleItem::Mod(m),
@@ -619,6 +621,17 @@ fn rewrite_item_struct(
 	visitor.visit_item_struct_mut(item);
 }
 
+fn rewrite_item_enum(
+	item: &mut ItemEnum,
+	defs: &Definitions,
+	telescope: &[TypeParam],
+	scope: &[String],
+) {
+	let mut visitor =
+		RewriteVisitor { defs, scope, generic_idents: generic_idents(telescope, &item.generics) };
+	visitor.visit_item_enum_mut(item);
+}
+
 fn rewrite_item_trait(
 	item: &mut ItemTrait,
 	defs: &Definitions,
@@ -686,6 +699,7 @@ fn expand_item(
 	match item {
 		ModuleItem::TypeAlias(t) => expand_type_alias(telescope, where_predicates, t, defs, scope),
 		ModuleItem::Struct(s) => expand_struct(telescope, where_predicates, s, defs, scope),
+		ModuleItem::Enum(e) => expand_enum(telescope, where_predicates, e, defs, scope),
 		ModuleItem::Trait(t) => expand_trait(telescope, where_predicates, t, defs, scope),
 		ModuleItem::Impl(i) => expand_impl(telescope, where_predicates, i, defs, scope),
 		ModuleItem::Mod(m) => expand_mod(telescope, where_predicates, m, defs, scope),
@@ -826,20 +840,63 @@ fn expand_struct(
 			core::marker::PhantomData<( #(#unused_idents,)* )>
 		};
 
-		if let Some(existing_phantom) = fields
-			.named
-			.iter_mut()
-			.find(|field| field.ident.as_ref().is_some_and(|ident| ident == "_phantom"))
-		{
-			let existing_type = existing_phantom.ty.clone();
-			existing_phantom.ty = syn::parse_quote! { (#existing_type, #phantom_type) };
-		} else {
-			let phantom_field: syn::Field = syn::parse_quote! {
-				_phantom: #phantom_type
+		let mut phantom_index = 1usize;
+		let phantom_ident = loop {
+			let candidate = if phantom_index == 1 {
+				format_ident!("_phantom")
+			} else {
+				format_ident!("_phantom{}", phantom_index)
 			};
-			fields.named.push(phantom_field);
-		}
+
+			if !fields
+				.named
+				.iter()
+				.any(|field| field.ident.as_ref().is_some_and(|ident| ident == &candidate))
+			{
+				break candidate;
+			}
+
+			phantom_index += 1;
+		};
+
+		let phantom_field: syn::Field = syn::parse_quote! {
+			#phantom_ident: #phantom_type
+		};
+		fields.named.push(phantom_field);
 	}
+
+	quote! { #item }
+}
+
+fn expand_enum(
+	telescope: &[TypeParam],
+	where_predicates: &[WherePredicate],
+	item: &ItemEnum,
+	defs: &mut Definitions,
+	scope: &[String],
+) -> TokenStream {
+	let mut item = item.clone();
+
+	// First rewrite references to previously defined items in variant fields.
+	rewrite_item_enum(&mut item, defs, telescope, scope);
+
+	// Register this definition with ALL telescope params, matching structs.
+	let all_params: Vec<&TypeParam> = telescope.iter().collect();
+	defs.register(scope, &item.ident, &all_params, item.generics.params.len());
+
+	// Add ALL telescope type params to generics.
+	for param in telescope {
+		item.generics.params.push(syn::GenericParam::Type(param.clone()));
+	}
+	let rewritten_where_predicates =
+		rewrite_where_predicates(where_predicates, defs, telescope, &item.generics, scope);
+	add_where_predicates(&mut item.generics, rewritten_where_predicates);
+
+	let telescope_idents = telescope.iter().map(|param| &param.ident);
+	let phantom_variant: syn::Variant = syn::parse_quote! {
+		_phantom(cf_utilities::never::Never, core::marker::PhantomData<( #(#telescope_idents,)* )>)
+	};
+	item.variants.push(phantom_variant);
 
 	quote! { #item }
 }
@@ -982,6 +1039,7 @@ fn classify_item(item: Item) -> ModuleItem {
 	match item {
 		Item::Type(t) => ModuleItem::TypeAlias(t),
 		Item::Struct(s) => ModuleItem::Struct(s),
+		Item::Enum(e) => ModuleItem::Enum(e),
 		Item::Trait(t) => ModuleItem::Trait(t),
 		Item::Impl(i) => ModuleItem::Impl(i),
 		Item::Mod(m) => ModuleItem::Mod(m),
