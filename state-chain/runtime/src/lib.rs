@@ -537,6 +537,7 @@ type MigrationsForV2_3 = (
 	migrations::bsc_integration::BscElectionsInit,
 	migrations::bsc_integration::BscIngressEgressInit,
 	migrations::bsc_integration::BscChainstate,
+	migrations::bsc_integration::BscBroadcasterInit,
 );
 
 #[cfg(test)]

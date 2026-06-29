@@ -1219,7 +1219,6 @@ fn testnet_genesis(
 		},
 		// instance8
 		bsc_broadcaster: state_chain_runtime::BscBroadcasterConfig {
-			// todo: revisit this
 			broadcast_timeout: 2 * BLOCKS_PER_MINUTE_BSC,
 		},
 	})
