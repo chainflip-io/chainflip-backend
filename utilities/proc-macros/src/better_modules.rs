@@ -587,6 +587,36 @@ fn predicate_mentions_any_telescope_param(
 	telescope_params.iter().any(|param| tokens_contain_ident(&tokens, &param.ident))
 }
 
+fn predicate_mentions_only_telescope_params(
+	predicate: &WherePredicate,
+	allowed_params: &[&TypeParam],
+	all_params: &[TypeParam],
+) -> bool {
+	let tokens = quote! { #predicate };
+	all_params.iter().all(|param| {
+		!tokens_contain_ident(&tokens, &param.ident) ||
+			allowed_params.iter().any(|allowed| allowed.ident == param.ident)
+	})
+}
+
+fn type_alias_telescope_params_and_predicates<'a>(
+	telescope: &'a [TypeParam],
+	dependency_tokens: &TokenStream,
+	where_predicates: &[WherePredicate],
+) -> (Vec<&'a TypeParam>, Vec<WherePredicate>) {
+	let used = used_telescope_params(telescope, dependency_tokens);
+	let selected_predicates = where_predicates
+		.iter()
+		.filter(|predicate| {
+			predicate_mentions_any_telescope_param(predicate, &used) &&
+				predicate_mentions_only_telescope_params(predicate, &used, telescope)
+		})
+		.cloned()
+		.collect();
+
+	(used, selected_predicates)
+}
+
 fn type_alias_dependency_tokens(item: &ItemType) -> TokenStream {
 	let generics = &item.generics;
 	let ty = &item.ty;
@@ -767,9 +797,15 @@ fn expand_type_alias(
 	rewrite_item_type_with_telescope(&mut item, defs, telescope, scope);
 
 	// Only add telescope params that appear in the (rewritten) type definition,
-	// including generic bounds and where clauses.
+	// plus params needed by inherited where predicates that constrain those params.
 	let ty_tokens = type_alias_dependency_tokens(&item);
-	let used = used_telescope_params(telescope, &ty_tokens);
+	let rewritten_where_predicates =
+		rewrite_where_predicates(where_predicates, defs, telescope, &item.generics, scope);
+	let (used, selected_where_predicates) = type_alias_telescope_params_and_predicates(
+		telescope,
+		&ty_tokens,
+		&rewritten_where_predicates,
+	);
 
 	// Register this definition before adding params to generics
 	defs.register(scope, &item.ident, &used, item.generics.params.len());
@@ -778,14 +814,7 @@ fn expand_type_alias(
 		item.generics.params.push(syn::GenericParam::Type((*param).clone()));
 	}
 
-	let rewritten_where_predicates =
-		rewrite_where_predicates(where_predicates, defs, telescope, &item.generics, scope);
-	add_where_predicates(
-		&mut item.generics,
-		rewritten_where_predicates
-			.into_iter()
-			.filter(|predicate| predicate_mentions_any_telescope_param(predicate, &used)),
-	);
+	add_where_predicates(&mut item.generics, selected_where_predicates);
 
 	quote_item_type(&item)
 }

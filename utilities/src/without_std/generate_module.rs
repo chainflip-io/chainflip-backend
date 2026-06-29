@@ -114,8 +114,8 @@ macro_rules! generate_module {
                     }
 
                     // ----------------- connection with default struct ------------------ //
-                    type UserStruct = $struct $(< $($T,)+ >)?;
                     mod (EF) (EB) where $(( $field_ty: HasGenericVariant<EF, EB> ))* {
+                        type UserStruct = $struct $(< $($T,)+ >)?;
                         pub type GenericStruct = Struct<( $( GetGenericVariant<$field_ty, EF, EB>,)*)>;
 
                         impl HasGenericVariant<EF, EB> for UserStruct
