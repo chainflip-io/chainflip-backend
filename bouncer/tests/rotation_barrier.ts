@@ -3,8 +3,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import {
-  amountToFineAmount,
-  assetDecimals,
+  amountToFineAmountBigInt,
   Assets,
   newAssetAddress,
   observeBalanceIncrease,
@@ -42,7 +41,7 @@ export async function testRotationBarrier(testContext: TestContext) {
   const depositAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) =>
       api.tx.liquidityProvider.withdrawAsset(
-        BigInt(amountToFineAmount('2', assetDecimals(Assets.ArbEth))),
+        amountToFineAmountBigInt('2', Assets.ArbEth),
         Assets.ArbEth,
         encodedAddress('Arbitrum', withdrawalAddress),
       ),

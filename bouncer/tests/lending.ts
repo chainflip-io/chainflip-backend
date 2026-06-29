@@ -83,7 +83,7 @@ async function lendingTestForAsset<A = []>(
     extrinsic: (api) =>
       api.tx.lendingPools.addLenderFunds(
         collateralAsset,
-        BigInt(amountToFineAmount(collateralAmount.toString(), assetDecimals(collateralAsset))),
+        amountToFineAmountBigInt(collateralAmount.toString(), collateralAsset),
       ),
     expectedEvent: lendingPoolsLendingFundsAddedEvent.refine(
       (event) => event.lenderId === lp.address && event.asset === collateralAsset,
@@ -112,7 +112,7 @@ async function lendingTestForAsset<A = []>(
     extrinsic: (api) =>
       api.tx.lendingPools.requestLoan(
         loanAsset,
-        BigInt(amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset))),
+        amountToFineAmountBigInt(loanAmount.toString(), loanAsset),
         undefined,
       ),
     expectedEvent: lendingPoolsLoanCreatedEvent.refine(

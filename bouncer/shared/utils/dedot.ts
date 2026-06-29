@@ -1,5 +1,6 @@
 import type { DedotClient } from 'dedot';
 import { InvalidTxError } from 'dedot';
+import { Semaphore } from 'async-mutex';
 import type { DispatchError } from 'dedot/codecs';
 import type {
   IKeyringPair,
@@ -116,41 +117,13 @@ export function isDispatchError(err: unknown, match: DispatchErrorMatch): boolea
  */
 const nextNonceByAccount = new Map<string, number>();
 
-/** Minimal async concurrency limiter: `limit(fn)` runs at most `max` `fn`s at once. */
-function createConcurrencyLimiter(max: number) {
-  let active = 0;
-  const queue: (() => void)[] = [];
-  const release = () => {
-    const next = queue.shift();
-    if (next) {
-      next(); // transfer the slot to the next waiter; `active` is unchanged
-    } else {
-      active -= 1;
-    }
-  };
-  return async function limit<T>(fn: () => Promise<T>): Promise<T> {
-    if (active < max) {
-      active += 1;
-    } else {
-      await new Promise<void>((resolve) => {
-        queue.push(resolve);
-      });
-    }
-    try {
-      return await fn();
-    } finally {
-      release();
-    }
-  };
-}
-
 /**
  * Caps concurrent broadcasts process-wide. The node limits concurrent `transaction_v1_broadcast`
  * operations per connection to 16 (`MAX_TRANSACTION_PER_CONNECTION`), and we share one connection;
  * exceeding it throws "Maximum number of broadcasted transactions has been reached". Kept below 16
  * (slots free at inclusion, so this rarely blocks).
  */
-const broadcastLimit = createConcurrencyLimiter(12);
+const broadcastLimit = new Semaphore(12);
 
 /**
  * A submission result guaranteed to be in a block, so `status.value.blockNumber`/`txIndex` are
@@ -191,7 +164,7 @@ export async function signSendAndWait(
   waitForFinalize = false,
 ): Promise<IncludedResult> {
   // Bound concurrent in-flight broadcasts to stay under the node's broadcast limit.
-  return broadcastLimit(async () => {
+  return broadcastLimit.runExclusive(async () => {
     // dedot validates each tx against the FINALIZED block before broadcasting, which can lag a
     // state change the caller just observed via the indexer (best block) — e.g. a fresh funding,
     // or a new governance membership that gates a fee waiver. On such a (transient) pre-validation

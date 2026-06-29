@@ -2,6 +2,7 @@ import {
   newAssetAddress,
   decodeDotAddressForContract,
   amountToFineAmount,
+  amountToFineAmountBigInt,
   isWithinOnePercent,
   chainFromAsset,
   decodeSolAddress,
@@ -97,10 +98,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
     assetBalancesAccountCreditedEvent.refine((event) => {
       if (event.asset === ccy && event.accountId === lp.address) {
         if (
-          isWithinOnePercent(
-            event.amountCredited,
-            BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
-          )
+          isWithinOnePercent(event.amountCredited, amountToFineAmountBigInt(String(amount), ccy))
         ) {
           return true;
         }

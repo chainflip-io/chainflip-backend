@@ -8,8 +8,7 @@ import {
   observeBalanceIncrease,
   observeCcmReceived,
   observeFetch,
-  amountToFineAmount,
-  assetDecimals,
+  amountToFineAmountBigInt,
   Chain,
   Asset,
 } from 'shared/utils';
@@ -320,7 +319,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
           event.accountId === lp.address &&
           isWithinOnePercent(
             event.amountCredited,
-            BigInt(amountToFineAmount(String(amount), assetDecimals(sourceAsset))),
+            amountToFineAmountBigInt(String(amount), sourceAsset),
           ),
       ),
     );

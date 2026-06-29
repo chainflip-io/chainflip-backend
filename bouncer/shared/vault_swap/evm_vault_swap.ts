@@ -4,6 +4,7 @@ import BigNumber from 'bignumber.js';
 import {
   getContractAddress,
   amountToFineAmount,
+  amountToFineAmountBigInt,
   defaultAssetAmounts,
   chainFromAsset,
   assetDecimals,
@@ -132,7 +133,7 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     await approveEvmTokenVault(
       sourceAsset,
-      (BigInt(amountToFineAmount(amountToSwap, assetDecimals(sourceAsset))) * 100n).toString(),
+      (amountToFineAmountBigInt(amountToSwap, sourceAsset) * 100n).toString(),
       evmWallet,
     );
   }

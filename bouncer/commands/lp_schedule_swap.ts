@@ -12,7 +12,7 @@
  * Example:
  * ./commands/lp_schedule_swap.ts Eth Flip 20
  */
-import { amountToFineAmount, assetDecimals, Assets, createStateChainKeypair } from 'shared/utils';
+import { amountToFineAmountBigInt, Assets, createStateChainKeypair } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { signSendAndWait } from 'shared/utils/dedot';
 import { globalLogger as logger } from 'shared/utils/logger';
@@ -53,7 +53,7 @@ logger.info('Submitting on-chain swap extrinsic');
 await signSendAndWait(
   chainflip,
   chainflip.tx.liquidityProvider.scheduleSwap(
-    BigInt(amountToFineAmount(amount.toString(), assetDecimals(inputAsset))),
+    amountToFineAmountBigInt(amount.toString(), inputAsset),
     inputAsset,
     outputAsset,
     0, // Retry duration

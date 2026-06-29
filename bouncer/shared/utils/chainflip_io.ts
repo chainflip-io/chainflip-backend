@@ -555,7 +555,7 @@ export class ChainflipIO<Requirements> {
 export async function newChainflipIO<Requirements>(logger: Logger, requirements: Requirements) {
   // find out current block height
   await using chainflipApi = await getChainflipApi();
-  const currentBlockHeight = Number(await chainflipApi.query.system.number());
+  const currentBlockHeight = await chainflipApi.query.system.number();
 
   // initialize with this height, meaning that we'll only search for events from this height on
   return new ChainflipIO(logger, requirements, currentBlockHeight, (level: Severity) => {

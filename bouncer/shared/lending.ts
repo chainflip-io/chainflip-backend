@@ -1,4 +1,4 @@
-import { amountToFineAmount, Asset, Assets, assetDecimals, decodeModuleError } from 'shared/utils';
+import { amountToFineAmountBigInt, Asset, Assets, decodeModuleError } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -64,10 +64,7 @@ export async function addLenderFunds<A extends WithLpAccount>(
 
   const lendingFundsAddedEvent = await cf.submitExtrinsic({
     extrinsic: (api) =>
-      api.tx.lendingPools.addLenderFunds(
-        asset,
-        BigInt(amountToFineAmount(amount.toString(), assetDecimals(asset))),
-      ),
+      api.tx.lendingPools.addLenderFunds(asset, amountToFineAmountBigInt(amount.toString(), asset)),
     expectedEvent: lendingPoolsLendingFundsAddedEvent.refine(
       (event) =>
         event.lenderId === cf.requirements.account.keypair.address && event.asset === asset,
