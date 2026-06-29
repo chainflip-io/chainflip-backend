@@ -37,7 +37,7 @@ impl OnRuntimeUpgrade for BscElectionsInit {
 			crate::chainflip::witnessing::bsc_elections::initial_state(),
 		);
 		if result.is_err() {
-			log::error!("Failed to initialize Bsc election pallet");
+			log::info!("BSC Elections already initialised.");
 		}
 		Weight::zero()
 	}
