@@ -1380,11 +1380,18 @@ export const palletCfPoolsCloseOrder = z.discriminatedUnion('__kind', [
   }),
 ]);
 
-export const palletCfPoolsPalletConfigUpdate = z.object({
-  __kind: z.literal('LimitOrderAutoSweepingThreshold'),
-  asset: cfPrimitivesChainsAssetsAnyAsset,
-  amount: numberOrHex,
-});
+export const palletCfPoolsPalletConfigUpdate = z.discriminatedUnion('__kind', [
+  z.object({
+    __kind: z.literal('LimitOrderAutoSweepingThreshold'),
+    asset: cfPrimitivesChainsAssetsAnyAsset,
+    amount: numberOrHex,
+  }),
+  z.object({
+    __kind: z.literal('SetMinimumLimitOrderAmount'),
+    asset: cfPrimitivesChainsAssetsAnyAsset,
+    amount: numberOrHex,
+  }),
+]);
 
 export const cfChainsArbArbitrumTrackedData = z.object({
   baseFee: numberOrHex,

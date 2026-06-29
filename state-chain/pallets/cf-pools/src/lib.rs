@@ -285,7 +285,18 @@ impl<T: Config> LimitOrderUpdate<T> {
 	MaxEncodedLen,
 )]
 pub enum PalletConfigUpdate {
-	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
+	LimitOrderAutoSweepingThreshold {
+		asset: Asset,
+		amount: AssetAmount,
+	},
+	/// Set the per-asset minimum amount required for a limit order to be created or to
+	/// remain open. The minimum applies to the asset being sold (`base_asset` for
+	/// `Side::Sell`, `quote_asset` for `Side::Buy`). Set to `0` to disable the check
+	/// for an asset.
+	SetMinimumLimitOrderAmount {
+		asset: Asset,
+		amount: AssetAmount,
+	},
 }
 
 pub const STORAGE_VERSION_U16: u16 = 9;
@@ -591,11 +602,6 @@ pub mod pallet {
 		},
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
-		},
-		/// A per-asset minimum limit order amount has been set by governance.
-		MinimumLimitOrderAmountSet {
-			asset: Asset,
-			amount: AssetAmount,
 		},
 	}
 
@@ -1083,30 +1089,11 @@ pub mod pallet {
 							thresholds.try_insert(asset, amount).expect("Every asset will fit");
 						});
 					},
+					PalletConfigUpdate::SetMinimumLimitOrderAmount { asset, amount } => {
+						MinimumLimitOrderAmount::<T>::set(asset, amount);
+					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
-			}
-
-			Ok(())
-		}
-
-		/// Set the per-asset minimum amount required for a limit order to be created or to
-		/// remain open. The minimum applies to the asset being sold (`base_asset` for
-		/// `Side::Sell`, `quote_asset` for `Side::Buy`). Set to `0` to disable the check
-		/// for an asset.
-		///
-		/// Requires Governance.
-		#[pallet::call_index(12)]
-		#[pallet::weight(T::WeightInfo::set_minimum_limit_order_amounts(minimums.len() as u32))]
-		pub fn set_minimum_limit_order_amounts(
-			origin: OriginFor<T>,
-			minimums: BoundedVec<AssetAndAmount<AssetAmount>, ConstU32<100>>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			for AssetAndAmount { asset, amount } in minimums {
-				MinimumLimitOrderAmount::<T>::set(asset, amount);
-				Self::deposit_event(Event::<T>::MinimumLimitOrderAmountSet { asset, amount });
 			}
 
 			Ok(())
