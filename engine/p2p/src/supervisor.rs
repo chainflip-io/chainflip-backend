@@ -29,13 +29,17 @@
 
 use std::{collections::BTreeMap, future::Future};
 
-use cf_utilities::Port;
+use cf_utilities::{
+	metrics::P2P_BAD_MSG,
+	Port,
+};
 use tokio::sync::{
 	mpsc::{UnboundedReceiver, UnboundedSender},
 	oneshot,
 };
 
 use crate::{
+	fair_channel::FairSender,
 	message::{AccountId, OutgoingMessage},
 	peer::{PeerInfo, PeerUpdate},
 	P2PKey, Transport,
@@ -72,7 +76,7 @@ fn apply_peer_update(registry: &mut BTreeMap<AccountId, PeerInfo>, update: &Peer
 pub(crate) async fn run_transport_supervisor_with<R, Fut>(
 	initial_transport: Transport,
 	initial_peers: Vec<PeerInfo>,
-	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	incoming_message_sender: FairSender<AccountId, Vec<u8>>,
 	outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 	restart_receiver: UnboundedReceiver<Transport>,
@@ -140,9 +144,12 @@ where
 				Some(message) = outgoing_message_receiver.recv() => {
 					let _ = transport_outgoing_sender.send(message);
 				},
-				// Forward incoming messages from the transport to the muxer.
-				Some(incoming) = transport_incoming_receiver.recv() => {
-					let _ = incoming_message_sender.send(incoming);
+				// Forward incoming messages from the transport to the muxer, applying
+				// per-peer fair queueing so a flooding peer cannot exhaust engine memory.
+				Some((account_id, payload)) = transport_incoming_receiver.recv() => {
+					incoming_message_sender.try_send_or_drop(account_id, payload, || {
+						P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
+					});
 				},
 			}
 		};
@@ -176,7 +183,7 @@ pub async fn run_transport_supervisor(
 	port: Port,
 	our_account_id: AccountId,
 	initial_peers: Vec<PeerInfo>,
-	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	incoming_message_sender: FairSender<AccountId, Vec<u8>>,
 	outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 	restart_receiver: UnboundedReceiver<Transport>,
@@ -217,6 +224,7 @@ mod tests {
 	use tokio::sync::mpsc;
 
 	use super::*;
+	use crate::{fair_channel::fair_channel, INCOMING_MESSAGE_PER_PEER_LIMIT};
 
 	fn test_peer(seed: u8) -> PeerInfo {
 		PeerInfo {
@@ -229,7 +237,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn restart_starts_new_transport_with_current_peer_snapshot() {
-		let (incoming_sender, _incoming_receiver) = mpsc::unbounded_channel();
+		let (incoming_sender, _incoming_receiver) = fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
 		let (_outgoing_sender, outgoing_receiver) = mpsc::unbounded_channel();
 		let (peer_update_sender, peer_update_receiver) = mpsc::unbounded_channel();
 		let (restart_sender, restart_receiver) = mpsc::unbounded_channel();
@@ -284,7 +292,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn deregistered_peer_is_dropped_from_the_snapshot() {
-		let (incoming_sender, _incoming_receiver) = mpsc::unbounded_channel();
+		let (incoming_sender, _incoming_receiver) = fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
 		let (_outgoing_sender, outgoing_receiver) = mpsc::unbounded_channel();
 		let (peer_update_sender, peer_update_receiver) = mpsc::unbounded_channel();
 		let (restart_sender, restart_receiver) = mpsc::unbounded_channel();
@@ -339,7 +347,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn a_transport_error_shuts_the_supervisor_down() {
-		let (incoming_sender, _incoming_receiver) = mpsc::unbounded_channel();
+		let (incoming_sender, _incoming_receiver) = fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
 		let (_outgoing_sender, outgoing_receiver) = mpsc::unbounded_channel();
 		let (_peer_update_sender, peer_update_receiver) = mpsc::unbounded_channel();
 		let (_restart_sender, restart_receiver) = mpsc::unbounded_channel();
@@ -364,7 +372,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn messages_are_forwarded_in_both_directions() {
-		let (incoming_sender, mut muxer_incoming_receiver) = mpsc::unbounded_channel();
+		let (incoming_sender, mut muxer_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 		let (muxer_outgoing_sender, outgoing_receiver) = mpsc::unbounded_channel();
 		let (_peer_update_sender, peer_update_receiver) = mpsc::unbounded_channel();
 		let (_restart_sender, restart_receiver) = mpsc::unbounded_channel();

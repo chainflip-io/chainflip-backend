@@ -22,10 +22,16 @@ use futures::Future;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, Instrument};
 
-use crate::message::{
-	IncomingMessage, OutgoingMessage, ProtocolVersion, TopicId, CURRENT_PROTOCOL_VERSION,
+use crate::{
+	fair_channel::{fair_channel, FairReceiver, FairSender},
+	message::{IncomingMessage, OutgoingMessage, ProtocolVersion, TopicId, CURRENT_PROTOCOL_VERSION},
 };
 use cf_utilities::metrics::P2P_BAD_MSG;
+
+/// Per-peer in-flight message limit for the muxer→ceremony channels. This is the stage
+/// with the slowest consumer (the ceremony manager), so the cap here is intentionally
+/// larger than the supervisor→muxer one.
+const CEREMONY_MESSAGE_PER_PEER_LIMIT: usize = 250;
 
 /// Trait for types that represent P2P protocol topics.
 ///
@@ -39,7 +45,7 @@ pub trait Topic: Copy {
 pub struct ProtocolHandle {
 	pub topic: TopicId,
 	pub outgoing_sender: UnboundedSender<OutgoingMessage>,
-	pub incoming_receiver: UnboundedReceiver<IncomingMessage>,
+	pub incoming_receiver: FairReceiver<AccountId, IncomingMessage>,
 }
 
 /// Generic topic-based message router.
@@ -47,9 +53,9 @@ pub struct ProtocolHandle {
 /// Routes messages between the raw P2P layer and protocol-specific handlers.
 /// Each protocol registers for a topic and gets a dedicated channel pair.
 pub struct TopicMuxer {
-	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+	all_incoming_receiver: FairReceiver<AccountId, Vec<u8>>,
 	all_outgoing_sender: UnboundedSender<OutgoingMessage>,
-	topic_senders: HashMap<TopicId, UnboundedSender<IncomingMessage>>,
+	topic_senders: HashMap<TopicId, FairSender<AccountId, IncomingMessage>>,
 	topic_receivers: Vec<(TopicId, UnboundedReceiver<OutgoingMessage>)>,
 }
 
@@ -115,7 +121,7 @@ impl TopicMuxer {
 	/// Returns the muxer future and a map of topics to protocol handles.
 	/// The map is keyed by the topic type itself, allowing type-safe handle retrieval.
 	pub fn start<T: Topic + Eq + std::hash::Hash>(
-		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+		all_incoming_receiver: FairReceiver<AccountId, Vec<u8>>,
 		all_outgoing_sender: UnboundedSender<OutgoingMessage>,
 		topics: impl IntoIterator<Item = T>,
 	) -> (impl Future<Output = ()>, HashMap<T, ProtocolHandle>) {
@@ -126,7 +132,8 @@ impl TopicMuxer {
 		for topic in topics {
 			let topic_id = topic.topic_id();
 			let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-			let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+			let (incoming_sender, incoming_receiver) =
+				fair_channel::<AccountId, IncomingMessage>(CEREMONY_MESSAGE_PER_PEER_LIMIT);
 
 			topic_senders.insert(topic_id, incoming_sender);
 			topic_receivers.push((topic_id, outgoing_receiver));
@@ -157,14 +164,15 @@ impl TopicMuxer {
 					Ok(TopicMessage { topic, payload }) => {
 						if let Some(sender) = self.topic_senders.get(&topic) {
 							let message = IncomingMessage {
-								sender: account_id,
+								sender: account_id.clone(),
 								topic,
 								version,
 								payload: payload.to_vec(),
 							};
-							if sender.send(message).is_err() {
-								trace!("Topic {topic} receiver dropped");
-							}
+							sender.try_send_or_drop(account_id, message, || {
+								P2P_BAD_MSG.inc(&["ceremony_per_peer_limit"]);
+								trace!("Dropping incoming message for topic {topic}: per-peer limit reached");
+							});
 						} else {
 							P2P_BAD_MSG.inc(&["unknown_topic"]);
 							trace!("Received message for unknown topic: {topic}");
@@ -239,9 +247,11 @@ impl TopicMuxer {
 
 #[cfg(test)]
 mod tests {
-	use cf_utilities::testing::{expect_recv_with_timeout, recv_with_timeout};
+	use cf_utilities::testing::expect_recv_with_timeout;
+	use tokio::time::Duration;
 
 	use super::*;
+	use crate::INCOMING_MESSAGE_PER_PEER_LIMIT;
 
 	const ACC_1: AccountId = AccountId::new([b'A'; 32]);
 	const ACC_2: AccountId = AccountId::new([b'B'; 32]);
@@ -291,11 +301,31 @@ mod tests {
 		}
 	}
 
+	/// Receive the next message from a FairReceiver with a generous timeout, panicking
+	/// if nothing arrives (mirrors `expect_recv_with_timeout` for tokio receivers).
+	async fn expect_incoming(
+		receiver: &mut FairReceiver<AccountId, IncomingMessage>,
+	) -> (AccountId, IncomingMessage) {
+		tokio::time::timeout(Duration::from_millis(500), receiver.recv())
+			.await
+			.expect("timed out waiting for incoming message")
+			.expect("channel closed")
+	}
+
+	/// Assert that no message arrives on the fair receiver within a short deadline.
+	async fn expect_no_incoming(receiver: &mut FairReceiver<AccountId, IncomingMessage>) {
+		assert!(
+			tokio::time::timeout(Duration::from_millis(100), receiver.recv()).await.is_err(),
+			"expected no incoming message but received one"
+		);
+	}
+
 	#[tokio::test]
 	async fn correctly_prepends_topic_broadcast() {
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
-		let (_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC]);
@@ -323,7 +353,8 @@ mod tests {
 	async fn correctly_prepends_topic_private() {
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
-		let (_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC]);
@@ -365,7 +396,8 @@ mod tests {
 	#[tokio::test]
 	async fn should_parse_and_remove_headers() {
 		let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (p2p_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC]);
@@ -376,9 +408,9 @@ mod tests {
 
 		let bytes = [VERSION_PREFIX, &topic_prefix(TOPIC_ETH), DATA_1].concat();
 
-		p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
+		p2p_incoming_sender.try_send(ACC_1, bytes).unwrap();
 
-		let received = expect_recv_with_timeout(&mut eth_handle.incoming_receiver).await;
+		let (_sender, received) = expect_incoming(&mut eth_handle.incoming_receiver).await;
 
 		assert_eq!(received.sender, ACC_1);
 		assert_eq!(received.payload, DATA_1.to_vec());
@@ -388,7 +420,8 @@ mod tests {
 	#[tokio::test]
 	async fn unknown_topic_is_dropped_and_counted() {
 		let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (p2p_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC]);
@@ -400,16 +433,17 @@ mod tests {
 		let unknown_topic = TOPIC_DOT;
 		let bytes = add_topic_and_current_version(DATA_1, unknown_topic);
 
-		p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
+		p2p_incoming_sender.try_send(ACC_1, bytes).unwrap();
 
-		assert!(recv_with_timeout(&mut eth_handle.incoming_receiver).await.is_none());
+		expect_no_incoming(&mut eth_handle.incoming_receiver).await;
 		wait_for_bad_msg_increment("unknown_topic", before).await;
 	}
 
 	#[tokio::test]
 	async fn unexpected_version_is_dropped_and_counted() {
 		let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (p2p_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC]);
@@ -422,16 +456,17 @@ mod tests {
 		let wrong_version = CURRENT_PROTOCOL_VERSION.saturating_add(1).to_be_bytes();
 		bytes[0..2].copy_from_slice(&wrong_version);
 
-		p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
+		p2p_incoming_sender.try_send(ACC_1, bytes).unwrap();
 
-		assert!(recv_with_timeout(&mut eth_handle.incoming_receiver).await.is_none());
+		expect_no_incoming(&mut eth_handle.incoming_receiver).await;
 		wait_for_bad_msg_increment("unexpected_version", before).await;
 	}
 
 	#[tokio::test]
 	async fn malformed_version_header_is_counted() {
 		let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (p2p_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC]);
@@ -440,16 +475,17 @@ mod tests {
 		let mut eth_handle = handles.remove(&ETH_TOPIC).unwrap();
 
 		let before = bad_msg_count("deserialization_versioned_msg");
-		p2p_incoming_sender.send((ACC_1, vec![0x00])).unwrap();
+		p2p_incoming_sender.try_send(ACC_1, vec![0x00]).unwrap();
 
-		assert!(recv_with_timeout(&mut eth_handle.incoming_receiver).await.is_none());
+		expect_no_incoming(&mut eth_handle.incoming_receiver).await;
 		wait_for_bad_msg_increment("deserialization_versioned_msg", before).await;
 	}
 
 	#[tokio::test]
 	async fn malformed_topic_header_is_counted() {
 		let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (p2p_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC]);
@@ -460,9 +496,9 @@ mod tests {
 		let before = bad_msg_count("deserialization_topic_msg");
 		let bytes = CURRENT_PROTOCOL_VERSION.to_be_bytes().to_vec();
 
-		p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
+		p2p_incoming_sender.try_send(ACC_1, bytes).unwrap();
 
-		assert!(recv_with_timeout(&mut eth_handle.incoming_receiver).await.is_none());
+		expect_no_incoming(&mut eth_handle.incoming_receiver).await;
 		wait_for_bad_msg_increment("deserialization_topic_msg", before).await;
 	}
 
@@ -470,7 +506,8 @@ mod tests {
 	async fn routes_outgoing_messages_for_multiple_topics() {
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
-		let (_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC, DOT_TOPIC]);
@@ -512,7 +549,8 @@ mod tests {
 	async fn closing_one_topic_does_not_stop_other_topics() {
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
-		let (_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC, DOT_TOPIC]);
@@ -544,7 +582,8 @@ mod tests {
 	#[tokio::test]
 	async fn dropped_outgoing_receiver_does_not_crash_muxer() {
 		let (p2p_outgoing_sender, p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (p2p_incoming_sender, p2p_incoming_receiver) =
+			fair_channel::<AccountId, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (muxer_future, mut handles) =
 			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC]);
@@ -566,8 +605,8 @@ mod tests {
 
 		// The muxer should still be alive and routing incoming messages.
 		let bytes = [VERSION_PREFIX, &topic_prefix(TOPIC_ETH), DATA_1].concat();
-		p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
-		let received = expect_recv_with_timeout(&mut eth_handle.incoming_receiver).await;
+		p2p_incoming_sender.try_send(ACC_1, bytes).unwrap();
+		let (_sender, received) = expect_incoming(&mut eth_handle.incoming_receiver).await;
 		assert_eq!(received.payload, DATA_1.to_vec());
 
 		assert!(!muxer_handle.is_finished(), "muxer task should still be running");
