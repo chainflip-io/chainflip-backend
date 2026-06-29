@@ -24,7 +24,8 @@ use std::{collections::BTreeSet, net::Ipv4Addr, sync::Arc, time::Duration};
 use cf_primitives::{AccountId, GENESIS_EPOCH};
 use cf_utilities::{testing::new_temp_directory_with_nonexistent_file, Port};
 use ed25519_dalek::SigningKey;
-use engine_p2p::{quic::PeerInfo, P2PKey, TopicMuxer, Transport};
+use engine_p2p::{fair_channel::fair_channel, quic::PeerInfo, P2PKey, TopicMuxer, Transport,
+	INCOMING_MESSAGE_PER_PEER_LIMIT};
 use futures::future::join_all;
 use multisig::{
 	client::MultisigClientApi,
@@ -242,7 +243,7 @@ fn spawn_ceremony_node(
 	initial_transport: Transport,
 ) -> CeremonyNode {
 	// Channels between the transport (owned by the supervisor) and the muxer.
-	let (to_muxer_sender, to_muxer_receiver) = mpsc::unbounded_channel();
+	let (to_muxer_sender, to_muxer_receiver) = fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
 	let (from_muxer_sender, from_muxer_receiver) = mpsc::unbounded_channel();
 
 	// Topic muxer with a single Ethereum topic.

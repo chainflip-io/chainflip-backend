@@ -49,8 +49,10 @@ use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 
 use crate::{
 	ed25519_public_key_to_x25519_public_key,
+	fair_channel::{fair_channel, FairReceiver},
 	message::{AccountId, OutgoingMessage},
 	pk_to_string, P2PKey, X25519KeyPair, XPublicKey,
+	INCOMING_MESSAGE_PER_PEER_LIMIT,
 };
 
 // Peer-identity types are shared across transports; ZMQ additionally derives the
@@ -364,7 +366,7 @@ impl P2PContext {
 	async fn control_loop(
 		mut self,
 		mut outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
-		mut incoming_message_receiver: UnboundedReceiver<(XPublicKey, Vec<u8>)>,
+		mut incoming_message_receiver: FairReceiver<XPublicKey, Vec<u8>>,
 		mut peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 		mut monitor_event_receiver: UnboundedReceiver<MonitorEvent>,
 		mut reconnect_receiver: UnboundedReceiver<AccountId>,
@@ -642,7 +644,7 @@ impl P2PContext {
 	fn start_listening_thread(
 		&mut self,
 		port: Port,
-	) -> anyhow::Result<UnboundedReceiver<(XPublicKey, Vec<u8>)>> {
+	) -> anyhow::Result<FairReceiver<XPublicKey, Vec<u8>>> {
 		let socket = self.zmq_context.socket(zmq::SocketType::ROUTER).unwrap();
 
 		socket.set_router_mandatory(true).unwrap();
@@ -670,6 +672,8 @@ impl P2PContext {
 		socket.set_curve_server(true).unwrap();
 		socket.set_curve_secretkey(&self.key.secret_key.to_bytes()).unwrap();
 		socket.set_handshake_ivl(HANDSHAKE_TIMEOUT.as_millis() as i32).unwrap();
+		socket.set_maxmsgsize(socket::MAX_MESSAGE_SIZE).unwrap();
+		socket.set_rcvhwm(socket::INCOMING_MESSAGES_BUFFER_SIZE).unwrap();
 
 		// Listen on all interfaces
 		let endpoint = format!("tcp://0.0.0.0:{port}");
@@ -687,7 +691,7 @@ impl P2PContext {
 		info!("Started listening for incoming p2p connections on: {endpoint}");
 
 		let (incoming_message_sender, incoming_message_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
+			fair_channel::<XPublicKey, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let stop_thread = self.stop_thread.clone();
 
@@ -725,7 +729,10 @@ impl P2PContext {
 					let pubkey: [u8; 32] = hex::decode(pubkey).unwrap().try_into().unwrap();
 					let pubkey = XPublicKey::from(pubkey);
 
-					incoming_message_sender.send((pubkey, msg.to_vec())).unwrap();
+					incoming_message_sender.try_send_or_drop(pubkey, msg.to_vec(), || {
+						P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
+						warn!("Dropping incoming message: per-peer limit reached");
+					});
 				} else {
 					P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
 					warn!(

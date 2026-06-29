@@ -48,15 +48,21 @@ pub mod quic;
 pub mod zmq;
 
 // Shared modules
+pub mod fair_channel;
 pub mod message;
 pub mod muxer;
 pub mod peer;
 pub mod supervisor;
 
 // Re-export commonly used types
+pub use fair_channel::{FairReceiver, FairSender};
 pub use message::{AccountId, IncomingMessage, OutgoingMessage, ProtocolVersion, TopicId};
 pub use muxer::{ProtocolHandle, Topic, TopicMuxer};
 pub use peer::{PeerInfo, PeerUpdate};
+
+/// Per-peer in-flight message limit for the supervisor→muxer incoming channel. Shared between
+/// `zmq.rs` (listener→control) and `supervisor.rs` (supervisor→muxer).
+pub const INCOMING_MESSAGE_PER_PEER_LIMIT: usize = 100;
 
 /// Which P2P transport implementation to use. The transports are not interoperable, so
 /// this must be the same across the whole validator set.
