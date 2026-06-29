@@ -30,11 +30,39 @@ import { ethereumIngressEgressTransactionRejectedByBrokerEvent } from 'generated
 import { arbitrumIngressEgressTransactionRejectedByBrokerEvent } from 'generated/events/arbitrumIngressEgress/transactionRejectedByBroker';
 import { bscIngressEgressTransactionRejectedByBrokerEvent } from 'generated/events/bscIngressEgress/transactionRejectedByBroker';
 import { bscIngressEgressDepositFinalisedEvent } from 'generated/events/bscIngressEgress/depositFinalised';
+import { ethereumChainTrackingChainStateUpdatedEvent } from 'generated/events/ethereumChainTracking/chainStateUpdated';
+import { arbitrumChainTrackingChainStateUpdatedEvent } from 'generated/events/arbitrumChainTracking/chainStateUpdated';
+import { bscChainTrackingChainStateUpdatedEvent } from 'generated/events/bscChainTracking/chainStateUpdated';
 
 /**
- * Wait for the Deposit contract to be deployed.
+ * Wait until the state chain's chain tracking has witnessed up to (at least) `blockHeight`.
  */
-async function waitForDepositContractDeployment(chain: Chain, depositAddress: string) {
+async function waitForEvmChainTrackingPastBlock<A = []>(
+  cf: ChainflipIO<A>,
+  chain: Chain,
+  blockHeight: bigint,
+) {
+  const reachedBlock = (event: { newChainState: { blockHeight: bigint } }) =>
+    event.newChainState.blockHeight >= blockHeight;
+
+  if (chain === 'Ethereum') {
+    await cf.stepUntilEvent(ethereumChainTrackingChainStateUpdatedEvent.refine(reachedBlock));
+  } else if (chain === 'Arbitrum') {
+    await cf.stepUntilEvent(arbitrumChainTrackingChainStateUpdatedEvent.refine(reachedBlock));
+  } else if (chain === 'Bsc') {
+    await cf.stepUntilEvent(bscChainTrackingChainStateUpdatedEvent.refine(reachedBlock));
+  } else {
+    throw Error('Unsupported EVM chain while waiting for chain tracking');
+  }
+}
+
+/**
+ * Wait for the Deposit contract to be deployed, returning the block at which it was found deployed.
+ */
+async function waitForDepositContractDeployment(
+  chain: Chain,
+  depositAddress: string,
+): Promise<bigint> {
   switch (chain) {
     case 'Bsc':
     case 'Arbitrum':
@@ -46,18 +74,14 @@ async function waitForDepositContractDeployment(chain: Chain, depositAddress: st
 
   const MAX_RETRIES = 100;
   const web3 = getWeb3(chain);
-  let contractDeployed = false;
   for (let i = 0; i < MAX_RETRIES; i++) {
     const bytecode = await web3.eth.getCode(depositAddress);
     if (bytecode && bytecode !== '0x') {
-      contractDeployed = true;
-      break;
+      return BigInt(await web3.eth.getBlockNumber());
     }
     await sleep(6000);
   }
-  if (!contractDeployed) {
-    throw new Error(`${chain} contract not deployed at address ${depositAddress} within timeout!`);
-  }
+  throw new Error(`${chain} contract not deployed at address ${depositAddress} within timeout!`);
 }
 
 async function waitForEvmDepositFinalized<A = []>(
@@ -210,7 +234,17 @@ export async function testEvm<A = []>(
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
     // successfully to make sure the Deposit contract is deployed.
-    await waitForDepositContractDeployment(chain, swapParams.depositAddress);
+    const deploymentBlock = await waitForDepositContractDeployment(
+      chain,
+      swapParams.depositAddress,
+    );
+    cf.debug(`${chain} Deposit contract was deployed at chain block height ${deploymentBlock}`);
+    // Don't proceed until the state chain has witnessed the deployment, otherwise the next deposit
+    // may be witnessed in the same batch and treated as a deposit to an undeployed contract.
+    await waitForEvmChainTrackingPastBlock(cf, chain, deploymentBlock);
+    cf.debug(
+      `${chain} tracking has progressed past the contract deployment block ${deploymentBlock}`,
+    );
   }
 
   cf.debug(`Sending ${sourceAsset} tx to reject...`);
@@ -385,7 +419,14 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
     // the current block) doesn't re-match this deposit's DepositFinalised.
     await cf.stepOneBlock();
 
-    await waitForDepositContractDeployment(chain, depositAddress);
+    const deploymentBlock = await waitForDepositContractDeployment(chain, depositAddress);
+    cf.debug(`${chain} Deposit contract was deployed at chain block height ${deploymentBlock}`);
+    // Don't proceed until the state chain has witnessed the deployment, otherwise the next deposit
+    // may be witnessed in the same batch and treated as a deposit to an undeployed contract.
+    await waitForEvmChainTrackingPastBlock(cf, chain, deploymentBlock);
+    cf.debug(
+      `${chain} ingress has progressed past the contract deployment block ${deploymentBlock}`,
+    );
   }
 
   cf.debug(`Sending ${sourceAsset} tx to reject...`);
