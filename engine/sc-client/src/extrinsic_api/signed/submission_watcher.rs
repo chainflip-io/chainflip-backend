@@ -324,9 +324,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		const MAX_RECOVERY_RESUBMISSIONS: usize = 3;
 		let mut recovery_resubmissions: usize = 0;
 		loop {
-			// Era (mortality) anchor: the node's latest finalized block, re-read each attempt so
-			// every (re)submission signs against the freshest anchor — never the contiguous
-			// `finalized_block_*` scan position, which lags under back-pressure.
+			// Era (mortality) anchor: re-read from the watch on each attempt to ensure it stays
+			// fresh.
 			let latest_finalized = *self.latest_finalized_block_watcher.borrow();
 			let (signed_extrinsic, lifetime) = self.signer.new_signed_extrinsic(
 				request.call.clone(),
@@ -405,13 +404,11 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							}
 							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refreshing runtime version and resubmitting (attempt {recovery_resubmissions}/{MAX_RECOVERY_RESUBMISSIONS}).");
 
-							// Refetch the runtime version at most once per finalized block. The era
-							// anchor is refreshed automatically when the loop re-reads the watch.
-							if self.last_runtime_version_refresh_block !=
-								Some(self.finalized_block_number)
+							// Refetch the runtime version at most once per finalized block. Use the best known 
+							// finalized hash, not the stream's latest, to avoid reading a stale runtime version.
+							if self.last_runtime_version_refresh_block != Some(latest_finalized.number)
 							{
-								self.last_runtime_version_refresh_block =
-									Some(self.finalized_block_number);
+								self.last_runtime_version_refresh_block = Some(latest_finalized.number);
 								let new_runtime_version =
 									self.base_rpc_client.runtime_version(None).await?;
 								if new_runtime_version != self.runtime_version {
