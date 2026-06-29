@@ -35,9 +35,19 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 
 	let handler_args = variants.iter().enumerate().map(|(variant_index, variant)| {
 		let handler = handler_ident(variant_index);
-		let field_types = variant.fields.iter().map(|field| &field.ty);
-		quote! {
-			#handler: impl Fn(#(#field_types),*) -> #output
+		match &variant.fields {
+			Fields::Unnamed(fields) => {
+				let field_types = fields.unnamed.iter().map(|field| &field.ty);
+				quote! {
+					#handler: impl Fn((#(#field_types,)*)) -> #output
+				}
+			},
+			_ => {
+				let field_types = variant.fields.iter().map(|field| &field.ty);
+				quote! {
+					#handler: impl Fn(#(#field_types),*) -> #output
+				}
+			},
 		}
 	});
 
@@ -62,7 +72,7 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 			},
 			Fields::Unnamed(_) => {
 				quote! {
-					Self::#variant_ident(#(#field_bindings),*) => #handler(#(#field_bindings),*)
+					Self::#variant_ident(#(#field_bindings),*) => #handler((#(#field_bindings,)*))
 				}
 			},
 			Fields::Unit => {

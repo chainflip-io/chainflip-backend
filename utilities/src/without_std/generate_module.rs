@@ -722,10 +722,11 @@ macro_rules! generate_module {
                         fn backwards(x: RealEnum) -> Self::From {
                             x.elim(
                                 $(
-                                    |x| Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(
+                                    |$(x: ($($variant_ty,)*))? $($($variant_field: $variant_field_ty,)*)?|
+                                    Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(
                                         variants::$variant::intro(
-                                            $( { let _ = core::marker::PhantomData::<($($variant_ty,)*)>; (x,) }, )?
-                                            $( $( x.$variant_field, )*)?
+                                            $( { let _ = core::marker::PhantomData::<($($variant_ty,)*)>; x }, )?
+                                            $( $( $variant_field, )*)?
                                             Default::default(),
                                         )
                                     )),
