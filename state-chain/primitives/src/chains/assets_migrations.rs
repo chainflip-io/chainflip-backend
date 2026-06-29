@@ -110,15 +110,6 @@ pub enum MyTestValues<T: T1> {
 	mod _MyTestValues { #![migrations] }
 }
 
-// type XX = _MyTestValues::variants::Variant1<u8>;
-
-// duplicate::substitute! {
-// 	[
-// 		typ1 [T: T1, T2: Copy];
-// 	]
-// 	type X<typ1> = T::XY;
-// }
-
 trait Good {
 	type Bad;
 }

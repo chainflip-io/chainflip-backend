@@ -628,14 +628,6 @@ macro_rules! generate_module {
 
                             impl Into<RealEnum> for $variant {
                                 fn into(self) -> RealEnum {
-                                    // $( let (cf_utilities::comma_separated_identifiers_for!($($variant_ty)*)) = self; )?
-                                    // $enum::variant
-                                    //     $(
-                                    //         (cf_utilities::comma_separated_identifiers_for!($($variant_ty)*))
-                                    //     )?
-                                    //     $(
-                                    //         $( $variant_field: self.$variant_field, )*
-                                    //     )?
                                         $crate::or_else! {
                                             ($(
                                                 cf_utilities::tuple_into_enum_variant!(self.value; $enum::$variant; $($variant_ty),*)
