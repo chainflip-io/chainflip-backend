@@ -163,21 +163,21 @@ macro_rules! generate_module {
             cf_proc_macros::better_modules! {
                 mod (To: HistoricalTypesAt<V>) (V: Version)
                 {
-                    pub trait CustomMigration {
+                    pub trait FieldCustomMigration {
                         $(
                             type $field: MaybeMigration<To::$field, V> = DefaultMigration;
                         )*
                     }
 
-                    impl CustomMigration for () {}
+                    impl FieldCustomMigration for () {}
 
-                    impl<M1: CustomMigration, M2: CustomMigration> CustomMigration for (M1, M2) {
+                    impl<M1: FieldCustomMigration, M2: FieldCustomMigration> FieldCustomMigration for (M1, M2) {
                         $(
                             type $field = (M1::$field, M2::$field);
                         )*
                     }
 
-                    mod (M: CustomMigration<To, V>)
+                    mod (M: FieldCustomMigration<To, V>)
                     {
                         mod field_migrations {
                             use super::*;
@@ -226,12 +226,12 @@ macro_rules! generate_module {
             pub mod field {
                 $(
                     pub mod $field {
-                        use super::super::{OverrideMigrationWith, Version, HistoricalTypesAt, CustomMigration, NewFieldWithDefault};
+                        use super::super::{OverrideMigrationWith, Version, HistoricalTypesAt, FieldCustomMigration, NewFieldWithDefault};
 
                         #[derive(Debug)]
                         pub struct Added;
                         impl<V: Version, TargetFieldsTypes: HistoricalTypesAt<V, $field: Default>>
-                            CustomMigration<TargetFieldsTypes, V> for Added
+                            FieldCustomMigration<TargetFieldsTypes, V> for Added
                         {
                             type $field = OverrideMigrationWith<NewFieldWithDefault>;
                         }
@@ -323,7 +323,7 @@ macro_rules! generate_module {
 
 
 
-            pub trait CustomMigration<
+            pub trait VariantCustomMigration<
                 To: HistoricalTypesAt<V>,
                 V: Version,
             > {
@@ -333,10 +333,10 @@ macro_rules! generate_module {
             }
 
 
-            // this extracts the From types (per variant) from a CustomMigration
+            // this extracts the From types (per variant) from a VariantCustomMigration
             #[derive_where::derive_where(Debug, Default; )]
-            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>>(sp_std::marker::PhantomData<(To, V, M)>);
-            impl<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
+            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: Version, M: VariantCustomMigration<To, V>>(sp_std::marker::PhantomData<(To, V, M)>);
+            impl<To: HistoricalTypesAt<V>, V: Version, M: VariantCustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
                 $(
                     type $variant = <
                         <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>
@@ -345,7 +345,7 @@ macro_rules! generate_module {
                 )+
             }
 
-            type ResolveCustomMigration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> = (
+            type ResolveCustomMigration<To: HistoricalTypesAt<V>, V: Version, M: VariantCustomMigration<To, V>> = (
                 $(
                     <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>,
                 )+
@@ -354,10 +354,10 @@ macro_rules! generate_module {
             impl <
                 To: HistoricalTypesAt<V>,
                 V: Version
-            > CustomMigration<To, V> for () {}
+            > VariantCustomMigration<To, V> for () {}
 
-            impl<To: HistoricalTypesAt<V>, V: Version, M1: CustomMigration<To, V>, M2: CustomMigration<To, V>>
-            CustomMigration<To,V>
+            impl<To: HistoricalTypesAt<V>, V: Version, M1: VariantCustomMigration<To, V>, M2: VariantCustomMigration<To, V>>
+            VariantCustomMigration<To,V>
             for (M1, M2)
             {
                 $(
@@ -568,7 +568,7 @@ macro_rules! generate_module {
             pub struct see_variant_changelogs_and_also<M>(M);
 
 
-            impl<M: CustomMigration<To, V>, $( $($T $(: $TBound)?,)+ )? To: HistoricalTypesAt<V>, V: Version> Migration<Enum<$($($T,)+)? To>, V> for see_variant_changelogs_and_also<M>
+            impl<M: VariantCustomMigration<To, V>, $( $($T $(: $TBound)?,)+ )? To: HistoricalTypesAt<V>, V: Version> Migration<Enum<$($($T,)+)? To>, V> for see_variant_changelogs_and_also<M>
             where
                 Enum<$($($T,)+)? source_of_custom_migration<To, V, M>>: IsHistoricalType
             {
