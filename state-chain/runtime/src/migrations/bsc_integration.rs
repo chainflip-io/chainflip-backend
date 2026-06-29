@@ -134,7 +134,7 @@ impl OnRuntimeUpgrade for BscChainstate {
 	}
 }
 
-/// Seed the Bsc broadcast timeout. Without it, `BroadcastTimeout` defaults to 100 bsc blocks (~45s),
+/// Seed the Bsc broadcast timeout. Without it, `BroadcastTimeout` defaults to 100 bsc blocks
 pub struct BscBroadcasterInit;
 
 impl OnRuntimeUpgrade for BscBroadcasterInit {

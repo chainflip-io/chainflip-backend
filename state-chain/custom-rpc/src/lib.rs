@@ -2849,7 +2849,7 @@ where
 						.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
 						.map_err(CfApiError::from)?
 						.unwrap_or_default();
-					Ok(if api_version < 18 {
+					Ok(if api_version < 17 {
 						#[expect(deprecated)]
 						api.cf_transaction_screening_events_before_version_17(hash)
 							.map_err(CfApiError::from)?

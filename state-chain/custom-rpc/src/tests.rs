@@ -100,10 +100,10 @@ fn asset_map<T: Clone>(v: T) -> any::AssetMap<T> {
 		btc: btc::AssetMap { btc: v.clone() },
 		dot: dot::AssetMap { dot: v.clone() },
 		arb: arb::AssetMap { eth: v.clone(), usdc: v.clone(), usdt: v.clone() },
-		bsc: bsc::AssetMap { bnb: v.clone(), usdt: v.clone() },
 		sol: sol::AssetMap { sol: v.clone(), usdc: v.clone(), usdt: v.clone() },
 		hub: hub::AssetMap { dot: v.clone(), usdc: v.clone(), usdt: v.clone() },
-		tron: tron::AssetMap { trx: v.clone(), usdt: v },
+		tron: tron::AssetMap { trx: v.clone(), usdt: v.clone() },
+		bsc: bsc::AssetMap { bnb: v.clone(), usdt: v.clone() },
 	}
 }
 
@@ -170,10 +170,10 @@ fn test_environment_serialization() {
 				btc: btc::AssetMap { btc: Some(0u32.into()) },
 				dot: dot::AssetMap { dot: None },
 				arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()), usdt: Some(0u32.into()) },
-				bsc: bsc::AssetMap { bnb: None, usdt: None },
 				sol: sol::AssetMap { sol: None, usdc: None, usdt: None },
 				hub: hub::AssetMap { dot: None, usdc: None, usdt: None },
 				tron: tron::AssetMap { trx: Some(0u32.into()), usdt: None },
+				bsc: bsc::AssetMap { bnb: None, usdt: None },
 			},
 			network_fee_hundredth_pips: Permill::from_percent(100),
 			swap_retry_delay_blocks: 5,
@@ -292,10 +292,10 @@ fn test_environment_serialization() {
 				btc: btc::AssetMap { btc: Some(55) },
 				dot: dot::AssetMap { dot: None },
 				arb: arb::AssetMap { eth: Some(55), usdc: Some(25), usdt: Some(25) },
-				bsc: bsc::AssetMap { bnb: Some(55), usdt: Some(25) },
 				sol: sol::AssetMap { sol: Some(55), usdc: Some(25), usdt: Some(25) },
 				hub: hub::AssetMap { dot: None, usdc: Some(25), usdt: Some(25) },
 				tron: tron::AssetMap { trx: None, usdt: Some(25) },
+				bsc: bsc::AssetMap { bnb: Some(55), usdt: Some(25) },
 			},
 		},
 		ingress_egress: IngressEgressEnvironment {
