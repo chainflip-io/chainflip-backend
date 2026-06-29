@@ -130,21 +130,21 @@ macro_rules! generate_module {
                         {
                             type From = GenericStruct;
 
-                            fn forwards(x: GenericStruct) -> UserStruct {
-                                $struct {
+                            fn forwards(x: GenericStruct) -> Result<UserStruct, MigrationError> {
+                                Ok($struct {
                                     $(
-                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field),
+                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field)?,
                                     )*
-                                }
+                                })
                             }
 
-                            fn backwards(x: UserStruct) -> GenericStruct {
-                                Struct::intro(
+                            fn backwards(x: UserStruct) -> Result<GenericStruct, MigrationError> {
+                                Ok(Struct::intro(
                                     $(
-                                        <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
+                                        <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field)?,
                                     )*
                                     Default::default(),
-                                )
+                                ))
                             }
                         }
                     }
@@ -193,22 +193,22 @@ macro_rules! generate_module {
                                 {
                                     type From = StructVariant<From>;
 
-                                    fn forwards(x: StructVariant<From>) -> StructVariant<To> {
-                                        Struct::intro(
+                                    fn forwards(x: StructVariant<From>) -> Result<StructVariant<To>, MigrationError> {
+                                        Ok(Struct::intro(
                                             $(
-                                                $field::forwards(x.$field),
+                                                $field::forwards(x.$field)?,
                                             )*
                                             Default::default(),
-                                        )
+                                        ))
                                     }
 
-                                    fn backwards(x: StructVariant<To>) -> StructVariant<From> {
-                                        Struct::intro (
+                                    fn backwards(x: StructVariant<To>) -> Result<StructVariant<From>, MigrationError> {
+                                        Ok(Struct::intro (
                                             $(
-                                                $field::backwards(x.$field),
+                                                $field::backwards(x.$field)?,
                                             )*
                                             Default::default(),
-                                        )
+                                        ))
                                     }
                                 }
                             }
@@ -536,22 +536,22 @@ macro_rules! generate_module {
                                 {
                                     type From = EnumVariant<From>;
 
-                                    fn forwards(x: EnumVariant<From>) -> EnumVariant<To> {
-                                        match x {
+                                    fn forwards(x: EnumVariant<From>) -> Result<EnumVariant<To>, MigrationError> {
+                                        Ok(match x {
                                             $(
-                                                Enum::$variant(val) => Enum::$variant($variant::forwards(val)),
+                                                Enum::$variant(val) => Enum::$variant($variant::forwards(val)?),
                                             )*
                                             Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
-                                        }
+                                        })
                                     }
 
-                                    fn backwards(x: EnumVariant<To>) -> EnumVariant<From> {
-                                        match x {
+                                    fn backwards(x: EnumVariant<To>) -> Result<EnumVariant<From>, MigrationError> {
+                                        Ok(match x {
                                             $(
-                                                Enum::$variant(val) => Enum::$variant($variant::backwards(val)),
+                                                Enum::$variant(val) => Enum::$variant($variant::backwards(val)?),
                                             )*
                                             Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
-                                        }
+                                        })
                                     }
                                 }
                             }
@@ -673,27 +673,27 @@ macro_rules! generate_module {
                             )*
                         )>;
 
-                        fn forwards(x: Self::From) -> RealEnum {
-                            match x {
+                        fn forwards(x: Self::From) -> Result<RealEnum, MigrationError> {
+                            Ok(match x {
                                 $(
                                     Enum::$variant(val) =>
-                                        (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::forwards(val)).into(),
+                                        (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::forwards(val)?).into(),
                                 )*
                                 Enum::_phantom(never, _) => match never {},
-                            }
+                            })
                         }
 
-                        fn backwards(x: RealEnum) -> Self::From {
+                        fn backwards(x: RealEnum) -> Result<Self::From, MigrationError> {
                             x.elim(
                                 $(
                                     |$(x: ($($variant_ty,)*))? $($($variant_field: $variant_field_ty,)*)?|
-                                    Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(
+                                    Ok(Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(
                                         variants::$variant::intro(
                                             $( { let _ = core::marker::PhantomData::<($($variant_ty,)*)>; x }, )?
                                             $( $( $variant_field, )*)?
                                             Default::default(),
                                         )
-                                    )),
+                                    )?)),
                                 )*
                             )
                         }

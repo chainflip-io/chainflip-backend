@@ -2224,12 +2224,14 @@ where
 						v20000,
 						api.cf_common_account_info_before_version_16(hash, &account_id)?,
 					)
+					.map_err(|error| anyhow::anyhow!("Failed to migrate account info: {error:?}"))?
 				} else if api_version < 17 {
 					#[expect(deprecated)]
 					migrate_from_historical_type(
 						v20100,
 						api.cf_common_account_info_before_version_17(hash, &account_id)?,
 					)
+					.map_err(|error| anyhow::anyhow!("Failed to migrate account info: {error:?}"))?
 				} else {
 					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}
@@ -2599,9 +2601,11 @@ where
 			let network_fees = if version < 16 {
 				#[expect(deprecated)]
 				migrate_from_historical_type(v20000, api.cf_network_fees_before_version_16(hash)?)
+					.map_err(|error| anyhow::anyhow!("Failed to migrate network fees: {error:?}"))?
 			} else if version < 17 {
 				#[expect(deprecated)]
 				migrate_from_historical_type(v20100, api.cf_network_fees_before_version_17(hash)?)
+					.map_err(|error| anyhow::anyhow!("Failed to migrate network fees: {error:?}"))?
 			} else {
 				api.cf_network_fees(hash)?
 			};

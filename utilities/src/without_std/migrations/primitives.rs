@@ -19,7 +19,7 @@
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
 use crate::migrations::{
-	basics::{IdentityMigration, Migration, Version},
+	basics::{IdentityMigration, Migration, MigrationError, Version},
 	with_all_runtime_migrations, HasChangelog, HasGenericVariant, IsHistoricalType, OrdMigrations,
 };
 
@@ -90,12 +90,12 @@ macro_rules! impl_identity_migrations_with_wrapper {
 		impl Migration<$Ty, crate::migrations::vCurrent> for WrapMigration {
 			type From = $Wrapper;
 
-			fn forwards(x: Self::From) -> $Ty {
-				x.0
+			fn forwards(x: Self::From) -> Result<$Ty, MigrationError> {
+				Ok(x.0)
 			}
 
-			fn backwards(x: $Ty) -> Self::From {
-				$Wrapper(x)
+			fn backwards(x: $Ty) -> Result<Self::From, MigrationError> {
+				Ok($Wrapper(x))
 			}
 		}
 
@@ -153,12 +153,12 @@ pub struct NewTypeWithDefault;
 impl<V: Version, T: HasChangelog + Default> Migration<T, V> for NewTypeWithDefault {
 	type From = HistoricalEmptyPlaceholder<T>;
 
-	fn forwards(_: Self::From) -> T {
-		Default::default()
+	fn forwards(_: Self::From) -> Result<T, MigrationError> {
+		Ok(Default::default())
 	}
 
-	fn backwards(_: T) -> Self::From {
-		HistoricalEmptyPlaceholder(Default::default())
+	fn backwards(_: T) -> Result<Self::From, MigrationError> {
+		Ok(HistoricalEmptyPlaceholder(Default::default()))
 	}
 }
 
@@ -190,11 +190,11 @@ macro_rules! impl_migrations_for_container {
         impl<$($ty $(: $($ty_path)* )? ,)+  V: Version, $($var_M: Migration<$ty, V $(, From: $($from_path)*)?>),+> Migration<$container<$($ty),+>, V> for MapMigration<($($var_M, )+)> {
             type From = $container<$($var_M::From),+>;
 
-            fn forwards($var_f: Self::From) -> $container<$($ty),+> {
+			fn forwards($var_f: Self::From) -> Result<$container<$($ty),+>, MigrationError> {
                 $expr_f
             }
 
-            fn backwards($var_b: $container<$($ty),+>) -> Self::From {
+			fn backwards($var_b: $container<$($ty),+>) -> Result<Self::From, MigrationError> {
                 $expr_b
             }
         }
@@ -213,8 +213,8 @@ impl_migrations_for_container! {
 	Option<X>,
 	impl_changelog_for_option,
 	[M],
-	|x| x.map(M::forwards),
-	|x| x.map(M::backwards),
+	|x| x.map(M::forwards).transpose(),
+	|x| x.map(M::backwards).transpose(),
 }
 
 impl_migrations_for_container! {
@@ -231,8 +231,8 @@ impl_migrations_for_container! {
 	TupleWith1Entry<A>,
 	impl_changelog_for_tuple1,
 	[M1],
-	|x| (M1::forwards(x.0),),
-	|x| (M1::backwards(x.0),),
+	|x| Ok((M1::forwards(x.0)?,)),
+	|x| Ok((M1::backwards(x.0)?,)),
 }
 
 pub type TupleWith2Entries<A, B> = (A, B);
@@ -241,8 +241,8 @@ impl_migrations_for_container! {
 	TupleWith2Entries<A,B>,
 	impl_changelog_for_tuple,
 	[M1,M2],
-	|x| (M1::forwards(x.0), M2::forwards(x.1)),
-	|x| (M1::backwards(x.0), M2::backwards(x.1)),
+	|x| Ok((M1::forwards(x.0)?, M2::forwards(x.1)?)),
+	|x| Ok((M1::backwards(x.0)?, M2::backwards(x.1)?)),
 }
 
 // ---- btreemap ----
@@ -272,12 +272,12 @@ impl<
 {
 	type From = BTreeMap<M1::From, M2::From>;
 
-	fn forwards(x: Self::From) -> BTreeMap<A, B> {
-		x.into_iter().map(|(a, b)| (M1::forwards(a), M2::forwards(b))).collect()
+	fn forwards(x: Self::From) -> Result<BTreeMap<A, B>, MigrationError> {
+		x.into_iter().map(|(a, b)| Ok((M1::forwards(a)?, M2::forwards(b)?))).collect()
 	}
 
-	fn backwards(x: BTreeMap<A, B>) -> Self::From {
-		x.into_iter().map(|(a, b)| (M1::backwards(a), M2::backwards(b))).collect()
+	fn backwards(x: BTreeMap<A, B>) -> Result<Self::From, MigrationError> {
+		x.into_iter().map(|(a, b)| Ok((M1::backwards(a)?, M2::backwards(b)?))).collect()
 	}
 }
 

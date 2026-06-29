@@ -27,13 +27,18 @@ pub enum CanonicalPatchVersion {
 	Released(u32),
 }
 
-pub trait Migration<To: ?Sized, V: Version> {
-	type From: IsHistoricalType;
-	fn forwards(x: Self::From) -> To;
-	fn backwards(x: To) -> Self::From;
+#[derive(Debug)]
+pub enum MigrationError {
+	EnumVariantDoesntExist,
 }
 
-pub trait HasVersion<V: Version> {
+pub trait Migration<To, V: Version> {
+	type From: IsHistoricalType;
+	fn forwards(x: Self::From) -> Result<To, MigrationError>;
+	fn backwards(x: To) -> Result<Self::From, MigrationError>;
+}
+
+pub trait HasVersion<V: Version>: Sized {
 	type HistoricalType;
 	type HistoricalMigration: Migration<Self::HistoricalType, V>;
 	type MigrationToCurrent: Migration<Self, vCurrent, From = Self::HistoricalType>;
@@ -42,11 +47,14 @@ pub trait HasVersion<V: Version> {
 pub fn migrate_from_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X::HistoricalType,
-) -> X {
+) -> Result<X, MigrationError> {
 	X::MigrationToCurrent::forwards(x)
 }
 
-pub fn migrate_to_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X) -> X::HistoricalType {
+pub fn migrate_to_historical_type<V: Version, X: HasVersion<V>>(
+	_v: V,
+	x: X,
+) -> Result<X::HistoricalType, MigrationError> {
 	X::MigrationToCurrent::backwards(x)
 }
 // -------- identity migration --------
@@ -55,12 +63,12 @@ pub struct IdentityMigration;
 impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 	type From = X;
 
-	fn forwards(x: Self::From) -> X {
-		x
+	fn forwards(x: Self::From) -> Result<X, MigrationError> {
+		Ok(x)
 	}
 
-	fn backwards(x: X) -> Self::From {
-		x
+	fn backwards(x: X) -> Result<Self::From, MigrationError> {
+		Ok(x)
 	}
 }
 
@@ -70,12 +78,12 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 {
 	type From = A::From;
 
-	fn forwards(x: Self::From) -> X {
-		B::forwards(A::forwards(x))
+	fn forwards(x: Self::From) -> Result<X, MigrationError> {
+		B::forwards(A::forwards(x)?)
 	}
 
-	fn backwards(x: X) -> Self::From {
-		A::backwards(B::backwards(x))
+	fn backwards(x: X) -> Result<Self::From, MigrationError> {
+		A::backwards(B::backwards(x)?)
 	}
 }
 
@@ -85,11 +93,13 @@ pub struct NewFieldWithDefault;
 impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 	type From = ();
 
-	fn forwards(_x: Self::From) -> T {
-		Default::default()
+	fn forwards(_x: Self::From) -> Result<T, MigrationError> {
+		Ok(Default::default())
 	}
 
-	fn backwards(_x: T) -> Self::From {}
+	fn backwards(_x: T) -> Result<Self::From, MigrationError> {
+		Ok(())
+	}
 }
 
 // ----------- lookups ------------
@@ -125,11 +135,15 @@ pub type GetGenericVariant<X: HasGenericVariant> =
 
 pub struct GlobalMigrationFromGeneric;
 
-pub fn migrate_from_generic_type<X: HasGenericVariant>(x: X::GenericType) -> X {
+pub fn migrate_from_generic_type<X: HasGenericVariant>(
+	x: X::GenericType,
+) -> Result<X, MigrationError> {
 	X::MigrationFromGeneric::forwards(x)
 }
 
-pub fn migrate_to_generic_type<X: HasGenericVariant>(x: X) -> X::GenericType {
+pub fn migrate_to_generic_type<X: HasGenericVariant>(
+	x: X,
+) -> Result<X::GenericType, MigrationError> {
 	X::MigrationFromGeneric::backwards(x)
 }
 
