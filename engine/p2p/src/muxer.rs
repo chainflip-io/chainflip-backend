@@ -18,9 +18,7 @@ use anyhow::{anyhow, Result};
 use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto};
 use cf_primitives::AccountId;
 use futures::Future;
-use tokio::sync::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
-
-use crate::fair_channel::{fair_channel, FairReceiver, FairSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, Instrument};
 
 use crate::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
@@ -28,36 +26,16 @@ use cf_utilities::metrics::P2P_BAD_MSG;
 pub use multisig::p2p::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION};
 use multisig::ChainTag;
 
-/// Per-peer in-flight limit for ceremony messages awaiting processing by a
-/// ceremony manager. This is the receive-path stage with the slowest consumer,
-/// so it is where a real backlog forms; the per-peer limit ensures a flooding
-/// peer only ever delays its own ceremony messages.
-const CEREMONY_MESSAGE_PER_PEER_LIMIT: usize = 250;
-
-/// Capacity of the small bounded channel between each forwarder and its
-/// ceremony manager.
-///
-/// This is the only buffer on the receive path that is not per-peer accounted,
-/// so it is deliberately kept tiny: it cannot drop messages (the forwarder
-/// blocks rather than dropping), but every slot is unaccounted shared buffer,
-/// so a larger value would only add head-of-line delay for honest messages and
-/// unaccounted memory. Its sole purpose is to let the forwarder run a couple of
-/// messages ahead so the ceremony manager is not stalled on a forwarder wakeup
-/// after every message. That benefit saturates almost immediately, so this is a
-/// fixed small constant and does not scale with peer count or load. The real
-/// per-peer buffering happens upstream in the fair channel.
-const FORWARDER_BUFFER_SIZE: usize = 4;
-
 pub struct P2PMuxer {
-	all_incoming_receiver: FairReceiver<AccountId, Vec<u8>>,
+	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 	all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-	eth_incoming_sender: FairSender<AccountId, VersionedCeremonyMessage>,
+	eth_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	eth_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-	dot_incoming_sender: FairSender<AccountId, VersionedCeremonyMessage>,
+	dot_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	dot_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-	btc_incoming_sender: FairSender<AccountId, VersionedCeremonyMessage>,
+	btc_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	btc_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-	sol_incoming_sender: FairSender<AccountId, VersionedCeremonyMessage>,
+	sol_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	sol_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 }
 
@@ -122,26 +100,10 @@ fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 	VersionedMessage { version: CURRENT_PROTOCOL_VERSION, payload: &with_tag }.serialize()
 }
 
-/// Drain a per-peer fair channel into the bounded channel that feeds a
-/// ceremony manager. Awaiting the bounded `send` applies backpressure: while
-/// the ceremony manager is busy, messages accumulate in the fair channel,
-/// where they are bounded per sender. Returns when either channel is closed.
-async fn forward(
-	mut fair_receiver: FairReceiver<AccountId, VersionedCeremonyMessage>,
-	out_sender: Sender<(AccountId, VersionedCeremonyMessage)>,
-) {
-	while let Some(message) = fair_receiver.recv().await {
-		if out_sender.send(message).await.is_err() {
-			// The ceremony manager has gone away.
-			break;
-		}
-	}
-}
-
 impl P2PMuxer {
 	#[expect(clippy::type_complexity)]
 	pub fn start(
-		all_incoming_receiver: FairReceiver<AccountId, Vec<u8>>,
+		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 		all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	) -> (
 		MultisigMessageSender<EvmCrypto>,
@@ -155,35 +117,16 @@ impl P2PMuxer {
 		impl Future<Output = ()>,
 	) {
 		let (eth_outgoing_sender, eth_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (eth_incoming_sender, eth_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
 		let (dot_outgoing_sender, dot_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (dot_incoming_sender, dot_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
 		let (btc_outgoing_sender, btc_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (btc_incoming_sender, btc_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
 		let (sol_outgoing_sender, sol_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-
-		// Each incoming ceremony channel is split into a per-peer fair channel
-		// (where a backlog buffers, accounted per sender) and a small bounded
-		// channel feeding the ceremony manager. A forwarder task moves messages
-		// between them, blocking on the bounded channel so that a slow ceremony
-		// manager applies backpressure to the fair channel rather than letting
-		// it grow without limit.
-		let (eth_incoming_sender, eth_incoming_fair_receiver) =
-			fair_channel(CEREMONY_MESSAGE_PER_PEER_LIMIT);
-		let (eth_forwarder_sender, eth_incoming_receiver) =
-			tokio::sync::mpsc::channel(FORWARDER_BUFFER_SIZE);
-
-		let (dot_incoming_sender, dot_incoming_fair_receiver) =
-			fair_channel(CEREMONY_MESSAGE_PER_PEER_LIMIT);
-		let (dot_forwarder_sender, dot_incoming_receiver) =
-			tokio::sync::mpsc::channel(FORWARDER_BUFFER_SIZE);
-
-		let (btc_incoming_sender, btc_incoming_fair_receiver) =
-			fair_channel(CEREMONY_MESSAGE_PER_PEER_LIMIT);
-		let (btc_forwarder_sender, btc_incoming_receiver) =
-			tokio::sync::mpsc::channel(FORWARDER_BUFFER_SIZE);
-
-		let (sol_incoming_sender, sol_incoming_fair_receiver) =
-			fair_channel(CEREMONY_MESSAGE_PER_PEER_LIMIT);
-		let (sol_forwarder_sender, sol_incoming_receiver) =
-			tokio::sync::mpsc::channel(FORWARDER_BUFFER_SIZE);
+		let (sol_incoming_sender, sol_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 		let muxer = P2PMuxer {
 			all_incoming_receiver,
@@ -198,16 +141,7 @@ impl P2PMuxer {
 			sol_incoming_sender,
 		};
 
-		let muxer_fut = async move {
-			futures::join!(
-				muxer.run(),
-				forward(eth_incoming_fair_receiver, eth_forwarder_sender),
-				forward(dot_incoming_fair_receiver, dot_forwarder_sender),
-				forward(btc_incoming_fair_receiver, btc_forwarder_sender),
-				forward(sol_incoming_fair_receiver, sol_forwarder_sender),
-			);
-		}
-		.instrument(info_span!("P2PMuxer"));
+		let muxer_fut = muxer.run().instrument(info_span!("P2PMuxer"));
 
 		(
 			MultisigMessageSender::<EvmCrypto>::new(eth_outgoing_sender),
@@ -222,7 +156,7 @@ impl P2PMuxer {
 		)
 	}
 
-	fn process_incoming(&mut self, account_id: AccountId, data: Vec<u8>) {
+	async fn process_incoming(&mut self, account_id: AccountId, data: Vec<u8>) {
 		if let Ok(VersionedMessage { version, payload }) = VersionedMessage::deserialize(&data) {
 			// only version 1 is expected/supported
 			if version == CURRENT_PROTOCOL_VERSION {
@@ -230,19 +164,28 @@ impl P2PMuxer {
 					Ok(TagPlusMessage { tag, payload }) => {
 						let message =
 							VersionedCeremonyMessage { version, payload: payload.to_vec() };
-						let sender = match tag {
-							ChainTag::Ethereum => &self.eth_incoming_sender,
-							ChainTag::Polkadot => &self.dot_incoming_sender,
-							ChainTag::Bitcoin => &self.btc_incoming_sender,
-							ChainTag::Solana => &self.sol_incoming_sender,
-						};
-						sender.try_send_or_drop(account_id.clone(), message, || {
-							P2P_BAD_MSG.inc(&["ceremony_per_peer_limit"]);
-							trace!(
-								"Dropping ceremony message from {account_id}: \
-								 over its in-flight limit",
-							);
-						});
+						match tag {
+							ChainTag::Ethereum => {
+								self.eth_incoming_sender
+									.send((account_id, message))
+									.expect("eth receiver dropped");
+							},
+							ChainTag::Polkadot => {
+								self.dot_incoming_sender
+									.send((account_id, message))
+									.expect("polkadot receiver dropped");
+							},
+							ChainTag::Bitcoin => {
+								self.btc_incoming_sender
+									.send((account_id, message))
+									.expect("bitcoin receiver dropped");
+							},
+							ChainTag::Solana => {
+								self.sol_incoming_sender
+									.send((account_id, message))
+									.expect("solana receiver dropped");
+							},
+						}
 					},
 					Err(e) => {
 						P2P_BAD_MSG.inc(&["deserialization_tagged_msg"]);
@@ -280,7 +223,7 @@ impl P2PMuxer {
 		loop {
 			tokio::select! {
 				Some((account_id, data)) = self.all_incoming_receiver.recv() => {
-					self.process_incoming(account_id, data);
+					self.process_incoming(account_id, data).await;
 				}
 				Some(data) = self.eth_outgoing_receiver.recv() => {
 					self.process_outgoing(ChainTag::Ethereum, data).await;
@@ -306,10 +249,7 @@ mod tests {
 
 	use super::*;
 
-	use crate::{
-		core::INCOMING_MESSAGE_PER_PEER_LIMIT, fair_channel::fair_channel,
-		OutgoingMultisigStageMessages,
-	};
+	use crate::OutgoingMultisigStageMessages;
 
 	const ACC_1: AccountId = AccountId::new([b'A'; 32]);
 	const ACC_2: AccountId = AccountId::new([b'B'; 32]);
@@ -324,8 +264,7 @@ mod tests {
 	async fn correctly_prepends_chain_tag_broadcast() {
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
-		let (_p2p_incoming_sender, p2p_incoming_receiver) =
-			fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
+		let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 		let (eth_outgoing_sender, .., muxer_future) =
 			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
@@ -351,8 +290,7 @@ mod tests {
 	async fn correctly_prepends_chain_tag_private() {
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
-		let (_p2p_incoming_sender, p2p_incoming_receiver) =
-			fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
+		let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 		let (eth_outgoing_sender, .., muxer_future) =
 			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
@@ -391,8 +329,7 @@ mod tests {
 	#[tokio::test]
 	async fn should_parse_and_remove_headers() {
 		let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-		let (p2p_incoming_sender, p2p_incoming_receiver) =
-			fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
+		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 		let (_eth_outgoing_sender, mut eth_incoming_receiver, .., muxer_future) =
 			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
@@ -401,13 +338,9 @@ mod tests {
 
 		let bytes = [VERSION_PREFIX, ETH_TAG_PREFIX, DATA_1].concat();
 
-		p2p_incoming_sender.try_send(ACC_1, bytes).unwrap();
+		p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
 
-		let received =
-			tokio::time::timeout(std::time::Duration::from_secs(1), eth_incoming_receiver.0.recv())
-				.await
-				.expect("timed out waiting for message")
-				.expect("channel closed");
+		let received = expect_recv_with_timeout(&mut eth_incoming_receiver.0).await;
 
 		assert_eq!(received.0, ACC_1);
 		assert_eq!(received.1.payload, DATA_1.to_vec());
