@@ -17,6 +17,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(trait_alias)]
 #![feature(associated_type_defaults)]
+#![feature(lazy_type_alias)]
 
 use cf_amm::{
 	common::{AssetPair, Side},
@@ -251,7 +252,12 @@ pub struct FeeRateAndMinimum {
 	pub rate: sp_runtime::Permill,
 	pub minimum: AssetAmount,
 }
-impl HasChangelog for FeeRateAndMinimum {
+impl<F, B> HasChangelog<F, B> for FeeRateAndMinimum
+where
+	sp_runtime::Permill:
+		HasGenericVariant<F, B, GenericType: IsHistoricalType<F, B>>,
+	AssetAmount: HasGenericVariant<F, B, GenericType: IsHistoricalType<F, B>>,
+{
 	type if_unspecified = _FeeRateAndMinimum::see_field_changelogs;
 }
 

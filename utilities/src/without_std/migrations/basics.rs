@@ -158,13 +158,20 @@ impl Version for vCurrent {
 		None;
 }
 
-pub trait HasGenericVariant<EF = MigrationError, EB = MigrationError>: Sized {
+pub trait HasGenericVariant<EF, EB>: Sized {
 	type GenericType;
 	type MigrationFromGeneric: Migration<Self, vCurrent, EF, EB, From = Self::GenericType>;
 }
 
-pub type GetGenericVariant<X: HasGenericVariant<EF, EB>, EF = MigrationError, EB = MigrationError> =
-	<<X as HasGenericVariant<EF, EB>>::MigrationFromGeneric as Migration<X, vCurrent, EF, EB>>::From;
+pub type GetGenericVariant<X: HasGenericVariant<EF, EB>, EF, EB> = <<X as HasGenericVariant<
+	EF,
+	EB,
+>>::MigrationFromGeneric as Migration<
+	X,
+	vCurrent,
+	EF,
+	EB,
+>>::From;
 
 pub struct GlobalMigrationFromGeneric;
 
@@ -182,7 +189,7 @@ pub fn migrate_to_generic_type<X: HasGenericVariant<EF, EB>, EF, EB>(
 
 // ----------- maybe migrations (for horizontal composition) ---------
 
-pub trait MaybeMigration<To, V: Version, EF = MigrationError, EB = MigrationError> {
+pub trait MaybeMigration<To, V: Version, EF, EB> {
 	type GetWithDefault<Default: Migration<To, V, EF, EB>>: Migration<To, V, EF, EB>;
 }
 
