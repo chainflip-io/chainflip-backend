@@ -252,12 +252,7 @@ pub struct FeeRateAndMinimum {
 	pub rate: sp_runtime::Permill,
 	pub minimum: AssetAmount,
 }
-impl<F, B> HasChangelog<F, B> for FeeRateAndMinimum
-where
-	sp_runtime::Permill:
-		HasGenericVariant<F, B, GenericType: IsHistoricalType<F, B>>,
-	AssetAmount: HasGenericVariant<F, B, GenericType: IsHistoricalType<F, B>>,
-{
+impl<F, B> HasChangelog<F, B> for FeeRateAndMinimum {
 	type if_unspecified = _FeeRateAndMinimum::see_field_changelogs;
 }
 

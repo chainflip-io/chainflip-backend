@@ -139,7 +139,8 @@ pub trait IsHistoricalType<EF, EB> {
 pub trait IsHistoricalTypeAt<V: Version, EF, EB> =
 	IsHistoricalType<EF, EB, GetCurrentType: HasVersion<V, EF, EB, HistoricalType = Self>>;
 pub type GetMigrationToHistoricalType<
-	X: IsHistoricalType<EF, EB, GetCurrentType: HasVersion<V, EF, EB, HistoricalType = X>>,
+	X: IsHistoricalTypeAt<V, EF, EB>,
+	// X: IsHistoricalType<EF, EB, GetCurrentType: HasVersion<V, EF, EB, HistoricalType = X>>,
 	V: Version,
 	EF,
 	EB,
@@ -159,7 +160,7 @@ impl Version for vCurrent {
 }
 
 pub trait HasGenericVariant<EF, EB>: Sized {
-	type GenericType;
+	type GenericType: IsHistoricalType<EF, EB>;
 	type MigrationFromGeneric: Migration<Self, vCurrent, EF, EB, From = Self::GenericType>;
 }
 

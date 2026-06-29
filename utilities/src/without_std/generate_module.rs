@@ -115,12 +115,12 @@ macro_rules! generate_module {
 
                     // ----------------- connection with default struct ------------------ //
                     mod (EF) (EB) where $(( $field_ty: HasGenericVariant<EF, EB> ))* {
+
                         type UserStruct = $struct $(< $($T,)+ >)?;
                         pub type GenericStruct = Struct<( $( GetGenericVariant<$field_ty, EF, EB>,)*)>;
 
                         impl HasGenericVariant<EF, EB> for UserStruct
                         where
-                            // $( $field_ty: HasGenericVariant<EF, EB>, )*
                             GenericStruct: IsHistoricalType<EF, EB>,
                         {
                             type GenericType = GenericStruct;
@@ -129,7 +129,6 @@ macro_rules! generate_module {
 
                         impl Migration<UserStruct, vCurrent, EF, EB> for GlobalMigrationFromGeneric
                         where
-                            // $( $field_ty: HasGenericVariant<EF, EB>, )*
                             GenericStruct: IsHistoricalType<EF, EB>,
                         {
                             type From = GenericStruct;
