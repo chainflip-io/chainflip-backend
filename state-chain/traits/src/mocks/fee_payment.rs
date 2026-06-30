@@ -28,12 +28,17 @@ pub const ERROR_INSUFFICIENT_LIQUIDITY: DispatchError =
 impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayment<T> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
+	type Deficit = ();
 
-	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult {
+	fn try_take_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult {
 		MockFundingInfo::<T>::try_debit_funds(account_id, amount)
 			.map(|_| ())
 			.ok_or(ERROR_INSUFFICIENT_LIQUIDITY)
 	}
+
+	fn add_to_offchain_flip_to_be_distributed(_amount: i128) {}
+
+	fn add_to_onchain_flip_to_be_distributed(_amount: Self::Amount) -> Self::Deficit {}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
