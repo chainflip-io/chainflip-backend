@@ -104,14 +104,43 @@ pub trait T1 {
 	type XY;
 }
 
+// cf_utilities::generate_module! {
+// pub enum MyTestValues<T: T1> {
+// 	Variant1(T::XY),
+// 	Variant2(u8,u16),
+// 	Variant3(T::XY),
+// 	Variant4 {
+// 		myfield: u8,
+// 		field2: (T::XY, T::XY),
+// 	},
+// }
+// 	mod _MyTestValues { #![migrations] }
+// }
+
 cf_utilities::generate_module! {
 pub enum MyTestValues<T: T1> {
-	Variant1(T::XY),
-	Variant2(u8,u16),
-	Variant3(T::XY),
+	Variant1(_0: T::XY),
+	Variant2(_0: u8, _1: u16),
 	Variant4 {
 		myfield: u8,
-		field2: (T::XY, T::XY),
+		field2: T::XY,
+		field3: T::XY,
+		field4: T::XY,
+		field5: T::XY,
+	},
+	Variant5 {
+		myfield: u8,
+		field2: u16,
+		field3: T::XY,
+		field4: T::XY,
+		field5: T::XY,
+	},
+	Variant6 {
+		myfield: u8,
+		field2: u16,
+		field3: T::XY,
+		field4: T::XY,
+		field5: T::XY,
 	},
 }
 	mod _MyTestValues { #![migrations] }

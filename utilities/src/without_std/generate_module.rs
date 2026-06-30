@@ -250,7 +250,7 @@ macro_rules! generate_module {
             $(
 		        $(#[$($Variant_Attributes:tt)*])*
                 $variant:ident
-                    $( ( $($variant_ty:ty),* ) )?
+                    $( ( $($variant_tuple_entry:ident : $variant_ty:ty),* ) )?
                     $( { $($variant_field:ident : $variant_field_ty:ty ,)* } )?
                     $(= $variant_discriminant:literal)?
                     ,
@@ -584,14 +584,14 @@ macro_rules! generate_module {
                                     use super::*;
                                     $crate::generate_module! {
                                         pub struct variant_struct {
-                                            $( pub value: ( $($variant_ty,)* ), )?
+                                            $( $( pub $variant_tuple_entry: $variant_ty,)*)?
                                             $( $( pub $variant_field: $variant_field_ty,)*)?
                                         }
                                         mod variant_mod { #![migrations] }
                                     }
                                     impl HasChangelog for variant_struct
                                     where
-                                        $( ($($variant_ty, )*) : HasChangelog )?
+                                        $( $( $variant_ty: HasChangelog, )* )?
                                         $( $( $variant_field_ty: HasChangelog, )* )?
                                     {
                                         type if_unspecified = variant_mod::see_field_changelogs;
@@ -605,23 +605,17 @@ macro_rules! generate_module {
 
                             impl Into<RealEnum> for $variant {
                                 fn into(self) -> RealEnum {
-                                        $crate::or_else! {
-                                            ($(
-                                                cf_utilities::tuple_into_enum_variant!(self.value; $enum::$variant; $($variant_ty),*)
-                                            )? ) or (
-                                                $crate::or_else! {
-                                                    ($(
-                                                        $enum::$variant {
-                                                            $(
-                                                                $variant_field: self.$variant_field,
-                                                            )*
-                                                        }
-                                                    )? ) or (
-                                                        $enum::$variant
-                                                    )
-                                                }
-                                            )
+                                    $enum::$variant
+                                    $(
+                                        {
+                                            $( $variant_field: self.$variant_field, )*
                                         }
+                                    )?
+                                    $(
+                                        (
+                                            $( self.$variant_tuple_entry, )*
+                                        )
+                                    )?
                                 }
                             }
                         )*
@@ -638,8 +632,8 @@ macro_rules! generate_module {
                     impl HasGenericVariant for RealEnum
                         where
                             $(
-                                $( ($($variant_ty, )*) : HasChangelog ,)?
-                                $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
+                                $( $( $variant_ty: HasChangelog, )* )?
+                                $( $( $variant_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                                 $( $( $variant_field_ty: HasChangelog, )* )?
                                 $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                             )*
@@ -661,8 +655,8 @@ macro_rules! generate_module {
                     impl Migration<RealEnum, vCurrent> for GlobalMigrationFromGeneric
                     where
                             $(
-                                $( ($($variant_ty, )*) : HasChangelog ,)?
-                                $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
+                                $( $( $variant_ty: HasChangelog, )* )?
+                                $( $( $variant_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                                 $( $( $variant_field_ty: HasChangelog, )* )?
                                 $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                             )*
@@ -691,10 +685,10 @@ macro_rules! generate_module {
                         fn backwards(x: RealEnum) -> Self::From {
                             x.elim(
                                 $(
-                                    |$(x: ($($variant_ty,)*))? $($($variant_field: $variant_field_ty,)*)?|
+                                    |$($($variant_tuple_entry: $variant_ty,)*)? $($($variant_field: $variant_field_ty,)*)?|
                                     Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(
                                         variants::$variant::intro(
-                                            $( { let _ = core::marker::PhantomData::<($($variant_ty,)*)>; x }, )?
+                                            $( $( $variant_tuple_entry, )*)?
                                             $( $( $variant_field, )*)?
                                             Default::default(),
                                         )
@@ -706,10 +700,6 @@ macro_rules! generate_module {
 
                 }
             }
-
-            // pub struct DefaultTypes$(< $($T $(: $TBound)?),+ >)?($($($T,)+)?);
-
-
         }
     };
 }
