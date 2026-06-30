@@ -181,7 +181,7 @@ macro_rules! generate_module {
             pub struct see_field_changelogs_and_also<M>(M);
 
             cf_proc_macros::better_modules! {
-                mod (To: Types) (V: Version)
+                mod (To: HistoricalTypesAt<V>) (V: Version)
                 {
                     pub trait FieldCustomMigration {
                         $(
@@ -197,7 +197,7 @@ macro_rules! generate_module {
                         )*
                     }
 
-                    mod (M: FieldCustomMigration<To, V>) where (To: HistoricalTypesAt<V>)
+                    mod (M: FieldCustomMigration<To, V>)
                     {
                         mod field_migrations {
                             use super::*;
@@ -542,7 +542,7 @@ macro_rules! generate_module {
             pub struct see_variant_changelogs_and_also<M>(M);
 
             cf_proc_macros::better_modules! {
-                mod (To: Types) (V: Version)
+                mod (To: HistoricalTypesAt<V>) (V: Version)
                 {
                     pub trait VariantCustomMigration {
                         $(
@@ -558,7 +558,7 @@ macro_rules! generate_module {
                         )+
                     }
 
-                    mod (M: VariantCustomMigration<To, V>) where (To: HistoricalTypesAt<V>)
+                    mod (M: VariantCustomMigration<To, V>)
                     {
                         mod variant_migrations {
                             use super::*;
