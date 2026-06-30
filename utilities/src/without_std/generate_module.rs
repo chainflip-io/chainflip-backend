@@ -112,7 +112,6 @@ macro_rules! generate_module {
 
                         impl IsHistoricalType for Struct where
                             $( Ty::$field: IsHistoricalType,)*
-                            $struct$(< $($T,)+ >)?: HasChangelog
                         {
                             type GetCurrentType = $struct$(< $($T,)+ >)?;
                         }
@@ -392,7 +391,6 @@ macro_rules! generate_module {
 
                         impl IsHistoricalType for Enum where
                             $( Ty::$variant: IsHistoricalType,)*
-                            $enum$(< $($T,)+ >)?: HasChangelog
                         {
                             type GetCurrentType = $enum$(< $($T,)+ >)?;
                         }

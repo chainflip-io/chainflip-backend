@@ -170,7 +170,7 @@ impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 // ----------- lookups ------------
 
 pub trait IsHistoricalType {
-	type GetCurrentType: HasChangelog;
+	type GetCurrentType;
 }
 pub trait IsHistoricalTypeAt<V: Version> =
 	IsHistoricalType<GetCurrentType: HasVersion<V, HistoricalType = Self>>;
