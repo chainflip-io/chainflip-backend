@@ -113,7 +113,7 @@ pub enum MyTestValuesWithoutChangelog<T: T1> {
 cf_utilities::generate_module! {
 pub enum MyTestValues<T: T1> {
 	Variant1(_0: T::XY),
-	Variant2(_0: u8, _1: u16),
+	Variant2(_0: u8, _1: u16, _2: u8, _3: u8),
 	Variant4 {
 		myfield: u8,
 		field2: T::XY,
