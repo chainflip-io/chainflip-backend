@@ -14,7 +14,7 @@ import type {
 import { Logger } from 'pino';
 import { globalLogger } from 'shared/utils/logger';
 import { findOneEventOfMany } from 'shared/utils/indexer';
-import { governanceProposed } from 'generated/events/governance/proposed';
+import { governanceProposedEvent } from 'generated/events/governance/proposed';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
@@ -24,12 +24,37 @@ const keyring = new Keyring({ type: 'sr25519' });
 
 export const snowWhite = keyring.createFromUri(snowWhiteUri);
 
-export async function submitExistingGovernanceExtrinsic(
-  extrinsic: SubmittableExtrinsic<'promise'>,
+async function findProposalId(
+  logger: Logger,
+  txHash: string,
+  startFromBlock: number,
+): Promise<number> {
+  // Use the indexer to find the Governance.Proposed event. This avoids SCALE decoding of the
+  // submit result's events, which fails at runtime upgrade boundaries.
+  const { name, schema } = governanceProposedEvent;
+  const event = await findOneEventOfMany(
+    logger,
+    { event: { name, schema, txHash } },
+    { startFromBlock },
+  );
+  logger.debug(`Governance extrinsic proposal ID: ${event.data}`);
+  return event.data;
+}
+
+/**
+ * @deprecated Legacy polkadot.js governance path. Prefer the dedot {@link submitGovernanceExtrinsic}
+ * (or `ChainflipIO.submitGovernance`). Keeping around for now due to Dedot having a bug when encoding
+ * some config-update shapes.
+ */
+export async function submitGovernanceExtrinsicPolkadot(
+  call: (
+    api: DisposableApiPromise,
+  ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
   logger: Logger = globalLogger,
   preAuthorise = 0,
 ): Promise<number> {
   await using api = await getChainflipPolkadotApi();
+  const extrinsic = await call(api);
 
   logger.debug(`Submitting governance extrinsic`);
 
@@ -50,34 +75,7 @@ export async function submitExistingGovernanceExtrinsic(
   ).number.toNumber();
   logger.debug(`Governance extrinsic tx hash: ${txHash}, tx block: ${txBlockNumber}`);
 
-  // Use the indexer to find the Governance.Proposed event. This avoids
-  // SCALE decoding of submitResult.events which fails at runtime upgrade boundaries.
-  const event = await findOneEventOfMany(
-    logger,
-    {
-      event: {
-        name: 'Governance.Proposed',
-        schema: governanceProposed,
-        txHash,
-      },
-    },
-    { startFromBlock: txBlockNumber },
-  );
-
-  const proposalId = event.data;
-  logger.debug(`Governance extrinsic proposal ID: ${proposalId}`);
-  return proposalId;
-}
-
-export async function submitGovernanceExtrinsicPolkadot(
-  call: (
-    api: DisposableApiPromise,
-  ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
-  logger: Logger = globalLogger,
-  preAuthorise = 0,
-): Promise<number> {
-  await using api = await getChainflipPolkadotApi();
-  return submitExistingGovernanceExtrinsic(await call(api), logger, preAuthorise);
+  return findProposalId(logger, txHash, txBlockNumber);
 }
 
 /**
@@ -114,21 +112,5 @@ export async function submitGovernanceExtrinsic(
   const txBlockNumber = result.status.value.blockNumber;
   logger.debug(`Governance extrinsic tx hash: ${txHash}, tx block: ${txBlockNumber}`);
 
-  // Use the indexer to find the Governance.Proposed event. This avoids
-  // SCALE decoding of result.events which fails at runtime upgrade boundaries.
-  const event = await findOneEventOfMany(
-    logger,
-    {
-      event: {
-        name: 'Governance.Proposed',
-        schema: governanceProposed,
-        txHash,
-      },
-    },
-    { startFromBlock: txBlockNumber },
-  );
-
-  const proposalId = event.data;
-  logger.debug(`Governance extrinsic proposal ID: ${proposalId}`);
-  return proposalId;
+  return findProposalId(logger, txHash, txBlockNumber);
 }
