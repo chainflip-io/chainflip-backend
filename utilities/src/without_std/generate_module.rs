@@ -243,7 +243,7 @@ macro_rules! generate_module {
                                         ))
                                     }
 
-                                    fn try_backwards<E>(x: Self::From, map_error: impl Fn(Self::BackwardsError) -> E) -> Result<StructVariant<To>, E> {
+                                    fn try_backwards<E>(x: StructVariant<To>, map_error: impl Fn(Self::BackwardsError) -> E) -> Result<Self::From, E> {
                                         Ok(Struct::intro(
                                             $(
                                                 $field::try_backwards::<StructBackwardsError>(x.$field, StructBackwardsError::$field)
@@ -623,7 +623,7 @@ macro_rules! generate_module {
                                         })
                                     }
 
-                                    fn try_backwards<E>(x: Self::From, map_error: impl Fn(Self::BackwardsError) -> E) -> Result<EnumVariant<To>, E> {
+                                    fn try_backwards<E>(x: EnumVariant<To>, map_error: impl Fn(Self::BackwardsError) -> E) -> Result<Self::From, E> {
                                         Ok(match x {
                                             $(
                                                 Enum::$variant(val) => Enum::$variant(
@@ -747,6 +747,8 @@ macro_rules! generate_module {
                                 GetGenericVariant<variants::$variant>,
                             )*
                         )>;
+                        type ForwardsError = cf_utilities::never::Never;
+                        type BackwardsError = cf_utilities::never::Never;
 
                         fn forwards(x: Self::From) -> RealEnum {
                             match x {
