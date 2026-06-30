@@ -35,6 +35,7 @@ use cf_primitives::{
 };
 use common::SHARED_DATA_REFERENCE_LIFETIME;
 use pallet_cf_elections::generic_tools::{ArrayContainer, ArrayToVector};
+use pallet_cf_swapping::FeeRateAndMinimum;
 pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -1183,7 +1184,13 @@ fn testnet_genesis(
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
-		swapping: Default::default(),
+		swapping: state_chain_runtime::SwappingConfig {
+			flip_buy_interval: 3,
+			network_fee: FeeRateAndMinimum {
+				rate: Permill::from_rational(1u32, 1000u32),
+				minimum: 100_000u128,
+			},
+		},
 		bitcoin_vault: Default::default(),
 		polkadot_vault: Default::default(),
 		system: Default::default(),

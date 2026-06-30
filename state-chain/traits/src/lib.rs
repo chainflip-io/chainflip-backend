@@ -749,6 +749,7 @@ pub trait MissedAuthorshipSlots {
 pub trait FeePayment {
 	type Amount;
 	type AccountId;
+	type Deficit;
 	/// Helper function to mint FLIP to an account.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
@@ -756,7 +757,13 @@ pub trait FeePayment {
 	}
 
 	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
-	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
+	fn try_take_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
+
+	/// Accumulate FLIP to be distributed off-chain (e.g. via the StateChainGateway).
+	fn add_to_offchain_flip_to_be_distributed(amount: i128);
+
+	/// Accumulate FLIP to be distributed on-chain, returning a deficit imbalance.
+	fn add_to_onchain_flip_to_be_distributed(amount: Self::Amount) -> Self::Deficit;
 }
 
 /// Provides information about on-chain funds.

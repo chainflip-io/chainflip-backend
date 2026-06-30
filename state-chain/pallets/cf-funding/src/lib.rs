@@ -34,10 +34,13 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
+use cf_primitives::{
+	chains::assets::eth::Asset as EthAsset, AssetAmount, ACCUMULATE_REWARDS_EPOCH_START,
+};
 use cf_traits::{
-	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
+	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, EpochInfo,
+	FeePayment, FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck,
+	SpawnAccount,
 };
 use cf_utilities::derive_common_traits;
 use codec::{Decode, DecodeWithMemTracking, Encode};
@@ -259,9 +262,9 @@ impl<T: Config> Redemption<T> {
 		self.redeem_amount.saturating_add(self.redemption_fee)
 	}
 
-	pub fn burn_fee(&self) -> Result<(), Error<T>> {
+	pub fn take_fee(&self) -> Result<(), Error<T>> {
 		ensure!(
-			T::Flip::try_burn_fee(&self.account_id, self.redemption_fee).is_ok(),
+			T::Flip::try_take_fee(&self.account_id, self.redemption_fee).is_ok(),
 			Error::<T>::InsufficientBalance
 		);
 		Ok(())
@@ -692,7 +695,7 @@ pub mod pallet {
 				redemption.total_debit_amount(),
 			)?;
 
-			redemption.burn_fee()?;
+			redemption.take_fee()?;
 			redemption.update_restricted_balances(None)?;
 
 			// Update the account balance.
@@ -879,7 +882,7 @@ pub mod pallet {
 
 			let redemption =
 				Redemption::<T>::for_rebalance(&source_account_id, amount, redemption_address)?;
-			redemption.burn_fee()?;
+			redemption.take_fee()?;
 			redemption.update_restricted_balances(Some(&recipient_account_id))?;
 
 			T::Flip::try_transfer(
@@ -923,7 +926,11 @@ pub mod pallet {
 						amount < MinimumFunding::<T>::get().into()
 					{
 						// Insufficient funds to create an account.
-						T::Flip::burn_offchain(amount.into());
+						if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+							T::Flip::add_to_onchain_flip_to_be_distributed(amount.into());
+						} else {
+							T::Flip::burn_offchain(amount.into());
+						}
 						Self::deposit_event(Event::FailedFundingAttempt {
 							account_id: caller_account_id,
 							withdrawal_address: caller,

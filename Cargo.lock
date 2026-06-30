@@ -2284,6 +2284,7 @@ dependencies = [
  "jsonrpsee",
  "log",
  "pallet-cf-elections",
+ "pallet-cf-swapping",
  "pallet-staking",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",

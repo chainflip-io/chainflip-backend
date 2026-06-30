@@ -20,8 +20,8 @@
 //! 'good' behaviour and (b) to ensure that only funded actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, OpaqueCallIndex, Pallet as Flip};
-use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
-use cf_traits::{AccountInfo, WaivedFees};
+use cf_primitives::{FlipBalance, ACCUMULATE_REWARDS_EPOCH_START, FLIPPERINOS_PER_FLIP};
+use cf_traits::{AccountInfo, EpochInfo, FeePayment, WaivedFees};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
@@ -121,8 +121,8 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 	) -> Result<(), frame_support::unsigned::TransactionValidityError> {
 		if let Some((surplus, call_index)) = escrow {
 			// It's possible the account was deleted during extrinsic execution. If this is the
-			// case, we shouldn't refund anything, we can just burn all fees in escrow.
-			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
+			// case, we shouldn't refund anything, we can just take all the fees in escrow.
+			let fee = if frame_system::Pallet::<T>::account_exists(who) {
 				if let Some(call_index) = call_index {
 					corrected_fee.saturating_mul(
 						crate::CallCounter::<T>::mutate(
@@ -142,7 +142,12 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			};
 
 			// If there is a difference this will be reconciled when the result goes out of scope.
-			let _imbalance = surplus.offset(Flip::<T>::burn(to_burn));
+			let _imbalance =
+				surplus.offset(if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+					Flip::<T>::add_to_onchain_flip_to_be_distributed(fee)
+				} else {
+					Flip::<T>::burn(fee)
+				});
 		}
 		Ok(())
 	}

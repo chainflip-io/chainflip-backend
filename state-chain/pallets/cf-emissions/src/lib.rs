@@ -19,9 +19,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
-use cf_primitives::{AssetAmount, EgressId};
+use cf_primitives::{AssetAmount, EgressId, ACCUMULATE_REWARDS_EPOCH_START};
 use cf_traits::{
-	impl_pallet_safe_mode, Broadcaster, EgressApi, FlipBurnOrMoveInfo, Issuance,
+	impl_pallet_safe_mode, Broadcaster, EgressApi, EpochInfo, FlipBurnOrMoveInfo, Issuance,
 	RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
@@ -176,19 +176,11 @@ pub mod pallet {
 			if current_block % T::CompoundingInterval::get() == Zero::zero() {
 				Self::update_block_emissions();
 			}
-			if Self::should_update_supply_at(current_block) {
-				if T::SafeMode::get().emissions_sync_enabled {
-					Self::burn_flip_network_fee();
-					Self::broadcast_update_total_supply(
-						T::Issuance::total_issuance(),
-						current_block,
-					);
-					Self::deposit_event(Event::SupplyUpdateBroadcastRequested(current_block));
-					LastSupplyUpdateBlock::<T>::set(current_block);
-					return T::WeightInfo::rewards_minted()
-				} else {
-					log::info!("Runtime Safe Mode is CODE RED: Flip total issuance update broadcast are paused for now.");
-				}
+			if Self::should_update_supply_at(current_block) &&
+				T::EpochInfo::epoch_index() < ACCUMULATE_REWARDS_EPOCH_START
+			{
+				Self::burn_and_broadcast_supply_update(current_block);
+				return T::WeightInfo::rewards_minted()
 			}
 			T::WeightInfo::rewards_not_minted()
 		}
@@ -245,6 +237,19 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Burns the network fee and broadcasts an updated total supply to the gateway.
+	/// No-ops if safe mode has disabled emissions sync.
+	pub fn burn_and_broadcast_supply_update(current_block: BlockNumberFor<T>) {
+		if T::SafeMode::get().emissions_sync_enabled {
+			Self::burn_flip_network_fee();
+			Self::broadcast_update_total_supply(T::Issuance::total_issuance(), current_block);
+			Self::deposit_event(Event::SupplyUpdateBroadcastRequested(current_block));
+			LastSupplyUpdateBlock::<T>::set(current_block);
+		} else {
+			log::info!("Runtime Safe Mode is CODE RED: Flip total issuance update broadcast are paused for now.");
+		}
+	}
+
 	/// Determines if we should broadcast supply update at block number `block_number`.
 	fn should_update_supply_at(block_number: BlockNumberFor<T>) -> bool {
 		let supply_update_interval = SupplyUpdateInterval::<T>::get();
@@ -343,7 +348,9 @@ where
 impl<T: Config> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
 	fn note_author(author: T::AccountId) {
 		let reward_amount = CurrentAuthorityEmissionPerBlock::<T>::get();
-		if reward_amount != Zero::zero() {
+		if reward_amount != Zero::zero() &&
+			T::EpochInfo::epoch_index() < ACCUMULATE_REWARDS_EPOCH_START
+		{
 			T::RewardsDistribution::distribute(reward_amount, &author, T::Issuance::mint);
 		}
 	}
