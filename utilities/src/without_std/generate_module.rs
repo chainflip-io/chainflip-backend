@@ -228,8 +228,14 @@ macro_rules! generate_module {
                                         )
                                     }
 
-                                    fn try_forwards<E>(x: Self::From) -> Result<StructVariant<To>, E> {
-                                        todo!()
+                                    fn try_forwards<E>(x: Self::From, map_error: impl Fn(Self::ForwardsError) -> E) -> Result<StructVariant<To>, E> {
+                                        Ok(Struct::intro(
+                                            $(
+                                                $field::try_forwards::<StructForwardsError>(x.$field, StructForwardsError::$field)
+                                                    .map_err(&map_error)?,
+                                            )*
+                                            Default::default(),
+                                        ))
                                     }
                                 }
                             }
