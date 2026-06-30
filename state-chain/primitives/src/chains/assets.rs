@@ -366,7 +366,7 @@ macro_rules! assets {
 				use super::$chain_member_and_module as $chain_member_and_module;
 			)*
 
-			// #[cf_proc_macros::generate_module]
+			#[cf_proc_macros::generate_module]
 			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
 			#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 			pub struct AssetMap<T> {
@@ -580,7 +580,7 @@ macro_rules! assets {
 					Unsupported,
 				}
 
-				// #[cf_proc_macros::generate_module]
+				#[cf_proc_macros::generate_module]
 				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
 				#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 				pub struct AssetMap<T> {
