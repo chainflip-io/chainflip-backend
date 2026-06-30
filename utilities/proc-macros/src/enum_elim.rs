@@ -39,7 +39,7 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 			Fields::Unnamed(fields) => {
 				let field_types = fields.unnamed.iter().map(|field| &field.ty);
 				quote! {
-					#handler: impl Fn((#(#field_types,)*)) -> #output
+					#handler: impl Fn(#(#field_types),*) -> #output
 				}
 			},
 			_ => {
@@ -72,7 +72,7 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 			},
 			Fields::Unnamed(_) => {
 				quote! {
-					Self::#variant_ident(#(#field_bindings),*) => #handler((#(#field_bindings,)*))
+					Self::#variant_ident(#(#field_bindings),*) => #handler(#(#field_bindings),*)
 				}
 			},
 			Fields::Unit => {
