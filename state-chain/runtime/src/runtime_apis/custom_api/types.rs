@@ -581,7 +581,7 @@ pub enum TransactionScreeningEvent<TxId, DepositDetails, Address> {
 	},
 }
 
-pub type BrokerRejectionEventFor<C> = TransactionScreeningEvent<
+pub type BrokerRejectionEventFor<C: Chain> = TransactionScreeningEvent<
 	<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
 	<C as Chain>::DepositDetails,
 	<C as Chain>::ChainAccount,

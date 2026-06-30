@@ -23,8 +23,6 @@ use crate::Asset;
 
 use super::assets::*;
 
-/*
-
 // -------------- HasChangelog ---------------- //
 
 impl<T: HasChangelog> HasChangelog for hub::AssetMap<T> {
@@ -90,8 +88,6 @@ where
 // impl HasChangelog for Asset {
 // 	type if_unspecified = IdentityMigration;
 // }
-
- */
 
 // --------- testing ------------
 
