@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use cf_utilities::migrations::v20000;
+use cf_utilities::migrations::{v20000, v20100, v20200, v20300};
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 
 #[derive(Encode, Decode, TypeInfo, Clone)]
@@ -57,8 +57,12 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	}
 }
 
-pub type RpcAccountInfoCommonItems<Balance> =
-	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20000>>::HistoricalType;
+pub type RpcAccountInfoCommonItems<Balance: HasChangelog + Default>
+	= <super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20000>>::HistoricalType
+where
+	<Balance as HasVersion<v20300>>::HistoricalType: Default,
+	<Balance as HasVersion<v20200>>::HistoricalType: Default,
+	<Balance as HasVersion<v20100>>::HistoricalType: Default;
 
 #[derive(
 	Copy,

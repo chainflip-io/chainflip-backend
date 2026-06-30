@@ -19,7 +19,7 @@ use cf_chains::instances::{
 	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaCryptoInstance, SolanaInstance,
 };
 use cf_traits::{lending::LoanId, SafeModeSet};
-use cf_utilities::migrations::{basics::HasVersion, v20100};
+use cf_utilities::migrations::{basics::HasVersion, v20000, v20100, v20200, v20300};
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 use frame_support::sp_runtime::Percent;
 use pallet_cf_lending_pools::{LendingPoolConfiguration, NetworkFeeContributions};
@@ -255,8 +255,12 @@ impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
 	}
 }
 
-pub type RpcAccountInfoCommonItems<Balance> =
-	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20100>>::HistoricalType;
+pub type RpcAccountInfoCommonItems<Balance: HasChangelog + Default>
+	= <super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20100>>::HistoricalType
+where
+	<Balance as HasVersion<v20300>>::HistoricalType: Default,
+	<Balance as HasVersion<v20200>>::HistoricalType: Default,
+	<Balance as HasVersion<v20100>>::HistoricalType: Default;
 
 // VaultAddresses as returned by api_version 16 runtimes: has usdt fields added in v16
 // but lacks the tron field added in v17.
