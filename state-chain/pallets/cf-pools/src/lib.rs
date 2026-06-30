@@ -24,9 +24,7 @@ use cf_amm::{
 	PoolState,
 };
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{
-	chains::assets::any, Asset, AssetAmount, AssetAndAmount, OrderId, STABLE_ASSET,
-};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
