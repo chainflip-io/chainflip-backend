@@ -103,43 +103,39 @@ macro_rules! define_all_runtime_versions {
         ///
         /// In order to implement `HasChangelog` a type also has to implement `HasGenericVariant`.
         ///
-        pub trait HasChangelog<EF, EB>:
+        pub trait HasChangelog:
             HasGenericVariant<
-            EF,
-            EB,
-            MigrationFromGeneric: Migration<Self, vCurrent, EF, EB, From: IsHistoricalType<EF, EB, GetCurrentType = Self>>,
+            MigrationFromGeneric: Migration<Self, vCurrent, From: IsHistoricalType<GetCurrentType = Self>>,
         > {
             #[allow(nonstandard_style)]
             type if_unspecified: $(
-                Migration<migration_helpers::$version<Self, EF, EB>, $version, EF, EB, From: IsHistoricalType<EF, EB, GetCurrentType = Self>> +
+                Migration<migration_helpers::$version<Self>, $version, From: IsHistoricalType<GetCurrentType = Self>> +
             )*;
 
             $(
                 #[allow(nonstandard_style)]
-                type $Migration: Migration<migration_helpers::$version<Self, EF, EB>, $version, EF, EB, From: IsHistoricalType<EF, EB, GetCurrentType = Self>> = Self::if_unspecified;
+                type $Migration: Migration<migration_helpers::$version<Self>, $version, From: IsHistoricalType<GetCurrentType = Self>> = Self::if_unspecified;
             )*
         }
 
-        pub trait OrdMigrations<EF, EB> = HasChangelog<
-            EF,
-            EB,
-            MigrationFromGeneric: Migration<Self, vCurrent, EF, EB, From: Ord + IsHistoricalType<EF, EB, GetCurrentType = Self>>,
+        pub trait OrdMigrations = HasChangelog<
+            MigrationFromGeneric: Migration<Self, vCurrent, From: Ord + IsHistoricalType<GetCurrentType = Self>>,
 
             if_unspecified: $(
-                Migration<migration_helpers::$version<Self, EF, EB>, $version, EF, EB, From: Ord + IsHistoricalType<EF, EB, GetCurrentType = Self>> +
+                Migration<migration_helpers::$version<Self>, $version, From: Ord + IsHistoricalType<GetCurrentType = Self>> +
             )*,
 
             $(
-                $Migration: Migration<migration_helpers::$version<Self, EF, EB>, $version, EF, EB, From: Ord + IsHistoricalType<EF, EB, GetCurrentType = Self>>,
+                $Migration: Migration<migration_helpers::$version<Self>, $version, From: Ord + IsHistoricalType<GetCurrentType = Self>>,
             )*
         >;
 
         // helper trait implementations to get access to the type at an arbitrary version
         $(
-            impl<X: HasChangelog<EF, EB>, EF, EB> HasVersion<$version, EF, EB> for X {
-                type HistoricalType = migration_helpers::$version<X, EF, EB>;
+            impl<X: HasChangelog> HasVersion<$version> for X {
+                type HistoricalType = migration_helpers::$version<X>;
                 type HistoricalMigration = X::$Migration;
-                type MigrationToCurrent = migration_helpers::$Migration<X, EF, EB>;
+                type MigrationToCurrent = migration_helpers::$Migration<X>;
             }
         )*
 
@@ -173,12 +169,12 @@ macro_rules! generate_migration_helpers {
         $old:ident => $OldMigration:ident, $new:ident => $NewMigration:ident, $($rest:tt)*
     ) => {
         #[allow(nonstandard_style)]
-        pub type $old<M: HasChangelog<EF, EB>, EF, EB> =
-            <M::$NewMigration as Migration<$new<M, EF, EB>, super::$new, EF, EB>>::From;
+        pub type $old<M: HasChangelog> =
+            <M::$NewMigration as Migration<$new<M>, super::$new>>::From;
 
         #[allow(nonstandard_style)]
-        pub type $OldMigration<M: HasChangelog<EF, EB>, EF, EB> =
-            (M::$NewMigration, super::$new, $NewMigration<M, EF, EB>);
+        pub type $OldMigration<M: HasChangelog> =
+            (M::$NewMigration, super::$new, $NewMigration<M>);
 
         generate_migration_helpers!{ $new => $NewMigration, $($rest)*}
     };
@@ -186,11 +182,11 @@ macro_rules! generate_migration_helpers {
         $new:ident => $NewMigration:ident,
     ) => {
         #[allow(nonstandard_style)]
-        pub type $new<M: HasChangelog<EF, EB>, EF, EB> =
-            <M::MigrationFromGeneric as Migration<M, vCurrent, EF, EB>>::From;
+        pub type $new<M: HasChangelog> =
+            <M::MigrationFromGeneric as Migration<M, vCurrent>>::From;
 
         #[allow(nonstandard_style)]
-        pub type $NewMigration<M: HasChangelog<EF, EB>, EF, EB> =
+        pub type $NewMigration<M: HasChangelog> =
             M::MigrationFromGeneric;
     }
 }

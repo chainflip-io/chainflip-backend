@@ -252,7 +252,7 @@ pub struct FeeRateAndMinimum {
 	pub rate: sp_runtime::Permill,
 	pub minimum: AssetAmount,
 }
-impl<F, B> HasChangelog<F, B> for FeeRateAndMinimum {
+impl HasChangelog for FeeRateAndMinimum {
 	type if_unspecified = _FeeRateAndMinimum::see_field_changelogs;
 }
 

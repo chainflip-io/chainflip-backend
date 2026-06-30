@@ -271,7 +271,7 @@ pub struct DelegationInfo<Amount> {
 	pub bid: Amount,
 }
 
-impl<Amount: HasChangelog<F, B>, F, B> HasChangelog<F, B> for DelegationInfo<Amount> {
+impl<Amount: HasChangelog> HasChangelog for DelegationInfo<Amount> {
 	type if_unspecified = _DelegationInfo::see_field_changelogs;
 }
 
@@ -623,7 +623,7 @@ pub struct NetworkFeeDetails {
 	pub standard_rate_and_minimum: FeeRateAndMinimum,
 	pub rates: AssetMap<Permill>,
 }
-impl<F, B> HasChangelog<F, B> for NetworkFeeDetails {
+impl HasChangelog for NetworkFeeDetails {
 	type if_unspecified = _NetworkFeeDetails::see_field_changelogs;
 }
 
@@ -633,7 +633,7 @@ pub struct NetworkFees {
 	pub regular_network_fee: NetworkFeeDetails,
 	pub internal_swap_network_fee: NetworkFeeDetails,
 }
-impl<F, B> HasChangelog<F, B> for NetworkFees {
+impl HasChangelog for NetworkFees {
 	type if_unspecified = _NetworkFees::see_field_changelogs;
 }
 
@@ -846,14 +846,14 @@ pub enum ShouldSweep {
 	No,
 }
 
-impl<F, B> HasChangelog<F, B> for ShouldSweep {
+impl HasChangelog for ShouldSweep {
 	type if_unspecified = IdentityMigration;
 	type in_20200 = NewTypeWithDefault;
 }
-impl<F, B> HasGenericVariant<F, B> for ShouldSweep {
+impl HasGenericVariant for ShouldSweep {
 	type GenericType = Self;
 	type MigrationFromGeneric = IdentityMigration;
 }
-impl<F, B> IsHistoricalType<F, B> for ShouldSweep {
+impl IsHistoricalType for ShouldSweep {
 	type GetCurrentType = Self;
 }

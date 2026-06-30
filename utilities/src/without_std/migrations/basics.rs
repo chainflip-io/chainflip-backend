@@ -32,47 +32,51 @@ pub enum MigrationError {
 	EnumVariantDoesntExist,
 }
 
-pub trait Migration<To, V: Version, EF, EB> {
-	type From: IsHistoricalType<EF, EB>;
-	fn forwards(x: Self::From) -> Result<To, EF>;
-	fn backwards(x: To) -> Result<Self::From, EB>;
+pub trait Migration<To, V: Version> {
+	type From: IsHistoricalType;
+	type ForwardsError;
+	type BackwardsError;
+	fn forwards<E: From<Self::ForwardsError>>(x: Self::From) -> Result<To, E>;
+	fn backwards<E: From<Self::BackwardsError>>(x: To) -> Result<Self::From, E>;
 }
 
-pub trait HasVersion<V: Version, EF, EB>: Sized {
+pub trait HasVersion<V: Version>: Sized {
 	type HistoricalType;
-	type HistoricalMigration: Migration<Self::HistoricalType, V, EF, EB>;
-	type MigrationToCurrent: Migration<Self, vCurrent, EF, EB, From = Self::HistoricalType>;
+	type HistoricalMigration: Migration<Self::HistoricalType, V>;
+	type MigrationToCurrent: Migration<Self, vCurrent, From = Self::HistoricalType>;
 }
 
-pub fn try_migrate_from_historical_type<V: Version, X: HasVersion<V, EF, EB>, EF, EB>(
+pub fn try_migrate_from_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X::HistoricalType,
-) -> Result<X, EF> {
+) -> Result<X, <X::MigrationToCurrent as Migration<X, vCurrent>>::ForwardsError> {
 	X::MigrationToCurrent::forwards(x)
 }
 
-pub fn migrate_from_historical_type<V: Version, X: HasVersion<V, Never, EB>, EB>(
-	_v: V,
-	x: X::HistoricalType,
-) -> X {
-	match X::MigrationToCurrent::forwards(x) {
+pub fn migrate_from_historical_type<V: Version, X>(_v: V, x: X::HistoricalType) -> X
+where
+	X: HasVersion<V>,
+	X::MigrationToCurrent: Migration<X, vCurrent, ForwardsError = Never>,
+{
+	match X::MigrationToCurrent::forwards::<Never>(x) {
 		Ok(x) => x,
 		Err(never) => match never {},
 	}
 }
 
-pub fn try_migrate_to_historical_type<V: Version, X: HasVersion<V, EF, EB>, EF, EB>(
+pub fn try_migrate_to_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X,
-) -> Result<X::HistoricalType, EB> {
+) -> Result<X::HistoricalType, <X::MigrationToCurrent as Migration<X, vCurrent>>::BackwardsError> {
 	X::MigrationToCurrent::backwards(x)
 }
 
-pub fn migrate_to_historical_type<V: Version, X: HasVersion<V, EF, Never>, EF>(
-	_v: V,
-	x: X,
-) -> X::HistoricalType {
-	match X::MigrationToCurrent::backwards(x) {
+pub fn migrate_to_historical_type<V: Version, X>(_v: V, x: X) -> X::HistoricalType
+where
+	X: HasVersion<V>,
+	X::MigrationToCurrent: Migration<X, vCurrent, BackwardsError = Never>,
+{
+	match X::MigrationToCurrent::backwards::<Never>(x) {
 		Ok(x) => x,
 		Err(never) => match never {},
 	}
@@ -80,71 +84,86 @@ pub fn migrate_to_historical_type<V: Version, X: HasVersion<V, EF, Never>, EF>(
 // -------- identity migration --------
 pub struct IdentityMigration;
 
-impl<X: IsHistoricalType<EF, EB>, V: Version, EF, EB> Migration<X, V, EF, EB>
-	for IdentityMigration
-{
+impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 	type From = X;
+	type ForwardsError = Never;
+	type BackwardsError = Never;
 
-	fn forwards(x: Self::From) -> Result<X, EF> {
+	fn forwards<E: From<Self::ForwardsError>>(x: Self::From) -> Result<X, E> {
 		Ok(x)
 	}
 
-	fn backwards(x: X) -> Result<Self::From, EB> {
+	fn backwards<E: From<Self::BackwardsError>>(x: X) -> Result<Self::From, E> {
 		Ok(x)
 	}
 }
 
 // -------- composition of migrations --------
-impl<
-		V: Version,
-		W: Version,
-		X,
-		EF,
-		EB,
-		A: Migration<B::From, W, EF, EB>,
-		B: Migration<X, V, EF, EB>,
-	> Migration<X, V, EF, EB> for (A, W, B)
+pub enum ComposeForwardsError<A, B> {
+	First(A),
+	Second(B),
+}
+
+pub enum ComposeBackwardsError<A, B> {
+	First(A),
+	Second(B),
+}
+
+impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Migration<X, V>
+	for (A, W, B)
 {
 	type From = A::From;
+	type ForwardsError = ComposeForwardsError<A::ForwardsError, B::ForwardsError>;
+	type BackwardsError = ComposeBackwardsError<A::BackwardsError, B::BackwardsError>;
 
-	fn forwards(x: Self::From) -> Result<X, EF> {
-		B::forwards(A::forwards(x)?)
+	fn forwards<E: From<Self::ForwardsError>>(x: Self::From) -> Result<X, E> {
+		let x = A::forwards::<A::ForwardsError>(x)
+			.map_err(Self::ForwardsError::First)
+			.map_err(E::from)?;
+		B::forwards::<B::ForwardsError>(x)
+			.map_err(Self::ForwardsError::Second)
+			.map_err(E::from)
 	}
 
-	fn backwards(x: X) -> Result<Self::From, EB> {
-		A::backwards(B::backwards(x)?)
+	fn backwards<E: From<Self::BackwardsError>>(x: X) -> Result<Self::From, E> {
+		let x = B::backwards::<B::BackwardsError>(x)
+			.map_err(Self::BackwardsError::Second)
+			.map_err(E::from)?;
+		A::backwards::<A::BackwardsError>(x)
+			.map_err(Self::BackwardsError::First)
+			.map_err(E::from)
 	}
 }
 
 // ------- migration for new field with default value --------
 
 pub struct NewFieldWithDefault;
-impl<T: Default, V: Version, EF, EB> Migration<T, V, EF, EB> for NewFieldWithDefault {
+impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 	type From = ();
+	type ForwardsError = Never;
+	type BackwardsError = Never;
 
-	fn forwards(_x: Self::From) -> Result<T, EF> {
+	fn forwards<E: From<Self::ForwardsError>>(_x: Self::From) -> Result<T, E> {
 		Ok(Default::default())
 	}
 
-	fn backwards(_x: T) -> Result<Self::From, EB> {
+	fn backwards<E: From<Self::BackwardsError>>(_x: T) -> Result<Self::From, E> {
 		Ok(())
 	}
 }
 
 // ----------- lookups ------------
 
-pub trait IsHistoricalType<EF, EB> {
-	type GetCurrentType: HasChangelog<EF, EB>;
+pub trait IsHistoricalType {
+	type GetCurrentType: HasChangelog;
 }
-pub trait IsHistoricalTypeAt<V: Version, EF, EB> =
-	IsHistoricalType<EF, EB, GetCurrentType: HasVersion<V, EF, EB, HistoricalType = Self>>;
+pub trait IsHistoricalTypeAt<V: Version> =
+	IsHistoricalType<GetCurrentType: HasVersion<V, HistoricalType = Self>>;
 pub type GetMigrationToHistoricalType<
-	X: IsHistoricalTypeAt<V, EF, EB>,
-	// X: IsHistoricalType<EF, EB, GetCurrentType: HasVersion<V, EF, EB, HistoricalType = X>>,
+	X: IsHistoricalTypeAt<V>,
+	// X: IsHistoricalType<GetCurrentType: HasVersion<V, HistoricalType = X>>,
 	V: Version,
-	EF,
-	EB,
-> = <X::GetCurrentType as HasVersion<V, EF, EB>>::HistoricalMigration;
+> = <X::GetCurrentType as HasVersion<V>>::HistoricalMigration;
 
 // ----------- associated generic type --------------
 
@@ -159,62 +178,47 @@ impl Version for vCurrent {
 		None;
 }
 
-pub trait HasGenericVariant<EF, EB>: Sized {
-	type GenericType: IsHistoricalType<EF, EB>;
-	type MigrationFromGeneric: Migration<Self, vCurrent, EF, EB, From = Self::GenericType>;
+pub trait HasGenericVariant: Sized {
+	type GenericType: IsHistoricalType;
+	type MigrationFromGeneric: Migration<Self, vCurrent, From = Self::GenericType>;
 }
 
-pub type GetGenericVariant<X: HasGenericVariant<EF, EB>, EF, EB> = <<X as HasGenericVariant<
-	EF,
-	EB,
->>::MigrationFromGeneric as Migration<
-	X,
-	vCurrent,
-	EF,
-	EB,
->>::From;
+pub type GetGenericVariant<X: HasGenericVariant> =
+	<<X as HasGenericVariant>::MigrationFromGeneric as Migration<X, vCurrent>>::From;
 
 pub struct GlobalMigrationFromGeneric;
 
-pub fn migrate_from_generic_type<X: HasGenericVariant<EF, EB>, EF, EB>(
+pub fn migrate_from_generic_type<X: HasGenericVariant>(
 	x: X::GenericType,
-) -> Result<X, EF> {
+) -> Result<X, <X::MigrationFromGeneric as Migration<X, vCurrent>>::ForwardsError> {
 	X::MigrationFromGeneric::forwards(x)
 }
 
-pub fn migrate_to_generic_type<X: HasGenericVariant<EF, EB>, EF, EB>(
+pub fn migrate_to_generic_type<X: HasGenericVariant>(
 	x: X,
-) -> Result<X::GenericType, EB> {
+) -> Result<X::GenericType, <X::MigrationFromGeneric as Migration<X, vCurrent>>::BackwardsError> {
 	X::MigrationFromGeneric::backwards(x)
 }
 
 // ----------- maybe migrations (for horizontal composition) ---------
 
-pub trait MaybeMigration<To, V: Version, EF, EB> {
-	type GetWithDefault<Default: Migration<To, V, EF, EB>>: Migration<To, V, EF, EB>;
+pub trait MaybeMigration<To, V: Version> {
+	type GetWithDefault<Default: Migration<To, V>>: Migration<To, V>;
 }
 
 pub struct DefaultMigration;
-impl<To, V: Version, EF, EB> MaybeMigration<To, V, EF, EB> for DefaultMigration {
-	type GetWithDefault<Default: Migration<To, V, EF, EB>> = Default;
+impl<To, V: Version> MaybeMigration<To, V> for DefaultMigration {
+	type GetWithDefault<Default: Migration<To, V>> = Default;
 }
 
 pub struct OverrideMigrationWith<M>(M);
-impl<To, V: Version, EF, EB, M: Migration<To, V, EF, EB>> MaybeMigration<To, V, EF, EB>
-	for OverrideMigrationWith<M>
-{
-	type GetWithDefault<Default: Migration<To, V, EF, EB>> = M;
+impl<To, V: Version, M: Migration<To, V>> MaybeMigration<To, V> for OverrideMigrationWith<M> {
+	type GetWithDefault<Default: Migration<To, V>> = M;
 }
 
-impl<
-		To,
-		V: Version,
-		EF,
-		EB,
-		M1: MaybeMigration<To, V, EF, EB>,
-		M2: MaybeMigration<To, V, EF, EB>,
-	> MaybeMigration<To, V, EF, EB> for (M1, M2)
+impl<To, V: Version, M1: MaybeMigration<To, V>, M2: MaybeMigration<To, V>> MaybeMigration<To, V>
+	for (M1, M2)
 {
-	type GetWithDefault<Default: Migration<To, V, EF, EB>> =
+	type GetWithDefault<Default: Migration<To, V>> =
 		M2::GetWithDefault<M1::GetWithDefault<Default>>;
 }

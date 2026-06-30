@@ -18,9 +18,13 @@
 
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
-use crate::migrations::{
-	basics::{IdentityMigration, Migration, Version},
-	with_all_runtime_migrations, HasChangelog, HasGenericVariant, IsHistoricalType, OrdMigrations,
+use crate::{
+	migrations::{
+		basics::{IdentityMigration, Migration, Version},
+		with_all_runtime_migrations, HasChangelog, HasGenericVariant, IsHistoricalType,
+		OrdMigrations,
+	},
+	never::Never,
 };
 
 // ----------- identity migrations -------------
@@ -29,16 +33,16 @@ macro_rules! impl_identity_migrations {
 	($($ty:ty, )*) => {
 
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-		impl<EF, EB> IsHistoricalType<EF, EB> for Type {
+		impl IsHistoricalType for Type {
             type GetCurrentType = Self;
         }
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-		impl<EF, EB> HasGenericVariant<EF, EB> for Type {
+		impl HasGenericVariant for Type {
             type GenericType = Type;
             type MigrationFromGeneric = IdentityMigration;
         }
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-		impl<EF, EB> HasChangelog<EF, EB> for Type {
+		impl HasChangelog for Type {
             type if_unspecified = IdentityMigration;
         }
     };
@@ -46,16 +50,16 @@ macro_rules! impl_identity_migrations {
 
 impl_identity_migrations! {(), u8, u16, u128, }
 
-impl<T, EF, EB> IsHistoricalType<EF, EB> for PhantomData<T> {
+impl<T> IsHistoricalType for PhantomData<T> {
 	type GetCurrentType = Self;
 }
 
-impl<T, EF, EB> HasGenericVariant<EF, EB> for PhantomData<T> {
+impl<T> HasGenericVariant for PhantomData<T> {
 	type GenericType = Self;
 	type MigrationFromGeneric = IdentityMigration;
 }
 
-impl<T, EF, EB> HasChangelog<EF, EB> for PhantomData<T> {
+impl<T> HasChangelog for PhantomData<T> {
 	type if_unspecified = IdentityMigration;
 }
 
@@ -87,26 +91,28 @@ macro_rules! impl_identity_migrations_with_wrapper {
 			}
 		}
 
-		impl<EF, EB> Migration<$Ty, crate::migrations::vCurrent, EF, EB> for WrapMigration {
+		impl Migration<$Ty, crate::migrations::vCurrent> for WrapMigration {
 			type From = $Wrapper;
+			type ForwardsError = Never;
+			type BackwardsError = Never;
 
-			fn forwards(x: Self::From) -> Result<$Ty, EF> {
+			fn forwards<E: From<Self::ForwardsError>>(x: Self::From) -> Result<$Ty, E> {
 				Ok(x.0)
 			}
 
-			fn backwards(x: $Ty) -> Result<Self::From, EB> {
+			fn backwards<E: From<Self::BackwardsError>>(x: $Ty) -> Result<Self::From, E> {
 				Ok($Wrapper(x))
 			}
 		}
 
-		impl<EF, EB> IsHistoricalType<EF, EB> for $Wrapper {
+		impl IsHistoricalType for $Wrapper {
 			type GetCurrentType = $Ty;
 		}
-		impl<EF, EB> HasGenericVariant<EF, EB> for $Ty {
+		impl HasGenericVariant for $Ty {
             type GenericType = $Wrapper;
 			type MigrationFromGeneric = WrapMigration;
 		}
-		impl<EF, EB> HasChangelog<EF, EB> for $Ty {
+		impl HasChangelog for $Ty {
 			type if_unspecified = IdentityMigration;
 		}
 
@@ -145,23 +151,21 @@ impl_identity_migrations_with_wrapper! {
 #[derive(codec::Encode, codec::Decode, scale_info::TypeInfo, PartialEq, Debug)]
 #[cfg_attr(all(feature = "proptest", feature = "std"), derive(proptest_derive::Arbitrary))]
 pub struct HistoricalEmptyPlaceholder<T>(sp_std::marker::PhantomData<T>);
-impl<T: HasGenericVariant<EF, EB> + HasChangelog<EF, EB>, EF, EB> IsHistoricalType<EF, EB>
-	for HistoricalEmptyPlaceholder<T>
-{
+impl<T: HasGenericVariant + HasChangelog> IsHistoricalType for HistoricalEmptyPlaceholder<T> {
 	type GetCurrentType = T;
 }
 
 pub struct NewTypeWithDefault;
-impl<V: Version, T: HasChangelog<EF, EB> + Default, EF, EB> Migration<T, V, EF, EB>
-	for NewTypeWithDefault
-{
+impl<V: Version, T: HasChangelog + Default> Migration<T, V> for NewTypeWithDefault {
 	type From = HistoricalEmptyPlaceholder<T>;
+	type ForwardsError = Never;
+	type BackwardsError = Never;
 
-	fn forwards(_: Self::From) -> Result<T, EF> {
+	fn forwards<E: From<Self::ForwardsError>>(_: Self::From) -> Result<T, E> {
 		Ok(Default::default())
 	}
 
-	fn backwards(_: T) -> Result<Self::From, EB> {
+	fn backwards<E: From<Self::BackwardsError>>(_: T) -> Result<Self::From, E> {
 		Ok(HistoricalEmptyPlaceholder(Default::default()))
 	}
 }
@@ -170,18 +174,28 @@ impl<V: Version, T: HasChangelog<EF, EB> + Default, EF, EB> Migration<T, V, EF, 
 
 pub struct MapMigration<X>(X);
 
+pub enum MapMigrationForwardsError<A, B> {
+	First(A),
+	Second(B),
+}
+
+pub enum MapMigrationBackwardsError<A, B> {
+	First(A),
+	Second(B),
+}
+
 macro_rules! impl_migrations_for_container {
     (
         $container:ident<$($ty:ident $(: ($($ty_path:tt)*))?),+>,
         $container_macro:ident,
-        [$($var_M:ident $(where From: ($($from_path:tt)*) )?),+],
+		[$var_M:ident $(where From: ($($from_path:tt)*) )?],
         |$var_f:ident| $expr_f:expr,
         |$var_b:ident| $expr_b:expr,
     ) => {
         macro_rules! $container_macro {
             ($$($$migration:ident, )*) => {
-				impl<EF, EB, $($ty: HasChangelog<EF, EB> $(+ $($ty_path)*)?),+> HasChangelog<EF, EB> for $container<$($ty),+> {
-                    type if_unspecified = MapMigration<( $($ty::if_unspecified, )+ )>;
+				impl<$($ty: HasChangelog $(+ $($ty_path)*)?),+> HasChangelog for $container<$($ty),+> {
+					type if_unspecified = MapMigration<( $($ty::if_unspecified, )+ )>;
 
                     $$(
                         type $$migration = MapMigration<( $($ty::$$migration, )+ )>;
@@ -191,23 +205,25 @@ macro_rules! impl_migrations_for_container {
         }
         with_all_runtime_migrations!{ $container_macro }
 
-		impl<$($ty $(: $($ty_path)* )? ,)+  V: Version, EF, EB, $($var_M: Migration<$ty, V, EF, EB $(, From: $($from_path)*)?>),+> Migration<$container<$($ty),+>, V, EF, EB> for MapMigration<($($var_M, )+)> {
-            type From = $container<$($var_M::From),+>;
+		impl<$($ty $(: $($ty_path)* )? ,)+  V: Version, $var_M: Migration<$($ty),+, V $(, From: $($from_path)*)?>> Migration<$container<$($ty),+>, V> for MapMigration<($var_M,)> {
+			type From = $container<$var_M::From>;
+			type ForwardsError = $var_M::ForwardsError;
+			type BackwardsError = $var_M::BackwardsError;
 
-			fn forwards($var_f: Self::From) -> Result<$container<$($ty),+>, EF> {
+			fn forwards<E: From<Self::ForwardsError>>($var_f: Self::From) -> Result<$container<$($ty),+>, E> {
                 $expr_f
             }
 
-			fn backwards($var_b: $container<$($ty),+>) -> Result<Self::From, EB> {
+			fn backwards<E: From<Self::BackwardsError>>($var_b: $container<$($ty),+>) -> Result<Self::From, E> {
                 $expr_b
             }
         }
 
-		impl<EF, EB, $($ty: HasGenericVariant<EF, EB> $(+ $($ty_path)*)?),+ > HasGenericVariant<EF, EB> for $container<$($ty),+> {
+		impl<$($ty: HasGenericVariant $(+ $($ty_path)*)?),+ > HasGenericVariant for $container<$($ty),+> {
             type GenericType = $container<$($ty::GenericType),+>;
             type MigrationFromGeneric = MapMigration<($($ty::MigrationFromGeneric, )+)>;
         }
-		impl<EF, EB, $($ty: IsHistoricalType<EF, EB> $(+ $($ty_path)*)?),+> IsHistoricalType<EF, EB> for $container<$($ty),+> {
+		impl<$($ty: IsHistoricalType $(+ $($ty_path)*)?),+> IsHistoricalType for $container<$($ty),+> {
             type GetCurrentType = $container<$($ty::GetCurrentType),+>;
         }
     };
@@ -241,12 +257,57 @@ impl_migrations_for_container! {
 
 pub type TupleWith2Entries<A, B> = (A, B);
 
-impl_migrations_for_container! {
-	TupleWith2Entries<A,B>,
-	impl_changelog_for_tuple,
-	[M1,M2],
-	|x| Ok((M1::forwards(x.0)?, M2::forwards(x.1)?)),
-	|x| Ok((M1::backwards(x.0)?, M2::backwards(x.1)?)),
+macro_rules! impl_changelog_for_tuple {
+    ($($migration:ident,)*) => {
+		impl<A: HasChangelog, B: HasChangelog> HasChangelog for TupleWith2Entries<A, B> {
+            type if_unspecified = MapMigration<(A::if_unspecified, B::if_unspecified)>;
+
+            $(
+                type $migration = MapMigration<(A::$migration, B::$migration)>;
+            )*
+        }
+    };
+}
+with_all_runtime_migrations! {impl_changelog_for_tuple}
+
+impl<A, B, V: Version, M1: Migration<A, V>, M2: Migration<B, V>>
+	Migration<TupleWith2Entries<A, B>, V> for MapMigration<(M1, M2)>
+{
+	type From = TupleWith2Entries<M1::From, M2::From>;
+	type ForwardsError = MapMigrationForwardsError<M1::ForwardsError, M2::ForwardsError>;
+	type BackwardsError = MapMigrationBackwardsError<M1::BackwardsError, M2::BackwardsError>;
+
+	fn forwards<E: From<Self::ForwardsError>>(x: Self::From) -> Result<TupleWith2Entries<A, B>, E> {
+		Ok((
+			M1::forwards::<M1::ForwardsError>(x.0)
+				.map_err(MapMigrationForwardsError::First)
+				.map_err(E::from)?,
+			M2::forwards::<M2::ForwardsError>(x.1)
+				.map_err(MapMigrationForwardsError::Second)
+				.map_err(E::from)?,
+		))
+	}
+
+	fn backwards<E: From<Self::BackwardsError>>(
+		x: TupleWith2Entries<A, B>,
+	) -> Result<Self::From, E> {
+		Ok((
+			M1::backwards::<M1::BackwardsError>(x.0)
+				.map_err(MapMigrationBackwardsError::First)
+				.map_err(E::from)?,
+			M2::backwards::<M2::BackwardsError>(x.1)
+				.map_err(MapMigrationBackwardsError::Second)
+				.map_err(E::from)?,
+		))
+	}
+}
+
+impl<A: HasGenericVariant, B: HasGenericVariant> HasGenericVariant for TupleWith2Entries<A, B> {
+	type GenericType = TupleWith2Entries<A::GenericType, B::GenericType>;
+	type MigrationFromGeneric = MapMigration<(A::MigrationFromGeneric, B::MigrationFromGeneric)>;
+}
+impl<A: IsHistoricalType, B: IsHistoricalType> IsHistoricalType for TupleWith2Entries<A, B> {
+	type GetCurrentType = TupleWith2Entries<A::GetCurrentType, B::GetCurrentType>;
 }
 
 // ---- btreemap ----
@@ -255,7 +316,7 @@ impl_migrations_for_container! {
 
 macro_rules! impl_changelog_for_btreemap {
     ($($migration:ident,)*) => {
-		impl<EF, EB, A: OrdMigrations<EF, EB> + Ord, B: HasChangelog<EF, EB>> HasChangelog<EF, EB> for BTreeMap<A, B> {
+		impl<A: OrdMigrations + Ord, B: HasChangelog> HasChangelog for BTreeMap<A, B> {
             type if_unspecified = MapMigration<(A::if_unspecified, B::if_unspecified)>;
 
             $(
@@ -270,46 +331,56 @@ impl<
 		A: Ord,
 		B,
 		V: Version,
-		EF,
-		EB,
-		M1: Migration<
-			A,
-			V,
-			EF,
-			EB,
-			From: IsHistoricalType<EF, EB, GetCurrentType: OrdMigrations<EF, EB> + Ord> + Ord,
-		>,
-		M2: Migration<B, V, EF, EB>,
-	> Migration<BTreeMap<A, B>, V, EF, EB> for MapMigration<(M1, M2)>
+		M1: Migration<A, V, From: IsHistoricalType<GetCurrentType: OrdMigrations + Ord> + Ord>,
+		M2: Migration<B, V>,
+	> Migration<BTreeMap<A, B>, V> for MapMigration<(M1, M2)>
 {
 	type From = BTreeMap<M1::From, M2::From>;
+	type ForwardsError = MapMigrationForwardsError<M1::ForwardsError, M2::ForwardsError>;
+	type BackwardsError = MapMigrationBackwardsError<M1::BackwardsError, M2::BackwardsError>;
 
-	fn forwards(x: Self::From) -> Result<BTreeMap<A, B>, EF> {
-		x.into_iter().map(|(a, b)| Ok((M1::forwards(a)?, M2::forwards(b)?))).collect()
+	fn forwards<E: From<Self::ForwardsError>>(x: Self::From) -> Result<BTreeMap<A, B>, E> {
+		x.into_iter()
+			.map(|(a, b)| {
+				Ok((
+					M1::forwards::<M1::ForwardsError>(a)
+						.map_err(MapMigrationForwardsError::First)
+						.map_err(E::from)?,
+					M2::forwards::<M2::ForwardsError>(b)
+						.map_err(MapMigrationForwardsError::Second)
+						.map_err(E::from)?,
+				))
+			})
+			.collect()
 	}
 
-	fn backwards(x: BTreeMap<A, B>) -> Result<Self::From, EB> {
-		x.into_iter().map(|(a, b)| Ok((M1::backwards(a)?, M2::backwards(b)?))).collect()
+	fn backwards<E: From<Self::BackwardsError>>(x: BTreeMap<A, B>) -> Result<Self::From, E> {
+		x.into_iter()
+			.map(|(a, b)| {
+				Ok((
+					M1::backwards::<M1::BackwardsError>(a)
+						.map_err(MapMigrationBackwardsError::First)
+						.map_err(E::from)?,
+					M2::backwards::<M2::BackwardsError>(b)
+						.map_err(MapMigrationBackwardsError::Second)
+						.map_err(E::from)?,
+				))
+			})
+			.collect()
 	}
 }
 
-impl<EF, EB, A: HasGenericVariant<EF, EB> + Ord, B: HasGenericVariant<EF, EB>>
-	HasGenericVariant<EF, EB> for BTreeMap<A, B>
+impl<A: HasGenericVariant + Ord, B: HasGenericVariant> HasGenericVariant for BTreeMap<A, B>
 where
-	A: HasGenericVariant<EF, EB, GenericType: Ord + IsHistoricalTypeOrd<EF, EB>>,
+	A: HasGenericVariant<GenericType: Ord + IsHistoricalTypeOrd>,
 {
 	type GenericType = BTreeMap<A::GenericType, B::GenericType>;
 	type MigrationFromGeneric = MapMigration<(A::MigrationFromGeneric, B::MigrationFromGeneric)>;
 }
-impl<
-		EF,
-		EB,
-		A: IsHistoricalType<EF, EB, GetCurrentType: OrdMigrations<EF, EB> + Ord>,
-		B: IsHistoricalType<EF, EB>,
-	> IsHistoricalType<EF, EB> for BTreeMap<A, B>
+impl<A: IsHistoricalType<GetCurrentType: OrdMigrations + Ord>, B: IsHistoricalType> IsHistoricalType
+	for BTreeMap<A, B>
 {
 	type GetCurrentType = BTreeMap<A::GetCurrentType, B::GetCurrentType>;
 }
 
-trait IsHistoricalTypeOrd<EF, EB> =
-	IsHistoricalType<EF, EB, GetCurrentType: OrdMigrations<EF, EB> + Ord>;
+trait IsHistoricalTypeOrd = IsHistoricalType<GetCurrentType: OrdMigrations + Ord>;

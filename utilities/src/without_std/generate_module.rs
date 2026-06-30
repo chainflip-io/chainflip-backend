@@ -54,9 +54,9 @@ macro_rules! generate_module {
                     type $field;
                 )*
             }
-            pub trait HistoricalTypesAt<V: Version, EF, EB> = Types<
+            pub trait HistoricalTypesAt<V: Version> = Types<
                 $(
-                    $field: IsHistoricalTypeAt<V, EF, EB>,
+                    $field: IsHistoricalTypeAt<V>,
                 )*
             >;
 
@@ -105,46 +105,68 @@ macro_rules! generate_module {
                             }
                         }
 
-                        impl<EF, EB> IsHistoricalType<EF, EB> for Struct where
-                            $( Ty::$field: IsHistoricalType<EF, EB>,)*
-                            $struct$(< $($T,)+ >)?: HasChangelog<EF, EB>
+                        impl IsHistoricalType for Struct where
+                            $( Ty::$field: IsHistoricalType,)*
+                            $struct$(< $($T,)+ >)?: HasChangelog
                         {
                             type GetCurrentType = $struct$(< $($T,)+ >)?;
                         }
                     }
 
                     // ----------------- connection with default struct ------------------ //
-                    mod (EF) (EB) where $(( $field_ty: HasGenericVariant<EF, EB> ))* {
+                    mod where $(( $field_ty: HasGenericVariant ))* {
 
                         type UserStruct = $struct $(< $($T,)+ >)?;
-                        pub type GenericStruct = Struct<( $( GetGenericVariant<$field_ty, EF, EB>,)*)>;
+                        pub type GenericStruct = Struct<( $( GetGenericVariant<$field_ty>,)*)>;
 
-                        impl HasGenericVariant<EF, EB> for UserStruct
+                        pub enum GenericForwardsError {
+                            $(
+                                $field(<<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::ForwardsError),
+                            )*
+                        }
+
+                        pub enum GenericBackwardsError {
+                            $(
+                                $field(<<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::BackwardsError),
+                            )*
+                        }
+
+                        impl HasGenericVariant for UserStruct
                         where
-                            GenericStruct: IsHistoricalType<EF, EB>,
+                            GenericStruct: IsHistoricalType,
                         {
                             type GenericType = GenericStruct;
                             type MigrationFromGeneric = GlobalMigrationFromGeneric;
                         }
 
-                        impl Migration<UserStruct, vCurrent, EF, EB> for GlobalMigrationFromGeneric
+                        impl Migration<UserStruct, vCurrent> for GlobalMigrationFromGeneric
                         where
-                            GenericStruct: IsHistoricalType<EF, EB>,
+                            GenericStruct: IsHistoricalType,
                         {
                             type From = GenericStruct;
+                            type ForwardsError = GenericForwardsError;
+                            type BackwardsError = GenericBackwardsError;
 
-                            fn forwards(x: GenericStruct) -> Result<UserStruct, EF> {
+                            fn forwards<E: From<Self::ForwardsError>>(x: GenericStruct) -> Result<UserStruct, E> {
                                 Ok($struct {
                                     $(
-                                        $field: <<$field_ty as HasGenericVariant<EF, EB>>::MigrationFromGeneric as Migration<$field_ty, vCurrent, EF, EB>>::forwards(x.$field)?,
+                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards::<
+                                            <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::ForwardsError,
+                                        >(x.$field)
+                                            .map_err(GenericForwardsError::$field)
+                                            .map_err(E::from)?,
                                     )*
                                 })
                             }
 
-                            fn backwards(x: UserStruct) -> Result<GenericStruct, EB> {
+                            fn backwards<E: From<Self::BackwardsError>>(x: UserStruct) -> Result<GenericStruct, E> {
                                 Ok(Struct::intro(
                                     $(
-                                        <<$field_ty as HasGenericVariant<EF, EB>>::MigrationFromGeneric as Migration<$field_ty, vCurrent, EF, EB>>::backwards(x.$field)?,
+                                        <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards::<
+                                            <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::BackwardsError,
+                                        >(x.$field)
+                                            .map_err(GenericBackwardsError::$field)
+                                            .map_err(E::from)?,
                                     )*
                                     Default::default(),
                                 ))
@@ -161,54 +183,72 @@ macro_rules! generate_module {
             cf_proc_macros::better_modules! {
                 mod (To: Types) (V: Version)
                 {
-                    pub trait FieldCustomMigration<EF, EB> {
+                    pub trait FieldCustomMigration {
                         $(
-                            type $field: MaybeMigration<To::$field, V, EF, EB> = DefaultMigration;
+                            type $field: MaybeMigration<To::$field, V> = DefaultMigration;
                         )*
                     }
 
-                    impl<EF, EB> FieldCustomMigration<EF, EB> for () {}
+                    impl FieldCustomMigration for () {}
 
-                    impl<EF, EB, M1: FieldCustomMigration<EF, EB>, M2: FieldCustomMigration<EF, EB>> FieldCustomMigration<EF, EB> for (M1, M2) {
+                    impl<M1: FieldCustomMigration, M2: FieldCustomMigration> FieldCustomMigration for (M1, M2) {
                         $(
                             type $field = (M1::$field, M2::$field);
                         )*
                     }
 
-                    mod (EF) (EB) (M: FieldCustomMigration<EF, EB, To, V>) where (To: HistoricalTypesAt<V, EF, EB>)
+                    mod (M: FieldCustomMigration<To, V>) where (To: HistoricalTypesAt<V>)
                     {
                         mod field_migrations {
                             use super::*;
                             $(
-                                type $field = <M::$field as MaybeMigration<To::$field, V, EF, EB>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V, EF, EB>>;
+                                type $field = <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>;
                             )*
-                            pub type From = (
+                            pub type FromTy = (
                                 $(
-                                    <field_migrations::$field as Migration<To::$field, V, EF, EB>>::From,
+                                    <field_migrations::$field as Migration<To::$field, V>>::From,
                                 )*
                             );
+
+                            pub enum ForwardsError {
+                                $(
+                                    $field(<field_migrations::$field as Migration<To::$field, V>>::ForwardsError),
+                                )*
+                            }
+
+                            pub enum BackwardsError {
+                                $(
+                                    $field(<field_migrations::$field as Migration<To::$field, V>>::BackwardsError),
+                                )*
+                            }
 
                             mod $( $( ($T $(: $TBound)?) )+ )? {
                                 pub type StructVariant<Target: Types> = Struct<$($($T,)+)? Target>;
 
-                                impl Migration<Struct<$($($T,)+)? To>, V, EF, EB> for see_field_changelogs_and_also<M> where
-                                    StructVariant<From>: IsHistoricalType<EF, EB>
+                                impl Migration<Struct<$($($T,)+)? To>, V> for see_field_changelogs_and_also<M> where
+                                    StructVariant<FromTy>: IsHistoricalType
                                 {
-                                    type From = StructVariant<From>;
+                                    type From = StructVariant<FromTy>;
+                                    type ForwardsError = field_migrations::ForwardsError;
+                                    type BackwardsError = field_migrations::BackwardsError;
 
-                                    fn forwards(x: StructVariant<From>) -> Result<StructVariant<To>, EF> {
+                                    fn forwards<E: From<Self::ForwardsError>>(x: StructVariant<FromTy>) -> Result<StructVariant<To>, E> {
                                         Ok(Struct::intro(
                                             $(
-                                                $field::forwards(x.$field)?,
+                                                $field::forwards::<<$field as Migration<To::$field, V>>::ForwardsError>(x.$field)
+                                                    .map_err(field_migrations::ForwardsError::$field)
+                                                    .map_err(E::from)?,
                                             )*
                                             Default::default(),
                                         ))
                                     }
 
-                                    fn backwards(x: StructVariant<To>) -> Result<StructVariant<From>, EB> {
+                                    fn backwards<E: From<Self::BackwardsError>>(x: StructVariant<To>) -> Result<StructVariant<FromTy>, E> {
                                         Ok(Struct::intro (
                                             $(
-                                                $field::backwards(x.$field)?,
+                                                $field::backwards::<<$field as Migration<To::$field, V>>::BackwardsError>(x.$field)
+                                                    .map_err(field_migrations::BackwardsError::$field)
+                                                    .map_err(E::from)?,
                                             )*
                                             Default::default(),
                                         ))
@@ -228,8 +268,8 @@ macro_rules! generate_module {
 
                         #[derive(Debug)]
                         pub struct Added;
-                        impl<V: Version, EF, EB, TargetFieldsTypes: HistoricalTypesAt<V, EF, EB, $field: Default>>
-                            FieldCustomMigration<EF, EB, TargetFieldsTypes, V> for Added
+                        impl<V: Version, TargetFieldsTypes: HistoricalTypesAt<V, $field: Default>>
+                            FieldCustomMigration<TargetFieldsTypes, V> for Added
                         {
                             type $field = OverrideMigrationWith<NewFieldWithDefault>;
                         }
@@ -286,9 +326,9 @@ macro_rules! generate_module {
                 )*
             }
 
-            pub trait HistoricalTypesAt<V: Version, EF, EB> = Types<
+            pub trait HistoricalTypesAt<V: Version> = Types<
                 $(
-                    $variant: IsHistoricalTypeAt<V, EF, EB>,
+                    $variant: IsHistoricalTypeAt<V>,
                 )*
             >;
 
@@ -311,9 +351,9 @@ macro_rules! generate_module {
                             )*
                         }
 
-                        impl<EF, EB> IsHistoricalType<EF, EB> for Enum where
-                            $( Ty::$variant: IsHistoricalType<EF, EB>,)*
-                            $enum$(< $($T,)+ >)?: HasChangelog<EF, EB>
+                        impl IsHistoricalType for Enum where
+                            $( Ty::$variant: IsHistoricalType,)*
+                            $enum$(< $($T,)+ >)?: HasChangelog
                         {
                             type GetCurrentType = $enum$(< $($T,)+ >)?;
                         }
@@ -504,54 +544,72 @@ macro_rules! generate_module {
             cf_proc_macros::better_modules! {
                 mod (To: Types) (V: Version)
                 {
-                    pub trait VariantCustomMigration<EF, EB> {
+                    pub trait VariantCustomMigration {
                         $(
-                            type $variant: MaybeMigration<To::$variant, V, EF, EB> = DefaultMigration;
+                            type $variant: MaybeMigration<To::$variant, V> = DefaultMigration;
                         )+
                     }
 
-                    impl<EF, EB> VariantCustomMigration<EF, EB> for () {}
+                    impl VariantCustomMigration for () {}
 
-                    impl<EF, EB, M1: VariantCustomMigration<EF, EB>, M2: VariantCustomMigration<EF, EB>> VariantCustomMigration<EF, EB> for (M1, M2) {
+                    impl<M1: VariantCustomMigration, M2: VariantCustomMigration> VariantCustomMigration for (M1, M2) {
                         $(
                             type $variant = (M1::$variant, M2::$variant);
                         )+
                     }
 
-                    mod (EF) (EB) (M: VariantCustomMigration<EF, EB, To, V>) where (To: HistoricalTypesAt<V, EF, EB>)
+                    mod (M: VariantCustomMigration<To, V>) where (To: HistoricalTypesAt<V>)
                     {
                         mod variant_migrations {
                             use super::*;
                             $(
-                                type $variant = <M::$variant as MaybeMigration<To::$variant, V, EF, EB>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V, EF, EB>>;
+                                type $variant = <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>;
                             )*
-                            pub type From = (
+                            pub type FromTy = (
                                 $(
-                                    <variant_migrations::$variant as Migration<To::$variant, V, EF, EB>>::From,
+                                    <variant_migrations::$variant as Migration<To::$variant, V>>::From,
                                 )*
                             );
+
+                            pub enum ForwardsError {
+                                $(
+                                    $variant(<variant_migrations::$variant as Migration<To::$variant, V>>::ForwardsError),
+                                )*
+                            }
+
+                            pub enum BackwardsError {
+                                $(
+                                    $variant(<variant_migrations::$variant as Migration<To::$variant, V>>::BackwardsError),
+                                )*
+                            }
 
                             mod $( $( ($T $(: $TBound)?) )+ )? {
                                 pub type EnumVariant<Target: Types> = Enum<$($($T,)+)? Target>;
 
-                                impl Migration<Enum<$($($T,)+)? To>, V, EF, EB> for see_variant_changelogs_and_also<M> where
-                                    EnumVariant<From>: IsHistoricalType<EF, EB>
+                                impl Migration<Enum<$($($T,)+)? To>, V> for see_variant_changelogs_and_also<M> where
+                                    EnumVariant<FromTy>: IsHistoricalType
                                 {
-                                    type From = EnumVariant<From>;
+                                    type From = EnumVariant<FromTy>;
+                                    type ForwardsError = variant_migrations::ForwardsError;
+                                    type BackwardsError = variant_migrations::BackwardsError;
 
-                                    fn forwards(x: EnumVariant<From>) -> Result<EnumVariant<To>, EF> {
+                                    fn forwards<E: From<Self::ForwardsError>>(x: EnumVariant<FromTy>) -> Result<EnumVariant<To>, E> {
                                         Ok(match x {
                                             $(
-                                                Enum::$variant(val) => Enum::$variant($variant::forwards(val)?),
+                                                Enum::$variant(val) => Enum::$variant($variant::forwards::<<$variant as Migration<To::$variant, V>>::ForwardsError>(val)
+                                                    .map_err(variant_migrations::ForwardsError::$variant)
+                                                    .map_err(E::from)?),
                                             )*
                                             Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
                                         })
                                     }
 
-                                    fn backwards(x: EnumVariant<To>) -> Result<EnumVariant<From>, EB> {
+                                    fn backwards<E: From<Self::BackwardsError>>(x: EnumVariant<To>) -> Result<EnumVariant<FromTy>, E> {
                                         Ok(match x {
                                             $(
-                                                Enum::$variant(val) => Enum::$variant($variant::backwards(val)?),
+                                                Enum::$variant(val) => Enum::$variant($variant::backwards::<<$variant as Migration<To::$variant, V>>::BackwardsError>(val)
+                                                    .map_err(variant_migrations::BackwardsError::$variant)
+                                                    .map_err(E::from)?),
                                             )*
                                             Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
                                         })
@@ -587,10 +645,10 @@ macro_rules! generate_module {
                                         }
                                         mod variant_mod { #![migrations] }
                                     }
-                                    impl<EF, EB> HasChangelog<EF, EB> for variant_struct
+                                    impl HasChangelog for variant_struct
                                     where
-                                        $( ($($variant_ty, )*) : HasChangelog<EF, EB> )?
-                                        $( $( $variant_field_ty: HasChangelog<EF, EB>, )* )?
+                                        $( ($($variant_ty, )*) : HasChangelog )?
+                                        $( $( $variant_field_ty: HasChangelog, )* )?
                                     {
                                         type if_unspecified = variant_mod::see_field_changelogs;
                                     }
@@ -633,70 +691,92 @@ macro_rules! generate_module {
                         )*
                     }
 
-                    impl<EF, EB> HasGenericVariant<EF, EB> for RealEnum
+                    pub enum GenericForwardsError {
+                        $(
+                            $variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::ForwardsError),
+                        )*
+                    }
+
+                    pub enum GenericBackwardsError {
+                        $(
+                            $variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::BackwardsError),
+                        )*
+                    }
+
+                    impl HasGenericVariant for RealEnum
                         where
                             $(
-                                $( ($($variant_ty, )*) : HasChangelog<EF, EB> ,)?
-                                $( ($($variant_ty, )*) : HasGenericVariant<EF, EB, GenericType: IsHistoricalType<EF, EB>> ,)?
-                                $( $( $variant_field_ty: HasChangelog<EF, EB>, )* )?
-                                $( $( $variant_field_ty: HasGenericVariant<EF, EB, GenericType: IsHistoricalType<EF, EB>>, )* )?
+                                $( ($($variant_ty, )*) : HasChangelog ,)?
+                                $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
+                                $( $( $variant_field_ty: HasChangelog, )* )?
+                                $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                             )*
                             Enum<$($($T,)+)? (
                                 $(
-                                    GetGenericVariant<variants::$variant, EF, EB>,
+                                    GetGenericVariant<variants::$variant>,
                                 )*
-                            )>: IsHistoricalType<EF, EB>
+                            )>: IsHistoricalType
                     {
                         type GenericType = Enum<$($($T,)+)? (
                             $(
-                                GetGenericVariant<variants::$variant, EF, EB>,
+                                GetGenericVariant<variants::$variant>,
                             )*
                         )>;
                         type MigrationFromGeneric = GlobalMigrationFromGeneric;
                     }
 
 
-                    impl<EF, EB> Migration<RealEnum, vCurrent, EF, EB> for GlobalMigrationFromGeneric
+                    impl Migration<RealEnum, vCurrent> for GlobalMigrationFromGeneric
                     where
                             $(
-                                $( ($($variant_ty, )*) : HasChangelog<EF, EB> ,)?
-                                $( ($($variant_ty, )*) : HasGenericVariant<EF, EB, GenericType: IsHistoricalType<EF, EB>> ,)?
-                                $( $( $variant_field_ty: HasChangelog<EF, EB>, )* )?
-                                $( $( $variant_field_ty: HasGenericVariant<EF, EB, GenericType: IsHistoricalType<EF, EB>>, )* )?
+                                $( ($($variant_ty, )*) : HasChangelog ,)?
+                                $( ($($variant_ty, )*) : HasGenericVariant<GenericType: IsHistoricalType> ,)?
+                                $( $( $variant_field_ty: HasChangelog, )* )?
+                                $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                             )*
                         Enum<$($($T,)+)? (
                             $(
-                                GetGenericVariant<variants::$variant, EF, EB>,
+                                GetGenericVariant<variants::$variant>,
                             )*
-                        )>: IsHistoricalType<EF, EB>
+                        )>: IsHistoricalType
                     {
                         type From = Enum<$($($T,)+)? (
                             $(
-                                GetGenericVariant<variants::$variant, EF, EB>,
+                                GetGenericVariant<variants::$variant>,
                             )*
                         )>;
+                        type ForwardsError = GenericForwardsError;
+                        type BackwardsError = GenericBackwardsError;
 
-                        fn forwards(x: Self::From) -> Result<RealEnum, EF> {
+                        fn forwards<E: From<Self::ForwardsError>>(x: Self::From) -> Result<RealEnum, E> {
                             Ok(match x {
                                 $(
                                     Enum::$variant(val) =>
-                                        (<<variants::$variant as HasGenericVariant<EF, EB>>::MigrationFromGeneric as Migration<variants::$variant, vCurrent, EF, EB>>::forwards(val)?).into(),
+                                        (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::forwards::<
+                                            <<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::ForwardsError,
+                                        >(val)
+                                            .map_err(GenericForwardsError::$variant)
+                                            .map_err(E::from)?).into(),
                                 )*
                                 Enum::_phantom(never, _) => match never {},
                             })
                         }
 
-                        fn backwards(x: RealEnum) -> Result<Self::From, EB> {
+                        fn backwards<E: From<Self::BackwardsError>>(x: RealEnum) -> Result<Self::From, E> {
                             x.elim(
                                 $(
                                     |$(x: ($($variant_ty,)*))? $($($variant_field: $variant_field_ty,)*)?|
-                                    Ok(Enum::$variant(<<variants::$variant as HasGenericVariant<EF, EB>>::MigrationFromGeneric as Migration<variants::$variant, vCurrent, EF, EB>>::backwards(
+                                    Ok(Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards::<
+                                        <<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::BackwardsError,
+                                    >(
                                         variants::$variant::intro(
                                             $( { let _ = core::marker::PhantomData::<($($variant_ty,)*)>; x }, )?
                                             $( $( $variant_field, )*)?
                                             Default::default(),
                                         )
-                                    )?)),
+                                    )
+                                        .map_err(GenericBackwardsError::$variant)
+                                        .map_err(E::from)?)),
                                 )*
                             )
                         }
