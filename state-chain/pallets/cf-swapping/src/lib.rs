@@ -3600,13 +3600,15 @@ pub mod utilities {
 			Asset::SolUsdt |
 			Asset::HubUsdc |
 			Asset::HubUsdt |
-			Asset::TrxUsdt => 100, // $1
+			Asset::TrxUsdt |
+			Asset::BscUsdt => 100, // $1
 			Asset::Flip => 40,                     // ~$0.40
 			Asset::Eth | Asset::ArbEth => 280_000, // ~$2,800
 			Asset::Dot | Asset::HubDot => 200,     // ~$2
 			Asset::Btc | Asset::Wbtc => 8_650_000, // ~$86,500
 			Asset::Sol => 12_700,                  // ~$127
 			Asset::Trx => 30,                      // ~$0.3
+			Asset::Bnb => 60_000,                  // ~$600
 		};
 
 		Price::from_usd_cents(asset, price_usd_cents)

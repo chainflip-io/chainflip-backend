@@ -6,7 +6,7 @@
 // To run a test by name:
 //   ./commands/run_test.ts BoostingForAsset
 //   This is the equivalent of running:
-//  `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "BoostingForAsset"`
+//  `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "BoostingForAsset$"`
 //
 // To run a test file (resolves the test name from the file's exported function):
 //   ./commands/run_test.ts ./tests/boost.ts
@@ -31,7 +31,7 @@ if (!arg) {
 function runByTestName(testName: string): never {
   try {
     execSync(
-      `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "${testName}"`,
+      `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "${testName}$"`,
       { stdio: 'inherit' },
     );
   } catch (err) {

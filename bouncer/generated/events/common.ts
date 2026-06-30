@@ -152,6 +152,8 @@ export const cfPrimitivesChainsAssetsAnyAsset = simpleEnum([
   'SolUsdt',
   'Trx',
   'TrxUsdt',
+  'Bnb',
+  'BscUsdt',
 ]);
 
 export const cfTraitsSafeModeSafeModeSet = z.discriminatedUnion('__kind', [
@@ -210,6 +212,10 @@ export const stateChainRuntimeSafeModeWitnesserCallPermission = z.object({
   tronChainTracking: z.boolean(),
   tronIngressEgress: z.boolean(),
   tronVault: z.boolean(),
+  bscBroadcast: z.boolean(),
+  bscChainTracking: z.boolean(),
+  bscIngressEgress: z.boolean(),
+  bscVault: z.boolean(),
 });
 
 export const palletCfWitnesserPalletSafeMode = z.discriminatedUnion('__kind', [
@@ -245,6 +251,10 @@ export const stateChainRuntimeChainflipWitnessingTronElectionsTronElectionsSafeM
   keyManagerWitnessing: z.boolean(),
 });
 
+export const stateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMode = z.object({
+  keyManagerWitnessing: z.boolean(),
+});
+
 export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
   emissions: palletCfEmissionsPalletSafeMode,
   funding: palletCfFundingPalletSafeMode,
@@ -267,6 +277,7 @@ export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
   broadcastSolana: palletCfBroadcastPalletSafeMode,
   broadcastAssethub: palletCfBroadcastPalletSafeMode,
   broadcastTron: palletCfBroadcastPalletSafeMode,
+  broadcastBsc: palletCfBroadcastPalletSafeMode,
   witnesser: palletCfWitnesserPalletSafeMode,
   ingressEgressEthereum: palletCfIngressEgressPalletSafeMode,
   ingressEgressBitcoin: palletCfIngressEgressPalletSafeMode,
@@ -275,10 +286,12 @@ export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
   ingressEgressSolana: palletCfIngressEgressPalletSafeMode,
   ingressEgressAssethub: palletCfIngressEgressPalletSafeMode,
   ingressEgressTron: palletCfIngressEgressPalletSafeMode,
+  ingressEgressBsc: palletCfIngressEgressPalletSafeMode,
   electionsGeneric: stateChainRuntimeChainflipWitnessingGenericElectionsGenericElectionsSafeMode,
   ethereumElections: stateChainRuntimeChainflipWitnessingEthereumElectionsEthereumElectionsSafeMode,
   arbitrumElections: stateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumElectionsSafeMode,
   tronElections: stateChainRuntimeChainflipWitnessingTronElectionsTronElectionsSafeMode,
+  bscElections: stateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMode,
 });
 
 export const palletCfEnvironmentSafeModeUpdate = z.discriminatedUnion('__kind', [
@@ -376,6 +389,7 @@ export const cfPrimitivesChainsForeignChain = simpleEnum([
   'Solana',
   'Assethub',
   'Tron',
+  'Bsc',
 ]);
 
 export const cfTraitsFundingSource = z.discriminatedUnion('__kind', [
@@ -508,6 +522,7 @@ export const cfPrimitivesWitnessingTaskName = simpleEnum([
   'Assethub',
   'Oracle',
   'Tron',
+  'Bsc',
 ]);
 
 export const palletCfGovernanceGovernanceCouncil = z.object({
@@ -635,7 +650,10 @@ export const cfChainsBtcScriptPubkey = z.discriminatedUnion('__kind', [
 ]);
 
 export const cfChainsAddressEncodedAddress = z
-  .object({ __kind: z.enum(['Eth', 'Dot', 'Btc', 'Arb', 'Sol', 'Hub', 'Tron']), value: hexString })
+  .object({
+    __kind: z.enum(['Eth', 'Dot', 'Btc', 'Arb', 'Sol', 'Hub', 'Tron', 'Bsc']),
+    value: hexString,
+  })
   .transform(({ __kind, value }) => {
     switch (__kind) {
       case 'Eth':
@@ -655,6 +673,8 @@ export const cfChainsAddressEncodedAddress = z
         return { chain: 'Assethub', address: ss58.encode({ data: value, ss58Format: 0 }) } as const;
       case 'Tron':
         return { chain: 'Tron', address: hexToTronAddress(value) } as const;
+      case 'Bsc':
+        return { chain: 'Bsc', address: value } as const;
       default:
         throw new Error('Unknown chain');
     }
@@ -774,6 +794,7 @@ export const cfChainsAddressForeignChainAddress = z.discriminatedUnion('__kind',
   z.object({ __kind: z.literal('Sol'), value: hexString }),
   z.object({ __kind: z.literal('Hub'), value: hexString }),
   z.object({ __kind: z.literal('Tron'), value: hexString }),
+  z.object({ __kind: z.literal('Bsc'), value: hexString }),
 ]);
 
 export const cfChainsRefundParametersAccountOrAddress = z.discriminatedUnion('__kind', [
@@ -2070,14 +2091,14 @@ export const stateChainRuntimeChainflipWitnessingEthereumElectionsEthereumElecto
     reorgedBlocks: z.object({ start: numberOrHex, end: numberOrHex }),
   });
 
-export const cfChainsWitnessPeriodBlockWitnessRange = z.object({ root: numberOrHex });
+export const cfChainsWitnessPeriodBlockWitnessRangeArbitrum = z.object({ root: numberOrHex });
 
 export const stateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumElectoralEvents =
   z.object({
     __kind: z.literal('ReorgDetected'),
     reorgedBlocks: z.object({
-      start: cfChainsWitnessPeriodBlockWitnessRange,
-      end: cfChainsWitnessPeriodBlockWitnessRange,
+      start: cfChainsWitnessPeriodBlockWitnessRangeArbitrum,
+      end: cfChainsWitnessPeriodBlockWitnessRangeArbitrum,
     }),
   });
 
@@ -2219,4 +2240,143 @@ export const palletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElect
 export const stateChainRuntimeChainflipWitnessingTronElectionsTronElectoralEvents = z.object({
   __kind: z.literal('ReorgDetected'),
   reorgedBlocks: z.object({ start: numberOrHex, end: numberOrHex }),
+});
+
+export const cfChainsBscBscTrackedData = z.object({ priorityFee: numberOrHex });
+
+export const cfChainsChainStateBsc = z.object({
+  blockHeight: numberOrHex,
+  trackedData: cfChainsBscBscTrackedData,
+});
+
+export const cfPrimitivesChainsAssetsBscAsset = simpleEnum(['Bnb', 'BscUsdt']);
+
+export const palletCfBscIngressEgressRefundReason = simpleEnum([
+  'InvalidBrokerFees',
+  'InvalidRefundParameters',
+  'InvalidDcaParameters',
+  'CcmUnsupportedForTargetChain',
+  'CcmInvalidMetadata',
+  'InvalidDestinationAddress',
+]);
+
+export const palletCfBscIngressEgressDepositAction = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('Swap'), swapRequestId: numberOrHex }),
+  z.object({ __kind: z.literal('LiquidityProvision'), lpAccount: accountId }),
+  z.object({ __kind: z.literal('CcmTransfer'), swapRequestId: numberOrHex }),
+  z.object({
+    __kind: z.literal('BoostersCredited'),
+    prewitnessedDepositId: numberOrHex,
+    networkFeeFromBoost: numberOrHex,
+    networkFeeSwapRequestId: numberOrHex.nullish(),
+  }),
+  z.object({
+    __kind: z.literal('Refund'),
+    egressId: z.tuple([cfPrimitivesChainsForeignChain, numberOrHex]).nullish(),
+    reason: palletCfBscIngressEgressRefundReason,
+    amount: numberOrHex,
+  }),
+  z.object({ __kind: z.literal('Unrefundable') }),
+]);
+
+export const palletCfBscIngressEgressDepositFailedReason = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('BelowMinimumDeposit') }),
+  z.object({ __kind: z.literal('NotEnoughToPayFees') }),
+  z.object({ __kind: z.literal('TransactionRejectedByBroker') }),
+  z.object({ __kind: z.literal('DepositWitnessRejected'), value: spRuntimeDispatchError }),
+  z.object({ __kind: z.literal('Unrefundable') }),
+]);
+
+export const palletCfBscIngressEgressDepositWitnessBsc = z.object({
+  depositAddress: hexString,
+  asset: cfPrimitivesChainsAssetsBscAsset,
+  amount: numberOrHex,
+  depositDetails: cfChainsEvmDepositDetails,
+});
+
+export const cfBscChainCcmDepositMetadata = z.object({
+  channelMetadata: cfChainsCcmChannelMetadataCcmAdditionalData,
+  sourceChain: cfPrimitivesChainsForeignChain,
+  sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
+});
+
+export const cfBscChainRefundParametersChannelRefundParameters = z.object({
+  retryDuration: z.number(),
+  refundAddress: hexString,
+  minPrice: numberOrHex,
+  refundCcmMetadata: cfChainsCcmChannelMetadataCcmAdditionalData.nullish(),
+  maxOraclePriceSlippage: z.number().nullish(),
+});
+
+export const palletCfBscIngressEgressVaultDepositWitnessBsc = z.object({
+  inputAsset: cfPrimitivesChainsAssetsBscAsset,
+  depositAddress: hexString.nullish(),
+  channelId: numberOrHex.nullish(),
+  depositAmount: numberOrHex,
+  depositDetails: cfChainsEvmDepositDetails,
+  outputAsset: cfPrimitivesChainsAssetsAnyAsset,
+  destinationAddress: cfChainsAddressEncodedAddress,
+  depositMetadata: cfBscChainCcmDepositMetadata.nullish(),
+  txId: hexString,
+  brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
+  affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
+  refundParams: cfBscChainRefundParametersChannelRefundParameters,
+  dcaParams: cfPrimitivesDcaParameters.nullish(),
+  boostFee: z.number(),
+});
+
+export const palletCfBscIngressEgressDepositFailedDetailsBsc = z.discriminatedUnion('__kind', [
+  z.object({
+    __kind: z.literal('DepositFailedDepositChannelVariantBsc'),
+    depositWitness: palletCfBscIngressEgressDepositWitnessBsc,
+  }),
+  z.object({
+    __kind: z.literal('DepositFailedVaultVariantBsc'),
+    vaultWitness: palletCfBscIngressEgressVaultDepositWitnessBsc,
+  }),
+]);
+
+export const cfTraitsScheduledEgressDetailsBsc = z.object({
+  egressId: z.tuple([cfPrimitivesChainsForeignChain, numberOrHex]),
+  egressAmount: numberOrHex,
+  feeWithheld: numberOrHex,
+});
+
+export const palletCfBscIngressEgressRefundFailureReason = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('BelowDustLimit') }),
+  z.object({ __kind: z.literal('InvalidRefundAddress') }),
+  z.object({ __kind: z.literal('FailedToBuildRejectCall'), value: cfChainsRejectError }),
+  z.object({
+    __kind: z.literal('FailedToBuildExecutexSwapAndCall'),
+    value: cfChainsExecutexSwapAndCallError,
+  }),
+  z.object({ __kind: z.literal('SolanaCcmWithAltsNotSupported') }),
+]);
+
+export const palletCfBscIngressEgressPalletConfigUpdateBsc = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('ChannelOpeningFeeBsc'), fee: numberOrHex }),
+  z.object({
+    __kind: z.literal('SetMinimumDepositBsc'),
+    asset: cfPrimitivesChainsAssetsBscAsset,
+    minimumDeposit: numberOrHex,
+  }),
+  z.object({ __kind: z.literal('SetDepositChannelLifetimeBsc'), lifetime: numberOrHex }),
+  z.object({ __kind: z.literal('SetWitnessSafetyMarginBsc'), margin: numberOrHex }),
+  z.object({ __kind: z.literal('SetBoostDelayBsc'), delayBlocks: z.number() }),
+  z.object({
+    __kind: z.literal('SetMaximumPreallocatedChannelsBsc'),
+    accountRole: cfPrimitivesAccountRole,
+    numChannels: z.number(),
+  }),
+  z.object({ __kind: z.literal('SetIngressDelayBsc'), delayBlocks: z.number() }),
+]);
+
+export const cfChainsWitnessPeriodBlockWitnessRangeBsc = z.object({ root: numberOrHex });
+
+export const stateChainRuntimeChainflipWitnessingBscElectionsBscElectoralEvents = z.object({
+  __kind: z.literal('ReorgDetected'),
+  reorgedBlocks: z.object({
+    start: cfChainsWitnessPeriodBlockWitnessRangeBsc,
+    end: cfChainsWitnessPeriodBlockWitnessRangeBsc,
+  }),
 });

@@ -46,6 +46,7 @@ impl_runtime_safe_mode! {
 	broadcast_solana: pallet_cf_broadcast::PalletSafeMode<Instance5>,
 	broadcast_assethub: pallet_cf_broadcast::PalletSafeMode<Instance6>,
 	broadcast_tron: pallet_cf_broadcast::PalletSafeMode<Instance7>,
+	broadcast_bsc: pallet_cf_broadcast::PalletSafeMode<Instance8>,
 	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
 	ingress_egress_ethereum: pallet_cf_ingress_egress::PalletSafeMode<Instance1>,
 	ingress_egress_bitcoin: pallet_cf_ingress_egress::PalletSafeMode<Instance3>,
@@ -54,10 +55,12 @@ impl_runtime_safe_mode! {
 	ingress_egress_solana: pallet_cf_ingress_egress::PalletSafeMode<Instance5>,
 	ingress_egress_assethub: pallet_cf_ingress_egress::PalletSafeMode<Instance6>,
 	ingress_egress_tron: pallet_cf_ingress_egress::PalletSafeMode<Instance7>,
+	ingress_egress_bsc: pallet_cf_ingress_egress::PalletSafeMode<Instance8>,
 	elections_generic: crate::chainflip::witnessing::generic_elections::GenericElectionsSafeMode,
 	ethereum_elections: crate::chainflip::witnessing::ethereum_elections::EthereumElectionsSafeMode,
 	arbitrum_elections: crate::chainflip::witnessing::arbitrum_elections::ArbitrumElectionsSafeMode,
 	tron_elections: crate::chainflip::witnessing::tron_elections::TronElectionsSafeMode,
+	bsc_elections: crate::chainflip::witnessing::bsc_elections::BscElectionsSafeMode,
 }
 
 /// Contains permissions for different Runtime calls.
@@ -123,6 +126,12 @@ pub struct WitnesserCallPermission {
 	pub tron_chain_tracking: bool,
 	pub tron_ingress_egress: bool,
 	pub tron_vault: bool,
+
+	// BSC pallets
+	pub bsc_broadcast: bool,
+	pub bsc_chain_tracking: bool,
+	pub bsc_ingress_egress: bool,
+	pub bsc_vault: bool,
 }
 
 impl WitnesserCallPermission {
@@ -157,6 +166,10 @@ impl WitnesserCallPermission {
 			tron_chain_tracking: true,
 			tron_ingress_egress: true,
 			tron_vault: true,
+			bsc_broadcast: true,
+			bsc_chain_tracking: true,
+			bsc_ingress_egress: true,
+			bsc_vault: true,
 		}
 	}
 }
@@ -200,6 +213,11 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 			RuntimeCall::TronChainTracking(..) => self.tron_chain_tracking,
 			RuntimeCall::TronIngressEgress(..) => self.tron_ingress_egress,
 			RuntimeCall::TronVault(..) => self.tron_vault,
+
+			RuntimeCall::BscBroadcaster(..) => self.bsc_broadcast,
+			RuntimeCall::BscChainTracking(..) => self.bsc_chain_tracking,
+			RuntimeCall::BscIngressEgress(..) => self.bsc_ingress_egress,
+			RuntimeCall::BscVault(..) => self.bsc_vault,
 
 			_ => {
 				cf_runtime_utilities::log_or_panic!(

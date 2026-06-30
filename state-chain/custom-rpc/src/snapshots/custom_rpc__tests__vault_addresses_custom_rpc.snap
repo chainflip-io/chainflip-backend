@@ -1,6 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
-assertion_line: 491
 expression: val
 ---
 {
@@ -406,6 +405,30 @@ expression: val
       12,
       12,
       12
+    ]
+  },
+  "bsc": {
+    "Bsc": [
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13,
+      13
     ]
   },
   "predicted_seconds_until_next_vault_rotation": 9

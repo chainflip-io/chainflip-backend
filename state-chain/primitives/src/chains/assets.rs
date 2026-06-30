@@ -936,6 +936,34 @@ assets!(
 			},
 		],
 	},
+	Chain {
+		variant: Bsc,
+		member_and_module: bsc,
+		string: "Bsc" (aliases: ["BSC", "bsc"]),
+		json: "Bsc",
+		assets: [
+			Asset {
+				variant: Bnb,
+				member: bnb,
+				string: "BNB" (aliases: ["Bnb", "bnb"]),
+				json: "BNB",
+				gas: true,
+				index: 19,
+				usd_stablecoin: false,
+				decimals: 18,
+			},
+			Asset {
+				variant: BscUsdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 20,
+				usd_stablecoin: true,
+				decimals: 18,
+			},
+		],
+	},
 );
 
 #[cfg(test)]
@@ -977,6 +1005,8 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(16).unwrap(), any::Asset::SolUsdt);
 		assert_eq!(any::Asset::try_from(17).unwrap(), any::Asset::Trx);
 		assert_eq!(any::Asset::try_from(18).unwrap(), any::Asset::TrxUsdt);
+		assert_eq!(any::Asset::try_from(19).unwrap(), any::Asset::Bnb);
+		assert_eq!(any::Asset::try_from(20).unwrap(), any::Asset::BscUsdt);
 	}
 
 	#[test]

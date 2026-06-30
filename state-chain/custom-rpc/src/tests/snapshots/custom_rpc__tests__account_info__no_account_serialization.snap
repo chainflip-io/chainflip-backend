@@ -38,6 +38,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     "Tron": {
       "TRX": "0x0",
       "USDT": "0x0"
+    },
+    "Bsc": {
+      "BNB": "0x0",
+      "USDT": "0x0"
     }
   },
   "bond": 0,

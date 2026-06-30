@@ -39,6 +39,10 @@ expression: broker
     "Tron": {
       "TRX": "0x0",
       "USDT": "0x0"
+    },
+    "Bsc": {
+      "BNB": "0x0",
+      "USDT": "0x0"
     }
   },
   "affiliates": [

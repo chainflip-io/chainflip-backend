@@ -32,12 +32,13 @@ pub const RPC_RETRY_CONNECTION_INTERVAL: Duration = Duration::from_secs(10);
 // ======= Settings environment variables =======
 
 pub const ETH_HTTP_ENDPOINT: &str = "ETH__RPC__HTTP_ENDPOINT";
-
 pub const ETH_BACKUP_HTTP_ENDPOINT: &str = "ETH__BACKUP_RPC__HTTP_ENDPOINT";
 
 pub const ARB_HTTP_ENDPOINT: &str = "ARB__RPC__HTTP_ENDPOINT";
-
 pub const ARB_BACKUP_HTTP_ENDPOINT: &str = "ARB__BACKUP_RPC__HTTP_ENDPOINT";
+
+pub const BSC_HTTP_ENDPOINT: &str = "BSC__RPC__HTTP_ENDPOINT";
+pub const BSC_BACKUP_HTTP_ENDPOINT: &str = "BSC__BACKUP_RPC__HTTP_ENDPOINT";
 
 pub const BTC_HTTP_ENDPOINT: &str = "BTC__RPC__HTTP_ENDPOINT";
 pub const BTC_RPC_USER: &str = "BTC__RPC__BASIC_AUTH_USER";

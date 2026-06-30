@@ -54,6 +54,7 @@ pub trait WeightInfo {
 	fn witness_polkadot_vault_creation() -> Weight;
 	fn witness_current_bitcoin_block_number_for_key() -> Weight;
 	fn witness_initialize_arbitrum_vault() -> Weight;
+	fn witness_initialize_bsc_vault() -> Weight;
 	fn witness_initialize_solana_vault() -> Weight;
 	fn witness_initialize_tron_vault() -> Weight;
 	fn witness_assethub_vault_creation() -> Weight;
@@ -118,6 +119,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Estimated: `0`
 		// Minimum execution time: 26_277_000 picoseconds.
 		Weight::from_parts(26_825_000, 0)
+	}
+	fn witness_initialize_bsc_vault() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `426`
+		//  Estimated: `0`
+		// Minimum execution time: 24_581_000 picoseconds.
+		Weight::from_parts(24_883_000, 0)
 	}
 	fn witness_initialize_solana_vault() -> Weight {
 		// Proof Size summary in bytes:
@@ -307,6 +315,13 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 26_273_000 picoseconds.
 		Weight::from_parts(26_970_000, 0)
+	}
+	fn witness_initialize_bsc_vault() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `529`
+		//  Estimated: `0`
+		// Minimum execution time: 25_756_000 picoseconds.
+		Weight::from_parts(26_300_000, 0)
 	}
 	fn witness_assethub_vault_creation() -> Weight {
 		// Proof Size summary in bytes:

@@ -242,6 +242,7 @@ export async function testVaultSwap(testContext: TestContext) {
   await cf.all([
     (subcf) => testFeeCollection(subcf, Assets.Eth, testContext.swapContext),
     (subcf) => testFeeCollection(subcf, Assets.ArbEth, testContext.swapContext),
+    (subcf) => testFeeCollection(subcf, Assets.Bnb, testContext.swapContext),
     (subcf) => testFeeCollection(subcf, Assets.Sol, testContext.swapContext),
     (subcf) => testFeeCollection(subcf, Assets.Trx, testContext.swapContext),
     (subcf) => testFeeCollectionWithdrawal(subcf, Assets.Btc, testContext.swapContext),

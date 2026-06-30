@@ -7,6 +7,7 @@ import {
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import {
+  Chain,
   getContractAddress,
   getTronWhaleKeyPair,
   getSolWhaleKeyPair,
@@ -50,25 +51,33 @@ export async function initializeAssethubChain(logger: Logger) {
   await hubInitializationRequest;
 }
 
-export async function initializeArbitrumContracts(
-  logger: Logger,
-  arbClient: Web3,
-  arbKey: { pubKeyX: string; pubKeyYParity: string },
-) {
-  const keyManagerAddress = getContractAddress('Arbitrum', 'KEY_MANAGER');
+export async function initializeBscChain(logger: Logger) {
+  logger.info('Initializing BSC');
+  const bscInitializationRequest = observeEvent(logger, 'bscVault:ChainInitialized').event;
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.bscVault.initializeChain());
+  await bscInitializationRequest;
+}
 
-  const keyManagerContract = new arbClient.eth.Contract(
+export async function initializeEvmContracts(
+  logger: Logger,
+  chain: Chain,
+  client: Web3,
+  key: { pubKeyX: string; pubKeyYParity: string },
+) {
+  const keyManagerAddress = getContractAddress(chain, 'KEY_MANAGER');
+
+  const keyManagerContract = new client.eth.Contract(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (await getKeyManagerAbi()) as any,
     keyManagerAddress,
   );
   const txData = keyManagerContract.methods
     .setAggKeyWithGovKey({
-      pubKeyX: arbKey.pubKeyX,
-      pubKeyYParity: arbKey.pubKeyYParity === 'Odd' ? 1 : 0,
+      pubKeyX: key.pubKeyX,
+      pubKeyYParity: key.pubKeyYParity === 'Odd' ? 1 : 0,
     })
     .encodeABI();
-  await signAndSendTxEvm(logger, 'Arbitrum', { to: keyManagerAddress, value: '0', data: txData });
+  await signAndSendTxEvm(logger, chain, { to: keyManagerAddress, value: '0', data: txData });
 }
 
 export async function initializeTronContracts(

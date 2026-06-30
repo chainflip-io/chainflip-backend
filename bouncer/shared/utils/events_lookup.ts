@@ -38,6 +38,12 @@ import { solanaIngressEgressCcmBroadcastFailedEvent } from 'generated/events/sol
 import { tronIngressEgressCcmBroadcastFailedEvent } from 'generated/events/tronIngressEgress/ccmBroadcastFailed';
 import { Chain } from 'shared/utils';
 import { Logger, throwError } from 'shared/utils/logger';
+import { bscIngressEgressBatchBroadcastRequestedEvent } from 'generated/events/bscIngressEgress/batchBroadcastRequested';
+import { bscBroadcasterBroadcastSuccessEvent } from 'generated/events/bscBroadcaster/broadcastSuccess';
+import { bscIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/bscIngressEgress/ccmBroadcastRequested';
+import { bscIngressEgressCcmEgressInvalidEvent } from 'generated/events/bscIngressEgress/ccmEgressInvalid';
+import { bscIngressEgressCcmBroadcastFailedEvent } from 'generated/events/bscIngressEgress/ccmBroadcastFailed';
+import { bscBroadcasterBroadcastAbortedEvent } from 'generated/events/bscBroadcaster/broadcastAborted';
 
 const batchBroadcastRequestedEvents = {
   Ethereum: ethereumIngressEgressBatchBroadcastRequestedEvent,
@@ -47,6 +53,7 @@ const batchBroadcastRequestedEvents = {
   Assethub: assethubIngressEgressBatchBroadcastRequestedEvent,
   Polkadot: polkadotIngressEgressBatchBroadcastRequestedEvent,
   Tron: tronIngressEgressBatchBroadcastRequestedEvent,
+  Bsc: bscIngressEgressBatchBroadcastRequestedEvent,
 } as const;
 
 const broadcastSuccessEvents = {
@@ -57,6 +64,7 @@ const broadcastSuccessEvents = {
   Assethub: assethubBroadcasterBroadcastSuccessEvent,
   Polkadot: polkadotBroadcasterBroadcastSuccessEvent,
   Tron: tronBroadcasterBroadcastSuccessEvent,
+  Bsc: bscBroadcasterBroadcastSuccessEvent,
 } as const;
 
 const broadcastAbortedEvents = {
@@ -67,6 +75,7 @@ const broadcastAbortedEvents = {
   Assethub: assethubBroadcasterBroadcastAbortedEvent,
   Polkadot: polkadotBroadcasterBroadcastAbortedEvent,
   Tron: tronBroadcasterBroadcastAbortedEvent,
+  Bsc: bscBroadcasterBroadcastAbortedEvent,
 } as const;
 
 // CCM events are only emitted on chains that support contract calls.
@@ -75,6 +84,7 @@ const ccmBroadcastRequestedEvents = {
   Arbitrum: arbitrumIngressEgressCcmBroadcastRequestedEvent,
   Solana: solanaIngressEgressCcmBroadcastRequestedEvent,
   Tron: tronIngressEgressCcmBroadcastRequestedEvent,
+  Bsc: bscIngressEgressCcmBroadcastRequestedEvent,
 } as const;
 
 const ccmEgressInvalidEvents = {
@@ -82,6 +92,7 @@ const ccmEgressInvalidEvents = {
   Arbitrum: arbitrumIngressEgressCcmEgressInvalidEvent,
   Solana: solanaIngressEgressCcmEgressInvalidEvent,
   Tron: tronIngressEgressCcmEgressInvalidEvent,
+  Bsc: bscIngressEgressCcmEgressInvalidEvent,
 } as const;
 
 const ccmBroadcastFailedEvents = {
@@ -89,6 +100,7 @@ const ccmBroadcastFailedEvents = {
   Arbitrum: arbitrumIngressEgressCcmBroadcastFailedEvent,
   Solana: solanaIngressEgressCcmBroadcastFailedEvent,
   Tron: tronIngressEgressCcmBroadcastFailedEvent,
+  Bsc: bscIngressEgressCcmBroadcastFailedEvent,
 } as const;
 
 // Look up a per-chain generated event descriptor from one of the tables below, throwing (with the

@@ -78,6 +78,7 @@ pub mod benchmarking_value;
 
 pub mod any;
 pub mod arb;
+pub mod bsc;
 pub mod btc;
 pub mod dot;
 pub mod eth;
@@ -1092,6 +1093,8 @@ pub trait FeeRefundCalculator<C: Chain> {
 
 pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
+// NOTE: New chain variants MUST be appended at the end to preserve SCALE discriminants for
+// backward compatibility with already-encoded storage and cross-version runtime API calls.
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TransactionInId {
@@ -1103,7 +1106,8 @@ pub enum TransactionInId {
 	// Deposit channels are marked differently than vault swaps
 	Solana(TransactionInIdFor<crate::Solana>),
 	SolanaDepositChannel(SolAddress),
-	// other variants reserved for other chains.
+
+	Bsc(TransactionInIdFor<crate::Bsc>),
 }
 
 #[derive(Debug, Clone, TypeInfo, Encode, Decode, DecodeWithMemTracking, PartialEq, Eq)]
@@ -1557,6 +1561,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 		from_token_account: Option<Address>,
 	},
 	Tron(EvmVaultSwapExtraParameters<Address, Amount>),
+	Bsc(EvmVaultSwapExtraParameters<Address, Amount>),
 }
 
 impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
@@ -1580,6 +1585,8 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_address(f)?),
 			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>
 				VaultSwapExtraParameters::Arbitrum(extra_parameter.try_map_address(f)?),
+			VaultSwapExtraParameters::Bsc(extra_parameter) =>
+				VaultSwapExtraParameters::Bsc(extra_parameter.try_map_address(f)?),
 			VaultSwapExtraParameters::Solana {
 				from,
 				seed,
@@ -1618,6 +1625,8 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_amounts(f)?),
 			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>
 				VaultSwapExtraParameters::Arbitrum(extra_parameter.try_map_amounts(f)?),
+			VaultSwapExtraParameters::Bsc(extra_parameter) =>
+				VaultSwapExtraParameters::Bsc(extra_parameter.try_map_amounts(f)?),
 			VaultSwapExtraParameters::Solana {
 				from,
 				seed,

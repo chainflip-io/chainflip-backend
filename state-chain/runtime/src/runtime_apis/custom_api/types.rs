@@ -22,13 +22,13 @@ use cf_chains::{
 	address::EncodedAddress,
 	assets::any::AssetMap,
 	evm::Address as EvmAddress,
-	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
+	instances::{ArbitrumInstance, BitcoinInstance, BscInstance, EthereumInstance, TronInstance},
 	sol::SolInstructionRpc,
 	tron::TronAddress,
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, TransactionInId, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
+use cf_primitives::{chains::Bsc, Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
@@ -36,7 +36,7 @@ use cf_utilities::migrations::{
 		IsHistoricalType, Migration, NewFieldWithDefault,
 	},
 	primitives::NewTypeWithDefault,
-	v20100, v20200, HasChangelog,
+	v20100, v20200, v20300, HasChangelog,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -128,6 +128,10 @@ pub enum VaultSwapDetails<BtcAddress> {
 		#[serde(with = "sp_core::bytes")]
 		note: Vec<u8>,
 	},
+	Bsc {
+		#[serde(flatten)]
+		details: EvmCallDetails,
+	},
 }
 
 pub type TronCallDetails = EvmCallDetails<String>;
@@ -170,6 +174,10 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 		}
 	}
 
+	pub fn bsc(details: EvmCallDetails) -> Self {
+		VaultSwapDetails::Bsc { details }
+	}
+
 	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>
 	where
 		F: FnOnce(BtcAddress) -> T,
@@ -181,6 +189,7 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 			VaultSwapDetails::Ethereum { details } => VaultSwapDetails::Ethereum { details },
 			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
 			VaultSwapDetails::Tron { details, note } => VaultSwapDetails::Tron { details, note },
+			VaultSwapDetails::Bsc { details } => VaultSwapDetails::Bsc { details },
 		}
 	}
 }
@@ -585,6 +594,7 @@ pub struct TransactionScreeningEvents {
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
 	pub sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>>,
 	pub tron_events: Vec<BrokerRejectionEventFor<cf_chains::Tron>>,
+	pub bsc_events: Vec<BrokerRejectionEventFor<cf_chains::Bsc>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -604,6 +614,7 @@ pub struct VaultAddresses {
 	pub solana_vault_swap_account: Option<EncodedAddress>,
 
 	pub tron: EncodedAddress,
+	pub bsc: EncodedAddress,
 
 	pub predicted_seconds_until_next_vault_rotation: u64,
 }
@@ -684,6 +695,11 @@ pub enum RawWitnessedEvents {
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, TronInstance>)>,
 		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, TronInstance>)>,
 	},
+	Bsc {
+		deposits: Vec<(u64, DepositWitness<Bsc>)>,
+		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, BscInstance>)>,
+		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, BscInstance>)>,
+	},
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
@@ -693,6 +709,7 @@ pub enum DepositDetails {
 	Ethereum(<Ethereum as Chain>::DepositDetails),
 	Arbitrum(<Arbitrum as Chain>::DepositDetails),
 	Tron(<Tron as Chain>::DepositDetails),
+	Bsc(<Bsc as Chain>::DepositDetails),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
@@ -793,6 +810,7 @@ where
 	Balance: Default,
 	<Balance as HasVersion<v20100>>::HistoricalType: Default,
 	<Balance as HasVersion<v20200>>::HistoricalType: Default,
+	<Balance as HasVersion<v20300>>::HistoricalType: Default,
 {
 	type if_unspecified = _RpcAccountInfoCommonItems::see_field_changelogs;
 	type in_20200 = _RpcAccountInfoCommonItems::see_field_changelogs_and_also<

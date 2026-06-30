@@ -276,6 +276,7 @@ mod tests {
 					},
 				}),
 			ForeignChain::Arbitrum => unimplemented!(),
+			ForeignChain::Bsc => unimplemented!(),
 			ForeignChain::Solana => unimplemented!(),
 			ForeignChain::Tron => unimplemented!(),
 			ForeignChain::Assethub =>

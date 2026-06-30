@@ -211,6 +211,7 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 			sol: value.sol,
 			hub: value.hub,
 			tron: Default::default(),
+			bsc: Default::default(),
 		}
 	}
 }
@@ -295,6 +296,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 			solana_usdt_token_vault_ata: old.solana_usdt_token_vault_ata,
 			solana_vault_swap_account: old.solana_vault_swap_account,
 			tron: EncodedAddress::Tron([0u8; 20]),
+			bsc: EncodedAddress::Bsc([0u8; 20]),
 			predicted_seconds_until_next_vault_rotation: old
 				.predicted_seconds_until_next_vault_rotation,
 		}
@@ -375,6 +377,10 @@ impl From<WitnesserCallPermission> for crate::safe_mode::WitnesserCallPermission
 			tron_chain_tracking: true,
 			tron_ingress_egress: true,
 			tron_vault: true,
+			bsc_broadcast: true,
+			bsc_chain_tracking: true,
+			bsc_ingress_egress: true,
+			bsc_vault: true,
 		}
 	}
 }
@@ -485,6 +491,8 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 			broadcast_assethub: old.broadcast_assethub,
 			broadcast_tron:
 				<pallet_cf_broadcast::PalletSafeMode<_> as SafeMode>::code_green(),
+			broadcast_bsc:
+			<pallet_cf_broadcast::PalletSafeMode<_> as SafeMode>::code_green(),
 			witnesser,
 			ingress_egress_ethereum: old.ingress_egress_ethereum,
 			ingress_egress_bitcoin: old.ingress_egress_bitcoin,
@@ -494,11 +502,15 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 			ingress_egress_assethub: old.ingress_egress_assethub,
 			ingress_egress_tron:
 				<pallet_cf_ingress_egress::PalletSafeMode<_> as SafeMode>::code_green(),
+			ingress_egress_bsc:
+			<pallet_cf_ingress_egress::PalletSafeMode<_> as SafeMode>::code_green(),
 			elections_generic: old.elections_generic,
 			ethereum_elections: old.ethereum_elections,
 			arbitrum_elections: old.arbitrum_elections,
 			tron_elections:
 				<crate::chainflip::witnessing::tron_elections::TronElectionsSafeMode as SafeMode>::code_green(),
+			bsc_elections:
+			<crate::chainflip::witnessing::bsc_elections::BscElectionsSafeMode as SafeMode>::code_green(),
 		}
 	}
 }
@@ -519,6 +531,7 @@ impl From<TransactionScreeningEvents> for super::TransactionScreeningEvents {
 			arb_events: old.arb_events,
 			sol_events: old.sol_events,
 			tron_events: Default::default(),
+			bsc_events: Default::default(),
 		}
 	}
 }

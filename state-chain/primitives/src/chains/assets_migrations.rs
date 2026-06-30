@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_utilities::migrations::{basics::HasVersion, v20100, v20200, HasChangelog};
+use cf_utilities::migrations::{basics::HasVersion, v20100, v20200, v20300, HasChangelog};
 
 use super::assets::*;
 
@@ -54,6 +54,10 @@ impl<T: HasChangelog> HasChangelog for tron::AssetMap<T> {
 	type if_unspecified = tron::_AssetMap::see_field_changelogs;
 }
 
+impl<T: HasChangelog> HasChangelog for bsc::AssetMap<T> {
+	type if_unspecified = bsc::_AssetMap::see_field_changelogs;
+}
+
 impl<T: HasChangelog> HasChangelog for eth::AssetMap<T>
 where
 	<T as HasVersion<v20100>>::HistoricalType: Default,
@@ -67,8 +71,11 @@ impl<T: HasChangelog + Default> HasChangelog for any::AssetMap<T>
 where
 	<T as HasVersion<v20100>>::HistoricalType: Default,
 	<T as HasVersion<v20200>>::HistoricalType: Default,
+	<T as HasVersion<v20300>>::HistoricalType: Default,
 {
 	type if_unspecified = any::_AssetMap::see_field_changelogs;
 	type in_20200 =
 		any::_AssetMap::see_field_changelogs_and_also<any::_AssetMap::field::tron::Added>;
+	type in_20300 =
+		any::_AssetMap::see_field_changelogs_and_also<any::_AssetMap::field::bsc::Added>;
 }

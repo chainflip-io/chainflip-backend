@@ -8,6 +8,7 @@ import {
   solVersionedCcmAdditionalDataCodec,
   newAssetAddress,
   Asset,
+  isEvmChain,
 } from 'shared/utils';
 import { BtcAddressType } from 'shared/new_btc_address';
 import { CcmDepositMetadata } from 'shared/new_swap';
@@ -119,6 +120,7 @@ function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: num
     case 'Ethereum':
     case 'Arbitrum':
     case 'Tron':
+    case 'Bsc':
       return '0x';
     case 'Solana': {
       const messageLength = message.slice(2).length / 2;
@@ -154,6 +156,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
   switch (destChain) {
     case 'Ethereum':
     case 'Tron':
+    case 'Bsc':
       length = MAX_CCM_MSG_LENGTH;
       break;
     case 'Arbitrum':
@@ -194,7 +197,7 @@ export async function newCcmMetadata(
   const destChain = chainFromAsset(destAsset);
 
   let userLogicGasBudget;
-  if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
+  if (isEvmChain(destChain)) {
     // Do the gas estimation of the call to the CF Tester contract. CF will then add the extra
     // overhead on top. This is particularly relevant for Arbitrum where estimating the gas here
     // required for execution is very complicated without using `eth_estimateGas` on the user's side.

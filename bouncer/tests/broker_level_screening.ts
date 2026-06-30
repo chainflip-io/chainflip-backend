@@ -84,13 +84,15 @@ async function ensureHealth() {
   }
 }
 
-// Sets the ingress_egress broker whitelist to the given `broker`.
+// Sets the ingress_egress broker whitelist to the given `broker`. Use the storage key for
+// the chainIngressEgress pallet -> whiteListedBrokers
 async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: Uint8Array) {
   const BTC_WHITELIST_PREFIX = '3ed3ce16dbc61ca64eaac5a96e809a8f6b8fb02fc586c9dab2385ea1690a7db6';
   const ETH_WHITELIST_PREFIX = '4fc967eb3d0785df0389312c2ebd853e6b8fb02fc586c9dab2385ea1690a7db6';
   const ARB_WHITELIST_PREFIX = '3d3491b8c14ff78a5176bc3b6ebe516f6b8fb02fc586c9dab2385ea1690a7db6';
   const SOL_WHITELIST_PREFIX = '8595efe3a571f61007e89f4416b858b16b8fb02fc586c9dab2385ea1690a7db6';
   const TRON_WHITELIST_PREFIX = '65fbb72d24f6d3ade3baaf42fd5075756b8fb02fc586c9dab2385ea1690a7db6';
+  const BSC_WHITELIST_PREFIX = '36cfeffab8147b64824ff0c0622e11316b8fb02fc586c9dab2385ea1690a7db6';
 
   const decodeHexStringToByteArray = (hex: string) => {
     let hexString = hex;
@@ -109,6 +111,7 @@ async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: U
       ARB_WHITELIST_PREFIX,
       SOL_WHITELIST_PREFIX,
       TRON_WHITELIST_PREFIX,
+      BSC_WHITELIST_PREFIX,
     ].map(
       (prefix) => (subcf: ChainflipIO<A>) =>
         subcf.submitGovernance({
@@ -156,6 +159,8 @@ export async function doTestSwapDeposits<A = []>(
     (subcf) => testEvm(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Bnb', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'BscUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) =>
       testBitcoin(subcf.withChildLogger('BrokerLevelScreening_testBitcoin'), false, async (txId) =>
         setTxRiskScore(txId, 9.0),
@@ -198,6 +203,8 @@ export async function doTestVaultSwaps<A = []>(cf: ChainflipIO<A>) {
     (subcf) => testSolVaultSwap(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testTronVaultSwap(subcf, 'Trx', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testTronVaultSwap(subcf, 'TrxUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'Bnb', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'BscUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 }
 

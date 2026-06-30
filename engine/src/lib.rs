@@ -370,6 +370,29 @@ async fn run_main(
 				)
 			};
 
+			let bsc_client = {
+				let expected_bsc_chain_id = U256::from(
+					state_chain_client
+						.storage_value::<pallet_cf_environment::BscChainId<state_chain_runtime::Runtime>>(
+							state_chain_client.latest_finalized_block().hash,
+						)
+						.await
+						.expect(STATE_CHAIN_CONNECTION),
+				);
+				EvmCachingClient::new(
+					scope,
+					EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+						scope,
+						settings.bsc.private_key_file,
+						settings.bsc.nodes,
+						expected_bsc_chain_id,
+						"bsc_rpc",
+						"Bsc",
+						cf_chains::Bsc::WITNESS_PERIOD,
+					)?,
+				)
+			};
+
 			witness::start::start(
 				scope,
 				eth_client.clone(),
@@ -378,6 +401,7 @@ async fn run_main(
 				sol_client.clone(),
 				hub_client.clone(),
 				tron_client.clone(),
+				bsc_client.clone(),
 				state_chain_client.clone(),
 				db.clone(),
 			)
@@ -392,6 +416,7 @@ async fn run_main(
 				sol_client,
 				hub_client,
 				tron_client,
+				bsc_client,
 				eth_multisig_client,
 				dot_multisig_client,
 				btc_multisig_client,

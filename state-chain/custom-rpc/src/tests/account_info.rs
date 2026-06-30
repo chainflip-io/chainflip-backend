@@ -38,6 +38,7 @@ fn test_no_account_serialization() {
 				sol: sol::AssetMap { sol: 0u128.into(), usdc: 0u128.into(), usdt: 0u128.into() },
 				hub: hub::AssetMap { dot: 0u128.into(), usdc: 0u128.into(), usdt: 0u128.into() },
 				tron: tron::AssetMap { trx: 0u128.into(), usdt: 0u128.into() },
+				bsc: bsc::AssetMap { bnb: 0u128.into(), usdt: 0u128.into() },
 			},
 			bond: 0u32.into(),
 			estimated_redeemable_balance: 0u32.into(),
@@ -89,6 +90,11 @@ fn test_broker_serialization() {
 		tron: tron::AssetMap {
 			trx: 5000000u128.into(), // 5 TRX
 			usdt: 500000u128.into(), // 0.5 USDT
+		},
+		bsc: bsc::AssetMap {
+			//todo: revisit this
+			bnb: 300000000000000000u128.into(),  // 0.3 BNB
+			usdt: 400000000000000000u128.into(), // 0.4 USDT
 		},
 	};
 
@@ -179,6 +185,7 @@ fn test_lp_serialization() {
 			usdt: 500000u128.into(),
 		},
 		tron: tron::AssetMap { trx: 8u128.into(), usdt: 10u128.into() },
+		bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 	};
 
 	let boost_balances = any::AssetMap {
@@ -221,6 +228,7 @@ fn test_lp_serialization() {
 			usdt: 2000000u128.into(),
 		},
 		tron: tron::AssetMap { trx: 5u128.into(), usdt: 5u128.into() },
+		bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 	};
 	let collateral_balances =
 		vec![AssetAndAmount { asset: Asset::Flip, amount: 500_000u128.into() }];
@@ -291,6 +299,7 @@ fn test_validator_serialization() {
 					trx: 10000000u128.into(), // 10 TRX
 					usdt: 1500000u128.into(), // 1.5 USDT
 				},
+				bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 			},
 			bond: (FLIPPERINOS_PER_FLIP * 100).into(), // 100 FLIP
 			estimated_redeemable_balance: (FLIPPERINOS_PER_FLIP * 25).into(), // 25 FLIP

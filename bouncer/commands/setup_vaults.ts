@@ -19,7 +19,8 @@ import {
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import {
   initializeArbitrumChain,
-  initializeArbitrumContracts,
+  initializeBscChain,
+  initializeEvmContracts,
   initializeSolanaChain,
   initializeSolanaPrograms,
   initializeTronChain,
@@ -33,6 +34,7 @@ import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { bitcoinVaultAwaitingGovernanceActivationEvent } from 'generated/events/bitcoinVault/awaitingGovernanceActivation';
 import { arbitrumVaultAwaitingGovernanceActivationEvent } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
+import { bscVaultAwaitingGovernanceActivationEvent } from 'generated/events/bscVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivationEvent } from 'generated/events/solanaVault/awaitingGovernanceActivation';
 import { tronVaultAwaitingGovernanceActivationEvent } from 'generated/events/tronVault/awaitingGovernanceActivation';
 import { assethubVaultAwaitingGovernanceActivationEvent } from 'generated/events/assethubVault/awaitingGovernanceActivation';
@@ -132,6 +134,7 @@ async function main(): Promise<void> {
   const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
   const btcClient = getBtcClient();
   const arbClient = getWeb3('Arbitrum');
+  const bscClient = getWeb3('Bsc');
   const solClient = getSolConnection();
   const tronClient = getTronWebClient();
 
@@ -148,6 +151,7 @@ async function main(): Promise<void> {
     initializeSolanaChain(cf.logger),
     initializeTronChain(cf.logger),
     initializeAssethubChain(cf.logger),
+    initializeBscChain(cf.logger),
   ]);
 
   // Step 2
@@ -175,16 +179,18 @@ async function main(): Promise<void> {
     sol: solanaVaultAwaitingGovernanceActivationEvent,
     tron: tronVaultAwaitingGovernanceActivationEvent,
     hub: assethubVaultAwaitingGovernanceActivationEvent,
+    bsc: bscVaultAwaitingGovernanceActivationEvent,
   });
 
   const btcKey = keyEvents.btc.data.newPublicKey;
   const arbKey = keyEvents.arb.data.newPublicKey;
+  const bscKey = keyEvents.bsc.data.newPublicKey;
   const solKey = keyEvents.sol.data.newPublicKey;
   const tronKey = keyEvents.tron.data.newPublicKey;
   const hubKey = keyEvents.hub.data.newPublicKey;
 
   // Step 4
-  cf.info('Setting up external chains (Arbitrum, Solana, Assethub, Tron) with new keys');
+  cf.info('Setting up external chains (Arbitrum, Solana, Assethub, Tron, Bsc) with new keys');
 
   const createAssethubProxy = async () => {
     // Wait for the assethub vault Promise to resolve
@@ -207,8 +213,14 @@ async function main(): Promise<void> {
 
   const insertArbitrumKey = async () => {
     cf.info('Inserting Arbitrum key in the contracts');
-    await initializeArbitrumContracts(cf.logger, arbClient, arbKey);
+    await initializeEvmContracts(cf.logger, 'Arbitrum', arbClient, arbKey);
     cf.debug('Arbitrum key inserted');
+  };
+
+  const insertBscKey = async () => {
+    cf.info('Inserting BSC key in the contracts');
+    await initializeEvmContracts(cf.logger, 'Bsc', bscClient, bscKey);
+    cf.debug('BSC key inserted');
   };
 
   const insertSolanaKey = async () => {
@@ -228,6 +240,7 @@ async function main(): Promise<void> {
     insertArbitrumKey(),
     insertSolanaKey(),
     insertTronKey(),
+    insertBscKey(),
   ]);
 
   // Step 7

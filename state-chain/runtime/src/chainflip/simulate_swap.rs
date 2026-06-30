@@ -24,8 +24,8 @@ use crate::{
 use cf_chains::{
 	assets::any::ForeignChainAndAsset,
 	instances::{
-		ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
-		SolanaInstance, TronInstance,
+		ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
+		PolkadotInstance, SolanaInstance, TronInstance,
 	},
 };
 use cf_primitives::{
@@ -287,6 +287,15 @@ fn take_ingress_or_egress_fee(
 		ForeignChainAndAsset::Arbitrum(asset) => pallet_cf_ingress_egress::Pallet::<
 			Runtime,
 			ArbitrumInstance,
+		>::withhold_ingress_or_egress_fee(
+			ingress_or_egress,
+			asset,
+			amount.unique_saturated_into(),
+		)
+		.map_amounts(Into::into),
+		ForeignChainAndAsset::Bsc(asset) => pallet_cf_ingress_egress::Pallet::<
+			Runtime,
+			BscInstance,
 		>::withhold_ingress_or_egress_fee(
 			ingress_or_egress,
 			asset,

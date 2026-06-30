@@ -51,8 +51,8 @@ pub mod primitives {
 }
 pub use cf_chains::evm::Address as EthereumAddress;
 use cf_chains::instances::{
-	ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
-	SolanaInstance, TronInstance,
+	ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
+	PolkadotInstance, SolanaInstance, TronInstance,
 };
 pub use cf_node_client::WaitForResult;
 
@@ -903,6 +903,13 @@ pub trait DepositMonitorApi:
 					),
 				)
 				.await,
+			TransactionInId::Bsc(tx_id) =>
+				self.simple_submission_with_dry_run(
+					state_chain_runtime::RuntimeCall::BscIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+				)
+				.await,
 		}
 	}
 }
@@ -1053,6 +1060,10 @@ fn fetch_preallocated_channels(
 		ForeignChain::Tron => Box::pin(preallocated_channels_for_chain::<
 			state_chain_runtime::Runtime,
 			TronInstance,
+		>(rpc_client, account_id)),
+		ForeignChain::Bsc => Box::pin(preallocated_channels_for_chain::<
+			state_chain_runtime::Runtime,
+			BscInstance,
 		>(rpc_client, account_id)),
 	}
 }

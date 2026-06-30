@@ -75,7 +75,7 @@ pallet-session = { workspace = true, features = ["historical"] }
 frame-benchmarking = { workspace = true, optional = true }
 frame-executive = { workspace = true }
 frame-metadata-hash-extension = { workspace = true }
-frame-support = { workspace = true }
+frame-support = { workspace = true, features = ["tuples-96"] }
 frame-system = { workspace = true }
 frame-system-benchmarking = { workspace = true, optional = true }
 frame-try-runtime = { workspace = true, optional = true }

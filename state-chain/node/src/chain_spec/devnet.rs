@@ -28,6 +28,8 @@ pub const POLKADOT_EXPIRY_BLOCKS: u32 = 10 * 60 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 10 * 60 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 10 * 60 / 12;
 pub const TRON_EXPIRY_BLOCKS: u32 = 10 * 60 / 3;
+pub const BSC_EXPIRY_BLOCKS: u32 = 10 * 60 * 1000 / 450; // 450ms block time
+
 pub const MIN_AUTHORITIES: AuthorityCount = 1;
 pub const AUCTION_PARAMETERS: SetSizeParameters = SetSizeParameters {
 	min_size: MIN_AUTHORITIES,

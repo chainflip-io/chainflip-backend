@@ -34,7 +34,7 @@ use engine_sc_client::{
 };
 use futures::try_join;
 use state_chain_runtime::{
-	ArbitrumInstance, BitcoinInstance, EthereumInstance, SolanaInstance, TronInstance,
+	ArbitrumInstance, BitcoinInstance, BscInstance, EthereumInstance, SolanaInstance, TronInstance,
 };
 
 use anyhow::Result;
@@ -52,6 +52,7 @@ pub async fn start<StateChainClient>(
 	sol_client: SolRetryRpcClient,
 	hub_client: DotRetryRpcClient,
 	tron_client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
+	bsc_client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
@@ -65,6 +66,7 @@ where
 		+ ElectoralApi<EthereumInstance>
 		+ ElectoralApi<ArbitrumInstance>
 		+ ElectoralApi<TronInstance>
+		+ ElectoralApi<BscInstance>
 		+ 'static
 		+ Send
 		+ Sync,
@@ -87,6 +89,9 @@ where
 	let start_arb =
 		super::arb_elections::start(scope, arb_client.clone(), state_chain_client.clone());
 
+	let start_bsc =
+		super::bsc_elections::start(scope, bsc_client.clone(), state_chain_client.clone());
+
 	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
 
 	let start_btc = super::btc::start(scope, btc_client, state_chain_client.clone());
@@ -101,7 +106,15 @@ where
 	let start_generic_elections =
 		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
 
-	try_join!(start_eth, start_arb, start_sol, start_btc, start_tron, start_generic_elections)?;
+	try_join!(
+		start_eth,
+		start_arb,
+		start_bsc,
+		start_sol,
+		start_btc,
+		start_tron,
+		start_generic_elections
+	)?;
 
 	Ok(())
 }

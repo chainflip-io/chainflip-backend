@@ -17,6 +17,7 @@
 use cf_chains::{
 	arb::ArbitrumTrackedData,
 	assets::btc,
+	bsc::BscTrackedData,
 	btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT},
 	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
@@ -26,7 +27,7 @@ use cf_chains::{
 		SolHash, SolTrackedData,
 	},
 	tron::TronTrackedData,
-	Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot, Tron,
+	Arbitrum, Assethub, Bitcoin, Bsc, ChainState, Ethereum, Polkadot, Tron,
 };
 use cf_primitives::{
 	chains::Solana, AccountRole, AuthorityCount, ChainflipNetwork, NetworkEnvironment,
@@ -45,18 +46,19 @@ use sp_core::{
 use state_chain_runtime::{
 	chainflip::{
 		witnessing::{
-			arbitrum_elections, bitcoin_elections, ethereum_elections,
+			arbitrum_elections, bitcoin_elections, bsc_elections, ethereum_elections,
 			generic_elections::{self, ChainlinkOraclePriceSettings},
 			solana_elections, tron_elections,
 		},
 		Offence,
 	},
 	constants::common::{
-		BLOCKS_PER_MINUTE_ARBITRUM, BLOCKS_PER_MINUTE_ASSETHUB, BLOCKS_PER_MINUTE_ETHEREUM,
-		BLOCKS_PER_MINUTE_POLKADOT, BLOCKS_PER_MINUTE_SOLANA, BLOCKS_PER_MINUTE_TRON,
+		BLOCKS_PER_MINUTE_ARBITRUM, BLOCKS_PER_MINUTE_ASSETHUB, BLOCKS_PER_MINUTE_BSC,
+		BLOCKS_PER_MINUTE_ETHEREUM, BLOCKS_PER_MINUTE_POLKADOT, BLOCKS_PER_MINUTE_SOLANA,
+		BLOCKS_PER_MINUTE_TRON,
 	},
 	opaque::SessionKeys,
-	AccountId, ArbitrumElectionsConfig, BitcoinElectionsConfig, BlockNumber,
+	AccountId, ArbitrumElectionsConfig, BitcoinElectionsConfig, BlockNumber, BscElectionsConfig,
 	EthereumElectionsConfig, FlipBalance, GenericElectionsConfig, SetSizeParameters, Signature,
 	SolanaElectionsConfig, TronElectionsConfig, WASM_BINARY,
 };
@@ -133,6 +135,12 @@ pub struct StateChainEnvironment {
 	tron_vault_address: [u8; 20],
 	trx_usdt_token_address: [u8; 20],
 	tron_chain_id: u64,
+	// bsc
+	bsc_key_manager_address: [u8; 20],
+	bsc_vault_address: [u8; 20],
+	bsc_usdt_token_address: [u8; 20],
+	bsc_address_checker_address: [u8; 20],
+	bsc_chain_id: u64,
 	ethereum_deployment_block: u64,
 	genesis_funding_amount: u128,
 	/// Note: Minimum funding should be expressed in Flipperinos.
@@ -196,10 +204,15 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, TRON_KEY_MANAGER_ADDRESS, tron_key_manager_address);
 	from_env_var!(clean_hex_address, TRON_VAULT_ADDRESS, tron_vault_address);
 	from_env_var!(clean_hex_address, TRX_USDT_TOKEN_ADDRESS, trx_usdt_token_address);
+	from_env_var!(clean_hex_address, BSC_KEY_MANAGER_ADDRESS, bsc_key_manager_address);
+	from_env_var!(clean_hex_address, BSC_VAULT_ADDRESS, bsc_vault_address);
+	from_env_var!(clean_hex_address, BSC_USDT_TOKEN_ADDRESS, bsc_usdt_token_address);
+	from_env_var!(clean_hex_address, BSC_ADDRESS_CHECKER, bsc_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ARBITRUM_CHAIN_ID, arbitrum_chain_id);
 	from_env_var!(FromStr::from_str, TRON_CHAIN_ID, tron_chain_id);
+	from_env_var!(FromStr::from_str, BSC_CHAIN_ID, bsc_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
@@ -307,6 +320,11 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		ethereum_chain_id,
 		arbitrum_chain_id,
 		tron_chain_id,
+		bsc_key_manager_address,
+		bsc_vault_address,
+		bsc_usdt_token_address,
+		bsc_address_checker_address,
+		bsc_chain_id,
 		eth_init_agg_key,
 		sol_init_agg_key,
 		ethereum_deployment_block,
@@ -397,6 +415,11 @@ pub fn inner_cf_development_chain_spec(
 		trx_usdt_token_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
+		bsc_key_manager_address,
+		bsc_vault_address,
+		bsc_usdt_token_address,
+		bsc_address_checker_address,
+		bsc_chain_id,
 		tron_chain_id,
 		eth_init_agg_key,
 		sol_init_agg_key,
@@ -457,6 +480,11 @@ pub fn inner_cf_development_chain_spec(
 				trx_usdt_address: trx_usdt_token_address.into(),
 				ethereum_chain_id,
 				arbitrum_chain_id,
+				bsc_key_manager_address: bsc_key_manager_address.into(),
+				bsc_vault_address: bsc_vault_address.into(),
+				bsc_address_checker_address: bsc_address_checker_address.into(),
+				bsc_usdt_address: bsc_usdt_token_address.into(),
+				bsc_chain_id,
 				tron_chain_id,
 				polkadot_genesis_hash: dot_genesis_hash,
 				polkadot_vault_account_id: dot_vault_account_id,
@@ -516,6 +544,7 @@ pub fn inner_cf_development_chain_spec(
 			devnet::SOLANA_EXPIRY_BLOCKS,
 			devnet::ASSETHUB_EXPIRY_BLOCKS,
 			devnet::TRON_EXPIRY_BLOCKS,
+			devnet::BSC_EXPIRY_BLOCKS,
 			devnet::BITCOIN_SAFETY_MARGIN,
 			devnet::ETHEREUM_SAFETY_MARGIN,
 			devnet::ARBITRUM_SAFETY_MARGIN,
@@ -545,6 +574,7 @@ pub fn inner_cf_development_chain_spec(
 				option_initial_state: Some(arbitrum_elections::initial_state()),
 			},
 			TronElectionsConfig { option_initial_state: Some(tron_elections::initial_state()) },
+			BscElectionsConfig { option_initial_state: Some(bsc_elections::initial_state()) },
 		))
 		.build())
 }
@@ -584,6 +614,11 @@ macro_rules! network_spec {
 					trx_usdt_token_address,
 					ethereum_chain_id,
 					arbitrum_chain_id,
+					bsc_key_manager_address,
+					bsc_vault_address,
+					bsc_usdt_token_address,
+					bsc_address_checker_address,
+					bsc_chain_id,
 					tron_chain_id,
 					eth_init_agg_key,
 					sol_init_agg_key,
@@ -674,6 +709,11 @@ macro_rules! network_spec {
 							trx_usdt_address: trx_usdt_token_address.into(),
 							ethereum_chain_id,
 							arbitrum_chain_id,
+							bsc_key_manager_address: bsc_key_manager_address.into(),
+							bsc_vault_address: bsc_vault_address.into(),
+							bsc_address_checker_address: bsc_address_checker_address.into(),
+							bsc_usdt_address: bsc_usdt_token_address.into(),
+							bsc_chain_id,
 							tron_chain_id,
 							polkadot_genesis_hash: dot_genesis_hash,
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
@@ -734,6 +774,7 @@ macro_rules! network_spec {
 						SOLANA_EXPIRY_BLOCKS,
 						ASSETHUB_EXPIRY_BLOCKS,
 						TRON_EXPIRY_BLOCKS,
+						BSC_EXPIRY_BLOCKS,
 						BITCOIN_SAFETY_MARGIN,
 						ETHEREUM_SAFETY_MARGIN,
 						ARBITRUM_SAFETY_MARGIN,
@@ -764,6 +805,9 @@ macro_rules! network_spec {
 						},
 						TronElectionsConfig {
 							option_initial_state: Some(tron_elections::initial_state()),
+						},
+						BscElectionsConfig {
+							option_initial_state: Some(bsc_elections::initial_state()),
 						},
 					))
 					.build())
@@ -814,6 +858,7 @@ fn testnet_genesis(
 	solana_deposit_channel_lifetime: u32,
 	assethub_deposit_channel_lifetime: u32,
 	tron_deposit_channel_lifetime: u32,
+	bsc_deposit_channel_lifetime: u32,
 	bitcoin_safety_margin: u64,
 	ethereum_safety_margin: u64,
 	arbitrum_safety_margin: u64,
@@ -825,6 +870,7 @@ fn testnet_genesis(
 	ethereum_elections: state_chain_runtime::EthereumElectionsConfig,
 	arbitrum_elections: state_chain_runtime::ArbitrumElectionsConfig,
 	tron_elections: state_chain_runtime::TronElectionsConfig,
+	bsc_elections: state_chain_runtime::BscElectionsConfig,
 ) -> serde_json::Value {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -986,6 +1032,11 @@ fn testnet_genesis(
 			chain_initialized: false,
 		},
 
+		bsc_vault: state_chain_runtime::BscVaultConfig {
+			deployment_block: None,
+			chain_initialized: false,
+		},
+
 		evm_threshold_signer: state_chain_runtime::EvmThresholdSignerConfig {
 			key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
@@ -1071,6 +1122,12 @@ fn testnet_genesis(
 				tracked_data: TronTrackedData {},
 			},
 		},
+		bsc_chain_tracking: state_chain_runtime::BscChainTrackingConfig {
+			init_chain_state: ChainState::<Bsc> {
+				block_height: 0,
+				tracked_data: BscTrackedData { priority_fee: 10_000_000_000u64.into() },
+			},
+		},
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: state_chain_runtime::BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
@@ -1105,6 +1162,10 @@ fn testnet_genesis(
 			witness_safety_margin: Some(tron_safety_margin),
 			..Default::default()
 		},
+		bsc_ingress_egress: state_chain_runtime::BscIngressEgressConfig {
+			deposit_channel_lifetime: bsc_deposit_channel_lifetime.into(),
+			..Default::default()
+		},
 		solana_elections,
 
 		// TODO: Set correct initial state
@@ -1117,6 +1178,8 @@ fn testnet_genesis(
 		arbitrum_elections,
 
 		tron_elections,
+
+		bsc_elections,
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
@@ -1153,6 +1216,10 @@ fn testnet_genesis(
 		// instance7
 		tron_broadcaster: state_chain_runtime::TronBroadcasterConfig {
 			broadcast_timeout: 2 * BLOCKS_PER_MINUTE_TRON,
+		},
+		// instance8
+		bsc_broadcaster: state_chain_runtime::BscBroadcasterConfig {
+			broadcast_timeout: 2 * BLOCKS_PER_MINUTE_BSC,
 		},
 	})
 	.expect("Genesis config is JSON-compatible.")

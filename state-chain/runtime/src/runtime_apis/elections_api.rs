@@ -23,7 +23,7 @@ decl_runtime_apis!(
 	/// Of course it doesn't explain everything, e.g. there's a very useful
 	/// `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 	/// of apis automatically.
-	#[api_version(3)]
+	#[api_version(4)]
 	pub trait ElectoralRuntimeApi {
 		/// Returns SCALE encoded `Option<ElectoralDataFor<state_chain_runtime::Runtime,
 		/// Instance>>`
@@ -58,5 +58,13 @@ decl_runtime_apis!(
 		#[changed_in(3)]
 		fn cf_tron_filter_votes();
 		fn cf_tron_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8>;
+
+		#[changed_in(4)]
+		fn cf_bsc_electoral_data();
+		fn cf_bsc_electoral_data(account_id: AccountId) -> Vec<u8>;
+
+		#[changed_in(4)]
+		fn cf_bsc_filter_votes();
+		fn cf_bsc_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8>;
 	}
 );

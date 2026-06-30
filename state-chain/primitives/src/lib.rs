@@ -673,4 +673,5 @@ pub enum WitnessingTaskName {
 	Assethub,
 	Oracle,
 	Tron,
+	Bsc,
 }

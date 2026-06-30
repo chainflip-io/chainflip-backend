@@ -80,6 +80,8 @@ pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAsse
 		any::Asset::HubUsdc => Some(UsdcUsd),
 		any::Asset::Trx => None,
 		any::Asset::TrxUsdt => Some(UsdtUsd),
+		any::Asset::Bnb => None,
+		any::Asset::BscUsdt => Some(UsdtUsd),
 	}
 }
 

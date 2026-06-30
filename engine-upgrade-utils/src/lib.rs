@@ -38,7 +38,11 @@ pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 // the engine's arguments, adapt them here so the old engine still parses them during the upgrade
 // fallback path.
 pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
-	args
+	let mut compatible_args = args;
+
+	compatible_args.retain(|arg| !arg.starts_with("--bsc."));
+
+	compatible_args
 }
 
 pub use std::ffi::c_char;
