@@ -21,9 +21,7 @@ use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		broadcaster::MockBroadcaster,
-		rewards_distribution::MockRewardsDistribution,
-		time_source,
+		broadcaster::MockBroadcaster, rewards_distribution::MockRewardsDistribution, time_source,
 		waived_fees::WaivedFeesMock,
 	},
 	AccountRoleRegistry, RedemptionCheck,
