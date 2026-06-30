@@ -921,9 +921,24 @@ fn expand_enum(
 		rewrite_where_predicates(where_predicates, defs, telescope, &item.generics, scope);
 	add_where_predicates(&mut item.generics, rewritten_where_predicates);
 
+	let mut phantom_index = 1usize;
+	let phantom_ident = loop {
+		let candidate = if phantom_index == 1 {
+			format_ident!("_phantom")
+		} else {
+			format_ident!("_phantom{}", phantom_index)
+		};
+
+		if !item.variants.iter().any(|variant| variant.ident == candidate) {
+			break candidate;
+		}
+
+		phantom_index += 1;
+	};
+
 	let telescope_idents = telescope.iter().map(|param| &param.ident);
 	let phantom_variant: syn::Variant = syn::parse_quote! {
-		_phantom(cf_utilities::never::Never, core::marker::PhantomData<( #(#telescope_idents,)* )>)
+		#phantom_ident(cf_utilities::never::Never, core::marker::PhantomData<( #(#telescope_idents,)* )>)
 	};
 	item.variants.push(phantom_variant);
 

@@ -110,7 +110,8 @@ pub trait T1 {
 // 	mod _MyTestValues { #![migrations] }
 // }
 
-// /////////////////////////////////////
+// ///////////////////////////////////////////
+
 
 // Recursive expansion of generate_module! macro
 // ==============================================
@@ -469,7 +470,7 @@ pub mod _MyTestValues {
 		>
 		where
 			To: HistoricalTypesAt<V>;
-		pub type From<To: Types, V: Version, M: VariantCustomMigration<To, V>>
+		pub type FromTy<To: Types, V: Version, M: VariantCustomMigration<To, V>>
 			= (
 			<variant_migrations::Variant1<To, V, M> as Migration<To::Variant1, V>>::From,
 			<variant_migrations::Variant2<To, V, M> as Migration<To::Variant2, V>>::From,
@@ -494,14 +495,14 @@ pub mod _MyTestValues {
 		impl<To: Types, V: Version, M: VariantCustomMigration<To, V>, T: T1>
 			Migration<Enum<T, To>, V> for see_variant_changelogs_and_also<M>
 		where
-			EnumVariant<From<To, V, M>, T>: IsHistoricalType,
+			EnumVariant<FromTy<To, V, M>, T>: IsHistoricalType,
 			To: HistoricalTypesAt<V>,
 		{
-			type From = EnumVariant<From<To, V, M>, T>;
+			type From = EnumVariant<FromTy<To, V, M>, T>;
 			type ForwardsError = variant_migrations::ForwardsError<To, V, M>;
 			type BackwardsError = variant_migrations::BackwardsError<To, V, M>;
-			fn forwards<E: From<To, V, M, Self::ForwardsError>>(
-				x: EnumVariant<From<To, V, M>, T>,
+			fn forwards<E: From<Self::ForwardsError>>(
+				x: EnumVariant<FromTy<To, V, M>, T>,
 			) -> Result<EnumVariant<To, T>, E> {
 				Ok(match x {
 					Enum::Variant1(val) => Enum::Variant1(
@@ -535,9 +536,9 @@ pub mod _MyTestValues {
 					Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
 				})
 			}
-			fn backwards<E: From<To, V, M, Self::BackwardsError>>(
+			fn backwards<E: From<Self::BackwardsError>>(
 				x: EnumVariant<To, T>,
-			) -> Result<EnumVariant<From<To, V, M>, T>, E> {
+			) -> Result<EnumVariant<FromTy<To, V, M>, T>, E> {
 				Ok(match x {
 					Enum::Variant1(val) => Enum::Variant1(
 						Variant1::<To, V, M>::backwards::<
@@ -728,7 +729,7 @@ pub mod _MyTestValues {
 						>
 						where
 							To: HistoricalTypesAt<V>;
-						pub type From<To: Types,V: Version,M: FieldCustomMigration<To,V> >  = (<field_migrations::value<To,V,M>as Migration<To::value,V> > ::From, <field_migrations::_phantom<To,V,M>as Migration<To::_phantom,V> > ::From,)where To: HistoricalTypesAt<V> ;
+						pub type FromTy<To: Types,V: Version,M: FieldCustomMigration<To,V> >  = (<field_migrations::value<To,V,M>as Migration<To::value,V> > ::From, <field_migrations::_phantom<To,V,M>as Migration<To::_phantom,V> > ::From,)where To: HistoricalTypesAt<V> ;
 						pub enum ForwardsError<
 							To: Types,
 							V: Version,
@@ -783,20 +784,20 @@ pub mod _MyTestValues {
 						impl<To: Types, V: Version, M: FieldCustomMigration<To, V>, T: T1>
 							Migration<Struct<T, To>, V> for see_field_changelogs_and_also<M>
 						where
-							StructVariant<From<To, V, M>, T>: IsHistoricalType,
+							StructVariant<FromTy<To, V, M>, T>: IsHistoricalType,
 							To: HistoricalTypesAt<V>,
 						{
-							type From = StructVariant<From<To, V, M>, T>;
+							type From = StructVariant<FromTy<To, V, M>, T>;
 							type ForwardsError = field_migrations::ForwardsError<To, V, M>;
 							type BackwardsError = field_migrations::BackwardsError<To, V, M>;
-							fn forwards<E: From<To, V, M, Self::ForwardsError>>(
-								x: StructVariant<From<To, V, M>, T>,
+							fn forwards<E: From<Self::ForwardsError>>(
+								x: StructVariant<FromTy<To, V, M>, T>,
 							) -> Result<StructVariant<To, T>, E> {
 								Ok(Struct::intro(value:: <To,V,M> ::forwards:: < <value<To,V,M>as Migration<To::value,V> > ::ForwardsError>(x.value).map_err(field_migrations::ForwardsError:: <To,V,M> ::value).map_err(E::from)? ,_phantom:: <To,V,M> ::forwards:: < <_phantom<To,V,M>as Migration<To::_phantom,V> > ::ForwardsError>(x._phantom).map_err(field_migrations::ForwardsError:: <To,V,M> ::_phantom).map_err(E::from)? ,Default::default(),))
 							}
-							fn backwards<E: From<To, V, M, Self::BackwardsError>>(
+							fn backwards<E: From<Self::BackwardsError>>(
 								x: StructVariant<To, T>,
-							) -> Result<StructVariant<From<To, V, M>, T>, E> {
+							) -> Result<StructVariant<FromTy<To, V, M>, T>, E> {
 								Ok(Struct::intro(value:: <To,V,M> ::backwards:: < <value<To,V,M>as Migration<To::value,V> > ::BackwardsError>(x.value).map_err(field_migrations::BackwardsError:: <To,V,M> ::value).map_err(E::from)? ,_phantom:: <To,V,M> ::backwards:: < <_phantom<To,V,M>as Migration<To::_phantom,V> > ::BackwardsError>(x._phantom).map_err(field_migrations::BackwardsError:: <To,V,M> ::_phantom).map_err(E::from)? ,Default::default(),))
 							}
 						}
@@ -994,7 +995,7 @@ pub mod _MyTestValues {
 						>
 						where
 							To: HistoricalTypesAt<V>;
-						pub type From<To: Types,V: Version,M: FieldCustomMigration<To,V> >  = (<field_migrations::value<To,V,M>as Migration<To::value,V> > ::From, <field_migrations::_phantom<To,V,M>as Migration<To::_phantom,V> > ::From,)where To: HistoricalTypesAt<V> ;
+						pub type FromTy<To: Types,V: Version,M: FieldCustomMigration<To,V> >  = (<field_migrations::value<To,V,M>as Migration<To::value,V> > ::From, <field_migrations::_phantom<To,V,M>as Migration<To::_phantom,V> > ::From,)where To: HistoricalTypesAt<V> ;
 						pub enum ForwardsError<
 							To: Types,
 							V: Version,
@@ -1049,20 +1050,20 @@ pub mod _MyTestValues {
 						impl<To: Types, V: Version, M: FieldCustomMigration<To, V>, T: T1>
 							Migration<Struct<T, To>, V> for see_field_changelogs_and_also<M>
 						where
-							StructVariant<From<To, V, M>, T>: IsHistoricalType,
+							StructVariant<FromTy<To, V, M>, T>: IsHistoricalType,
 							To: HistoricalTypesAt<V>,
 						{
-							type From = StructVariant<From<To, V, M>, T>;
+							type From = StructVariant<FromTy<To, V, M>, T>;
 							type ForwardsError = field_migrations::ForwardsError<To, V, M>;
 							type BackwardsError = field_migrations::BackwardsError<To, V, M>;
-							fn forwards<E: From<To, V, M, Self::ForwardsError>>(
-								x: StructVariant<From<To, V, M>, T>,
+							fn forwards<E: From<Self::ForwardsError>>(
+								x: StructVariant<FromTy<To, V, M>, T>,
 							) -> Result<StructVariant<To, T>, E> {
 								Ok(Struct::intro(value:: <To,V,M> ::forwards:: < <value<To,V,M>as Migration<To::value,V> > ::ForwardsError>(x.value).map_err(field_migrations::ForwardsError:: <To,V,M> ::value).map_err(E::from)? ,_phantom:: <To,V,M> ::forwards:: < <_phantom<To,V,M>as Migration<To::_phantom,V> > ::ForwardsError>(x._phantom).map_err(field_migrations::ForwardsError:: <To,V,M> ::_phantom).map_err(E::from)? ,Default::default(),))
 							}
-							fn backwards<E: From<To, V, M, Self::BackwardsError>>(
+							fn backwards<E: From<Self::BackwardsError>>(
 								x: StructVariant<To, T>,
-							) -> Result<StructVariant<From<To, V, M>, T>, E> {
+							) -> Result<StructVariant<FromTy<To, V, M>, T>, E> {
 								Ok(Struct::intro(value:: <To,V,M> ::backwards:: < <value<To,V,M>as Migration<To::value,V> > ::BackwardsError>(x.value).map_err(field_migrations::BackwardsError:: <To,V,M> ::value).map_err(E::from)? ,_phantom:: <To,V,M> ::backwards:: < <_phantom<To,V,M>as Migration<To::_phantom,V> > ::BackwardsError>(x._phantom).map_err(field_migrations::BackwardsError:: <To,V,M> ::_phantom).map_err(E::from)? ,Default::default(),))
 							}
 						}
@@ -1260,7 +1261,7 @@ pub mod _MyTestValues {
 						>
 						where
 							To: HistoricalTypesAt<V>;
-						pub type From<To: Types,V: Version,M: FieldCustomMigration<To,V> >  = (<field_migrations::value<To,V,M>as Migration<To::value,V> > ::From, <field_migrations::_phantom<To,V,M>as Migration<To::_phantom,V> > ::From,)where To: HistoricalTypesAt<V> ;
+						pub type FromTy<To: Types,V: Version,M: FieldCustomMigration<To,V> >  = (<field_migrations::value<To,V,M>as Migration<To::value,V> > ::From, <field_migrations::_phantom<To,V,M>as Migration<To::_phantom,V> > ::From,)where To: HistoricalTypesAt<V> ;
 						pub enum ForwardsError<
 							To: Types,
 							V: Version,
@@ -1315,20 +1316,20 @@ pub mod _MyTestValues {
 						impl<To: Types, V: Version, M: FieldCustomMigration<To, V>, T: T1>
 							Migration<Struct<T, To>, V> for see_field_changelogs_and_also<M>
 						where
-							StructVariant<From<To, V, M>, T>: IsHistoricalType,
+							StructVariant<FromTy<To, V, M>, T>: IsHistoricalType,
 							To: HistoricalTypesAt<V>,
 						{
-							type From = StructVariant<From<To, V, M>, T>;
+							type From = StructVariant<FromTy<To, V, M>, T>;
 							type ForwardsError = field_migrations::ForwardsError<To, V, M>;
 							type BackwardsError = field_migrations::BackwardsError<To, V, M>;
-							fn forwards<E: From<To, V, M, Self::ForwardsError>>(
-								x: StructVariant<From<To, V, M>, T>,
+							fn forwards<E: From<Self::ForwardsError>>(
+								x: StructVariant<FromTy<To, V, M>, T>,
 							) -> Result<StructVariant<To, T>, E> {
 								Ok(Struct::intro(value:: <To,V,M> ::forwards:: < <value<To,V,M>as Migration<To::value,V> > ::ForwardsError>(x.value).map_err(field_migrations::ForwardsError:: <To,V,M> ::value).map_err(E::from)? ,_phantom:: <To,V,M> ::forwards:: < <_phantom<To,V,M>as Migration<To::_phantom,V> > ::ForwardsError>(x._phantom).map_err(field_migrations::ForwardsError:: <To,V,M> ::_phantom).map_err(E::from)? ,Default::default(),))
 							}
-							fn backwards<E: From<To, V, M, Self::BackwardsError>>(
+							fn backwards<E: From<Self::BackwardsError>>(
 								x: StructVariant<To, T>,
-							) -> Result<StructVariant<From<To, V, M>, T>, E> {
+							) -> Result<StructVariant<FromTy<To, V, M>, T>, E> {
 								Ok(Struct::intro(value:: <To,V,M> ::backwards:: < <value<To,V,M>as Migration<To::value,V> > ::BackwardsError>(x.value).map_err(field_migrations::BackwardsError:: <To,V,M> ::value).map_err(E::from)? ,_phantom:: <To,V,M> ::backwards:: < <_phantom<To,V,M>as Migration<To::_phantom,V> > ::BackwardsError>(x._phantom).map_err(field_migrations::BackwardsError:: <To,V,M> ::_phantom).map_err(E::from)? ,Default::default(),))
 							}
 						}
@@ -1558,7 +1559,7 @@ pub mod _MyTestValues {
 						>
 						where
 							To: HistoricalTypesAt<V>;
-						pub type From<To: Types,V: Version,M: FieldCustomMigration<To,V> >  = (<field_migrations::myfield<To,V,M>as Migration<To::myfield,V> > ::From, <field_migrations::field2<To,V,M>as Migration<To::field2,V> > ::From, <field_migrations::_phantom<To,V,M>as Migration<To::_phantom,V> > ::From,)where To: HistoricalTypesAt<V> ;
+						pub type FromTy<To: Types,V: Version,M: FieldCustomMigration<To,V> >  = (<field_migrations::myfield<To,V,M>as Migration<To::myfield,V> > ::From, <field_migrations::field2<To,V,M>as Migration<To::field2,V> > ::From, <field_migrations::_phantom<To,V,M>as Migration<To::_phantom,V> > ::From,)where To: HistoricalTypesAt<V> ;
 						pub enum ForwardsError<
 							To: Types,
 							V: Version,
@@ -1625,20 +1626,20 @@ pub mod _MyTestValues {
 						impl<To: Types, V: Version, M: FieldCustomMigration<To, V>, T: T1>
 							Migration<Struct<T, To>, V> for see_field_changelogs_and_also<M>
 						where
-							StructVariant<From<To, V, M>, T>: IsHistoricalType,
+							StructVariant<FromTy<To, V, M>, T>: IsHistoricalType,
 							To: HistoricalTypesAt<V>,
 						{
-							type From = StructVariant<From<To, V, M>, T>;
+							type From = StructVariant<FromTy<To, V, M>, T>;
 							type ForwardsError = field_migrations::ForwardsError<To, V, M>;
 							type BackwardsError = field_migrations::BackwardsError<To, V, M>;
-							fn forwards<E: From<To, V, M, Self::ForwardsError>>(
-								x: StructVariant<From<To, V, M>, T>,
+							fn forwards<E: From<Self::ForwardsError>>(
+								x: StructVariant<FromTy<To, V, M>, T>,
 							) -> Result<StructVariant<To, T>, E> {
 								Ok(Struct::intro(myfield:: <To,V,M> ::forwards:: < <myfield<To,V,M>as Migration<To::myfield,V> > ::ForwardsError>(x.myfield).map_err(field_migrations::ForwardsError:: <To,V,M> ::myfield).map_err(E::from)? ,field2:: <To,V,M> ::forwards:: < <field2<To,V,M>as Migration<To::field2,V> > ::ForwardsError>(x.field2).map_err(field_migrations::ForwardsError:: <To,V,M> ::field2).map_err(E::from)? ,_phantom:: <To,V,M> ::forwards:: < <_phantom<To,V,M>as Migration<To::_phantom,V> > ::ForwardsError>(x._phantom).map_err(field_migrations::ForwardsError:: <To,V,M> ::_phantom).map_err(E::from)? ,Default::default(),))
 							}
-							fn backwards<E: From<To, V, M, Self::BackwardsError>>(
+							fn backwards<E: From<Self::BackwardsError>>(
 								x: StructVariant<To, T>,
-							) -> Result<StructVariant<From<To, V, M>, T>, E> {
+							) -> Result<StructVariant<FromTy<To, V, M>, T>, E> {
 								Ok(Struct::intro(myfield:: <To,V,M> ::backwards:: < <myfield<To,V,M>as Migration<To::myfield,V> > ::BackwardsError>(x.myfield).map_err(field_migrations::BackwardsError:: <To,V,M> ::myfield).map_err(E::from)? ,field2:: <To,V,M> ::backwards:: < <field2<To,V,M>as Migration<To::field2,V> > ::BackwardsError>(x.field2).map_err(field_migrations::BackwardsError:: <To,V,M> ::field2).map_err(E::from)? ,_phantom:: <To,V,M> ::backwards:: < <_phantom<To,V,M>as Migration<To::_phantom,V> > ::BackwardsError>(x._phantom).map_err(field_migrations::BackwardsError:: <To,V,M> ::_phantom).map_err(E::from)? ,Default::default(),))
 							}
 						}
@@ -1893,8 +1894,7 @@ pub mod _MyTestValues {
 	}
 }
 
-// /////////////////////////////////////
-
+// ///////////////////////////////////////////
 trait Good {
 	type Bad;
 }
