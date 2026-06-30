@@ -188,48 +188,72 @@ where
 	let vault_event_source = EvmEventSource::new::<VaultEvents>(vault_address);
 	let key_manager_event_source = EvmEventSource::new::<KeyManagerEvents>(key_manager_address);
 
-	scope.spawn(async move {
-		task_scope::task_scope(|scope| {
-			async {
-				crate::elections::Voter::new(
-					scope,
-					state_chain_client,
-					CompositeVoter::<BscElectoralSystemRunner, _>::new((
-						EvmVoter::new(client.clone()),
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							EvmDepositChannelWitnessingConfig {
-								address_checker_address,
-								vault_contract: vault_event_source.clone(),
-								supported_assets: supported_asset_address_and_event_type,
-							},
-						),
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							VaultDepositWitnessingConfig {
-								vault: vault_event_source,
-								supported_assets: supported_erc20_tokens.clone(),
-							},
-						),
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							EvmKeyManagerWitnessingConfig { key_manager: key_manager_event_source },
-						),
-						BscFeeVoter { client: client.clone() },
-						BscLivenessVoter { client: client.clone() },
-					)),
-					Some(client.cache_invalidation_senders),
-					"Bsc",
-				)
-				.continuously_vote()
-				.await;
+	let deposit_channel_config = EvmDepositChannelWitnessingConfig {
+		address_checker_address,
+		vault_contract: vault_event_source.clone(),
+		supported_assets: supported_asset_address_and_event_type,
+	};
 
-				Ok(())
+	let vault_deposit_config = VaultDepositWitnessingConfig {
+		vault: vault_event_source,
+		supported_assets: supported_erc20_tokens,
+	};
+
+	let key_manager_config =
+		EvmKeyManagerWitnessingConfig { key_manager: key_manager_event_source };
+
+	let sos_client = state_chain_client.clone();
+	scope.spawn_with_restart(
+		"bsc_witnessing",
+		move || {
+			let client = client.clone();
+			let state_chain_client = state_chain_client.clone();
+			let deposit_channel_config = deposit_channel_config.clone();
+			let vault_deposit_config = vault_deposit_config.clone();
+			let key_manager_config = key_manager_config.clone();
+			async move {
+				task_scope::task_scope(|scope| {
+					async {
+						crate::elections::Voter::new(
+							scope,
+							state_chain_client,
+							CompositeVoter::<BscElectoralSystemRunner, _>::new((
+								EvmVoter::new(client.clone()),
+								GenericBwVoter::new(
+									EvmVoter::new(client.clone()),
+									deposit_channel_config,
+								),
+								GenericBwVoter::new(
+									EvmVoter::new(client.clone()),
+									vault_deposit_config,
+								),
+								GenericBwVoter::new(
+									EvmVoter::new(client.clone()),
+									key_manager_config,
+								),
+								BscFeeVoter { client: client.clone() },
+								BscLivenessVoter { client: client.clone() },
+							)),
+							Some(client.cache_invalidation_senders),
+							"Bsc",
+						)
+						.continuously_vote()
+						.await;
+
+						Ok(())
+					}
+					.boxed()
+				})
+				.await
 			}
-			.boxed()
-		})
-		.await
-	});
+		},
+		move || {
+			crate::witness::common::submit_sos_extrinsic(
+				sos_client.clone(),
+				cf_primitives::WitnessingTaskName::Bsc,
+			)
+		},
+	);
 
 	Ok(())
 }
