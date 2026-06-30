@@ -97,7 +97,7 @@ pub fn initial_state(
 	usdt_token_mint_pubkey: SolAddress,
 	swap_endpoint_data_account_address: SolAddress,
 	shared_data_reference_lifetime: BlockNumberFor<Runtime>,
-) -> InitialStateOf<Runtime, Instance> {
+) -> InitialStateOf<Runtime, SolanaInstance> {
 	InitialState {
 		unsynchronised_state: (
 			// The initial chain tracking value does not matter, as we don't care about the vault
