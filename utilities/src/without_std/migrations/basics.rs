@@ -40,9 +40,9 @@ pub trait Migration<To, V: Version> {
 		todo!()
 	}
 	fn try_backwards<E>(
-		_x: Self::From,
+		_x: To,
 		_map_error: impl Fn(Self::BackwardsError) -> E,
-	) -> Result<To, E> {
+	) -> Result<Self::From, E> {
 		todo!()
 	}
 }
