@@ -179,36 +179,37 @@ macro_rules! generate_module {
                             $(
                                 type $field = <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>;
                             )*
-                            pub type From = (
+                            pub type TyFrom = (
                                 $(
                                     <field_migrations::$field as Migration<To::$field, V>>::From,
                                 )*
                             );
 
                             pub enum StructForwardsError {
-                                // $(
-                                //     $field(<$field as Migration<To::$field, V>>::ForwardsError),
-                                // )*
+                                $(
+                                    $field(<$field as Migration<To::$field, V>>::ForwardsError),
+                                )*
                             }
 
                             pub enum StructBackwardsError {
-                                // $(
-                                //     $field(<$field as Migration<To::$field, V>>::BackwardsError),
-                                // )*
+                                $(
+                                    $field(<$field as Migration<To::$field, V>>::BackwardsError),
+                                )*
                             }
 
                             mod $( $( ($T $(: $TBound)?) )+ )? {
                                 pub type StructVariant<Target: Types> = Struct<$($($T,)+)? Target>;
 
                                 impl Migration<Struct<$($($T,)+)? To>, V> for see_field_changelogs_and_also<M> where
-                                    StructVariant<From>: IsHistoricalType
+                                    StructVariant<TyFrom>: IsHistoricalType,
+                                    $struct<$($($T,)+)?>: HasChangelog
                                 {
                                     type ForwardsError = StructForwardsError;
                                     type BackwardsError = StructBackwardsError;
 
-                                    type From = StructVariant<From>;
+                                    type From = StructVariant<TyFrom>;
 
-                                    fn forwards(x: StructVariant<From>) -> StructVariant<To> {
+                                    fn forwards(x: StructVariant<TyFrom>) -> StructVariant<To> {
                                         Struct::intro(
                                             $(
                                                 $field::forwards(x.$field),
@@ -217,13 +218,17 @@ macro_rules! generate_module {
                                         )
                                     }
 
-                                    fn backwards(x: StructVariant<To>) -> StructVariant<From> {
+                                    fn backwards(x: StructVariant<To>) -> StructVariant<TyFrom> {
                                         Struct::intro (
                                             $(
                                                 $field::backwards(x.$field),
                                             )*
                                             Default::default(),
                                         )
+                                    }
+
+                                    fn try_forwards<E>(x: Self::From) -> Result<StructVariant<To>, E> {
+                                        todo!()
                                     }
                                 }
                             }
@@ -547,7 +552,8 @@ macro_rules! generate_module {
                                 pub type EnumVariant<Target: Types> = Enum<$($($T,)+)? Target>;
 
                                 impl Migration<Enum<$($($T,)+)? To>, V> for see_variant_changelogs_and_also<M> where
-                                    EnumVariant<From>: IsHistoricalType
+                                    EnumVariant<From>: IsHistoricalType,
+                                    $enum<$($($T,)+)?>: HasChangelog
                                 {
                                     type From = EnumVariant<From>;
 

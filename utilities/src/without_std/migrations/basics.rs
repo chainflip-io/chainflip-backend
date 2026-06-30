@@ -27,15 +27,18 @@ pub enum CanonicalPatchVersion {
 	Released(u32),
 }
 
-pub trait Migration<To: ?Sized, V: Version> {
+pub trait Migration<To, V: Version> {
 	type From: IsHistoricalType;
 	type ForwardsError = Never;
 	type BackwardsError = Never;
 	fn forwards(x: Self::From) -> To;
 	fn backwards(x: To) -> Self::From;
+	fn try_forwards<E: From<Self::ForwardsError>>(x: Self::From) -> Result<To, E> {
+		todo!()
+	}
 }
 
-pub trait HasVersion<V: Version> {
+pub trait HasVersion<V: Version>: Sized {
 	type HistoricalType;
 	type HistoricalMigration: Migration<Self::HistoricalType, V>;
 	type MigrationToCurrent: Migration<Self, vCurrent, From = Self::HistoricalType>;
