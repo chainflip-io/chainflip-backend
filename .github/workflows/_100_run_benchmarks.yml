@@ -111,13 +111,25 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.CF_GITHUB_BOT_SSH_PRIVATE_KEY }}
 
+      - name: Analyse benchmark weight changes 📊
+        run: |
+          ANALYSIS=$(git diff -U50 -- 'state-chain/pallets/*/src/weights.rs' | python3 ./state-chain/scripts/analyze-benchmark-weights.py) \
+            || ANALYSIS="_Weight analysis could not be generated._"
+          {
+            echo "PR_BODY<<PR_BODY_EOF"
+            echo "This pull request was opened automatically. Close it if you think it was opened in error."
+            echo ""
+            echo "$ANALYSIS"
+            echo "PR_BODY_EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Make a pull request with the changed weight files 🕯️
         uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38
         with:
           base: ${{ inputs.base_branch_name }}
           title: "[AUTOMATED] Benchmark results"
           commit-message: "[AUTOMATED] Benchmarking results."
-          body: "This pull request was opened automatically. Close it if you think it was opened in error."
+          body: ${{ env.PR_BODY }}
           branch: auto/benchmark-results/${{ inputs.commit_sha }}
           delete-branch: true
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
