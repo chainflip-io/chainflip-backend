@@ -142,7 +142,7 @@ impl BscTrackedData {
 		&self,
 		gas_limit: AssetAmount,
 	) -> <Bsc as crate::Chain>::ChainAmount {
-		self.priority_fee.saturating_mul(gas_limit)
+		self.priority_fee.max(MIN_FEE_PER_GAS).saturating_mul(gas_limit)
 	}
 }
 
