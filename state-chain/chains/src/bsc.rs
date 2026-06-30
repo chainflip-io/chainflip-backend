@@ -105,7 +105,7 @@ impl Default for BscTrackedData {
 }
 
 /// Minimum gas price (wei) BSC validators will accept; below this, txs are likely dropped.
-const MIN_FEE_PER_GAS: <Bsc as Chain>::ChainAmount = 50_000_000; // 0.05 Gwei
+const MIN_FEE_PER_GAS: <Bsc as Chain>::ChainAmount = 1_000_000_000; // 1 Gwei
 
 impl BscTrackedData {
 	pub fn max_fee_per_gas(
