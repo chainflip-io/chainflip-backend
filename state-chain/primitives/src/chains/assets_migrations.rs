@@ -295,11 +295,11 @@ mod enum1 {
 		pub enum MyTestValuesWithoutChangelog<T: T1> {
 			Variant1(_0: T::XY),
 			VariantNone{_0: u8,_1: u16, _2: u8,},
-			// Variant3(_0: T::XY),
-			Variant5 {
-				myfield: u8,
-				// field2: (T::XY, T::XY),
-			},
+			Variant3(_0: T::XY),
+			// Variant5 {
+			// 	myfield: u8,
+			// 	// field2: (T::XY, T::XY),
+			// },
 		}
 		mod _MyTestValuesWithoutChangelog { #![migrations] }
 	}
@@ -453,3 +453,5 @@ pub fn mytset() {
 	}
 	cf_utilities::comma_separated_identifiers_for! {dothis; u8, u32}
 }
+/*
+ */
