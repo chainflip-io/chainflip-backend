@@ -237,6 +237,16 @@ macro_rules! generate_module {
                                             Default::default(),
                                         ))
                                     }
+
+                                    fn try_backwards<E>(x: Self::From, map_error: impl Fn(Self::BackwardsError) -> E) -> Result<StructVariant<To>, E> {
+                                        Ok(Struct::intro(
+                                            $(
+                                                $field::try_backwards::<StructBackwardsError>(x.$field, StructBackwardsError::$field)
+                                                    .map_err(&map_error)?,
+                                            )*
+                                            Default::default(),
+                                        ))
+                                    }
                                 }
                             }
                         }
@@ -555,6 +565,18 @@ macro_rules! generate_module {
                                 )*
                             );
 
+                            pub enum EnumForwardsError {
+                                $(
+                                    $variant(<$variant as Migration<To::$variant, V>>::ForwardsError),
+                                )*
+                            }
+
+                            pub enum EnumBackwardsError {
+                                $(
+                                    $variant(<$variant as Migration<To::$variant, V>>::BackwardsError),
+                                )*
+                            }
+
                             mod $( $( ($T $(: $TBound)?) )+ )? {
                                 pub type EnumVariant<Target: Types> = Enum<$($($T,)+)? Target>;
 
@@ -563,6 +585,8 @@ macro_rules! generate_module {
                                     $enum<$($($T,)+)?>: HasChangelog
                                 {
                                     type From = EnumVariant<From>;
+                                    type ForwardsError = EnumForwardsError;
+                                    type BackwardsError = EnumBackwardsError;
 
                                     fn forwards(x: EnumVariant<From>) -> EnumVariant<To> {
                                         match x {
@@ -580,6 +604,30 @@ macro_rules! generate_module {
                                             )*
                                             Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
                                         }
+                                    }
+
+                                    fn try_forwards<E>(x: Self::From, map_error: impl Fn(Self::ForwardsError) -> E) -> Result<EnumVariant<To>, E> {
+                                        Ok(match x {
+                                            $(
+                                                Enum::$variant(val) => Enum::$variant(
+                                                    $variant::try_forwards(val, EnumForwardsError::$variant)
+                                                        .map_err(&map_error)?
+                                                ),
+                                            )*
+                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                                        })
+                                    }
+
+                                    fn try_backwards<E>(x: Self::From, map_error: impl Fn(Self::BackwardsError) -> E) -> Result<EnumVariant<To>, E> {
+                                        Ok(match x {
+                                            $(
+                                                Enum::$variant(val) => Enum::$variant(
+                                                    $variant::try_backwards(val, EnumBackwardsError::$variant)
+                                                        .map_err(&map_error)?
+                                                ),
+                                            )*
+                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                                        })
                                     }
                                 }
                             }

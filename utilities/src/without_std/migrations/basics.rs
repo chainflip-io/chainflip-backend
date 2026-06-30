@@ -39,6 +39,12 @@ pub trait Migration<To, V: Version> {
 	) -> Result<To, E> {
 		todo!()
 	}
+	fn try_backwards<E>(
+		_x: Self::From,
+		_map_error: impl Fn(Self::BackwardsError) -> E,
+	) -> Result<To, E> {
+		todo!()
+	}
 }
 
 pub trait HasVersion<V: Version>: Sized {
