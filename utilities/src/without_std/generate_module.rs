@@ -118,14 +118,15 @@ macro_rules! generate_module {
                         type UserStruct = $struct $(< $($T,)+ >)?;
                         pub type GenericStruct = Struct<( $( GetGenericVariant<$field_ty>,)*)>;
 
-                        impl HasGenericVariant for UserStruct
+                        impl HasGenericVariant for $struct $(< $($T,)+ >)? // UserStruct
                         where GenericStruct: IsHistoricalType,
                         {
                             type GenericType = GenericStruct;
                             type MigrationFromGeneric = GlobalMigrationFromGeneric;
                         }
 
-                        impl Migration<UserStruct, vCurrent> for GlobalMigrationFromGeneric
+                        // impl Migration<UserStruct, vCurrent> for GlobalMigrationFromGeneric
+                        impl Migration<$struct $(< $($T,)+ >)?, vCurrent> for GlobalMigrationFromGeneric
                         where GenericStruct: IsHistoricalType,
                         {
                             type From = GenericStruct;
