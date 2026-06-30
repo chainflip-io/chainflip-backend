@@ -33,7 +33,10 @@ pub trait Migration<To, V: Version> {
 	type BackwardsError = Never;
 	fn forwards(x: Self::From) -> To;
 	fn backwards(x: To) -> Self::From;
-	fn try_forwards<E: From<Self::ForwardsError>>(x: Self::From) -> Result<To, E> {
+	fn try_forwards<E>(
+		_x: Self::From,
+		_map_error: impl Fn(Self::ForwardsError) -> E,
+	) -> Result<To, E> {
 		todo!()
 	}
 }
