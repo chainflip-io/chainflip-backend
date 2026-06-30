@@ -131,7 +131,13 @@ impl Version for vCurrent {
 
 pub trait HasGenericVariant: Sized {
 	type GenericType;
-	type MigrationFromGeneric: Migration<Self, vCurrent, From = Self::GenericType>;
+	type MigrationFromGeneric: Migration<
+		Self,
+		vCurrent,
+		From = Self::GenericType,
+		ForwardsError = Never,
+		BackwardsError = Never,
+	>;
 }
 
 pub type GetGenericVariant<X: HasGenericVariant> =
