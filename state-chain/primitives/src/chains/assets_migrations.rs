@@ -104,18 +104,18 @@ pub trait T1 {
 	type XY;
 }
 
-// cf_utilities::generate_module! {
-// pub enum MyTestValues<T: T1> {
-// 	Variant1(T::XY),
-// 	Variant2(u8,u16),
-// 	Variant3(T::XY),
-// 	Variant4 {
-// 		myfield: u8,
-// 		field2: (T::XY, T::XY),
-// 	},
-// }
-// 	mod _MyTestValues { #![migrations] }
-// }
+cf_utilities::generate_module! {
+pub enum MyTestValuesWithoutChangelog<T: T1> {
+	Variant1(_0: T::XY),
+	Variant2(_0: u8,_1: u16),
+	Variant3(_0: T::XY),
+	Variant4 {
+		myfield: u8,
+		field2: (T::XY, T::XY),
+	},
+}
+	mod _MyTestValuesWithoutChangelog { #![migrations] }
+}
 
 cf_utilities::generate_module! {
 pub enum MyTestValues<T: T1> {
@@ -144,6 +144,13 @@ pub enum MyTestValues<T: T1> {
 	},
 }
 	mod _MyTestValues { #![migrations] }
+}
+
+impl<T: T1 + HasChangelog> HasChangelog for MyTestValues<T>
+where
+	T::XY: HasChangelog,
+{
+	type if_unspecified = _MyTestValues::see_variant_changelogs;
 }
 
 trait Good {
