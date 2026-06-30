@@ -26,7 +26,8 @@ use cf_primitives::AccountId;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		egress_handler::MockEgressHandler, key_provider::MockKeyProvider, pool_api::MockPoolApi,
+		address_converter::MockAddressConverter, egress_handler::MockEgressHandler,
+		key_provider::MockKeyProvider, pool_api::MockPoolApi, time_source,
 	},
 };
 use frame_support::{derive_impl, sp_runtime::app_crypto::sp_core::H160};
@@ -73,6 +74,8 @@ impl crate::Config for Test {
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type PolkadotKeyProvider = MockKeyProvider<PolkadotCrypto>;
 	type PoolApi = MockPoolApi<AccountId>;
+	type AddressConverter = MockAddressConverter;
+	type TimeSource = time_source::Mock;
 	type SafeMode = MockRuntimeSafeMode;
 }
 

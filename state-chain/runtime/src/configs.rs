@@ -247,6 +247,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
 	type BalanceApi = AssetBalances;
+	type WithdrawalRestriction = AssetBalances;
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
@@ -596,6 +597,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type BalanceApi = AssetBalances;
+	type WithdrawalRestriction = AssetBalances;
 	type SwapRequestHandler = Swapping;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1112,6 +1114,8 @@ impl pallet_cf_asset_balances::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type PolkadotKeyProvider = PolkadotThresholdSigner;
 	type PoolApi = LiquidityPools;
+	type AddressConverter = ChainAddressConverter;
+	type TimeSource = Timestamp;
 	type SafeMode = RuntimeSafeMode;
 }
 

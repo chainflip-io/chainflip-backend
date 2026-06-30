@@ -501,3 +501,161 @@ pub mod balance_api {
 		});
 	}
 }
+
+mod withdrawal_whitelist {
+	use super::*;
+	use crate::{Error, MaxPendingWhitelistUpdates, MaxWithdrawalTimelock, WhitelistChange};
+	use cf_chains::{
+		address::{AddressConverter, EncodedAddress},
+		AccountOrAddress,
+	};
+	use cf_traits::{
+		mocks::{address_converter::MockAddressConverter, time_source},
+		WithdrawalAddressRestriction,
+	};
+	use core::time::Duration;
+	use frame_support::{assert_err, pallet_prelude::DispatchResult};
+
+	fn account(seed: u8) -> AccountId {
+		AccountId::from([seed; 32])
+	}
+
+	fn encoded(address: ForeignChainAddress) -> EncodedAddress {
+		MockAddressConverter::to_encoded_address(address)
+	}
+
+	fn allow(who: &AccountId, address: ForeignChainAddress) {
+		assert_ok!(Pallet::<Test>::update_whitelist(
+			RuntimeOrigin::signed(who.clone()),
+			WhitelistChange::Allow(AccountOrAddress::ExternalAddress(encoded(address))),
+		));
+	}
+
+	fn set_timelock(who: &AccountId, seconds: u64) {
+		assert_ok!(Pallet::<Test>::set_withdrawal_timelock(
+			RuntimeOrigin::signed(who.clone()),
+			seconds
+		));
+	}
+
+	fn ensure_external(who: &AccountId, address: &ForeignChainAddress) -> DispatchResult {
+		Pallet::<Test>::ensure_withdrawal_allowed_to(
+			who,
+			AccountOrAddress::ExternalAddress(address),
+		)
+	}
+
+	#[test]
+	fn update_whitelist_stores_and_emits_scheduled_event() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// The timelock is off, so the change is scheduled for the current time.
+			allow(&who, ETH_ADDR_1);
+			System::assert_has_event(RuntimeEvent::AssetBalances(
+				Event::WithdrawalAllowlistUpdateScheduled {
+					account_id: who,
+					change: WhitelistChange::Allow(AccountOrAddress::ExternalAddress(ETH_ADDR_1)),
+					apply_at: 0,
+				},
+			));
+		});
+	}
+
+	#[test]
+	fn update_whitelist_rejects_undecodable_address() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Pallet::<Test>::update_whitelist(
+					RuntimeOrigin::signed(account(1)),
+					WhitelistChange::Allow(AccountOrAddress::ExternalAddress(EncodedAddress::Btc(
+						vec![]
+					))),
+				),
+				Error::<Test>::InvalidEncodedAddress
+			);
+		});
+	}
+
+	#[test]
+	fn update_whitelist_enforces_pending_cap() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::MaxPendingWhitelistUpdates { count: 2 },
+			));
+			allow(&who, ETH_ADDR_1);
+			allow(&who, ETH_ADDR_2);
+			assert_noop!(
+				Pallet::<Test>::update_whitelist(
+					RuntimeOrigin::signed(who),
+					WhitelistChange::Allow(AccountOrAddress::ExternalAddress(encoded(ARB_ADDR_1))),
+				),
+				Error::<Test>::TooManyPendingUpdates
+			);
+		});
+	}
+
+	#[test]
+	fn set_withdrawal_timelock_enforces_maximum_and_emits() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			let max = MaxWithdrawalTimelock::<Test>::get();
+			assert_noop!(
+				Pallet::<Test>::set_withdrawal_timelock(
+					RuntimeOrigin::signed(who.clone()),
+					max + 1
+				),
+				Error::<Test>::TimelockExceedsMaximum
+			);
+			// Enabling (0 -> 1000) takes effect immediately.
+			set_timelock(&who, 1000);
+			System::assert_has_event(RuntimeEvent::AssetBalances(
+				Event::WithdrawalTimelockUpdated {
+					account_id: who,
+					duration: 1000,
+					effective_at: 0,
+				},
+			));
+		});
+	}
+
+	#[test]
+	fn governance_can_update_limits() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::MaxWithdrawalTimelock { seconds: 123 },
+			));
+			assert_eq!(MaxWithdrawalTimelock::<Test>::get(), 123);
+
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::MaxPendingWhitelistUpdates { count: 5 },
+			));
+			assert_eq!(MaxPendingWhitelistUpdates::<Test>::get(), 5);
+		});
+	}
+
+	#[test]
+	fn restriction_activates_after_timelock_elapses() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// Off by default => everything allowed.
+			assert_ok!(ensure_external(&who, &ETH_ADDR_1));
+
+			// Enabling turns the restriction on immediately; with nothing configured, all blocked.
+			set_timelock(&who, 1000);
+			assert_err!(ensure_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
+
+			// A scheduled address only takes effect once the timelock has elapsed.
+			allow(&who, ETH_ADDR_1);
+			assert_err!(ensure_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
+
+			time_source::Mock::tick(Duration::from_secs(1001));
+			assert_ok!(ensure_external(&who, &ETH_ADDR_1));
+			// An unconfigured chain stays blocked (account-wide fail-safe).
+			assert_err!(ensure_external(&who, &ARB_ADDR_1), Error::<Test>::DestinationNotAllowed);
+		});
+	}
+}

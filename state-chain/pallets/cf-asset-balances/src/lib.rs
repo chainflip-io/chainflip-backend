@@ -17,19 +17,24 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
+use cf_chains::{
+	address::{AddressConverter, EncodedAddress},
+	assets::any::AssetMap,
+	AccountOrAddress, AnyChain, ForeignChain, ForeignChainAddress,
+};
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
 	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, ScheduledEgressDetails,
+	WithdrawalAddressRestriction,
 };
 use cf_utilities::derive_common_traits;
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::traits::{Saturating, Zero},
 	storage::transactional::with_storage_layer,
-	traits::{DefensiveSaturating, OnKilledAccount},
+	traits::{ConstU64, DefensiveSaturating, OnKilledAccount, UnixTime},
 };
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
@@ -42,6 +47,9 @@ mod benchmarking;
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub mod whitelist;
+use whitelist::*;
 
 pub const STORAGE_VERSION_U16: u16 = 1;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
@@ -84,6 +92,10 @@ derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub enum PalletConfigUpdate {
 		RefundFeeMultiple { chain: ForeignChain, multiple: Option<u32> },
+		/// Maximum withdrawal timelock duration.
+		MaxWithdrawalTimelock { seconds: DurationSeconds },
+		/// Maximum number of pending whitelist updates per account.
+		MaxPendingWhitelistUpdates { count: u32 },
 	}
 }
 
@@ -93,7 +105,7 @@ impl_pallet_safe_mode!(PalletSafeMode; reconciliation_enabled);
 pub mod pallet {
 	use cf_chains::{dot::PolkadotCrypto, ForeignChain};
 	use cf_primitives::EgressId;
-	use frame_system::pallet_prelude::OriginFor;
+	use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 
 	use super::*;
 	#[pallet::config]
@@ -106,6 +118,12 @@ pub mod pallet {
 		type PolkadotKeyProvider: KeyProvider<PolkadotCrypto>;
 
 		type PoolApi: PoolApi<AccountId = Self::AccountId>;
+
+		/// Converts between encoded (wire) and internal address representations.
+		type AddressConverter: AddressConverter;
+
+		/// Wall-clock time source for the withdrawal timelock (seconds).
+		type TimeSource: UnixTime;
 
 		/// Safe mode configuration.
 		type SafeMode: Get<PalletSafeMode>;
@@ -123,6 +141,14 @@ pub mod pallet {
 		ChainDeprecated,
 		/// The account still has free balance.
 		FundsRemaining,
+		/// The withdrawal destination is not on the account's withdrawal allowlist.
+		DestinationNotAllowed,
+		/// The provided address could not be decoded.
+		InvalidEncodedAddress,
+		/// The requested timelock exceeds the configured maximum.
+		TimelockExceedsMaximum,
+		/// The account has too many pending allowlist updates.
+		TooManyPendingUpdates,
 	}
 
 	#[pallet::event]
@@ -163,6 +189,18 @@ pub mod pallet {
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
 		},
+		/// An allowlist change was accepted.
+		WithdrawalAllowlistUpdateScheduled {
+			account_id: T::AccountId,
+			change: WhitelistChange<T::AccountId, ForeignChainAddress>,
+			apply_at: DurationSeconds,
+		},
+		/// An account's withdrawal timelock was updated.
+		WithdrawalTimelockUpdated {
+			account_id: T::AccountId,
+			duration: DurationSeconds,
+			effective_at: DurationSeconds,
+		},
 	}
 
 	#[pallet::pallet]
@@ -196,6 +234,28 @@ pub mod pallet {
 	pub type RefundFeeMultiple<T> =
 		StorageMap<_, Twox64Concat, ForeignChain, u32, ValueQuery, ConstU32<100>>;
 
+	/// Per-account withdrawal whitelist: active external/internal allowlists, the timelock, and the
+	/// queue of timelocked changes awaiting activation.
+	#[pallet::storage]
+	pub type WithdrawalWhitelists<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		WithdrawalWhitelist<T::AccountId>,
+		ValueQuery,
+	>;
+
+	/// Maximum withdrawal timelock duration (seconds). Governance-updatable via
+	/// [`PalletConfigUpdate::MaxWithdrawalTimelock`]. Defaults to 10 days.
+	#[pallet::storage]
+	pub type MaxWithdrawalTimelock<T> =
+		StorageValue<_, DurationSeconds, ValueQuery, ConstU64<{ 10 * 24 * 3600 }>>;
+
+	/// Maximum number of pending allowlist updates per account. Governance-updatable via
+	/// [`PalletConfigUpdate::MaxPendingWhitelistUpdates`]. Defaults to 16.
+	#[pallet::storage]
+	pub type MaxPendingWhitelistUpdates<T> = StorageValue<_, u32, ValueQuery, ConstU32<16>>;
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
@@ -214,9 +274,83 @@ pub mod pallet {
 						RefundFeeMultiple::<T>::remove(chain);
 					}
 				},
+				PalletConfigUpdate::MaxWithdrawalTimelock { seconds } => {
+					MaxWithdrawalTimelock::<T>::put(seconds);
+				},
+				PalletConfigUpdate::MaxPendingWhitelistUpdates { count } => {
+					MaxPendingWhitelistUpdates::<T>::put(count);
+				},
 			}
 
 			Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
+
+			Ok(())
+		}
+
+		/// Add or remove a destination from the caller's withdrawal allowlist. When a timelock is
+		/// set the change is scheduled and only takes effect after the timelock elapses; otherwise
+		/// it applies immediately.
+		#[pallet::call_index(1)]
+		#[pallet::weight(Weight::zero())]
+		pub fn update_whitelist(
+			origin: OriginFor<T>,
+			change: WhitelistChange<T::AccountId, EncodedAddress>,
+		) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+
+			let decode = |destination: AccountOrAddress<T::AccountId, EncodedAddress>| {
+				destination
+					.try_into_decoded::<T::AddressConverter>()
+					.map_err(|()| Error::<T>::InvalidEncodedAddress)
+			};
+			let change = match change {
+				WhitelistChange::Allow(destination) => WhitelistChange::Allow(decode(destination)?),
+				WhitelistChange::Remove(destination) =>
+					WhitelistChange::Remove(decode(destination)?),
+			};
+
+			let now = Self::now_secs();
+			let max_pending = MaxPendingWhitelistUpdates::<T>::get();
+			let apply_at = WithdrawalWhitelists::<T>::try_mutate(&account_id, |whitelist| {
+				whitelist
+					.schedule_change(change.clone(), now, max_pending)
+					.ok_or(Error::<T>::TooManyPendingUpdates)
+			})?;
+
+			Self::deposit_event(Event::<T>::WithdrawalAllowlistUpdateScheduled {
+				account_id,
+				change,
+				apply_at,
+			});
+
+			Ok(())
+		}
+
+		/// Set the caller's withdrawal timelock. Increasing/enabling applies immediately;
+		/// decreasing/disabling is itself delayed by the current timelock so a stolen key can't
+		/// instantly remove the protection.
+		#[pallet::call_index(2)]
+		#[pallet::weight(Weight::zero())]
+		pub fn set_withdrawal_timelock(
+			origin: OriginFor<T>,
+			duration: DurationSeconds,
+		) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+			ensure!(
+				duration <= MaxWithdrawalTimelock::<T>::get(),
+				Error::<T>::TimelockExceedsMaximum
+			);
+
+			let now = Self::now_secs();
+			let effective_at = WithdrawalWhitelists::<T>::mutate(&account_id, |whitelist| {
+				whitelist.set_timelock(duration, now)
+			});
+
+			Self::deposit_event(Event::<T>::WithdrawalTimelockUpdated {
+				account_id,
+				duration,
+				effective_at,
+			});
 
 			Ok(())
 		}
@@ -397,6 +531,33 @@ impl<T: Config> Pallet<T> {
 		} else {
 			VaultImbalance::Surplus(withheld - owed)
 		}
+	}
+
+	fn now_secs() -> DurationSeconds {
+		T::TimeSource::now().as_secs()
+	}
+}
+
+impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn ensure_withdrawal_allowed_to(
+		owner: &Self::AccountId,
+		dest: AccountOrAddress<&Self::AccountId, &ForeignChainAddress>,
+	) -> DispatchResult {
+		let now = Self::now_secs();
+		let mut whitelist = WithdrawalWhitelists::<T>::get(owner);
+		// Lazily fold in any matured pending updates so the active allowlists are current, writing
+		// back only if that changed anything.
+		if whitelist.apply_due_updates(now) {
+			if whitelist.is_empty() {
+				WithdrawalWhitelists::<T>::remove(owner);
+			} else {
+				WithdrawalWhitelists::<T>::insert(owner, &whitelist);
+			}
+		}
+		ensure!(whitelist.is_allowed(dest, now), Error::<T>::DestinationNotAllowed);
+		Ok(())
 	}
 }
 

@@ -2849,3 +2849,96 @@ mod bound_broker_withdrawal {
 		});
 	}
 }
+
+/// Proves that the account-wide withdrawal allowlist (implemented in `cf-asset-balances`, mocked
+/// here) is wired into `trigger_withdrawal` — the shared exit path for both the broker `withdraw`
+/// extrinsic and `affiliate_withdrawal_request`.
+mod withdrawal_restriction {
+	use super::*;
+	use cf_chains::AccountOrAddress;
+	use cf_traits::mocks::withdrawal_address_restriction::MockWithdrawalAddressRestriction;
+
+	fn not_allowed() -> DispatchError {
+		DispatchError::Other("MockWithdrawalAddressRestriction: destination not allowed")
+	}
+
+	#[test]
+	fn broker_withdraw_is_gated_by_the_allowlist() {
+		new_test_ext().execute_with(|| {
+			let allowed: EthereumAddress = [0xaa; 20].into();
+			let disallowed: EthereumAddress = [0xbb; 20].into();
+
+			MockWithdrawalAddressRestriction::restrict_to(
+				&BROKER,
+				vec![AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(allowed))],
+			);
+
+			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 1000);
+
+			// Withdrawal to a non-allowlisted address is rejected before any debit.
+			assert_noop!(
+				Swapping::withdraw(
+					OriginTrait::signed(BROKER),
+					Asset::Eth,
+					EncodedAddress::Eth(disallowed.into()),
+				),
+				not_allowed()
+			);
+
+			// Withdrawal to the allowlisted address succeeds.
+			assert_ok!(Swapping::withdraw(
+				OriginTrait::signed(BROKER),
+				Asset::Eth,
+				EncodedAddress::Eth(allowed.into()),
+			));
+		});
+	}
+
+	#[test]
+	fn affiliate_withdrawal_request_is_gated_by_the_allowlist() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			let withdrawal_address: EthereumAddress = [0xcc; 20].into();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address,
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			<Test as Config>::BalanceApi::credit_account(&affiliate_account_id, Asset::Usdc, 1000);
+
+			// The affiliate's own account is the owner checked in `trigger_withdrawal`; restrict it
+			// to a destination that isn't its registered withdrawal address.
+			MockWithdrawalAddressRestriction::restrict_to(
+				&affiliate_account_id,
+				vec![AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
+					[0xdd; 20].into(),
+				))],
+			);
+
+			assert_noop!(
+				Swapping::affiliate_withdrawal_request(
+					OriginTrait::signed(BROKER),
+					affiliate_account_id,
+				),
+				not_allowed()
+			);
+
+			// Allow the registered withdrawal address and the request goes through.
+			MockWithdrawalAddressRestriction::restrict_to(
+				&affiliate_account_id,
+				vec![AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
+					withdrawal_address,
+				))],
+			);
+
+			assert_ok!(Swapping::affiliate_withdrawal_request(
+				OriginTrait::signed(BROKER),
+				affiliate_account_id,
+			));
+		});
+	}
+}

@@ -24,6 +24,7 @@ use cf_primitives::{
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DepositApi, EgressApi,
 	LpRegistration, LpStatsApi, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
+	WithdrawalAddressRestriction,
 };
 use frame_support::{
 	fail,
@@ -227,6 +228,11 @@ pub mod pallet {
 
 		/// The interface to managing balances.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
+		/// Restricts which destinations an LP may withdraw or transfer to.
+		type WithdrawalRestriction: WithdrawalAddressRestriction<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 
 		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
 
@@ -600,6 +606,11 @@ impl<T: Config> Pallet<T> {
 						Error::<T>::NoLiquidityRefundAddressRegistered
 					);
 
+					T::WithdrawalRestriction::ensure_withdrawal_allowed_to(
+						&account_id,
+						AccountOrAddress::InternalAccount(&destination_account),
+					)?;
+
 					// Debit the asset from the account.
 					T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
 
@@ -623,6 +634,11 @@ impl<T: Config> Pallet<T> {
 						destination_address_internal.chain() == ForeignChain::from(asset),
 						Error::<T>::InvalidEgressAddress
 					);
+
+					T::WithdrawalRestriction::ensure_withdrawal_allowed_to(
+						&account_id,
+						AccountOrAddress::ExternalAddress(&destination_address_internal),
+					)?;
 
 					// Debit the asset from the account.
 					T::BalanceApi::try_debit_account(&account_id, asset, amount)?;

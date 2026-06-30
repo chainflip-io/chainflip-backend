@@ -766,3 +766,84 @@ fn test_purge_balances() {
 			.all(|(_, amount)| *amount == 0));
 	});
 }
+
+mod withdrawal_restriction {
+	use super::*;
+	use cf_chains::AccountOrAddress;
+	use cf_traits::mocks::withdrawal_address_restriction::MockWithdrawalAddressRestriction;
+	use sp_runtime::DispatchError;
+
+	fn not_allowed() -> DispatchError {
+		DispatchError::Other("MockWithdrawalAddressRestriction: destination not allowed")
+	}
+
+	#[test]
+	fn external_withdrawal_is_gated_by_the_allowlist() {
+		new_test_ext().execute_with(|| {
+			let allowed = [0xaa; 20];
+			let disallowed = [0xbb; 20];
+
+			MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, 1_000);
+			MockWithdrawalAddressRestriction::restrict_to(
+				&LP_ACCOUNT,
+				vec![AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(allowed.into()))],
+			);
+
+			// A different address is blocked...
+			assert_noop!(
+				LiquidityProvider::withdraw_asset(
+					RuntimeOrigin::signed(LP_ACCOUNT),
+					100,
+					Asset::Eth,
+					EncodedAddress::Eth(disallowed),
+				),
+				not_allowed()
+			);
+			// ...the allowlisted one succeeds.
+			assert_ok!(LiquidityProvider::withdraw_asset(
+				RuntimeOrigin::signed(LP_ACCOUNT),
+				100,
+				Asset::Eth,
+				EncodedAddress::Eth(allowed),
+			));
+		});
+	}
+
+	#[test]
+	fn internal_transfer_is_gated_by_the_allowlist() {
+		new_test_ext().execute_with(|| {
+			MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, 1_000);
+			assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+				RuntimeOrigin::signed(LP_ACCOUNT_2),
+				EncodedAddress::Eth(Default::default()),
+			));
+
+			// Restrict to some other account: transferring to LP_ACCOUNT_2 is blocked.
+			MockWithdrawalAddressRestriction::restrict_to(
+				&LP_ACCOUNT,
+				vec![AccountOrAddress::InternalAccount(NON_LP_ACCOUNT)],
+			);
+			assert_noop!(
+				LiquidityProvider::transfer_asset(
+					RuntimeOrigin::signed(LP_ACCOUNT),
+					100,
+					Asset::Eth,
+					LP_ACCOUNT_2,
+				),
+				not_allowed()
+			);
+
+			// Allow LP_ACCOUNT_2: the transfer succeeds.
+			MockWithdrawalAddressRestriction::restrict_to(
+				&LP_ACCOUNT,
+				vec![AccountOrAddress::InternalAccount(LP_ACCOUNT_2)],
+			);
+			assert_ok!(LiquidityProvider::transfer_asset(
+				RuntimeOrigin::signed(LP_ACCOUNT),
+				100,
+				Asset::Eth,
+				LP_ACCOUNT_2,
+			));
+		});
+	}
+}

@@ -24,6 +24,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
+		withdrawal_address_restriction::MockWithdrawalAddressRestriction,
 	},
 	AccountRoleRegistry, BalanceApi, MinimumDeposit,
 };
@@ -144,6 +145,8 @@ impl crate::Config for Test {
 	type WeightInfo = ();
 	type PoolApi = MockPoolApi;
 	type BalanceApi = MockBalanceApi;
+	type WithdrawalRestriction =
+		MockWithdrawalAddressRestriction<<Self as frame_system::Config>::AccountId>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = cf_traits::mocks::fee_payment::MockFeePayment<Self>;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
