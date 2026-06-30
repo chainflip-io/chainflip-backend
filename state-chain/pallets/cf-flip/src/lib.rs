@@ -30,10 +30,12 @@ pub mod substrate_impls;
 
 pub mod weights;
 use scale_info::TypeInfo;
+use sp_runtime::traits::Saturating;
 pub use weights::WeightInfo;
 
+use cf_primitives::ACCUMULATE_REWARDS_EPOCH_START;
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, Issuance,
+	AccountInfo, Bonding, DeregistrationCheck, EpochInfo, FeePayment, FundingInfo, Issuance,
 	RewardsDistribution, Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
@@ -101,11 +103,17 @@ pub mod pallet {
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
 
+	/// Reserve ID derived from blake2_256("OnchainFees")[..4].
+	pub const ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID: ReserveId = [0xc3, 0xee, 0x10, 0x5a];
+
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip<Amount = Self::Balance> {
 		/// The balance of an account.
-		type Balance: frame_support::traits::tokens::Balance + From<u128> + From<u64>;
+		type Balance: frame_support::traits::tokens::Balance
+			+ From<u128>
+			+ From<u64>
+			+ TryInto<i128>;
 
 		/// Blocks per day.
 		#[pallet::constant]
@@ -522,7 +530,15 @@ impl<T: Config> Pallet<T> {
 
 	fn slash(account_id: &T::AccountId, slash_amount: T::Balance) {
 		if !slash_amount.is_zero() && Account::<T>::get(account_id).can_be_slashed(slash_amount) {
-			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
+			Pallet::<T>::settle(
+				account_id,
+				if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+					Pallet::<T>::add_to_onchain_flip_to_be_distributed(slash_amount)
+				} else {
+					Pallet::<T>::burn(slash_amount)
+				}
+				.into(),
+			);
 			Self::deposit_event(Event::<T>::SlashingPerformed {
 				who: account_id.clone(),
 				amount: slash_amount,
@@ -531,20 +547,30 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn trigger_flip_reward_distribution(authorities: Vec<T::AccountId>) -> T::Balance {
-		let flip_to_distribute = FlipToDistribute::<T>::take();
-		if flip_to_distribute <= Zero::zero() {
-			FlipToDistribute::<T>::put(flip_to_distribute);
-			return Zero::zero()
-		}
-		let flip_to_distribute: u128 =
-			flip_to_distribute.try_into().expect("checked for negative number above");
+		let onchain_flip_to_distribute = Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID);
 
 		let count = authorities.len();
 		let count_u128 = count as u128;
-		let (per_authority_reward, remainder) =
-			(flip_to_distribute / count_u128, flip_to_distribute % count_u128);
 
-		let winner_authority = if remainder > 0 {
+		let (onchain_per_authority_reward, onchain_remainder) = (
+			onchain_flip_to_distribute / count_u128.into(),
+			onchain_flip_to_distribute % count_u128.into(),
+		);
+
+		let offchain_flip_to_distribute = FlipToDistribute::<T>::take();
+		let offchain_flip_to_distribute: u128 = if offchain_flip_to_distribute <= Zero::zero() {
+			FlipToDistribute::<T>::put(offchain_flip_to_distribute);
+			Zero::zero()
+		} else {
+			offchain_flip_to_distribute
+				.try_into()
+				.expect("checked for negative number above")
+		};
+
+		let (offchain_per_authority_reward, offchain_remainder) =
+			(offchain_flip_to_distribute / count_u128, offchain_flip_to_distribute % count_u128);
+
+		let winner_authority = if offchain_remainder > 0 || onchain_remainder > 0u128.into() {
 			let parent_hash = frame_system::Pallet::<T>::parent_hash();
 			let seed =
 				<T as frame_system::Config>::Hashing::hash_of(&(parent_hash, b"flip_distribution"));
@@ -555,24 +581,52 @@ impl<T: Config> Pallet<T> {
 			None
 		};
 
-		let mut flip_minted_list = vec![];
+		let mut flip_distributed_map = sp_std::collections::btree_map::BTreeMap::new();
 		for authority in &authorities {
 			T::RewardsDistribution::distribute(
 				if winner_authority.is_some_and(|wa| authority == wa) {
-					(per_authority_reward + remainder).into()
+					(offchain_per_authority_reward + offchain_remainder).into()
 				} else {
-					per_authority_reward.into()
+					offchain_per_authority_reward.into()
 				},
 				authority,
 				|account, amount| {
 					Pallet::<T>::settle(account, Pallet::<T>::bridge_in(amount).into());
-					flip_minted_list.push((account.clone(), amount));
+					flip_distributed_map
+						.entry(account.clone())
+						.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
+						.or_insert(amount);
+				},
+			);
+
+			T::RewardsDistribution::distribute(
+				if winner_authority.is_some_and(|wa| authority == wa) {
+					onchain_per_authority_reward + onchain_remainder
+				} else {
+					onchain_per_authority_reward
+				},
+				authority,
+				|account, amount| {
+					Pallet::<T>::settle(
+						account,
+						Pallet::<T>::withdraw_reserves(
+							ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
+							amount,
+						)
+						.into(),
+					);
+					flip_distributed_map
+						.entry(account.clone())
+						.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
+						.or_insert(amount);
 				},
 			);
 		}
 
-		Self::deposit_event(Event::FlipDistributed { amount: flip_minted_list });
-		flip_to_distribute.into()
+		Self::deposit_event(Event::FlipDistributed {
+			amount: flip_distributed_map.into_iter().collect(),
+		});
+		offchain_flip_to_distribute.into()
 	}
 }
 
@@ -592,6 +646,7 @@ impl<T: Config> FundingInfo for Pallet<T> {
 impl<T: Config> FeePayment for Pallet<T> {
 	type Amount = T::Balance;
 	type AccountId = T::AccountId;
+	type Deficit = Deficit<T>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
@@ -603,16 +658,29 @@ impl<T: Config> FeePayment for Pallet<T> {
 		Pallet::<T>::settle(account_id, Pallet::<T>::mint(amount).into());
 	}
 
-	fn try_burn_fee(
+	fn try_take_fee(
 		account_id: &Self::AccountId,
 		amount: Self::Amount,
 	) -> frame_support::dispatch::DispatchResult {
 		if let Some(surplus) = Pallet::<T>::try_debit_from_liquid_funds(account_id, amount) {
-			let _ = surplus.offset(Pallet::<T>::burn(amount));
+			let _ =
+				surplus.offset(if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+					Pallet::<T>::add_to_onchain_flip_to_be_distributed(amount)
+				} else {
+					Pallet::<T>::burn(amount)
+				});
 			Ok(())
 		} else {
 			Err(Error::<T>::InsufficientLiquidity.into())
 		}
+	}
+
+	fn add_to_offchain_flip_to_be_distributed(amount: i128) {
+		FlipToDistribute::<T>::mutate(|flip| flip.saturating_accrue(amount));
+	}
+
+	fn add_to_onchain_flip_to_be_distributed(amount: Self::Amount) -> Deficit<T> {
+		Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
 	}
 }
 
@@ -753,7 +821,15 @@ pub struct BurnFlipAccount<T: Config>(PhantomData<T>);
 impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		let dust = Pallet::<T>::total_balance_of(account_id);
-		Pallet::<T>::settle(account_id, Pallet::<T>::burn(dust).into());
+		Pallet::<T>::settle(
+			account_id,
+			if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+				Pallet::<T>::add_to_onchain_flip_to_be_distributed(dust)
+			} else {
+				Pallet::<T>::burn(dust)
+			}
+			.into(),
+		);
 		Account::<T>::remove(account_id);
 		Pallet::<T>::deposit_event(Event::AccountReaped {
 			who: account_id.clone(),

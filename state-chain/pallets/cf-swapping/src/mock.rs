@@ -209,7 +209,6 @@ impl pallet_cf_swapping::Config for Test {
 	type SwappingApi = MockSwappingApi;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = MockWeightInfo;
-	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
 	type LendingSystemApi = MockLendingSystemApi;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
