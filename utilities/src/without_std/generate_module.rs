@@ -114,41 +114,81 @@ macro_rules! generate_module {
                     }
 
                     // ----------------- connection with default struct ------------------ //
-                    mod where $(( $field_ty: HasGenericVariant ))* {
-                        type UserStruct = $struct $(< $($T,)+ >)?;
-                        pub type GenericStruct = Struct<( $( GetGenericVariant<$field_ty>,)*)>;
+                    type UserStruct = $struct $(< $($T,)+ >)?;
 
-                        impl HasGenericVariant for $struct $(< $($T,)+ >)? // UserStruct
-                        where GenericStruct: IsHistoricalType,
-                        {
-                            type GenericType = GenericStruct;
-                            type MigrationFromGeneric = GlobalMigrationFromGeneric;
-                        }
+                    impl HasGenericVariant for $struct $(< $($T,)+ >)? // UserStruct
+                    where
+                        $( $field_ty: HasChangelog, )*
+                        $( $field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )*
+                        Struct<( $( < $field_ty as HasGenericVariant>::GenericType,)*)>: IsHistoricalType
+                    {
+                        type GenericType = Struct<(
+                            $(
+                                < $field_ty as HasGenericVariant>::GenericType,
+                            )*
+                        )>;
+                        type MigrationFromGeneric = GlobalMigrationFromGeneric;
+                    }
 
-                        // impl Migration<UserStruct, vCurrent> for GlobalMigrationFromGeneric
-                        impl Migration<$struct $(< $($T,)+ >)?, vCurrent> for GlobalMigrationFromGeneric
-                        where GenericStruct: IsHistoricalType,
-                        {
-                            type From = GenericStruct;
+                    impl Migration<$struct $(< $($T,)+ >)?, vCurrent> for GlobalMigrationFromGeneric
+                    where
+                        $( $field_ty: HasChangelog, )*
+                        $( $field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )*
+                        Struct<( $( < $field_ty as HasGenericVariant>::GenericType,)*)>: IsHistoricalType
+                    {
+                        type From = Struct<(
+                            $(
+                                < $field_ty as HasGenericVariant>::GenericType,
+                            )*
+                        )>;
+                        type ForwardsError = cf_utilities::never::Never;
+                        type BackwardsError = cf_utilities::never::Never;
 
-                            fn forwards(x: GenericStruct) -> UserStruct {
+                        fn try_forwards<E>(
+                            x: Self::From,
+                            _map_error: impl Fn(Self::ForwardsError) -> E,
+                        ) -> Result<$struct $(< $($T,)+ >)?, E> {
+                            Ok(
                                 $struct {
                                     $(
                                         $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field),
                                     )*
                                 }
-                            }
+                            )
+                        }
 
-                            fn backwards(x: UserStruct) -> GenericStruct {
+                        fn try_backwards<E>(
+                            x: $struct $(< $($T,)+ >)?,
+                            _map_error: impl Fn(Self::BackwardsError) -> E,
+                        ) -> Result<Self::From, E> {
+                            Ok(
                                 Struct::intro(
                                     $(
                                         <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
                                     )*
                                     Default::default(),
                                 )
+                            )
+                        }
+
+                        fn forwards(x: Self::From) -> UserStruct {
+                            $struct {
+                                $(
+                                    $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field),
+                                )*
                             }
                         }
+
+                        fn backwards(x: UserStruct) -> Self::From {
+                            Struct::intro(
+                                $(
+                                    <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
+                                )*
+                                Default::default(),
+                            )
+                        }
                     }
+
                 }
             }
 
@@ -708,6 +748,7 @@ macro_rules! generate_module {
                                 $( $( $variant_field_ty: HasChangelog, )* )?
                                 $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                             )*
+                            $enum<$($($T,)+)?>: HasChangelog,
                             Enum<$($($T,)+)? (
                                 $(
                                     GetGenericVariant<variants::$variant>,
@@ -731,6 +772,7 @@ macro_rules! generate_module {
                                 $( $( $variant_field_ty: HasChangelog, )* )?
                                 $( $( $variant_field_ty: HasGenericVariant<GenericType: IsHistoricalType>, )* )?
                             )*
+                            $enum<$($($T,)+)?>: HasChangelog,
                         Enum<$($($T,)+)? (
                             $(
                                 GetGenericVariant<variants::$variant>,
@@ -767,6 +809,41 @@ macro_rules! generate_module {
                                         )
                                     )),
                                 )*
+                            )
+                        }
+
+                        fn try_forwards<E>(
+                            x: Self::From,
+                            _map_error: impl Fn(Self::ForwardsError) -> E,
+                        ) -> Result<RealEnum, E> {
+                            Ok(
+                                match x {
+                                    $(
+                                        Enum::$variant(val) =>
+                                            (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::forwards(val)).into(),
+                                    )*
+                                    Enum::_phantom(never, _) => match never {},
+                                }
+                            )
+                        }
+
+                        fn try_backwards<E>(
+                            x: RealEnum,
+                            _map_error: impl Fn(Self::BackwardsError) -> E,
+                        ) -> Result<Self::From, E> {
+                            Ok(
+                                x.elim(
+                                    $(
+                                        |$($($variant_tuple_entry: $variant_ty,)*)? $($($variant_field: $variant_field_ty,)*)?|
+                                        Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(
+                                            variants::$variant::intro(
+                                                $( $( $variant_tuple_entry, )*)?
+                                                $( $( $variant_field, )*)?
+                                                Default::default(),
+                                            )
+                                        )),
+                                    )*
+                                )
                             )
                         }
                     }
