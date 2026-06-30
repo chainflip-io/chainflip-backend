@@ -76,13 +76,39 @@ impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 	fn backwards(x: X) -> Self::From {
 		x
 	}
+
+	fn try_forwards<E>(
+		x: Self::From,
+		_map_error: impl Fn(Self::ForwardsError) -> E,
+	) -> Result<X, E> {
+		Ok(x)
+	}
+
+	fn try_backwards<E>(
+		x: X,
+		_map_error: impl Fn(Self::BackwardsError) -> E,
+	) -> Result<Self::From, E> {
+		Ok(x)
+	}
 }
 
 // -------- composition of migrations --------
+pub enum ComposedMigrationFailedForwards<A, B> {
+	First(A),
+	Second(B),
+}
+
+pub enum ComposedMigrationFailedBackwards<A, B> {
+	First(A),
+	Second(B),
+}
+
 impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Migration<X, V>
 	for (A, W, B)
 {
 	type From = A::From;
+	type ForwardsError = ComposedMigrationFailedForwards<A::ForwardsError, B::ForwardsError>;
+	type BackwardsError = ComposedMigrationFailedBackwards<A::BackwardsError, B::BackwardsError>;
 
 	fn forwards(x: Self::From) -> X {
 		B::forwards(A::forwards(x))
@@ -90,6 +116,27 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 
 	fn backwards(x: X) -> Self::From {
 		A::backwards(B::backwards(x))
+	}
+
+	fn try_forwards<E>(
+		x: Self::From,
+		map_error: impl Fn(Self::ForwardsError) -> E,
+	) -> Result<X, E> {
+		let x =
+			A::try_forwards(x, |error| map_error(ComposedMigrationFailedForwards::First(error)))?;
+
+		B::try_forwards(x, |error| map_error(ComposedMigrationFailedForwards::Second(error)))
+	}
+
+	fn try_backwards<E>(
+		x: X,
+		map_error: impl Fn(Self::BackwardsError) -> E,
+	) -> Result<Self::From, E> {
+		let x = B::try_backwards(x, |error| {
+			map_error(ComposedMigrationFailedBackwards::Second(error))
+		})?;
+
+		A::try_backwards(x, |error| map_error(ComposedMigrationFailedBackwards::First(error)))
 	}
 }
 
@@ -104,6 +151,20 @@ impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 	}
 
 	fn backwards(_x: T) -> Self::From {}
+
+	fn try_forwards<E>(
+		_x: Self::From,
+		_map_error: impl Fn(Self::ForwardsError) -> E,
+	) -> Result<T, E> {
+		Ok(Default::default())
+	}
+
+	fn try_backwards<E>(
+		_x: T,
+		_map_error: impl Fn(Self::BackwardsError) -> E,
+	) -> Result<Self::From, E> {
+		Ok(())
+	}
 }
 
 // ----------- lookups ------------
