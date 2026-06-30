@@ -190,12 +190,27 @@ macro_rules! generate_module {
                                 )*
                             );
 
+                            pub enum StructForwardsError {
+                                $(
+                                    $field(<$field as Migration<To::$field, V>>::ForwardsError),
+                                )*
+                            }
+
+                            pub enum StructBackwardsError {
+                                $(
+                                    $field(<$field as Migration<To::$field, V>>::BackwardsError),
+                                )*
+                            }
+
                             mod $( $( ($T $(: $TBound)?) )+ )? {
                                 pub type StructVariant<Target: Types> = Struct<$($($T,)+)? Target>;
 
                                 impl Migration<Struct<$($($T,)+)? To>, V> for see_field_changelogs_and_also<M> where
                                     StructVariant<From>: IsHistoricalType
                                 {
+                                    type ForwardsError = StructForwardsError;
+                                    type BackwardsError = StructBackwardsError;
+
                                     type From = StructVariant<From>;
 
                                     fn forwards(x: StructVariant<From>) -> StructVariant<To> {

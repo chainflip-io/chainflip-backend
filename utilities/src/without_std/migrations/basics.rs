@@ -16,7 +16,7 @@
 
 // ---------- definition of migrations ------------
 
-use crate::migrations::HasChangelog;
+use crate::{migrations::HasChangelog, never::Never};
 
 pub trait Version: Copy {
 	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<CanonicalPatchVersion>;
@@ -29,6 +29,8 @@ pub enum CanonicalPatchVersion {
 
 pub trait Migration<To: ?Sized, V: Version> {
 	type From: IsHistoricalType;
+	type ForwardsError = Never;
+	type BackwardsError = Never;
 	fn forwards(x: Self::From) -> To;
 	fn backwards(x: To) -> Self::From;
 }
