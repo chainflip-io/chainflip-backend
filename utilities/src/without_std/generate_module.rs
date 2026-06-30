@@ -191,15 +191,15 @@ macro_rules! generate_module {
                             );
 
                             pub enum StructForwardsError {
-                                $(
-                                    $field(<$field as Migration<To::$field, V>>::ForwardsError),
-                                )*
+                                // $(
+                                //     $field(<$field as Migration<To::$field, V>>::ForwardsError),
+                                // )*
                             }
 
                             pub enum StructBackwardsError {
-                                $(
-                                    $field(<$field as Migration<To::$field, V>>::BackwardsError),
-                                )*
+                                // $(
+                                //     $field(<$field as Migration<To::$field, V>>::BackwardsError),
+                                // )*
                             }
 
                             mod $( $( ($T $(: $TBound)?) )+ )? {

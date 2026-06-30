@@ -107,11 +107,11 @@ pub trait T1 {
 cf_utilities::generate_module! {
 pub enum MyTestValuesWithoutChangelog<T: T1> {
 	Variant1(_0: T::XY),
-	Variant2(_0: u8,_1: u16),
-	Variant3(_0: T::XY),
-	Variant4 {
+	VariantNone{_0: u8,_1: u16, _2: u8,},
+	// Variant3(_0: T::XY),
+	Variant5 {
 		myfield: u8,
-		field2: (T::XY, T::XY),
+		// field2: (T::XY, T::XY),
 	},
 }
 	mod _MyTestValuesWithoutChangelog { #![migrations] }
@@ -120,21 +120,32 @@ pub enum MyTestValuesWithoutChangelog<T: T1> {
 cf_utilities::generate_module! {
 pub enum MyTestValues<T: T1> {
 	Variant1(_0: T::XY),
-	Variant2(_0: u8, _1: u16, _2: u8, _3: u8),
+	// Variant2(_0: u8),
+	Variant2(_0: u8, _1: u16, _2: u8, _3: u8, _4: u8, _5: u8, _6: u16, _7: u8),
+	// Variant2(_0: u8, _1: u16),
+	Variant3 {_0: T::XY, _1: T::XY,},
 	Variant4 {
-		myfield: u8,
+		// myfield: u8,
 		field2: T::XY,
 		field3: T::XY,
 		field4: T::XY,
 		field5: T::XY,
 	},
-	Variant5 {
-		myfield: u8,
+	Variant5 (
+		// myfield: u8,
 		field2: u16,
-		field3: T::XY,
-		field4: T::XY,
-		field5: T::XY,
-	},
+		field3: u8,
+		field4: u8,
+		field5: u8,
+		field6: u8,
+		field7: u8,
+		field8: u8,
+		field9: u8,
+		field10: u8,
+		field11: u8,
+		field12: u8,
+		field13: u8
+	),
 	Variant6 {
 		myfield: u8,
 		field2: u16,
