@@ -558,64 +558,34 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn trigger_flip_reward_distribution(authorities: Vec<T::AccountId>) -> T::Balance {
-		let onchain_flip_to_distribute = Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID);
+		let count_u128 = authorities.len() as u128;
 
-		let count = authorities.len();
-		let count_u128 = count as u128;
-
-		let (onchain_per_authority_reward, onchain_remainder) = (
-			onchain_flip_to_distribute / count_u128.into(),
-			onchain_flip_to_distribute % count_u128.into(),
-		);
-
+		// Bridge in any pending offchain rewards and deposit them into the distribution reserve so
+		// that everything is distributed from a single source.
 		let offchain_flip_to_distribute = FlipToDistribute::<T>::take();
-		let offchain_flip_to_distribute: u128 = if offchain_flip_to_distribute <= Zero::zero() {
+		let offchain_flip_bridged: T::Balance = if offchain_flip_to_distribute > Zero::zero() {
+			let as_u128: u128 = offchain_flip_to_distribute
+				.try_into()
+				.expect("checked for positive number above");
+			let amount: T::Balance = as_u128.into();
+			let _ = Pallet::<T>::bridge_in(amount).offset(Pallet::<T>::deposit_reserves(
+				ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
+				amount,
+			));
+			amount
+		} else {
 			FlipToDistribute::<T>::put(offchain_flip_to_distribute);
 			Zero::zero()
-		} else {
-			offchain_flip_to_distribute
-				.try_into()
-				.expect("checked for negative number above")
 		};
 
-		let (offchain_per_authority_reward, offchain_remainder) =
-			(offchain_flip_to_distribute / count_u128, offchain_flip_to_distribute % count_u128);
-
-		let winner_authority = if offchain_remainder > 0 || onchain_remainder > 0u128.into() {
-			let parent_hash = frame_system::Pallet::<T>::parent_hash();
-			let seed =
-				<T as frame_system::Config>::Hashing::hash_of(&(parent_hash, b"flip_distribution"));
-			let random_num = u64::from_le_bytes(seed.as_ref()[..8].try_into().unwrap_or([0u8; 8]));
-			let winner_idx = (random_num % count as u64) as usize;
-			Some(&authorities[winner_idx])
-		} else {
-			None
-		};
+		// Distribute evenly from the combined reserve. Any remainder stays for the next epoch.
+		let per_authority_reward =
+			Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID) / count_u128.into();
 
 		let mut flip_distributed_map = sp_std::collections::btree_map::BTreeMap::new();
 		for authority in &authorities {
 			T::RewardsDistribution::distribute(
-				if winner_authority.is_some_and(|wa| authority == wa) {
-					(offchain_per_authority_reward + offchain_remainder).into()
-				} else {
-					offchain_per_authority_reward.into()
-				},
-				authority,
-				|account, amount| {
-					Pallet::<T>::settle(account, Pallet::<T>::bridge_in(amount).into());
-					flip_distributed_map
-						.entry(account.clone())
-						.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
-						.or_insert(amount);
-				},
-			);
-
-			T::RewardsDistribution::distribute(
-				if winner_authority.is_some_and(|wa| authority == wa) {
-					onchain_per_authority_reward + onchain_remainder
-				} else {
-					onchain_per_authority_reward
-				},
+				per_authority_reward,
 				authority,
 				|account, amount| {
 					Pallet::<T>::settle(
@@ -637,7 +607,7 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::FlipDistributed {
 			amount: flip_distributed_map.into_iter().collect(),
 		});
-		offchain_flip_to_distribute.into()
+		offchain_flip_bridged
 	}
 }
 
