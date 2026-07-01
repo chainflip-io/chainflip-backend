@@ -39,3 +39,13 @@ impl proptest::arbitrary::Arbitrary for Never {
 		panic!("Cannot generate arbitrary values for uninhabited type Never")
 	}
 }
+
+pub trait IsEmptyType: Sized {
+	fn as_never(self) -> Never;
+}
+
+impl IsEmptyType for Never {
+	fn as_never(self) -> Never {
+		self
+	}
+}
