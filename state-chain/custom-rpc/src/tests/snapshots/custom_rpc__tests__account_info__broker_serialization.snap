@@ -38,6 +38,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     "Tron": {
       "TRX": "0x0",
       "USDT": "0x0"
+    },
+    "Bsc": {
+      "BNB": "0x0",
+      "USDT": "0x0"
     }
   },
   "bond": "0x8ac7230489e80000",
@@ -79,6 +83,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     "Tron": {
       "TRX": "0x4c4b40",
       "USDT": "0x7a120"
+    },
+    "Bsc": {
+      "BNB": "0x429d069189e0000",
+      "USDT": "0x58d15e176280000"
     }
   },
   "affiliates": [

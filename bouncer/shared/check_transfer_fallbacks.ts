@@ -10,7 +10,7 @@ import { findAllEventsByName } from 'shared/utils/indexer';
 // Neither should ever happen during normal bouncer tests.
 
 // Chains that have EVM vault contracts with the TransferFallbackRequested mechanism.
-const EVM_VAULT_CHAINS = [Chains.Ethereum, Chains.Arbitrum, Chains.Tron] as const;
+const EVM_VAULT_CHAINS = [Chains.Ethereum, Chains.Arbitrum, Chains.Tron, Chains.Bsc] as const;
 
 const TRANSFER_FALLBACK_EVENTS = EVM_VAULT_CHAINS.map(
   (chain) => `${chain}IngressEgress.TransferFallbackRequested`,

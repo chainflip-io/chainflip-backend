@@ -17,6 +17,33 @@ function check_endpoint_health() {
   fi
 }
 
+function create_webstack_databases() {
+  local databases=("swap" "chainstate" "processor" "liquidity_provision" "reporting")
+  local compose="$DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p chainflip-localnet"
+
+  echo "🗄️  Provisioning web-services databases ..."
+
+  # Wait for Postgres to accept connections before touching it.
+  local retries=30
+  until $compose exec -T postgres pg_isready -U postgres >>"$DEBUG_OUTPUT_DESTINATION" 2>&1; do
+    retries=$((retries - 1))
+    if [ $retries -le 0 ]; then
+      echo "⚠️  Postgres not ready; skipping web-services DB provisioning"
+      return 0
+    fi
+    sleep 1
+  done
+
+  for db in "${databases[@]}"; do
+    if $compose exec -T postgres psql -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$db'" 2>>"$DEBUG_OUTPUT_DESTINATION" | grep -q 1; then
+      echo "   • $db already exists"
+    else
+      $compose exec -T postgres createdb -U postgres "$db" >>"$DEBUG_OUTPUT_DESTINATION" 2>&1
+      echo "   • created $db"
+    fi
+  done
+}
+
 function print_success() {
   logs=$(cat <<EOM
 ---------------------------------------------------------------------------------------

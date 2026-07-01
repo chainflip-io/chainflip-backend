@@ -16,4 +16,6 @@
 
 //! Chainflip runtime storage migrations.
 
+pub mod bsc_integration;
 pub mod housekeeping;
+pub mod safe_mode;

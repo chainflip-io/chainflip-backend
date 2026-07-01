@@ -109,6 +109,14 @@ expression: val
       {
         "chain": "Tron",
         "asset": "USDT"
+      },
+      {
+        "chain": "Bsc",
+        "asset": "BNB"
+      },
+      {
+        "chain": "Bsc",
+        "asset": "USDT"
       }
     ],
     "add_lender_funds": [
@@ -182,6 +190,14 @@ expression: val
       },
       {
         "chain": "Tron",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Bsc",
+        "asset": "BNB"
+      },
+      {
+        "chain": "Bsc",
         "asset": "USDT"
       }
     ],
@@ -257,6 +273,14 @@ expression: val
       {
         "chain": "Tron",
         "asset": "USDT"
+      },
+      {
+        "chain": "Bsc",
+        "asset": "BNB"
+      },
+      {
+        "chain": "Bsc",
+        "asset": "USDT"
       }
     ],
     "liquidations_enabled": true
@@ -307,6 +331,10 @@ expression: val
     "retry_enabled": true,
     "egress_witnessing_enabled": true
   },
+  "broadcast_bsc": {
+    "retry_enabled": true,
+    "egress_witnessing_enabled": true
+  },
   "witnesser": "CodeGreen",
   "ingress_egress_ethereum": {
     "boost_deposits_enabled": true,
@@ -350,6 +378,12 @@ expression: val
     "deposit_channel_witnessing_enabled": true,
     "vault_deposit_witnessing_enabled": true
   },
+  "ingress_egress_bsc": {
+    "boost_deposits_enabled": true,
+    "deposit_channel_creation_enabled": true,
+    "deposit_channel_witnessing_enabled": true,
+    "vault_deposit_witnessing_enabled": true
+  },
   "elections_generic": {
     "oracle_price_elections": true
   },
@@ -362,6 +396,9 @@ expression: val
     "key_manager_witnessing": true
   },
   "tron_elections": {
+    "key_manager_witnessing": true
+  },
+  "bsc_elections": {
     "key_manager_witnessing": true
   }
 }

@@ -347,7 +347,15 @@ impl<T: Config> BoostApi for Pallet<T> {
 				let boost_pool_total = boost_pool_contribution.map_or(0, |c| c.boosted_amount);
 				let lending_repayment = deposit_amount.saturating_sub(boost_pool_total);
 
-				loan.repay_principal(lending_repayment, LoanRepaidActionType::BoostFinalisation);
+				let repaid = {
+					let excess = loan.repay_principal(lending_repayment);
+					lending_repayment.saturating_sub(excess)
+				};
+				Self::deposit_event(Event::LoanRepaid {
+					loan_id,
+					amount: repaid,
+					action_type: LoanRepaidActionType::BoostFinalisation,
+				});
 
 				if loan.owed_principal > 0 {
 					log_or_panic!(

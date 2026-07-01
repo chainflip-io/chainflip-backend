@@ -61,6 +61,7 @@ members = [
 	"state-chain/test-utilities",
 	"state-chain/traits",
 	"utilities",
+	"utilities/proc-macros",
 	"utilities/scale-json",
 	"utilities/scale-json-event-logger",
 ]
@@ -73,6 +74,7 @@ blocks_in_conditions = "allow"
 missing_const_for_thread_local = "allow"
 len_zero = "allow"
 multiple_bound_locations = "allow" # This appears to give false positives in some cases.
+println_empty_string = "allow"
 
 [workspace.dependencies]
 # Third party crates
@@ -99,6 +101,7 @@ csv = { version = "1.1.6" }
 curve25519-dalek = { version = "4.1.3", default-features = false }
 derive-where = { version = "1.2.7" }
 digest = { version = "0.10.3", default-features = false }
+duplicate = { version = "2.0.0" }
 ed25519-dalek = { version = "2.1.1" }
 enum-iterator = { version = "2.1.0" }
 env_logger = { version = "0.11.3" }
@@ -140,7 +143,10 @@ predicates = { version = "3.0" }
 proc-macro2 = { version = "1.0.79" }
 prometheus = { version = "0.13.0", default-features = false }
 # Lock these, some proptests break with newer versions
-proptest = { version = "=1.6" }
+proptest = { version = "=1.6", default-features = false, features = [
+	"alloc",
+	"no_std",
+] }
 proptest-derive = { version = "=0.5.1" }
 quickcheck = { version = "1.0.3" }
 quickcheck_macros = { version = "1" }
@@ -201,6 +207,7 @@ pallet-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", t
 pallet-transaction-payment = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
 pallet-transaction-payment-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
 pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
+pallet-staking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
 
 # PolkadotSdk Frame
 frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
@@ -317,6 +324,7 @@ cf-runtime-macros = { path = "state-chain/runtime-utilities/macros", default-fea
 cf-runtime-utilities = { path = "state-chain/runtime-utilities", default-features = false }
 cf-test-utilities = { path = "state-chain/test-utilities" }
 cf-utilities = { package = "utilities", path = "utilities", default-features = false }
+cf-proc-macros = { path = "utilities/proc-macros" }
 cfe-events = { path = "state-chain/cfe-events", default-features = false }
 engine-upgrade-utils = { path = "engine-upgrade-utils" }
 multisig = { path = "engine/multisig" }

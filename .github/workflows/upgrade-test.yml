@@ -174,13 +174,16 @@ jobs:
           sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
+          
+          # Remove after 2.3 release
+          # This makes the deposit monitor uses the broker rpc 2.0 not the broker binary
+          sed -i 's/CFDM_BROKER_API_URL=${CFDM_BROKER_API_URL}/CFDM_BROKER_API_URL=${CFDM_CHAINFLIP_RPC_URL}/' localnet/docker-compose.yml
+          
+          # Remove after 2.3 release
           # Use the new solana start script (with current ledger size limit) for the pre-upgrade localnet.
           git show ${{ github.sha }}:localnet/init/scripts/start-solana.sh > localnet/init/scripts/start-solana.sh
+          
           ./localnet/manage.sh
-          # Replace the old indexer with the new one (new image + args like --finalized-blocks false).
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" stop indexer
-          git show ${{ github.sha }}:localnet/docker-compose.yml > /tmp/docker-compose.new.yml
-          docker compose -f /tmp/docker-compose.new.yml -p "chainflip-localnet" up indexer --quiet-pull -d
           git reset --hard
 
       - name: Setup bouncer tests initial state 📦
@@ -215,9 +218,25 @@ jobs:
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
+          # Remove after 2.3 release.
+          # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc is the
+          # unreleased chain now, so retarget the filter to exclude Bsc assets instead.
+          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc'/" bouncer/tests/rpc_tests.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
+          git reset --hard
+
+      # TODO: This is a temporary workaround to setup Bsc in the upgrade test.
+      # To remove after BSC is released.
+      - name: Start Bsc containers 🌞
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up bsc --quiet-pull -d
+          source localnet/helper.sh
+          echo "🌞 Waiting for BSC node to start"
+          check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8645
           git reset --hard
 
       - name: Upgrade runtime 🚀
@@ -247,6 +266,9 @@ jobs:
           cd bouncer
           ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
+          # TODO: This is a temporary workaround to setup BSC.
+          # To remove after BSC is released.
+          ./commands/setup_new_bsc_chain.ts
           ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗

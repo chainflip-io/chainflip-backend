@@ -885,6 +885,273 @@ fn broker_fee_collected_after_pool_replenished() {
 		});
 }
 
+/// Interest the pool couldn't collect from its own liquidity (e.g. at full utilisation) is
+/// collected from the borrower's repayment when the loan is closed, rather than being forgiven.
+#[test]
+fn pending_interest_settled_from_repayment_on_close() {
+	use cf_primitives::{Beneficiary, BASIS_POINTS_PER_MILLION};
+
+	const PRINCIPAL: AssetAmount = 2_000_000_000_000;
+	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE;
+	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
+
+	const BROKER: u64 = 999;
+	const BROKER_BPS: u16 = 100; // 1% per year
+
+	let (origination_fee_network, _) = take_network_fee(ORIGINATION_FEE);
+
+	// Fund the pool with exactly the principal plus the network portion of the origination fee, so
+	// drawing the loan leaves zero available liquidity (100% utilisation) and the pool can't
+	// collect the network/broker interest as it accrues.
+	let init_pool_amount = PRINCIPAL + origination_fee_network;
+
+	// Interest accrued over interval 1, left pending because the pool can't collect it. The base
+	// for both is the loan's initial owed principal, `PRINCIPAL + ORIGINATION_FEE`.
+	let interest_base = ScaledAmountHP::from_asset_amount(PRINCIPAL + ORIGINATION_FEE);
+	let network_interest_scaled = interest_base *
+		CONFIG.derive_network_interest_rate_per_payment_interval(
+			CONFIG.interest_payment_interval_blocks,
+		);
+	let broker_interest_scaled = interest_base *
+		CONFIG.interest_per_year_to_per_payment_interval(
+			Permill::from_parts(BROKER_BPS as u32 * BASIS_POINTS_PER_MILLION),
+			CONFIG.interest_payment_interval_blocks,
+		);
+
+	let expected_network_interest = network_interest_scaled.into_asset_amount();
+	let expected_broker_interest = broker_interest_scaled.into_asset_amount();
+	assert!(
+		expected_network_interest > 0 && expected_broker_interest > 0,
+		"interest amounts must be non-zero for the test"
+	);
+
+	let first_interest_payment_block = INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64;
+
+	new_test_ext()
+		.with_funded_pool(init_pool_amount)
+		.then_execute_with(|_| {
+			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			register_as_broker(&BROKER);
+
+			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
+			assert_ok!(supply_funds::<Test>(
+				BORROWER,
+				COLLATERAL_ASSET,
+				INIT_COLLATERAL,
+				SupplyAddedActionType::Manual,
+			));
+
+			assert_ok!(LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				PRINCIPAL,
+				Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
+			));
+
+			// The pool is fully utilised, and only the network portion of the origination fee has
+			// been collected so far.
+			assert_eq!(GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().available_amount, 0);
+			assert_eq!(PendingNetworkFees::<Test>::get(LOAN_ASSET), origination_fee_network);
+		})
+		.then_process_blocks_until_block(first_interest_payment_block)
+		.then_execute_with(|_| {
+			let loan = LoanAccounts::<Test>::get(BORROWER).unwrap().loans[&LOAN_ID].clone();
+
+			// The network and broker interest for interval 1 is still pending (the pool had nothing
+			// to collect it with) and neither beneficiary has been paid yet.
+			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), 0);
+			assert_eq!(loan.pending_interest.network, network_interest_scaled);
+			assert_eq!(loan.pending_interest.broker, broker_interest_scaled);
+
+			// A full repayment now requires the principal plus all outstanding interest.
+			let total_to_repay = loan.total_owed();
+
+			let borrower_balance_before = MockBalance::get_balance(&BORROWER, LOAN_ASSET);
+			MockBalance::credit_account(&BORROWER, LOAN_ASSET, total_to_repay);
+
+			// Captured before the repayment because pending network fees are periodically swept.
+			let network_fees_before = PendingNetworkFees::<Test>::get(LOAN_ASSET);
+
+			System::reset_events();
+
+			assert_ok!(LendingPools::try_making_repayment(
+				&BORROWER,
+				LOAN_ID,
+				RepaymentAmount::Full
+			));
+
+			// The outstanding network and broker interest is collected and paid (rather than
+			// forgiven), and reported via an InterestTaken event:
+			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), expected_broker_interest);
+			assert_eq!(
+				PendingNetworkFees::<Test>::get(LOAN_ASSET),
+				network_fees_before + expected_network_interest
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+					loan_id: LOAN_ID,
+					network_interest,
+					broker_interest,
+					..
+				}) if *network_interest == expected_network_interest &&
+					*broker_interest == expected_broker_interest,
+			);
+
+			// The interest was rolled into the principal and repaid; the whole repayment (principal
+			// plus the freshly collected interest) is reported in a single LoanRepaid event.
+			assert_matching_event_count!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid { .. }) => 1
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+					loan_id: LOAN_ID,
+					amount,
+					action_type: LoanRepaidActionType::Manual,
+				}) if *amount ==
+					loan.owed_principal + expected_network_interest + expected_broker_interest,
+			);
+
+			// The loan is fully settled with no write-off:
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+					loan_id: LOAN_ID,
+					outstanding_principal: 0,
+					..
+				}),
+			);
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
+
+			// The borrower funded the principal and interest; `total_owed` floors the summed
+			// interest while collection floors each component, so any sub-unit dust is refunded.
+			let interest_dust = total_to_repay -
+				loan.owed_principal -
+				expected_network_interest -
+				expected_broker_interest;
+			assert_eq!(
+				MockBalance::get_balance(&BORROWER, LOAN_ASSET),
+				borrower_balance_before + interest_dust
+			);
+
+			// The pool is whole again: all principal repaid, nothing written off.
+			let pool = GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap();
+			assert_eq!(pool.available_amount, pool.total_amount);
+		});
+}
+
+/// Interest the pool couldn't collect (e.g. at full utilisation) is also paid from the liquidation
+/// proceeds when a loan is closed via liquidation, rather than being forgiven.
+#[test]
+fn pending_interest_settled_when_loan_liquidated() {
+	use cf_primitives::{Beneficiary, BASIS_POINTS_PER_MILLION};
+
+	const PRINCIPAL: AssetAmount = 2_000_000_000_000;
+	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE; // 75% LTV
+	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
+
+	const BROKER: u64 = 999;
+	const BROKER_BPS: u16 = 100; // 1% per year
+
+	// Doubling the loan asset price pushes the LTV well past the hard-liquidation threshold.
+	const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
+	// More than enough recovered loan asset to cover principal, fee and interest in full.
+	const RECOVERED: AssetAmount = PRINCIPAL + PRINCIPAL / 10;
+	const REMAINING_COLLATERAL: AssetAmount = INIT_COLLATERAL / 10;
+
+	let (origination_fee_network, _) = take_network_fee(ORIGINATION_FEE);
+
+	// 100% utilisation after the loan is drawn, so the pool can't collect the broker interest.
+	let init_pool_amount = PRINCIPAL + origination_fee_network;
+
+	let expected_broker_interest =
+		(ScaledAmountHP::from_asset_amount(PRINCIPAL + ORIGINATION_FEE) *
+			CONFIG.interest_per_year_to_per_payment_interval(
+				Permill::from_parts(BROKER_BPS as u32 * BASIS_POINTS_PER_MILLION),
+				CONFIG.interest_payment_interval_blocks,
+			))
+		.into_asset_amount();
+	assert!(expected_broker_interest > 0, "broker interest must be non-zero for the test");
+
+	let first_interest_payment_block = INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64;
+
+	new_test_ext()
+		.with_funded_pool(init_pool_amount)
+		.then_execute_with(|_| {
+			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			register_as_broker(&BROKER);
+
+			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
+			assert_ok!(supply_funds::<Test>(
+				BORROWER,
+				COLLATERAL_ASSET,
+				INIT_COLLATERAL,
+				SupplyAddedActionType::Manual,
+			));
+			assert_ok!(LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				PRINCIPAL,
+				Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
+			));
+
+			assert_eq!(GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().available_amount, 0);
+		})
+		.then_process_blocks_until_block(first_interest_payment_block)
+		.then_execute_with(|_| {
+			// Broker interest accrued over interval 1 is pending (the pool couldn't collect it).
+			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), 0);
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap().loans[&LOAN_ID]
+					.pending_interest
+					.broker
+					.into_asset_amount(),
+				expected_broker_interest
+			);
+
+			// Push the loan into liquidation.
+			MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, NEW_SWAP_RATE);
+		})
+		.then_execute_at_next_block(|_| {
+			// Read the liquidation swap id directly (a network-fee swap may have taken earlier
+			// ids).
+			let liquidation_swap_id =
+				match &LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status {
+					LiquidationStatus::Liquidating { liquidation_swaps, .. } =>
+						*liquidation_swaps.keys().next().expect("a liquidation swap"),
+					other => panic!("expected liquidating, got {:?}", other),
+				};
+
+			// Simulate the liquidation swap producing more than enough loan asset to fully repay
+			// the loan; the swap is aborted and the loan settled at the next block.
+			MockSwapRequestHandler::<Test>::set_swap_request_progress(
+				liquidation_swap_id,
+				SwapExecutionProgress {
+					remaining_input_amount: REMAINING_COLLATERAL,
+					accumulated_output_amount: RECOVERED,
+				},
+			);
+		})
+		.then_execute_at_next_block(|_| {
+			// The broker interest is paid from the liquidation proceeds (not forgiven), and the
+			// loan is settled with no write-off.
+			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), expected_broker_interest);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+					loan_id: LOAN_ID,
+					outstanding_principal: 0,
+					via_liquidation: true,
+				}),
+			);
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
+		});
+}
+
 mod broker_fees {
 
 	use super::*;

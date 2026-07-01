@@ -19,6 +19,7 @@ use cf_chains::instances::{
 	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaCryptoInstance, SolanaInstance,
 };
 use cf_traits::{lending::LoanId, SafeModeSet};
+use cf_utilities::migrations::{basics::HasVersion, v20100};
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 use frame_support::sp_runtime::Percent;
 use pallet_cf_lending_pools::{LendingPoolConfiguration, NetworkFeeContributions};
@@ -210,39 +211,12 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 			sol: value.sol,
 			hub: value.hub,
 			tron: Default::default(),
+			bsc: Default::default(),
 		}
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone)]
-pub struct NetworkFeeDetails {
-	pub standard_rate_and_minimum: FeeRateAndMinimum,
-	pub rates: AssetMap<Permill>,
-}
-
-impl From<NetworkFeeDetails> for super::NetworkFeeDetails {
-	fn from(value: NetworkFeeDetails) -> Self {
-		Self {
-			standard_rate_and_minimum: value.standard_rate_and_minimum,
-			rates: value.rates.into(),
-		}
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone)]
-pub struct NetworkFees {
-	pub regular_network_fee: NetworkFeeDetails,
-	pub internal_swap_network_fee: NetworkFeeDetails,
-}
-
-impl From<NetworkFees> for super::NetworkFees {
-	fn from(value: NetworkFees) -> Self {
-		Self {
-			regular_network_fee: value.regular_network_fee.into(),
-			internal_swap_network_fee: value.internal_swap_network_fee.into(),
-		}
-	}
-}
+pub type NetworkFees = <super::NetworkFees as HasVersion<v20100>>::HistoricalType;
 
 #[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct TradingStrategyLimits {
@@ -282,35 +256,8 @@ impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, Default, Debug)]
-pub struct RpcAccountInfoCommonItems<Balance> {
-	pub vanity_name: VanityName,
-	pub flip_balance: Balance,
-	pub asset_balances: AssetMap<Balance>,
-	pub bond: Balance,
-	pub estimated_redeemable_balance: Balance,
-	pub bound_redeem_address: Option<EvmAddress>,
-	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-	pub current_delegation_status: Option<DelegationInfo<Balance>>,
-	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
-}
-
-impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCommonItems<B> {
-	fn from(value: RpcAccountInfoCommonItems<B>) -> Self {
-		Self {
-			account_id: None,
-			vanity_name: value.vanity_name,
-			flip_balance: value.flip_balance,
-			asset_balances: value.asset_balances.into(),
-			bond: value.bond,
-			estimated_redeemable_balance: value.estimated_redeemable_balance,
-			bound_redeem_address: value.bound_redeem_address,
-			restricted_balances: value.restricted_balances,
-			current_delegation_status: value.current_delegation_status,
-			upcoming_delegation_status: value.upcoming_delegation_status,
-		}
-	}
-}
+pub type RpcAccountInfoCommonItems<Balance> =
+	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20100>>::HistoricalType;
 
 // VaultAddresses as returned by api_version 16 runtimes: has usdt fields added in v16
 // but lacks the tron field added in v17.
@@ -349,6 +296,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 			solana_usdt_token_vault_ata: old.solana_usdt_token_vault_ata,
 			solana_vault_swap_account: old.solana_vault_swap_account,
 			tron: EncodedAddress::Tron([0u8; 20]),
+			bsc: EncodedAddress::Bsc([0u8; 20]),
 			predicted_seconds_until_next_vault_rotation: old
 				.predicted_seconds_until_next_vault_rotation,
 		}
@@ -429,6 +377,10 @@ impl From<WitnesserCallPermission> for crate::safe_mode::WitnesserCallPermission
 			tron_chain_tracking: true,
 			tron_ingress_egress: true,
 			tron_vault: true,
+			bsc_broadcast: true,
+			bsc_chain_tracking: true,
+			bsc_ingress_egress: true,
+			bsc_vault: true,
 		}
 	}
 }
@@ -539,6 +491,8 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 			broadcast_assethub: old.broadcast_assethub,
 			broadcast_tron:
 				<pallet_cf_broadcast::PalletSafeMode<_> as SafeMode>::code_green(),
+			broadcast_bsc:
+			<pallet_cf_broadcast::PalletSafeMode<_> as SafeMode>::code_green(),
 			witnesser,
 			ingress_egress_ethereum: old.ingress_egress_ethereum,
 			ingress_egress_bitcoin: old.ingress_egress_bitcoin,
@@ -548,11 +502,15 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 			ingress_egress_assethub: old.ingress_egress_assethub,
 			ingress_egress_tron:
 				<pallet_cf_ingress_egress::PalletSafeMode<_> as SafeMode>::code_green(),
+			ingress_egress_bsc:
+			<pallet_cf_ingress_egress::PalletSafeMode<_> as SafeMode>::code_green(),
 			elections_generic: old.elections_generic,
 			ethereum_elections: old.ethereum_elections,
 			arbitrum_elections: old.arbitrum_elections,
 			tron_elections:
 				<crate::chainflip::witnessing::tron_elections::TronElectionsSafeMode as SafeMode>::code_green(),
+			bsc_elections:
+			<crate::chainflip::witnessing::bsc_elections::BscElectionsSafeMode as SafeMode>::code_green(),
 		}
 	}
 }
@@ -573,6 +531,7 @@ impl From<TransactionScreeningEvents> for super::TransactionScreeningEvents {
 			arb_events: old.arb_events,
 			sol_events: old.sol_events,
 			tron_events: Default::default(),
+			bsc_events: Default::default(),
 		}
 	}
 }

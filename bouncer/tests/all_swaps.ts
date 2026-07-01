@@ -78,13 +78,9 @@ export function testAllSwaps(timeoutPerSwap: number) {
     return items[Math.floor(Math.random() * items.length)];
   }
 
-  // TODO: properly include TRON and BSC assets once they are fully integrated
-  // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
+  // If we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
-  const AssetsForTesting = Object.values(Assets).filter((id) => {
-    const chain: string = chainFromAsset(id);
-    return chain !== 'Assethub' && chain !== 'Bsc';
-  });
+  const AssetsForTesting = Object.values(Assets).filter((id) => chainFromAsset(id) !== 'Assethub');
 
   AssetsForTesting.sort().forEach((sourceAsset) => {
     AssetsForTesting.sort()

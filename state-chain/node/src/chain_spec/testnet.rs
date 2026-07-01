@@ -44,6 +44,7 @@ pub const POLKADOT_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 12;
 pub const TRON_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 3;
+pub const BSC_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 1000 / 450; // 450ms block time
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_key_manager_address: hex_literal::hex!("a16E02E87b7454126E5E10d957A927A7F5B5d2be"),
@@ -65,6 +66,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	tron_key_manager_address: hex_literal::hex!("eb99889eb704b4d58256ff25b4f033c673c166b6"),
 	tron_vault_address: hex_literal::hex!("2fca9b8e3816e10d6c6033d0f7e0471542a09110"),
 	trx_usdt_token_address: hex_literal::hex!("df78fc9c3223ff2d64a5e897279ce3e35609e8da"),
+
+	bsc_key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
+	bsc_vault_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
+	bsc_usdt_token_address: hex_literal::hex!("Dc64a140Aa3E981100a9becA4E685f962f0cF6C9"),
+	bsc_address_checker_address: hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"),
+	bsc_chain_id: cf_chains::bsc::CHAIN_ID_TESTNET,
 
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,

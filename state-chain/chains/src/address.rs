@@ -26,7 +26,7 @@ use crate::{
 
 use crate::tron::TronAddress;
 use cf_primitives::{
-	chains::{Arbitrum, Assethub, Bitcoin, Ethereum, Polkadot, Solana, Tron},
+	chains::{Arbitrum, Assethub, Bitcoin, Bsc, Ethereum, Polkadot, Solana, Tron},
 	ChannelId, ForeignChain, NetworkEnvironment,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
@@ -89,6 +89,7 @@ pub enum ForeignChainAddress {
 	Sol(<Solana as Chain>::ChainAccount),
 	Hub(<Assethub as Chain>::ChainAccount),
 	Tron(<Tron as Chain>::ChainAccount),
+	Bsc(<Bsc as Chain>::ChainAccount),
 }
 
 impl ForeignChainAddress {
@@ -101,6 +102,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Sol(_) => ForeignChain::Solana,
 			ForeignChainAddress::Hub(_) => ForeignChain::Assethub,
 			ForeignChainAddress::Tron(_) => ForeignChain::Tron,
+			ForeignChainAddress::Bsc(_) => ForeignChain::Bsc,
 		}
 	}
 	pub fn raw_bytes(self) -> Vec<u8> {
@@ -112,6 +114,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Btc(script_pubkey) => script_pubkey.bytes(),
 			ForeignChainAddress::Hub(source_address) => source_address.aliased_ref().to_vec(),
 			ForeignChainAddress::Tron(source_address) => source_address.0.to_vec(),
+			ForeignChainAddress::Bsc(source_address) => source_address.0.to_vec(),
 		}
 	}
 
@@ -142,6 +145,7 @@ pub enum EncodedAddress {
 	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
 	Hub([u8; 32]),
 	Tron([u8; 20]),
+	Bsc([u8; 20]),
 }
 
 pub trait AddressConverter: Sized {
@@ -160,7 +164,7 @@ pub trait AddressConverter: Sized {
 impl core::fmt::Display for EncodedAddress {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		match self {
-			EncodedAddress::Eth(addr) | EncodedAddress::Arb(addr) =>
+			EncodedAddress::Eth(addr) | EncodedAddress::Arb(addr) | EncodedAddress::Bsc(addr) =>
 				write!(f, "0x{}", hex::encode(&addr[..])),
 			EncodedAddress::Tron(addr) =>
 				write!(f, "{}", TronAddress::from_evm_address(EvmAddress::from(*addr))),
@@ -207,6 +211,7 @@ impl TryFrom<ForeignChainAddress> for EvmAddress {
 		match address {
 			ForeignChainAddress::Eth(addr) |
 			ForeignChainAddress::Arb(addr) |
+			ForeignChainAddress::Bsc(addr) => Ok(addr),
 			ForeignChainAddress::Tron(addr) => Ok(addr),
 			_ => Err(AddressError::InvalidAddress),
 		}
@@ -256,6 +261,12 @@ impl IntoForeignChainAddress<Arbitrum> for EvmAddress {
 	}
 }
 
+impl IntoForeignChainAddress<Bsc> for EvmAddress {
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Bsc(self)
+	}
+}
+
 impl IntoForeignChainAddress<Polkadot> for PolkadotAccountId {
 	fn into_foreign_chain_address(self) -> ForeignChainAddress {
 		ForeignChainAddress::Dot(self)
@@ -296,6 +307,7 @@ impl EncodedAddress {
 			EncodedAddress::Sol(inner) => &inner[..],
 			EncodedAddress::Hub(inner) => &inner[..],
 			EncodedAddress::Tron(inner) => &inner[..],
+			EncodedAddress::Bsc(inner) => &inner[..],
 		}
 	}
 	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Result<Self, &'static str> {
@@ -344,6 +356,14 @@ impl EncodedAddress {
 				address.copy_from_slice(&bytes);
 				Ok(EncodedAddress::Tron(address))
 			},
+			ForeignChain::Bsc => {
+				if bytes.len() != 20 {
+					return Err("Invalid BSC address length")
+				}
+				let mut address = [0u8; 20];
+				address.copy_from_slice(&bytes);
+				Ok(EncodedAddress::Bsc(address))
+			},
 		}
 	}
 
@@ -356,6 +376,7 @@ impl EncodedAddress {
 			EncodedAddress::Sol(_) => ForeignChain::Solana,
 			EncodedAddress::Hub(_) => ForeignChain::Assethub,
 			EncodedAddress::Tron(_) => ForeignChain::Tron,
+			EncodedAddress::Bsc(_) => ForeignChain::Bsc,
 		}
 	}
 	pub fn into_vec(self) -> Vec<u8> {
@@ -367,6 +388,7 @@ impl EncodedAddress {
 			EncodedAddress::Btc(byte_vec) => byte_vec,
 			EncodedAddress::Hub(bytes) => bytes.to_vec(),
 			EncodedAddress::Tron(bytes) => bytes.to_vec(),
+			EncodedAddress::Bsc(bytes) => bytes.to_vec(),
 		}
 	}
 
@@ -392,6 +414,7 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		ForeignChainAddress::Sol(address) => EncodedAddress::Sol(address.into()),
 		ForeignChainAddress::Hub(address) => EncodedAddress::Hub(*address.aliased_ref()),
 		ForeignChainAddress::Tron(address) => EncodedAddress::Tron(address.0),
+		ForeignChainAddress::Bsc(address) => EncodedAddress::Bsc(address.0),
 	}
 }
 
@@ -416,6 +439,7 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		EncodedAddress::Hub(address_bytes) =>
 			Ok(ForeignChainAddress::Hub(PolkadotAccountId::from_aliased(address_bytes))),
 		EncodedAddress::Tron(address_bytes) => Ok(ForeignChainAddress::Tron(address_bytes.into())),
+		EncodedAddress::Bsc(address_bytes) => Ok(ForeignChainAddress::Bsc(address_bytes.into())),
 	}
 }
 
@@ -507,6 +531,7 @@ pub enum ForeignChainAddressHumanreadable {
 	Sol(<SolAddress as ToHumanreadableAddress>::Humanreadable),
 	Hub(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
 	Tron(<TronAddress as ToHumanreadableAddress>::Humanreadable),
+	Bsc(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 }
 
 #[cfg(feature = "std")]
@@ -514,7 +539,8 @@ impl std::fmt::Display for ForeignChainAddressHumanreadable {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			ForeignChainAddressHumanreadable::Eth(address) |
-			ForeignChainAddressHumanreadable::Arb(address) => write!(f, "{:#x}", address),
+			ForeignChainAddressHumanreadable::Arb(address) |
+			ForeignChainAddressHumanreadable::Bsc(address) => write!(f, "{:#x}", address),
 			ForeignChainAddressHumanreadable::Dot(address) |
 			ForeignChainAddressHumanreadable::Hub(address) => write!(f, "{}", address),
 			ForeignChainAddressHumanreadable::Btc(address) |
@@ -556,6 +582,8 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 			ForeignChainAddress::Tron(address) => ForeignChainAddressHumanreadable::Tron(
 				TronAddress::from_evm_address(*address).to_humanreadable(network_environment),
 			),
+			ForeignChainAddress::Bsc(address) =>
+				ForeignChainAddressHumanreadable::Bsc(address.to_humanreadable(network_environment)),
 		}
 	}
 }
@@ -653,6 +681,7 @@ pub fn clean_foreign_chain_address(
 				}
 			},
 		},
+		ForeignChain::Bsc => EncodedAddress::Bsc(clean_hex_address(address)?),
 	})
 }
 

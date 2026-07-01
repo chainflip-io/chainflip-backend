@@ -37,6 +37,8 @@ export async function send(
       return sendEvmNative(logger, 'Ethereum', address, amount);
     case 'ArbEth':
       return sendEvmNative(logger, 'Arbitrum', address, amount);
+    case 'Bnb':
+      return sendEvmNative(logger, 'Bsc', address, amount);
     case 'Sol':
       return sendSol(logger, address, amount);
     case 'Usdc':
@@ -50,6 +52,10 @@ export async function send(
     case 'ArbUsdt': {
       const contractAddress = getContractAddress('Arbitrum', asset);
       return sendErc20(logger, 'Arbitrum', address, contractAddress, amount);
+    }
+    case 'BscUsdt': {
+      const contractAddress = getContractAddress('Bsc', asset);
+      return sendErc20(logger, 'Bsc', address, contractAddress, amount);
     }
     case 'SolUsdc':
       return sendSolUsdc(logger, address, amount);

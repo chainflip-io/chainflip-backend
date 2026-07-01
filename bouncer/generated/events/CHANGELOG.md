@@ -16,6 +16,11 @@ New or removed pallets:
   BitcoinIngressEgress: added
   BitcoinThresholdSigner: added
   BitcoinVault: added
+  BscBroadcaster: added
+  BscChainTracking: added
+  BscElections: added
+  BscIngressEgress: added
+  BscVault: added
   Emissions: added
   Environment: added
   EthereumBroadcaster: added

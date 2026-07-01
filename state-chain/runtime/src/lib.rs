@@ -17,6 +17,7 @@
 #![feature(trait_alias)]
 #![feature(step_trait)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(associated_type_defaults)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
 
@@ -259,6 +260,17 @@ mod runtime {
 	pub type TronIngressEgress = pallet_cf_ingress_egress<Instance7>;
 	#[runtime::pallet_index(62)]
 	pub type TronElections = pallet_cf_elections<Instance7>;
+
+	#[runtime::pallet_index(63)]
+	pub type BscChainTracking = pallet_cf_chain_tracking<Instance8>;
+	#[runtime::pallet_index(64)]
+	pub type BscVault = pallet_cf_vaults<Instance8>;
+	#[runtime::pallet_index(65)]
+	pub type BscBroadcaster = pallet_cf_broadcast<Instance8>;
+	#[runtime::pallet_index(66)]
+	pub type BscIngressEgress = pallet_cf_ingress_egress<Instance8>;
+	#[runtime::pallet_index(67)]
+	pub type BscElections = pallet_cf_elections<Instance8>;
 }
 
 /// The address format for describing accounts.
@@ -348,6 +360,7 @@ pub type PalletExecutionOrder = (
 	SolanaChainTracking,
 	AssethubChainTracking,
 	TronChainTracking,
+	BscChainTracking,
 	// Elections
 	GenericElections,
 	SolanaElections,
@@ -355,6 +368,7 @@ pub type PalletExecutionOrder = (
 	EthereumElections,
 	ArbitrumElections,
 	TronElections,
+	BscElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -363,6 +377,7 @@ pub type PalletExecutionOrder = (
 	SolanaVault,
 	AssethubVault,
 	TronVault,
+	BscVault,
 	// Threshold Signers
 	EvmThresholdSigner,
 	PolkadotThresholdSigner,
@@ -376,6 +391,7 @@ pub type PalletExecutionOrder = (
 	SolanaBroadcaster,
 	AssethubBroadcaster,
 	TronBroadcaster,
+	BscBroadcaster,
 	// Swapping and Liquidity Provision
 	Swapping,
 	LiquidityProvider,
@@ -387,6 +403,7 @@ pub type PalletExecutionOrder = (
 	SolanaIngressEgress,
 	AssethubIngressEgress,
 	TronIngressEgress,
+	BscIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
 	// Miscellaneous
@@ -432,6 +449,7 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, AssethubInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, TronInstance>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -439,6 +457,7 @@ type PalletMigrations = (
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, AssethubInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, TronInstance>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotCryptoInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -450,6 +469,7 @@ type PalletMigrations = (
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, AssethubInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, TronInstance>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, EthereumInstance>,
@@ -459,12 +479,14 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, AssethubInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, TronInstance>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 	pallet_cf_lending_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	pallet_cf_elections::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, ()>,
 );
 
@@ -510,7 +532,13 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_3 = ();
+type MigrationsForV2_3 = (
+	migrations::safe_mode::SafeModeMigration,
+	migrations::bsc_integration::BscElectionsInit,
+	migrations::bsc_integration::BscIngressEgressInit,
+	migrations::bsc_integration::BscChainstate,
+	migrations::bsc_integration::BscBroadcasterInit,
+);
 
 #[cfg(test)]
 mod test {

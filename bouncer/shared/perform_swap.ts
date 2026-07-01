@@ -17,7 +17,6 @@ import {
   chainFromAsset,
   observeSwapRequested,
   SwapRequestType,
-  evmChains,
   createEvmWalletAndFund,
   getSolWhaleKeyPair,
   decodeSolAddress,
@@ -30,6 +29,7 @@ import {
   decodeDispatchError,
   Asset,
   getTronWhaleKeyPair,
+  isEvmChain,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi, getChainflipPolkadotApi } from 'shared/utils/substrate';
@@ -400,7 +400,7 @@ export async function prepareVaultSwapSource<A = []>(
   const srcChain = chainFromAsset(sourceAsset);
   let vaultSwapSource: VaultSwapSource;
 
-  if (evmChains.includes(srcChain)) {
+  if (isEvmChain(srcChain)) {
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
     const wallet = await createEvmWalletAndFund(cf.logger, sourceAsset, amount);

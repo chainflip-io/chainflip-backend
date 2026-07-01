@@ -75,7 +75,7 @@ pallet-session = { workspace = true, features = ["historical"] }
 frame-benchmarking = { workspace = true, optional = true }
 frame-executive = { workspace = true }
 frame-metadata-hash-extension = { workspace = true }
-frame-support = { workspace = true }
+frame-support = { workspace = true, features = ["tuples-96"] }
 frame-system = { workspace = true }
 frame-system-benchmarking = { workspace = true, optional = true }
 frame-try-runtime = { workspace = true, optional = true }
@@ -100,6 +100,7 @@ sp-std = { workspace = true }
 sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true }
 generic-typeinfo-derive = { workspace = true }
+cf-proc-macros = { workspace = true }
 
 # Used for RPCs
 frame-system-rpc-runtime-api = { workspace = true }
@@ -109,13 +110,24 @@ cf-test-utilities = { workspace = true, optional = true }
 
 # other
 n-functor = { workspace = true }
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
 
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }
-proptest = { version = "1.6" }
-proptest-derive = { version = "0.5.1" }
-cf-chains = { workspace = true, features = ["mocks", "runtime-integration-tests"] }
+proptest = { workspace = true }
+proptest-derive = { workspace = true }
+cf-chains = { workspace = true, features = [
+	"mocks",
+	"runtime-integration-tests",
+] }
 cf-traits = { workspace = true, features = ["mocks"] }
+
+# enable the `proptest` feature for dependencies if we are buiding for a test
+pallet-cf-swapping = { workspace = true, features = ["proptest"] }
+cf-primitives = { workspace = true, features = ["proptest"] }
+cf-utilities = { workspace = true, features = ["proptest"] }
+
 
 [features]
 default = ["std"]
@@ -266,6 +278,13 @@ mocks = ["cf-chains/mocks", "cf-traits/mocks"]
 runtime-integration-tests = [
 	"cf-traits/runtime-integration-tests",
 	"pallet-cf-elections/runtime-integration-tests",
+]
+proptest = [
+	"dep:proptest",
+	"dep:proptest-derive",
+	"pallet-cf-swapping/proptest",
+	"cf-primitives/proptest",
+	"cf-utilities/proptest",
 ]
 
 # IMPORTANT: These two are required to make sure that 'turbo bouncer' works and also

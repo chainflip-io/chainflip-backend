@@ -171,6 +171,10 @@ mod tests {
 			"--tron.rpc.json_rpc_endpoint=http://localhost:8091/jsonrpc".to_string(),
 			"--tron.backup_rpc.http_endpoint=http://localhost:8090/wallet".to_string(),
 			"--tron.backup_rpc.json_rpc_endpoint=http://localhost:8091/jsonrpc".to_string(),
+			// Bsc
+			format!("--bsc.private_key_file={some_file}"),
+			"--bsc.rpc.http_endpoint=http://localhost:8549".to_string(),
+			"--bsc.backup_rpc.http_endpoint=http://localhost:8550".to_string(),
 			// p2p
 			format!("--p2p.node_key_file={some_file}"),
 			"--p2p.ip_address=0.1.2.3".to_string(),

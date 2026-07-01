@@ -359,6 +359,11 @@ macro_rules! assets {
 				type Asset;
 				fn from_fn<F: FnMut(Self::Asset) -> T>(f: F) -> Self;
 			}
+			$(
+				use super::$chain_member_and_module as $chain_member_and_module;
+			)*
+
+			#[cf_proc_macros::generate_module]
 			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
 			#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 			pub struct AssetMap<T> {
@@ -368,6 +373,7 @@ macro_rules! assets {
 					pub $chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>,
 				)*
 			}
+
 			impl<T> AssetMap<T> {
 				pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
 					Self {
@@ -571,6 +577,7 @@ macro_rules! assets {
 					Unsupported,
 				}
 
+				#[cf_proc_macros::generate_module]
 				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
 				#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 				pub struct AssetMap<T> {
@@ -580,6 +587,7 @@ macro_rules! assets {
 						pub $asset_member: T,
 					)+
 				}
+
 				impl<T> AssetMap<T> {
 					pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
 						Self {
@@ -592,6 +600,7 @@ macro_rules! assets {
 							$($asset_member: f(Asset::$asset_variant)?,)+
 						})
 					}
+
 
 					pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
 						AssetMap {
@@ -927,6 +936,34 @@ assets!(
 			},
 		],
 	},
+	Chain {
+		variant: Bsc,
+		member_and_module: bsc,
+		string: "Bsc" (aliases: ["BSC", "bsc"]),
+		json: "Bsc",
+		assets: [
+			Asset {
+				variant: Bnb,
+				member: bnb,
+				string: "BNB" (aliases: ["Bnb", "bnb"]),
+				json: "BNB",
+				gas: true,
+				index: 19,
+				usd_stablecoin: false,
+				decimals: 18,
+			},
+			Asset {
+				variant: BscUsdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 20,
+				usd_stablecoin: true,
+				decimals: 18,
+			},
+		],
+	},
 );
 
 #[cfg(test)]
@@ -968,6 +1005,8 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(16).unwrap(), any::Asset::SolUsdt);
 		assert_eq!(any::Asset::try_from(17).unwrap(), any::Asset::Trx);
 		assert_eq!(any::Asset::try_from(18).unwrap(), any::Asset::TrxUsdt);
+		assert_eq!(any::Asset::try_from(19).unwrap(), any::Asset::Bnb);
+		assert_eq!(any::Asset::try_from(20).unwrap(), any::Asset::BscUsdt);
 	}
 
 	#[test]

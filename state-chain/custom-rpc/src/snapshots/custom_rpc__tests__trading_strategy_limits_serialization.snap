@@ -36,6 +36,10 @@ expression: val
     "Tron": {
       "TRX": 123456,
       "USDT": 123456
+    },
+    "Bsc": {
+      "BNB": 123456,
+      "USDT": 123456
     }
   },
   "minimum_added_funds_amount": {
@@ -69,6 +73,10 @@ expression: val
     },
     "Tron": {
       "TRX": 654321,
+      "USDT": 654321
+    },
+    "Bsc": {
+      "BNB": 654321,
       "USDT": 654321
     }
   }

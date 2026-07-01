@@ -6,6 +6,7 @@ import {
   getEvmWhaleKeypair,
   assetDecimals,
   getContractAddress,
+  isEvmChain,
 } from 'shared/utils';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { Logger } from 'shared/utils/logger';
@@ -15,6 +16,7 @@ import { Logger } from 'shared/utils/logger';
 const MAX_IN_FLIGHT_TXS = 48;
 const ethSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
 const arbSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
+const bscSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
 
 // Nonce tracking and mutex per (chain, account) to avoid cross-account collisions.
 const nonceMutex = new KeyedMutex();
@@ -32,7 +34,7 @@ export async function getNextEvmNonce(
     privkey: string;
   },
 ): Promise<number> {
-  if (chain !== 'Ethereum' && chain !== 'Arbitrum') {
+  if (!isEvmChain(chain)) {
     throw new Error('Invalid chain');
   }
 
@@ -78,7 +80,7 @@ function isNonceError(error: unknown): boolean {
 }
 
 export async function warnIfEvmAddressHasNoCode(logger: Logger, chain: Chain, address: string) {
-  if (chain !== 'Ethereum' && chain !== 'Arbitrum') return;
+  if (!isEvmChain(chain)) return;
 
   try {
     const web3 = getWeb3(chain);
@@ -132,7 +134,11 @@ export async function signAndSendTxEvm(
 ) {
   const { to, value, data } = tx;
   const gas = tx.gas ?? (chain === 'Arbitrum' ? 5000000 : 200000);
-  const semaphore = chain === 'Arbitrum' ? arbSemaphore : ethSemaphore;
+  const semaphoreByChain: Record<string, typeof ethSemaphore> = {
+    Arbitrum: arbSemaphore,
+    Bsc: bscSemaphore,
+  };
+  const semaphore = semaphoreByChain[chain] ?? ethSemaphore;
 
   return semaphore.runExclusive(async () => {
     const web3 = getWeb3(chain);

@@ -94,7 +94,9 @@ pub const ETHEREUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum EthereumElectoralEvents {
-	ReorgDetected { reorged_blocks: RangeInclusive<<Ethereum as Chain>::ChainBlockNumber> },
+	ReorgDetected {
+		reorged_blocks: RangeInclusive<<EthereumChain as ChainTypes>::ChainBlockNumber>,
+	},
 }
 
 // ------------------------ block height tracking ---------------------------

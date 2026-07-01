@@ -8,7 +8,7 @@ export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
       api.tx.solanaIngressEgress.updatePalletConfig([
         {
           type: 'SetIngressDelaySolana',
-          value: { delayBlocks: 10 },
+          value: { delayBlocks: 15 },
         },
       ]),
   });

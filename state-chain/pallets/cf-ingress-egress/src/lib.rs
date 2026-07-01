@@ -1272,7 +1272,8 @@ pub mod pallet {
 									ForeignChain::Arbitrum |
 									ForeignChain::Bitcoin |
 									ForeignChain::Ethereum |
-									ForeignChain::Tron => ProcessedUpTo::<T, I>::get(),
+									ForeignChain::Tron |
+									ForeignChain::Bsc => ProcessedUpTo::<T, I>::get(),
 									ForeignChain::Assethub | ForeignChain::Polkadot =>
 										T::ChainTracking::get_block_height(),
 									ForeignChain::Solana => {

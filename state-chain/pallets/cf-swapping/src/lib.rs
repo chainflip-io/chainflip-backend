@@ -15,6 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(trait_alias)]
+#![feature(associated_type_defaults)]
 
 use cf_amm::{
 	common::{AssetPair, Side},
@@ -39,6 +41,10 @@ use cf_traits::{
 	FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
 	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
 	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+};
+use cf_utilities::migrations::{
+	basics::{HasGenericVariant, IsHistoricalType},
+	HasChangelog,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -227,6 +233,7 @@ pub enum FeeType<T: Config> {
 	BrokerFee(Beneficiaries<T::AccountId>),
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(
 	Clone,
 	Debug,
@@ -243,6 +250,9 @@ pub enum FeeType<T: Config> {
 pub struct FeeRateAndMinimum {
 	pub rate: sp_runtime::Permill,
 	pub minimum: AssetAmount,
+}
+impl HasChangelog for FeeRateAndMinimum {
+	type if_unspecified = _FeeRateAndMinimum::see_field_changelogs;
 }
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
@@ -3590,13 +3600,15 @@ pub mod utilities {
 			Asset::SolUsdt |
 			Asset::HubUsdc |
 			Asset::HubUsdt |
-			Asset::TrxUsdt => 100, // $1
+			Asset::TrxUsdt |
+			Asset::BscUsdt => 100, // $1
 			Asset::Flip => 40,                     // ~$0.40
 			Asset::Eth | Asset::ArbEth => 280_000, // ~$2,800
 			Asset::Dot | Asset::HubDot => 200,     // ~$2
 			Asset::Btc | Asset::Wbtc => 8_650_000, // ~$86,500
 			Asset::Sol => 12_700,                  // ~$127
 			Asset::Trx => 30,                      // ~$0.3
+			Asset::Bnb => 60_000,                  // ~$600
 		};
 
 		Price::from_usd_cents(asset, price_usd_cents)

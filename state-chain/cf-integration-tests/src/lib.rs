@@ -30,6 +30,7 @@ mod funding;
 mod genesis;
 mod governance;
 mod grandpa_delegation;
+mod historical_compatibility;
 mod lending;
 mod new_epoch;
 mod solana;

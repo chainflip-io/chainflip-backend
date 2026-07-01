@@ -55,8 +55,6 @@ type VaultSwapInputRpc = {
   dca_parameters: { number_of_chunks: number; chunk_interval: number } | null;
 };
 
-const evmChains: ReadonlySet<string> = new Set([Chains.Ethereum, Chains.Arbitrum, Chains.Tron]);
-
 /**
  * Requests the encoded vault swap parameters using the `cf_request_swap_parameter_encoding` RPC.
  * For non-EVM source chains, the encoded result is immediately decoded via the `cf_decode_vault_swap_parameter` RPC as a sanity check.
@@ -95,8 +93,9 @@ export async function requestSwapParameterEncoding<T>(
     dcaParams ? toDcaRpcParams(dcaParams) : null,
   )) as unknown as T;
 
-  // Sanity check the encoding by decoding it (EVM decoding is not supported)
-  if (!evmChains.has(chainFromAsset(sourceAsset))) {
+  // Sanity check the encoding by decoding it (only Bitcoin and Solana are supported by cf_decode_vault_swap_parameter)
+  const srcChain = chainFromAsset(sourceAsset);
+  if (srcChain === Chains.Bitcoin || srcChain === Chains.Solana) {
     const decoded = (await chainflip.rpc.cf_decode_vault_swap_parameter(
       brokerAddress,
       encoded,

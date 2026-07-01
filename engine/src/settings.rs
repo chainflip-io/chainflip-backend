@@ -228,6 +228,7 @@ pub struct Settings {
 	pub eth: Evm,
 	pub btc: Btc,
 	pub arb: Evm,
+	pub bsc: Evm,
 	pub sol: Sol,
 	pub hub: Hub,
 	pub tron: Tron,
@@ -285,6 +286,18 @@ pub struct ArbOptions {
 
 	#[clap(long = "arb.private_key_file")]
 	pub arb_private_key_file: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
+pub struct BscOptions {
+	#[clap(long = "bsc.rpc.http_endpoint")]
+	pub bsc_http_endpoint: Option<String>,
+
+	#[clap(long = "bsc.backup_rpc.http_endpoint")]
+	pub bsc_backup_http_endpoint: Option<String>,
+
+	#[clap(long = "bsc.private_key_file")]
+	pub bsc_private_key_file: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -359,6 +372,9 @@ pub struct CommandLineOptions {
 	pub arb_opts: ArbOptions,
 
 	#[clap(flatten)]
+	pub bsc_opts: BscOptions,
+
+	#[clap(flatten)]
 	pub sol_opts: SolOptions,
 
 	#[clap(flatten)]
@@ -403,6 +419,7 @@ impl Default for CommandLineOptions {
 			eth_opts: EthOptions::default(),
 			btc_opts: BtcOptions::default(),
 			arb_opts: ArbOptions::default(),
+			bsc_opts: BscOptions::default(),
 			sol_opts: SolOptions::default(),
 			hub_opts: HubOptions::default(),
 			tron_opts: TronOptions::default(),
@@ -427,6 +444,7 @@ const STATE_CHAIN_SIGNING_KEY_FILE: &str = "state_chain.signing_key_file";
 const ETH_PRIVATE_KEY_FILE: &str = "eth.private_key_file";
 const ARB_PRIVATE_KEY_FILE: &str = "arb.private_key_file";
 const TRON_PRIVATE_KEY_FILE: &str = "tron.private_key_file";
+const BSC_PRIVATE_KEY_FILE: &str = "bsc.private_key_file";
 
 const SIGNING_DB_FILE: &str = "signing.db_file";
 
@@ -589,6 +607,8 @@ impl CfSettings for Settings {
 
 		self.arb.validate_settings()?;
 
+		self.bsc.validate_settings()?;
+
 		self.sol.validate_settings()?;
 
 		self.hub.validate_settings()?;
@@ -617,6 +637,11 @@ impl CfSettings for Settings {
 		self.tron.private_key_file = resolve_settings_path(
 			config_root,
 			&self.tron.private_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
+		self.bsc.private_key_file = resolve_settings_path(
+			config_root,
+			&self.bsc.private_key_file,
 			Some(PathResolutionExpectation::ExistingFile),
 		)?;
 		self.signing.db_file = resolve_settings_path(config_root, &self.signing.db_file, None)?;
@@ -675,6 +700,13 @@ impl CfSettings for Settings {
 					.expect("Invalid tron_private_key path"),
 			)?
 			.set_default(
+				BSC_PRIVATE_KEY_FILE,
+				PathBuf::from(config_root)
+					.join("keys/eth_private_key")
+					.to_str()
+					.expect("Invalid bsc_private_key path"),
+			)?
+			.set_default(
 				SIGNING_DB_FILE,
 				PathBuf::from(config_root)
 					.join("data.db")
@@ -701,6 +733,8 @@ impl Source for CommandLineOptions {
 		self.btc_opts.insert_all(&mut map);
 
 		self.arb_opts.insert_all(&mut map);
+
+		self.bsc_opts.insert_all(&mut map);
 
 		self.sol_opts.insert_all(&mut map);
 
@@ -840,6 +874,21 @@ impl ArbOptions {
 	}
 }
 
+impl BscOptions {
+	/// Inserts all the BSC Options into the given map (if Some)
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "bsc.rpc.http_endpoint", &self.bsc_http_endpoint);
+
+		insert_command_line_option(
+			map,
+			"bsc.backup_rpc.http_endpoint",
+			&self.bsc_backup_http_endpoint,
+		);
+
+		insert_command_line_option_path(map, BSC_PRIVATE_KEY_FILE, &self.bsc_private_key_file);
+	}
+}
+
 impl SolOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
 		insert_command_line_option(map, "sol.rpc.http_endpoint", &self.sol_http_endpoint);
@@ -948,12 +997,13 @@ pub mod tests {
 	use cf_utilities::assert_ok;
 
 	use crate::constants::{
-		ARB_BACKUP_HTTP_ENDPOINT, ARB_HTTP_ENDPOINT, BTC_BACKUP_HTTP_ENDPOINT,
-		BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT, BTC_RPC_PASSWORD,
-		BTC_RPC_USER, ETH_BACKUP_HTTP_ENDPOINT, ETH_HTTP_ENDPOINT, HUB_BACKUP_HTTP_ENDPOINT,
-		HUB_BACKUP_WS_ENDPOINT, HUB_HTTP_ENDPOINT, HUB_WS_ENDPOINT, NODE_P2P_IP_ADDRESS,
-		SOL_BACKUP_HTTP_ENDPOINT, SOL_HTTP_ENDPOINT, TRON_BACKUP_HTTP_ENDPOINT,
-		TRON_BACKUP_JSON_RPC_ENDPOINT, TRON_HTTP_ENDPOINT, TRON_JSON_RPC_ENDPOINT,
+		ARB_BACKUP_HTTP_ENDPOINT, ARB_HTTP_ENDPOINT, BSC_BACKUP_HTTP_ENDPOINT, BSC_HTTP_ENDPOINT,
+		BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT,
+		BTC_RPC_PASSWORD, BTC_RPC_USER, ETH_BACKUP_HTTP_ENDPOINT, ETH_HTTP_ENDPOINT,
+		HUB_BACKUP_HTTP_ENDPOINT, HUB_BACKUP_WS_ENDPOINT, HUB_HTTP_ENDPOINT, HUB_WS_ENDPOINT,
+		NODE_P2P_IP_ADDRESS, SOL_BACKUP_HTTP_ENDPOINT, SOL_HTTP_ENDPOINT,
+		TRON_BACKUP_HTTP_ENDPOINT, TRON_BACKUP_JSON_RPC_ENDPOINT, TRON_HTTP_ENDPOINT,
+		TRON_JSON_RPC_ENDPOINT,
 	};
 
 	use super::*;
@@ -1012,7 +1062,10 @@ pub mod tests {
 		TRON_HTTP_ENDPOINT => "http://localhost:8090/wallet",
 		TRON_JSON_RPC_ENDPOINT => "http://localhost:8091/jsonrpc",
 		TRON_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8090/wallet",
-		TRON_BACKUP_JSON_RPC_ENDPOINT => "http://second.localhost:8091/jsonrpc"
+		TRON_BACKUP_JSON_RPC_ENDPOINT => "http://second.localhost:8091/jsonrpc",
+
+		BSC_HTTP_ENDPOINT => "http://localhost:8549",
+		BSC_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8549"
 	}
 
 	// We do them like this so they run sequentially, which is necessary so the environment doesn't
@@ -1037,6 +1090,7 @@ pub mod tests {
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.nodes.primary.http_endpoint.as_ref(), "http://localhost:8545");
 		assert_eq!(settings.arb.nodes.primary.http_endpoint.as_ref(), "http://localhost:8547");
+		assert_eq!(settings.bsc.nodes.primary.http_endpoint.as_ref(), "http://localhost:8549");
 		assert_eq!(settings.sol.nodes.primary.http_endpoint.as_ref(), "http://localhost:8899");
 		assert_eq!(
 			settings.hub.nodes.primary.ws_endpoint.as_ref(),
@@ -1057,6 +1111,10 @@ pub mod tests {
 		assert_eq!(
 			settings.arb.nodes.backup.unwrap().http_endpoint.as_ref(),
 			"http://second.localhost:8547"
+		);
+		assert_eq!(
+			settings.bsc.nodes.backup.unwrap().http_endpoint.as_ref(),
+			"http://second.localhost:8549"
 		);
 		assert_eq!(
 			settings.sol.nodes.backup.unwrap().http_endpoint.as_ref(),
@@ -1156,6 +1214,11 @@ pub mod tests {
 				arb_backup_http_endpoint: Some("http://second_endpoint:4321".to_owned()),
 				arb_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
+			bsc_opts: BscOptions {
+				bsc_http_endpoint: Some("http://endpoint:4322".to_owned()),
+				bsc_backup_http_endpoint: Some("http://second_endpoint:4322".to_owned()),
+				bsc_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
+			},
 			sol_opts: SolOptions {
 				sol_http_endpoint: Some("http://sol-endpoint:4321".to_owned()),
 				sol_backup_http_endpoint: Some("http://second.sol-endpoint:4321".to_owned()),
@@ -1227,6 +1290,19 @@ pub mod tests {
 		);
 
 		assert!(settings.arb.private_key_file.ends_with("eth_private_key_2"));
+
+		assert_eq!(
+			opts.bsc_opts.bsc_http_endpoint.clone().unwrap(),
+			settings.bsc.nodes.primary.http_endpoint.as_ref()
+		);
+
+		let bsc_backup_node = settings.bsc.nodes.backup.unwrap();
+		assert_eq!(
+			opts.bsc_opts.bsc_backup_http_endpoint.unwrap(),
+			bsc_backup_node.http_endpoint.as_ref()
+		);
+
+		assert!(settings.bsc.private_key_file.ends_with("eth_private_key_2"));
 
 		assert_eq!(
 			opts.btc_opts.btc_http_endpoint.unwrap(),

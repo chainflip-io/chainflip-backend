@@ -38,6 +38,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     "Tron": {
       "TRX": "0x5",
       "USDT": "0x5"
+    },
+    "Bsc": {
+      "BNB": "0xa",
+      "USDT": "0x28"
     }
   },
   "bond": 0,
@@ -82,6 +86,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     "Tron": {
       "TRX": "0x8",
       "USDT": "0xa"
+    },
+    "Bsc": {
+      "BNB": "0xa",
+      "USDT": "0x28"
     }
   },
   "boost_balances": {
@@ -130,6 +138,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Tron": {
       "TRX": [],
+      "USDT": []
+    },
+    "Bsc": {
+      "BNB": [],
       "USDT": []
     }
   },

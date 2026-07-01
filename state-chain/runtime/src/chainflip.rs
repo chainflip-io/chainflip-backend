@@ -44,11 +44,12 @@ use crate::{
 	constants::common::YEAR,
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
-	BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber, Emissions,
-	Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, Flip,
-	FlipBalance, Hash, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
-	PolkadotThresholdSigner, Runtime, RuntimeCall, SolanaBroadcaster, SolanaIngressEgress,
-	SolanaThresholdSigner, System, TronIngressEgress, Validator,
+	BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber,
+	BscChainTracking, BscIngressEgress, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
+	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
+	SolanaBroadcaster, SolanaIngressEgress, SolanaThresholdSigner, System, TronIngressEgress,
+	Validator,
 };
 #[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 use cf_amm::math::Price;
@@ -59,6 +60,7 @@ use cf_chains::{
 	},
 	arb::api::ArbitrumApi,
 	assets::any::ForeignChainAndAsset,
+	bsc::api::BscApi,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, Utxo, UtxoId,
@@ -79,8 +81,8 @@ use cf_chains::{
 	},
 	hub::{api::AssethubApi, OutputAccountId},
 	instances::{
-		ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
-		SolanaInstance, TronInstance,
+		ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
+		PolkadotInstance, SolanaInstance, TronInstance,
 	},
 	sol::{
 		api::{
@@ -92,10 +94,11 @@ use cf_chains::{
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
 	tron::{api::TronApi, TronTransaction},
-	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadataChecked, CcmDepositMetadataChecked,
-	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersForChain,
-	ForeignChain, ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, SetGovKeyWithAggKeyError, Solana, TransactionBuilder, Tron,
+	AnyChain, ApiCall, Arbitrum, Assethub, Bsc, CcmChannelMetadataChecked,
+	CcmDepositMetadataChecked, Chain, ChainCrypto, ChainEnvironment, ChainState,
+	ChannelRefundParametersForChain, ForeignChain, ReplayProtectionProvider,
+	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, SetGovKeyWithAggKeyError,
+	Solana, TransactionBuilder, Tron,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChainflipNetwork,
@@ -160,6 +163,8 @@ impl cf_traits::WaivedFees for WaivedFees {
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 /// Arbitrum has smaller variability so we are willing to pay at most 1.5x the base fee.
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
+/// we use same multiplier as arb.
+const BSC_PRIORITY_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
 
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
@@ -180,8 +185,16 @@ impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {
 	}
 }
 
+impl EvmPriorityFee<Bsc> for BscTransactionBuilder {
+	fn get_priority_fee(tracked_data: &<Bsc as Chain>::TrackedData) -> Option<U256> {
+		// we set the max fee and priority fee the same in bsc since base fee is always 0
+		Some(U256::from(tracked_data.max_fee_per_gas(BSC_PRIORITY_FEE_MULTIPLIER)))
+	}
+}
+
 pub struct EthTransactionBuilder;
 pub struct ArbTransactionBuilder;
+pub struct BscTransactionBuilder;
 impl_transaction_builder_for_evm_chain!(
 	Ethereum,
 	EthTransactionBuilder,
@@ -195,6 +208,14 @@ impl_transaction_builder_for_evm_chain!(
 	ArbitrumApi<EvmEnvironment>,
 	ArbitrumChainTracking,
 	ARBITRUM_BASE_FEE_MULTIPLIER
+);
+impl_transaction_builder_for_evm_chain!(
+	Bsc,
+	BscTransactionBuilder,
+	BscApi<EvmEnvironment>,
+	BscChainTracking,
+	// we use priority fee multiplier in bsc's case since base fee is anyways always 0 in bsc
+	BSC_PRIORITY_FEE_MULTIPLIER
 );
 
 pub struct TronTransactionBuilder;
@@ -546,6 +567,31 @@ impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
 	}
 }
 
+impl EvmEnvironmentProvider<Bsc> for EvmEnvironment {
+	fn token_address(asset: assets::bsc::Asset) -> Option<EvmAddress> {
+		match asset {
+			assets::bsc::Asset::Bnb => Some(ETHEREUM_ETH_ADDRESS),
+			assets::bsc::Asset::BscUsdt => Environment::supported_bsc_assets(asset),
+		}
+	}
+
+	fn vault_address() -> EvmAddress {
+		Environment::bsc_vault_address()
+	}
+
+	fn key_manager_address() -> EvmAddress {
+		Environment::bsc_key_manager_address()
+	}
+
+	fn chain_id() -> EvmChainId {
+		Environment::bsc_chain_id()
+	}
+
+	fn next_nonce() -> u64 {
+		Environment::next_bsc_signature_nonce()
+	}
+}
+
 impl EvmEnvironmentProvider<Tron> for EvmEnvironment {
 	fn token_address(asset: assets::tron::Asset) -> Option<EvmAddress> {
 		match asset {
@@ -789,6 +835,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(SetGovKeyWithAggKeyError::UnsupportedChain),
 			ForeignChain::Arbitrum => Err(SetGovKeyWithAggKeyError::UnsupportedChain),
+			ForeignChain::Bsc => Err(SetGovKeyWithAggKeyError::UnsupportedChain),
 			ForeignChain::Solana =>
 				Self::broadcast_gov_key::<Solana, SolanaBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Assethub =>
@@ -805,6 +852,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
 			ForeignChain::Arbitrum => false,
+			ForeignChain::Bsc => false,
 			ForeignChain::Solana =>
 				Self::is_govkey_compatible::<<Solana as Chain>::ChainCrypto>(key),
 			ForeignChain::Assethub =>
@@ -921,6 +969,7 @@ impl_deposit_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
 	(Arbitrum, ArbitrumIngressEgress),
+	(Bsc, BscIngressEgress),
 	(Solana, SolanaIngressEgress),
 	(Assethub, AssethubIngressEgress),
 	(Tron, TronIngressEgress)
@@ -932,6 +981,7 @@ impl_egress_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
 	(Arbitrum, ArbitrumIngressEgress),
+	(Bsc, BscIngressEgress),
 	(Solana, SolanaIngressEgress),
 	(Assethub, AssethubIngressEgress),
 	(Tron, TronIngressEgress)
@@ -949,6 +999,7 @@ impl OnDeposit<Arbitrum> for DepositHandler {}
 impl OnDeposit<Tron> for DepositHandler {}
 impl OnDeposit<Solana> for DepositHandler {}
 impl OnDeposit<Assethub> for DepositHandler {}
+impl OnDeposit<Bsc> for DepositHandler {}
 
 pub struct ChainAddressConverter;
 
@@ -1021,6 +1072,9 @@ impl OnBroadcastReady<Solana> for BroadcastReadyProvider {
 }
 impl OnBroadcastReady<Assethub> for BroadcastReadyProvider {
 	type ApiCall = AssethubApi<HubEnvironment>;
+}
+impl OnBroadcastReady<Bsc> for BroadcastReadyProvider {
+	type ApiCall = BscApi<EvmEnvironment>;
 }
 
 pub struct BitcoinFeeGetter;
@@ -1098,6 +1152,7 @@ impl_ingress_egress_fee_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
 	(Arbitrum, ArbitrumIngressEgress),
+	(Bsc, BscIngressEgress),
 	(Solana, SolanaIngressEgress),
 	(Assethub, AssethubIngressEgress),
 	(Tron, TronIngressEgress)
@@ -1160,6 +1215,7 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 				MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
 			ForeignChainAndAsset::Arbitrum(asset) =>
 				MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
+			ForeignChainAndAsset::Bsc(asset) => MinimumDeposit::<Runtime, BscInstance>::get(asset),
 			ForeignChainAndAsset::Solana(asset) =>
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 			ForeignChainAndAsset::Assethub(asset) =>

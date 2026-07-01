@@ -16,13 +16,14 @@
 
 use cf_chains::{
 	arb::ArbitrumTrackedData,
+	bsc::BscTrackedData,
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
 	dot::{PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
 	hub::AssethubTrackedData,
 	sol::{sol_tx_core::sol_test_values, SolTrackedData},
 	tron::TronTrackedData,
-	Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot, Solana, Tron,
+	Arbitrum, Assethub, Bitcoin, Bsc, ChainState, Ethereum, Polkadot, Solana, Tron,
 };
 use chainflip_node::{
 	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
@@ -49,11 +50,11 @@ use state_chain_runtime::{
 	test_runner::*,
 	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumElectionsConfig,
 	AssethubChainTrackingConfig, BitcoinChainTrackingConfig, BitcoinElectionsConfig,
-	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumElectionsConfig,
-	EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig,
-	GenericElectionsConfig, GovernanceConfig, PolkadotChainTrackingConfig, ReputationConfig,
-	SessionConfig, SolanaChainTrackingConfig, SolanaElectionsConfig, TronChainTrackingConfig,
-	TronElectionsConfig, ValidatorConfig,
+	BscChainTrackingConfig, BscElectionsConfig, EmissionsConfig, EnvironmentConfig,
+	EthereumChainTrackingConfig, EthereumElectionsConfig, EthereumVaultConfig,
+	EvmThresholdSignerConfig, FlipConfig, FundingConfig, GenericElectionsConfig, GovernanceConfig,
+	PolkadotChainTrackingConfig, ReputationConfig, SessionConfig, SolanaChainTrackingConfig,
+	SolanaElectionsConfig, TronChainTrackingConfig, TronElectionsConfig, ValidatorConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
@@ -307,6 +308,12 @@ impl ExtBuilder {
 					tracked_data: TronTrackedData {},
 				},
 			},
+			bsc_chain_tracking: BscChainTrackingConfig {
+				init_chain_state: ChainState::<Bsc> {
+					block_height: 0,
+					tracked_data: BscTrackedData { priority_fee: 10000000000u64.into() },
+				},
+			},
 			bitcoin_threshold_signer: Default::default(),
 			evm_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),
@@ -337,6 +344,7 @@ impl ExtBuilder {
 			arbitrum_vault: Default::default(),
 			solana_vault: Default::default(),
 			tron_vault: Default::default(),
+			bsc_vault: Default::default(),
 			swapping: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
@@ -347,6 +355,7 @@ impl ExtBuilder {
 			arbitrum_ingress_egress: Default::default(),
 			solana_ingress_egress: Default::default(),
 			tron_ingress_egress: Default::default(),
+			bsc_ingress_egress: Default::default(),
 			solana_elections: SolanaElectionsConfig {
 				option_initial_state: Some(InitialState {
 					unsynchronised_state: (
@@ -395,6 +404,7 @@ impl ExtBuilder {
 			ethereum_elections: EthereumElectionsConfig { option_initial_state: None },
 			arbitrum_elections: ArbitrumElectionsConfig { option_initial_state: None },
 			tron_elections: TronElectionsConfig { option_initial_state: None },
+			bsc_elections: BscElectionsConfig { option_initial_state: None },
 			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
 				broadcast_timeout: 5 * BLOCKS_PER_MINUTE_ETHEREUM,
 			},
@@ -415,6 +425,9 @@ impl ExtBuilder {
 			},
 			tron_broadcaster: state_chain_runtime::TronBroadcasterConfig {
 				broadcast_timeout: 3 * BLOCKS_PER_MINUTE_TRON,
+			},
+			bsc_broadcaster: state_chain_runtime::BscBroadcasterConfig {
+				broadcast_timeout: 2 * BLOCKS_PER_MINUTE_BSC,
 			},
 		})
 	}

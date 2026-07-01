@@ -12,6 +12,7 @@ version = "0.1.0"
 workspace = true
 
 [dependencies]
+duplicate = { workspace = true }
 anyhow = { workspace = true, optional = true }
 async-broadcast = { workspace = true, optional = true }
 async-channel = { workspace = true, optional = true }
@@ -31,11 +32,12 @@ pin-project = { workspace = true, optional = true }
 predicates = { workspace = true, optional = true }
 prometheus = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
-scale-info = { workspace = true, optional = true }
+scale-info = { workspace = true }
 scopeguard = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 sp-core = { workspace = true }
 sp-std = { workspace = true }
+sp-arithmetic = { workspace = true, features = ["serde"]}
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
@@ -46,10 +48,10 @@ tracing-subscriber = { workspace = true, optional = true, features = [
 ] }
 url = { workspace = true, optional = true }
 warp = { workspace = true, optional = true }
-
 # local dependencies
 scale-json = { workspace = true, optional = true }
-
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true, default-features = true }
@@ -74,7 +76,6 @@ std = [
   "dep:pin-project",
   "dep:prometheus",
   "serde/std",
-  "dep:scale-info",
   "dep:scale-json",
   "dep:thiserror",
   "dep:tracing",
@@ -88,3 +89,4 @@ std = [
 ]
 default = ["std"]
 test-utils = ["dep:tempfile", "dep:tracing", "dep:tracing-subscriber"]
+proptest = ["dep:proptest", "dep:proptest-derive"]

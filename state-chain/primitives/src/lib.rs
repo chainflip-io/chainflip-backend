@@ -16,6 +16,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(int_roundings)]
+#![feature(associated_type_defaults)]
+#![feature(trait_alias)]
 
 //! Chainflip Primitives
 //!
@@ -671,4 +673,5 @@ pub enum WitnessingTaskName {
 	Assethub,
 	Oracle,
 	Tron,
+	Bsc,
 }

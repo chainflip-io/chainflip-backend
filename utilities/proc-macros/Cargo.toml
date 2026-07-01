@@ -1,0 +1,14 @@
+[package]
+authors = ["Chainflip <https://chainflip.io>"]
+edition = "2021"
+name = "cf-proc-macros"
+license = "Apache-2.0"
+version = "0.1.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { workspace = true, features = ["full"] }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }

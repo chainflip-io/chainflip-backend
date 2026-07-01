@@ -22,14 +22,22 @@ use cf_chains::{
 	address::EncodedAddress,
 	assets::any::AssetMap,
 	evm::Address as EvmAddress,
-	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
+	instances::{ArbitrumInstance, BitcoinInstance, BscInstance, EthereumInstance, TronInstance},
 	sol::SolInstructionRpc,
 	tron::TronAddress,
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, TransactionInId, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
+use cf_primitives::{chains::Bsc, Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
+use cf_utilities::migrations::{
+	basics::{
+		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
+		IsHistoricalType, Migration, NewFieldWithDefault,
+	},
+	primitives::NewTypeWithDefault,
+	v20100, v20200, v20300, HasChangelog,
+};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
 pub use frame_support::BoundedVec;
@@ -120,6 +128,10 @@ pub enum VaultSwapDetails<BtcAddress> {
 		#[serde(with = "sp_core::bytes")]
 		note: Vec<u8>,
 	},
+	Bsc {
+		#[serde(flatten)]
+		details: EvmCallDetails,
+	},
 }
 
 pub type TronCallDetails = EvmCallDetails<String>;
@@ -162,6 +174,10 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 		}
 	}
 
+	pub fn bsc(details: EvmCallDetails) -> Self {
+		VaultSwapDetails::Bsc { details }
+	}
+
 	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>
 	where
 		F: FnOnce(BtcAddress) -> T,
@@ -173,6 +189,7 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 			VaultSwapDetails::Ethereum { details } => VaultSwapDetails::Ethereum { details },
 			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
 			VaultSwapDetails::Tron { details, note } => VaultSwapDetails::Tron { details, note },
+			VaultSwapDetails::Bsc { details } => VaultSwapDetails::Bsc { details },
 		}
 	}
 }
@@ -256,10 +273,15 @@ pub struct OperatorInfo<Amount> {
 	pub active_delegation: Option<DelegationSnapshot<AccountId32, Amount>>,
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct DelegationInfo<Amount> {
 	pub operator: AccountId32,
 	pub bid: Amount,
+}
+
+impl<Amount: HasChangelog> HasChangelog for DelegationInfo<Amount> {
+	type if_unspecified = _DelegationInfo::see_field_changelogs;
 }
 
 impl<Amount> DelegationInfo<Amount> {
@@ -397,6 +419,7 @@ pub struct AuctionState {
 	pub min_active_bid: Option<u128>,
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderBoostPoolInfo {
 	pub fee_tier: u16,
@@ -404,6 +427,10 @@ pub struct LiquidityProviderBoostPoolInfo {
 	pub available_balance: AssetAmount,
 	pub in_use_balance: AssetAmount,
 	pub is_withdrawing: bool,
+}
+
+impl HasChangelog for LiquidityProviderBoostPoolInfo {
+	type if_unspecified = _LiquidityProviderBoostPoolInfo::see_field_changelogs;
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
@@ -567,6 +594,7 @@ pub struct TransactionScreeningEvents {
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
 	pub sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>>,
 	pub tron_events: Vec<BrokerRejectionEventFor<cf_chains::Tron>>,
+	pub bsc_events: Vec<BrokerRejectionEventFor<cf_chains::Bsc>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -586,6 +614,7 @@ pub struct VaultAddresses {
 	pub solana_vault_swap_account: Option<EncodedAddress>,
 
 	pub tron: EncodedAddress,
+	pub bsc: EncodedAddress,
 
 	pub predicted_seconds_until_next_vault_rotation: u64,
 }
@@ -598,22 +627,35 @@ pub struct TradingStrategyInfo<Amount> {
 	pub balance: Vec<(Asset, Amount)>,
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct TradingStrategyLimits {
 	pub minimum_deployment_amount: AssetMap<Option<AssetAmount>>,
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+impl HasChangelog for TradingStrategyLimits {
+	type if_unspecified = _TradingStrategyLimits::see_field_changelogs;
+}
+
+#[cf_proc_macros::generate_module]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
 pub struct NetworkFeeDetails {
 	pub standard_rate_and_minimum: FeeRateAndMinimum,
 	pub rates: AssetMap<Permill>,
 }
+impl HasChangelog for NetworkFeeDetails {
+	type if_unspecified = _NetworkFeeDetails::see_field_changelogs;
+}
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[cf_proc_macros::generate_module]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
 pub struct NetworkFees {
 	pub regular_network_fee: NetworkFeeDetails,
 	pub internal_swap_network_fee: NetworkFeeDetails,
+}
+impl HasChangelog for NetworkFees {
+	type if_unspecified = _NetworkFees::see_field_changelogs;
 }
 
 mod serialize_vanity_name {
@@ -653,6 +695,11 @@ pub enum RawWitnessedEvents {
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, TronInstance>)>,
 		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, TronInstance>)>,
 	},
+	Bsc {
+		deposits: Vec<(u64, DepositWitness<Bsc>)>,
+		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, BscInstance>)>,
+		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, BscInstance>)>,
+	},
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
@@ -662,6 +709,7 @@ pub enum DepositDetails {
 	Ethereum(<Ethereum as Chain>::DepositDetails),
 	Arbitrum(<Arbitrum as Chain>::DepositDetails),
 	Tron(<Tron as Chain>::DepositDetails),
+	Bsc(<Bsc as Chain>::DepositDetails),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
@@ -734,6 +782,7 @@ pub struct RpcLendingConfig {
 	pub minimum_update_supply_amount_usd: U256,
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
 pub struct RpcAccountInfoCommonItems<Balance> {
@@ -754,6 +803,19 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	pub current_delegation_status: Option<DelegationInfo<Balance>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
+}
+
+impl<Balance: HasChangelog> HasChangelog for RpcAccountInfoCommonItems<Balance>
+where
+	Balance: Default,
+	<Balance as HasVersion<v20100>>::HistoricalType: Default,
+	<Balance as HasVersion<v20200>>::HistoricalType: Default,
+	<Balance as HasVersion<v20300>>::HistoricalType: Default,
+{
+	type if_unspecified = _RpcAccountInfoCommonItems::see_field_changelogs;
+	type in_20200 = _RpcAccountInfoCommonItems::see_field_changelogs_and_also<
+		_RpcAccountInfoCommonItems::field::account_id::Added,
+	>;
 }
 
 impl<A> RpcAccountInfoCommonItems<A> {
@@ -801,8 +863,25 @@ pub enum RuntimeApiAccountInfo {
 	Operator(Box<OperatorInfo<FlipBalance>>),
 }
 
-#[derive(Encode, Decode, TypeInfo, PartialEq)]
+#[derive(Encode, Decode, TypeInfo, PartialEq, Debug, Default)]
+#[cfg_attr(
+	any(test, all(feature = "proptest", feature = "std")),
+	derive(proptest_derive::Arbitrary)
+)]
 pub enum ShouldSweep {
+	#[default]
 	Yes,
 	No,
+}
+
+impl HasChangelog for ShouldSweep {
+	type if_unspecified = IdentityMigration;
+	type in_20200 = NewTypeWithDefault;
+}
+impl HasGenericVariant for ShouldSweep {
+	type GenericType = Self;
+	type MigrationFromGeneric = IdentityMigration;
+}
+impl IsHistoricalType for ShouldSweep {
+	type GetCurrentType = Self;
 }
