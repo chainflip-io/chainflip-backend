@@ -33,16 +33,10 @@ pub trait Migration<To, V: Version> {
 	type BackwardsError = Never;
 	fn forwards(x: Self::From) -> To;
 	fn backwards(x: To) -> Self::From;
-	fn try_forwards<E>(
-		_x: Self::From,
-		_map_error: impl Fn(Self::ForwardsError) -> E,
-	) -> Result<To, E> {
+	fn try_forwards(_x: Self::From) -> Result<To, Self::ForwardsError> {
 		todo!()
 	}
-	fn try_backwards<E>(
-		_x: To,
-		_map_error: impl Fn(Self::BackwardsError) -> E,
-	) -> Result<Self::From, E> {
+	fn try_backwards(_x: To) -> Result<Self::From, Self::BackwardsError> {
 		todo!()
 	}
 }
@@ -77,17 +71,11 @@ impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 		x
 	}
 
-	fn try_forwards<E>(
-		x: Self::From,
-		_map_error: impl Fn(Self::ForwardsError) -> E,
-	) -> Result<X, E> {
+	fn try_forwards(x: Self::From) -> Result<X, Self::ForwardsError> {
 		Ok(x)
 	}
 
-	fn try_backwards<E>(
-		x: X,
-		_map_error: impl Fn(Self::BackwardsError) -> E,
-	) -> Result<Self::From, E> {
+	fn try_backwards(x: X) -> Result<Self::From, Self::BackwardsError> {
 		Ok(x)
 	}
 }
@@ -123,20 +111,14 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 		A::backwards(B::backwards(x))
 	}
 
-	fn try_forwards<E>(
-		x: Self::From,
-		map_error: impl Fn(Self::ForwardsError) -> E,
-	) -> Result<X, E> {
-		let x = A::try_forwards(x, |error| map_error(ComposedMigrationFailed::First(error)))?;
-		B::try_forwards(x, |error| map_error(ComposedMigrationFailed::Second(error)))
+	fn try_forwards(x: Self::From) -> Result<X, Self::ForwardsError> {
+		let x = A::try_forwards(x).map_err(ComposedMigrationFailed::First)?;
+		B::try_forwards(x).map_err(ComposedMigrationFailed::Second)
 	}
 
-	fn try_backwards<E>(
-		x: X,
-		map_error: impl Fn(Self::BackwardsError) -> E,
-	) -> Result<Self::From, E> {
-		let x = B::try_backwards(x, |error| map_error(ComposedMigrationFailed::Second(error)))?;
-		A::try_backwards(x, |error| map_error(ComposedMigrationFailed::First(error)))
+	fn try_backwards(x: X) -> Result<Self::From, Self::BackwardsError> {
+		let x = B::try_backwards(x).map_err(ComposedMigrationFailed::Second)?;
+		A::try_backwards(x).map_err(ComposedMigrationFailed::First)
 	}
 }
 
@@ -152,17 +134,11 @@ impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 
 	fn backwards(_x: T) -> Self::From {}
 
-	fn try_forwards<E>(
-		_x: Self::From,
-		_map_error: impl Fn(Self::ForwardsError) -> E,
-	) -> Result<T, E> {
+	fn try_forwards(_x: Self::From) -> Result<T, Self::ForwardsError> {
 		Ok(Default::default())
 	}
 
-	fn try_backwards<E>(
-		_x: T,
-		_map_error: impl Fn(Self::BackwardsError) -> E,
-	) -> Result<Self::From, E> {
+	fn try_backwards(_x: T) -> Result<Self::From, Self::BackwardsError> {
 		Ok(())
 	}
 }
@@ -186,18 +162,12 @@ impl<T, V: Version> Migration<T, V> for NewVariant {
 		panic!("cannot migrate newly added enum variant backwards")
 	}
 
-	fn try_forwards<E>(
-		x: Self::From,
-		_map_error: impl Fn(Self::ForwardsError) -> E,
-	) -> Result<T, E> {
+	fn try_forwards(x: Self::From) -> Result<T, Self::ForwardsError> {
 		match x {}
 	}
 
-	fn try_backwards<E>(
-		_x: T,
-		map_error: impl Fn(Self::BackwardsError) -> E,
-	) -> Result<Self::From, E> {
-		Err(map_error(NewVariantBackwardsError))
+	fn try_backwards(_x: T) -> Result<Self::From, Self::BackwardsError> {
+		Err(NewVariantBackwardsError)
 	}
 }
 
