@@ -16,6 +16,7 @@
 
 use frame_support::sp_runtime::{DispatchError, DispatchResult};
 
+use cf_primitives::EpochIndex;
 use crate::{Chainflip, FeePayment};
 
 use super::funding_info::MockFundingInfo;
@@ -39,6 +40,10 @@ impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayme
 	fn add_to_offchain_flip_to_be_distributed(_amount: i128) {}
 
 	fn add_to_onchain_flip_to_be_distributed(_amount: Self::Amount) -> Self::Deficit {}
+
+	fn fee_rewards_activation_epoch() -> EpochIndex {
+		EpochIndex::MAX
+	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {

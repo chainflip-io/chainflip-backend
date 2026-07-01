@@ -20,7 +20,7 @@
 //! 'good' behaviour and (b) to ensure that only funded actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, OpaqueCallIndex, Pallet as Flip};
-use cf_primitives::{FlipBalance, ACCUMULATE_REWARDS_EPOCH_START, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountInfo, EpochInfo, FeePayment, WaivedFees};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
@@ -142,12 +142,13 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			};
 
 			// If there is a difference this will be reconciled when the result goes out of scope.
-			let _imbalance =
-				surplus.offset(if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+			let _imbalance = surplus.offset(
+				if T::EpochInfo::epoch_index() >= crate::FeeRewardsActivationEpoch::<T>::get() {
 					Flip::<T>::add_to_onchain_flip_to_be_distributed(fee)
 				} else {
 					Flip::<T>::burn(fee)
-				});
+				},
+			);
 		}
 		Ok(())
 	}

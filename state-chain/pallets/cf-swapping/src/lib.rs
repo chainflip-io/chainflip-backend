@@ -31,7 +31,7 @@ use cf_chains::{
 use cf_primitives::{
 	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
 	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId,
-	SwapLeg, SwapRequestId, ACCUMULATE_REWARDS_EPOCH_START, BASIS_POINTS_PER_MILLION,
+	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION,
 	FLIPPERINOS_PER_FLIP, FLIP_TO_GATEWAY_MULTIPLE, ONE_AS_BASIS_POINTS, SECONDS_PER_BLOCK,
 	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
@@ -2627,7 +2627,7 @@ pub mod pallet {
 											let deficit = flip_to_subtract_from_swap_output
 												.saturating_sub(output_amount);
 											if T::EpochInfo::epoch_index() >=
-												ACCUMULATE_REWARDS_EPOCH_START
+												T::FeePayment::fee_rewards_activation_epoch()
 											{
 												T::FeePayment::add_to_offchain_flip_to_be_distributed(
 													-(deficit.try_into().unwrap_or(i128::MAX)),
@@ -2669,7 +2669,7 @@ pub mod pallet {
 					},
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
-						if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+						if T::EpochInfo::epoch_index() >= T::FeePayment::fee_rewards_activation_epoch() {
 							T::FeePayment::add_to_offchain_flip_to_be_distributed(
 								output_amount.try_into().unwrap_or(i128::MAX),
 							);
