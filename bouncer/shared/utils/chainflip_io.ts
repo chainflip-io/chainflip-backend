@@ -327,10 +327,10 @@ export class ChainflipIO<Requirements> {
    *
    * @returns The data of the first matching event, well-typed according to the provided schema.
    */
-  async stepUntilEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>({
+  async stepUntilEvent<Event extends EventDescriptor<EventName, z.ZodTypeAny>>({
     name,
     schema,
-  }: EventDescriptor<EventName, Z>): Promise<z.infer<Z>> {
+  }: Event): Promise<z.infer<SchemaFromEventDescriptor<Event>>> {
     return this.runExclusively('stepUntilEvent', async () => {
       const event = await this.waitFor(
         `event ${name} from block ${this.lastIoBlockHeight}`,
@@ -354,10 +354,10 @@ export class ChainflipIO<Requirements> {
    *
    * @returns The data of the first matching event, well-typed according to the schema.
    */
-  async expectEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>({
+  async expectEvent<Event extends EventDescriptor<EventName, z.ZodTypeAny>>({
     name,
     schema,
-  }: EventDescriptor<EventName, Z>): Promise<z.infer<Z>> {
+  }: Event): Promise<z.infer<SchemaFromEventDescriptor<Event>>> {
     return this.runExclusively('expectEvent', async () => {
       this.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
       const event = await findOneEventOfMany(
@@ -665,6 +665,11 @@ export function partialAccountFromUri(uri: `//${string}`): PartialAccount {
     keypair: createStateChainKeypair(uri),
   };
 }
+
+// ------------ Type helpers -------
+
+type SchemaFromEventDescriptor<Event extends EventDescriptor<EventName, z.ZodTypeAny>> =
+  Event extends EventDescriptor<EventName, infer Schema> ? Schema : never;
 
 // ------------ Other ---------------
 export type Severity = 'Error' | 'Warn' | 'Info' | 'Debug' | 'Trace';
