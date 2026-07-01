@@ -271,10 +271,6 @@ pub struct TxId {
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;
 
-/// From this epoch onward, functionality that accumulates rewards for off-chain distribution is
-/// enabled. Used to gate behaviour that should only activate after a protocol upgrade.
-pub const ACCUMULATE_REWARDS_EPOCH_START: EpochIndex = 6; // todo: set a reasonable value before releasing
-
 /// Number of blocks in the future a swap is scheduled for.
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 

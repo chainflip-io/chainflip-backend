@@ -19,7 +19,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
-use cf_primitives::{AssetAmount, EgressId, ACCUMULATE_REWARDS_EPOCH_START};
+use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
 	impl_pallet_safe_mode, Broadcaster, EgressApi, EpochInfo, FlipBurnOrMoveInfo, Issuance,
 	RewardsDistribution, ScheduledEgressDetails,
@@ -177,7 +177,7 @@ pub mod pallet {
 				Self::update_block_emissions();
 			}
 			if Self::should_update_supply_at(current_block) &&
-				T::EpochInfo::epoch_index() < ACCUMULATE_REWARDS_EPOCH_START
+				T::EpochInfo::epoch_index() < T::Issuance::fee_rewards_activation_epoch()
 			{
 				Self::burn_and_broadcast_supply_update(current_block);
 				return T::WeightInfo::rewards_minted()
@@ -349,7 +349,7 @@ impl<T: Config> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>>
 	fn note_author(author: T::AccountId) {
 		let reward_amount = CurrentAuthorityEmissionPerBlock::<T>::get();
 		if reward_amount != Zero::zero() &&
-			T::EpochInfo::epoch_index() < ACCUMULATE_REWARDS_EPOCH_START
+			T::EpochInfo::epoch_index() < T::Issuance::fee_rewards_activation_epoch()
 		{
 			T::RewardsDistribution::distribute(reward_amount, &author, T::Issuance::mint);
 		}

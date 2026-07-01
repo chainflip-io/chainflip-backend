@@ -33,7 +33,7 @@ use scale_info::TypeInfo;
 use sp_runtime::traits::Saturating;
 pub use weights::WeightInfo;
 
-use cf_primitives::ACCUMULATE_REWARDS_EPOCH_START;
+use cf_primitives::EpochIndex;
 use cf_traits::{
 	AccountInfo, Bonding, DeregistrationCheck, EpochInfo, FeePayment, FundingInfo, Issuance,
 	RewardsDistribution, Slashing,
@@ -49,7 +49,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, Hash as HashT, Zero},
+		traits::{AtLeast32BitUnsigned, Zero},
 		DispatchError, Permill, RuntimeDebug,
 	},
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
@@ -76,6 +76,8 @@ pub enum PalletConfigUpdate {
 	SetSlashingRate(Permill),
 	// Set fee scaling rate for any calls that are scaled.
 	SetFeeScalingRate(FeeScalingRateConfig),
+	// Set the epoch from which flip 2.1 activates.
+	SetFeeRewardsActivationEpoch(EpochIndex),
 }
 
 #[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -185,6 +187,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FlipToDistribute<T: Config> = StorageValue<_, i128, ValueQuery>;
 
+	/// The epoch from which flip 2.1 activates.
+	/// Defaults to u32::MAX (effectively disabled) until set via governance.
+	#[pallet::storage]
+	pub type FeeRewardsActivationEpoch<T: Config> =
+		StorageValue<_, EpochIndex, ValueQuery, ConstU32<{ u32::MAX }>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -266,6 +274,9 @@ pub mod pallet {
 					// i.e. there are 9 decimal places.
 					PalletConfigUpdate::SetFeeScalingRate(fee_scaling_rate) => {
 						FeeScalingRate::<T>::set(fee_scaling_rate);
+					},
+					PalletConfigUpdate::SetFeeRewardsActivationEpoch(epoch) => {
+						FeeRewardsActivationEpoch::<T>::set(epoch);
 					},
 				};
 				Self::deposit_event(Event::PalletConfigUpdated { update });
@@ -532,7 +543,7 @@ impl<T: Config> Pallet<T> {
 		if !slash_amount.is_zero() && Account::<T>::get(account_id).can_be_slashed(slash_amount) {
 			Pallet::<T>::settle(
 				account_id,
-				if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+				if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
 					Pallet::<T>::add_to_onchain_flip_to_be_distributed(slash_amount)
 				} else {
 					Pallet::<T>::burn(slash_amount)
@@ -663,12 +674,13 @@ impl<T: Config> FeePayment for Pallet<T> {
 		amount: Self::Amount,
 	) -> frame_support::dispatch::DispatchResult {
 		if let Some(surplus) = Pallet::<T>::try_debit_from_liquid_funds(account_id, amount) {
-			let _ =
-				surplus.offset(if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+			let _ = surplus.offset(
+				if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
 					Pallet::<T>::add_to_onchain_flip_to_be_distributed(amount)
 				} else {
 					Pallet::<T>::burn(amount)
-				});
+				},
+			);
 			Ok(())
 		} else {
 			Err(Error::<T>::InsufficientLiquidity.into())
@@ -681,6 +693,10 @@ impl<T: Config> FeePayment for Pallet<T> {
 
 	fn add_to_onchain_flip_to_be_distributed(amount: Self::Amount) -> Deficit<T> {
 		Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
+	}
+
+	fn fee_rewards_activation_epoch() -> EpochIndex {
+		FeeRewardsActivationEpoch::<T>::get()
 	}
 }
 
@@ -727,6 +743,10 @@ impl<T: Config> Issuance for Pallet<T> {
 	fn burn_offchain(amount: Self::Balance) {
 		let _remainder = Pallet::<T>::burn(amount).offset(Pallet::<T>::bridge_in(amount));
 	}
+
+	fn fee_rewards_activation_epoch() -> EpochIndex {
+		FeeRewardsActivationEpoch::<T>::get()
+	}
 }
 
 pub struct FlipIssuance<T>(PhantomData<T>);
@@ -745,6 +765,10 @@ impl<T: Config> Issuance for FlipIssuance<T> {
 
 	fn burn_offchain(amount: Self::Balance) {
 		<Pallet<T> as Issuance>::burn_offchain(amount);
+	}
+
+	fn fee_rewards_activation_epoch() -> EpochIndex {
+		<Pallet<T> as Issuance>::fee_rewards_activation_epoch()
 	}
 }
 
@@ -823,7 +847,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 		let dust = Pallet::<T>::total_balance_of(account_id);
 		Pallet::<T>::settle(
 			account_id,
-			if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+			if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
 				Pallet::<T>::add_to_onchain_flip_to_be_distributed(dust)
 			} else {
 				Pallet::<T>::burn(dust)
