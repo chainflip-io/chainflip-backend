@@ -80,34 +80,13 @@ macro_rules! generate_module {
                         #[scale_info(skip_type_params(Ty))]
                         #[derive(cf_proc_macros::HasTypeIntrospection)]
                         #[derive(cf_proc_macros::IntroElim)]
+                        #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(cf_proc_macros::ArbitraryWithBounds))]
+                        #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), arbitrary(bound(Ty: 'static, $( $($T: 'static,)+ )? $( Ty::$field: proptest::arbitrary::Arbitrary + 'static ),* )))]
+
                         pub struct Struct {
                             $(
                                 pub $field: Ty::$field,
                             )*
-                        }
-
-                        #[cfg(any(test, all(feature = "proptest", feature = "std")))]
-                        impl proptest::arbitrary::Arbitrary for Struct where
-                            Ty: 'static,
-                            $( $($T: 'static, )+ )?
-                            $( Ty::$field: proptest::arbitrary::Arbitrary + 'static, )*
-                        {
-                            type Parameters = ();
-                            type Strategy = proptest::strategy::BoxedStrategy<Self>;
-
-                            fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-                                use proptest::strategy::{Strategy, Just};
-                                use proptest::arbitrary::any;
-
-                                (Just(()), $( any::<Ty::$field>(), )* )
-                                    .prop_map(|(_, $( $field, )* )| Struct::intro(
-                                        $(
-                                            $field,
-                                        )*
-                                        Default::default(),
-                                    ))
-                                    .boxed()
-                            }
                         }
 
                         impl IsHistoricalType for Struct where
