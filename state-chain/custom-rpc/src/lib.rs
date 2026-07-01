@@ -1984,6 +1984,7 @@ where
 						utilisation_cap: pool.utilisation_cap,
 						current_interest_rate: pool.current_interest_rate,
 						config: pool.config,
+                        owed_to_network: (),
 					})
 					.collect()
 			})
