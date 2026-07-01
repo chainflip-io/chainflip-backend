@@ -105,8 +105,7 @@ pub mod pallet {
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
 
-	/// Reserve ID derived from blake2_256("OnchainFees")[..4].
-	pub const ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID: ReserveId = [0xc3, 0xee, 0x10, 0x5a];
+	pub const ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID: ReserveId = *b"FEES";
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
