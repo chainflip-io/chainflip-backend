@@ -143,27 +143,21 @@ macro_rules! generate_module {
                         type ForwardsError = cf_utilities::never::Never;
                         type BackwardsError = cf_utilities::never::Never;
 
-                        fn try_forwards<E>(
-                            x: Self::From,
-                            map_error: impl Fn(Self::ForwardsError) -> E,
-                        ) -> Result<$struct $(< $($T,)+ >)?, E> {
+                        fn try_forwards(x: Self::From) -> Result<$struct $(< $($T,)+ >)?, Self::ForwardsError> {
                             Ok(
                                 $struct {
                                     $(
-                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::try_forwards(x.$field, &map_error)?,
+                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::try_forwards(x.$field)?,
                                     )*
                                 }
                             )
                         }
 
-                        fn try_backwards<E>(
-                            x: $struct $(< $($T,)+ >)?,
-                            map_error: impl Fn(Self::BackwardsError) -> E,
-                        ) -> Result<Self::From, E> {
+                        fn try_backwards(x: $struct $(< $($T,)+ >)?) -> Result<Self::From, Self::BackwardsError> {
                             Ok(
                                 Struct::intro(
                                     $(
-                                        <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::try_backwards(x.$field, &map_error)?,
+                                        <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::try_backwards(x.$field)?,
                                     )*
                                     Default::default(),
                                 )
@@ -267,21 +261,21 @@ macro_rules! generate_module {
                                         )
                                     }
 
-                                    fn try_forwards<E>(x: Self::From, map_error: impl Fn(Self::ForwardsError) -> E) -> Result<StructVariant<To>, E> {
+                                    fn try_forwards(x: Self::From) -> Result<StructVariant<To>, Self::ForwardsError> {
                                         Ok(Struct::intro(
                                             $(
-                                                $field::try_forwards::<StructForwardsError>(x.$field, StructForwardsError::$field)
-                                                    .map_err(&map_error)?,
+                                                $field::try_forwards(x.$field)
+                                                    .map_err(StructForwardsError::$field)?,
                                             )*
                                             Default::default(),
                                         ))
                                     }
 
-                                    fn try_backwards<E>(x: StructVariant<To>, map_error: impl Fn(Self::BackwardsError) -> E) -> Result<Self::From, E> {
+                                    fn try_backwards(x: StructVariant<To>) -> Result<Self::From, Self::BackwardsError> {
                                         Ok(Struct::intro(
                                             $(
-                                                $field::try_backwards::<StructBackwardsError>(x.$field, StructBackwardsError::$field)
-                                                    .map_err(&map_error)?,
+                                                $field::try_backwards(x.$field)
+                                                    .map_err(StructBackwardsError::$field)?,
                                             )*
                                             Default::default(),
                                         ))
@@ -644,24 +638,24 @@ macro_rules! generate_module {
                                         }
                                     }
 
-                                    fn try_forwards<E>(x: Self::From, map_error: impl Fn(Self::ForwardsError) -> E) -> Result<EnumVariant<To>, E> {
+                                    fn try_forwards(x: Self::From) -> Result<EnumVariant<To>, Self::ForwardsError> {
                                         Ok(match x {
                                             $(
                                                 Enum::$variant(val) => Enum::$variant(
-                                                    $variant::try_forwards(val, EnumForwardsError::$variant)
-                                                        .map_err(&map_error)?
+                                                    $variant::try_forwards(val)
+                                                        .map_err(EnumForwardsError::$variant)?
                                                 ),
                                             )*
                                             Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
                                         })
                                     }
 
-                                    fn try_backwards<E>(x: EnumVariant<To>, map_error: impl Fn(Self::BackwardsError) -> E) -> Result<Self::From, E> {
+                                    fn try_backwards(x: EnumVariant<To>) -> Result<Self::From, Self::BackwardsError> {
                                         Ok(match x {
                                             $(
                                                 Enum::$variant(val) => Enum::$variant(
-                                                    $variant::try_backwards(val, EnumBackwardsError::$variant)
-                                                        .map_err(&map_error)?
+                                                    $variant::try_backwards(val)
+                                                        .map_err(EnumBackwardsError::$variant)?
                                                 ),
                                             )*
                                             Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
@@ -825,25 +819,19 @@ macro_rules! generate_module {
                             )
                         }
 
-                        fn try_forwards<E>(
-                            x: Self::From,
-                            map_error: impl Fn(Self::ForwardsError) -> E,
-                        ) -> Result<RealEnum, E> {
+                        fn try_forwards(x: Self::From) -> Result<RealEnum, Self::ForwardsError> {
                             Ok(
                                 match x {
                                     $(
                                         Enum::$variant(val) =>
-                                            (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::try_forwards(val, &map_error)?).into(),
+                                            (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::try_forwards(val)?).into(),
                                     )*
                                     Enum::_phantom(never, _) => match never {},
                                 }
                             )
                         }
 
-                        fn try_backwards<E>(
-                            x: RealEnum,
-                            map_error: impl Fn(Self::BackwardsError) -> E,
-                        ) -> Result<Self::From, E> {
+                        fn try_backwards(x: RealEnum) -> Result<Self::From, Self::BackwardsError> {
                             x.elim(
                                 $(
                                     |$($($variant_tuple_entry: $variant_ty,)*)? $($($variant_field: $variant_field_ty,)*)?|
@@ -852,8 +840,7 @@ macro_rules! generate_module {
                                             $( $( $variant_tuple_entry, )*)?
                                             $( $( $variant_field, )*)?
                                             Default::default(),
-                                        ),
-                                        &map_error
+                                        )
                                     ).map(Enum::$variant),
                                 )*
                             )
