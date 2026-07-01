@@ -159,10 +159,9 @@ pub fn derive_intro_elim(input: TokenStream) -> TokenStream {
 ///
 /// ## Attributes
 ///
-/// - `#[arbitrary(bound = "T: Trait, U: OtherTrait")]` — Override the default
-///   where-clause bounds on the generated impl. When not specified, each
-///   non-phantom field type gets an `Arbitrary + 'static` bound and each type
-///   parameter gets `'static`.
+/// - `#[arbitrary(bound = "T: Trait, U: OtherTrait")]` — Override the default where-clause bounds
+///   on the generated impl. When not specified, each non-phantom field type gets an `Arbitrary +
+///   'static` bound and each type parameter gets `'static`.
 ///
 /// ## Example
 ///
