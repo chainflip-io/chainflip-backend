@@ -92,8 +92,8 @@ async function main() {
   // would crash the script if the localnet were down.
   const { getChainflipApi } = await import('shared/utils/substrate');
   const api = await getChainflipApi();
-  const btcPool = (await api.query.lendingPools.generalLendingPools('Btc')).toJSON();
-  const setupReady = btcPool !== null;
+  const btcPool = await api.query.lendingPools.generalLendingPools('Btc');
+  const setupReady = btcPool !== undefined;
   console.log(`Setup:    ${setupReady ? 'READY (btc lending pool present)' : 'NOT_SET_UP'}`);
 
   const state: State = setupReady ? 'READY' : 'UNREADY';

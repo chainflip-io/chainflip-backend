@@ -1,6 +1,10 @@
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { getChainflipApi } from 'shared/utils/substrate';
+import type {
+  CfChainsDepositChannelDepositChannelEthereum,
+  StateChainRuntimeChainflipWitnessingEthereumElectionsElectionTypes,
+} from 'generated/chaintypes/chainflip-node';
 import {
   observeSwapRequested,
   SwapRequestType,
@@ -56,16 +60,9 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
   // Step 4: Fetch actual deposit channel details from chain storage
   await using chainflip = await getChainflipApi();
 
-  const depositChannelDetails = (
-    await chainflip.query.ethereumIngressEgress.depositChannelLookup(swapParams.depositAddress)
-  ).toJSON() as {
-    depositChannel: {
-      channelId: number;
-      address: string;
-      asset: string;
-      state: string;
-    };
-  };
+  const depositChannelDetails = await chainflip.query.ethereumIngressEgress.depositChannelLookup(
+    swapParams.depositAddress as `0x${string}`,
+  );
 
   if (!depositChannelDetails) {
     throw new Error(`Deposit channel not found for address ${swapParams.depositAddress}`);
@@ -77,15 +74,17 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
     `Submitting governance extrinsic to trigger deposit witnessing at block ${depositBlockNumber}...`,
   );
   await cf.submitGovernance({
-    extrinsic: async (api) => {
-      const depositChannel = {
-        channelId: depositChannelDetails.depositChannel.channelId,
-        address: depositChannelDetails.depositChannel.address,
-        asset: 'Usdt', // Override to USDT instead of USDC
-        state: depositChannelDetails.depositChannel.state,
+    extrinsic: (api) => {
+      // Reuse the on-chain channel state/address verbatim, overriding only the asset to USDT.
+      const depositChannel: CfChainsDepositChannelDepositChannelEthereum = {
+        ...depositChannelDetails.depositChannel,
+        asset: 'Usdt',
       };
 
-      const properties = [depositBlockNumber, { DepositChannels: [depositChannel] }];
+      const properties: [
+        bigint,
+        StateChainRuntimeChainflipWitnessingEthereumElectionsElectionTypes,
+      ] = [BigInt(depositBlockNumber), { type: 'DepositChannels', value: [depositChannel] }];
 
       return api.tx.ethereumElections.startNewBlockWitnesserElection(properties);
     },

@@ -10,6 +10,7 @@ import { executeVaultSwap, prepareVaultSwapSource, performVaultSwap } from 'shar
 import { prepareSwap } from 'shared/swapping';
 import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
+import { isDispatchError } from 'shared/utils/dedot';
 import { SwapContext } from 'shared/utils/swap_context';
 import {
   ChainflipIO,
@@ -88,7 +89,7 @@ async function testWithdrawCollectedAffiliateFees<A extends WithBrokerAccount>(
       extrinsic: (api) => api.tx.swapping.affiliateWithdrawalRequest(affiliateAccountId),
     });
   } catch (error) {
-    if (`${error}`.includes('IngressEgress.BelowEgressDustLimit')) {
+    if (isDispatchError(error, { name: 'BelowEgressDustLimit' })) {
       cf.info(
         'Withdrawal request failed with BelowEgressDustLimit error. This means that the fee balance was above 0. So this counts as success for this test.',
       );

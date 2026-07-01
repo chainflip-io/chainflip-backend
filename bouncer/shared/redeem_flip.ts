@@ -6,7 +6,6 @@ import { getNextEvmNonce } from 'shared/send_evm';
 import { getIStateChainGatewayAbi } from 'shared/contract_interfaces';
 import {
   sleep,
-  handleSubstrateError,
   getContractAddress,
   amountToFineAmount,
   observeEVMEvent,
@@ -18,6 +17,8 @@ import {
   Assets,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { signSendAndWait } from 'shared/utils/dedot';
+import type { PalletCfFundingRedemptionAmount } from 'generated/chaintypes/chainflip-node';
 import { Logger } from 'shared/utils/logger';
 
 export type RedeemAmount = 'Max' | { Exact: string };
@@ -57,7 +58,7 @@ export async function redeemFlip(
   );
   // If a redemption is already in progress, the request will fail.
   assert(
-    pendingRedemption.toString().length === 0,
+    pendingRedemption === undefined,
     `A redemption is already in progress for this account: ${accountIdHex}, amount: ${pendingRedemption}`,
   );
 
@@ -66,10 +67,16 @@ export async function redeemFlip(
     test: (event) => event.data.accountId === flipWallet.address,
   }).event;
   const flipperinoRedeemAmount = intoFineAmount(flipAmount);
-  const flipNonce = await chainflip.rpc.system.accountNextIndex(flipWallet.address);
-  await chainflip.tx.funding
-    .redeem(flipperinoRedeemAmount, ethAddress, null)
-    .signAndSend(flipWallet, { nonce: flipNonce }, handleSubstrateError(chainflip));
+  const redeemAmount: PalletCfFundingRedemptionAmount =
+    flipperinoRedeemAmount === 'Max'
+      ? { type: 'Max' }
+      : { type: 'Exact', value: BigInt(flipperinoRedeemAmount.Exact) };
+  await signSendAndWait(
+    chainflip,
+    chainflip.tx.funding.redeem(redeemAmount, ethAddress, undefined),
+    flipWallet,
+    '//' + flipSeed,
+  );
 
   const redemptionRequestEvent = await redemptionRequestHandle;
   logger.debug('Redemption requested: ', redemptionRequestEvent.data.amount);
