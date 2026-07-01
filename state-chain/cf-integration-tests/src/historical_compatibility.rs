@@ -159,6 +159,9 @@ fn test_all_historical_runtime_calls(
                             "cf_common_account_info",
                         )
                 );
+                incompatibilities.append(
+                    &mut tester.test_call::<$version, Option<Asset>, Vec<RpcLendingPool<U256>>>($version, "CustomRuntimeApi", "cf_lending_pools")
+                );
                 if match $version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST.unwrap() {
                     CanonicalPatchVersion::Released(v) => Some(v),
                     CanonicalPatchVersion::Unreleased => None,
