@@ -1,4 +1,5 @@
 use crate::type_introspection::HasTypeIntrospection;
+use sp_std::vec::Vec;
 
 /// Uninhabited type used as a placeholder for enum variants that cannot be constructed.
 ///
@@ -27,6 +28,10 @@ pub enum Never {}
 impl HasTypeIntrospection for Never {
 	fn is_empty_type() -> bool {
 		true
+	}
+
+	fn sample_all_shapes() -> Vec<Self> {
+		Vec::new()
 	}
 }
 

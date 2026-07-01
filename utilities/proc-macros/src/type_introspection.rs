@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{Data, DeriveInput, Fields};
 
 pub fn derive(input: DeriveInput) -> TokenStream {
@@ -17,7 +17,7 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 			.push(syn::parse_quote!(#ty: cf_utilities::type_introspection::HasTypeIntrospection));
 	}
 
-	let body = match &input.data {
+	let is_empty_body = match &input.data {
 		Data::Struct(data) => struct_body(&data.fields),
 		Data::Enum(data) =>
 			if data.variants.is_empty() {
@@ -35,11 +35,20 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 			.to_compile_error();
 		},
 	};
+	let sample_all_shapes_body = match &input.data {
+		Data::Struct(data) => struct_sample_all_shapes(&data.fields),
+		Data::Enum(data) => enum_sample_all_shapes(data),
+		Data::Union(_) => unreachable!(),
+	};
 
 	quote! {
 		impl #impl_generics cf_utilities::type_introspection::HasTypeIntrospection for #name #ty_generics #where_clause {
 			fn is_empty_type() -> bool {
-				#body
+				#is_empty_body
+			}
+
+			fn sample_all_shapes() -> sp_std::vec::Vec<Self> {
+				#sample_all_shapes_body
 			}
 		}
 	}
@@ -101,5 +110,107 @@ fn field_types_any_empty(fields: &Fields) -> TokenStream {
 
 	quote! {
 		#( <#field_types as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() )||*
+	}
+}
+
+fn enum_sample_all_shapes(data: &syn::DataEnum) -> TokenStream {
+	let variant_samples = data.variants.iter().map(|variant| {
+		let ident = &variant.ident;
+		let constructor = construct_value(&variant.fields, quote! { Self::#ident });
+		append_field_samples(&variant.fields, constructor)
+	});
+
+	quote! {
+		let mut __samples: sp_std::vec::Vec<Self> = Default::default();
+		#( #variant_samples )*
+		__samples
+	}
+}
+
+fn struct_sample_all_shapes(fields: &Fields) -> TokenStream {
+	let constructor = construct_value(fields, quote! { Self });
+	let field_samples = append_field_samples(fields, constructor);
+
+	quote! {
+		let mut __samples: sp_std::vec::Vec<Self> = Default::default();
+		#field_samples
+		__samples
+	}
+}
+
+fn append_field_samples(fields: &Fields, constructor: TokenStream) -> TokenStream {
+	let field_types: Vec<_> = match fields {
+		Fields::Named(f) => f.named.iter().map(|f| &f.ty).collect(),
+		Fields::Unnamed(f) => f.unnamed.iter().map(|f| &f.ty).collect(),
+		Fields::Unit => Vec::new(),
+	};
+
+	if field_types.is_empty() {
+		return quote! {
+			__samples.push(#constructor);
+		};
+	}
+
+	let count_idents: Vec<_> = (0..field_types.len())
+		.map(|index| format_ident!("__shape_count_{index}"))
+		.collect();
+	let index_idents: Vec<_> = (0..field_types.len())
+		.map(|index| format_ident!("__shape_index_{index}"))
+		.collect();
+	let value_idents: Vec<_> = (0..field_types.len())
+		.map(|index| format_ident!("__shape_value_{index}"))
+		.collect();
+
+	let push_sample = quote! {
+		match (
+			#(
+				<#field_types as cf_utilities::type_introspection::HasTypeIntrospection>::sample_all_shapes()
+					.into_iter()
+					.nth(#index_idents),
+			)*
+		) {
+			( #( Some(#value_idents), )* ) => __samples.push(#constructor),
+			_ => {},
+		}
+	};
+
+	let nested_loops = index_idents.iter().zip(count_idents.iter()).rfold(
+		push_sample,
+		|body, (index_ident, count_ident)| {
+			quote! {
+				for #index_ident in 0..#count_ident {
+					#body
+				}
+			}
+		},
+	);
+
+	quote! {
+		{
+			#(
+				let #count_idents = <#field_types as cf_utilities::type_introspection::HasTypeIntrospection>::sample_all_shapes().len();
+			)*
+			#nested_loops
+		}
+	}
+}
+
+fn construct_value(fields: &Fields, prefix: TokenStream) -> TokenStream {
+	let value_idents: Vec<_> = match fields {
+		Fields::Named(f) =>
+			(0..f.named.len()).map(|index| format_ident!("__shape_value_{index}")).collect(),
+		Fields::Unnamed(f) => (0..f.unnamed.len())
+			.map(|index| format_ident!("__shape_value_{index}"))
+			.collect(),
+		Fields::Unit => Vec::new(),
+	};
+
+	match fields {
+		Fields::Named(f) => {
+			let field_names = f.named.iter().map(|field| &field.ident);
+			quote! { #prefix { #( #field_names: #value_idents ),* } }
+		},
+		Fields::Unnamed(_) => quote! { #prefix( #( #value_idents ),* ) },
+		Fields::Unit => quote! { #prefix },
 	}
 }
