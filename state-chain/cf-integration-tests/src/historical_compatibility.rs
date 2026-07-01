@@ -160,7 +160,7 @@ fn test_all_historical_runtime_calls(
                         )
                 );
                 incompatibilities.append(
-                    &mut tester.test_call::<$version, Option<Asset>, Vec<RpcLendingPool<U256>>>($version, "CustomRuntimeApi", "cf_lending_pools")
+                    &mut tester.test_call::<$version, Option<Asset>, Vec<pallet_cf_lending_pools::RpcLendingPool<cf_primitives::AssetAmount>>>($version, "CustomRuntimeApi", "cf_lending_pools")
                 );
                 if match $version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST.unwrap() {
                     CanonicalPatchVersion::Released(v) => Some(v),

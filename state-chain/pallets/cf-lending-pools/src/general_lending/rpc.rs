@@ -18,7 +18,7 @@ use cf_primitives::{AssetAmount, AssetAndAmount, Beneficiary, SwapRequestId};
 use cf_traits::lending::LoanId;
 use cf_utilities::migrations::{
 	basics::{HasVersion, Migration, RemovedFieldWithDefault},
-	HasChangelog,
+	v20100, v20200, HasChangelog,
 };
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
@@ -53,9 +53,15 @@ pub struct RpcLendingPool<Amount> {
 	#[serde(flatten)]
 	pub config: LendingPoolConfiguration,
 }
-impl<Amount: HasChangelog> HasChangelog for RpcLendingPool<Amount> {
+impl<Amount: HasChangelog> HasChangelog for RpcLendingPool<Amount>
+where
+	<Amount as HasVersion<v20200>>::HistoricalType: Default,
+{
 	type if_unspecified = _RpcLendingPool::see_field_changelogs;
 	type in_20200 = _RpcLendingPool::see_field_changelogs_and_also<
+		_RpcLendingPool::field::utilisation_cap::Added,
+	>;
+	type in_20300 = _RpcLendingPool::see_field_changelogs_and_also<
 		_RpcLendingPool::field::owed_to_network::Removed<Amount>,
 	>;
 }

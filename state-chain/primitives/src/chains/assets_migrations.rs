@@ -84,6 +84,10 @@ where
 
 impl HasChangelog for Asset {
 	type if_unspecified = _Asset::see_variant_changelogs;
+	type in_20200 = _Asset::see_variant_changelogs_and_also<(
+		_Asset::variant::Trx::Added,
+		_Asset::variant::TrxUsdt::Added,
+	)>;
 	type in_20300 = _Asset::see_variant_changelogs_and_also<(
 		_Asset::variant::Bnb::Added,
 		_Asset::variant::BscUsdt::Added,

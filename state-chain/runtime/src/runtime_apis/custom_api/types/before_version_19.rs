@@ -606,6 +606,7 @@ impl<Amount> From<RpcLendingPool<Amount>> for pallet_cf_lending_pools::RpcLendin
 			utilisation_cap: value.utilisation_cap,
 			current_interest_rate: value.current_interest_rate,
 			config: value.config,
+			owed_to_network: (),
 		}
 	}
 }
