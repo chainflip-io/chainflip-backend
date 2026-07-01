@@ -378,6 +378,9 @@ pub trait Issuance {
 	///
 	/// Use with care.
 	fn burn_offchain(amount: Self::Balance);
+
+	/// The epoch from which fee rewards are accumulated on-chain rather than burned.
+	fn fee_rewards_activation_epoch() -> EpochIndex;
 }
 
 /// Distribute rewards somehow.
@@ -764,6 +767,9 @@ pub trait FeePayment {
 
 	/// Accumulate FLIP to be distributed on-chain, returning a deficit imbalance.
 	fn add_to_onchain_flip_to_be_distributed(amount: Self::Amount) -> Self::Deficit;
+
+	/// The epoch from which fee rewards are accumulated on-chain rather than burned.
+	fn fee_rewards_activation_epoch() -> EpochIndex;
 }
 
 /// Provides information about on-chain funds.

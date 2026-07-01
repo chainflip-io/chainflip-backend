@@ -34,9 +34,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::{
-	chains::assets::eth::Asset as EthAsset, AssetAmount, ACCUMULATE_REWARDS_EPOCH_START,
-};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, EpochInfo,
 	FeePayment, FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck,
@@ -926,7 +924,9 @@ pub mod pallet {
 						amount < MinimumFunding::<T>::get().into()
 					{
 						// Insufficient funds to create an account.
-						if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+						if T::EpochInfo::epoch_index() >=
+							<T::Flip as FeePayment>::fee_rewards_activation_epoch()
+						{
 							T::Flip::add_to_onchain_flip_to_be_distributed(amount.into());
 						} else {
 							T::Flip::burn_offchain(amount.into());

@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{AssetBalances, Emissions, Environment, Flip, Swapping, Validator};
-use cf_primitives::{EpochIndex, ACCUMULATE_REWARDS_EPOCH_START};
+use cf_primitives::EpochIndex;
 use cf_traits::EpochTransitionHandler;
 
 use crate::{ArbitrumVault, BitcoinVault, EthereumVault, PolkadotVault, SolanaVault, Witnesser};
@@ -34,11 +34,13 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	fn on_new_epoch(new: EpochIndex) {
 		AssetBalances::trigger_reconciliation();
 
-		if new == ACCUMULATE_REWARDS_EPOCH_START {
+		let activation_epoch =
+			pallet_cf_flip::FeeRewardsActivationEpoch::<crate::Runtime>::get();
+		if new == activation_epoch {
 			Emissions::burn_and_broadcast_supply_update(
 				frame_system::Pallet::<crate::Runtime>::block_number(),
 			);
-		} else if new > ACCUMULATE_REWARDS_EPOCH_START {
+		} else if new > activation_epoch {
 			let flip_distributed =
 				Flip::trigger_flip_reward_distribution(Validator::historical_authorities(new - 1));
 			Swapping::maybe_trigger_flip_to_gateway_egress(
