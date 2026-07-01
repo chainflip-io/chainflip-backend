@@ -336,14 +336,31 @@ pub mod pallet {
 		StablecoinDefaults<10_000_000>, // $10 USD
 	>;
 
+	/// Cursor into `Strategies` for incremental `on_idle` processing: the raw storage
+	/// key of the last strategy processed, or `None` to (re)start from the beginning.
+	/// Bounds the per-block scan and ensures every strategy is eventually processed,
+	/// rather than always the first `max_strategies` (no starvation of the tail).
+	#[pallet::storage]
+	pub type NextStrategyCursor<T: Config> = StorageValue<_, Vec<u8>, OptionQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_current_block: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let mut weight_used: Weight = Weight::zero();
-
 			// We assume this consumes 0 weight since safe mode is likely in cache
 			if !T::SafeMode::get().strategy_execution_enabled {
-				return weight_used
+				return Weight::zero()
+			}
+
+			let base = T::WeightInfo::on_idle(0);
+			let per_strategy = T::WeightInfo::on_idle(1).saturating_sub(base);
+
+			let max_strategies = remaining_weight
+				.ref_time()
+				.saturating_sub(base.ref_time())
+				.checked_div(per_strategy.ref_time().max(1))
+				.unwrap_or(0) as usize;
+			if max_strategies == 0 {
+				return base
 			}
 
 			let order_update_thresholds = LimitOrderUpdateThresholds::<T>::get();
@@ -351,12 +368,21 @@ pub mod pallet {
 			// Cache of orders per asset pair to avoid redundant reads
 			let mut order_cache: BTreeMap<AssetPair, Vec<StrategyLimitOrder<T::AccountId>>> =
 				BTreeMap::new();
-
-			// Grab all of the strategies and also group them by asset pair for efficient order
-			// fetching.
 			let mut fetch_orders_for_strategies: BTreeMap<AssetPair, BTreeSet<T::AccountId>> =
 				BTreeMap::new();
-			let strategies = Strategies::<T>::iter()
+
+			// Resume from where the previous block stopped so every strategy is eventually
+			// processed, rather than always the first `max_strategies` (no tail starvation).
+			let mut iter = match NextStrategyCursor::<T>::get() {
+				Some(raw_key) => Strategies::<T>::iter_from(raw_key),
+				None => Strategies::<T>::iter(),
+			};
+
+			// Read at most `max_strategies` from storage (the bounded scan) and group the
+			// prefetch strategies by asset pair for efficient order fetching.
+			let batch = iter
+				.by_ref()
+				.take(max_strategies)
 				.map(|(_, strategy_id, strategy)| {
 					if strategy.needs_order_prefetch() {
 						if let Some(asset_pair) = strategy.asset_pair() {
@@ -370,27 +396,18 @@ pub mod pallet {
 				})
 				.collect::<Vec<_>>();
 
-			// Weight comes entirely from the `on_idle` benchmark: a fixed base plus a
-			// per-strategy cost covering the O(n) scan above, the order prefetch, the
-			// oracle/balance reads, and the worst-case order updates (benchmarked against
-			// OracleTracking, the heaviest and most common strategy type).
-			//
-			// NOTE: the scan is unconditional, so for very large strategy counts the loop
-			// stops early while the full scan was still paid — properly bounding this
-			// requires processing strategies incrementally from a stored cursor (follow-up).
-			let per_strategy = T::WeightInfo::on_idle(1).saturating_sub(T::WeightInfo::on_idle(0));
-			weight_used = T::WeightInfo::on_idle(0);
+			// Fewer than the affordable maximum means we reached the end of the map, so wrap
+			// back to the start next block; otherwise resume after the last key the
+			// iterator returned (no re-hashing).
+			if batch.len() < max_strategies {
+				NextStrategyCursor::<T>::kill();
+			} else {
+				NextStrategyCursor::<T>::set(Some(iter.last_raw_key().to_vec()));
+			}
+			let processed = batch.len() as u32;
 
-			// Execute each strategy.
-			for (strategy_id, strategy) in strategies {
-				if remaining_weight
-					.checked_sub(&weight_used.saturating_add(per_strategy))
-					.is_none()
-				{
-					break;
-				}
-				weight_used = weight_used.saturating_add(per_strategy);
-
+			// Execute each strategy in the batch.
+			for (strategy_id, strategy) in batch {
 				// Populate the order cache for strategies that require existing pool orders.
 				let existing_orders: Vec<&StrategyLimitOrder<T::AccountId>> = if strategy
 					.needs_order_prefetch()
@@ -458,7 +475,7 @@ pub mod pallet {
 				);
 			}
 
-			weight_used
+			T::WeightInfo::on_idle(processed)
 		}
 	}
 
