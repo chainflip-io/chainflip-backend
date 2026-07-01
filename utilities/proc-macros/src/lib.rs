@@ -18,6 +18,7 @@ use proc_macro::TokenStream;
 
 mod better_modules;
 mod enum_elim;
+mod generate_module;
 mod intro_elim;
 mod type_introspection;
 
@@ -127,16 +128,8 @@ pub fn better_modules(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn generate_module(_attr: TokenStream, item: TokenStream) -> TokenStream {
 	let item_clone: proc_macro2::TokenStream = item.clone().into();
-	let parsed: syn::ItemStruct =
-		syn::parse(item).expect("#[generate_module] can only be applied to structs");
-	let mod_name = quote::format_ident!("_{}", parsed.ident);
-	let output = quote::quote! {
-		cf_utilities::generate_module! {
-			#item_clone
-			mod #mod_name { #![migrations] }
-		}
-	};
-	output.into()
+	let parsed = syn::parse_macro_input!(item as syn::Item);
+	generate_module::expand(item_clone, parsed).into()
 }
 
 #[proc_macro_derive(HasTypeIntrospection)]

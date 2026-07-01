@@ -90,31 +90,29 @@ macro_rules! assets {
 			use core::ops::{Index, IndexMut};
 			use core::iter::FromIterator;
 
-            // cf_utilities::generate_module! {
-                #[derive(
-                    Copy,
-                    Clone,
-                    Debug,
-                    PartialEq,
-                    Eq,
-                    Encode,
-                    Decode,
-                    DecodeWithMemTracking,
-                    TypeInfo,
-                    MaxEncodedLen,
-                    Hash,
-                    PartialOrd,
-                    Ord,
-                    EnumIter,
-                )]
-                #[repr(u32)]
-                pub enum Asset {
-                    $(
-                        $($asset_variant = $asset_index,)+
-                    )+
-                }
-            //     mod _Asset { #![migrations] }
-            // }
+            #[cf_proc_macros::generate_module]
+            #[derive(
+                Copy,
+                Clone,
+                Debug,
+                PartialEq,
+                Eq,
+                Encode,
+                Decode,
+                DecodeWithMemTracking,
+                TypeInfo,
+                MaxEncodedLen,
+                Hash,
+                PartialOrd,
+                Ord,
+                EnumIter,
+            )]
+            #[repr(u32)]
+            pub enum Asset {
+                $(
+                    $($asset_variant = $asset_index,)+
+                )+
+            }
 			impl TryFrom<u32> for Asset {
 				type Error = &'static str;
 

@@ -85,9 +85,9 @@ where
 		any::_AssetMap::see_field_changelogs_and_also<any::_AssetMap::field::bsc::Added>;
 }
 
-// impl HasChangelog for Asset {
-// 	type if_unspecified = IdentityMigration;
-// }
+impl HasChangelog for Asset {
+	type if_unspecified = IdentityMigration;
+}
 
 // --------- testing ------------
 
@@ -99,6 +99,16 @@ pub struct MyS<T> {
 impl<T: HasChangelog> HasChangelog for MyS<T> {
 	type if_unspecified = _MyS::see_field_changelogs;
 }
+
+// #[cf_proc_macros::generate_module]
+// pub enum MyE {
+// 	A,
+// 	B,
+// }
+
+// impl HasChangelog for MyE {
+// 	type if_unspecified = _MyE::see_variant_changelogs;
+// }
 
 // Recursive expansion of generate_module macro
 // =============================================
