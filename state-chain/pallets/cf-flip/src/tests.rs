@@ -810,4 +810,62 @@ mod test_flip_reward_distribution {
 			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 0);
 		});
 	}
+
+	// Verify distribution invariants on arbitrary inputs.
+	//
+	// Uses i64/u64 inputs (cast to i128/u128) to avoid u128 overflow when summing
+	// onchain_reserve + bridged (max sum ~2.7e19 << u128::MAX).
+	// OffchainFunds is topped up with i64::MAX before the call so bridge_in is never capped.
+	#[quickcheck]
+	fn reward_distribution_invariants(flip_to_distribute: i64, onchain_reserve: u64) -> TestResult {
+		let flip_to_distribute = flip_to_distribute as i128;
+		let onchain_reserve = onchain_reserve as u128;
+
+		new_test_ext()
+			.execute_with(|| -> TestResult {
+				const COUNT: u128 = 3; // ALICE, BOB, CHARLIE
+
+				// Top up OffchainFunds so any positive flip_to_distribute can be bridged in without
+				// being capped (initial OffchainFunds=850; i64::MAX ≈ 9.2e18 covers i64 range).
+				let _ = Flip::mint(i64::MAX as u128).offset(Flip::bridge_out(i64::MAX as u128));
+
+				FlipToDistribute::<Test>::put(flip_to_distribute);
+				Reserve::<Test>::insert(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, onchain_reserve);
+
+				let expected_bridged: u128 =
+					if flip_to_distribute > 0 { flip_to_distribute as u128 } else { 0 };
+				let total_reserve = onchain_reserve + expected_bridged;
+				let expected_per_authority = total_reserve / COUNT;
+				let expected_remainder = total_reserve % COUNT;
+
+				let bridged = Flip::trigger_flip_reward_distribution(vec![ALICE, BOB, CHARLIE]);
+
+				// Return value equals what was subtracted from FlipToDistribute
+				if bridged != expected_bridged {
+					return TestResult::failed()
+				}
+				// Every authority receives the same truncated share
+				for authority in [ALICE, BOB, CHARLIE] {
+					if MockRewardsDistribution::<Test>::get_assigned_rewards(&authority) !=
+						expected_per_authority
+					{
+						return TestResult::failed()
+					}
+				}
+				// Remainder stays in the reserve for the next epoch
+				if Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID) != expected_remainder
+				{
+					return TestResult::failed()
+				}
+				// FlipToDistribute is zeroed when positive, preserved otherwise
+				let expected_flip_storage =
+					if flip_to_distribute > 0 { 0 } else { flip_to_distribute };
+				if FlipToDistribute::<Test>::get() != expected_flip_storage {
+					return TestResult::failed()
+				}
+
+				TestResult::passed()
+			})
+			.into_context()
+	}
 }
