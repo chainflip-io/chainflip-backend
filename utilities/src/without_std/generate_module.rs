@@ -680,6 +680,21 @@ macro_rules! generate_module {
             }
 
             // ----------------- predefined migrations ------------------ //
+            pub mod variant {
+                $(
+                    pub mod $variant {
+                        use super::super::{OverrideMigrationWith, Version, HistoricalTypesAt, VariantCustomMigration, NewVariant};
+
+                        #[derive(Debug)]
+                        pub struct Added;
+                        impl<V: Version, TargetVariantTypes: HistoricalTypesAt<V>>
+                            VariantCustomMigration<TargetVariantTypes, V> for Added
+                        {
+                            type $variant = OverrideMigrationWith<NewVariant>;
+                        }
+                    }
+                )*
+            }
 
 
             // ----------------- connection with default enum ------------------ //

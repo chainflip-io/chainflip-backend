@@ -16,7 +16,7 @@
 
 // ---------- definition of migrations ------------
 
-use crate::{migrations::HasChangelog, never::Never};
+use crate::never::Never;
 
 pub trait Version: Copy {
 	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<CanonicalPatchVersion>;
@@ -164,6 +164,40 @@ impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 		_map_error: impl Fn(Self::BackwardsError) -> E,
 	) -> Result<Self::From, E> {
 		Ok(())
+	}
+}
+
+// ------- migration for new enum variant --------
+
+pub struct NewVariant;
+
+#[derive(Debug)]
+pub struct NewVariantBackwardsError;
+
+impl<T, V: Version> Migration<T, V> for NewVariant {
+	type From = Never;
+	type BackwardsError = NewVariantBackwardsError;
+
+	fn forwards(x: Self::From) -> T {
+		match x {}
+	}
+
+	fn backwards(_x: T) -> Self::From {
+		panic!("cannot migrate newly added enum variant backwards")
+	}
+
+	fn try_forwards<E>(
+		x: Self::From,
+		_map_error: impl Fn(Self::ForwardsError) -> E,
+	) -> Result<T, E> {
+		match x {}
+	}
+
+	fn try_backwards<E>(
+		_x: T,
+		map_error: impl Fn(Self::BackwardsError) -> E,
+	) -> Result<Self::From, E> {
+		Err(map_error(NewVariantBackwardsError))
 	}
 }
 

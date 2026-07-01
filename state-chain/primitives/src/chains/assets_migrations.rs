@@ -380,6 +380,8 @@ mod enum4 {
 		T::XY: HasChangelog,
 	{
 		type if_unspecified = _MyTestValues::see_variant_changelogs;
+		type in_20100 =
+			_MyTestValues::see_variant_changelogs_and_also<_MyTestValues::variant::Variant2::Added>;
 	}
 }
 
