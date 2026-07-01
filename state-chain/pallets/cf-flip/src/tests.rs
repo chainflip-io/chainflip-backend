@@ -719,3 +719,95 @@ mod transfer {
 		});
 	}
 }
+
+#[cfg(test)]
+mod test_flip_reward_distribution {
+	use super::*;
+	use crate::{FlipToDistribute, ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID};
+	use cf_traits::mocks::rewards_distribution::MockRewardsDistribution;
+
+	#[test]
+	fn distributes_offchain_and_onchain_rewards_evenly() {
+		new_test_ext().execute_with(|| {
+			FlipToDistribute::<Test>::put(300i128);
+			Reserve::<Test>::insert(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, 300u128);
+
+			let bridged = Flip::trigger_flip_reward_distribution(vec![ALICE, BOB, CHARLIE]);
+
+			// 300 offchain bridged in + 300 onchain = 600 total; 600 / 3 = 200 each
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 200);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&BOB), 200);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&CHARLIE), 200);
+
+			// FlipToDistribute is drained after distribution
+			assert_eq!(FlipToDistribute::<Test>::get(), 0);
+			// Return value equals what was subtracted from FlipToDistribute (300 - 0 = 300)
+			assert_eq!(bridged, 300u128);
+			// Reserve is fully distributed with no remainder
+			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 0);
+		});
+	}
+
+	#[test]
+	fn remainder_stays_in_reserve_not_awarded_to_winner() {
+		new_test_ext().execute_with(|| {
+			// 1 offchain bridged in + 201 onchain = 202 total; 202 / 3 = 67 each, 1 stays in
+			// reserve
+			FlipToDistribute::<Test>::put(1i128);
+			Reserve::<Test>::insert(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, 201u128);
+
+			let bridged = Flip::trigger_flip_reward_distribution(vec![ALICE, BOB, CHARLIE]);
+
+			// All authorities get the same truncated share — no winner receives the remainder
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 67);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&BOB), 67);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&CHARLIE), 67);
+
+			// Return value equals what was subtracted from FlipToDistribute (1 - 0 = 1)
+			assert_eq!(bridged, 1u128);
+			// The 1 FLIP remainder stays in the reserve for the next epoch
+			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 1);
+		});
+	}
+
+	#[test]
+	fn negative_offchain_balance_is_not_distributed() {
+		new_test_ext().execute_with(|| {
+			// Negative FlipToDistribute should be left intact; only onchain rewards are distributed
+			FlipToDistribute::<Test>::put(-100i128);
+			Reserve::<Test>::insert(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, 300u128);
+
+			let bridged = Flip::trigger_flip_reward_distribution(vec![ALICE, BOB, CHARLIE]);
+
+			// Only onchain: 100 each
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 100);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&BOB), 100);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&CHARLIE), 100);
+
+			// Negative value is preserved; return value equals what was bridged in which is nothing
+			assert_eq!(FlipToDistribute::<Test>::get(), -100);
+			assert_eq!(bridged, 0u128);
+			// Reserve is fully distributed with no remainder
+			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 0);
+		});
+	}
+
+	#[test]
+	fn zero_onchain_reserve_only_distributes_offchain() {
+		new_test_ext().execute_with(|| {
+			FlipToDistribute::<Test>::put(300i128);
+			// Reserve not set → defaults to 0
+
+			let bridged = Flip::trigger_flip_reward_distribution(vec![ALICE, BOB, CHARLIE]);
+
+			// 100 offchain each, 0 onchain
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 100);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&BOB), 100);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&CHARLIE), 100);
+			// Return value equals what was subtracted from FlipToDistribute (300 - 0 = 300)
+			assert_eq!(bridged, 300u128);
+			// Reserve is fully distributed with no remainder
+			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 0);
+		});
+	}
+}
