@@ -93,26 +93,13 @@ impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 }
 
 // -------- composition of migrations --------
-pub enum ComposedMigrationFailedForwards<A, B> {
+
+pub enum ComposedMigrationFailed<A, B> {
 	First(A),
 	Second(B),
 }
 
-pub enum ComposedMigrationFailedBackwards<A, B> {
-	First(A),
-	Second(B),
-}
-
-impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType for ComposedMigrationFailedForwards<A, B> {
-	fn as_never(self) -> Never {
-		match self {
-			Self::First(error) => error.as_never(),
-			Self::Second(error) => error.as_never(),
-		}
-	}
-}
-
-impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType for ComposedMigrationFailedBackwards<A, B> {
+impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType for ComposedMigrationFailed<A, B> {
 	fn as_never(self) -> Never {
 		match self {
 			Self::First(error) => error.as_never(),
@@ -125,8 +112,8 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 	for (A, W, B)
 {
 	type From = A::From;
-	type ForwardsError = ComposedMigrationFailedForwards<A::ForwardsError, B::ForwardsError>;
-	type BackwardsError = ComposedMigrationFailedBackwards<A::BackwardsError, B::BackwardsError>;
+	type ForwardsError = ComposedMigrationFailed<A::ForwardsError, B::ForwardsError>;
+	type BackwardsError = ComposedMigrationFailed<A::BackwardsError, B::BackwardsError>;
 
 	fn forwards(x: Self::From) -> X {
 		B::forwards(A::forwards(x))
@@ -140,21 +127,16 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 		x: Self::From,
 		map_error: impl Fn(Self::ForwardsError) -> E,
 	) -> Result<X, E> {
-		let x =
-			A::try_forwards(x, |error| map_error(ComposedMigrationFailedForwards::First(error)))?;
-
-		B::try_forwards(x, |error| map_error(ComposedMigrationFailedForwards::Second(error)))
+		let x = A::try_forwards(x, |error| map_error(ComposedMigrationFailed::First(error)))?;
+		B::try_forwards(x, |error| map_error(ComposedMigrationFailed::Second(error)))
 	}
 
 	fn try_backwards<E>(
 		x: X,
 		map_error: impl Fn(Self::BackwardsError) -> E,
 	) -> Result<Self::From, E> {
-		let x = B::try_backwards(x, |error| {
-			map_error(ComposedMigrationFailedBackwards::Second(error))
-		})?;
-
-		A::try_backwards(x, |error| map_error(ComposedMigrationFailedBackwards::First(error)))
+		let x = B::try_backwards(x, |error| map_error(ComposedMigrationFailed::Second(error)))?;
+		A::try_backwards(x, |error| map_error(ComposedMigrationFailed::First(error)))
 	}
 }
 
