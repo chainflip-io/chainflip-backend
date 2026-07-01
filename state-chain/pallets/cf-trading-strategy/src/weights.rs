@@ -24,19 +24,19 @@
 //! EXECUTION: , WASM-EXECUTION: Compiled, CHAIN: Some("dev-3"), DB CACHE: 1024
 
 // Executed Command:
-// ./chainflip-node
+// ./target/release/chainflip-node
 // benchmark
 // pallet
 // --pallet
 // pallet_cf_trading_strategy
 // --extrinsic
 // *
+// --template
+// state-chain/chainflip-weight-template.hbs
 // --output
 // state-chain/pallets/cf-trading-strategy/src/weights.rs
 // --steps=20
 // --repeat=10
-// --template=state-chain/chainflip-weight-template.hbs
-// --chain=dev-3
 
 #![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
@@ -51,6 +51,7 @@ pub trait WeightInfo {
 	fn deploy_strategy() -> Weight;
 	fn close_strategy() -> Weight;
 	fn add_funds_to_strategy() -> Weight;
+	fn on_idle(n: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_trading_strategy using the Substrate node and recommended hardware.
