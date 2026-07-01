@@ -16,8 +16,8 @@
 
 use frame_support::sp_runtime::{DispatchError, DispatchResult};
 
-use cf_primitives::EpochIndex;
 use crate::{Chainflip, FeePayment};
+use cf_primitives::EpochIndex;
 
 use super::funding_info::MockFundingInfo;
 

@@ -34,8 +34,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	fn on_new_epoch(new: EpochIndex) {
 		AssetBalances::trigger_reconciliation();
 
-		let activation_epoch =
-			pallet_cf_flip::FeeRewardsActivationEpoch::<crate::Runtime>::get();
+		let activation_epoch = pallet_cf_flip::FeeRewardsActivationEpoch::<crate::Runtime>::get();
 		if new == activation_epoch {
 			Emissions::burn_and_broadcast_supply_update(
 				frame_system::Pallet::<crate::Runtime>::block_number(),
