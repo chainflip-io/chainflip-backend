@@ -30,7 +30,7 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 	fn distribute(
 		amount: Self::Balance,
 		beneficiary: &Self::AccountId,
-		_settle: impl FnMut(&Self::AccountId, Self::Balance),
+		mut settle: impl FnMut(&Self::AccountId, Self::Balance),
 	) {
 		<Self as MockPalletStorage>::mutate_storage(
 			b"REWARDS",
@@ -40,6 +40,7 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 				*balance = Some(current_balance + amount);
 			},
 		);
+		settle(beneficiary, amount);
 	}
 }
 
