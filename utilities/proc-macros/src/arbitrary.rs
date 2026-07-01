@@ -16,7 +16,7 @@
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Fields, Type, parse::Parse, punctuated::Punctuated, token::Comma};
+use syn::{parse::Parse, punctuated::Punctuated, token::Comma, Data, DeriveInput, Fields, Type};
 
 /// Maximum number of elements in a single strategy tuple (proptest supports up to 12).
 const CHUNK_SIZE: usize = 10;
@@ -58,17 +58,13 @@ fn parse_arbitrary_attrs(input: &DeriveInput) -> syn::Result<Option<Vec<syn::Whe
 			continue;
 		}
 
-		let nested = attr.parse_args_with(
-			Punctuated::<syn::Meta, Comma>::parse_terminated,
-		)?;
+		let nested = attr.parse_args_with(Punctuated::<syn::Meta, Comma>::parse_terminated)?;
 
 		for meta in nested {
 			match &meta {
 				syn::Meta::NameValue(nv) if nv.path.is_ident("bound") => {
 					// #[arbitrary(bound = "T: Trait, ...")]
-					let syn::Expr::Lit(syn::ExprLit {
-						lit: syn::Lit::Str(lit), ..
-					}) = &nv.value
+					let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(lit), .. }) = &nv.value
 					else {
 						return Err(syn::Error::new_spanned(
 							&nv.value,
@@ -110,8 +106,10 @@ fn generate_chunk_strategy(
 	field_types: &[&Type],
 	binding_idents: &[syn::Ident],
 ) -> (TokenStream, TokenStream) {
-	let strategies: Vec<_> =
-		field_types.iter().map(|ty| quote! { proptest::arbitrary::any::<#ty>() }).collect();
+	let strategies: Vec<_> = field_types
+		.iter()
+		.map(|ty| quote! { proptest::arbitrary::any::<#ty>() })
+		.collect();
 	let bindings: Vec<_> = binding_idents.iter().map(|id| quote! { #id }).collect();
 
 	(quote! { ( #(#strategies),* ) }, quote! { ( #(#bindings),* ) })
@@ -219,10 +217,7 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 				strategy_parts.push(s);
 				pattern_parts.push(p);
 			}
-			(
-				quote! { ( #(#strategy_parts),* ) },
-				quote! { ( #(#pattern_parts),* ) },
-			)
+			(quote! { ( #(#strategy_parts),* ) }, quote! { ( #(#pattern_parts),* ) })
 		};
 
 		// Build the struct construction
