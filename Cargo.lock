@@ -17378,6 +17378,7 @@ dependencies = [
  "async-broadcast",
  "async-channel 1.9.0",
  "bs58",
+ "cf-proc-macros",
  "clap",
  "duplicate",
  "futures",
