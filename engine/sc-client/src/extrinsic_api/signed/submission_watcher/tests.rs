@@ -96,6 +96,49 @@ async fn should_update_version_on_bad_proof() {
 	.unwrap();
 }
 
+/// A burst of BadProofs within one finalized block must refetch the runtime version at most once
+/// (it only changes on a runtime upgrade), not once per failure.
+#[tokio::test]
+async fn bad_proof_burst_refetches_version_once_per_block() {
+	task_scope(|scope| {
+		async {
+			let mut mock_rpc_api = MockBaseRpcApi::new();
+
+			mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(1));
+
+			// Two BadProofs then success, all within the same (initial) finalized block.
+			let submit_calls = Arc::new(AtomicU8::new(0));
+			mock_rpc_api.expect_submit_and_watch_extrinsic().times(3).returning(move |_| {
+				match submit_calls.fetch_add(1, Ordering::Relaxed) {
+					0 | 1 => Err(ErrorObject::owned(
+						1010,
+						"Invalid Transaction",
+						Some("Transaction has a bad signature"),
+					)
+					.into()),
+					_ => Ok(Box::pin(stream::empty()) as WatchExtrinsicStream),
+				}
+			});
+
+			// Rate-limited: refetched once despite two BadProofs in the same block.
+			mock_rpc_api
+				.expect_runtime_version()
+				.times(1)
+				.returning(move |_| Ok(Default::default()));
+
+			let mut watcher =
+				new_watcher_with_mock_rpc_api(scope, mock_rpc_api, INITIAL_NONCE, 0).await;
+			let mut request = new_test_request(0, false);
+			watcher.submit_extrinsic(&mut request).await.unwrap();
+
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	.unwrap();
+}
+
 #[tokio::test]
 async fn should_remove_terminated_submission_from_tracking() {
 	task_scope(|scope| {
@@ -112,8 +155,8 @@ async fn should_remove_terminated_submission_from_tracking() {
 				scope,
 				signer::PairSigner::new(sp_core::Pair::generate().0),
 				INITIAL_NONCE,
-				H256::default(),
 				0,
+				finalized_watch(0),
 				Default::default(),
 				H256::default(),
 				SIGNED_EXTRINSIC_LIFETIME,
@@ -238,8 +281,8 @@ async fn should_retry_after_dropped_on_next_finalized_block() {
 				scope,
 				signer::PairSigner::new(sp_core::Pair::generate().0),
 				0,
-				H256::default(),
 				0,
+				finalized_watch(0),
 				Default::default(),
 				H256::default(),
 				SIGNED_EXTRINSIC_LIFETIME,
@@ -275,7 +318,8 @@ async fn should_retry_after_dropped_on_next_finalized_block() {
 }
 
 /// AncientBirthBlock should be recoverable:
-///  - the retry is signed with the *refreshed* era anchor (not the stale one),
+///  - the retry is signed with the era anchor from the latest-finalized watch (the fresher
+///    REFRESHED block), not the stale scan position,
 ///  - the watcher's tracked finalized block (`self.finalized_block_*`) is NOT mutated — that cursor
 ///    must only advance through `on_block_finalized`, otherwise its strictly-increasing invariant
 ///    breaks.
@@ -303,49 +347,35 @@ async fn should_recover_from_ancient_birth_block() {
 					.into())
 				});
 
-				let refreshed_finalized_hash = H256::from_low_u64_be(0xABCDEF);
-				mock_rpc_api
-					.expect_latest_finalized_block_hash()
-					.times(1)
-					.return_once(move || Ok(refreshed_finalized_hash));
-				mock_rpc_api
-					.expect_block_header()
-					.withf(move |hash| *hash == refreshed_finalized_hash)
-					.times(1)
-					.return_once(move |_| {
-						Ok(state_chain_runtime::Header {
-							parent_hash: H256::default(),
-							number: REFRESHED_FINALIZED_BLOCK_NUMBER,
-							state_root: H256::default(),
-							extrinsics_root: H256::default(),
-							digest: Default::default(),
-						})
-					});
-
 				// On the retry, return a success.
 				mock_rpc_api
 					.expect_submit_and_watch_extrinsic()
 					.return_once(move |_| Ok(Box::pin(stream::empty()) as WatchExtrinsicStream));
 
-				let mut watcher = new_watcher_with_mock_rpc_api(
+				// Scan position stays at the (stale) INITIAL block; the era anchor is sourced from
+				// the latest-finalized watch, seeded at the fresher REFRESHED block.
+				let (mut watcher, _requests) = SubmissionWatcher::new(
 					scope,
-					mock_rpc_api,
+					signer::PairSigner::new(sp_core::Pair::generate().0),
 					INITIAL_NONCE,
 					INITIAL_FINALIZED_BLOCK_NUMBER,
-				)
-				.await;
+					finalized_watch(REFRESHED_FINALIZED_BLOCK_NUMBER),
+					Default::default(),
+					H256::default(),
+					SIGNED_EXTRINSIC_LIFETIME,
+					Arc::new(mock_rpc_api),
+				);
 				let mut request = new_test_request(0, false);
 				watcher.submit_extrinsic(&mut request).await.unwrap();
 
-				// The watcher's tracked finalized block must NOT have changed — only
+				// The watcher's tracked finalized block (scan cursor) must NOT have changed — only
 				// `on_block_finalized` is allowed to advance it.
-				assert_eq!(watcher.finalized_block_hash, H256::default());
 				assert_eq!(watcher.finalized_block_number, INITIAL_FINALIZED_BLOCK_NUMBER);
 
-				// The successful retry must have been signed with the REFRESHED era
-				// anchor. The stored submission lifetime is `..era.death(anchor)`,
-				// so we compare against what Era::mortal would produce for the
-				// refreshed anchor.
+				// The successful retry must have been signed with the era anchor from the
+				// watch (REFRESHED block), not the stale scan position. The stored submission
+				// lifetime is `..era.death(anchor)`, so we compare against what Era::mortal
+				// would produce for the watch's anchor.
 				let tracked_submission = watcher
 					.submissions_by_nonce
 					.get(&NONCE)
@@ -558,8 +588,8 @@ async fn dropped_submission_invalidates_nonce_so_next_submission_refills_gap() {
 				scope,
 				signer::PairSigner::new(sp_core::Pair::generate().0),
 				GAP_NONCE,
-				H256::default(),
 				0,
+				finalized_watch(0),
 				Default::default(),
 				H256::default(),
 				SIGNED_EXTRINSIC_LIFETIME,
@@ -637,6 +667,11 @@ async fn new_watcher_and_submit_test_extrinsic<'a, 'env>(
 	watcher
 }
 
+// A watch seeded with a finalized block at `number` (sender dropped; `borrow()` still returns it).
+fn finalized_watch(number: state_chain_runtime::BlockNumber) -> watch::Receiver<BlockInfo> {
+	watch::channel(BlockInfo { parent_hash: H256::default(), hash: H256::default(), number }).1
+}
+
 async fn new_watcher_with_mock_rpc_api<'a, 'env>(
 	scope: &'a Scope<'env, anyhow::Error>,
 	mock_rpc_api: MockBaseRpcApi,
@@ -647,8 +682,8 @@ async fn new_watcher_with_mock_rpc_api<'a, 'env>(
 		scope,
 		signer::PairSigner::new(sp_core::Pair::generate().0),
 		finalized_nonce,
-		H256::default(),
 		finalized_block_number,
+		finalized_watch(finalized_block_number),
 		Default::default(),
 		H256::default(),
 		SIGNED_EXTRINSIC_LIFETIME,

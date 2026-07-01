@@ -94,6 +94,57 @@ impl From<state_chain_runtime::Header> for BlockInfo {
 	}
 }
 
+/// Spawns a task that keeps the returned watch populated with the node's latest finalized block,
+/// independent of the gap-filled / back-pressured block stream. Restarts the subscription if no
+/// header arrives within the timeout (stall watchdog).
+fn spawn_latest_finalized_block_head_watcher<
+	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
+>(
+	scope: &Scope<'_, anyhow::Error>,
+	base_rpc_client: Arc<BaseRpcClient>,
+	initial: BlockInfo,
+) -> watch::Receiver<BlockInfo> {
+	// Restart the subscription if no finalized header arrives within this window.
+	const HEAD_TIMEOUT: Duration = Duration::from_secs(20);
+	const RESTART_DELAY: Duration = Duration::from_secs(6);
+
+	let (sender, receiver) = watch::channel(initial);
+	scope.spawn(async move {
+		let mut latest = initial.number;
+		loop {
+			match base_rpc_client.subscribe_finalized_block_headers().await {
+				Ok(mut stream) => loop {
+					match tokio::time::timeout(HEAD_TIMEOUT, stream.next()).await {
+						Ok(Some(Ok(header))) => {
+							let block: BlockInfo = header.into();
+							// Sparse subscription: only advance, never regress on reconnect.
+							if block.number > latest {
+								latest = block.number;
+								let _ = sender.send(block);
+							}
+						},
+						Ok(Some(Err(error))) => {
+							warn!("Finalized-head subscription error: {error}. Restarting.");
+							break
+						},
+						Ok(None) => {
+							warn!("Finalized-head subscription ended. Restarting.");
+							break
+						},
+						Err(_elapsed) => {
+							warn!("No finalized head within {HEAD_TIMEOUT:?}; restarting subscription.");
+							break
+						},
+					}
+				},
+				Err(error) => warn!("Failed to subscribe to finalized heads: {error}. Retrying."),
+			}
+			tokio::time::sleep(RESTART_DELAY).await;
+		}
+	});
+	receiver
+}
+
 pub type DefaultRpcClient = base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>;
 pub(crate) type RpcResult<T> = Result<T, ClientError>;
 
@@ -456,7 +507,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		let genesis_hash = base_rpc_client.block_hash(0).await?.expect(SUBSTRATE_BEHAVIOUR);
 
 		let (
-			latest_finalized_block_watcher,
+			// Superseded by the dedicated `latest_finalized_block_watcher` below, which tracks the
+			// node's latest finalized head independent of this (gap-filled, back-pressured)
+			// stream.
+			_gap_filled_finalized_block_watcher,
 			mut finalized_state_chain_stream,
 			finalized_block_stream_request_sender,
 		) = Self::create_block_stream(
@@ -577,6 +631,15 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		)
 		.await?;
 
+		// Dedicated finalized-head watcher: keeps `latest_finalized_block()` and the submission era
+		// anchor tracking the node's latest finalized block, independent of the gap-filled /
+		// back-pressured block stream above.
+		let latest_finalized_block_watcher = spawn_latest_finalized_block_head_watcher(
+			scope,
+			base_rpc_client.clone(),
+			*finalized_state_chain_stream.cache(),
+		);
+
 		let state_chain_client = Arc::new(StateChainClient {
 			genesis_hash,
 			signed_extrinsic_client: signed_extrinsic_client_builder
@@ -585,6 +648,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					base_rpc_client.clone(),
 					genesis_hash,
 					&mut finalized_state_chain_stream,
+					latest_finalized_block_watcher.clone(),
 				)
 				.await?,
 			unsigned_extrinsic_client: unsigned::UnsignedExtrinsicClient::new(
@@ -635,6 +699,7 @@ trait SignedExtrinsicClientBuilderTrait {
 		base_rpc_client: Arc<BaseRpcClient>,
 		genesis_hash: state_chain_runtime::Hash,
 		state_chain_stream: &mut BlockStream,
+		latest_finalized_block_watcher: watch::Receiver<BlockInfo>,
 	) -> Result<Self::Client>;
 }
 
@@ -663,6 +728,7 @@ impl SignedExtrinsicClientBuilderTrait for () {
 		_base_rpc_client: Arc<BaseRpcClient>,
 		_genesis_hash: state_chain_runtime::Hash,
 		_block_stream: &mut BlockStream,
+		_latest_finalized_block_watcher: watch::Receiver<BlockInfo>,
 	) -> Result<Self::Client> {
 		Ok(())
 	}
@@ -911,10 +977,19 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		base_rpc_client: Arc<BaseRpcClient>,
 		genesis_hash: state_chain_runtime::Hash,
 		state_chain_stream: &mut BlockStream,
+		latest_finalized_block_watcher: watch::Receiver<BlockInfo>,
 	) -> Result<Self::Client> {
 		let (nonce, signer) = self.nonce_and_signer.expect("The function pre_compatibility should be run exactly once successfully before build is called");
-		Self::Client::new(scope, base_rpc_client, nonce, signer, genesis_hash, state_chain_stream)
-			.await
+		Self::Client::new(
+			scope,
+			base_rpc_client,
+			nonce,
+			signer,
+			genesis_hash,
+			state_chain_stream,
+			latest_finalized_block_watcher,
+		)
+		.await
 	}
 }
 
