@@ -16,6 +16,7 @@
 
 use proc_macro::TokenStream;
 
+mod arbitrary;
 mod better_modules;
 mod enum_elim;
 mod generate_module;
@@ -148,4 +149,34 @@ pub fn derive_enum_elim(input: TokenStream) -> TokenStream {
 pub fn derive_intro_elim(input: TokenStream) -> TokenStream {
 	let input = syn::parse_macro_input!(input as syn::DeriveInput);
 	intro_elim::derive(input).into()
+}
+
+/// Derive macro that implements `proptest::arbitrary::Arbitrary` for a struct.
+///
+/// Handles structs with any number of fields (not limited to 12) by chunking
+/// fields into nested strategy tuples. `PhantomData` fields are automatically
+/// filled with `Default::default()`.
+///
+/// ## Attributes
+///
+/// - `#[arbitrary(bound = "T: Trait, U: OtherTrait")]` — Override the default
+///   where-clause bounds on the generated impl. When not specified, each
+///   non-phantom field type gets an `Arbitrary + 'static` bound and each type
+///   parameter gets `'static`.
+///
+/// ## Example
+///
+/// ```ignore
+/// #[derive(cf_proc_macros::ArbitraryWithBounds)]
+/// #[arbitrary(bound = "Ty: 'static, Ty::amount: Arbitrary + 'static")]
+/// pub struct MyStruct<Ty: Types> {
+///     pub amount: Ty::amount,
+///     pub count: Ty::count,
+///     _phantom: PhantomData<(Ty,)>,
+/// }
+/// ```
+#[proc_macro_derive(ArbitraryWithBounds, attributes(arbitrary))]
+pub fn derive_arbitrary_with_bounds(input: TokenStream) -> TokenStream {
+	let input = syn::parse_macro_input!(input as syn::DeriveInput);
+	arbitrary::derive(input).into()
 }
