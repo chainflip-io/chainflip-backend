@@ -16,7 +16,7 @@
 
 // ---------- definition of migrations ------------
 
-use crate::never::Never;
+use crate::never::{IsEmptyType, Never};
 
 pub trait Version: Copy {
 	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<CanonicalPatchVersion>;
@@ -101,6 +101,24 @@ pub enum ComposedMigrationFailedForwards<A, B> {
 pub enum ComposedMigrationFailedBackwards<A, B> {
 	First(A),
 	Second(B),
+}
+
+impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType for ComposedMigrationFailedForwards<A, B> {
+	fn as_never(self) -> Never {
+		match self {
+			Self::First(error) => error.as_never(),
+			Self::Second(error) => error.as_never(),
+		}
+	}
+}
+
+impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType for ComposedMigrationFailedBackwards<A, B> {
+	fn as_never(self) -> Never {
+		match self {
+			Self::First(error) => error.as_never(),
+			Self::Second(error) => error.as_never(),
+		}
+	}
 }
 
 impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Migration<X, V>

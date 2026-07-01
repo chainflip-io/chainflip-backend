@@ -24,7 +24,7 @@ use crate::{
 		with_all_runtime_migrations, HasChangelog, HasGenericVariant, IsHistoricalType,
 		OrdMigrations,
 	},
-	never::Never,
+	never::{IsEmptyType, Never},
 };
 
 // ----------- identity migrations -------------
@@ -232,6 +232,76 @@ pub enum TupleWith2EntriesMigrationFailedForwards<A, B> {
 pub enum TupleWith2EntriesMigrationFailedBackwards<A, B> {
 	First(A),
 	Second(B),
+}
+
+impl<E: IsEmptyType> IsEmptyType for OptionMigrationFailedForwards<E> {
+	fn as_never(self) -> Never {
+		match self {
+			Self::Some(error) => error.as_never(),
+		}
+	}
+}
+
+impl<E: IsEmptyType> IsEmptyType for OptionMigrationFailedBackwards<E> {
+	fn as_never(self) -> Never {
+		match self {
+			Self::Some(error) => error.as_never(),
+		}
+	}
+}
+
+impl<E: IsEmptyType> IsEmptyType for VecMigrationFailedForwards<E> {
+	fn as_never(self) -> Never {
+		match self {
+			Self::Element { error, .. } => error.as_never(),
+		}
+	}
+}
+
+impl<E: IsEmptyType> IsEmptyType for VecMigrationFailedBackwards<E> {
+	fn as_never(self) -> Never {
+		match self {
+			Self::Element { error, .. } => error.as_never(),
+		}
+	}
+}
+
+impl<E: IsEmptyType> IsEmptyType for TupleWith1EntryMigrationFailedForwards<E> {
+	fn as_never(self) -> Never {
+		match self {
+			Self::First(error) => error.as_never(),
+		}
+	}
+}
+
+impl<E: IsEmptyType> IsEmptyType for TupleWith1EntryMigrationFailedBackwards<E> {
+	fn as_never(self) -> Never {
+		match self {
+			Self::First(error) => error.as_never(),
+		}
+	}
+}
+
+impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType
+	for TupleWith2EntriesMigrationFailedForwards<A, B>
+{
+	fn as_never(self) -> Never {
+		match self {
+			Self::First(error) => error.as_never(),
+			Self::Second(error) => error.as_never(),
+		}
+	}
+}
+
+impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType
+	for TupleWith2EntriesMigrationFailedBackwards<A, B>
+{
+	fn as_never(self) -> Never {
+		match self {
+			Self::First(error) => error.as_never(),
+			Self::Second(error) => error.as_never(),
+		}
+	}
 }
 
 macro_rules! impl_migrations_for_container {
