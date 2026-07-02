@@ -927,7 +927,7 @@ pub mod pallet {
 						if T::EpochInfo::epoch_index() >=
 							<T::Flip as FeePayment>::fee_rewards_activation_epoch()
 						{
-							T::Flip::add_to_onchain_flip_to_be_distributed(amount.into());
+							T::Flip::bridge_in_and_add_to_onchain_flip_to_be_distributed(amount.into());
 						} else {
 							T::Flip::burn_offchain(amount.into());
 						}

@@ -543,7 +543,10 @@ impl<T: Config> Pallet<T> {
 			Pallet::<T>::settle(
 				account_id,
 				if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
-					Pallet::<T>::add_to_onchain_flip_to_be_distributed(slash_amount)
+					Pallet::<T>::deposit_reserves(
+						ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
+						slash_amount,
+					)
 				} else {
 					Pallet::<T>::burn(slash_amount)
 				}
@@ -626,7 +629,6 @@ impl<T: Config> FundingInfo for Pallet<T> {
 impl<T: Config> FeePayment for Pallet<T> {
 	type Amount = T::Balance;
 	type AccountId = T::AccountId;
-	type Deficit = Deficit<T>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
@@ -645,7 +647,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 		if let Some(surplus) = Pallet::<T>::try_debit_from_liquid_funds(account_id, amount) {
 			let _ = surplus.offset(
 				if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
-					Pallet::<T>::add_to_onchain_flip_to_be_distributed(amount)
+					Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
 				} else {
 					Pallet::<T>::burn(amount)
 				},
@@ -660,8 +662,11 @@ impl<T: Config> FeePayment for Pallet<T> {
 		FlipToDistribute::<T>::mutate(|flip| flip.saturating_accrue(amount));
 	}
 
-	fn add_to_onchain_flip_to_be_distributed(amount: Self::Amount) -> Deficit<T> {
-		Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
+	fn bridge_in_and_add_to_onchain_flip_to_be_distributed(amount: Self::Amount) {
+		let _ = Self::bridge_in(amount).offset(Pallet::<T>::deposit_reserves(
+			ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
+			amount,
+		));
 	}
 
 	fn fee_rewards_activation_epoch() -> EpochIndex {
@@ -817,7 +822,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 		Pallet::<T>::settle(
 			account_id,
 			if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
-				Pallet::<T>::add_to_onchain_flip_to_be_distributed(dust)
+				Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, dust)
 			} else {
 				Pallet::<T>::burn(dust)
 			}
