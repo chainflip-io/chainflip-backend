@@ -469,6 +469,16 @@ impl<T: Config> Pallet<T> {
 		Deficit::from_burn(amount)
 	}
 
+	/// Burns `amount`, unless fee reward distribution has been activated, in which case `amount`
+	/// is deposited into the reserve to be distributed to authorities as fee rewards instead.
+	fn burn_or_deposit_to_reserve(amount: T::Balance) -> Deficit<T> {
+		if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
+			Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
+		} else {
+			Pallet::<T>::burn(amount)
+		}
+	}
+
 	/// Increases total issuance and returns a corresponding imbalance that must be reconciled.
 	fn mint(amount: T::Balance) -> Surplus<T> {
 		Surplus::from_mint(amount)
@@ -542,15 +552,7 @@ impl<T: Config> Pallet<T> {
 		if !slash_amount.is_zero() && Account::<T>::get(account_id).can_be_slashed(slash_amount) {
 			Pallet::<T>::settle(
 				account_id,
-				if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
-					Pallet::<T>::deposit_reserves(
-						ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
-						slash_amount,
-					)
-				} else {
-					Pallet::<T>::burn(slash_amount)
-				}
-				.into(),
+				Pallet::<T>::burn_or_deposit_to_reserve(slash_amount).into(),
 			);
 			Self::deposit_event(Event::<T>::SlashingPerformed {
 				who: account_id.clone(),
@@ -645,13 +647,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 		amount: Self::Amount,
 	) -> frame_support::dispatch::DispatchResult {
 		if let Some(surplus) = Pallet::<T>::try_debit_from_liquid_funds(account_id, amount) {
-			let _ = surplus.offset(
-				if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
-					Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
-				} else {
-					Pallet::<T>::burn(amount)
-				},
-			);
+			let _ = surplus.offset(Pallet::<T>::burn_or_deposit_to_reserve(amount));
 			Ok(())
 		} else {
 			Err(Error::<T>::InsufficientLiquidity.into())
@@ -817,15 +813,7 @@ pub struct BurnFlipAccount<T: Config>(PhantomData<T>);
 impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		let dust = Pallet::<T>::total_balance_of(account_id);
-		Pallet::<T>::settle(
-			account_id,
-			if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
-				Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, dust)
-			} else {
-				Pallet::<T>::burn(dust)
-			}
-			.into(),
-		);
+		Pallet::<T>::settle(account_id, Pallet::<T>::burn_or_deposit_to_reserve(dust).into());
 		Account::<T>::remove(account_id);
 		Pallet::<T>::deposit_event(Event::AccountReaped {
 			who: account_id.clone(),
