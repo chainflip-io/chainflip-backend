@@ -751,7 +751,6 @@ pub trait MissedAuthorshipSlots {
 pub trait FeePayment {
 	type Amount;
 	type AccountId;
-	type Deficit;
 	/// Helper function to mint FLIP to an account.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
@@ -765,7 +764,7 @@ pub trait FeePayment {
 	fn add_to_offchain_flip_to_be_distributed(amount: i128);
 
 	/// Accumulate FLIP to be distributed on-chain, returning a deficit imbalance.
-	fn add_to_onchain_flip_to_be_distributed(amount: Self::Amount) -> Self::Deficit;
+	fn bridge_in_and_add_to_onchain_flip_to_be_distributed(amount: Self::Amount);
 
 	/// The epoch from which fee rewards are accumulated on-chain rather than burned.
 	fn fee_rewards_activation_epoch() -> EpochIndex;

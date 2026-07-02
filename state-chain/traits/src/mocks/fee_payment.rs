@@ -29,7 +29,6 @@ pub const ERROR_INSUFFICIENT_LIQUIDITY: DispatchError =
 impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayment<T> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
-	type Deficit = ();
 
 	fn try_take_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult {
 		MockFundingInfo::<T>::try_debit_funds(account_id, amount)
@@ -39,7 +38,7 @@ impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayme
 
 	fn add_to_offchain_flip_to_be_distributed(_amount: i128) {}
 
-	fn add_to_onchain_flip_to_be_distributed(_amount: Self::Amount) -> Self::Deficit {}
+	fn bridge_in_and_add_to_onchain_flip_to_be_distributed(_amount: Self::Amount) {}
 
 	fn fee_rewards_activation_epoch() -> EpochIndex {
 		EpochIndex::MAX
