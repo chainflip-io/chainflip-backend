@@ -18,7 +18,8 @@ use crate as pallet_cf_trading_strategy;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		balance_api::MockLpRegistration, pool_api::MockPoolApi, price_feed_api::MockPriceFeedApi,
+		balance_api::MockRefundAddressRegistry, pool_api::MockPoolApi,
+		price_feed_api::MockPriceFeedApi,
 	},
 	AccountRoleRegistry,
 };
@@ -45,7 +46,7 @@ impl pallet_cf_trading_strategy::Config for Test {
 	type BalanceApi = cf_traits::mocks::balance_api::MockBalance;
 	type PoolApi = MockPoolApi;
 	type LpOrdersWeights = MockPoolApi;
-	type LpRegistrationApi = MockLpRegistration;
+	type RefundAddressRegistry = MockRefundAddressRegistry;
 	type SafeMode = MockRuntimeSafeMode;
 	type PriceFeedApi = MockPriceFeedApi;
 }

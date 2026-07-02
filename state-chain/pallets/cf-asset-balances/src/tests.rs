@@ -511,7 +511,7 @@ mod withdrawal_whitelist {
 	};
 	use cf_traits::{
 		mocks::{address_converter::MockAddressConverter, time_source},
-		WithdrawalAddressRestriction,
+		RefundAddressRegistry, WithdrawalAddressRestriction,
 	};
 	use core::time::Duration;
 	use frame_support::{assert_err, pallet_prelude::DispatchResult};
@@ -656,6 +656,29 @@ mod withdrawal_whitelist {
 			assert_ok!(ensure_external(&who, &ETH_ADDR_1));
 			// An unconfigured chain stays blocked (account-wide fail-safe).
 			assert_err!(ensure_external(&who, &ARB_ADDR_1), Error::<Test>::DestinationNotAllowed);
+		});
+	}
+
+	#[test]
+	fn registered_refund_address_is_implicitly_allowed() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// An LP registers a refund address first.
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_1);
+
+			// With no timelock set the restriction is off, so a refund address changes nothing:
+			// any address is still allowed, exactly as before the feature.
+			assert_ok!(ensure_external(&who, &ETH_ADDR_2));
+
+			// Turn the restriction on; nothing has been added to the whitelist.
+			set_timelock(&who, 1000);
+
+			// The refund address is allowed even though it was never whitelisted (and the timelock
+			// is on) — refund addresses are trusted.
+			assert_ok!(ensure_external(&who, &ETH_ADDR_1));
+
+			// A different address on the same chain is still blocked.
+			assert_err!(ensure_external(&who, &ETH_ADDR_2), Error::<Test>::DestinationNotAllowed);
 		});
 	}
 }

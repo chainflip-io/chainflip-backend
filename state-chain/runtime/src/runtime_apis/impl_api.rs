@@ -1205,7 +1205,7 @@ impl_runtime_apis! {
 			should_sweep: ShouldSweep,
 		) -> LiquidityProviderInfo {
 			let refund_addresses = ForeignChain::iter().map(|chain| {
-				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
+				(chain, pallet_cf_asset_balances::RefundAddresses::<Runtime>::get(&account_id, chain))
 			}).collect();
 
 			if should_sweep == ShouldSweep::Yes {

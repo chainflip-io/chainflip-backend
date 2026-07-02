@@ -55,7 +55,10 @@ mod benchmarks {
 			ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32])),
 			ForeignChainAddress::Sol(Default::default()),
 		] {
-			T::LpRegistrationApi::register_liquidity_refund_address(account_id, encoded_address);
+			T::RefundAddressRegistry::register_liquidity_refund_address(
+				account_id,
+				encoded_address,
+			);
 		}
 	}
 

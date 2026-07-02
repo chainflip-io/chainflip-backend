@@ -361,7 +361,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -392,7 +392,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -423,7 +423,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -454,7 +454,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -485,7 +485,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
@@ -516,7 +516,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
@@ -547,7 +547,7 @@ impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance8> for Runtime {
@@ -584,7 +584,7 @@ impl pallet_cf_ingress_egress::Config<Instance8> for Runtime {
 impl pallet_cf_pools::Config for Runtime {
 	type LpBalance = AssetBalances;
 	type LpStats = LiquidityProvider;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 	type SwapRequestHandler = Swapping;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = ();
@@ -598,6 +598,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type PoolApi = LiquidityPools;
 	type BalanceApi = AssetBalances;
 	type WithdrawalRestriction = AssetBalances;
+	type RefundAddressRegistry = AssetBalances;
 	type SwapRequestHandler = Swapping;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1241,7 +1242,7 @@ impl pallet_cf_trading_strategy::Config for Runtime {
 	type BalanceApi = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 	type PriceFeedApi = ChainlinkOracle;
 }
 
@@ -1253,5 +1254,5 @@ impl pallet_cf_lending_pools::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type PriceApi = ChainlinkOracle;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 }

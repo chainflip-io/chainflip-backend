@@ -16,7 +16,7 @@
 use cf_amm_math::Price;
 use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId, ONE_AS_BASIS_POINTS};
 use cf_traits::{
-	ExpiryBehaviour, LendingSwapType, LpRegistration, NetworkFeeApi, PriceLimitsAndExpiry,
+	ExpiryBehaviour, LendingSwapType, NetworkFeeApi, PriceLimitsAndExpiry, RefundAddressRegistry,
 };
 use frame_support::{
 	fail,
@@ -1547,7 +1547,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		amount_to_borrow: AssetAmount,
 		broker: Option<Beneficiary<T::AccountId>>,
 	) -> Result<LoanId, DispatchError> {
-		T::LpRegistrationApi::ensure_has_refund_address_for_asset(&borrower_id, asset)
+		T::RefundAddressRegistry::ensure_has_refund_address_for_asset(&borrower_id, asset)
 			.map_err(|_| Error::<T>::NoRefundAddressSet)?;
 
 		if let Some(broker) = &broker {

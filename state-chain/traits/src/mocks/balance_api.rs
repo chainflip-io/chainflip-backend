@@ -29,7 +29,7 @@ use sp_std::marker::PhantomData;
 
 use super::{MockPallet, MockPalletStorage};
 
-use crate::LpRegistration;
+use crate::RefundAddressRegistry;
 
 type DefaultAccountId = u64;
 
@@ -116,43 +116,62 @@ where
 	}
 }
 
-pub struct MockLpRegistration;
+pub struct MockRefundAddressRegistry;
 
-impl MockPallet for MockLpRegistration {
+impl MockPallet for MockRefundAddressRegistry {
 	const PREFIX: &'static [u8] = b"LP_REGISTRATION";
 }
 
-const REFUND_ADDRESS_REGISTRATION: &[u8] = b"IS_REGISTERED_FOR_ASSET";
+const REFUND_ADDRESS: &[u8] = b"REFUND_ADDRESS";
 
-impl MockLpRegistration {
-	pub fn register_refund_address(account_id: DefaultAccountId, chain: ForeignChain) {
-		Self::mutate_storage::<(DefaultAccountId, ForeignChain), _, _, (), _>(
-			REFUND_ADDRESS_REGISTRATION,
-			&(account_id, chain),
-			|is_registered: &mut Option<()>| {
-				*is_registered = Some(());
-			},
-		);
+/// A deterministic, chain-correct placeholder address, so the chain-only `register_refund_address`
+/// test helper can share one storage map with the full-address trait method.
+fn placeholder_address(chain: ForeignChain) -> cf_chains::ForeignChainAddress {
+	use cf_chains::{btc::ScriptPubkey, dot::PolkadotAccountId, ForeignChainAddress::*};
+	match chain {
+		ForeignChain::Ethereum => Eth(Default::default()),
+		ForeignChain::Arbitrum => Arb(Default::default()),
+		ForeignChain::Tron => Tron(Default::default()),
+		ForeignChain::Solana => Sol(Default::default()),
+		ForeignChain::Bitcoin => Btc(ScriptPubkey::P2PKH([0; 20])),
+		ForeignChain::Polkadot => Dot(PolkadotAccountId([0; 32])),
+		ForeignChain::Assethub => Hub(PolkadotAccountId([0; 32])),
 	}
 }
 
-impl LpRegistration for MockLpRegistration {
+impl MockRefundAddressRegistry {
+	/// Test helper: register a placeholder refund address for `chain` (enough to satisfy
+	/// [`RefundAddressRegistry::ensure_has_refund_address_for_asset`]).
+	pub fn register_refund_address(account_id: DefaultAccountId, chain: ForeignChain) {
+		Self::put_storage(REFUND_ADDRESS, (account_id, chain), placeholder_address(chain));
+	}
+}
+
+impl RefundAddressRegistry for MockRefundAddressRegistry {
 	type AccountId = u64;
 
 	fn register_liquidity_refund_address(
 		who: &Self::AccountId,
 		address: cf_chains::ForeignChainAddress,
 	) {
-		Self::register_refund_address(*who, address.chain());
+		Self::put_storage(REFUND_ADDRESS, (*who, address.chain()), address);
+	}
+
+	fn get_refund_address(
+		who: &Self::AccountId,
+		chain: ForeignChain,
+	) -> Option<cf_chains::ForeignChainAddress> {
+		Self::get_storage(REFUND_ADDRESS, (*who, chain))
+	}
+
+	fn clear_refund_addresses(who: &Self::AccountId) {
+		for chain in ForeignChain::iter() {
+			Self::take_storage::<_, cf_chains::ForeignChainAddress>(REFUND_ADDRESS, (*who, chain));
+		}
 	}
 
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult {
-		if Self::get_storage::<(Self::AccountId, ForeignChain), ()>(
-			REFUND_ADDRESS_REGISTRATION,
-			(*who, asset.into()),
-		)
-		.is_some()
-		{
+		if Self::get_refund_address(who, asset.into()).is_some() {
 			Ok(())
 		} else {
 			Err(DispatchError::Other("no refund address"))

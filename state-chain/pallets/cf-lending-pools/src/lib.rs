@@ -59,8 +59,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
-	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, LpRegistration, PoolApi,
-	PriceFeedApi, SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, PoolApi, PriceFeedApi,
+	RefundAddressRegistry, SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	fail,
@@ -337,7 +337,7 @@ pub mod pallet {
 
 		type PriceApi: PriceFeedApi;
 
-		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
+		type RefundAddressRegistry: RefundAddressRegistry<AccountId = Self::AccountId>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;

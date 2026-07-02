@@ -23,7 +23,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DepositApi, EgressApi,
-	LpRegistration, LpStatsApi, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
+	LpStatsApi, PoolApi, RefundAddressRegistry, ScheduledEgressDetails, SwapRequestHandler,
 	WithdrawalAddressRestriction,
 };
 use frame_support::{
@@ -49,7 +49,7 @@ pub use weights::WeightInfo;
 
 use cf_chains::address::EncodedAddress;
 
-pub const STORAGE_VERSION_U16: u16 = 3;
+pub const STORAGE_VERSION_U16: u16 = 4;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, internal_swaps_enabled);
@@ -234,6 +234,11 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 
+		/// Refund-address registry (relocated to `cf-asset-balances`).
+		type RefundAddressRegistry: RefundAddressRegistry<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
+
 		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
 
 		/// Benchmark weights
@@ -336,17 +341,6 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Stores the registered emergency withdrawal address for an Account
-	#[pallet::storage]
-	pub type LiquidityRefundAddress<T: Config> = StorageDoubleMap<
-		_,
-		Identity,
-		T::AccountId,
-		Twox64Concat,
-		ForeignChain,
-		ForeignChainAddress,
-	>;
-
 	#[pallet::storage]
 	/// Last block number when stats were updated
 	pub type StatsLastUpdatedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
@@ -394,7 +388,7 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			if let Some(refund_address) =
-				LiquidityRefundAddress::<T>::get(&account_id, ForeignChain::from(asset))
+				T::RefundAddressRegistry::get_refund_address(&account_id, ForeignChain::from(asset))
 			{
 				let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
 					T::DepositHandler::request_liquidity_deposit_address(
@@ -465,9 +459,8 @@ pub mod pallet {
 			let decoded_address = T::AddressConverter::try_from_encoded_address(address)
 				.map_err(|()| Error::<T>::InvalidEncodedAddress)?;
 
-			LiquidityRefundAddress::<T>::insert(
+			T::RefundAddressRegistry::register_liquidity_refund_address(
 				&account_id,
-				decoded_address.chain(),
 				decoded_address.clone(),
 			);
 
@@ -484,7 +477,7 @@ pub mod pallet {
 		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 
-			let _ = LiquidityRefundAddress::<T>::clear_prefix(&account_id, u32::MAX, None);
+			T::RefundAddressRegistry::clear_refund_addresses(&account_id);
 
 			T::AccountRoleRegistry::deregister_as_liquidity_provider(&account_id)?;
 
@@ -529,7 +522,11 @@ pub mod pallet {
 				Error::<T>::InternalSwapBelowMinimumDepositAmount
 			);
 
-			Self::ensure_has_refund_address_for_asset(&account_id, output_asset)?;
+			T::RefundAddressRegistry::ensure_has_refund_address_for_asset(
+				&account_id,
+				output_asset,
+			)
+			.map_err(|_| Error::<T>::NoLiquidityRefundAddressRegistered)?;
 
 			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)
 				.map_err(|_| Error::<T>::InsufficientBalance)?;
@@ -598,13 +595,11 @@ impl<T: Config> Pallet<T> {
 						),
 						Error::<T>::DestinationAccountNotLiquidityProvider
 					);
-					ensure!(
-						LiquidityRefundAddress::<T>::contains_key(
-							&destination_account,
-							ForeignChain::from(asset)
-						),
-						Error::<T>::NoLiquidityRefundAddressRegistered
-					);
+					T::RefundAddressRegistry::ensure_has_refund_address_for_asset(
+						&destination_account,
+						asset,
+					)
+					.map_err(|_| Error::<T>::NoLiquidityRefundAddressRegistered)?;
 
 					T::WithdrawalRestriction::ensure_withdrawal_allowed_to(
 						&account_id,
@@ -713,7 +708,7 @@ impl<T: Config> Pallet<T> {
 		);
 
 		let Some(refund_address) =
-			LiquidityRefundAddress::<T>::get(&account_id, ForeignChain::from(asset))
+			T::RefundAddressRegistry::get_refund_address(&account_id, ForeignChain::from(asset))
 		else {
 			fail!(Error::<T>::NoLiquidityRefundAddressRegistered);
 		};
@@ -743,28 +738,6 @@ impl<T: Config> Pallet<T> {
 			fee: fee_withheld,
 		});
 
-		Ok(())
-	}
-}
-
-impl<T: Config> LpRegistration for Pallet<T> {
-	type AccountId = <T as frame_system::Config>::AccountId;
-
-	fn register_liquidity_refund_address(
-		account_id: &Self::AccountId,
-		address: ForeignChainAddress,
-	) {
-		LiquidityRefundAddress::<T>::insert(account_id, address.chain(), address);
-	}
-
-	fn ensure_has_refund_address_for_asset(
-		account_id: &Self::AccountId,
-		asset: Asset,
-	) -> DispatchResult {
-		ensure!(
-			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(asset)),
-			Error::<T>::NoLiquidityRefundAddressRegistered
-		);
 		Ok(())
 	}
 }

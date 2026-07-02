@@ -26,8 +26,8 @@ use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
-	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, ScheduledEgressDetails,
-	WithdrawalAddressRestriction,
+	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
+	ScheduledEgressDetails, WithdrawalAddressRestriction,
 };
 use cf_utilities::derive_common_traits;
 use frame_support::{
@@ -51,7 +51,7 @@ mod tests;
 pub mod whitelist;
 use whitelist::*;
 
-pub const STORAGE_VERSION_U16: u16 = 1;
+pub const STORAGE_VERSION_U16: u16 = 2;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -149,6 +149,8 @@ pub mod pallet {
 		TimelockExceedsMaximum,
 		/// The account has too many pending allowlist updates.
 		TooManyPendingUpdates,
+		/// No liquidity refund address is registered for the account on the relevant chain.
+		NoLiquidityRefundAddressRegistered,
 	}
 
 	#[pallet::event]
@@ -255,6 +257,19 @@ pub mod pallet {
 	/// [`PalletConfigUpdate::MaxPendingWhitelistUpdates`]. Defaults to 16.
 	#[pallet::storage]
 	pub type MaxPendingWhitelistUpdates<T> = StorageValue<_, u32, ValueQuery, ConstU32<16>>;
+
+	/// The refund address registered by an account for each chain. Relocated from `cf-lp`: a
+	/// registered refund address is a trusted destination, so it is implicitly allowed by the
+	/// withdrawal allowlist (see [`Pallet::ensure_withdrawal_allowed_to`]).
+	#[pallet::storage]
+	pub type RefundAddresses<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		T::AccountId,
+		Twox64Concat,
+		ForeignChain,
+		ForeignChainAddress,
+	>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -556,7 +571,44 @@ impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
 				WithdrawalWhitelists::<T>::insert(owner, &whitelist);
 			}
 		}
-		ensure!(whitelist.is_allowed(dest, now), Error::<T>::DestinationNotAllowed);
+		// Extract the external address (if any) before `dest` is consumed by `is_allowed`, so a
+		// registered refund address can be treated as implicitly allowed without an extra clone.
+		let external = match &dest {
+			AccountOrAddress::ExternalAddress(address) => Some(*address),
+			AccountOrAddress::InternalAccount(_) => None,
+		};
+		let allowed = whitelist.is_allowed(dest, now) ||
+			external.is_some_and(|address| {
+				RefundAddresses::<T>::get(owner, address.chain()).as_ref() == Some(address)
+			});
+		ensure!(allowed, Error::<T>::DestinationNotAllowed);
+		Ok(())
+	}
+}
+
+impl<T: Config> RefundAddressRegistry for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn register_liquidity_refund_address(who: &Self::AccountId, address: ForeignChainAddress) {
+		RefundAddresses::<T>::insert(who, address.chain(), address);
+	}
+
+	fn get_refund_address(
+		who: &Self::AccountId,
+		chain: ForeignChain,
+	) -> Option<ForeignChainAddress> {
+		RefundAddresses::<T>::get(who, chain)
+	}
+
+	fn clear_refund_addresses(who: &Self::AccountId) {
+		let _ = RefundAddresses::<T>::clear_prefix(who, u32::MAX, None);
+	}
+
+	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult {
+		ensure!(
+			RefundAddresses::<T>::contains_key(who, ForeignChain::from(asset)),
+			Error::<T>::NoLiquidityRefundAddressRegistered
+		);
 		Ok(())
 	}
 }
