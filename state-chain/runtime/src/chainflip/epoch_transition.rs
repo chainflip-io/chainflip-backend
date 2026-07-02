@@ -14,8 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{AssetBalances, Emissions, Environment, Flip, Swapping, Validator, Witnesser};
-use cf_primitives::{EpochIndex, ACCUMULATE_REWARDS_EPOCH_START};
+use crate::{AssetBalances, Emissions, Environment, Flip, Swapping, Witnesser};
+use cf_primitives::EpochIndex;
 use cf_traits::EpochTransitionHandler;
 
 pub struct ChainflipEpochTransitions;
@@ -33,8 +33,9 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 				frame_system::Pallet::<crate::Runtime>::block_number(),
 			);
 		} else if new > activation_epoch {
-			let flip_distributed =
-				Flip::trigger_flip_reward_distribution(Validator::historical_authorities(new - 1));
+			let flip_distributed = Flip::trigger_flip_reward_distribution(
+				pallet_cf_validator::HistoricalAuthorities::<crate::Runtime>::get(new - 1),
+			);
 			Swapping::maybe_trigger_flip_to_gateway_egress(
 				Environment::state_chain_gateway_address(),
 				flip_distributed,
