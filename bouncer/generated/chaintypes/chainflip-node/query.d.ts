@@ -27,6 +27,7 @@ import type {
   CfChainsBtcUtxo,
   CfChainsBtcUtxoSelectionConsolidationParameters,
   CfPrimitivesChainsAssetsArbAsset,
+  CfPrimitivesChainsAssetsBscAsset,
   SolPrimAddress,
   SolPrimDigest,
   CfChainsSolSolApiEnvironment,
@@ -298,6 +299,27 @@ import type {
   PalletCfElectionsElectionIdentifier005,
   PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionState,
   PalletCfElectionsConsensusHistory006,
+  CfChainsChainStateBsc,
+  PalletCfBroadcastBroadcastDataBsc,
+  CfChainsBscApiBscApi,
+  PalletCfIngressEgressDepositChannelDetailsBsc,
+  PalletCfIngressEgressFetchOrTransferBsc,
+  PalletCfIngressEgressCrossChainMessageBsc,
+  CfChainsDepositChannelDepositChannelBsc,
+  PalletCfIngressEgressTransactionRejectionDetailsBsc,
+  PalletCfIngressEgressPendingPrewitnessedDepositEntry008,
+  PalletCfIngressEgressDepositWitnessBsc,
+  PalletCfIngressEgressVaultDepositWitnessBsc,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+  PalletCfElectionsBitmapComponentsElectionBitmapComponentsBsc,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeIndividualComponentBscTrackedData,
+  PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserBsc,
+  PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBscDepositChannel,
+  PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBscVaultDeposit,
+  PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBscKeyManager,
+  CfChainsBscBscTrackedData,
+  PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesBsc,
+  PalletCfElectionsConsensusHistory007,
 } from './types.js';
 
 export interface ChainStorage extends GenericChainStorage {
@@ -637,6 +659,51 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<bigint> =} callback
      **/
     arbitrumSignatureNonce: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Map of supported assets for BSC
+     *
+     * @param {CfPrimitivesChainsAssetsBscAsset} arg
+     * @param {Callback<H160 | undefined> =} callback
+     **/
+    bscSupportedAssets: GenericStorageQuery<
+      (arg: CfPrimitivesChainsAssetsBscAsset) => H160 | undefined,
+      CfPrimitivesChainsAssetsBscAsset
+    >;
+
+    /**
+     * The address of the BSC key manager contract
+     *
+     * @param {Callback<H160> =} callback
+     **/
+    bscKeyManagerAddress: GenericStorageQuery<() => H160>;
+
+    /**
+     * The address of the BSC vault contract
+     *
+     * @param {Callback<H160> =} callback
+     **/
+    bscVaultAddress: GenericStorageQuery<() => H160>;
+
+    /**
+     * The address of the Address Checker contract on BSC.
+     *
+     * @param {Callback<H160> =} callback
+     **/
+    bscAddressCheckerAddress: GenericStorageQuery<() => H160>;
+
+    /**
+     * The BSC chain id
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    bscChainId: GenericStorageQuery<() => bigint>;
+
+    /**
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    bscSignatureNonce: GenericStorageQuery<() => bigint>;
 
     /**
      *
@@ -5609,6 +5676,16 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     *
+     * @param {CfPrimitivesChainsForeignChain} arg
+     * @param {Callback<number> =} callback
+     **/
+    refundFeeMultiple: GenericStorageQuery<
+      (arg: CfPrimitivesChainsForeignChain) => number,
+      CfPrimitivesChainsForeignChain
+    >;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
@@ -7927,6 +8004,734 @@ export interface ChainStorage extends GenericChainStorage {
       (
         arg: PalletCfElectionsUniqueMonotonicIdentifier,
       ) => PalletCfElectionsConsensusHistory006 | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * Stores the elections whose consensus doesn't need to be rechecked, and the epoch when they
+     * were last checked.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<number | undefined> =} callback
+     **/
+    electionConsensusHistoryUpToDate: GenericStorageQuery<
+      (arg: PalletCfElectionsUniqueMonotonicIdentifier) => number | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
+     * is included is controlled solely by them. This serves as a method for validators to quickly
+     * remove all their votes from consensus, without having to know which votes should be removed
+     * and without deleting votes that are still valid. This storage item is not consistent with
+     * the current authority set, and so it may include authorities that are not in the current
+     * authority set or exclude authorities that are in the current authority set.
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    contributingAuthorities: GenericStorageQuery<
+      (arg: AccountId32Like) => [] | undefined,
+      AccountId32
+    >;
+
+    /**
+     * Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
+     * this is None, the pallet is considered uninitialized.
+     *
+     * @param {Callback<PalletCfElectionsElectionPalletStatus | undefined> =} callback
+     **/
+    status: GenericStorageQuery<() => PalletCfElectionsElectionPalletStatus | undefined>;
+
+    /**
+     * Generic pallet storage query
+     **/
+    [storage: string]: GenericStorageQuery;
+  };
+  /**
+   * Pallet `BscChainTracking`'s storage queries
+   **/
+  bscChainTracking: {
+    /**
+     * The tracked state of the external chain.
+     * It is safe to unwrap() this value. We set it at genesis and it is only ever updated
+     * by chain tracking, never removed. We use OptionQuery here so we don't need to
+     * impl Default for ChainState.
+     *
+     * @param {Callback<CfChainsChainStateBsc | undefined> =} callback
+     **/
+    currentChainState: GenericStorageQuery<() => CfChainsChainStateBsc | undefined>;
+
+    /**
+     * The fee multiplier value used when estimating ingress/egress fees
+     *
+     * @param {Callback<FixedU128> =} callback
+     **/
+    feeMultiplier: GenericStorageQuery<() => FixedU128>;
+
+    /**
+     * Generic pallet storage query
+     **/
+    [storage: string]: GenericStorageQuery;
+  };
+  /**
+   * Pallet `BscVault`'s storage queries
+   **/
+  bscVault: {
+    /**
+     * A map of starting block number of vaults by epoch.
+     *
+     * @param {number} arg
+     * @param {Callback<bigint | undefined> =} callback
+     **/
+    vaultStartBlockNumbers: GenericStorageQuery<(arg: number) => bigint | undefined, number>;
+
+    /**
+     * Vault activation status for the current epoch rotation.
+     *
+     * @param {Callback<PalletCfVaultsVaultActivationStatus | undefined> =} callback
+     **/
+    pendingVaultActivation: GenericStorageQuery<
+      () => PalletCfVaultsVaultActivationStatus | undefined
+    >;
+
+    /**
+     * Whether this chain is initialized.
+     *
+     * @param {Callback<boolean> =} callback
+     **/
+    chainInitialized: GenericStorageQuery<() => boolean>;
+
+    /**
+     * Generic pallet storage query
+     **/
+    [storage: string]: GenericStorageQuery;
+  };
+  /**
+   * Pallet `BscBroadcaster`'s storage queries
+   **/
+  bscBroadcaster: {
+    /**
+     * A counter for incrementing the broadcast id.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    broadcastIdCounter: GenericStorageQuery<() => number>;
+
+    /**
+     * Contains a Set of the authorities that have failed to sign a particular broadcast.
+     *
+     * @param {number} arg
+     * @param {Callback<Array<AccountId32>> =} callback
+     **/
+    failedBroadcasters: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
+
+    /**
+     * Live transaction broadcast requests.
+     *
+     * @param {number} arg
+     * @param {Callback<PalletCfBroadcastBroadcastDataBsc | undefined> =} callback
+     **/
+    awaitingBroadcast: GenericStorageQuery<
+      (arg: number) => PalletCfBroadcastBroadcastDataBsc | undefined,
+      number
+    >;
+
+    /**
+     * Lookup table between TransactionOutId -> Broadcast.
+     * This storage item is used by the CFE to track which broadcasts/egresses it needs to
+     * witness.
+     *
+     * @param {CfChainsEvmSchnorrVerificationComponents} arg
+     * @param {Callback<[number, bigint] | undefined> =} callback
+     **/
+    transactionOutIdToBroadcastId: GenericStorageQuery<
+      (arg: CfChainsEvmSchnorrVerificationComponents) => [number, bigint] | undefined,
+      CfChainsEvmSchnorrVerificationComponents
+    >;
+
+    /**
+     * Maps broadcast id to multiple transaction out ids.
+     * A broadcast id can have multiple transaction out ids if it is refreshed/resigned.
+     *
+     * @param {number} arg
+     * @param {Callback<Array<CfChainsEvmSchnorrVerificationComponents>> =} callback
+     **/
+    broadcastIdToTransactionOutIds: GenericStorageQuery<
+      (arg: number) => Array<CfChainsEvmSchnorrVerificationComponents>,
+      number
+    >;
+
+    /**
+     * The list of failed broadcasts that will be retried in some future block.
+     *
+     * @param {number} arg
+     * @param {Callback<Array<number>> =} callback
+     **/
+    delayedBroadcastRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
+
+    /**
+     * A vector containing broadcast_ids, together with the chain block numbers they time out at.
+     *
+     * @param {Callback<Array<[bigint, number, AccountId32]>> =} callback
+     **/
+    timeouts: GenericStorageQuery<() => Array<[bigint, number, AccountId32]>>;
+
+    /**
+     * Stores the signed external API Call for a broadcast.
+     *
+     * @param {number} arg
+     * @param {Callback<CfChainsBscApiBscApi | undefined> =} callback
+     **/
+    pendingApiCalls: GenericStorageQuery<(arg: number) => CfChainsBscApiBscApi | undefined, number>;
+
+    /**
+     * Stores metadata related to a transaction.
+     *
+     * @param {number} arg
+     * @param {Callback<CfChainsEvmEvmTransactionMetadata | undefined> =} callback
+     **/
+    transactionMetadata: GenericStorageQuery<
+      (arg: number) => CfChainsEvmEvmTransactionMetadata | undefined,
+      number
+    >;
+
+    /**
+     * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
+     *
+     * @param {Callback<Array<number>> =} callback
+     **/
+    broadcastBarriers: GenericStorageQuery<() => Array<number>>;
+
+    /**
+     * List of broadcasts that are initiated but not witnessed on the external chain.
+     *
+     * @param {Callback<Array<number>> =} callback
+     **/
+    pendingBroadcasts: GenericStorageQuery<() => Array<number>>;
+
+    /**
+     * List of broadcasts that have been aborted because they were unsuccessful to be broadcast
+     * after many retries.
+     *
+     * @param {Callback<Array<number>> =} callback
+     **/
+    abortedBroadcasts: GenericStorageQuery<() => Array<number>>;
+
+    /**
+     *
+     * @param {Callback<[CfChainsEvmAggKey, number] | undefined> =} callback
+     **/
+    incomingKeyAndBroadcastId: GenericStorageQuery<() => [CfChainsEvmAggKey, number] | undefined>;
+
+    /**
+     * We need to store the current Onchain key to know when to resign txs in edge cases around a
+     * rotation. Note that the on chain key is different than the current AggKey stored in
+     * threshold signature pallet. This is because we rotate the AggKey optimistically which means
+     * that the key in threshold signature pallet is rotated as soon as the rotation tx is created,
+     * without waiting for it the tx to actually go through onchain.
+     *
+     * @param {Callback<CfChainsEvmAggKey | undefined> =} callback
+     **/
+    currentOnChainKey: GenericStorageQuery<() => CfChainsEvmAggKey | undefined>;
+
+    /**
+     * The current timeout duration for the broadcast, measured in number of blocks.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    broadcastTimeout: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Generic pallet storage query
+     **/
+    [storage: string]: GenericStorageQuery;
+  };
+  /**
+   * Pallet `BscIngressEgress`'s storage queries
+   **/
+  bscIngressEgress: {
+    /**
+     * Lookup table for addresses to corresponding deposit channels.
+     *
+     * @param {H160} arg
+     * @param {Callback<PalletCfIngressEgressDepositChannelDetailsBsc | undefined> =} callback
+     **/
+    depositChannelLookup: GenericStorageQuery<
+      (arg: H160) => PalletCfIngressEgressDepositChannelDetailsBsc | undefined,
+      H160
+    >;
+
+    /**
+     * Stores the latest channel id used to generate an address.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    channelIdCounter: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stores the latest egress id used to generate an address.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    egressIdCounter: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Scheduled fetch and egress for the Ethereum chain.
+     *
+     * @param {Callback<Array<PalletCfIngressEgressFetchOrTransferBsc>> =} callback
+     **/
+    scheduledEgressFetchOrTransfer: GenericStorageQuery<
+      () => Array<PalletCfIngressEgressFetchOrTransferBsc>
+    >;
+
+    /**
+     * Scheduled cross chain messages for the Ethereum chain.
+     *
+     * @param {Callback<Array<PalletCfIngressEgressCrossChainMessageBsc>> =} callback
+     **/
+    scheduledEgressCcm: GenericStorageQuery<() => Array<PalletCfIngressEgressCrossChainMessageBsc>>;
+
+    /**
+     * Stores the list of assets that are not allowed to be egressed.
+     *
+     * @param {CfPrimitivesChainsAssetsBscAsset} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    disabledEgressAssets: GenericStorageQuery<
+      (arg: CfPrimitivesChainsAssetsBscAsset) => [] | undefined,
+      CfPrimitivesChainsAssetsBscAsset
+    >;
+
+    /**
+     * Stores address ready for use.
+     *
+     * @param {bigint} arg
+     * @param {Callback<CfChainsDepositChannelDepositChannelBsc | undefined> =} callback
+     **/
+    depositChannelPool: GenericStorageQuery<
+      (arg: bigint) => CfChainsDepositChannelDepositChannelBsc | undefined,
+      bigint
+    >;
+
+    /**
+     * Defines the minimum amount of Deposit allowed for each asset.
+     *
+     * @param {CfPrimitivesChainsAssetsBscAsset} arg
+     * @param {Callback<bigint> =} callback
+     **/
+    minimumDeposit: GenericStorageQuery<
+      (arg: CfPrimitivesChainsAssetsBscAsset) => bigint,
+      CfPrimitivesChainsAssetsBscAsset
+    >;
+
+    /**
+     * Defines the minimum amount aka. dust limit for a single egress i.e. *not* of a batch, but
+     * the outputs of each individual egress within that batch. If not set, defaults to 1.
+     *
+     * This is required for bitcoin, for example, where any amount below 600 satoshis is considered
+     * dust and will be rejected by miners.
+     *
+     * @param {CfPrimitivesChainsAssetsBscAsset} arg
+     * @param {Callback<bigint> =} callback
+     **/
+    egressDustLimit: GenericStorageQuery<
+      (arg: CfPrimitivesChainsAssetsBscAsset) => bigint,
+      CfPrimitivesChainsAssetsBscAsset
+    >;
+
+    /**
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    depositChannelLifetime: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stores information about Calls to external chains that have failed to be broadcasted.
+     * These calls are signed and stored on-chain so that the user can broadcast the call
+     * themselves. These messages will be re-threshold-signed once during the next epoch, and
+     * removed from storage in the epoch after that.
+     * Hashmap: last_signed_epoch -> Vec<FailedForeignChainCall>
+     *
+     * @param {number} arg
+     * @param {Callback<Array<PalletCfIngressEgressFailedForeignChainCall>> =} callback
+     **/
+    failedForeignChainCalls: GenericStorageQuery<
+      (arg: number) => Array<PalletCfIngressEgressFailedForeignChainCall>,
+      number
+    >;
+
+    /**
+     *
+     * @param {Callback<Array<[bigint, H160]>> =} callback
+     **/
+    depositChannelRecycleBlocks: GenericStorageQuery<() => Array<[bigint, H160]>>;
+
+    /**
+     *
+     * @param {Callback<bigint | undefined> =} callback
+     **/
+    witnessSafetyMargin: GenericStorageQuery<() => bigint | undefined>;
+
+    /**
+     * The fixed fee charged for opening a channel, in Flipperinos.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    channelOpeningFee: GenericStorageQuery<() => bigint>;
+
+    /**
+     * How many blocks to wait before processing a prewitnessed deposit.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    boostDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * How many blocks to wait before processing a new deposit.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    ingressDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * Stores the latest prewitnessed deposit id used.
+     *
+     * @param {Callback<CfPrimitivesPrewitnessedDepositId> =} callback
+     **/
+    prewitnessedDepositIdCounter: GenericStorageQuery<() => CfPrimitivesPrewitnessedDepositId>;
+
+    /**
+     * Stores the reporter and the tx_id against the BlockNumber when the report expires.
+     *
+     * @param {[AccountId32Like, H256]} arg
+     * @param {Callback<PalletCfIngressEgressTransactionRejectionStatus | undefined> =} callback
+     **/
+    transactionsMarkedForRejection: GenericStorageQuery<
+      (arg: [AccountId32Like, H256]) => PalletCfIngressEgressTransactionRejectionStatus | undefined,
+      [AccountId32, H256]
+    >;
+
+    /**
+     * Stores the block number when the report expires to gather with the reporter and the tx_id.
+     *
+     * @param {number} arg
+     * @param {Callback<Array<[AccountId32, H256]>> =} callback
+     **/
+    reportExpiresAt: GenericStorageQuery<(arg: number) => Array<[AccountId32, H256]>, number>;
+
+    /**
+     * Stores the details of transactions that are scheduled for rejecting.
+     *
+     * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsBsc>> =} callback
+     **/
+    scheduledTransactionsForRejection: GenericStorageQuery<
+      () => Array<PalletCfIngressEgressTransactionRejectionDetailsBsc>
+    >;
+
+    /**
+     * Stores the details of transactions that failed to be rejected.
+     *
+     * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsBsc>> =} callback
+     **/
+    failedRejections: GenericStorageQuery<
+      () => Array<PalletCfIngressEgressTransactionRejectionDetailsBsc>
+    >;
+
+    /**
+     * Stores the whitelisted brokers.
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<[]> =} callback
+     **/
+    whitelistedBrokers: GenericStorageQuery<(arg: AccountId32Like) => [], AccountId32>;
+
+    /**
+     * Stores transaction ids that have been boosted but have not yet been finalised.
+     *
+     * @param {H256} arg
+     * @param {Callback<PalletCfIngressEgressBoostStatus> =} callback
+     **/
+    boostedVaultTransactions: GenericStorageQuery<
+      (arg: H256) => PalletCfIngressEgressBoostStatus,
+      H256
+    >;
+
+    /**
+     *
+     * @param {number} arg
+     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry008>> =} callback
+     **/
+    pendingPrewitnessedDeposits: GenericStorageQuery<
+      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry008>,
+      number
+    >;
+
+    /**
+     *
+     * @param {number} arg
+     * @param {Callback<Array<[PalletCfIngressEgressDepositWitnessBsc, bigint]>> =} callback
+     **/
+    pendingDepositChannelDeposits: GenericStorageQuery<
+      (arg: number) => Array<[PalletCfIngressEgressDepositWitnessBsc, bigint]>,
+      number
+    >;
+
+    /**
+     *
+     * @param {number} arg
+     * @param {Callback<Array<[PalletCfIngressEgressVaultDepositWitnessBsc, bigint]>> =} callback
+     **/
+    pendingVaultDeposits: GenericStorageQuery<
+      (arg: number) => Array<[PalletCfIngressEgressVaultDepositWitnessBsc, bigint]>,
+      number
+    >;
+
+    /**
+     * What the witnessing says we've processed up to. This allows us to expire channels safely. If
+     * the witnessing has processed up to a block, then we can safely recycle the channels.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    processedUpTo: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Maps broadcast IDs to the action to take when the broadcast completes.
+     * Set when initiating a broadcast, consumed on success or expiry for actions that have
+     * explicit failure handling.
+     *
+     * @param {number} arg
+     * @param {Callback<PalletCfIngressEgressBroadcastAction | undefined> =} callback
+     **/
+    broadcastActions: GenericStorageQuery<
+      (arg: number) => PalletCfIngressEgressBroadcastAction | undefined,
+      number
+    >;
+
+    /**
+     * Stores configuration param for maximum number of pre-allocated channels per account role.
+     *
+     * @param {CfPrimitivesAccountRole} arg
+     * @param {Callback<number> =} callback
+     **/
+    maximumPreallocatedChannels: GenericStorageQuery<
+      (arg: CfPrimitivesAccountRole) => number,
+      CfPrimitivesAccountRole
+    >;
+
+    /**
+     * Stores pre-allocated channels per account.
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<Array<CfChainsDepositChannelDepositChannelBsc>> =} callback
+     **/
+    preallocatedChannels: GenericStorageQuery<
+      (arg: AccountId32Like) => Array<CfChainsDepositChannelDepositChannelBsc>,
+      AccountId32
+    >;
+
+    /**
+     * Generic pallet storage query
+     **/
+    [storage: string]: GenericStorageQuery;
+  };
+  /**
+   * Pallet `BscElections`'s storage queries
+   **/
+  bscElections: {
+    /**
+     * Stores the number of blocks after a piece of shared data is first referenced without being
+     * "provided" before expiring. Expiring will cause all votes that include references to be
+     * invalidated. This should be set as low as possible, I'd suggest using 8 blocks, which
+     * equates to 48 seconds.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    sharedDataReferenceLifetime: GenericStorageQuery<() => number>;
+
+    /**
+     * Stores the number of references to a shared vote. We also store the block number at which
+     * the first reference to a given SharedDataHash was added. If the associated SharedData has
+     * not been added, as this block number becomes older the probability a validator will submit
+     * the associated SharedData increases. After a number of blocks without the SharedData being
+     * added the reference will be removed which will invalidate any votes that reference it,
+     * forcing validators who referenced it to re-vote.
+     *
+     * @param {[PalletCfElectionsSharedDataHash, PalletCfElectionsUniqueMonotonicIdentifier]} arg
+     * @param {Callback<PalletCfElectionsReferenceDetails | undefined> =} callback
+     **/
+    sharedDataReferenceCount: GenericStorageQuery<
+      (
+        arg: [PalletCfElectionsSharedDataHash, PalletCfElectionsUniqueMonotonicIdentifier],
+      ) => PalletCfElectionsReferenceDetails | undefined,
+      [PalletCfElectionsSharedDataHash, PalletCfElectionsUniqueMonotonicIdentifier]
+    >;
+
+    /**
+     * Stores the *shared* parts of validator votes. Any duplicates will only be stored once,
+     * thereby decreasing the storage costs of validator votes as generally most validator's votes
+     * will be duplicates. A validator can choose to only provide the hashes of these pieces of
+     * data instead of the full data, any validator who has the associated data will randomly
+     * choose to submit it, where the probability increases over time.
+     *
+     * @param {PalletCfElectionsSharedDataHash} arg
+     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc | undefined> =} callback
+     **/
+    sharedData: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsSharedDataHash,
+      ) =>
+        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc
+        | undefined,
+      PalletCfElectionsSharedDataHash
+    >;
+
+    /**
+     * A mapping from election id and validator id to shared vote hash that uses bitmaps to
+     * decrease space requirements assuming most validators submit the same hashes.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<PalletCfElectionsBitmapComponentsElectionBitmapComponentsBsc | undefined> =} callback
+     **/
+    bitmapComponents: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsUniqueMonotonicIdentifier,
+      ) => PalletCfElectionsBitmapComponentsElectionBitmapComponentsBsc | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * A mapping from election id and validator id to individual vote components.
+     *
+     * @param {[PalletCfElectionsUniqueMonotonicIdentifier, AccountId32Like]} arg
+     * @param {Callback<[PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteProperties, PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeIndividualComponentBscTrackedData] | undefined> =} callback
+     **/
+    individualComponents: GenericStorageQuery<
+      (
+        arg: [PalletCfElectionsUniqueMonotonicIdentifier, AccountId32Like],
+      ) =>
+        | [
+            PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteProperties,
+            PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeIndividualComponentBscTrackedData,
+          ]
+        | undefined,
+      [PalletCfElectionsUniqueMonotonicIdentifier, AccountId32]
+    >;
+
+    /**
+     * Stores the next valid election identifier.
+     *
+     * @param {Callback<PalletCfElectionsUniqueMonotonicIdentifier> =} callback
+     **/
+    nextElectionIdentifier: GenericStorageQuery<() => PalletCfElectionsUniqueMonotonicIdentifier>;
+
+    /**
+     * Stores governance-controlled settings regarding the electoral system. These settings can be
+     * changed by governance at anytime.
+     *
+     * @param {Callback<[PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, number, []] | undefined> =} callback
+     **/
+    electoralUnsynchronisedSettings: GenericStorageQuery<
+      () =>
+        | [
+            PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+            number,
+            [],
+          ]
+        | undefined
+    >;
+
+    /**
+     * Stores persistent state the electoral system needs.
+     *
+     * @param {Callback<[PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserBsc, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBscDepositChannel, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBscVaultDeposit, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBscKeyManager, [CfChainsBscBscTrackedData, number], []] | undefined> =} callback
+     **/
+    electoralUnsynchronisedState: GenericStorageQuery<
+      () =>
+        | [
+            PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserBsc,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBscDepositChannel,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBscVaultDeposit,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBscKeyManager,
+            [CfChainsBscBscTrackedData, number],
+            [],
+          ]
+        | undefined
+    >;
+
+    /**
+     * Stores persistent state the electoral system needs.
+     *
+     * @param {PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectoralUnsynchronisedStateMapKey} arg
+     * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectoralUnsynchronisedStateMapValue | undefined> =} callback
+     **/
+    electoralUnsynchronisedStateMap: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectoralUnsynchronisedStateMapKey,
+      ) =>
+        | PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectoralUnsynchronisedStateMapValue
+        | undefined,
+      PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectoralUnsynchronisedStateMapKey
+    >;
+
+    /**
+     * Stores governance-controlled settings regarding the elections. These settings can be changed
+     * at anytime, but that change will only affect newly created elections.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<[[], [], [], [], [bigint, bigint], number] | undefined> =} callback
+     **/
+    electoralSettings: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsUniqueMonotonicIdentifier,
+      ) => [[], [], [], [], [bigint, bigint], number] | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * Stores the properties of each election. These settings are fixed and are set on creation of
+     * the election by the electoral system.
+     *
+     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} arg
+     * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesBsc | undefined> =} callback
+     **/
+    electionProperties: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+      ) =>
+        | PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesBsc
+        | undefined,
+      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+    >;
+
+    /**
+     * Stores mutable per-election state that the electoral system needs.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionState | undefined> =} callback
+     **/
+    electionState: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsUniqueMonotonicIdentifier,
+      ) => PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionState | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * Stores the most recent consensus, i.e. the most recent result of
+     * `ElectoralSystemRunner::check_consensus` that returned `Some(...)`, and whether it is
+     * `current` / has not been `lost` since.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<PalletCfElectionsConsensusHistory007 | undefined> =} callback
+     **/
+    electionConsensusHistory: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsUniqueMonotonicIdentifier,
+      ) => PalletCfElectionsConsensusHistory007 | undefined,
       PalletCfElectionsUniqueMonotonicIdentifier
     >;
 

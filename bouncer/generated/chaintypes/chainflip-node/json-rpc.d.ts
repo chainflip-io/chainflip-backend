@@ -84,6 +84,8 @@ export type ChainJsonRpcApis = Pick<
   | 'cf_boost_pool_details'
   | 'cf_boost_pool_pending_fees'
   | 'cf_boost_pools_depth'
+  | 'cf_bsc_electoral_data'
+  | 'cf_bsc_filter_votes'
   | 'cf_controlled_deposit_addresses'
   | 'cf_controlled_vault_addresses'
   | 'cf_current_compatibility_version'

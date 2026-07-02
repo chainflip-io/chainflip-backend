@@ -770,4 +770,52 @@ export interface ChainConsts extends GenericChainConsts {
      **/
     [name: string]: any;
   };
+  /**
+   * Pallet `BscChainTracking`'s constants
+   **/
+  bscChainTracking: {
+    /**
+     * Generic pallet constant
+     **/
+    [name: string]: any;
+  };
+  /**
+   * Pallet `BscVault`'s constants
+   **/
+  bscVault: {
+    /**
+     * Generic pallet constant
+     **/
+    [name: string]: any;
+  };
+  /**
+   * Pallet `BscBroadcaster`'s constants
+   **/
+  bscBroadcaster: {
+    /**
+     * Generic pallet constant
+     **/
+    [name: string]: any;
+  };
+  /**
+   * Pallet `BscIngressEgress`'s constants
+   **/
+  bscIngressEgress: {
+    allowTransactionReports: boolean;
+    screeningBrokerId: AccountId32;
+
+    /**
+     * Generic pallet constant
+     **/
+    [name: string]: any;
+  };
+  /**
+   * Pallet `BscElections`'s constants
+   **/
+  bscElections: {
+    /**
+     * Generic pallet constant
+     **/
+    [name: string]: any;
+  };
 }

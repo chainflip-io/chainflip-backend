@@ -2947,4 +2947,186 @@ export interface ChainErrors extends GenericChainErrors {
      **/
     [error: string]: GenericPalletError;
   };
+  /**
+   * Pallet `BscChainTracking`'s errors
+   **/
+  bscChainTracking: {
+    /**
+     * The submitted data is too old.
+     **/
+    StaleDataSubmitted: GenericPalletError;
+
+    /**
+     * Block height must be a multiple of the witness period
+     **/
+    InvalidBlockHeight: GenericPalletError;
+
+    /**
+     * Generic pallet error
+     **/
+    [error: string]: GenericPalletError;
+  };
+  /**
+   * Pallet `BscVault`'s errors
+   **/
+  bscVault: {
+    /**
+     * There is currently no vault rotation in progress for this chain.
+     **/
+    NoActiveRotation: GenericPalletError;
+
+    /**
+     * The requested call is invalid based on the current rotation state.
+     **/
+    InvalidRotationStatus: GenericPalletError;
+
+    /**
+     * Generic pallet error
+     **/
+    [error: string]: GenericPalletError;
+  };
+  /**
+   * Pallet `BscBroadcaster`'s errors
+   **/
+  bscBroadcaster: {
+    /**
+     * The provided payload is invalid.
+     **/
+    InvalidPayload: GenericPalletError;
+
+    /**
+     * The provided broadcast id is invalid.
+     **/
+    InvalidBroadcastId: GenericPalletError;
+
+    /**
+     * A threshold signature was expected but not available.
+     **/
+    ThresholdSignatureUnavailable: GenericPalletError;
+
+    /**
+     * Pending broadcasts cannot be re-signed.
+     **/
+    BroadcastStillPending: GenericPalletError;
+
+    /**
+     * The broadcast's api call is no longer available.
+     **/
+    ApiCallUnavailable: GenericPalletError;
+
+    /**
+     * Generic pallet error
+     **/
+    [error: string]: GenericPalletError;
+  };
+  /**
+   * Pallet `BscIngressEgress`'s errors
+   **/
+  bscIngressEgress: {
+    /**
+     * The deposit address is not valid. It may have expired or may never have been issued.
+     **/
+    InvalidDepositAddress: GenericPalletError;
+
+    /**
+     * A deposit was made using the wrong asset.
+     **/
+    AssetMismatch: GenericPalletError;
+
+    /**
+     * Channel ID has reached maximum
+     **/
+    ChannelIdsExhausted: GenericPalletError;
+
+    /**
+     * Polkadot's Vault Account does not exist in storage.
+     **/
+    MissingPolkadotVault: GenericPalletError;
+
+    /**
+     * Bitcoin's Vault key does not exist for the current epoch.
+     **/
+    MissingBitcoinVault: GenericPalletError;
+
+    /**
+     * Channel ID is too large for Bitcoin address derivation
+     **/
+    BitcoinChannelIdTooLarge: GenericPalletError;
+
+    /**
+     * The amount is below the minimum egress amount.
+     **/
+    BelowEgressDustLimit: GenericPalletError;
+
+    /**
+     * Solana address derivation error.
+     **/
+    SolanaAddressDerivationError: GenericPalletError;
+
+    /**
+     * Solana's Environment variables cannot be loaded via the SolanaEnvironment.
+     **/
+    MissingSolanaApiEnvironment: GenericPalletError;
+
+    /**
+     * Disabled due to safe mode for the chain
+     **/
+    DepositChannelCreationDisabled: GenericPalletError;
+
+    /**
+     * CCM parameters from a vault swap failed validity check.
+     **/
+    InvalidCcm: GenericPalletError;
+
+    /**
+     * Unsupported chain
+     **/
+    UnsupportedChain: GenericPalletError;
+
+    /**
+     * Transaction cannot be reported after being pre-witnessed or boosted.
+     **/
+    TransactionAlreadyPrewitnessed: GenericPalletError;
+
+    /**
+     * Assethub's Vault Account does not exist in storage.
+     **/
+    MissingAssethubVault: GenericPalletError;
+
+    /**
+     * The Chain is deprecated, support is being phased out.
+     **/
+    ChainDeprecated: GenericPalletError;
+
+    /**
+     * A channel is marked by an invalid account (not owner and not whitelisted)
+     **/
+    CannotMarkChannel: GenericPalletError;
+
+    /**
+     * Generic pallet error
+     **/
+    [error: string]: GenericPalletError;
+  };
+  /**
+   * Pallet `BscElections`'s errors
+   **/
+  bscElections: {
+    Uninitialized: GenericPalletError;
+    AlreadyInitialized: GenericPalletError;
+    UnknownElection: GenericPalletError;
+    Unauthorised: GenericPalletError;
+    Paused: GenericPalletError;
+    NotPaused: GenericPalletError;
+    UnreferencedSharedData: GenericPalletError;
+    CorruptStorage: GenericPalletError;
+    VotesNotCleared: GenericPalletError;
+    NotContributing: GenericPalletError;
+    NoVotesSpecified: GenericPalletError;
+
+    /**
+     * Generic pallet error
+     **/
+    [error: string]: GenericPalletError;
+  };
 }

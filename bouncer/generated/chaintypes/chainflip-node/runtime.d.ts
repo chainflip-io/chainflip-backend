@@ -912,6 +912,23 @@ export interface RuntimeApis extends GenericRuntimeApis {
     >;
 
     /**
+     *
+     * @callname: ElectoralRuntimeApi_cf_bsc_electoral_data
+     * @param {AccountId32Like} account_id
+     **/
+    cfBscElectoralData: GenericRuntimeApiMethod<(accountId: AccountId32Like) => Promise<Bytes>>;
+
+    /**
+     *
+     * @callname: ElectoralRuntimeApi_cf_bsc_filter_votes
+     * @param {AccountId32Like} account_id
+     * @param {BytesLike} proposed_votes
+     **/
+    cfBscFilterVotes: GenericRuntimeApiMethod<
+      (accountId: AccountId32Like, proposedVotes: BytesLike) => Promise<Bytes>
+    >;
+
+    /**
      * Generic runtime api call
      **/
     [method: string]: GenericRuntimeApiMethod;

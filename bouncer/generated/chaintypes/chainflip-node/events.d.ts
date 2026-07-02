@@ -122,6 +122,7 @@ import type {
   PalletCfIngressEgressPalletConfigUpdateSolana,
   PalletCfElectionsElectionIdentifier,
   CfChainsChainStateSolana,
+  PalletCfAssetBalancesPalletConfigUpdate,
   CfChainsChainStateAssethub,
   CfPrimitivesChainsAssetsHubAsset,
   PalletCfIngressEgressDepositFailedDetailsAssethub,
@@ -153,6 +154,12 @@ import type {
   PalletCfIngressEgressPalletConfigUpdateTron,
   PalletCfElectionsElectionIdentifier005,
   StateChainRuntimeChainflipWitnessingTronElectionsTronElectoralEvents,
+  CfChainsChainStateBsc,
+  CfPrimitivesChainsAssetsBscAsset,
+  PalletCfIngressEgressDepositFailedDetailsBsc,
+  CfTraitsScheduledEgressDetailsBsc,
+  PalletCfIngressEgressPalletConfigUpdateBsc,
+  StateChainRuntimeChainflipWitnessingBscElectionsBscElectoralEvents,
 } from './types.js';
 
 export interface ChainEvents extends GenericChainEvents {
@@ -353,6 +360,11 @@ export interface ChainEvents extends GenericChainEvents {
      * Tron Initialized: contract addresses have been set, first key activated
      **/
     TronInitialized: GenericPalletEvent<'Environment', 'TronInitialized', null>;
+
+    /**
+     * BSC Initialized: contract addresses have been set, first key activated
+     **/
+    BscInitialized: GenericPalletEvent<'Environment', 'BscInitialized', null>;
 
     /**
      * Generic pallet event
@@ -4660,6 +4672,11 @@ export interface ChainEvents extends GenericChainEvents {
         newBalance: bigint;
       }
     >;
+    PalletConfigUpdated: GenericPalletEvent<
+      'AssetBalances',
+      'PalletConfigUpdated',
+      { update: PalletCfAssetBalancesPalletConfigUpdate }
+    >;
 
     /**
      * Generic pallet event
@@ -5862,6 +5879,443 @@ export interface ChainEvents extends GenericChainEvents {
       'TronElections',
       'ElectoralEvent',
       StateChainRuntimeChainflipWitnessingTronElectionsTronElectoralEvents
+    >;
+
+    /**
+     * Generic pallet event
+     **/
+    [prop: string]: GenericPalletEvent;
+  };
+  /**
+   * Pallet `BscChainTracking`'s events
+   **/
+  bscChainTracking: {
+    /**
+     * The tracked state of this chain has been updated.
+     **/
+    ChainStateUpdated: GenericPalletEvent<
+      'BscChainTracking',
+      'ChainStateUpdated',
+      { newChainState: CfChainsChainStateBsc }
+    >;
+
+    /**
+     * The fee multiplier for this chain has been updated.
+     **/
+    FeeMultiplierUpdated: GenericPalletEvent<
+      'BscChainTracking',
+      'FeeMultiplierUpdated',
+      { newFeeMultiplier: FixedU128 }
+    >;
+
+    /**
+     * Generic pallet event
+     **/
+    [prop: string]: GenericPalletEvent;
+  };
+  /**
+   * Pallet `BscVault`'s events
+   **/
+  bscVault: {
+    /**
+     * The vault for the request has rotated
+     **/
+    VaultActivationCompleted: GenericPalletEvent<'BscVault', 'VaultActivationCompleted', null>;
+
+    /**
+     * The vault's key has been rotated externally \[new_public_key\]
+     **/
+    VaultRotatedExternally: GenericPalletEvent<
+      'BscVault',
+      'VaultRotatedExternally',
+      CfChainsEvmAggKey
+    >;
+
+    /**
+     * The new key has been generated, we must activate the new key on the external
+     * chain via governance.
+     **/
+    AwaitingGovernanceActivation: GenericPalletEvent<
+      'BscVault',
+      'AwaitingGovernanceActivation',
+      { newPublicKey: CfChainsEvmAggKey }
+    >;
+    ActivationTxFailedAwaitingGovernance: GenericPalletEvent<
+      'BscVault',
+      'ActivationTxFailedAwaitingGovernance',
+      { newPublicKey: CfChainsEvmAggKey }
+    >;
+    ChainInitialized: GenericPalletEvent<'BscVault', 'ChainInitialized', null>;
+
+    /**
+     * Generic pallet event
+     **/
+    [prop: string]: GenericPalletEvent;
+  };
+  /**
+   * Pallet `BscBroadcaster`'s events
+   **/
+  bscBroadcaster: {
+    /**
+     * A request to a specific authority to sign a transaction.
+     **/
+    TransactionBroadcastRequest: GenericPalletEvent<
+      'BscBroadcaster',
+      'TransactionBroadcastRequest',
+      {
+        broadcastId: number;
+        nominee: AccountId32;
+        transactionPayload: CfChainsEvmTransaction;
+        transactionOutId: CfChainsEvmSchnorrVerificationComponents;
+      }
+    >;
+
+    /**
+     * A failed broadcast has been scheduled for retry.
+     **/
+    BroadcastRetryScheduled: GenericPalletEvent<
+      'BscBroadcaster',
+      'BroadcastRetryScheduled',
+      { broadcastId: number; retryBlock: number }
+    >;
+
+    /**
+     * A broadcast has timed out.
+     **/
+    BroadcastTimeout: GenericPalletEvent<
+      'BscBroadcaster',
+      'BroadcastTimeout',
+      { broadcastId: number }
+    >;
+
+    /**
+     * A broadcast has been aborted after all authorities have failed to broadcast it.
+     **/
+    BroadcastAborted: GenericPalletEvent<
+      'BscBroadcaster',
+      'BroadcastAborted',
+      { broadcastId: number }
+    >;
+
+    /**
+     * A broadcast has successfully been completed.
+     **/
+    BroadcastSuccess: GenericPalletEvent<
+      'BscBroadcaster',
+      'BroadcastSuccess',
+      {
+        broadcastId: number;
+        transactionOutId: CfChainsEvmSchnorrVerificationComponents;
+        transactionRef: H256;
+      }
+    >;
+
+    /**
+     * A broadcast's threshold signature is invalid, we will attempt to re-sign it.
+     **/
+    ThresholdSignatureInvalid: GenericPalletEvent<
+      'BscBroadcaster',
+      'ThresholdSignatureInvalid',
+      { broadcastId: number }
+    >;
+
+    /**
+     * The fee paid for broadcasting a transaction has been recorded.
+     **/
+    TransactionFeeDeficitRecorded: GenericPalletEvent<
+      'BscBroadcaster',
+      'TransactionFeeDeficitRecorded',
+      { beneficiary: H160; amount: bigint }
+    >;
+
+    /**
+     * The fee paid for broadcasting a transaction has been refused.
+     **/
+    TransactionFeeDeficitRefused: GenericPalletEvent<
+      'BscBroadcaster',
+      'TransactionFeeDeficitRefused',
+      { beneficiary: H160 }
+    >;
+
+    /**
+     * A Call has been re-threshold-signed, and its signature data is inserted into storage.
+     **/
+    CallResigned: GenericPalletEvent<
+      'BscBroadcaster',
+      'CallResigned',
+      { broadcastId: number; transactionPayload: CfChainsEvmTransaction }
+    >;
+
+    /**
+     * Some pallet configuration has been updated.
+     **/
+    PalletConfigUpdated: GenericPalletEvent<
+      'BscBroadcaster',
+      'PalletConfigUpdated',
+      { update: PalletCfBroadcastPalletConfigUpdate }
+    >;
+
+    /**
+     * A signature/broadcast with a historical (expired) key was requested via governance.
+     **/
+    HistoricalBroadcastRequested: GenericPalletEvent<
+      'BscBroadcaster',
+      'HistoricalBroadcastRequested',
+      { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number }
+    >;
+
+    /**
+     * Generic pallet event
+     **/
+    [prop: string]: GenericPalletEvent;
+  };
+  /**
+   * Pallet `BscIngressEgress`'s events
+   **/
+  bscIngressEgress: {
+    DepositFinalised: GenericPalletEvent<
+      'BscIngressEgress',
+      'DepositFinalised',
+      {
+        depositAddress?: H160 | undefined;
+        asset: CfPrimitivesChainsAssetsBscAsset;
+        amount: bigint;
+        blockHeight: bigint;
+        depositDetails: CfChainsEvmDepositDetails;
+        ingressFee: bigint;
+        maxBoostFeeBps: number;
+        action: PalletCfIngressEgressDepositAction;
+        channelId?: bigint | undefined;
+        originType: CfChainsDepositOriginType;
+      }
+    >;
+    AssetEgressStatusChanged: GenericPalletEvent<
+      'BscIngressEgress',
+      'AssetEgressStatusChanged',
+      { asset: CfPrimitivesChainsAssetsBscAsset; disabled: boolean }
+    >;
+    CcmBroadcastRequested: GenericPalletEvent<
+      'BscIngressEgress',
+      'CcmBroadcastRequested',
+      { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] }
+    >;
+    CcmEgressInvalid: GenericPalletEvent<
+      'BscIngressEgress',
+      'CcmEgressInvalid',
+      {
+        egressId: [CfPrimitivesChainsForeignChain, bigint];
+        error: CfChainsExecutexSwapAndCallError;
+      }
+    >;
+    DepositFetchesScheduled: GenericPalletEvent<
+      'BscIngressEgress',
+      'DepositFetchesScheduled',
+      { channelId: bigint; asset: CfPrimitivesChainsAssetsBscAsset }
+    >;
+    BatchBroadcastRequested: GenericPalletEvent<
+      'BscIngressEgress',
+      'BatchBroadcastRequested',
+      { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> }
+    >;
+    DepositFailed: GenericPalletEvent<
+      'BscIngressEgress',
+      'DepositFailed',
+      {
+        blockHeight: bigint;
+        reason: PalletCfIngressEgressDepositFailedReason;
+        details: PalletCfIngressEgressDepositFailedDetailsBsc;
+      }
+    >;
+    TransferFallbackRequested: GenericPalletEvent<
+      'BscIngressEgress',
+      'TransferFallbackRequested',
+      {
+        asset: CfPrimitivesChainsAssetsBscAsset;
+        amount: bigint;
+        destinationAddress: H160;
+        broadcastId: number;
+        egressDetails?: CfTraitsScheduledEgressDetailsBsc | undefined;
+      }
+    >;
+
+    /**
+     * A CCM has failed to broadcast.
+     **/
+    CcmBroadcastFailed: GenericPalletEvent<
+      'BscIngressEgress',
+      'CcmBroadcastFailed',
+      { broadcastId: number }
+    >;
+
+    /**
+     * A failed CCM call has been re-threshold-signed for the current epoch.
+     **/
+    FailedForeignChainCallResigned: GenericPalletEvent<
+      'BscIngressEgress',
+      'FailedForeignChainCallResigned',
+      { broadcastId: number; thresholdSignatureId: number }
+    >;
+
+    /**
+     * A failed CCM has been in the system storage for more than 1 epoch.
+     * It's broadcast data has been cleaned from storage.
+     **/
+    FailedForeignChainCallExpired: GenericPalletEvent<
+      'BscIngressEgress',
+      'FailedForeignChainCallExpired',
+      { broadcastId: number }
+    >;
+    UtxoConsolidation: GenericPalletEvent<
+      'BscIngressEgress',
+      'UtxoConsolidation',
+      { broadcastId: number }
+    >;
+    FailedToBuildAllBatchCall: GenericPalletEvent<
+      'BscIngressEgress',
+      'FailedToBuildAllBatchCall',
+      { error: CfChainsAllBatchError }
+    >;
+    ChannelOpeningFeePaid: GenericPalletEvent<
+      'BscIngressEgress',
+      'ChannelOpeningFeePaid',
+      { fee: bigint }
+    >;
+    DepositBoosted: GenericPalletEvent<
+      'BscIngressEgress',
+      'DepositBoosted',
+      {
+        depositAddress?: H160 | undefined;
+        asset: CfPrimitivesChainsAssetsBscAsset;
+
+        /**
+         * Per-source amounts funded, including the boost fee charged by that source
+         * (entries present only if that source contributed).
+         **/
+        amounts: Array<[CfTraitsLendingBoostSource, bigint]>;
+        depositDetails: CfChainsEvmDepositDetails;
+        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
+        channelId?: bigint | undefined;
+        blockHeight: bigint;
+        ingressFee: bigint;
+        maxBoostFeeBps: number;
+
+        /**
+         * Per-source boost fees the user paid for their deposit to be boosted
+         * (entries present only if that source contributed).
+         **/
+        boostFee: Array<[CfTraitsLendingBoostSource, bigint]>;
+        action: PalletCfIngressEgressDepositAction;
+        originType: CfChainsDepositOriginType;
+      }
+    >;
+    InsufficientBoostLiquidity: GenericPalletEvent<
+      'BscIngressEgress',
+      'InsufficientBoostLiquidity',
+      {
+        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
+        asset: CfPrimitivesChainsAssetsBscAsset;
+        amountAttempted: bigint;
+        channelId?: bigint | undefined;
+        originType: CfChainsDepositOriginType;
+      }
+    >;
+    BoostedDepositLost: GenericPalletEvent<
+      'BscIngressEgress',
+      'BoostedDepositLost',
+      { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint }
+    >;
+    TransactionRejectionRequestReceived: GenericPalletEvent<
+      'BscIngressEgress',
+      'TransactionRejectionRequestReceived',
+      { accountId: AccountId32; txId: H256; expiresAt: number }
+    >;
+    TransactionRejectionRequestExpired: GenericPalletEvent<
+      'BscIngressEgress',
+      'TransactionRejectionRequestExpired',
+      { accountId: AccountId32; txId: H256 }
+    >;
+    TransactionRejectedByBroker: GenericPalletEvent<
+      'BscIngressEgress',
+      'TransactionRejectedByBroker',
+      { broadcastId: number; txId: CfChainsEvmDepositDetails }
+    >;
+    TransactionRejectionFailed: GenericPalletEvent<
+      'BscIngressEgress',
+      'TransactionRejectionFailed',
+      { txId: CfChainsEvmDepositDetails; reason: PalletCfIngressEgressRefundFailureReason }
+    >;
+    UnknownBroker: GenericPalletEvent<
+      'BscIngressEgress',
+      'UnknownBroker',
+      { brokerId: AccountId32 }
+    >;
+    UnknownAffiliate: GenericPalletEvent<
+      'BscIngressEgress',
+      'UnknownAffiliate',
+      { brokerId: AccountId32; shortAffiliateId: CfPrimitivesAffiliateShortId }
+    >;
+    InvalidCcmRefunded: GenericPalletEvent<
+      'BscIngressEgress',
+      'InvalidCcmRefunded',
+      { asset: CfPrimitivesChainsAssetsBscAsset; amount: bigint; destinationAddress: H160 }
+    >;
+    PalletConfigUpdated: GenericPalletEvent<
+      'BscIngressEgress',
+      'PalletConfigUpdated',
+      { update: PalletCfIngressEgressPalletConfigUpdateBsc }
+    >;
+    ChannelRejectionRequestReceived: GenericPalletEvent<
+      'BscIngressEgress',
+      'ChannelRejectionRequestReceived',
+      { accountId: AccountId32; depositAddress: H160 }
+    >;
+
+    /**
+     * Generic pallet event
+     **/
+    [prop: string]: GenericPalletEvent;
+  };
+  /**
+   * Pallet `BscElections`'s events
+   **/
+  bscElections: {
+    /**
+     * Corrupted storage was detected, and so all elections and voting has been paused.
+     **/
+    CorruptStorage: GenericPalletEvent<'BscElections', 'CorruptStorage', null>;
+
+    /**
+     * A request was made, but the pallet hasn't been initialized.
+     **/
+    Uninitialized: GenericPalletEvent<'BscElections', 'Uninitialized', null>;
+
+    /**
+     * All vote data was cleared.
+     **/
+    AllVotesCleared: GenericPalletEvent<'BscElections', 'AllVotesCleared', null>;
+
+    /**
+     * Not all vote data was cleared. *You should continue clearing votes until you receive
+     * the AllVotesCleared event*.
+     **/
+    AllVotesNotCleared: GenericPalletEvent<'BscElections', 'AllVotesNotCleared', null>;
+
+    /**
+     * Received vote for an unknown election
+     **/
+    UnknownElection: GenericPalletEvent<
+      'BscElections',
+      'UnknownElection',
+      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+    >;
+
+    /**
+     * Events generated by any of the contained electoral systems
+     **/
+    ElectoralEvent: GenericPalletEvent<
+      'BscElections',
+      'ElectoralEvent',
+      StateChainRuntimeChainflipWitnessingBscElectionsBscElectoralEvents
     >;
 
     /**

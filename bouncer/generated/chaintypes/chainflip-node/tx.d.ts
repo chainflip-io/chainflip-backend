@@ -118,6 +118,7 @@ import type {
   StateChainRuntimeChainflipWitnessingSolanaElectionsSolanaVaultSwapsSettings,
   PalletCfElectionsCorruptStorageAdherance,
   CfChainsChainStateSolana,
+  PalletCfAssetBalancesPalletConfigUpdate,
   CfChainsChainStateAssethub,
   CfChainsHubApiAssethubApi,
   CfPrimitivesChainsAssetsHubAsset,
@@ -167,6 +168,17 @@ import type {
   PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData,
   PalletCfElectionsInitialState006,
   StateChainRuntimeChainflipWitnessingTronElectionsElectionTypes,
+  CfChainsChainStateBsc,
+  CfChainsBscApiBscApi,
+  CfPrimitivesChainsAssetsBscAsset,
+  PalletCfIngressEgressDepositWitnessBsc,
+  PalletCfIngressEgressPalletConfigUpdateBsc,
+  PalletCfIngressEgressVaultDepositWitnessBsc,
+  PalletCfElectionsVoteStorageAuthorityVote007,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+  PalletCfElectionsInitialState007,
+  CfChainsWitnessPeriodBlockWitnessRangeBsc,
+  StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes,
 } from './types.js';
 
 export type ChainSubmittableExtrinsic<
@@ -738,6 +750,23 @@ export interface ChainTx<
           pallet: 'Environment';
           palletCall: {
             name: 'WitnessInitializeTronVault';
+            params: { blockNumber: bigint };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {bigint} blockNumber
+     **/
+    witnessInitializeBscVault: GenericTxCall<
+      (blockNumber: bigint) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Environment';
+          palletCall: {
+            name: 'WitnessInitializeBscVault';
             params: { blockNumber: bigint };
           };
         },
@@ -6669,6 +6698,32 @@ export interface ChainTx<
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
   };
   /**
+   * Pallet `AssetBalances`'s transaction calls
+   **/
+  assetBalances: {
+    /**
+     *
+     * @param {PalletCfAssetBalancesPalletConfigUpdate} update
+     **/
+    updatePalletConfig: GenericTxCall<
+      (update: PalletCfAssetBalancesPalletConfigUpdate) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssetBalances';
+          palletCall: {
+            name: 'UpdatePalletConfig';
+            params: { update: PalletCfAssetBalancesPalletConfigUpdate };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Generic pallet tx call
+     **/
+    [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
+  };
+  /**
    * Pallet `AssethubChainTracking`'s transaction calls
    **/
   assethubChainTracking: {
@@ -9710,6 +9765,849 @@ export interface ChainTx<
             name: 'StartNewBlockWitnesserElection';
             params: {
               properties: [bigint, StateChainRuntimeChainflipWitnessingTronElectionsElectionTypes];
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Generic pallet tx call
+     **/
+    [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
+  };
+  /**
+   * Pallet `BscChainTracking`'s transaction calls
+   **/
+  bscChainTracking: {
+    /**
+     * Logs the latest known state of the external chain defined by [Config::TargetChain].
+     *
+     * @param {CfChainsChainStateBsc} newChainState
+     **/
+    updateChainState: GenericTxCall<
+      (newChainState: CfChainsChainStateBsc) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscChainTracking';
+          palletCall: {
+            name: 'UpdateChainState';
+            params: { newChainState: CfChainsChainStateBsc };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Update the fee multiplier with the provided value
+     *
+     * Requires Governance.
+     *
+     * @param {FixedU128} newFeeMultiplier
+     **/
+    updateFeeMultiplier: GenericTxCall<
+      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscChainTracking';
+          palletCall: {
+            name: 'UpdateFeeMultiplier';
+            params: { newFeeMultiplier: FixedU128 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Generic pallet tx call
+     **/
+    [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
+  };
+  /**
+   * Pallet `BscVault`'s transaction calls
+   **/
+  bscVault: {
+    /**
+     * The vault's key has been updated externally, outside of the rotation
+     * cycle. This is an unexpected event as far as our chain is concerned, and
+     * the only thing we can do is to update the vault key to be sure we can continue
+     * to properly sign transactions.
+     *
+     * @param {CfChainsEvmAggKey} newPublicKey
+     * @param {bigint} blockNumber
+     * @param {H256} txId
+     **/
+    vaultKeyRotatedExternally: GenericTxCall<
+      (
+        newPublicKey: CfChainsEvmAggKey,
+        blockNumber: bigint,
+        txId: H256,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscVault';
+          palletCall: {
+            name: 'VaultKeyRotatedExternally';
+            params: { newPublicKey: CfChainsEvmAggKey; blockNumber: bigint; txId: H256 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Sets the ChainInitialized flag to true for this chain so that the chain can be
+     * initialized on the next epoch rotation
+     *
+     **/
+    initializeChain: GenericTxCall<
+      () => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscVault';
+          palletCall: {
+            name: 'InitializeChain';
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Generic pallet tx call
+     **/
+    [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
+  };
+  /**
+   * Pallet `BscBroadcaster`'s transaction calls
+   **/
+  bscBroadcaster: {
+    /**
+     * A callback to be used when a threshold signature request completes. Retrieves the
+     * requested signature, uses the configured [TransactionBuilder] to build the transaction.
+     * Initiates the broadcast sequence if `should_broadcast` is set to true, otherwise insert
+     * the signature result into the `PendingApiCalls` storage.
+     *
+     * @param {number} thresholdRequestId
+     * @param {H256} thresholdSignaturePayload
+     * @param {CfChainsBscApiBscApi} apiCall
+     * @param {number} broadcastId
+     * @param {bigint} initiatedAt
+     * @param {boolean} shouldBroadcast
+     **/
+    onSignatureReady: GenericTxCall<
+      (
+        thresholdRequestId: number,
+        thresholdSignaturePayload: H256,
+        apiCall: CfChainsBscApiBscApi,
+        broadcastId: number,
+        initiatedAt: bigint,
+        shouldBroadcast: boolean,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscBroadcaster';
+          palletCall: {
+            name: 'OnSignatureReady';
+            params: {
+              thresholdRequestId: number;
+              thresholdSignaturePayload: H256;
+              apiCall: CfChainsBscApiBscApi;
+              broadcastId: number;
+              initiatedAt: bigint;
+              shouldBroadcast: boolean;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Nodes have witnessed that a signature was accepted on the target chain.
+     *
+     * We add to the deficit to later be refunded, and clean up storage related to
+     * this broadcast, reporting any nodes who failed this particular broadcast before
+     * this success.
+     *
+     * @param {CfChainsEvmSchnorrVerificationComponents} txOutId
+     * @param {H160} signerId
+     * @param {CfChainsEvmTransactionFee} txFee
+     * @param {CfChainsEvmEvmTransactionMetadata} txMetadata
+     * @param {H256} transactionRef
+     **/
+    transactionSucceeded: GenericTxCall<
+      (
+        txOutId: CfChainsEvmSchnorrVerificationComponents,
+        signerId: H160,
+        txFee: CfChainsEvmTransactionFee,
+        txMetadata: CfChainsEvmEvmTransactionMetadata,
+        transactionRef: H256,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscBroadcaster';
+          palletCall: {
+            name: 'TransactionSucceeded';
+            params: {
+              txOutId: CfChainsEvmSchnorrVerificationComponents;
+              signerId: H160;
+              txFee: CfChainsEvmTransactionFee;
+              txMetadata: CfChainsEvmEvmTransactionMetadata;
+              transactionRef: H256;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {number} howMany
+     **/
+    stressTest: GenericTxCall<
+      (howMany: number) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscBroadcaster';
+          palletCall: {
+            name: 'StressTest';
+            params: { howMany: number };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Submitted by the nominated node to signal that they were unable to broadcast the
+     * transaction.
+     *
+     * @param {number} broadcastId
+     **/
+    transactionFailed: GenericTxCall<
+      (broadcastId: number) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscBroadcaster';
+          palletCall: {
+            name: 'TransactionFailed';
+            params: { broadcastId: number };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Re-sign and optionally re-send some broadcast requests.
+     * This is intended for cases where a transaction is valid, but the signature has become
+     * invalid due to a rotation, and so we need to resign the payload with the new key so that
+     * it can be broadcast.
+     *
+     * Requires governance origin.
+     *
+     * @param {Array<number>} broadcastIds
+     * @param {boolean} requestBroadcast
+     * @param {boolean} refreshReplayProtection
+     **/
+    reSignAbortedBroadcasts: GenericTxCall<
+      (
+        broadcastIds: Array<number>,
+        requestBroadcast: boolean,
+        refreshReplayProtection: boolean,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscBroadcaster';
+          palletCall: {
+            name: 'ReSignAbortedBroadcasts';
+            params: {
+              broadcastIds: Array<number>;
+              requestBroadcast: boolean;
+              refreshReplayProtection: boolean;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * [GOVERNANCE] Update a pallet config item.
+     *
+     * The dispatch origin of this function must be governance.
+     *
+     * @param {PalletCfBroadcastPalletConfigUpdate} update
+     **/
+    updatePalletConfig: GenericTxCall<
+      (update: PalletCfBroadcastPalletConfigUpdate) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscBroadcaster';
+          palletCall: {
+            name: 'UpdatePalletConfig';
+            params: { update: PalletCfBroadcastPalletConfigUpdate };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
+     *
+     * This is a recovery mechanism for broadcasting transactions that were missed during a
+     * key's active period. The operation will:
+     * - Request threshold signature using governance-provided historical key and participants
+     * - Optionally broadcast the signed transaction if `broadcast` is true
+     * - Not penalize participants for failures (best-effort recovery)
+     *
+     * ## Prerequisites
+     * - The key must exist in threshold-signature pallet storage for that epoch
+     * - Participants list must not be empty
+     * - Governance ensures participants hold key shares and are online
+     *
+     * Note: Governance takes full responsibility for providing valid inputs since
+     * HistoricalAuthorities data may be purged for old epochs.
+     *
+     * @param {CfChainsBscApiBscApi} apiCall
+     * @param {number} epochIndex
+     * @param {Array<AccountId32Like>} participants
+     * @param {number} signersRequired
+     * @param {number} maxRetries
+     * @param {boolean} broadcast
+     **/
+    thresholdSignAndBroadcastWithHistoricalKey: GenericTxCall<
+      (
+        apiCall: CfChainsBscApiBscApi,
+        epochIndex: number,
+        participants: Array<AccountId32Like>,
+        signersRequired: number,
+        maxRetries: number,
+        broadcast: boolean,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscBroadcaster';
+          palletCall: {
+            name: 'ThresholdSignAndBroadcastWithHistoricalKey';
+            params: {
+              apiCall: CfChainsBscApiBscApi;
+              epochIndex: number;
+              participants: Array<AccountId32Like>;
+              signersRequired: number;
+              maxRetries: number;
+              broadcast: boolean;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Generic pallet tx call
+     **/
+    [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
+  };
+  /**
+   * Pallet `BscIngressEgress`'s transaction calls
+   **/
+  bscIngressEgress: {
+    /**
+     * Sets if an asset is not allowed to be sent out of the chain via Egress.
+     * Requires Governance
+     *
+     * @param {CfPrimitivesChainsAssetsBscAsset} asset
+     * @param {boolean} setDisabled
+     **/
+    enableOrDisableEgress: GenericTxCall<
+      (
+        asset: CfPrimitivesChainsAssetsBscAsset,
+        setDisabled: boolean,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscIngressEgress';
+          palletCall: {
+            name: 'EnableOrDisableEgress';
+            params: { asset: CfPrimitivesChainsAssetsBscAsset; setDisabled: boolean };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Called when funds have been deposited into the given address.
+     *
+     * Requires `EnsurePrewitnessed` or `EnsureWitnessed` origin.
+     *
+     * We calculate weight assuming the most expensive code path is taken, i.e. the deposit
+     * had been boosted and is now being finalised
+     *
+     * @param {Array<PalletCfIngressEgressDepositWitnessBsc>} depositWitnesses
+     * @param {bigint} blockHeight
+     **/
+    processDeposits: GenericTxCall<
+      (
+        depositWitnesses: Array<PalletCfIngressEgressDepositWitnessBsc>,
+        blockHeight: bigint,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscIngressEgress';
+          palletCall: {
+            name: 'ProcessDeposits';
+            params: {
+              depositWitnesses: Array<PalletCfIngressEgressDepositWitnessBsc>;
+              blockHeight: bigint;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Stores information on failed Vault transfer.
+     * Requires Witness origin.
+     *
+     * @param {CfPrimitivesChainsAssetsBscAsset} asset
+     * @param {bigint} amount
+     * @param {H160} destinationAddress
+     **/
+    vaultTransferFailed: GenericTxCall<
+      (
+        asset: CfPrimitivesChainsAssetsBscAsset,
+        amount: bigint,
+        destinationAddress: H160,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscIngressEgress';
+          palletCall: {
+            name: 'VaultTransferFailed';
+            params: {
+              asset: CfPrimitivesChainsAssetsBscAsset;
+              amount: bigint;
+              destinationAddress: H160;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Apply a list of configuration updates to the pallet.
+     *
+     * Requires Governance.
+     *
+     * @param {Array<PalletCfIngressEgressPalletConfigUpdateBsc>} updates
+     **/
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfIngressEgressPalletConfigUpdateBsc>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscIngressEgress';
+          palletCall: {
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateBsc> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {H256} txId
+     **/
+    markTransactionForRejection: GenericTxCall<
+      (txId: H256) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscIngressEgress';
+          palletCall: {
+            name: 'MarkTransactionForRejection';
+            params: { txId: H256 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {bigint} blockHeight
+     * @param {PalletCfIngressEgressVaultDepositWitnessBsc} deposit
+     **/
+    vaultSwapRequest: GenericTxCall<
+      (
+        blockHeight: bigint,
+        deposit: PalletCfIngressEgressVaultDepositWitnessBsc,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscIngressEgress';
+          palletCall: {
+            name: 'VaultSwapRequest';
+            params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBsc };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {H160} depositAddress
+     **/
+    markDepositChannelForRejection: GenericTxCall<
+      (depositAddress: H160) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscIngressEgress';
+          palletCall: {
+            name: 'MarkDepositChannelForRejection';
+            params: { depositAddress: H160 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Generic pallet tx call
+     **/
+    [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
+  };
+  /**
+   * Pallet `BscElections`'s transaction calls
+   **/
+  bscElections: {
+    /**
+     *
+     * @param {Array<[PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra, PalletCfElectionsVoteStorageAuthorityVote007]>} authorityVotes
+     **/
+    vote: GenericTxCall<
+      (
+        authorityVotes: Array<
+          [
+            PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+            PalletCfElectionsVoteStorageAuthorityVote007,
+          ]
+        >,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'Vote';
+            params: {
+              authorityVotes: Array<
+                [
+                  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+                  PalletCfElectionsVoteStorageAuthorityVote007,
+                ]
+              >;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc} sharedData
+     **/
+    provideSharedData: GenericTxCall<
+      (
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'ProvideSharedData';
+            params: {
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     **/
+    ignoreMyVotes: GenericTxCall<
+      () => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'IgnoreMyVotes';
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     **/
+    stopIgnoringMyVotes: GenericTxCall<
+      () => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'StopIgnoringMyVotes';
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     **/
+    deleteVote: GenericTxCall<
+      (
+        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'DeleteVote';
+            params: {
+              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsInitialState007} initialState
+     **/
+    initialize: GenericTxCall<
+      (initialState: PalletCfElectionsInitialState007) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'Initialize';
+            params: { initialState: PalletCfElectionsInitialState007 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {[PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, number, []] | undefined} unsynchronisedSettings
+     * @param {[[], [], [], [], [bigint, bigint], number] | undefined} settings
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     **/
+    updateSettings: GenericTxCall<
+      (
+        unsynchronisedSettings:
+          | [
+              PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
+              PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+              PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+              PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+              number,
+              [],
+            ]
+          | undefined,
+        settings: [[], [], [], [], [bigint, bigint], number] | undefined,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'UpdateSettings';
+            params: {
+              unsynchronisedSettings:
+                | [
+                    PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
+                    PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+                    PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+                    PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+                    number,
+                    [],
+                  ]
+                | undefined;
+              settings: [[], [], [], [], [bigint, bigint], number] | undefined;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {number} blocks
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     **/
+    setSharedDataReferenceLifetime: GenericTxCall<
+      (
+        blocks: number,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'SetSharedDataReferenceLifetime';
+            params: {
+              blocks: number;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     * @param {boolean} checkElectionExists
+     **/
+    clearElectionVotes: GenericTxCall<
+      (
+        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+        checkElectionExists: boolean,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'ClearElectionVotes';
+            params: {
+              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+              checkElectionExists: boolean;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     * @param {boolean} checkElectionExists
+     **/
+    invalidateElectionConsensusCache: GenericTxCall<
+      (
+        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+        checkElectionExists: boolean,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'InvalidateElectionConsensusCache';
+            params: {
+              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+              checkElectionExists: boolean;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     **/
+    pauseElections: GenericTxCall<
+      () => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'PauseElections';
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {boolean} requireVotesCleared
+     **/
+    unpauseElections: GenericTxCall<
+      (requireVotesCleared: boolean) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'UnpauseElections';
+            params: { requireVotesCleared: boolean };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {number} limit
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     **/
+    clearAllVotes: GenericTxCall<
+      (
+        limit: number,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'ClearAllVotes';
+            params: {
+              limit: number;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     **/
+    validateStorage: GenericTxCall<
+      () => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'ValidateStorage';
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {[CfChainsWitnessPeriodBlockWitnessRangeBsc, StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes]} properties
+     **/
+    startNewBlockWitnesserElection: GenericTxCall<
+      (
+        properties: [
+          CfChainsWitnessPeriodBlockWitnessRangeBsc,
+          StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes,
+        ],
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscElections';
+          palletCall: {
+            name: 'StartNewBlockWitnesserElection';
+            params: {
+              properties: [
+                CfChainsWitnessPeriodBlockWitnessRangeBsc,
+                StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes,
+              ];
             };
           };
         },
