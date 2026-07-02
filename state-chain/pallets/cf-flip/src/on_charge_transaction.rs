@@ -19,7 +19,10 @@
 //! The Chainflip network is permissioned and as such the main reasons for fees are (a) to encourage
 //! 'good' behaviour and (b) to ensure that only funded actors can submit extrinsics to the network.
 
-use crate::{imbalances::Surplus, Config as FlipConfig, OpaqueCallIndex, Pallet as Flip};
+use crate::{
+	imbalances::Surplus, Config as FlipConfig, OpaqueCallIndex, Pallet as Flip,
+	ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
+};
 use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountInfo, EpochInfo, FeePayment, WaivedFees};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
@@ -144,7 +147,7 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			// If there is a difference this will be reconciled when the result goes out of scope.
 			let _imbalance = surplus.offset(
 				if T::EpochInfo::epoch_index() >= crate::FeeRewardsActivationEpoch::<T>::get() {
-					Flip::<T>::add_to_onchain_flip_to_be_distributed(fee)
+					Flip::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, fee)
 				} else {
 					Flip::<T>::burn(fee)
 				},
