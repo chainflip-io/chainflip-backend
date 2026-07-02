@@ -663,10 +663,8 @@ impl<T: Config> FeePayment for Pallet<T> {
 	}
 
 	fn bridge_in_and_add_to_onchain_flip_to_be_distributed(amount: Self::Amount) {
-		let _ = Self::bridge_in(amount).offset(Pallet::<T>::deposit_reserves(
-			ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
-			amount,
-		));
+		let _ = Self::bridge_in(amount)
+			.offset(Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount));
 	}
 
 	fn fee_rewards_activation_epoch() -> EpochIndex {
