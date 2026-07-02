@@ -7,6 +7,8 @@ edition = "2021"
 # Local dependencies
 state-chain-runtime = { path = "../runtime", features = ["std"] }
 cf-primitives = { path = "../primitives", features = ["std"] }
+pallet-cf-validator = { path = "../pallets/cf-validator", features = ["std"] }
+pallet-cf-witnesser = { path = "../pallets/cf-witnesser", features = ["std"] }
 
 # Polkadot SDK dependencies
 frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
