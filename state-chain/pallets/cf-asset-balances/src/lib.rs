@@ -48,6 +48,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 pub mod whitelist;
 use whitelist::*;
 
@@ -127,6 +130,9 @@ pub mod pallet {
 
 		/// Safe mode configuration.
 		type SafeMode: Get<PalletSafeMode>;
+
+		/// Benchmark weights.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -262,19 +268,13 @@ pub mod pallet {
 	/// registered refund address is a trusted destination, so it is implicitly allowed by the
 	/// withdrawal allowlist (see [`Pallet::ensure_withdrawal_allowed_to`]).
 	#[pallet::storage]
-	pub type RefundAddresses<T: Config> = StorageDoubleMap<
-		_,
-		Identity,
-		T::AccountId,
-		Twox64Concat,
-		ForeignChain,
-		ForeignChainAddress,
-	>;
+	pub type RefundAddresses<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, ForeignChain, RefundAddress>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::update_pallet_config())]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
 			update: PalletConfigUpdate,
@@ -306,7 +306,7 @@ pub mod pallet {
 		/// set the change is scheduled and only takes effect after the timelock elapses; otherwise
 		/// it applies immediately.
 		#[pallet::call_index(1)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::update_whitelist())]
 		pub fn update_whitelist(
 			origin: OriginFor<T>,
 			change: WhitelistChange<T::AccountId, EncodedAddress>,
@@ -345,7 +345,7 @@ pub mod pallet {
 		/// decreasing/disabling is itself delayed by the current timelock so a stolen key can't
 		/// instantly remove the protection.
 		#[pallet::call_index(2)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::set_withdrawal_timelock())]
 		pub fn set_withdrawal_timelock(
 			origin: OriginFor<T>,
 			duration: DurationSeconds,
@@ -412,7 +412,7 @@ impl<T: Config> Pallet<T> {
 	//
 	// The owed and available amount are mutated in place.
 	//
-	// For Ethereum, Arbitrum and Bsc, we expect to pay out the validators via egress to their
+	// For Ethereum and Arbitrum, we expect to pay out the validators via egress to their
 	// accounts. For Polkadot, we expect to pay out to the current AggKey account.
 	// For Bitcoin and Solana, the vault pays the fees directly so we don't need to egress
 	// anything.
@@ -426,10 +426,7 @@ impl<T: Config> Pallet<T> {
 		available: &mut AssetAmount,
 	) -> Result<(), DispatchError> {
 		let amount_reconciled = match chain {
-			ForeignChain::Ethereum |
-			ForeignChain::Arbitrum |
-			ForeignChain::Tron |
-			ForeignChain::Bsc => match owner {
+			ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Tron => match owner {
 				ExternalOwner::Account(address) =>
 					if *amount_owed > *available {
 						0
@@ -579,7 +576,12 @@ impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
 		};
 		let allowed = whitelist.is_allowed(dest, now) ||
 			external.is_some_and(|address| {
-				RefundAddresses::<T>::get(owner, address.chain()).as_ref() == Some(address)
+				// The *active* refund address is implicitly allowed; a pending (timelocked) repoint
+				// is not, so the old address stays the only allowed one until the new one matures.
+				RefundAddresses::<T>::get(owner, address.chain())
+					.as_ref()
+					.and_then(|refund| refund.effective(now)) ==
+					Some(address)
 			});
 		ensure!(allowed, Error::<T>::DestinationNotAllowed);
 		Ok(())
@@ -590,14 +592,23 @@ impl<T: Config> RefundAddressRegistry for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	fn register_liquidity_refund_address(who: &Self::AccountId, address: ForeignChainAddress) {
-		RefundAddresses::<T>::insert(who, address.chain(), address);
+		let now = Self::now_secs();
+		// Repointing a refund address is delayed by the account's timelock while the restriction is
+		// on (0 = off => immediate); the current address stays active until the new one matures.
+		let timelock = WithdrawalWhitelists::<T>::get(who).effective_timelock(now);
+		RefundAddresses::<T>::mutate(who, address.chain(), |maybe| {
+			maybe
+				.get_or_insert_with(RefundAddress::default)
+				.register(address, now, timelock)
+		});
 	}
 
 	fn get_refund_address(
 		who: &Self::AccountId,
 		chain: ForeignChain,
 	) -> Option<ForeignChainAddress> {
-		RefundAddresses::<T>::get(who, chain)
+		let now = Self::now_secs();
+		RefundAddresses::<T>::get(who, chain).and_then(|refund| refund.effective(now).cloned())
 	}
 
 	fn clear_refund_addresses(who: &Self::AccountId) {
@@ -605,8 +616,13 @@ impl<T: Config> RefundAddressRegistry for Pallet<T> {
 	}
 
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult {
+		// If refund address registration is timelocked we treat it as if the refund address
+		// (otherwise if we add a new chain the user would have to wait the timelock period before
+		// they can use it, which would be bad UX). This should be OK because max timelock is
+		// capped, so the address will become active soon.
 		ensure!(
-			RefundAddresses::<T>::contains_key(who, ForeignChain::from(asset)),
+			RefundAddresses::<T>::get(who, ForeignChain::from(asset))
+				.is_some_and(|refund| refund.is_registered()),
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);
 		Ok(())
@@ -646,10 +662,8 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 		debug_assert_eq!(ForeignChain::from(asset), address.chain());
 		Liabilities::<T>::mutate(asset, |fees| {
 			fees.entry(match ForeignChain::from(asset) {
-				ForeignChain::Ethereum |
-				ForeignChain::Arbitrum |
-				ForeignChain::Tron |
-				ForeignChain::Bsc => address.into(),
+				ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Tron =>
+					address.into(),
 				ForeignChain::Polkadot | ForeignChain::Assethub => ExternalOwner::AggKey,
 				ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 			})

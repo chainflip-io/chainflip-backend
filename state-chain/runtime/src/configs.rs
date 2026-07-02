@@ -1118,6 +1118,7 @@ impl pallet_cf_asset_balances::Config for Runtime {
 	type AddressConverter = ChainAddressConverter;
 	type TimeSource = Timestamp;
 	type SafeMode = RuntimeSafeMode;
+	type WeightInfo = pallet_cf_asset_balances::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance1> for Runtime {

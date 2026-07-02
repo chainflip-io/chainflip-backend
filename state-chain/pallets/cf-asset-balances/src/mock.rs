@@ -77,6 +77,7 @@ impl crate::Config for Test {
 	type AddressConverter = MockAddressConverter;
 	type TimeSource = time_source::Mock;
 	type SafeMode = MockRuntimeSafeMode;
+	type WeightInfo = ();
 }
 
 cf_test_utilities::impl_test_helpers! {
