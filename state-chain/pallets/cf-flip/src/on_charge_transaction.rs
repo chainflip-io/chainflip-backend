@@ -24,7 +24,7 @@ use crate::{
 	ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
 };
 use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
-use cf_traits::{AccountInfo, EpochInfo, FeePayment, WaivedFees};
+use cf_traits::{AccountInfo, EpochInfo, WaivedFees};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
