@@ -34,7 +34,7 @@ jobs:
   upgrade_test:
     runs-on: hetzner
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout chainflip-backend 🛒
         if: inputs.run-job
