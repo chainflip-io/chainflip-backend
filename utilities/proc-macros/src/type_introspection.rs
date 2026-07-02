@@ -25,7 +25,7 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 			} else {
 				let variant_checks: Vec<TokenStream> =
 					data.variants.iter().map(|v| variant_is_empty(&v.fields)).collect();
-				quote! { #( #variant_checks )&&* }
+				quote! { #( (#variant_checks) )&&* }
 			},
 		Data::Union(_) => {
 			return syn::Error::new_spanned(
