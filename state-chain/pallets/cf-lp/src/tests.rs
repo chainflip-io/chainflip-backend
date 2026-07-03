@@ -16,8 +16,9 @@
 
 use crate::{
 	mock::*, AggStats, DeltaStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats,
-	Pallet, PalletSafeMode, WindowedEma, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS,
-	ALPHA_HALF_LIFE_7_DAYS, EMA_PRUNE_THRESHOLD_USD, STATS_UPDATE_INTERVAL_IN_BLOCKS,
+	Pallet, PalletSafeMode, StatsLastUpdatedAt, StatsUpdateCursor, WindowedEma,
+	ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS,
+	EMA_PRUNE_THRESHOLD_USD, STATS_UPDATE_INTERVAL_IN_BLOCKS,
 };
 use std::collections::BTreeMap;
 
@@ -636,8 +637,13 @@ fn update_agg_stats_updates_correctly() {
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip), None);
 
 		// Call the update function and verify that LP_ACCOUNT's pre-existing entry decays
-		// correctly and its delta stats are deleted after the update.
-		LiquidityProvider::update_agg_stats();
+		// correctly and its delta stats are deleted after the update. Ample weight so the whole
+		// (tiny) pass completes in a single call.
+		LiquidityProvider::update_agg_stats(
+			1,
+			Vec::new(),
+			frame_support::weights::Weight::from_parts(u64::MAX, u64::MAX),
+		);
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
 
 		let lp1_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).unwrap();
@@ -744,7 +750,12 @@ fn update_agg_stats_prunes_below_threshold() {
 		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, below_threshold);
 		LpAggStats::<Test>::insert(LP_ACCOUNT_2, Asset::Flip, above_threshold);
 
-		LiquidityProvider::update_agg_stats();
+		// Ample weight so the whole (tiny) pass completes in a single call.
+		LiquidityProvider::update_agg_stats(
+			1,
+			Vec::new(),
+			frame_support::weights::Weight::from_parts(u64::MAX, u64::MAX),
+		);
 
 		assert!(LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
 		assert!(LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).is_some());
@@ -754,6 +765,91 @@ fn update_agg_stats_prunes_below_threshold() {
 			lp2_stats.avg_limit_usd_volume.pruning_weighted_score() >=
 				FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD)
 		);
+	});
+}
+
+#[test]
+fn update_agg_stats_resumes_across_multiple_capped_calls() {
+	new_test_ext().execute_with(|| {
+		use crate::weights::WeightInfo as _;
+
+		const NUM_LPS: u64 = 5;
+		for lp in 0..NUM_LPS {
+			// Two fills per Lp: the first seeds the entry, the second leaves a pending delta for
+			// update_agg_stats to apply.
+			LiquidityProvider::on_limit_order_filled(&lp, &Asset::Eth, 1_000_000_000u128); // 1000 usd
+			LiquidityProvider::on_limit_order_filled(&lp, &Asset::Eth, 200_000_000u128); // 200 usd
+		}
+		assert_eq!(LpAggStats::<Test>::iter().count(), NUM_LPS as usize);
+
+		// Budget exactly one item's worth of weight per call (computed from the real WeightInfo,
+		// so this test stays correct however that weight is defined) to force the pass to span
+		// multiple calls. Each of the first NUM_LPS calls processes exactly one entry; the pass
+		// only recognises it's exhausted (and clears the cursor) on the following call, once
+		// `iter.next()` comes back empty — so completion takes NUM_LPS + 1 calls, not NUM_LPS.
+		let per_item_weight = <Test as crate::Config>::WeightInfo::update_agg_stats_item();
+
+		let mut cursor = Vec::new();
+		let mut calls = 0u64;
+		loop {
+			calls += 1;
+			assert!(calls <= NUM_LPS + 1, "pass should complete within NUM_LPS + 1 calls");
+			LiquidityProvider::update_agg_stats(calls, cursor.clone(), per_item_weight);
+			match StatsUpdateCursor::<Test>::get() {
+				Some(next_cursor) => cursor = next_cursor,
+				None => break,
+			}
+		}
+		assert_eq!(calls, NUM_LPS + 1, "the pass should take one extra call to detect completion");
+
+		for lp in 0..NUM_LPS {
+			assert_eq!(LpDeltaStats::<Test>::get(lp, Asset::Eth), None);
+			let agg_stats = LpAggStats::<Test>::get(lp, Asset::Eth).unwrap();
+			assert!(is_within_tiny_error(
+				fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.one_day),
+				expected_ema(1000f64, 200f64, 1u32)
+			));
+		}
+	});
+}
+
+#[test]
+fn on_idle_does_nothing_before_interval_elapses() {
+	new_test_ext().execute_with(|| {
+		use frame_support::{traits::Hooks, weights::Weight};
+
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 1_000_000_000u128);
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 500_000_000u128);
+		StatsLastUpdatedAt::<Test>::put(0u64);
+
+		LiquidityProvider::on_idle(
+			STATS_UPDATE_INTERVAL_IN_BLOCKS - 1,
+			Weight::from_parts(u64::MAX, u64::MAX),
+		);
+
+		// Not due yet: the pending delta is untouched and no pass has started.
+		assert!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_some());
+		assert!(StatsUpdateCursor::<Test>::get().is_none());
+	});
+}
+
+#[test]
+fn on_idle_runs_and_completes_the_pass_once_due() {
+	new_test_ext().execute_with(|| {
+		use frame_support::{traits::Hooks, weights::Weight};
+
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 1_000_000_000u128);
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 500_000_000u128);
+		StatsLastUpdatedAt::<Test>::put(0u64);
+
+		LiquidityProvider::on_idle(
+			STATS_UPDATE_INTERVAL_IN_BLOCKS,
+			Weight::from_parts(u64::MAX, u64::MAX),
+		);
+
+		assert!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
+		assert!(StatsUpdateCursor::<Test>::get().is_none());
+		assert_eq!(StatsLastUpdatedAt::<Test>::get(), STATS_UPDATE_INTERVAL_IN_BLOCKS);
 	});
 }
 

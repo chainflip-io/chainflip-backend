@@ -54,8 +54,8 @@ pub trait WeightInfo {
 	fn deregister_lp_account() -> Weight;
 	fn register_liquidity_refund_address() -> Weight;
 	fn schedule_swap() -> Weight;
-	fn update_agg_stats_existing(m: u32, ) -> Weight;
-	fn update_agg_stats_new(n: u32, ) -> Weight;
+	fn update_agg_stats_item() -> Weight;
+	fn on_idle_nothing_to_do() -> Weight;
 	fn purge_balances(n: u32, ) -> Weight;
 }
 
@@ -215,7 +215,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Storage: `LiquidityProvider::LpDeltaStats` (r:101 w:100)
 	/// Proof: `LiquidityProvider::LpDeltaStats` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `m` is `[0, 100]`.
-	fn update_agg_stats_existing(m: u32, ) -> Weight {
+	fn update_agg_stats_item(m: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `267 + m * (144 ±0)`
 		//  Estimated: `3729 + m * (2620 ±0)`
@@ -454,7 +454,7 @@ impl WeightInfo for () {
 	/// Storage: `LiquidityProvider::LpDeltaStats` (r:101 w:100)
 	/// Proof: `LiquidityProvider::LpDeltaStats` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `m` is `[0, 100]`.
-	fn update_agg_stats_existing(m: u32, ) -> Weight {
+	fn update_agg_stats_item(m: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `267 + m * (144 ±0)`
 		//  Estimated: `3729 + m * (2620 ±0)`

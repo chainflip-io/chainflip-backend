@@ -28,7 +28,7 @@ use cf_traits::{
 use frame_support::{
 	fail,
 	pallet_prelude::*,
-	sp_runtime::{traits::Zero, DispatchResult, FixedU128, Perbill},
+	sp_runtime::{traits::Zero, DispatchResult, FixedU128, Perbill, Saturating},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -355,20 +355,31 @@ pub mod pallet {
 	pub type LpAggStats<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AggStats>;
 
+	/// Resumable raw-storage-key cursor for the periodic `LpAggStats` decay/prune pass. `Some`
+	/// while a pass is in progress (potentially spanning many blocks); `None` when idle, in which
+	/// case `on_idle` waits for `STATS_UPDATE_INTERVAL_IN_BLOCKS` to elapse before starting a new
+	/// one.
+	#[pallet::storage]
+	pub type StatsUpdateCursor<T: Config> = StorageValue<_, Vec<u8>, OptionQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+		fn on_idle(current_block: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let overhead = T::DbWeight::get().reads(1);
 
-			let blocks_elapsed = current_block.saturating_sub(StatsLastUpdatedAt::<T>::get());
-
-			if blocks_elapsed.saturated_into::<u64>() >= STATS_UPDATE_INTERVAL_IN_BLOCKS {
-				weight_used += Self::update_agg_stats();
-
-				StatsLastUpdatedAt::<T>::put(current_block);
-				weight_used += T::DbWeight::get().writes(1);
+			let cursor = StatsUpdateCursor::<T>::get();
+			if cursor.is_none() {
+				let blocks_elapsed = current_block.saturating_sub(StatsLastUpdatedAt::<T>::get());
+				if blocks_elapsed.saturated_into::<u64>() < STATS_UPDATE_INTERVAL_IN_BLOCKS {
+					return overhead
+				}
 			}
-			weight_used
+
+			overhead.saturating_add(Self::update_agg_stats(
+				current_block,
+				cursor,
+				remaining_weight.saturating_sub(overhead),
+			))
 		}
 	}
 
@@ -567,6 +578,10 @@ pub mod pallet {
 	}
 }
 
+/// Hard ceiling on how many `LpAggStats` entries a single `update_agg_stats` call processes,
+/// regardless of leftover weight.
+pub const MAX_STATS_UPDATES_PER_CALL: u32 = 100;
+
 impl<T: Config> Pallet<T> {
 	pub fn transfer_or_withdraw(
 		origin: OriginFor<T>,
@@ -649,21 +664,57 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn update_agg_stats() -> Weight {
-		let prune_threshold = FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD);
-		let mut existing_lps_count: u32 = 0;
+	fn update_agg_stats(
+		current_block: BlockNumberFor<T>,
+		cursor: Option<Vec<u8>>,
+		remaining_weight: Weight,
+	) -> Weight {
+		let per_item_weight = T::WeightInfo::update_agg_stats_item();
+		let max_items = remaining_weight
+			.ref_time()
+			.checked_div(per_item_weight.ref_time())
+			.unwrap_or(u64::MAX)
+			.min(MAX_STATS_UPDATES_PER_CALL as u64);
 
-		for (lp, asset, mut agg_stats) in LpAggStats::<T>::iter().collect::<Vec<_>>() {
-			existing_lps_count = existing_lps_count.saturating_add(1);
-			agg_stats.update(&LpDeltaStats::<T>::take(&lp, asset).unwrap_or_default());
-			if agg_stats.is_below_pruning_threshold(prune_threshold) {
-				LpAggStats::<T>::remove(&lp, asset);
-			} else {
-				LpAggStats::<T>::insert(&lp, asset, agg_stats);
-			}
+		if max_items == 0 {
+			StatsUpdateCursor::<T>::set(cursor);
+			return Weight::zero()
 		}
 
-		T::WeightInfo::update_agg_stats_existing(existing_lps_count)
+		let prune_threshold = FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD);
+		let mut iter = cursor
+			.map(|cursor| LpAggStats::<T>::iter_from(cursor))
+			.unwrap_or_else(|| LpAggStats::<T>::iter());
+		let mut processed: u64 = 0;
+
+		while processed < max_items {
+			let (lp, asset, agg_stats) = if let Some(next) = iter.next() {
+				next
+			} else {
+				StatsUpdateCursor::<T>::kill();
+				StatsLastUpdatedAt::<T>::put(current_block);
+				return per_item_weight.saturating_mul(processed)
+			};
+			Self::process_one_agg_stats_entry(&lp, asset, agg_stats, prune_threshold);
+			processed.saturating_accrue(1);
+		}
+
+		StatsUpdateCursor::<T>::put(iter.last_raw_key());
+		per_item_weight.saturating_mul(processed)
+	}
+
+	fn process_one_agg_stats_entry(
+		lp: &T::AccountId,
+		asset: Asset,
+		mut agg_stats: AggStats,
+		prune_threshold: FixedU128,
+	) {
+		agg_stats.update(&LpDeltaStats::<T>::take(lp, asset).unwrap_or_default());
+		if agg_stats.is_below_pruning_threshold(prune_threshold) {
+			LpAggStats::<T>::remove(lp, asset);
+		} else {
+			LpAggStats::<T>::insert(lp, asset, agg_stats);
+		}
 	}
 
 	#[frame_support::transactional]

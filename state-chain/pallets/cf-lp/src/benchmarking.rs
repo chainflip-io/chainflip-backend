@@ -143,76 +143,36 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn update_agg_stats_existing(m: Linear<0, 100>) {
-		// Generate m LPs with existing aggregate stats
-		let existing_lps = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
-			AccountRole::LiquidityProvider,
-			m,
-		)
-		.unwrap();
-
-		// Populate LpAggStats with existing LPs
-		for lp in &existing_lps {
-			pallet::LpAggStats::<T>::insert(
-				lp,
-				Asset::Eth,
-				pallet::AggStats::new(pallet::DeltaStats {
-					limit_orders_swap_usd_volume: FixedU128::from_u32(100),
-				}),
-			);
-		}
-
-		// Populate LpDeltaStats for existing LPs (they will be updated)
-		for lp in &existing_lps {
-			pallet::LpDeltaStats::<T>::insert(
-				lp,
-				Asset::Eth,
-				pallet::DeltaStats { limit_orders_swap_usd_volume: FixedU128::from_u32(50) },
-			);
-		}
+	fn update_agg_stats_item() {
+		let lp: T::AccountId = whitelisted_caller();
+		let agg_stats = pallet::AggStats::new(pallet::DeltaStats {
+			limit_orders_swap_usd_volume: FixedU128::from_u32(100),
+		});
+		pallet::LpDeltaStats::<T>::insert(
+			&lp,
+			Asset::Eth,
+			pallet::DeltaStats { limit_orders_swap_usd_volume: FixedU128::from_u32(50) },
+		);
 
 		#[block]
 		{
-			Pallet::<T>::update_agg_stats();
+			Pallet::<T>::process_one_agg_stats_entry(
+				&lp,
+				Asset::Eth,
+				agg_stats,
+				FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD),
+			);
 		}
 
-		// Verify existing LPs had their stats updated
-		for lp in &existing_lps {
-			assert!(pallet::LpAggStats::<T>::get(lp, Asset::Eth).is_some());
-		}
-		// Verify delta stats were drained
-		assert_eq!(pallet::LpDeltaStats::<T>::iter().count(), 0);
+		assert_eq!(pallet::LpDeltaStats::<T>::get(&lp, Asset::Eth), None);
 	}
 
 	#[benchmark]
-	fn update_agg_stats_new(n: Linear<0, 100>) {
-		// Generate n LPs that only have delta stats (new LPs)
-		let new_lps = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
-			AccountRole::LiquidityProvider,
-			n,
-		)
-		.unwrap();
-
-		// Populate LpDeltaStats for new LPs (they will be inserted as new agg entries)
-		for lp in &new_lps {
-			pallet::LpDeltaStats::<T>::insert(
-				lp,
-				Asset::Eth,
-				pallet::DeltaStats { limit_orders_swap_usd_volume: FixedU128::from_u32(25) },
-			);
-		}
-
+	fn on_idle_nothing_to_do() {
 		#[block]
 		{
-			Pallet::<T>::update_agg_stats();
+			Pallet::<T>::on_idle(0u32.into(), frame_support::weights::Weight::zero());
 		}
-
-		// Verify new LPs were added to agg stats
-		for lp in &new_lps {
-			assert!(pallet::LpAggStats::<T>::get(lp, Asset::Eth).is_some());
-		}
-		// Verify delta stats were drained
-		assert_eq!(pallet::LpDeltaStats::<T>::iter().count(), 0);
 	}
 
 	#[benchmark]
