@@ -615,9 +615,14 @@ impl<T: Config> RefundAddressRegistry for Pallet<T> {
 		let _ = RefundAddresses::<T>::clear_prefix(who, u32::MAX, None);
 	}
 
+	/// Make sure refund address is either set or will be set after timelock. (If we didn't allow
+	/// the latter, it would result in bad UX where upon adding a new chain the user would have to
+	/// wait the timelock period before they can use it. This should be OK because max
+	/// timelock is capped, so the address will become active soon.
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult {
 		ensure!(
-			Self::get_refund_address(who, ForeignChain::from(asset)).is_some(),
+			RefundAddresses::<T>::get(who, ForeignChain::from(asset))
+				.is_some_and(|refund| refund.is_registered()),
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);
 		Ok(())

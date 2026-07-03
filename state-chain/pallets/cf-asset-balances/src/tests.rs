@@ -553,7 +553,10 @@ mod withdrawal_whitelist {
 	}
 
 	fn ensure_allowed_internal(who: &AccountId, account: &AccountId) -> DispatchResult {
-		Pallet::<Test>::ensure_withdrawal_allowed_to(who, AccountOrAddress::InternalAccount(account))
+		Pallet::<Test>::ensure_withdrawal_allowed_to(
+			who,
+			AccountOrAddress::InternalAccount(account),
+		)
 	}
 
 	#[test]
@@ -657,16 +660,25 @@ mod withdrawal_whitelist {
 
 			// Enabling turns the restriction on immediately; with nothing configured, all blocked.
 			set_timelock(&who, 1000);
-			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
 
 			// A scheduled address only takes effect once the timelock has elapsed.
 			allow(&who, ETH_ADDR_1);
-			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
 
 			time_source::Mock::tick(Duration::from_secs(1001));
 			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
 			// An unconfigured chain stays blocked (account-wide fail-safe).
-			assert_err!(ensure_allowed_external(&who, &ARB_ADDR_1), Error::<Test>::DestinationNotAllowed);
+			assert_err!(
+				ensure_allowed_external(&who, &ARB_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
 		});
 	}
 
@@ -689,7 +701,10 @@ mod withdrawal_whitelist {
 			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
 
 			// A different address on the same chain is still blocked.
-			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_2), Error::<Test>::DestinationNotAllowed);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
 		});
 	}
 
@@ -706,12 +721,47 @@ mod withdrawal_whitelist {
 			// new one is not yet allowed (this is what closes the stolen-key repoint bypass).
 			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_2);
 			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
-			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_2), Error::<Test>::DestinationNotAllowed);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
 
 			// Once the timelock elapses the new refund address takes over.
 			time_source::Mock::tick(Duration::from_secs(1001));
 			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
-			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+		});
+	}
+
+	#[test]
+	fn scheduled_refund_address_permits_chain_interaction() {
+		new_test_ext().execute_with(|| {
+			use cf_primitives::Asset;
+			let who = account(1);
+
+			// Restriction on, no refund address yet => chain interaction is gated.
+			set_timelock(&who, 1000);
+			assert_err!(
+				Pallet::<Test>::ensure_has_refund_address_for_asset(&who, Asset::Eth),
+				Error::<Test>::NoLiquidityRefundAddressRegistered
+			);
+
+			// Registering under restriction only *schedules* the address — it is not yet
+			// effective...
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_1);
+			assert!(Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum).is_none());
+			// ...but a scheduled refund address is enough to interact with the chain.
+			assert_ok!(Pallet::<Test>::ensure_has_refund_address_for_asset(&who, Asset::Eth));
+
+			// It can't be perpetually deferred: it becomes effective within the timelock.
+			time_source::Mock::tick(Duration::from_secs(1001));
+			assert_eq!(
+				Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum),
+				Some(ETH_ADDR_1)
+			);
 		});
 	}
 
@@ -724,7 +774,8 @@ mod withdrawal_whitelist {
 			// Off by default => any internal destination is allowed.
 			assert_ok!(ensure_allowed_internal(&who, &dest));
 
-			// Enabling turns the restriction on; the internal set is now fail-safe (empty = blocked).
+			// Enabling turns the restriction on; the internal set is now fail-safe (empty =
+			// blocked).
 			set_timelock(&who, 1000);
 			assert_err!(ensure_allowed_internal(&who, &dest), Error::<Test>::DestinationNotAllowed);
 

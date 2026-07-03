@@ -126,7 +126,8 @@ impl RefundAddress {
 	}
 
 	/// Registers `new`. Immediate when `timelock == 0`; otherwise the current address stays active
-	/// and `new` is scheduled for `now + timelock`.
+	/// and `new` is scheduled for `now + timelock`. A pending change can be freely replaced (which
+	/// reschedules it for a fresh `now + timelock`).
 	pub(crate) fn register(
 		&mut self,
 		new: ForeignChainAddress,
@@ -138,6 +139,13 @@ impl RefundAddress {
 		} else {
 			self.0.schedule(Some(new), now, timelock);
 		}
+	}
+
+	/// Whether a refund address is registered — either effective now or scheduled (pending but not
+	/// yet matured). Gates chain interaction: a pending first registration counts, so an LP isn't
+	/// blocked from a chain during the timelock window after registering there.
+	pub(crate) fn is_registered(&self) -> bool {
+		self.0.current.is_some() || self.0.pending.is_some()
 	}
 
 	/// The effective (active) refund address at `now` (accounting for a matured pending change), if
@@ -497,14 +505,27 @@ mod tests {
 	}
 
 	#[test]
-	fn refund_register_collapses_matured_pending_first() {
+	fn refund_pending_change_can_be_replaced() {
 		let mut r = RefundAddress::default();
 		r.register(eth(1), 0, 0); // active: eth(1)
 		r.register(eth(2), 0, DAY); // pending: eth(2) @ DAY
-							  // At `now = DAY` the pending eth(2) has matured; registering eth(3) collapses it into
-							  // current first, then schedules eth(3).
-		r.register(eth(3), DAY, DAY);
-		assert_eq!(r.effective(DAY), Some(&eth(2)));
-		assert_eq!(r.effective(2 * DAY), Some(&eth(3)));
+							  // A pending change can be freely replaced; this reschedules it for a fresh `now +
+							  // timelock`, and the active eth(1) stays put until then.
+		r.register(eth(3), 100, DAY);
+		assert_eq!(r.effective(DAY), Some(&eth(1)));
+		assert_eq!(r.effective(100 + DAY), Some(&eth(3)));
+	}
+
+	#[test]
+	fn refund_is_registered_covers_effective_and_pending() {
+		let mut r = RefundAddress::default();
+		assert!(!r.is_registered());
+		// A pending first registration counts as registered even before it matures.
+		r.register(eth(1), 0, DAY);
+		assert!(r.is_registered());
+		// Still registered once effective.
+		let mut r = RefundAddress::default();
+		r.register(eth(1), 0, 0);
+		assert!(r.is_registered());
 	}
 }
