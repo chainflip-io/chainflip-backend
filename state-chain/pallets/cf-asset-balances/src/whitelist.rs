@@ -43,42 +43,32 @@ pub enum WhitelistChange<AccountId, Address> {
 	Remove(AccountOrAddress<AccountId, Address>),
 }
 
-/// Per-account withdrawal timelock, in seconds.
-///
-/// Strengthening changes (longer timelock, incl. enabling) apply immediately; weakening changes
-/// (shorter, incl. disabling) are themselves delayed by the current timelock and held in `pending`
-/// as `(new_duration, effective_at)`.
+/// A value with an optional timelocked change: `pending` — a `(new_value, apply_at)` pair — becomes
+/// `current` once `now` reaches its activation time. Only the state and its resolution against
+/// `now` live here; the *policy* for when a change is immediate vs delayed belongs to the caller.
+/// Used for both the withdrawal [`TimelockState`] and [`RefundAddress`].
 #[derive(
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	Clone,
-	Copy,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
-	Default,
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug, Default,
 )]
-pub struct TimelockState {
-	pub current: DurationSeconds,
-	pub pending: Option<(DurationSeconds, DurationSeconds)>,
+pub struct TimelockedValue<T> {
+	current: T,
+	pending: Option<(T, DurationSeconds)>,
 }
 
-impl TimelockState {
-	/// The timelock duration in force at `now`, accounting for a matured pending change.
-	fn effective(&self, now: DurationSeconds) -> DurationSeconds {
-		match self.pending {
-			Some((new_duration, effective_at)) if now >= effective_at => new_duration,
-			_ => self.current,
+impl<T: Clone> TimelockedValue<T> {
+	/// The value in force at `now`, accounting for a matured pending change.
+	fn effective(&self, now: DurationSeconds) -> &T {
+		match &self.pending {
+			Some((value, apply_at)) if now >= *apply_at => value,
+			_ => &self.current,
 		}
 	}
 
 	/// Collapses a matured pending change into `current`; returns whether anything changed.
 	fn collapse_if_matured(&mut self, now: DurationSeconds) -> bool {
-		if let Some((new_duration, effective_at)) = self.pending {
-			if now >= effective_at {
-				self.current = new_duration;
+		if let Some((value, apply_at)) = &self.pending {
+			if now >= *apply_at {
+				self.current = value.clone();
 				self.pending = None;
 				return true;
 			}
@@ -88,9 +78,72 @@ impl TimelockState {
 
 	/// Like [`effective`](Self::effective) but also collapses a matured pending change so storage
 	/// stays tidy.
-	fn effective_and_collapse(&mut self, now: DurationSeconds) -> DurationSeconds {
+	fn effective_and_collapse(&mut self, now: DurationSeconds) -> &T {
 		self.collapse_if_matured(now);
-		self.current
+		&self.current
+	}
+
+	/// Applies `value` immediately, discarding any pending change.
+	fn set_now(&mut self, value: T) {
+		self.current = value;
+		self.pending = None;
+	}
+
+	/// Schedules `value` to take effect `delay` seconds from `now` (folding any already-matured
+	/// change first). Returns the activation time.
+	fn schedule(
+		&mut self,
+		value: T,
+		now: DurationSeconds,
+		delay: DurationSeconds,
+	) -> DurationSeconds {
+		self.collapse_if_matured(now);
+		let apply_at = now.saturating_add(delay);
+		self.pending = Some((value, apply_at));
+		apply_at
+	}
+}
+
+/// Per-account withdrawal timelock, in seconds (`current == 0` = restriction off). Strengthening
+/// (longer/enabling) applies immediately; weakening (shorter/disabling) is delayed by the current
+/// timelock — the policy lives in [`WithdrawalWhitelist::set_timelock`].
+pub type TimelockState = TimelockedValue<DurationSeconds>;
+
+/// An account's refund address for one chain, with a possibly-pending timelocked change.
+///
+/// The refund address is implicitly allowed as a withdrawal destination, so — like whitelist
+/// entries — repointing it is delayed by the account's timelock while the restriction is on: the
+/// current address stays active until the pending one matures.
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug, Default,
+)]
+pub struct RefundAddress(TimelockedValue<Option<ForeignChainAddress>>);
+
+impl RefundAddress {
+	/// An immediately-active refund address.
+	pub fn immediate(address: ForeignChainAddress) -> Self {
+		Self(TimelockedValue { current: Some(address), pending: None })
+	}
+
+	/// Registers `new`. Immediate when `timelock == 0`; otherwise the current address stays active
+	/// and `new` is scheduled for `now + timelock`.
+	pub(crate) fn register(
+		&mut self,
+		new: ForeignChainAddress,
+		now: DurationSeconds,
+		timelock: DurationSeconds,
+	) {
+		if timelock == 0 {
+			self.0.set_now(Some(new));
+		} else {
+			self.0.schedule(Some(new), now, timelock);
+		}
+	}
+
+	/// The effective (active) refund address at `now` (accounting for a matured pending change), if
+	/// any.
+	pub(crate) fn effective(&self, now: DurationSeconds) -> Option<&ForeignChainAddress> {
+		self.0.effective(now).as_ref()
 	}
 }
 
@@ -132,7 +185,7 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 		dest: AccountOrAddress<&AccountId, &ForeignChainAddress>,
 		now: DurationSeconds,
 	) -> bool {
-		if self.timelock.effective(now) == 0 {
+		if *self.timelock.effective(now) == 0 {
 			return true;
 		}
 		match dest {
@@ -170,7 +223,7 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 		if self.pending_count() >= max_pending {
 			return None;
 		}
-		let apply_at = now.saturating_add(self.timelock.effective_and_collapse(now));
+		let apply_at = now.saturating_add(*self.timelock.effective_and_collapse(now));
 		self.pending.entry(apply_at).or_default().push(change);
 		Some(apply_at)
 	}
@@ -183,15 +236,19 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 		duration: DurationSeconds,
 		now: DurationSeconds,
 	) -> DurationSeconds {
-		let current = self.timelock.effective_and_collapse(now);
+		let current = *self.timelock.effective_and_collapse(now);
 		if duration >= current {
-			self.timelock = TimelockState { current: duration, pending: None };
+			self.timelock.set_now(duration);
 			now
 		} else {
-			let effective_at = now.saturating_add(current);
-			self.timelock.pending = Some((duration, effective_at));
-			effective_at
+			// Weakening/disabling is delayed by the current timelock.
+			self.timelock.schedule(duration, now, current)
 		}
+	}
+
+	/// The account's effective withdrawal timelock at `now` (0 = restriction off).
+	pub(crate) fn effective_timelock(&self, now: DurationSeconds) -> DurationSeconds {
+		*self.timelock.effective(now)
 	}
 
 	/// Whether this whitelist holds no state, so the caller can drop the storage entry.
@@ -405,5 +462,49 @@ mod tests {
 		// Second matures later.
 		assert!(w.apply_due_updates(2 * DAY));
 		assert!(w.is_allowed(to_address(&eth(2)), 2 * DAY));
+	}
+
+	#[test]
+	fn refund_immediate_when_timelock_off() {
+		let mut r = RefundAddress::default();
+		r.register(eth(1), 0, 0);
+		assert_eq!(r.effective(0), Some(&eth(1)));
+		// A repoint while off is also immediate.
+		r.register(eth(2), 100, 0);
+		assert_eq!(r.effective(100), Some(&eth(2)));
+	}
+
+	#[test]
+	fn refund_repoint_is_timelocked_and_old_stays_active() {
+		let mut r = RefundAddress::default();
+		// active: eth(1)
+		r.register(eth(1), 0, 0);
+		// Repoint under restriction: eth(1) stays active until eth(2) matures.
+		r.register(eth(2), 0, DAY);
+		assert_eq!(r.effective(0), Some(&eth(1)));
+		assert_eq!(r.effective(DAY - 1), Some(&eth(1)));
+		assert_eq!(r.effective(DAY), Some(&eth(2)));
+	}
+
+	#[test]
+	fn refund_first_registration_has_no_active_until_matured() {
+		let mut r = RefundAddress::default();
+		// First-ever registration under restriction: nothing active until it matures.
+		r.register(eth(1), 0, DAY);
+		assert_eq!(r.effective(0), None);
+		assert_eq!(r.effective(DAY - 1), None);
+		assert_eq!(r.effective(DAY), Some(&eth(1)));
+	}
+
+	#[test]
+	fn refund_register_collapses_matured_pending_first() {
+		let mut r = RefundAddress::default();
+		r.register(eth(1), 0, 0); // active: eth(1)
+		r.register(eth(2), 0, DAY); // pending: eth(2) @ DAY
+							  // At `now = DAY` the pending eth(2) has matured; registering eth(3) collapses it into
+							  // current first, then schedules eth(3).
+		r.register(eth(3), DAY, DAY);
+		assert_eq!(r.effective(DAY), Some(&eth(2)));
+		assert_eq!(r.effective(2 * DAY), Some(&eth(3)));
 	}
 }

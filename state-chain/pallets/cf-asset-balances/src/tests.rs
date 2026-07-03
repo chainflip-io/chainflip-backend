@@ -531,6 +531,13 @@ mod withdrawal_whitelist {
 		));
 	}
 
+	fn allow_account(who: &AccountId, account: &AccountId) {
+		assert_ok!(Pallet::<Test>::update_whitelist(
+			RuntimeOrigin::signed(who.clone()),
+			WhitelistChange::Allow(AccountOrAddress::InternalAccount(account.clone())),
+		));
+	}
+
 	fn set_timelock(who: &AccountId, seconds: u64) {
 		assert_ok!(Pallet::<Test>::set_withdrawal_timelock(
 			RuntimeOrigin::signed(who.clone()),
@@ -538,11 +545,15 @@ mod withdrawal_whitelist {
 		));
 	}
 
-	fn ensure_external(who: &AccountId, address: &ForeignChainAddress) -> DispatchResult {
+	fn ensure_allowed_external(who: &AccountId, address: &ForeignChainAddress) -> DispatchResult {
 		Pallet::<Test>::ensure_withdrawal_allowed_to(
 			who,
 			AccountOrAddress::ExternalAddress(address),
 		)
+	}
+
+	fn ensure_allowed_internal(who: &AccountId, account: &AccountId) -> DispatchResult {
+		Pallet::<Test>::ensure_withdrawal_allowed_to(who, AccountOrAddress::InternalAccount(account))
 	}
 
 	#[test]
@@ -642,20 +653,20 @@ mod withdrawal_whitelist {
 		new_test_ext().execute_with(|| {
 			let who = account(1);
 			// Off by default => everything allowed.
-			assert_ok!(ensure_external(&who, &ETH_ADDR_1));
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
 
 			// Enabling turns the restriction on immediately; with nothing configured, all blocked.
 			set_timelock(&who, 1000);
-			assert_err!(ensure_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
+			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
 
 			// A scheduled address only takes effect once the timelock has elapsed.
 			allow(&who, ETH_ADDR_1);
-			assert_err!(ensure_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
+			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
 
 			time_source::Mock::tick(Duration::from_secs(1001));
-			assert_ok!(ensure_external(&who, &ETH_ADDR_1));
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
 			// An unconfigured chain stays blocked (account-wide fail-safe).
-			assert_err!(ensure_external(&who, &ARB_ADDR_1), Error::<Test>::DestinationNotAllowed);
+			assert_err!(ensure_allowed_external(&who, &ARB_ADDR_1), Error::<Test>::DestinationNotAllowed);
 		});
 	}
 
@@ -668,17 +679,61 @@ mod withdrawal_whitelist {
 
 			// With no timelock set the restriction is off, so a refund address changes nothing:
 			// any address is still allowed, exactly as before the feature.
-			assert_ok!(ensure_external(&who, &ETH_ADDR_2));
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
 
 			// Turn the restriction on; nothing has been added to the whitelist.
 			set_timelock(&who, 1000);
 
 			// The refund address is allowed even though it was never whitelisted (and the timelock
 			// is on) — refund addresses are trusted.
-			assert_ok!(ensure_external(&who, &ETH_ADDR_1));
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
 
 			// A different address on the same chain is still blocked.
-			assert_err!(ensure_external(&who, &ETH_ADDR_2), Error::<Test>::DestinationNotAllowed);
+			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_2), Error::<Test>::DestinationNotAllowed);
+		});
+	}
+
+	#[test]
+	fn refund_address_update_is_timelocked() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// Establish a refund address, then turn the restriction on.
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_1);
+			set_timelock(&who, 1000);
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+
+			// Repointing under restriction is delayed: the old refund address stays active and the
+			// new one is not yet allowed (this is what closes the stolen-key repoint bypass).
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_2);
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_2), Error::<Test>::DestinationNotAllowed);
+
+			// Once the timelock elapses the new refund address takes over.
+			time_source::Mock::tick(Duration::from_secs(1001));
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
+			assert_err!(ensure_allowed_external(&who, &ETH_ADDR_1), Error::<Test>::DestinationNotAllowed);
+		});
+	}
+
+	#[test]
+	fn internal_account_allowlisting_is_timelocked() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			let dest = account(2);
+
+			// Off by default => any internal destination is allowed.
+			assert_ok!(ensure_allowed_internal(&who, &dest));
+
+			// Enabling turns the restriction on; the internal set is now fail-safe (empty = blocked).
+			set_timelock(&who, 1000);
+			assert_err!(ensure_allowed_internal(&who, &dest), Error::<Test>::DestinationNotAllowed);
+
+			// Allowlisting the account is itself timelocked.
+			allow_account(&who, &dest);
+			assert_err!(ensure_allowed_internal(&who, &dest), Error::<Test>::DestinationNotAllowed);
+
+			time_source::Mock::tick(Duration::from_secs(1001));
+			assert_ok!(ensure_allowed_internal(&who, &dest));
 		});
 	}
 }
