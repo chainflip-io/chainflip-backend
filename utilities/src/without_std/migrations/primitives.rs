@@ -25,6 +25,7 @@ use crate::{
 		OrdMigrations,
 	},
 	never::{IsEmptyType, Never},
+	type_introspection::HasTypeIntrospection,
 };
 
 // ----------- identity migrations -------------
@@ -135,6 +136,20 @@ macro_rules! impl_identity_migrations_with_wrapper {
 				type Strategy = impl proptest::strategy::Strategy<Value = Self>;
 			}
 		)?
+
+        $(
+            // This implementation assumes the inner type has a Default implementation
+            impl HasTypeIntrospection for $Wrapper {
+                fn is_empty_type() -> bool {
+                    false
+                }
+
+                fn sample_all_shapes() -> Vec<Self> {
+                    let $var = <$Inner as Default>::default();
+                    sp_std::vec![$Wrapper($ctr)]
+                }
+            }
+        )?
 	};
 }
 
@@ -154,7 +169,14 @@ impl_identity_migrations_with_wrapper! {
 
 // ----------- simple migration that introduces a new type -------------
 
-#[derive(codec::Encode, codec::Decode, scale_info::TypeInfo, PartialEq, Debug)]
+#[derive(
+	codec::Encode,
+	codec::Decode,
+	scale_info::TypeInfo,
+	PartialEq,
+	Debug,
+	cf_proc_macros::HasTypeIntrospection,
+)]
 #[cfg_attr(all(feature = "proptest", feature = "std"), derive(proptest_derive::Arbitrary))]
 pub struct HistoricalEmptyPlaceholder<T>(sp_std::marker::PhantomData<T>);
 impl<T: HasGenericVariant + HasChangelog> IsHistoricalType for HistoricalEmptyPlaceholder<T> {

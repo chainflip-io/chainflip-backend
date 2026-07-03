@@ -863,7 +863,9 @@ pub enum RuntimeApiAccountInfo {
 	Operator(Box<OperatorInfo<FlipBalance>>),
 }
 
-#[derive(Encode, Decode, TypeInfo, PartialEq, Debug, Default)]
+#[derive(
+	Encode, Decode, TypeInfo, PartialEq, Debug, Default, cf_proc_macros::HasTypeIntrospection,
+)]
 #[cfg_attr(
 	any(test, all(feature = "proptest", feature = "std")),
 	derive(proptest_derive::Arbitrary)
