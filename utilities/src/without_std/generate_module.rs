@@ -76,7 +76,6 @@ macro_rules! generate_module {
                         #[derive_where(Clone; $(Ty::$field: Clone),*)]
                         #[derive_where(PartialEq; $(Ty::$field: PartialEq),*)]
                         #[derive_where(Eq; $(Ty::$field: Eq),*)]
-                        #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
                         #[scale_info(skip_type_params(Ty))]
                         #[derive(cf_proc_macros::HasTypeIntrospection)]
                         #[derive(cf_proc_macros::IntroElim)]
