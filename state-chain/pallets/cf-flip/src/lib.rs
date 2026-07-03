@@ -56,7 +56,11 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 use on_charge_transaction::CallIndexFor;
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	marker::PhantomData,
+	prelude::*,
+};
 
 pub use pallet::*;
 
@@ -469,16 +473,6 @@ impl<T: Config> Pallet<T> {
 		Deficit::from_burn(amount)
 	}
 
-	/// Burns `amount`, unless fee reward distribution has been activated, in which case `amount`
-	/// is deposited into the reserve to be distributed to authorities as fee rewards instead.
-	fn burn_or_deposit_to_reserve(amount: T::Balance) -> Deficit<T> {
-		if T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get() {
-			Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
-		} else {
-			Pallet::<T>::burn(amount)
-		}
-	}
-
 	/// Increases total issuance and returns a corresponding imbalance that must be reconciled.
 	fn mint(amount: T::Balance) -> Surplus<T> {
 		Surplus::from_mint(amount)
@@ -561,9 +555,20 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn trigger_flip_reward_distribution(authorities: Vec<T::AccountId>) -> T::Balance {
-		let count_u128 = authorities.len() as u128;
+	/// Bridge in funds from off-chain and deposit them into the fee distribution reserve.
+	fn bridge_in_to_distribution_reserve(amount: T::Balance) {
+		let _ = Self::bridge_in(amount)
+			.offset(Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount));
+	}
 
+	fn credit_reward_from_reserve(account_id: &T::AccountId, amount: T::Balance) {
+		Pallet::<T>::settle(
+			account_id,
+			Pallet::<T>::withdraw_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount).into(),
+		);
+	}
+
+	pub fn trigger_flip_reward_distribution(authorities: BTreeSet<T::AccountId>) -> T::Balance {
 		// Bridge in any pending offchain rewards and deposit them into the distribution reserve so
 		// that everything is distributed from a single source.
 		let offchain_flip_to_distribute = FlipToDistribute::<T>::take();
@@ -572,10 +577,7 @@ impl<T: Config> Pallet<T> {
 				.try_into()
 				.expect("checked for positive number above");
 			let amount: T::Balance = as_u128.into();
-			let _ = Pallet::<T>::bridge_in(amount).offset(Pallet::<T>::deposit_reserves(
-				ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
-				amount,
-			));
+			Pallet::<T>::bridge_in_to_distribution_reserve(amount);
 			amount
 		} else {
 			FlipToDistribute::<T>::put(offchain_flip_to_distribute);
@@ -583,23 +585,16 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// Distribute evenly from the combined reserve. Any remainder stays for the next epoch.
-		let per_authority_reward =
-			Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID) / count_u128.into();
+		let per_authority_reward = Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID) /
+			(authorities.len() as u128).into();
 
-		let mut flip_distributed_map = sp_std::collections::btree_map::BTreeMap::new();
+		let mut flip_distributed_map = BTreeMap::new();
 		for authority in &authorities {
 			T::RewardsDistribution::distribute(
 				per_authority_reward,
 				authority,
 				|account, amount| {
-					Pallet::<T>::settle(
-						account,
-						Pallet::<T>::withdraw_reserves(
-							ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
-							amount,
-						)
-						.into(),
-					);
+					Pallet::<T>::credit_reward_from_reserve(account, amount);
 					flip_distributed_map
 						.entry(account.clone())
 						.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
@@ -612,6 +607,22 @@ impl<T: Config> Pallet<T> {
 			amount: flip_distributed_map.into_iter().collect(),
 		});
 		offchain_flip_bridged
+	}
+
+	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
+	/// rather than burned.
+	pub fn is_flip_2_1_activated() -> bool {
+		T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get()
+	}
+
+	/// Burns `amount`, unless FLIP 2.1 is active, in which case `amount` is deposited into the
+	/// reserve to be distributed to authorities as fee rewards instead.
+	fn burn_or_deposit_to_reserve(amount: T::Balance) -> Deficit<T> {
+		if Self::is_flip_2_1_activated() {
+			Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
+		} else {
+			Self::burn(amount)
+		}
 	}
 }
 
@@ -658,13 +669,16 @@ impl<T: Config> FeePayment for Pallet<T> {
 		FlipToDistribute::<T>::mutate(|flip| flip.saturating_accrue(amount));
 	}
 
-	fn bridge_in_and_add_to_onchain_flip_to_be_distributed(amount: Self::Amount) {
-		let _ = Self::bridge_in(amount)
-			.offset(Pallet::<T>::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount));
+	fn burn_or_reserve_offchain(amount: Self::Amount) {
+		if Pallet::<T>::is_flip_2_1_activated() {
+			Pallet::<T>::bridge_in_to_distribution_reserve(amount);
+		} else {
+			<Pallet<T> as Issuance>::burn_offchain(amount);
+		}
 	}
 
-	fn fee_rewards_activation_epoch() -> EpochIndex {
-		FeeRewardsActivationEpoch::<T>::get()
+	fn is_flip_2_1_activated() -> bool {
+		Pallet::<T>::is_flip_2_1_activated()
 	}
 }
 
@@ -712,8 +726,8 @@ impl<T: Config> Issuance for Pallet<T> {
 		let _remainder = Pallet::<T>::burn(amount).offset(Pallet::<T>::bridge_in(amount));
 	}
 
-	fn fee_rewards_activation_epoch() -> EpochIndex {
-		FeeRewardsActivationEpoch::<T>::get()
+	fn is_flip_2_1_activated() -> bool {
+		Pallet::<T>::is_flip_2_1_activated()
 	}
 }
 
@@ -735,8 +749,8 @@ impl<T: Config> Issuance for FlipIssuance<T> {
 		<Pallet<T> as Issuance>::burn_offchain(amount);
 	}
 
-	fn fee_rewards_activation_epoch() -> EpochIndex {
-		<Pallet<T> as Issuance>::fee_rewards_activation_epoch()
+	fn is_flip_2_1_activated() -> bool {
+		<Pallet<T> as Issuance>::is_flip_2_1_activated()
 	}
 }
 

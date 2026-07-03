@@ -38,11 +38,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, EpochInfo,
-	ExpiryBehaviour, FeePayment, FundingInfo, FundingSource, GetMinimumFunding,
-	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
+	FeePayment, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
+	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -2624,19 +2623,17 @@ pub mod pallet {
 										if output_amount < *flip_to_subtract_from_swap_output {
 											// In the rare event that this occurs we will track the
 											// deficit and offset it against the next burn
-											let deficit = flip_to_subtract_from_swap_output
-												.saturating_sub(output_amount);
-											if T::EpochInfo::epoch_index() >=
-												T::FeePayment::fee_rewards_activation_epoch()
-											{
+											let deficit: i128 = flip_to_subtract_from_swap_output
+												.saturating_sub(output_amount)
+												.try_into()
+												.unwrap_or(i128::MAX);
+											if T::FeePayment::is_flip_2_1_activated() {
 												T::FeePayment::add_to_offchain_flip_to_be_distributed(
-													-(deficit.try_into().unwrap_or(i128::MAX)),
+													-deficit,
 												);
 											} else {
 												FlipToBurn::<T>::mutate(|total| {
-													total.saturating_reduce(
-														deficit.try_into().unwrap_or(i128::MAX),
-													);
+													total.saturating_reduce(deficit);
 												});
 											}
 											FlipToBeSentToGateway::<T>::mutate(|total| {
@@ -2669,9 +2666,7 @@ pub mod pallet {
 					},
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
-						if T::EpochInfo::epoch_index() >=
-							T::FeePayment::fee_rewards_activation_epoch()
-						{
+						if T::FeePayment::is_flip_2_1_activated() {
 							T::FeePayment::add_to_offchain_flip_to_be_distributed(
 								output_amount.try_into().unwrap_or(i128::MAX),
 							);
