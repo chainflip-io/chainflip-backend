@@ -46,11 +46,11 @@ impl proptest::arbitrary::Arbitrary for Never {
 }
 
 pub trait IsEmptyType: Sized {
-	fn as_never(self) -> Never;
+	fn as_never(&self) -> Never;
 }
 
 impl IsEmptyType for Never {
-	fn as_never(self) -> Never {
-		self
+	fn as_never(&self) -> Never {
+		match *self {}
 	}
 }

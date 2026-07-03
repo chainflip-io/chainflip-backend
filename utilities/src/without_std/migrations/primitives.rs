@@ -228,7 +228,7 @@ pub enum TupleWith2EntriesMigrationFailed<A, B> {
 }
 
 impl<E: IsEmptyType> IsEmptyType for OptionMigrationFailed<E> {
-	fn as_never(self) -> Never {
+	fn as_never(&self) -> Never {
 		match self {
 			Self::Some(error) => error.as_never(),
 		}
@@ -236,7 +236,7 @@ impl<E: IsEmptyType> IsEmptyType for OptionMigrationFailed<E> {
 }
 
 impl<E: IsEmptyType> IsEmptyType for VecMigrationFailed<E> {
-	fn as_never(self) -> Never {
+	fn as_never(&self) -> Never {
 		match self {
 			Self::Element { error, .. } => error.as_never(),
 		}
@@ -244,7 +244,7 @@ impl<E: IsEmptyType> IsEmptyType for VecMigrationFailed<E> {
 }
 
 impl<E: IsEmptyType> IsEmptyType for TupleWith1EntryMigrationFailed<E> {
-	fn as_never(self) -> Never {
+	fn as_never(&self) -> Never {
 		match self {
 			Self::First(error) => error.as_never(),
 		}
@@ -252,7 +252,7 @@ impl<E: IsEmptyType> IsEmptyType for TupleWith1EntryMigrationFailed<E> {
 }
 
 impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType for TupleWith2EntriesMigrationFailed<A, B> {
-	fn as_never(self) -> Never {
+	fn as_never(&self) -> Never {
 		match self {
 			Self::First(error) => error.as_never(),
 			Self::Second(error) => error.as_never(),

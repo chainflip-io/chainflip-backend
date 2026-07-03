@@ -88,7 +88,7 @@ pub enum ComposedMigrationFailed<A, B> {
 }
 
 impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType for ComposedMigrationFailed<A, B> {
-	fn as_never(self) -> Never {
+	fn as_never(&self) -> Never {
 		match self {
 			Self::First(error) => error.as_never(),
 			Self::Second(error) => error.as_never(),
