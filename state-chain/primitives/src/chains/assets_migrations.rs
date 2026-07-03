@@ -14,12 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_utilities::migrations::{
-	basics::{HasVersion, IdentityMigration},
-	v20100, v20200, v20300, HasChangelog,
-};
+use cf_utilities::migrations::{basics::HasVersion, v20100, v20200, v20300, HasChangelog};
 
-use crate::Asset;
+use crate::{chains::assets::any::_Asset, Asset};
 
 use super::assets::*;
 
@@ -86,5 +83,9 @@ where
 }
 
 impl HasChangelog for Asset {
-	type if_unspecified = IdentityMigration;
+	type if_unspecified = _Asset::see_variant_changelogs;
+	type in_20300 = _Asset::see_variant_changelogs_and_also<(
+		_Asset::variant::Bnb::Added,
+		_Asset::variant::BscUsdt::Added,
+	)>;
 }
