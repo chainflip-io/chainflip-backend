@@ -2929,9 +2929,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								// (screening_id) or, by the channel owner if the owner is not
 								// whitelisted.
 								let screening_id = T::ScreeningBrokerId::get();
-								let screening_found =
+								let check_rejection = |id: &AccountIdFor<T>| -> bool {
 									TransactionsMarkedForRejection::<T, I>::mutate(
-										&screening_id,
+										id,
 										tx_id,
 										|status| match status {
 											Some(status) => {
@@ -2939,36 +2939,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 													ReportExpiresAt::<T, I>::append(
 														<frame_system::Pallet<T>>::block_number()
 															.saturating_add(One::one()),
-														(screening_id.clone(), tx_id),
+														(id.clone(), tx_id),
 													);
+													status.expires_at = Zero::zero();
 												}
-												status.expires_at = Zero::zero();
 												true
 											},
 											None => false,
 										},
-									);
+									)
+								};
 
-								let broker_found = TransactionsMarkedForRejection::<T, I>::mutate(
-									broker_id,
-									tx_id,
-									|status| match status {
-										Some(status) => {
-											if !status.expires_at.is_zero() {
-												ReportExpiresAt::<T, I>::append(
-													<frame_system::Pallet<T>>::block_number()
-														.saturating_add(One::one()),
-													(broker_id, tx_id),
-												);
-											}
-											status.expires_at = Zero::zero();
-											true
-										},
-										None => false,
-									},
-								);
+								let screening_broker_found = check_rejection(&screening_id);
+								let broker_found = check_rejection(broker_id);
 
-								if screening_found || broker_found {
+								if screening_broker_found || broker_found {
 									return Some(())
 								}
 								None
