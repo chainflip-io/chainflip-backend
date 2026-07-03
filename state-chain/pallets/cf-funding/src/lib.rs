@@ -36,9 +36,8 @@ mod tests;
 use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
 use cf_traits::{
-	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, EpochInfo,
-	FeePayment, FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck,
-	SpawnAccount,
+	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
+	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
 };
 use cf_utilities::derive_common_traits;
 use codec::{Decode, DecodeWithMemTracking, Encode};
@@ -924,15 +923,7 @@ pub mod pallet {
 						amount < MinimumFunding::<T>::get().into()
 					{
 						// Insufficient funds to create an account.
-						if T::EpochInfo::epoch_index() >=
-							<T::Flip as FeePayment>::fee_rewards_activation_epoch()
-						{
-							T::Flip::bridge_in_and_add_to_onchain_flip_to_be_distributed(
-								amount.into(),
-							);
-						} else {
-							T::Flip::burn_offchain(amount.into());
-						}
+						T::Flip::burn_or_reserve_offchain(amount.into());
 						Self::deposit_event(Event::FailedFundingAttempt {
 							account_id: caller_account_id,
 							withdrawal_address: caller,
