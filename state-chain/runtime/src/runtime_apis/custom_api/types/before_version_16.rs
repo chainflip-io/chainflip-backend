@@ -17,7 +17,6 @@ use super::*;
 use cf_utilities::migrations::{
 	basics::migrate_from_historical_type, v20000, v20100, v20200, v20300,
 };
-use codec::{DecodeWithMemTracking, MaxEncodedLen};
 
 #[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct VaultAddresses {

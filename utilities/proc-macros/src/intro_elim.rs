@@ -35,6 +35,7 @@ pub fn derive(input: DeriveInput) -> TokenStream {
 
 	quote! {
 		impl #impl_generics #name #ty_generics #where_clause {
+			#[allow(clippy::too_many_arguments)]
 			pub fn intro(#(#intro_args),*) -> Self {
 				Self {
 					#(#field_inits,)*

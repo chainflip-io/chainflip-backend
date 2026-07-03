@@ -114,6 +114,8 @@ mod derive_macro_tests {
 	// --------------- is_empty_type ----------------
 	#[test]
 	fn test_is_empty_type() {
+		#![allow(clippy::bool_assert_comparison)]
+
 		#[derive(cf_proc_macros::HasTypeIntrospection)]
 		enum NotEmpty0 {
 			Var0 { a: bool },
