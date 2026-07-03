@@ -33,10 +33,10 @@ use futures::StreamExt;
 use futures_util::FutureExt;
 use sp_core::H256;
 use state_chain_runtime::{AccountId, Nonce};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tracing::trace;
 
-use crate::SIGNED_EXTRINSIC_LIFETIME;
+use crate::{BlockInfo, SIGNED_EXTRINSIC_LIFETIME};
 
 mod submission_watcher;
 
@@ -174,6 +174,7 @@ impl SignedExtrinsicClient {
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
 		genesis_hash: H256,
 		state_chain_stream: &mut BlockStream,
+		latest_finalized_block_watcher: watch::Receiver<BlockInfo>,
 	) -> Result<Self> {
 		const REQUEST_BUFFER: usize = 16;
 
@@ -193,8 +194,8 @@ impl SignedExtrinsicClient {
 							scope,
 							signer,
 							account_nonce,
-							state_chain_stream.cache().hash,
 							state_chain_stream.cache().number,
+							latest_finalized_block_watcher,
 							base_rpc_client.runtime_version(None).await?,
 							genesis_hash,
 							SIGNED_EXTRINSIC_LIFETIME,
