@@ -829,9 +829,7 @@ fn expand_struct(
 		.iter()
 		.map(|p| &p.ident)
 		.filter(|id| {
-			!fields_str
-				.split(|c: char| !c.is_alphanumeric() && c != '_')
-				.any(|w| w == id.to_string())
+			!fields_str.split(|c: char| !c.is_alphanumeric() && c != '_').any(|w| *id == w)
 		})
 		.collect();
 
