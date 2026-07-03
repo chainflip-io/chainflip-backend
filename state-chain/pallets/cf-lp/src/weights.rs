@@ -203,85 +203,36 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn schedule_swap() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `2120`
-		//  Estimated: `8060`
-		// Minimum execution time: 79_816_000 picoseconds.
-		Weight::from_parts(81_115_000, 8060)
-			.saturating_add(T::DbWeight::get().reads(13_u64))
-			.saturating_add(T::DbWeight::get().writes(5_u64))
+		//  Measured:  `2011`
+		//  Estimated: `0`
+		// Minimum execution time: 81_602_000 picoseconds.
+		Weight::from_parts(82_797_000, 0)
 	}
-	/// Storage: `LiquidityProvider::LpAggStats` (r:1 w:1)
-	/// Proof: `LiquidityProvider::LpAggStats` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityProvider::LpDeltaStats` (r:101 w:100)
+	/// Storage: `LiquidityProvider::LpDeltaStats` (r:1 w:1)
 	/// Proof: `LiquidityProvider::LpDeltaStats` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `m` is `[0, 100]`.
-	fn update_agg_stats_item(m: u32, ) -> Weight {
+	/// Storage: `LiquidityProvider::LpAggStats` (r:0 w:1)
+	/// Proof: `LiquidityProvider::LpAggStats` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn update_agg_stats_item() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `267 + m * (144 ±0)`
-		//  Estimated: `3729 + m * (2620 ±0)`
-		// Minimum execution time: 10_848_000 picoseconds.
-		Weight::from_parts(13_016_086, 3729)
-			// Standard Error: 17_914
-			.saturating_add(Weight::from_parts(6_950_050, 0).saturating_mul(m.into()))
-			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(m.into())))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(m.into())))
-			.saturating_add(Weight::from_parts(0, 2620).saturating_mul(m.into()))
+		//  Measured:  `296`
+		//  Estimated: `3761`
+		// Minimum execution time: 8_000_000 picoseconds.
+		Weight::from_parts(9_000_000, 3761)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
-	/// Storage: `LiquidityProvider::LpAggStats` (r:1 w:1)
-	/// Proof: `LiquidityProvider::LpAggStats` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityProvider::LpDeltaStats` (r:101 w:100)
-	/// Proof: `LiquidityProvider::LpDeltaStats` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[0, 100]`.
-	fn update_agg_stats_new(n: u32, ) -> Weight {
+	/// Storage: `LiquidityProvider::StatsUpdateCursor` (r:1 w:0)
+	/// Proof: `LiquidityProvider::StatsUpdateCursor` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::StatsLastUpdatedAt` (r:1 w:0)
+	/// Proof: `LiquidityProvider::StatsLastUpdatedAt` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn on_idle_nothing_to_do() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `263 + n * (62 ±0)`
-		//  Estimated: `3726 + n * (2538 ±0)`
-		// Minimum execution time: 10_890_000 picoseconds.
-		Weight::from_parts(8_210_835, 3726)
-			// Standard Error: 17_346
-			.saturating_add(Weight::from_parts(5_088_133, 0).saturating_mul(n.into()))
+		//  Measured:  `213`
+		//  Estimated: `1698`
+		// Minimum execution time: 3_000_000 picoseconds.
+		Weight::from_parts(5_000_000, 1698)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(n.into())))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
-			.saturating_add(Weight::from_parts(0, 2538).saturating_mul(n.into()))
 	}
-	/// Storage: `AccountRoles::AccountRoles` (r:100 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:100 w:0)
-	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::Pools` (r:3 w:0)
-	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:100 w:100)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::EgressIdCounter` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::EgressIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
-	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
-	/// Storage: `EthereumChainTracking::FeeMultiplier` (r:1 w:0)
-	/// Proof: `EthereumChainTracking::FeeMultiplier` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
-	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::EgressDustLimit` (r:3 w:0)
-	/// Proof: `EthereumIngressEgress::EgressDustLimit` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::NetworkFee` (r:1 w:0)
-	/// Proof: `Swapping::NetworkFee` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::NetworkFeeForAsset` (r:3 w:0)
-	/// Proof: `Swapping::NetworkFeeForAsset` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
-	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::ScheduledSwaps` (r:1 w:1)
-	/// Proof: `Swapping::ScheduledSwaps` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequests` (r:0 w:66)
-	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `n` is `[1, 100]`.
 	fn purge_balances(n: u32, ) -> Weight {
 		// Proof Size summary in bytes:
@@ -442,85 +393,36 @@ impl WeightInfo for () {
 	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn schedule_swap() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `2120`
-		//  Estimated: `8060`
-		// Minimum execution time: 79_816_000 picoseconds.
-		Weight::from_parts(81_115_000, 8060)
-			.saturating_add(ParityDbWeight::get().reads(13_u64))
-			.saturating_add(ParityDbWeight::get().writes(5_u64))
+		//  Measured:  `2011`
+		//  Estimated: `0`
+		// Minimum execution time: 81_602_000 picoseconds.
+		Weight::from_parts(82_797_000, 0)
 	}
-	/// Storage: `LiquidityProvider::LpAggStats` (r:1 w:1)
-	/// Proof: `LiquidityProvider::LpAggStats` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityProvider::LpDeltaStats` (r:101 w:100)
+	/// Storage: `LiquidityProvider::LpDeltaStats` (r:1 w:1)
 	/// Proof: `LiquidityProvider::LpDeltaStats` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `m` is `[0, 100]`.
-	fn update_agg_stats_item(m: u32, ) -> Weight {
+	/// Storage: `LiquidityProvider::LpAggStats` (r:0 w:1)
+	/// Proof: `LiquidityProvider::LpAggStats` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn update_agg_stats_item() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `267 + m * (144 ±0)`
-		//  Estimated: `3729 + m * (2620 ±0)`
-		// Minimum execution time: 10_848_000 picoseconds.
-		Weight::from_parts(13_016_086, 3729)
-			// Standard Error: 17_914
-			.saturating_add(Weight::from_parts(6_950_050, 0).saturating_mul(m.into()))
-			.saturating_add(ParityDbWeight::get().reads(2_u64))
-			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(m.into())))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
-			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(m.into())))
-			.saturating_add(Weight::from_parts(0, 2620).saturating_mul(m.into()))
+		//  Measured:  `296`
+		//  Estimated: `3761`
+		// Minimum execution time: 8_000_000 picoseconds.
+		Weight::from_parts(9_000_000, 3761)
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
-	/// Storage: `LiquidityProvider::LpAggStats` (r:1 w:1)
-	/// Proof: `LiquidityProvider::LpAggStats` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityProvider::LpDeltaStats` (r:101 w:100)
-	/// Proof: `LiquidityProvider::LpDeltaStats` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[0, 100]`.
-	fn update_agg_stats_new(n: u32, ) -> Weight {
+	/// Storage: `LiquidityProvider::StatsUpdateCursor` (r:1 w:0)
+	/// Proof: `LiquidityProvider::StatsUpdateCursor` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::StatsLastUpdatedAt` (r:1 w:0)
+	/// Proof: `LiquidityProvider::StatsLastUpdatedAt` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn on_idle_nothing_to_do() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `263 + n * (62 ±0)`
-		//  Estimated: `3726 + n * (2538 ±0)`
-		// Minimum execution time: 10_890_000 picoseconds.
-		Weight::from_parts(8_210_835, 3726)
-			// Standard Error: 17_346
-			.saturating_add(Weight::from_parts(5_088_133, 0).saturating_mul(n.into()))
+		//  Measured:  `213`
+		//  Estimated: `1698`
+		// Minimum execution time: 3_000_000 picoseconds.
+		Weight::from_parts(5_000_000, 1698)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
-			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(n.into())))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
-			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(n.into())))
-			.saturating_add(Weight::from_parts(0, 2538).saturating_mul(n.into()))
 	}
-	/// Storage: `AccountRoles::AccountRoles` (r:100 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:100 w:0)
-	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::Pools` (r:3 w:0)
-	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:100 w:100)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::EgressIdCounter` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::EgressIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
-	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
-	/// Storage: `EthereumChainTracking::FeeMultiplier` (r:1 w:0)
-	/// Proof: `EthereumChainTracking::FeeMultiplier` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
-	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::EgressDustLimit` (r:3 w:0)
-	/// Proof: `EthereumIngressEgress::EgressDustLimit` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::NetworkFee` (r:1 w:0)
-	/// Proof: `Swapping::NetworkFee` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::NetworkFeeForAsset` (r:3 w:0)
-	/// Proof: `Swapping::NetworkFeeForAsset` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
-	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::ScheduledSwaps` (r:1 w:1)
-	/// Proof: `Swapping::ScheduledSwaps` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequests` (r:0 w:66)
-	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `n` is `[1, 100]`.
 	fn purge_balances(n: u32, ) -> Weight {
 		// Proof Size summary in bytes:
