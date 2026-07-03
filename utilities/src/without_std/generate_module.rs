@@ -80,7 +80,7 @@ macro_rules! generate_module {
                         #[derive(cf_proc_macros::HasTypeIntrospection)]
                         #[derive(cf_proc_macros::IntroElim)]
                         #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(cf_proc_macros::ArbitraryWithBounds))]
-                        #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), arbitrary(bound(Ty: 'static, $( $($T: 'static,)+ )? $( Ty::$field: proptest::arbitrary::Arbitrary + 'static ),* )))]
+                        #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), arbitrary(bound(Ty: 'static, $( $($T: 'static,)+ )? $( Ty::$field: sp_std::fmt::Debug + proptest::arbitrary::Arbitrary + 'static ),* )))]
 
                         pub struct Struct {
                             $(
@@ -96,7 +96,7 @@ macro_rules! generate_module {
                     }
 
                     // ----------------- connection with default struct ------------------ //
-                    type UserStruct = $struct $(< $($T,)+ >)?;
+                    pub type UserStruct = $struct $(< $($T,)+ >)?;
 
                     impl HasGenericVariant for $struct $(< $($T,)+ >)? // UserStruct
                     where
@@ -194,7 +194,7 @@ macro_rules! generate_module {
                         mod field_migrations {
                             use super::*;
                             $(
-                                type $field = <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>;
+                                pub type $field = <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>;
                             )*
                             pub type TyFrom = (
                                 $(
@@ -572,7 +572,7 @@ macro_rules! generate_module {
                         mod variant_migrations {
                             use super::*;
                             $(
-                                type $variant = <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>;
+                                pub type $variant = <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>;
                             )*
                             pub type From = (
                                 $(
@@ -674,7 +674,7 @@ macro_rules! generate_module {
             cf_proc_macros::better_modules! {
                 mod $( $( ($T $(: $TBound)?) )+ )?
                 {
-                    type RealEnum = $enum $(< $($T,)+ >)?;
+                    pub type RealEnum = $enum $(< $($T,)+ >)?;
 
                     pub mod variants {
                         use super::*;
@@ -704,17 +704,17 @@ macro_rules! generate_module {
                         $(
                             pub type $variant = __impls::$variant::variant_struct;
 
-                            impl Into<RealEnum> for $variant {
-                                fn into(self) -> RealEnum {
+                            impl From<$variant> for RealEnum {
+                                fn from(this: $variant) -> RealEnum {
                                     $enum::$variant
                                     $(
                                         {
-                                            $( $variant_field: self.$variant_field, )*
+                                            $( $variant_field: this.$variant_field, )*
                                         }
                                     )?
                                     $(
                                         (
-                                            $( self.$variant_tuple_entry, )*
+                                            $( this.$variant_tuple_entry, )*
                                         )
                                     )?
                                 }

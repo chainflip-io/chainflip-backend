@@ -23,7 +23,7 @@ use crate::{
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, sol::Asset as SolAsset},
-	instances::{ChainInstanceAlias, SolanaInstance},
+	instances::SolanaInstance,
 	sol::{
 		api::{
 			AltWitnessingConsensusResult, SolanaApi, SolanaTransactionBuildingError,
@@ -71,8 +71,6 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 use electoral_systems::liveness::Liveness;
 
 use crate::chainflip::SolEnvironment;
-
-type Instance = <Solana as ChainInstanceAlias>::Instance;
 
 pub type SolanaElectoralSystemRunner = CompositeRunner<
 	(
@@ -153,7 +151,7 @@ impl DerivedIngressSink<SolAddress, VaultSwapOrDepositChannelId> for DerivedDepo
 
 pub type SolanaIngressTracking =
 	electoral_systems::blockchain::delta_based_ingress::DeltaBasedIngress<
-		pallet_cf_ingress_egress::Pallet<Runtime, Instance>,
+		pallet_cf_ingress_egress::Pallet<Runtime, SolanaInstance>,
 		DerivedDepositDetails,
 		SolanaIngressSettings,
 		<Runtime as Chainflip>::ValidatorId,

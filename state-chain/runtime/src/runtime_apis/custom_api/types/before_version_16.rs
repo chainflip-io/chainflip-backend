@@ -66,7 +66,12 @@ where
 	<Balance as HasVersion<v20200>>::HistoricalType: Default,
 	<Balance as HasVersion<v20100>>::HistoricalType: Default;
 
-pub type AssetMap<T> = <super::AssetMap<T> as HasVersion<v20000>>::HistoricalType;
+pub type AssetMap<T: HasChangelog + Default>
+	= <super::AssetMap<T> as HasVersion<v20000>>::HistoricalType
+where
+	<T as HasVersion<v20300>>::HistoricalType: Default,
+	<T as HasVersion<v20200>>::HistoricalType: Default,
+	<T as HasVersion<v20100>>::HistoricalType: Default;
 
 #[derive(Encode, Decode, TypeInfo, Default)]
 pub struct LiquidityProviderInfo {

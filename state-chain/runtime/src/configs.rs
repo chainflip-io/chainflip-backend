@@ -701,7 +701,7 @@ impl pallet_aura::Config for Runtime {
 	type SlotDuration = ConstU64<SLOT_DURATION>;
 }
 
-type KeyOwnerIdentification<T: KeyOwnerProofSystem<(KeyTypeId, Id)>, Id> =
+pub type KeyOwnerIdentification<T: KeyOwnerProofSystem<(KeyTypeId, Id)>, Id> =
 	<T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::IdentificationTuple;
 pub type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReportingAdapter<
 	T,
