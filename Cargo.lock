@@ -17380,6 +17380,7 @@ dependencies = [
  "bs58",
  "cf-proc-macros",
  "clap",
+ "derive-where",
  "duplicate",
  "futures",
  "futures-util",
