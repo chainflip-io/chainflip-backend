@@ -308,7 +308,7 @@ macro_rules! generate_module {
     ) => {
 
         $(#[$($Attributes)*])*
-        #[derive(cf_proc_macros::EnumElim)]
+        #[derive(cf_proc_macros::IntroElim)]
         $vis enum $enum$(< $($T $(: $TBound)?),+ >)? {
             $(
                 $( #[$($Variant_Attributes)*])*
