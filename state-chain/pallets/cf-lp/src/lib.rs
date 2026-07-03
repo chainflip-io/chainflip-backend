@@ -33,7 +33,7 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::vec::Vec;
 
 mod benchmarking;
 
@@ -48,7 +48,7 @@ pub use weights::WeightInfo;
 
 use cf_chains::address::EncodedAddress;
 
-pub const STORAGE_VERSION_U16: u16 = 3;
+pub const STORAGE_VERSION_U16: u16 = 4;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, internal_swaps_enabled);
@@ -353,7 +353,7 @@ pub mod pallet {
 	/// Stores exponential moving average stats for liquidity providers per asset
 	#[pallet::storage]
 	pub type LpAggStats<T: Config> =
-		StorageValue<_, BTreeMap<T::AccountId, BTreeMap<Asset, AggStats>>, ValueQuery>;
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AggStats>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -650,39 +650,28 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn update_agg_stats() -> Weight {
-		LpAggStats::<T>::mutate(|agg_stats_map| {
-			let prune_threshold = FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD);
-			let mut empty_lps: Vec<T::AccountId> = Vec::new();
+		let prune_threshold = FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD);
+		let mut existing_lps_count: u32 = 0;
 
-			// For every existing Lp, update their Aggregate stats from accumulated delta stats
-			let existing_lps_count = agg_stats_map.len() as u32;
-			for (lp, lp_stats) in agg_stats_map.iter_mut() {
-				for (asset, agg_stats) in lp_stats.iter_mut() {
-					agg_stats.update(&LpDeltaStats::<T>::take(lp, asset).unwrap_or_default());
-				}
-				lp_stats
-					.retain(|_, agg_stats| !agg_stats.is_below_pruning_threshold(prune_threshold));
-				if lp_stats.is_empty() {
-					empty_lps.push(lp.clone());
-				}
+		for (lp, asset, mut agg_stats) in LpAggStats::<T>::iter().collect::<Vec<_>>() {
+			existing_lps_count = existing_lps_count.saturating_add(1);
+			agg_stats.update(&LpDeltaStats::<T>::take(&lp, asset).unwrap_or_default());
+			if agg_stats.is_below_pruning_threshold(prune_threshold) {
+				LpAggStats::<T>::remove(&lp, asset);
+			} else {
+				LpAggStats::<T>::insert(&lp, asset, agg_stats);
 			}
+		}
 
-			// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
-			let mut extra_lps_count = 0;
-			for (lp, asset, delta) in LpDeltaStats::<T>::drain() {
-				agg_stats_map.entry(lp.clone()).or_default().insert(asset, AggStats::new(delta));
-				extra_lps_count += 1;
-			}
+		// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
+		let mut extra_lps_count: u32 = 0;
+		for (lp, asset, delta) in LpDeltaStats::<T>::drain() {
+			extra_lps_count = extra_lps_count.saturating_add(1);
+			LpAggStats::<T>::insert(&lp, asset, AggStats::new(delta));
+		}
 
-			for lp in empty_lps {
-				agg_stats_map.remove(&lp);
-			}
-
-			T::WeightInfo::update_agg_stats_existing(existing_lps_count)
-				.saturating_add(T::WeightInfo::update_agg_stats_new(extra_lps_count))
-				// Subtract the overhead that is measured twice in the benchmarking
-				.saturating_sub(T::WeightInfo::update_agg_stats_new(0))
-		})
+		T::WeightInfo::update_agg_stats_existing(existing_lps_count)
+			.saturating_add(T::WeightInfo::update_agg_stats_new(extra_lps_count))
 	}
 
 	#[frame_support::transactional]

@@ -598,7 +598,6 @@ fn on_limit_order_filled_updates_delta_stats() {
 		assert_eq!(deltas_2.limit_orders_swap_usd_volume, FixedU128::from_inner(USD_AMOUNT));
 	});
 }
-// rust
 #[test]
 fn update_agg_stats_updates_correctly() {
 	new_test_ext().execute_with(|| {
@@ -608,10 +607,7 @@ fn update_agg_stats_updates_correctly() {
 			limit_orders_swap_usd_volume: FixedU128::from_inner(1_000_000_000u128),
 		}); // Avg: 1000 USD
 
-		LpAggStats::<Test>::mutate(|agg_stats_map| {
-			let lp_stats = agg_stats_map.entry(LP_ACCOUNT).or_default();
-			lp_stats.insert(Asset::Eth, pre_existing_eth_stats);
-		});
+		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, pre_existing_eth_stats);
 
 		// on_limit_order_filled for LP_ACCOUNT with pre-existing AggStats
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128); // 700 usd
@@ -627,8 +623,7 @@ fn update_agg_stats_updates_correctly() {
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip), None);
 
-		let agg_stats_map = LpAggStats::<Test>::get();
-		let lp1_agg_stats = agg_stats_map.get(&LP_ACCOUNT).unwrap().get(&Asset::Eth).unwrap();
+		let lp1_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).unwrap();
 		assert!(is_within_tiny_error(
 			fixed_u128_to_f64(lp1_agg_stats.avg_limit_usd_volume.one_day),
 			expected_ema(
@@ -655,8 +650,7 @@ fn update_agg_stats_updates_correctly() {
 		));
 
 		// Verify new EMA was created for LP_ACCOUNT_2 and is initialized correctly
-		let agg_stats_map = LpAggStats::<Test>::get();
-		let lp2_agg_stats = agg_stats_map.get(&LP_ACCOUNT_2).unwrap().get(&Asset::Flip).unwrap();
+		let lp2_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).unwrap();
 		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day), 500f64);
 		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days), 500f64);
 		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days), 500f64);
@@ -683,26 +677,15 @@ fn update_agg_stats_prunes_below_threshold() {
 			},
 		};
 
-		LpAggStats::<Test>::mutate(|agg_stats_map| {
-			let lp_stats = agg_stats_map.entry(LP_ACCOUNT).or_default();
-			lp_stats.insert(Asset::Eth, below_threshold);
-			let lp_stats = agg_stats_map.entry(LP_ACCOUNT_2).or_default();
-			lp_stats.insert(Asset::Flip, above_threshold);
-		});
+		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, below_threshold);
+		LpAggStats::<Test>::insert(LP_ACCOUNT_2, Asset::Flip, above_threshold);
 
 		LiquidityProvider::update_agg_stats();
 
-		let agg_stats_map = LpAggStats::<Test>::get();
-		assert!(agg_stats_map
-			.get(&LP_ACCOUNT)
-			.and_then(|stats| stats.get(&Asset::Eth))
-			.is_none());
-		assert!(agg_stats_map
-			.get(&LP_ACCOUNT_2)
-			.and_then(|stats| stats.get(&Asset::Flip))
-			.is_some());
+		assert!(LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
+		assert!(LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).is_some());
 
-		let lp2_stats = agg_stats_map.get(&LP_ACCOUNT_2).unwrap().get(&Asset::Flip).unwrap();
+		let lp2_stats = LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).unwrap();
 		assert!(
 			lp2_stats.avg_limit_usd_volume.pruning_weighted_score() >=
 				FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD)
