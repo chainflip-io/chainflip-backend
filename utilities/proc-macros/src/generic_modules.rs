@@ -36,7 +36,7 @@ pub struct Input {
 	pub items: Vec<ModuleItem>,
 }
 
-/// Items that can appear inside a `better_modules!` block.
+/// Items that can appear inside a `generic_modules!` block.
 pub enum ModuleItem {
 	TypeAlias(ItemType),
 	Struct(ItemStruct),
@@ -52,7 +52,7 @@ pub enum ModuleItem {
 	Other(Item),
 }
 
-/// `mod foo { ... }` or `mod foo;` parsed with `better_modules` items in the body.
+/// `mod foo { ... }` or `mod foo;` parsed with `generic_modules` items in the body.
 pub struct PlainMod {
 	pub attrs: Vec<Attribute>,
 	pub vis: Visibility,

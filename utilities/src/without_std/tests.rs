@@ -14,6 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod better_modules;
 pub mod generate_module;
+pub mod generic_modules;
 pub mod type_introspection;

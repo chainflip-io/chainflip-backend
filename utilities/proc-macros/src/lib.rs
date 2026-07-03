@@ -17,8 +17,8 @@
 use proc_macro::TokenStream;
 
 mod arbitrary;
-mod better_modules;
 mod generate_module;
+mod generic_modules;
 mod intro_elim;
 mod type_introspection;
 
@@ -33,10 +33,10 @@ mod type_introspection;
 /// own.
 ///
 /// Local definitions are tracked by scope. When a later local path refers to one
-/// of them, `better_modules!` adds the definition's telescope arguments for you:
+/// of them, `generic_modules!` adds the definition's telescope arguments for you:
 ///
 /// ```ignore
-/// better_modules! {
+/// generic_modules! {
 ///     mod (A: Trait) {
 ///         pub struct Local { value: A::Value }
 ///         pub type Alias = Local; // expands as Local<A>
@@ -50,7 +50,7 @@ mod type_introspection;
 /// parameter instead:
 ///
 /// ```ignore
-/// better_modules! {
+/// generic_modules! {
 ///     mod (A: Trait) {
 ///         pub struct Local { value: A::Value }
 ///     }
@@ -73,7 +73,7 @@ mod type_introspection;
 ///
 /// Usage:
 /// ```ignore
-/// better_modules! {
+/// generic_modules! {
 ///     pub type Plain = u8;
 ///
 ///     mod (A: Trait) (B: Trait) where (A::Assoc: Clone) (B: Copy) {
@@ -100,9 +100,9 @@ mod type_introspection;
 /// }
 /// ```
 #[proc_macro]
-pub fn better_modules(input: TokenStream) -> TokenStream {
-	let input = syn::parse_macro_input!(input as better_modules::Input);
-	better_modules::expand(input).into()
+pub fn generic_modules(input: TokenStream) -> TokenStream {
+	let input = syn::parse_macro_input!(input as generic_modules::Input);
+	generic_modules::expand(input).into()
 }
 
 /// Attribute macro that wraps the annotated struct in a `cf_utilities::generate_module!`

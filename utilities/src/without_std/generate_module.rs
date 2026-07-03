@@ -66,7 +66,7 @@ macro_rules! generate_module {
                 )*
             }
 
-            cf_proc_macros::better_modules! {
+            cf_proc_macros::generic_modules! {
                 mod $( $( ($T $(: $TBound)?) )+ )? {
                     mod (Ty: Types) {
 
@@ -172,7 +172,7 @@ macro_rules! generate_module {
             pub type see_field_changelogs = see_field_changelogs_and_also<()>;
             pub struct see_field_changelogs_and_also<M>(M);
 
-            cf_proc_macros::better_modules! {
+            cf_proc_macros::generic_modules! {
                 mod (To: HistoricalTypesAt<V>) (V: Version)
                 {
                     pub trait FieldCustomMigration {
@@ -346,7 +346,7 @@ macro_rules! generate_module {
                 )*
             }
 
-            cf_proc_macros::better_modules! {
+            cf_proc_macros::generic_modules! {
                 mod $( $( ($T $(: $TBound)?) )+ )? {
                     mod (Ty: Types) {
 
@@ -541,7 +541,7 @@ macro_rules! generate_module {
             pub type see_variant_changelogs = see_variant_changelogs_and_also<()>;
             pub struct see_variant_changelogs_and_also<M>(M);
 
-            cf_proc_macros::better_modules! {
+            cf_proc_macros::generic_modules! {
                 mod (To: HistoricalTypesAt<V>) (V: Version)
                 {
                     pub trait VariantCustomMigration {
@@ -662,7 +662,7 @@ macro_rules! generate_module {
 
             // ----------------- connection with default enum ------------------ //
 
-            cf_proc_macros::better_modules! {
+            cf_proc_macros::generic_modules! {
                 mod $( $( ($T $(: $TBound)?) )+ )?
                 {
                     pub type RealEnum = $enum $(< $($T,)+ >)?;

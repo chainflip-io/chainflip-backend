@@ -25,7 +25,7 @@ trait Good {
 	type Bad;
 }
 
-cf_proc_macros::better_modules! {
+cf_proc_macros::generic_modules! {
 	mod (A: T1) {
 		type MyType = A::XY;
 		type Bla = u16;
