@@ -2,6 +2,14 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.7] - 2026-07-03
+
+### Fixes
+
+- Submission finality block ([#6692](https://github.com/chainflip-io/chainflip-backend/issues/6692))
+- Emit log message when order fills fails to decode ([#6669](https://github.com/chainflip-io/chainflip-backend/issues/6669))
+- Bump anyhow version ([#6697](https://github.com/chainflip-io/chainflip-backend/issues/6697))
+
 ## [2.2.6] - 2026-06-25
 
 ## [2.2.5] - 2026-06-24
