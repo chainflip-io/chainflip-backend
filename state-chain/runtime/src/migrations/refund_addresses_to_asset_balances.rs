@@ -79,17 +79,30 @@ impl OnRuntimeUpgrade for Migration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		use codec::Encode;
-		let count = old::LiquidityRefundAddress::iter().count() as u64;
-		Ok(count.encode())
+		// Record both counts so `post_upgrade` can assert the delta, which stays valid if the
+		// migration runs more than once (try-runtime's idempotency check): on a second run
+		// `old_count` is 0 and `new_count_before` already includes the moved entries.
+		let old_count = old::LiquidityRefundAddress::iter().count() as u64;
+		let new_count_before =
+			pallet_cf_asset_balances::RefundAddresses::<Runtime>::iter().count() as u64;
+		Ok((old_count, new_count_before).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		use codec::Decode;
-		let old_count = u64::decode(&mut &state[..])
-			.map_err(|_| TryRuntimeError::Other("failed to decode pre-upgrade count"))?;
-		let new_count = pallet_cf_asset_balances::RefundAddresses::<Runtime>::iter().count() as u64;
-		ensure!(old_count == new_count, "refund address count changed during migration");
+		let (old_count, new_count_before) = <(u64, u64)>::decode(&mut &state[..])
+			.map_err(|_| TryRuntimeError::Other("failed to decode pre-upgrade counts"))?;
+		let new_count_after =
+			pallet_cf_asset_balances::RefundAddresses::<Runtime>::iter().count() as u64;
+		// Assert the *delta*, not `old_count == new_count_after`: try-runtime runs migrations twice
+		// to check idempotency, and on the second run `old_count` is 0 (old storage already drained)
+		// while the new storage still holds the entries moved by the first run. Checking that the new
+		// storage grew by exactly `old_count` holds on both runs (2nd run: after == before + 0).
+		ensure!(
+			new_count_after == new_count_before.saturating_add(old_count),
+			"refund address count changed during migration"
+		);
 		ensure!(
 			old::LiquidityRefundAddress::iter().next().is_none(),
 			"old refund address storage not cleared"
