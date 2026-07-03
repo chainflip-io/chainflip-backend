@@ -3251,8 +3251,8 @@ fn additional_action_correctly_prefund_and_create_account() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		ScheduledTransactionsForRejection, TransactionRejectionDetails, TransactionRejectionStatus,
-		TransactionsMarkedForRejection,
+		ReportExpiresAt, ScheduledTransactionsForRejection, TransactionRejectionDetails,
+		TransactionRejectionStatus, TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::Hash as EvmHash, ChannelLifecycleHooks,
@@ -3262,6 +3262,7 @@ mod evm_transaction_rejection {
 		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
 	};
 	use mocks::lending_pools::MockBoostApi;
+	use sp_runtime::traits::Zero;
 	use std::str::FromStr;
 
 	const ETH: EthAsset = EthAsset::Eth;
@@ -3437,6 +3438,61 @@ mod evm_transaction_rejection {
 	}
 
 	#[test]
+	fn rejects_multiple_deposits_sharing_the_same_transaction() {
+		new_test_ext().execute_with(|| {
+			let tx_id = EvmHash::repeat_byte(0xaa);
+			let request_deposit_address = || {
+				let (_, deposit_address, block, _) =
+					EthereumIngressEgress::request_liquidity_deposit_address(
+						BROKER,
+						BROKER,
+						ETH,
+						0,
+						ForeignChainAddress::Eth(Default::default()),
+						None,
+					)
+					.unwrap();
+
+				let deposit_address: <Ethereum as Chain>::ChainAccount =
+					deposit_address.try_into().unwrap();
+				(deposit_address, block)
+			};
+
+			let (first_deposit_address, first_block) = request_deposit_address();
+			let (second_deposit_address, second_block) = request_deposit_address();
+			assert_ne!(first_deposit_address, second_deposit_address);
+
+			assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+
+			for (deposit_address, block) in
+				[(first_deposit_address, first_block), (second_deposit_address, second_block)]
+			{
+				EthereumIngressEgress::process_channel_deposit_full_witness(
+					DepositWitness {
+						deposit_address,
+						asset: ETH,
+						amount: DEFAULT_DEPOSIT_AMOUNT,
+						deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
+					},
+					block,
+				);
+			}
+
+			assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::decode_len(), Some(2));
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+			assert!(TransactionsMarkedForRejection::<Test, Instance1>::get(BROKER, tx_id)
+				.is_some_and(|status| status.expires_at.is_zero()));
+			assert_eq!(
+				ReportExpiresAt::<Test, Instance1>::get(System::block_number() + 1),
+				vec![(BROKER, tx_id)],
+			);
+		});
+	}
+
+	#[test]
 	fn whitelisted_broker_can_mark_tx_for_rejection_for_lp() {
 		new_test_ext().execute_with(|| {
 			let tx_id = EvmHash::from_str(
@@ -3494,9 +3550,17 @@ mod evm_transaction_rejection {
 				}) if deposit_details.deposit_ids().unwrap().contains(&tx_id)
 			);
 
-			assert!(TransactionsMarkedForRejection::<Test, Instance1>::get(SCREENING_ID, tx_id).is_none());
-
+			assert!(TransactionsMarkedForRejection::<Test, Instance1>::get(SCREENING_ID, tx_id).is_some_and(|status| status.expires_at.is_zero()));
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+			tx_id
+		})
+		.then_process_blocks(1)
+		.then_execute_with(|tx_id| {
+			assert!(!TransactionsMarkedForRejection::<Test, Instance1>::contains_key(
+				SCREENING_ID,
+				tx_id,
+			));
 		});
 	}
 
