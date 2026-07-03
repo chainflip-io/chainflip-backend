@@ -328,8 +328,6 @@ macro_rules! generate_module {
             use cf_utilities::migrations::*;
             use cf_utilities::migrations::basics::*;
 
-            ///////////////
-            // start generic fibered type helpers
             pub trait Types {
                 $(
                     type $variant;
@@ -539,13 +537,6 @@ macro_rules! generate_module {
                     }
                 }
             }
-
-
-
-
-            // end generic fibered type helpers
-            ///////////////
-
 
             pub type see_variant_changelogs = see_variant_changelogs_and_also<()>;
             pub struct see_variant_changelogs_and_also<M>(M);
