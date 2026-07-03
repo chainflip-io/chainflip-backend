@@ -56,6 +56,7 @@ pub trait WeightInfo {
 	fn witness_initialize_arbitrum_vault() -> Weight;
 	fn witness_initialize_solana_vault() -> Weight;
 	fn witness_initialize_tron_vault() -> Weight;
+	fn witness_initialize_bsc_vault() -> Weight;
 	fn witness_assethub_vault_creation() -> Weight;
 	fn dispatch_solana_gov_call() -> Weight;
 	fn non_native_signed_call() -> Weight;
@@ -179,6 +180,21 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Storage: `TronVault::VaultStartBlockNumbers` (r:0 w:1)
 	/// Proof: `TronVault::VaultStartBlockNumbers` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn witness_initialize_tron_vault() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `559`
+		//  Estimated: `2044`
+		// Minimum execution time: 26_273_000 picoseconds.
+		Weight::from_parts(26_835_000, 2044)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
+	}
+	/// Storage: `BscVault::PendingVaultActivation` (r:1 w:1)
+	/// Proof: `BscVault::PendingVaultActivation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
+	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `BscVault::VaultStartBlockNumbers` (r:0 w:1)
+	/// Proof: `BscVault::VaultStartBlockNumbers` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn witness_initialize_bsc_vault() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `559`
 		//  Estimated: `2044`
@@ -466,6 +482,21 @@ impl WeightInfo for () {
 	/// Storage: `TronVault::VaultStartBlockNumbers` (r:0 w:1)
 	/// Proof: `TronVault::VaultStartBlockNumbers` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn witness_initialize_tron_vault() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `559`
+		//  Estimated: `2044`
+		// Minimum execution time: 26_273_000 picoseconds.
+		Weight::from_parts(26_835_000, 2044)
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
+	}
+	/// Storage: `BscVault::PendingVaultActivation` (r:1 w:1)
+	/// Proof: `BscVault::PendingVaultActivation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
+	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `BscVault::VaultStartBlockNumbers` (r:0 w:1)
+	/// Proof: `BscVault::VaultStartBlockNumbers` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn witness_initialize_bsc_vault() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `559`
 		//  Estimated: `2044`
