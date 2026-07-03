@@ -17,7 +17,11 @@ import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
 import { compileBinaries } from 'shared/utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
 import { execWithLog } from 'shared/utils/exec_with_log';
-import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
+import {
+  clearChainflipApiCache,
+  clearChainflipClientCache,
+  clearSubscribeHeadsCache,
+} from 'shared/utils/substrate';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { Logger } from 'pino';
 import { globalLogger } from './utils/logger';
@@ -141,6 +145,9 @@ export async function upgradeBinaries<A = []>(
   // The API connections opened against the old node are stale after a restart.
   clearChainflipApiCache();
   clearSubscribeHeadsCache();
+  // Also drop the cached dedot client so the next extrinsic submission connects fresh to the new
+  // node, rather than relying on the stale connection's auto-reconnect.
+  await clearChainflipClientCache();
 
   // Start the new engines
   await startEngines(localnetInitPath, newBinaryPath, numberOfNodes, '-binaries-upgrade');
