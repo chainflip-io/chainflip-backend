@@ -96,9 +96,10 @@ impl OnRuntimeUpgrade for Migration {
 		let new_count_after =
 			pallet_cf_asset_balances::RefundAddresses::<Runtime>::iter().count() as u64;
 		// Assert the *delta*, not `old_count == new_count_after`: try-runtime runs migrations twice
-		// to check idempotency, and on the second run `old_count` is 0 (old storage already drained)
-		// while the new storage still holds the entries moved by the first run. Checking that the new
-		// storage grew by exactly `old_count` holds on both runs (2nd run: after == before + 0).
+		// to check idempotency, and on the second run `old_count` is 0 (old storage already
+		// drained) while the new storage still holds the entries moved by the first run. Checking
+		// that the new storage grew by exactly `old_count` holds on both runs (2nd run: after ==
+		// before + 0).
 		ensure!(
 			new_count_after == new_count_before.saturating_add(old_count),
 			"refund address count changed during migration"

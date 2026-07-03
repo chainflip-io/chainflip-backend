@@ -16,7 +16,7 @@
 
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
-	LiquidityProviderSubcommands, ValidatorSubcommands,
+	LiquidityProviderSubcommands, ValidatorSubcommands, WhitelistSubcommands,
 };
 use anyhow::{Context, Result};
 use api::{
@@ -28,7 +28,7 @@ use cf_chains::evm::Address as EthereumAddress;
 use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
-	lp::LiquidityDepositChannelDetails,
+	lp::{LiquidityDepositChannelDetails, WhitelistChangeRpc, WhitelistDestinationRpc},
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
 	rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome},
 	Asset, BrokerApi,
@@ -121,6 +121,34 @@ async fn run_cli() -> Result<()> {
 						let tx_hash =
 							api.lp_api().register_liquidity_refund_address(chain, address).await?;
 						println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
+					},
+					LiquidityProviderSubcommands::SetWithdrawalTimelock { duration_secs } => {
+						let tx_hash = api.lp_api().set_withdrawal_timelock(duration_secs).await?;
+						println!("Withdrawal timelock set. Tx hash: {tx_hash}");
+					},
+					LiquidityProviderSubcommands::UpdateWhitelist(subcommand) => {
+						let change = match subcommand {
+							WhitelistSubcommands::AllowAddress { chain, address } =>
+								WhitelistChangeRpc::Allow(WhitelistDestinationRpc::ExternalAddress {
+									chain,
+									address,
+								}),
+							WhitelistSubcommands::RemoveAddress { chain, address } =>
+								WhitelistChangeRpc::Remove(WhitelistDestinationRpc::ExternalAddress {
+									chain,
+									address,
+								}),
+							WhitelistSubcommands::AllowAccount { account } =>
+								WhitelistChangeRpc::Allow(WhitelistDestinationRpc::InternalAccount(
+									account,
+								)),
+							WhitelistSubcommands::RemoveAccount { account } =>
+								WhitelistChangeRpc::Remove(WhitelistDestinationRpc::InternalAccount(
+									account,
+								)),
+						};
+						let tx_hash = api.lp_api().update_whitelist(change).await?;
+						println!("Withdrawal allowlist updated. Tx hash: {tx_hash}");
 					},
 					LiquidityProviderSubcommands::RegisterAccount => {
 						api.lp_api().register_account().await?;

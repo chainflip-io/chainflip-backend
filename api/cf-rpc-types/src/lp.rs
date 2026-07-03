@@ -25,7 +25,7 @@ use pallet_cf_pools::RangeOrderSize;
 use sp_core::serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-use crate::{SwapChannelInfo, U256};
+use crate::{AccountId32, SwapChannelInfo, U256};
 
 pub use cf_amm::{
 	common::{PoolPairsMap, Side},
@@ -150,4 +150,20 @@ impl From<SwapRequestId> for SwapRequestResponse {
 pub struct LiquidityDepositChannelDetails {
 	pub deposit_address: AddressString,
 	pub deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
+}
+
+/// A withdrawal-allowlist destination for RPC input: an internal account, or an external address
+/// given as a human-readable string plus its chain (parsed to an on-chain address by the API).
+/// Mirrors the pallet's `AccountOrAddress`.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum WhitelistDestinationRpc {
+	InternalAccount(AccountId32),
+	ExternalAddress { chain: ForeignChain, address: AddressString },
+}
+
+/// A change to the withdrawal allowlist for RPC input. Mirrors the pallet's `WhitelistChange`.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum WhitelistChangeRpc {
+	Allow(WhitelistDestinationRpc),
+	Remove(WhitelistDestinationRpc),
 }

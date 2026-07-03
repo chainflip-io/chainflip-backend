@@ -25,7 +25,10 @@ pub use cf_amm::{
 	math::{Amount, PriceLimits, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{address::AddressString, ForeignChain};
+use cf_chains::{
+	address::{AddressString, EncodedAddress},
+	AccountOrAddress, ForeignChain,
+};
 use cf_node_client::WaitForResult;
 use cf_primitives::{
 	AccountId, ApiWaitForResult, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters,
@@ -34,6 +37,7 @@ use cf_primitives::{
 pub use cf_rpc_types::lp::{
 	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
 	OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
+	WhitelistChangeRpc, WhitelistDestinationRpc,
 };
 use cf_rpc_types::ExtrinsicResponse;
 use engine_sc_client::{
@@ -168,6 +172,46 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 						.try_parse_to_encoded_address(chain)
 						.map_err(anyhow::Error::msg)?,
 				},
+			))
+			.await
+			.until_in_block()
+			.await?
+			.tx_hash)
+	}
+
+	async fn update_whitelist(&self, change: WhitelistChangeRpc) -> Result<H256> {
+		use pallet_cf_asset_balances::whitelist::WhitelistChange;
+		let to_destination =
+			|dest: WhitelistDestinationRpc| -> Result<AccountOrAddress<AccountId, EncodedAddress>> {
+				Ok(match dest {
+					WhitelistDestinationRpc::InternalAccount(account) =>
+						AccountOrAddress::InternalAccount(account),
+					WhitelistDestinationRpc::ExternalAddress { chain, address } =>
+						AccountOrAddress::ExternalAddress(
+							address
+								.try_parse_to_encoded_address(chain)
+								.map_err(anyhow::Error::msg)?,
+						),
+				})
+			};
+		let change = match change {
+			WhitelistChangeRpc::Allow(dest) => WhitelistChange::Allow(to_destination(dest)?),
+			WhitelistChangeRpc::Remove(dest) => WhitelistChange::Remove(to_destination(dest)?),
+		};
+		Ok(self
+			.submit_signed_extrinsic(RuntimeCall::from(
+				pallet_cf_asset_balances::Call::update_whitelist { change },
+			))
+			.await
+			.until_in_block()
+			.await?
+			.tx_hash)
+	}
+
+	async fn set_withdrawal_timelock(&self, duration_secs: u64) -> Result<H256> {
+		Ok(self
+			.submit_signed_extrinsic(RuntimeCall::from(
+				pallet_cf_asset_balances::Call::set_withdrawal_timelock { duration: duration_secs },
 			))
 			.await
 			.until_in_block()
