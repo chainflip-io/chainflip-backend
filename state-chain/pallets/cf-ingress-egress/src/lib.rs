@@ -2935,6 +2935,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 										tx_id,
 										|status| match status {
 											Some(status) => {
+												// If expires_at == 0 we know we've already rejected
+												// a deposit for the same tx_id
+												// avoid creating a duplicate expiry entry for it
 												if !status.expires_at.is_zero() {
 													ReportExpiresAt::<T, I>::append(
 														<frame_system::Pallet<T>>::block_number()
