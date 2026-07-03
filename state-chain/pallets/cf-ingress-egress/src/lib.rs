@@ -164,6 +164,7 @@ struct PendingPrewitnessedDeposit<T: Config<I>, I: 'static> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct TransactionRejectionStatus<BlockNumber> {
+	/// expire_at == 0 means "rejected, awaiting cleanup"
 	expires_at: BlockNumber,
 	/// We can't expire if the rejected tx has been prewitnessed. We need to wait until the
 	/// rejection is processed.
@@ -1338,6 +1339,9 @@ pub mod pallet {
 						&account_id,
 						&tx_id,
 						|status| match status.take() {
+							Some(TransactionRejectionStatus { expires_at, .. })
+								if expires_at.is_zero() =>
+								Ok(()),
 							Some(TransactionRejectionStatus { prewitnessed, expires_at })
 								if !prewitnessed && expires_at <= now =>
 							{
@@ -1802,6 +1806,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&lookup_id,
 			&tx_id,
 			|opt| match opt {
+				Some(status) if status.expires_at.is_zero() => Ok(false),
 				Some(status) => {
 					ensure!(!status.prewitnessed, Error::<T, I>::TransactionAlreadyPrewitnessed);
 					status.expires_at = expires_at;
@@ -2924,16 +2929,49 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								// (screening_id) or, by the channel owner if the owner is not
 								// whitelisted.
 								let screening_id = T::ScreeningBrokerId::get();
-								match (
-									TransactionsMarkedForRejection::<T, I>::take(
+								let screening_found =
+									TransactionsMarkedForRejection::<T, I>::mutate(
 										&screening_id,
 										tx_id,
-									),
-									TransactionsMarkedForRejection::<T, I>::take(broker_id, tx_id),
-								) {
-									(None, None) => None,
-									_ => Some(()),
+										|status| match status {
+											Some(status) => {
+												if !status.expires_at.is_zero() {
+													ReportExpiresAt::<T, I>::append(
+														<frame_system::Pallet<T>>::block_number()
+															.saturating_add(One::one()),
+														(screening_id.clone(), tx_id),
+													);
+												}
+												status.expires_at = Zero::zero();
+												true
+											},
+											None => false,
+										},
+									);
+
+								let broker_found = TransactionsMarkedForRejection::<T, I>::mutate(
+									broker_id,
+									tx_id,
+									|status| match status {
+										Some(status) => {
+											if !status.expires_at.is_zero() {
+												ReportExpiresAt::<T, I>::append(
+													<frame_system::Pallet<T>>::block_number()
+														.saturating_add(One::one()),
+													(broker_id, tx_id),
+												);
+											}
+											status.expires_at = Zero::zero();
+											true
+										},
+										None => false,
+									},
+								);
+
+								if screening_found || broker_found {
+									return Some(())
 								}
+								None
 							})
 							// Collect to ensure that the iterator is fully consumed.
 							.collect::<Vec<_>>()
