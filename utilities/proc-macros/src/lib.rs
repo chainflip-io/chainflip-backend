@@ -132,12 +132,73 @@ pub fn generate_module(_attr: TokenStream, item: TokenStream) -> TokenStream {
 	generate_module::expand(item_clone, parsed).into()
 }
 
+/// Derive macro that implements `cf_utilities::type_introspection::HasTypeIntrospection`.
+///
+/// The trait exposes two pieces of structural information:
+///
+/// - `is_empty_type()` returns whether the type has no constructible values.
+/// - `sample_all_shapes()` returns example values that enumerate every possible structural shape.
+///
+/// For structs, a type is empty when any field type is empty. Shape samples are built from the full
+/// Cartesian product of every field's samples.
+///
+/// For enums, a type is empty only when all variants are empty. Shape samples are built by sampling
+/// each variant independently and concatenating those variant samples. Unit variants contribute one
+/// sample, while variants containing an empty field contribute none.
+///
+/// Unions are not supported.
+///
+/// ## Example
+///
+/// ```ignore
+/// #[derive(cf_proc_macros::HasTypeIntrospection)]
+/// enum Value {
+///     Empty(Never),
+///     One(u8),
+///     Pair { left: bool, right: Option<u8> },
+/// }
+/// ```
 #[proc_macro_derive(HasTypeIntrospection)]
 pub fn derive_has_type_introspection(input: TokenStream) -> TokenStream {
 	let input = syn::parse_macro_input!(input as syn::DeriveInput);
 	type_introspection::derive(input).into()
 }
 
+/// Derive macro that adds simple constructor/destructor helpers.
+///
+/// For structs with named fields, this generates an `intro(...) -> Self` constructor with one
+/// argument per field. Tuple structs and unit structs are not supported.
+///
+/// For enums, this generates an `elim(...) -> Output` method. The method consumes `self` and takes
+/// one handler closure per variant. Each handler receives the fields of its corresponding variant.
+/// Unit variants receive a zero-argument handler.
+///
+/// ## Examples
+///
+/// ```ignore
+/// #[derive(cf_proc_macros::IntroElim)]
+/// struct Pair {
+///     left: u8,
+///     right: u16,
+/// }
+///
+/// let pair = Pair::intro(1, 2);
+/// ```
+///
+/// ```ignore
+/// #[derive(cf_proc_macros::IntroElim)]
+/// enum Value {
+///     None,
+///     One(u8),
+///     Pair { left: u8, right: u16 },
+/// }
+///
+/// let output = value.elim(
+///     || 0,
+///     |one| one as u16,
+///     |left, right| left as u16 + right,
+/// );
+/// ```
 #[proc_macro_derive(IntroElim)]
 pub fn derive_intro_elim(input: TokenStream) -> TokenStream {
 	let input = syn::parse_macro_input!(input as syn::DeriveInput);
