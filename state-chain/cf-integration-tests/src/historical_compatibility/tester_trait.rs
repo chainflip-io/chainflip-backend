@@ -16,7 +16,10 @@
 
 use std::cell::RefCell;
 
-use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, Version};
+use cf_utilities::{
+	migrations::basics::{HasGenericVariant, HasVersion, Version},
+	type_introspection::HasTypeIntrospection,
+};
 use codec::{Decode, Encode};
 use proptest::{
 	arbitrary::Arbitrary,
@@ -30,11 +33,24 @@ use similar::{ChangeTag, TextDiff};
 pub trait HistoricalCompatibilityTester {
 	fn test_call<
 		V: Version,
-		I: HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
-			+ HasGenericVariant<GenericType: Arbitrary>,
+		I: HasVersion<
+				V,
+				HistoricalType: Encode
+				                    + std::fmt::Debug
+				                    + TypeInfo
+				                    + 'static
+				                    + Arbitrary
+				                    + HasTypeIntrospection,
+			> + HasGenericVariant<GenericType: Arbitrary>,
 		O: HasVersion<
 				V,
-				HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static + Arbitrary,
+				HistoricalType: Encode
+				                    + Decode
+				                    + TypeInfo
+				                    + std::fmt::Debug
+				                    + 'static
+				                    + Arbitrary
+				                    + HasTypeIntrospection,
 			> + HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
@@ -221,7 +237,7 @@ pub struct SubTypeIncompatibility {
 	pub error: String,
 }
 
-pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
+pub fn fuzzy_test_encode_decode_compatibility<T1: Encode + HasTypeIntrospection>(
 	cases: u32,
 	strategy: &impl Strategy<Value = T1>,
 	encode: &impl Fn(T1) -> Result<Vec<u8>, SubTypeIncompatibility>,
@@ -233,30 +249,39 @@ pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
 
 	let incompatibility = RefCell::new(None);
 
+	// the test function
+	let test_value = |value: T1| {
+		encode(value).and_then(|encoded| {
+			let mut slice: &[u8] = &encoded;
+			let cursor: &mut &[u8] = &mut slice;
+			decode(cursor).and_then(|_| {
+				if cursor.is_empty() {
+					Ok(())
+				} else {
+					Err(SubTypeIncompatibility {
+						sub_type_details: type_details.clone(),
+						error: format!(
+							"Encoding mismatch: {} trailing bytes remain after decoding",
+							cursor.len(),
+						),
+					})
+				}
+			})
+		})
+	};
+
+	// -------------------- HasTypeIntrospection based sampling ------------------------
+	for sample in T1::sample_all_shapes() {
+		test_value(sample)?;
+	}
+
+	// -------------------- Arbitrary based sampling ------------------------
 	runner
 		.run(strategy, |value1| {
-			encode(value1)
-				.and_then(|encoded| {
-					let mut slice: &[u8] = &encoded;
-					let cursor: &mut &[u8] = &mut slice;
-					decode(cursor).and_then(|_| {
-						if cursor.is_empty() {
-							Ok(())
-						} else {
-							Err(SubTypeIncompatibility {
-								sub_type_details: type_details.clone(),
-								error: format!(
-									"Encoding mismatch: {} trailing bytes remain after decoding",
-									cursor.len(),
-								),
-							})
-						}
-					})
-				})
-				.map_err(|err| {
-					incompatibility.replace(Some(err));
-					TestCaseError::Fail("".into())
-				})
+			test_value(value1).map_err(|err| {
+				incompatibility.replace(Some(err));
+				TestCaseError::Fail("".into())
+			})
 		})
 		.map_err(|err| match err {
 			proptest::test_runner::TestError::Abort(reason) =>

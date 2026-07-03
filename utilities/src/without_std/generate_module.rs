@@ -350,7 +350,7 @@ macro_rules! generate_module {
 
                         #[derive(Copy, Clone, PartialEq, Eq, Hash)]
                         #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
-                        // #[derive(cf_proc_macros::HasTypeIntrospection)]
+                        #[derive(cf_proc_macros::HasTypeIntrospection)]
                         pub enum Enum {
                             $(
                                 $variant(Ty::$variant),

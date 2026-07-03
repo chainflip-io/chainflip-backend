@@ -14,8 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_utilities::migrations::basics::{
-	CanonicalPatchVersion, HasGenericVariant, HasVersion, Version,
+use cf_utilities::{
+	migrations::basics::{CanonicalPatchVersion, HasGenericVariant, HasVersion, Version},
+	type_introspection::HasTypeIntrospection,
 };
 use codec::{Decode, Encode};
 use proptest::arbitrary::Arbitrary;
@@ -38,11 +39,24 @@ pub struct OnlineNodeTester {
 impl HistoricalCompatibilityTester for OnlineNodeTester {
 	fn test_call<
 		V: Version,
-		I: HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
-			+ HasGenericVariant<GenericType: Arbitrary>,
+		I: HasVersion<
+				V,
+				HistoricalType: Encode
+				                    + std::fmt::Debug
+				                    + TypeInfo
+				                    + 'static
+				                    + Arbitrary
+				                    + HasTypeIntrospection,
+			> + HasGenericVariant<GenericType: Arbitrary>,
 		O: HasVersion<
 				V,
-				HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static + Arbitrary,
+				HistoricalType: Encode
+				                    + Decode
+				                    + TypeInfo
+				                    + std::fmt::Debug
+				                    + 'static
+				                    + Arbitrary
+				                    + HasTypeIntrospection,
 			> + HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
