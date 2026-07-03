@@ -663,15 +663,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
-		let mut extra_lps_count: u32 = 0;
-		for (lp, asset, delta) in LpDeltaStats::<T>::drain() {
-			extra_lps_count = extra_lps_count.saturating_add(1);
-			LpAggStats::<T>::insert(&lp, asset, AggStats::new(delta));
-		}
-
 		T::WeightInfo::update_agg_stats_existing(existing_lps_count)
-			.saturating_add(T::WeightInfo::update_agg_stats_new(extra_lps_count))
 	}
 
 	#[frame_support::transactional]
@@ -747,11 +739,21 @@ impl<T: Config> LpStatsApi for Pallet<T> {
 
 	fn on_limit_order_filled(who: &Self::AccountId, asset: &Asset, usd_value: AssetAmount) {
 		if usd_value != AssetAmount::zero() {
-			LpDeltaStats::<T>::mutate(who, asset, |maybe_stats| {
-				let delta_stats = maybe_stats.get_or_insert_default();
+			if LpAggStats::<T>::contains_key(who, asset) {
+				LpDeltaStats::<T>::mutate(who, asset, |maybe_stats| {
+					let delta_stats = maybe_stats.get_or_insert_default();
 
-				delta_stats.accrue_usd(FixedU128::from_inner(usd_value));
-			});
+					delta_stats.accrue_usd(FixedU128::from_inner(usd_value));
+				});
+			} else {
+				LpAggStats::<T>::insert(
+					who,
+					asset,
+					AggStats::new(DeltaStats {
+						limit_orders_swap_usd_volume: FixedU128::from_inner(usd_value),
+					}),
+				);
+			}
 		}
 	}
 }

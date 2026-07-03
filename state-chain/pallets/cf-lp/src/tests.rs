@@ -580,6 +580,12 @@ fn on_limit_order_filled_updates_delta_stats() {
 
 		const USD_AMOUNT: AssetAmount = 1_500_000;
 
+		// Pre-seed LpAggStats entries so on_limit_order_filled accrues into LpDeltaStats instead
+		// of eagerly seeding a new entry (that path is covered by
+		// `on_limit_order_filled_seeds_new_lp_agg_stats_entry_immediately`).
+		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, AggStats::default());
+		LpAggStats::<Test>::insert(LP_ACCOUNT_2, Asset::Eth, AggStats::default());
+
 		// round 1
 		assert!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
 		for _ in 0..3 {
@@ -609,19 +615,30 @@ fn update_agg_stats_updates_correctly() {
 
 		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, pre_existing_eth_stats);
 
-		// on_limit_order_filled for LP_ACCOUNT with pre-existing AggStats
+		// on_limit_order_filled for LP_ACCOUNT with pre-existing AggStats: accrues a delta, does
+		// not touch LpAggStats directly.
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128); // 700 usd
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128); // 700 usd
+		assert_eq!(
+			LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth)
+				.unwrap()
+				.limit_orders_swap_usd_volume,
+			FixedU128::from_inner(1_400_000_000u128)
+		);
 
-		// on_limit_order_filled for LP_ACCOUNT_2 (no pre-existing AggStats; should create new EMA
-		// equal to delta)
+		// on_limit_order_filled for LP_ACCOUNT_2 (no pre-existing AggStats): seeds a new entry
+		// immediately, unblended.
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT_2, &Asset::Flip, 500_000_000u128); // 500 usd
-
-		// Call the update function and verify that delta stats are deleted after the update
-		LiquidityProvider::update_agg_stats();
-		// After calling update_agg_stats(), all Delta stats should be deleted
-		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
+		let lp2_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).unwrap();
+		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day), 500f64);
+		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days), 500f64);
+		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days), 500f64);
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip), None);
+
+		// Call the update function and verify that LP_ACCOUNT's pre-existing entry decays
+		// correctly and its delta stats are deleted after the update.
+		LiquidityProvider::update_agg_stats();
+		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
 
 		let lp1_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).unwrap();
 		assert!(is_within_tiny_error(
@@ -649,11 +666,58 @@ fn update_agg_stats_updates_correctly() {
 			)
 		));
 
-		// Verify new EMA was created for LP_ACCOUNT_2 and is initialized correctly
+		// LP_ACCOUNT_2's freshly-seeded entry already exists in LpAggStats by the time
+		// update_agg_stats() runs, so it's included in the same iter() pass: with no pending
+		// delta, it decays toward zero like any other existing entry with no activity this
+		// period (same as LP_ACCOUNT's entry would if it had no delta).
 		let lp2_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).unwrap();
-		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day), 500f64);
-		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days), 500f64);
-		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days), 500f64);
+		assert!(is_within_tiny_error(
+			fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day),
+			expected_ema(500f64, 0f64, 1u32)
+		));
+		assert!(is_within_tiny_error(
+			fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days),
+			expected_ema(500f64, 0f64, 7u32)
+		));
+		assert!(is_within_tiny_error(
+			fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days),
+			expected_ema(500f64, 0f64, 30u32)
+		));
+	});
+}
+
+#[test]
+fn on_limit_order_filled_seeds_new_lp_agg_stats_entry_immediately() {
+	new_test_ext().execute_with(|| {
+		assert!(LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
+
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 1_000_000_000u128); // 1000 usd
+
+		// The entry exists immediately, without update_agg_stats() ever running.
+		let agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).unwrap();
+		assert_eq!(fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.one_day), 1000f64);
+		assert_eq!(fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.seven_days), 1000f64);
+		assert_eq!(fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.thirty_days), 1000f64);
+		// No delta was recorded for this first fill — it was consumed directly into the seed.
+		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
+
+		// A second fill for the SAME (Lp, Asset), now that an entry exists, accrues as a delta
+		// instead of overwriting the seed.
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 500_000_000u128); // 500 usd
+		assert_eq!(
+			LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth)
+				.unwrap()
+				.limit_orders_swap_usd_volume,
+			FixedU128::from_inner(500_000_000u128)
+		);
+		// The seeded aggregate is unchanged until the next update_agg_stats() pass.
+		assert_eq!(
+			LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth)
+				.unwrap()
+				.avg_limit_usd_volume
+				.one_day,
+			FixedU128::from_inner(1_000_000_000u128)
+		);
 	});
 }
 
