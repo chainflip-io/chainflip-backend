@@ -682,9 +682,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let prune_threshold = FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD);
-		let mut iter = cursor
-			.map(|cursor| LpAggStats::<T>::iter_from(cursor))
-			.unwrap_or_else(|| LpAggStats::<T>::iter());
+		let mut iter = cursor.map(LpAggStats::<T>::iter_from).unwrap_or_else(LpAggStats::<T>::iter);
 		let mut processed: u64 = 0;
 
 		while processed < max_items {
