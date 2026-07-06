@@ -131,6 +131,7 @@ fn placeholder_address(chain: ForeignChain) -> cf_chains::ForeignChainAddress {
 	match chain {
 		ForeignChain::Ethereum => Eth(Default::default()),
 		ForeignChain::Arbitrum => Arb(Default::default()),
+		ForeignChain::Bsc => Bsc(Default::default()),
 		ForeignChain::Tron => Tron(Default::default()),
 		ForeignChain::Solana => Sol(Default::default()),
 		ForeignChain::Bitcoin => Btc(ScriptPubkey::P2PKH([0; 20])),

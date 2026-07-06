@@ -578,7 +578,7 @@ impl pallet_cf_ingress_egress::Config<Instance8> for Runtime {
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
-	type LpRegistrationApi = LiquidityProvider;
+	type RefundAddressRegistry = AssetBalances;
 }
 
 impl pallet_cf_pools::Config for Runtime {
