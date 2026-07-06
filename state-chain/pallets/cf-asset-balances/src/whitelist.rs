@@ -198,7 +198,7 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 		}
 		match dest {
 			AccountOrAddress::ExternalAddress(address) =>
-				self.external.get(&address.chain()).map_or(false, |set| set.contains(address)),
+				self.external.get(&address.chain()).is_some_and(|set| set.contains(address)),
 			AccountOrAddress::InternalAccount(account) => self.internal.contains(account),
 		}
 	}
@@ -207,7 +207,7 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 	/// Returns whether anything changed, so the caller can skip an unnecessary storage write.
 	pub(crate) fn apply_due_updates(&mut self, now: DurationSeconds) -> bool {
 		let mut changed = self.timelock.collapse_if_matured(now);
-		if self.pending.first_key_value().map_or(false, |(&apply_at, _)| apply_at <= now) {
+		if self.pending.first_key_value().is_some_and(|(&apply_at, _)| apply_at <= now) {
 			// `pending` keeps the not-yet-due buckets; `due` takes the rest (apply_at <= now).
 			let not_due = self.pending.split_off(&now.saturating_add(1));
 			let due = core::mem::replace(&mut self.pending, not_due);
