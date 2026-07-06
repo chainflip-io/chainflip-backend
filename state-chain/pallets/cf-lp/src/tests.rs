@@ -641,7 +641,7 @@ fn update_agg_stats_updates_correctly() {
 		// (tiny) pass completes in a single call.
 		LiquidityProvider::update_agg_stats(
 			1,
-			Vec::new(),
+			None,
 			frame_support::weights::Weight::from_parts(u64::MAX, u64::MAX),
 		);
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
@@ -753,7 +753,7 @@ fn update_agg_stats_prunes_below_threshold() {
 		// Ample weight so the whole (tiny) pass completes in a single call.
 		LiquidityProvider::update_agg_stats(
 			1,
-			Vec::new(),
+			None,
 			frame_support::weights::Weight::from_parts(u64::MAX, u64::MAX),
 		);
 
@@ -789,15 +789,15 @@ fn update_agg_stats_resumes_across_multiple_capped_calls() {
 		// `iter.next()` comes back empty — so completion takes NUM_LPS + 1 calls, not NUM_LPS.
 		let per_item_weight = <Test as crate::Config>::WeightInfo::update_agg_stats_item();
 
-		let mut cursor = Vec::new();
+		let mut cursor: Option<Vec<u8>> = None;
 		let mut calls = 0u64;
 		loop {
 			calls += 1;
 			assert!(calls <= NUM_LPS + 1, "pass should complete within NUM_LPS + 1 calls");
 			LiquidityProvider::update_agg_stats(calls, cursor.clone(), per_item_weight);
-			match StatsUpdateCursor::<Test>::get() {
-				Some(next_cursor) => cursor = next_cursor,
-				None => break,
+			cursor = StatsUpdateCursor::<Test>::get();
+			if cursor.is_none() {
+				break;
 			}
 		}
 		assert_eq!(calls, NUM_LPS + 1, "the pass should take one extra call to detect completion");
