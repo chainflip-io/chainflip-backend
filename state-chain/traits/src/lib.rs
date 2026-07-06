@@ -70,7 +70,6 @@ use frame_support::{
 		Percent, RuntimeDebug,
 	},
 	traits::{ConstU32, EnsureOrigin, Get, IsType, UnfilteredDispatchable},
-	weights::Weight,
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
@@ -1370,11 +1369,6 @@ pub trait AffiliateRegistry {
 
 pub trait MinimumDeposit {
 	fn get(asset: Asset) -> AssetAmount;
-}
-
-// Used for exposing weights from the Pools pallet
-pub trait LpOrdersWeightsProvider {
-	fn update_limit_order_weight() -> Weight;
 }
 
 #[derive(
