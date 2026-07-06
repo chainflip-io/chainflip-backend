@@ -146,6 +146,37 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(10_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
+	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
+	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `TradingStrategy::LimitOrderUpdateThresholds` (r:1 w:0)
+	/// Proof: `TradingStrategy::LimitOrderUpdateThresholds` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `TradingStrategy::NextStrategyCursor` (r:1 w:1)
+	/// Proof: `TradingStrategy::NextStrategyCursor` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `TradingStrategy::Strategies` (r:101 w:0)
+	/// Proof: `TradingStrategy::Strategies` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:2 w:1)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
+	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:200 w:200)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:100 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 100]`.
+	fn on_idle(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `3146 + n * (758 ±0)`
+		//  Estimated: `9039 + n * (5709 ±0)`
+		// Minimum execution time: 1_948_000_000 picoseconds.
+		Weight::from_parts(2_060_000_000, 9039)
+			// Standard Error: 547_457_152
+			.saturating_add(Weight::from_parts(31_143_656_453, 0).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().reads(7_u64))
+			.saturating_add(T::DbWeight::get().reads((4_u64).saturating_mul(n.into())))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
+			.saturating_add(T::DbWeight::get().writes((2_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 5709).saturating_mul(n.into()))
+	}
 }
 
 // For backwards compatibility and tests
@@ -238,5 +269,36 @@ impl WeightInfo for () {
 		Weight::from_parts(103_173_000, 13547)
 			.saturating_add(ParityDbWeight::get().reads(10_u64))
 			.saturating_add(ParityDbWeight::get().writes(4_u64))
+	}
+	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
+	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `TradingStrategy::LimitOrderUpdateThresholds` (r:1 w:0)
+	/// Proof: `TradingStrategy::LimitOrderUpdateThresholds` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `TradingStrategy::NextStrategyCursor` (r:1 w:1)
+	/// Proof: `TradingStrategy::NextStrategyCursor` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `TradingStrategy::Strategies` (r:101 w:0)
+	/// Proof: `TradingStrategy::Strategies` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:2 w:1)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
+	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:200 w:200)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:100 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 100]`.
+	fn on_idle(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `3146 + n * (758 ±0)`
+		//  Estimated: `9039 + n * (5709 ±0)`
+		// Minimum execution time: 1_948_000_000 picoseconds.
+		Weight::from_parts(2_060_000_000, 9039)
+			// Standard Error: 547_457_152
+			.saturating_add(Weight::from_parts(31_143_656_453, 0).saturating_mul(n.into()))
+			.saturating_add(ParityDbWeight::get().reads(7_u64))
+			.saturating_add(ParityDbWeight::get().reads((4_u64).saturating_mul(n.into())))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().writes((2_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 5709).saturating_mul(n.into()))
 	}
 }
