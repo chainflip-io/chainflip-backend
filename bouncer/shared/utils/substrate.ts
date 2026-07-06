@@ -185,7 +185,14 @@ const makeCachedDedotClientFactory = (endpoint: string) => {
       const existing = clientPromise;
       clientPromise = undefined;
       if (existing) {
-        await (await existing).disconnect().catch(() => null);
+        // Best-effort disconnect: dropping the reference above is what actually invalidates the
+        // cache; the next getClient() builds a fresh connection regardless. dedot's disconnect()
+        // can hang if the socket is mid-reconnect (e.g. called right after a node restart), so
+        // cap it and move on rather than let it block the caller indefinitely.
+        await runWithTimeout(
+          (async () => (await existing).disconnect())(),
+          5,
+        ).catch(() => null);
       }
     },
   };
