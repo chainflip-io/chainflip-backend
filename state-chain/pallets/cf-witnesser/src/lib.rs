@@ -273,7 +273,10 @@ pub mod pallet {
 				return used_weight.saturating_add(T::WeightInfo::on_idle_with_nothing_to_remove())
 			}
 
-			let mut deletions_count_remaining = max_deletions_count_remaining;
+			// Cap the number of items culled per block.
+			const MAX_CULL_DELETIONS_PER_BLOCK: u64 = 1_000;
+			let mut deletions_count_remaining =
+				max_deletions_count_remaining.min(MAX_CULL_DELETIONS_PER_BLOCK);
 			let (mut cleared_votes, mut cleared_extra_call_data, mut cleared_call_hash) =
 				(false, false, false);
 
