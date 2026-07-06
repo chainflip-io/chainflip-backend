@@ -2008,33 +2008,48 @@ mod minimum_limit_order_amount {
 		));
 		MockBalance::credit_account(&ALICE, Asset::Eth, 1_000_000);
 		MockBalance::credit_account(&ALICE, STABLE_ASSET, 1_000_000);
-		assert_ok!(LiquidityPools::set_minimum_limit_order_amounts(
+		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
 			bounded_vec![
-				AssetAndAmount { asset: Asset::Eth, amount: MIN_ETH },
-				AssetAndAmount { asset: STABLE_ASSET, amount: MIN_USDC },
+				PalletConfigUpdate::SetMinimumLimitOrderAmount {
+					asset: Asset::Eth,
+					amount: MIN_ETH
+				},
+				PalletConfigUpdate::SetMinimumLimitOrderAmount {
+					asset: STABLE_ASSET,
+					amount: MIN_USDC
+				},
 			],
 		));
 	}
 
 	#[test]
-	fn set_minimum_limit_order_amounts_governance_only_and_emits_event() {
+	fn minimum_limit_order_amount_config_governance_only_and_emits_event() {
 		new_test_ext().execute_with(|| {
 			// Non-governance origin is rejected.
 			assert_noop!(
-				LiquidityPools::set_minimum_limit_order_amounts(
+				LiquidityPools::update_pallet_config(
 					RuntimeOrigin::signed(ALICE),
-					bounded_vec![AssetAndAmount { asset: Asset::Eth, amount: MIN_ETH }],
+					bounded_vec![PalletConfigUpdate::SetMinimumLimitOrderAmount {
+						asset: Asset::Eth,
+						amount: MIN_ETH
+					}],
 				),
 				sp_runtime::traits::BadOrigin,
 			);
 
 			// Governance sets the configured minimums (and only those), one event each.
-			assert_ok!(LiquidityPools::set_minimum_limit_order_amounts(
+			assert_ok!(LiquidityPools::update_pallet_config(
 				RuntimeOrigin::root(),
 				bounded_vec![
-					AssetAndAmount { asset: Asset::Eth, amount: MIN_ETH },
-					AssetAndAmount { asset: Asset::Usdc, amount: MIN_USDC },
+					PalletConfigUpdate::SetMinimumLimitOrderAmount {
+						asset: Asset::Eth,
+						amount: MIN_ETH
+					},
+					PalletConfigUpdate::SetMinimumLimitOrderAmount {
+						asset: Asset::Usdc,
+						amount: MIN_USDC
+					},
 				],
 			));
 			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Eth), MIN_ETH);
@@ -2042,7 +2057,7 @@ mod minimum_limit_order_amount {
 			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Btc), 0);
 			assert_matching_event_count!(
 				Test,
-				RuntimeEvent::LiquidityPools(Event::MinimumLimitOrderAmountSet { .. }) => 2
+				RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated { update: PalletConfigUpdate::SetMinimumLimitOrderAmount { .. } }) => 2
 			);
 		});
 	}
