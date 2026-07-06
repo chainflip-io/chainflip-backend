@@ -101,6 +101,8 @@ derive_common_traits! {
 		MaxWithdrawalTimelock { seconds: DurationSeconds },
 		/// Maximum number of pending whitelist updates per account.
 		MaxPendingWhitelistUpdates { count: u32 },
+		/// Maximum number of active whitelist entries per account.
+		MaxWhitelistEntries { count: u32 },
 	}
 }
 
@@ -266,6 +268,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxPendingWhitelistUpdates<T> = StorageValue<_, u32, ValueQuery, ConstU32<16>>;
 
+	/// Maximum number of active allowlist entries per account (external addresses across all chains
+	/// plus internal accounts).
+	#[pallet::storage]
+	pub type MaxWhitelistEntries<T> = StorageValue<_, u32, ValueQuery, ConstU32<100>>;
+
 	/// The refund address registered by an account for each chain. Relocated from `cf-lp`: a
 	/// registered refund address is a trusted destination, so it is implicitly allowed by the
 	/// withdrawal allowlist (see [`Pallet::ensure_withdrawal_allowed_to`]).
@@ -296,6 +303,9 @@ pub mod pallet {
 				},
 				PalletConfigUpdate::MaxPendingWhitelistUpdates { count } => {
 					MaxPendingWhitelistUpdates::<T>::put(count);
+				},
+				PalletConfigUpdate::MaxWhitelistEntries { count } => {
+					MaxWhitelistEntries::<T>::put(count);
 				},
 			}
 
@@ -566,7 +576,7 @@ impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
 		let mut whitelist = WithdrawalWhitelists::<T>::get(owner);
 		// Lazily fold in any matured pending updates so the active allowlists are current, writing
 		// back only if that changed anything.
-		if whitelist.apply_due_updates(now) {
+		if whitelist.apply_due_updates(now, MaxWhitelistEntries::<T>::get()) {
 			if whitelist.is_empty() {
 				WithdrawalWhitelists::<T>::remove(owner);
 			} else {

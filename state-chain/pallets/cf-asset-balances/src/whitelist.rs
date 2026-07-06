@@ -205,7 +205,11 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 
 	/// Folds any pending updates whose activation time has passed into the active allowlists.
 	/// Returns whether anything changed, so the caller can skip an unnecessary storage write.
-	pub(crate) fn apply_due_updates(&mut self, now: DurationSeconds) -> bool {
+	///
+	/// The active allowlist is capped at `max_entries`: an `Allow` that would exceed it is applied
+	/// as a no-op. This is enforced here rather than at scheduling time to keep things simple (this
+	/// prevents abuse, while real users are unlikely to ever hit this).
+	pub(crate) fn apply_due_updates(&mut self, now: DurationSeconds, max_entries: u32) -> bool {
 		let mut changed = self.timelock.collapse_if_matured(now);
 		if self.pending.first_key_value().is_some_and(|(&apply_at, _)| apply_at <= now) {
 			// `pending` keeps the not-yet-due buckets; `due` takes the rest (apply_at <= now).
@@ -213,7 +217,7 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 			let due = core::mem::replace(&mut self.pending, not_due);
 			// A BTreeMap yields keys in ascending order, so changes apply in activation order.
 			for change in due.into_values().flatten() {
-				self.apply_change(&change);
+				self.apply_change(&change, max_entries);
 			}
 			changed = true;
 		}
@@ -271,12 +275,32 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 		self.pending.values().map(|changes| changes.len() as u32).sum()
 	}
 
+	/// Number of active allowlist entries: external addresses across all chains plus internal
+	/// accounts.
+	fn active_entry_count(&self) -> u32 {
+		self.external
+			.values()
+			.fold(0u32, |acc, set| acc.saturating_add(set.len() as u32))
+			.saturating_add(self.internal.len() as u32)
+	}
+
 	/// Applies a single change to the active allowlists, pruning a chain's set once it empties.
-	fn apply_change(&mut self, change: &WhitelistChange<AccountId, ForeignChainAddress>) {
+	///
+	/// An `Allow` that would grow the active set beyond `max_entries` is a no-op — this bounds the
+	/// stored whitelist. `Remove` always applies. (Re-allowing an address that is already active is
+	/// unaffected, since it doesn't grow the set.)
+	fn apply_change(
+		&mut self,
+		change: &WhitelistChange<AccountId, ForeignChainAddress>,
+		max_entries: u32,
+	) {
 		let (destination, allow) = match change {
 			WhitelistChange::Allow(destination) => (destination, true),
 			WhitelistChange::Remove(destination) => (destination, false),
 		};
+		if allow && self.active_entry_count() >= max_entries {
+			return;
+		}
 		match destination {
 			AccountOrAddress::ExternalAddress(address) => {
 				let chain = address.chain();
@@ -313,6 +337,22 @@ mod tests {
 
 	const DAY: DurationSeconds = 24 * 3600;
 	const MAX_PENDING: u32 = 16;
+	const MAX_ENTRIES: u32 = 100;
+
+	// Schedules a change with the default pending cap, asserting it is accepted; returns the
+	// activation time.
+	fn schedule(
+		w: &mut Whitelist,
+		change: WhitelistChange<AccountId, ForeignChainAddress>,
+		now: DurationSeconds,
+	) -> DurationSeconds {
+		w.schedule_change(change, now, MAX_PENDING).unwrap()
+	}
+
+	// Applies due updates with the default entry cap.
+	fn apply(w: &mut Whitelist, now: DurationSeconds) -> bool {
+		w.apply_due_updates(now, MAX_ENTRIES)
+	}
 
 	// Distinct external addresses; `eth`/`arb` live on different chains.
 	fn eth(byte: u8) -> ForeignChainAddress {
@@ -354,8 +394,8 @@ mod tests {
 	fn restriction_off_while_timelock_zero() {
 		let mut w = Whitelist::default();
 		// Configured, but the timelock is 0, so the allowlist is dormant: everything is allowed.
-		assert_eq!(w.schedule_change(allow(eth(1)), 0, MAX_PENDING), Some(0));
-		assert!(w.apply_due_updates(0));
+		assert_eq!(schedule(&mut w, allow(eth(1)), 0), 0);
+		assert!(apply(&mut w, 0));
 		assert!(w.is_allowed(to_address(&eth(1)), 0));
 		assert!(w.is_allowed(to_address(&eth(2)), 0));
 		assert!(w.is_allowed(to_address(&arb(1)), 0));
@@ -365,8 +405,8 @@ mod tests {
 	fn enabling_timelock_blocks_unconfigured_destinations() {
 		let mut w = Whitelist::default();
 		// Configure while off, then enable — the recommended setup order.
-		w.schedule_change(allow(eth(1)), 0, MAX_PENDING);
-		assert!(w.apply_due_updates(0));
+		schedule(&mut w, allow(eth(1)), 0);
+		assert!(apply(&mut w, 0));
 		assert!(w.is_allowed(to_address(&eth(2)), 0)); // off => still unrestricted
 		assert_eq!(w.set_timelock(DAY, 0), 0); // enabling is immediate
 
@@ -380,14 +420,14 @@ mod tests {
 	#[test]
 	fn removing_last_address_blocks_chain_when_on() {
 		let mut w = Whitelist::default();
-		w.schedule_change(allow(eth(1)), 0, MAX_PENDING);
-		w.apply_due_updates(0);
+		schedule(&mut w, allow(eth(1)), 0);
+		apply(&mut w, 0);
 		w.set_timelock(DAY, 0);
 		assert!(w.is_allowed(to_address(&eth(1)), 0));
 
 		// Removal is delayed by the timelock; once it folds, the chain has no entries...
-		assert_eq!(w.schedule_change(remove(eth(1)), 0, MAX_PENDING), Some(DAY));
-		assert!(w.apply_due_updates(DAY));
+		assert_eq!(schedule(&mut w, remove(eth(1)), 0), DAY);
+		assert!(apply(&mut w, DAY));
 		// ...so it is blocked (fail-safe), not reopened — you can't empty-to-unrestrict.
 		assert!(!w.is_allowed(to_address(&eth(1)), DAY));
 		assert!(!w.is_allowed(to_address(&eth(2)), DAY));
@@ -397,9 +437,9 @@ mod tests {
 	fn changes_apply_in_activation_order_across_buckets() {
 		let mut w = Whitelist::default();
 		// Same destination, different activation times; the later one (remove) must win.
-		w.schedule_change(allow(eth(1)), 0, MAX_PENDING); // apply_at 0
-		w.schedule_change(remove(eth(1)), 5, MAX_PENDING); // apply_at 5
-		assert!(w.apply_due_updates(10));
+		schedule(&mut w, allow(eth(1)), 0); // apply_at 0
+		schedule(&mut w, remove(eth(1)), 5); // apply_at 5
+		assert!(apply(&mut w, 10));
 		assert!(w.is_empty());
 	}
 
@@ -407,9 +447,9 @@ mod tests {
 	fn later_change_in_same_bucket_wins() {
 		let mut w = Whitelist::default();
 		// Same activation time (same block + same timelock): submission order decides.
-		w.schedule_change(allow(eth(1)), 0, MAX_PENDING);
-		w.schedule_change(remove(eth(1)), 0, MAX_PENDING);
-		assert!(w.apply_due_updates(0));
+		schedule(&mut w, allow(eth(1)), 0);
+		schedule(&mut w, remove(eth(1)), 0);
+		assert!(apply(&mut w, 0));
 		assert!(w.is_empty());
 	}
 
@@ -418,34 +458,66 @@ mod tests {
 		let mut w = Whitelist::default();
 		// Enable: 0 -> DAY applies immediately.
 		assert_eq!(w.set_timelock(DAY, 0), 0);
-		let scheduled = w.schedule_change(allow(eth(1)), 0, MAX_PENDING);
-		assert_eq!(scheduled, Some(DAY));
+		assert_eq!(schedule(&mut w, allow(eth(1)), 0), DAY);
 
 		// Weaken: DAY -> 1h is delayed by the current timelock.
 		let now = 100;
 		assert_eq!(w.set_timelock(3600, now), now + DAY);
 		// Until the weakening matures, scheduling still uses the old (longer) timelock.
-		assert_eq!(w.schedule_change(allow(eth(2)), now, MAX_PENDING), Some(now + DAY));
+		assert_eq!(schedule(&mut w, allow(eth(2)), now), now + DAY);
 		// Once it has matured, the shorter timelock is in force.
 		let later = now + DAY;
-		assert_eq!(w.schedule_change(allow(eth(3)), later, MAX_PENDING), Some(later + 3600));
+		assert_eq!(schedule(&mut w, allow(eth(3)), later), later + 3600);
 	}
 
 	#[test]
-	fn schedule_change_respects_cap() {
+	fn schedule_change_respects_pending_cap() {
 		let mut w = Whitelist::default();
 		for byte in 0..MAX_PENDING as u8 {
 			assert!(w.schedule_change(allow(eth(byte)), 0, MAX_PENDING).is_some());
 		}
 		// Queue is full.
-		assert!(w.schedule_change(allow(eth(99)), 0, MAX_PENDING).is_none());
+		assert_eq!(w.schedule_change(allow(eth(99)), 0, MAX_PENDING), None);
+	}
+
+	#[test]
+	fn apply_caps_active_entries() {
+		let mut w = Whitelist::default();
+		let max_entries = 3;
+		// Schedule more allows than the cap allows (pending queue is large enough to hold them).
+		for byte in 0..5 {
+			w.schedule_change(allow(eth(byte)), 0, MAX_PENDING);
+		}
+		// Applying them stops adding once the cap is reached; the excess are no-ops.
+		w.apply_due_updates(0, max_entries);
+		assert_eq!(w.active_entry_count(), max_entries);
+	}
+
+	#[test]
+	fn apply_cap_lets_matured_removes_free_slots() {
+		let mut w = Whitelist::default();
+		let max_entries = 2;
+		// Two allows fill the cap; a third (later) allow would be a no-op — unless a remove frees a
+		// slot first. Schedule remove(eth(0)) before allow(eth(2)) so it applies earlier.
+		w.schedule_change(allow(eth(0)), 0, MAX_PENDING); // apply_at 0
+		w.schedule_change(allow(eth(1)), 0, MAX_PENDING); // apply_at 0
+		w.schedule_change(remove(eth(0)), 5, MAX_PENDING); // apply_at 5, frees a slot
+		w.schedule_change(allow(eth(2)), 5, MAX_PENDING); // apply_at 5, takes the freed slot
+		w.apply_due_updates(10, max_entries);
+		assert_eq!(w.active_entry_count(), max_entries);
+		assert!(w.is_allowed(to_address(&eth(2)), 0)); // timelock is 0 here, so allowed regardless
+												 // eth(0) was removed, eth(1) and eth(2) remain.
+		w.set_timelock(DAY, 20);
+		assert!(w.is_allowed(to_address(&eth(1)), 20));
+		assert!(w.is_allowed(to_address(&eth(2)), 20));
+		assert!(!w.is_allowed(to_address(&eth(0)), 20));
 	}
 
 	#[test]
 	fn internal_account_allowlist_when_on() {
 		let mut w = Whitelist::default();
-		w.schedule_change(allow_account(1), 0, MAX_PENDING);
-		w.apply_due_updates(0);
+		schedule(&mut w, allow_account(1), 0);
+		apply(&mut w, 0);
 		w.set_timelock(DAY, 0);
 
 		assert!(w.is_allowed(to_account(&1), 0));
@@ -458,17 +530,17 @@ mod tests {
 	fn apply_due_updates_reports_change_and_keeps_not_due() {
 		let mut w = Whitelist::default();
 		w.set_timelock(DAY, 0);
-		w.schedule_change(allow(eth(1)), 0, MAX_PENDING); // apply_at DAY
-		w.schedule_change(allow(eth(2)), DAY, MAX_PENDING); // apply_at 2*DAY
+		schedule(&mut w, allow(eth(1)), 0); // apply_at DAY
+		schedule(&mut w, allow(eth(2)), DAY); // apply_at 2*DAY
 
 		// Nothing due yet.
-		assert!(!w.apply_due_updates(DAY - 1));
+		assert!(!apply(&mut w, DAY - 1));
 		// First matures; second is retained (and not yet active).
-		assert!(w.apply_due_updates(DAY));
+		assert!(apply(&mut w, DAY));
 		assert!(w.is_allowed(to_address(&eth(1)), DAY));
 		assert!(!w.is_allowed(to_address(&eth(2)), DAY));
 		// Second matures later.
-		assert!(w.apply_due_updates(2 * DAY));
+		assert!(apply(&mut w, 2 * DAY));
 		assert!(w.is_allowed(to_address(&eth(2)), 2 * DAY));
 	}
 
