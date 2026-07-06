@@ -814,6 +814,86 @@ fn update_agg_stats_resumes_across_multiple_capped_calls() {
 }
 
 #[test]
+fn update_agg_stats_tolerates_new_entry_inserted_mid_pass() {
+	new_test_ext().execute_with(|| {
+		use crate::weights::WeightInfo as _;
+
+		// `frame_support`'s iteration docs warn that adding/removing values in the map "while
+		// doing this" gives "undefined results". Our reading of the actual mechanism (`next_key`
+		// is a live point-query against current storage, not a snapshot) says a fresh insertion
+		// elsewhere in the map between two `update_agg_stats` calls is safe: it can't skip or
+		// re-visit any entry that already existed when the pass started. This test proves that
+		// empirically for the concrete scenario that matters here — a limit order filling for a
+		// brand-new (Lp, Asset) pair (the eager-seed path) while a decay pass is genuinely
+		// in-progress (a persisted, non-empty cursor) — rather than relying only on that reading.
+		const NUM_LPS: u64 = 3;
+		for lp in 0..NUM_LPS {
+			LiquidityProvider::on_limit_order_filled(&lp, &Asset::Eth, 1_000_000_000u128); // 1000 usd
+			LiquidityProvider::on_limit_order_filled(&lp, &Asset::Eth, 200_000_000u128); // 200 usd
+		}
+		assert_eq!(LpAggStats::<Test>::iter().count(), NUM_LPS as usize);
+
+		let per_item_weight = <Test as crate::Config>::WeightInfo::update_agg_stats_item();
+		const NEW_LP: u64 = 999;
+
+		let mut cursor: Option<Vec<u8>> = None;
+		let mut calls = 0u64;
+		let mut new_entry_seeded_mid_pass = false;
+		loop {
+			calls += 1;
+			// Generous bound: the mid-pass insertion may or may not add one more call depending
+			// on where its key falls relative to the cursor. The property under test is
+			// termination, not the exact count (already covered by the test above).
+			assert!(calls <= NUM_LPS + 3, "pass should terminate in a bounded number of calls");
+			LiquidityProvider::update_agg_stats(calls, cursor.clone(), per_item_weight);
+			cursor = StatsUpdateCursor::<Test>::get();
+
+			if calls == 1 {
+				assert!(cursor.is_some(), "pass should still be genuinely in progress");
+				// Simulate a fill landing in an intervening block, for a brand-new (Lp, Asset)
+				// pair — this exercises the eager-seed path inserting a new LpAggStats entry
+				// while the cursor above is persisted mid-pass.
+				LiquidityProvider::on_limit_order_filled(&NEW_LP, &Asset::Eth, 700_000_000u128); // 700 usd
+				assert!(LpAggStats::<Test>::get(NEW_LP, Asset::Eth).is_some());
+				new_entry_seeded_mid_pass = true;
+			}
+
+			if cursor.is_none() {
+				break;
+			}
+		}
+		assert!(new_entry_seeded_mid_pass);
+
+		// Every entry that existed when the pass started was still reached and correctly
+		// decayed exactly once — the mid-pass insertion caused no skip.
+		for lp in 0..NUM_LPS {
+			assert_eq!(LpDeltaStats::<Test>::get(lp, Asset::Eth), None);
+			let agg_stats = LpAggStats::<Test>::get(lp, Asset::Eth).unwrap();
+			assert!(is_within_tiny_error(
+				fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.one_day),
+				expected_ema(1000f64, 200f64, 1u32)
+			));
+		}
+
+		// The mid-pass-inserted entry is intact either way: it was either swept into this same
+		// pass (decayed once from its seed with a zero delta, since it has no pending delta of
+		// its own) if its key fell ahead of the cursor, or left untouched, waiting for the next
+		// pass, if its key fell behind. Both are correct outcomes — what matters is that it's
+		// neither lost nor double-processed.
+		let new_lp_stats = LpAggStats::<Test>::get(NEW_LP, Asset::Eth).unwrap();
+		let seeded_value = 700f64;
+		let decayed_once = expected_ema(seeded_value, 0f64, 1u32);
+		let one_day = fixed_u128_to_f64(new_lp_stats.avg_limit_usd_volume.one_day);
+		assert!(
+			is_within_tiny_error(one_day, seeded_value) ||
+				is_within_tiny_error(one_day, decayed_once),
+			"new entry should be either untouched ({seeded_value}) or decayed exactly once \
+			 ({decayed_once}), got {one_day}"
+		);
+	});
+}
+
+#[test]
 fn on_idle_does_nothing_before_interval_elapses() {
 	new_test_ext().execute_with(|| {
 		use frame_support::{traits::Hooks, weights::Weight};
