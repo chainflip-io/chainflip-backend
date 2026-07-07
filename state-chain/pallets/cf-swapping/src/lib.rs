@@ -701,7 +701,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
-	/// Interval at which we buy FLIP in order from swap fee in USDC.
+	/// Interval at which we buy FLIP from swap fees in order to distribute as rewards.
 	#[pallet::storage]
 	pub type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
