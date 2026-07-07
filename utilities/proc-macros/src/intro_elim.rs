@@ -164,6 +164,7 @@ fn derive_enum(input: DeriveInput) -> TokenStream {
 
 	quote! {
 		impl #impl_generics #enum_ident #ty_generics #where_clause {
+			#[allow(clippy::too_many_arguments)]
 			pub fn elim<#output>(
 				self,
 				#(#handler_args,)*
@@ -173,6 +174,7 @@ fn derive_enum(input: DeriveInput) -> TokenStream {
 				}
 			}
 
+			#[allow(clippy::too_many_arguments)]
 			pub fn elim_ref<#output>(
 				&self,
 				#(#handler_args_ref,)*
