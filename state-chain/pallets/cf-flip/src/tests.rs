@@ -838,7 +838,23 @@ mod test_flip_reward_distribution {
 				let expected_per_authority = total_reserve / COUNT;
 				let expected_remainder = total_reserve % COUNT;
 
+				let total_funds = || {
+					Flip::total_balance_of(&ALICE) as i128 +
+						Flip::total_balance_of(&BOB) as i128 +
+						Flip::total_balance_of(&CHARLIE) as i128 +
+						Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID) as i128 +
+						FlipToDistribute::<Test>::get()
+				};
+
+				let total_funds_before = total_funds();
+
 				let bridged = Flip::trigger_flip_reward_distribution(vec![ALICE, BOB, CHARLIE]);
+
+				// Distribution only moves funds between the reserve, validator balances, and the
+				// FlipToDistribute offchain-accounting offset - no funds are created or destroyed.
+				if total_funds() != total_funds_before {
+					return TestResult::failed()
+				}
 
 				// Return value equals what was subtracted from FlipToDistribute
 				if bridged != expected_bridged {
