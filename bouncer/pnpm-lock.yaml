@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@chainflip/processor':
-        specifier: 2.3.0-dev.0
-        version: 2.3.0-dev.0
+        specifier: 2.3.0-dev.1
+        version: 2.3.0-dev.1
       '@chainflip/utils':
-        specifier: 2.3.0-dev.0
-        version: 2.3.0-dev.0
+        specifier: 2.3.0-dev.1
+        version: 2.3.0-dev.1
       '@coral-xyz/anchor':
         specifier: ^0.30.1
         version: 0.30.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
@@ -167,14 +167,14 @@ packages:
     resolution: {integrity: sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ==}
     engines: {node: '>=6.9.0'}
 
-  '@chainflip/processor@2.3.0-dev.0':
-    resolution: {integrity: sha512-iznG3ZHyujK3aMCN5mA98BJGpxfKSSuVBEu4kRjEhn7O5FrwLPeMoBBdBiwv+a1jWvTok75NaDOIqBOcbE5ICA==}
+  '@chainflip/processor@2.3.0-dev.1':
+    resolution: {integrity: sha512-dL+Sdp07oMS3WlTkVO5MKcPuR1iXQyRzsj3UjkJ05+HTB6cWCpaRzLY1hqSRxMBdClO0WsKbZLKMp12+yNspFg==}
 
-  '@chainflip/rpc@2.3.0-dev.0':
-    resolution: {integrity: sha512-yVsDxse67yhJOJgwC0m+FP+sMiRUZL8+1OcQhh0erxvM2TvK2Y8vltCNWYg00tS3WNijeu6MGN8v38nPR9/FNQ==}
+  '@chainflip/rpc@2.3.0-dev.1':
+    resolution: {integrity: sha512-ztX1zGw1gqM4oWkMt23rWwYDHzZvhlchhGQf7IubjuV7AgPPCeDYpjjTK+SSXU3HVQLEoQCCd/GkBoH+XowoUQ==}
 
-  '@chainflip/utils@2.3.0-dev.0':
-    resolution: {integrity: sha512-fMEI1/MJQYH66ew892UC2jX0fuRd2UtojNH1zJvZVPcxGj176S35eQQPWqpWiQaPkswO1f3M/BOqns4PDM+3cQ==}
+  '@chainflip/utils@2.3.0-dev.1':
+    resolution: {integrity: sha512-Y1Eu/6LPkze38jZ/0cx3EjGR7VkokxT9T98qKP06wUYxfiBUmW5TUgcpu89GpbUD1GgjVi1pPi1wW7fNZCjLtQ==}
 
   '@coral-xyz/anchor-errors@0.30.1':
     resolution: {integrity: sha512-9Mkradf5yS5xiLWrl9WrpjqOrAV+/W2RQHDlbnAZBivoGpOs1ECjoDCkVk4aRG8ZdiFiB8zQEVlxf+8fKkmSfQ==}
@@ -4252,18 +4252,18 @@ snapshots:
 
   '@babel/runtime@7.28.4': {}
 
-  '@chainflip/processor@2.3.0-dev.0':
+  '@chainflip/processor@2.3.0-dev.1':
     dependencies:
-      '@chainflip/rpc': 2.3.0-dev.0
-      '@chainflip/utils': 2.3.0-dev.0
+      '@chainflip/rpc': 2.3.0-dev.1
+      '@chainflip/utils': 2.3.0-dev.1
       zod: 3.25.75
 
-  '@chainflip/rpc@2.3.0-dev.0':
+  '@chainflip/rpc@2.3.0-dev.1':
     dependencies:
-      '@chainflip/utils': 2.3.0-dev.0
+      '@chainflip/utils': 2.3.0-dev.1
       zod: 3.25.75
 
-  '@chainflip/utils@2.3.0-dev.0':
+  '@chainflip/utils@2.3.0-dev.1':
     dependencies:
       '@date-fns/utc': 2.1.1
       '@noble/hashes': 2.2.0

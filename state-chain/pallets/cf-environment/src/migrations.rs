@@ -25,6 +25,7 @@ use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 use sp_std::vec::Vec;
 
 mod bsc_chain_environment;
+mod cbbtc_asset;
 
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility
 // checks.
@@ -55,8 +56,15 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 pub type PalletMigration<T> = (
 	VersionedMigration<
 		23,
-		STORAGE_VERSION_U16,
+		24,
 		bsc_chain_environment::BscAssetsMigration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		24,
+		STORAGE_VERSION_U16,
+		cbbtc_asset::CbbtcAssetMigration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,

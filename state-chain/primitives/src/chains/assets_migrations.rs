@@ -61,10 +61,13 @@ impl<T: HasChangelog> HasChangelog for bsc::AssetMap<T> {
 impl<T: HasChangelog> HasChangelog for eth::AssetMap<T>
 where
 	<T as HasVersion<v20100>>::HistoricalType: Default,
+	<T as HasVersion<v20300>>::HistoricalType: Default,
 {
 	type if_unspecified = eth::_AssetMap::see_field_changelogs;
 	type in_20100 =
 		eth::_AssetMap::see_field_changelogs_and_also<eth::_AssetMap::field::wbtc::Added>;
+	type in_20300 =
+		eth::_AssetMap::see_field_changelogs_and_also<eth::_AssetMap::field::cbbtc::Added>;
 }
 
 impl<T: HasChangelog + Default> HasChangelog for any::AssetMap<T>

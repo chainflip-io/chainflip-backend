@@ -55,3 +55,5 @@ define_erc20!(
 define_erc20!(usdc, Usdc, UsdcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDC.json");
 define_erc20!(usdt, Usdt, UsdtEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDT.json");
 define_erc20!(wbtc, Wbtc, WbtcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IWBTC.json");
+// cbBTC is a standard ERC-20; only the Transfer event is decoded, so the generic ABI suffices.
+define_erc20!(cbbtc, Cbbtc, CbbtcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IERC20.json");

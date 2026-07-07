@@ -210,13 +210,14 @@ pub fn evm_vault_swap<A>(
 		Asset::Usdc |
 		Asset::Usdt |
 		Asset::Wbtc |
+		Asset::Cbbtc |
 		Asset::ArbUsdc |
 		Asset::ArbUsdt |
 		Asset::BscUsdt => {
 			// Lookup Token addresses depending on the Chain
 			let source_token_address_ref = source_token_address.insert(
 				match source_asset {
-					Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc =>
+					Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc | Asset::Cbbtc =>
 						<EvmEnvironment as EvmEnvironmentProvider<Ethereum>>::token_address(
 							source_asset.try_into().expect("Only Ethereum asset is processed here"),
 						),
