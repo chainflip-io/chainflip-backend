@@ -131,7 +131,9 @@ macro_rules! impl_identity_migrations_with_wrapper {
 
         $(
             // This implementation assumes the inner type has a Default implementation
-            impl HasTypeIntrospection for $Wrapper {
+            impl HasTypeIntrospection for $Wrapper
+                where $Inner: Default
+            {
                 fn is_empty_type() -> bool {
                     false
                 }

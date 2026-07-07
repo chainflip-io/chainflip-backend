@@ -20,7 +20,8 @@ pub mod generate_module;
 pub mod migrations;
 pub mod never;
 pub mod select;
-pub mod tests;
+#[cfg(test)]
+mod tests;
 pub mod type_introspection;
 
 pub const fn bs58_array<const S: usize>(s: &'static str) -> [u8; S] {
