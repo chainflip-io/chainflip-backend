@@ -145,4 +145,68 @@ mod benchmarks {
 			BTreeMap::from_iter([(ASSET, 1000), (STABLE_ASSET, 1000)]),
 		);
 	}
+
+	/// Measures the full per-block cost of `on_idle` as a function of the number of
+	/// deployed strategies `n` — the single weight `on_idle` now charges per strategy.
+	///
+	/// Uses `OracleTracking`, the heaviest and most common strategy type, and measures
+	/// the *worst-case* per-strategy path: the O(n) scan, the prefetch of existing pool
+	/// orders, the oracle read, balance reads, order-sizing evaluation, and the cancel +
+	/// re-placement of all orders. To hit that path the strategies are funded and have
+	/// already placed orders (first pass), then the oracle is moved so the measured pass
+	/// must re-tick every order — which is the common case for oracle-tracking strategies.
+	#[benchmark]
+	fn on_idle(n: Linear<1, 100>) {
+		let caller = new_lp_account::<T>();
+
+		assert_ok!(T::PoolApi::create_pool(
+			ASSET,
+			STABLE_ASSET,
+			0,
+			Price::from_usd(STABLE_ASSET, 12345)
+		));
+		// Low thresholds so every strategy (re)places its orders.
+		LimitOrderUpdateThresholds::<T>::set(BTreeMap::from_iter([(ASSET, 1), (STABLE_ASSET, 1)]));
+		// A fresh relative price needs both legs, else the oracle path bails out early.
+		T::PriceFeedApi::set_price(ASSET, Price::from_usd(ASSET, 1));
+		T::PriceFeedApi::set_price(STABLE_ASSET, Price::from_usd(STABLE_ASSET, 1));
+
+		for i in 0..n {
+			let strategy_id: T::AccountId = account("strategy", i, 0u32);
+			if !frame_system::Pallet::<T>::account_exists(&strategy_id) {
+				let _ = frame_system::Provider::<T>::created(&strategy_id);
+			}
+			T::BalanceApi::credit_account(&strategy_id, ASSET, 2_000_000_000);
+			T::BalanceApi::credit_account(&strategy_id, STABLE_ASSET, 2_000_000_000);
+
+			// Vary the offsets so the strategies aren't bit-identical.
+			let offset: Tick = 1 + (i % 100) as Tick;
+			Strategies::<T>::insert(
+				&caller,
+				&strategy_id,
+				TradingStrategy::OracleTracking {
+					min_buy_offset_tick: -offset - 1,
+					max_buy_offset_tick: -1,
+					min_sell_offset_tick: 1,
+					max_sell_offset_tick: offset + 1,
+					base_asset: ASSET,
+					quote_asset: STABLE_ASSET,
+				},
+			);
+		}
+
+		// First pass places the initial orders.
+		Pallet::<T>::on_idle(1u32.into(), Weight::MAX);
+
+		// Move the oracle so the measured pass must cancel and re-place every strategy's
+		// orders (the worst case, and the common case for oracle-tracking strategies).
+		T::PriceFeedApi::set_price(ASSET, Price::from_usd(ASSET, 2));
+
+		#[block]
+		{
+			let _ = Pallet::<T>::on_idle(2u32.into(), Weight::MAX);
+		}
+
+		assert_eq!(Strategies::<T>::iter().count() as u32, n);
+	}
 }

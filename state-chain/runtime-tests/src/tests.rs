@@ -29,7 +29,11 @@ pub trait RuntimeTest: Default {
 	fn run(self, block_hash: state_chain_runtime::Hash, ext: Ext) -> anyhow::Result<()>;
 }
 
+pub mod auction_resolution;
+pub mod rotation_breakdown;
+pub mod rotation_on_initialize;
 pub mod swap_rate;
+pub mod witnesser_cull;
 
 pub fn run_all(ext: RemoteExternalities<StateChainBlock>) -> anyhow::Result<()> {
 	let block_hash = ext.header.hash();
@@ -81,16 +85,21 @@ pub fn run_all(ext: RemoteExternalities<StateChainBlock>) -> anyhow::Result<()> 
 
 	log::info!("Running tests for block hash: {:?}", block_hash);
 
-	for test in [swap_rate::Test::setup()] {
-		test.run(
-			block_hash,
-			sp_state_machine::TestExternalities::from_raw_snapshot(
-				raw_storage.clone(),
-				storage_root.clone(),
-				state_version,
-			),
-		)?;
-	}
+	let mk_ext = || {
+		sp_state_machine::TestExternalities::from_raw_snapshot(
+			raw_storage.clone(),
+			storage_root.clone(),
+			state_version,
+		)
+	};
+
+	swap_rate::Test::setup().run(block_hash, mk_ext())?;
+	auction_resolution::Test::setup().run(block_hash, mk_ext())?;
+	rotation_on_initialize::Test::setup().run(block_hash, mk_ext())?;
+	rotation_breakdown::PerPallet::setup().run(block_hash, mk_ext())?;
+	rotation_breakdown::Full::setup().run(block_hash, mk_ext())?;
+	witnesser_cull::Test::setup().run(block_hash, mk_ext())?;
+	witnesser_cull::CullCost::setup().run(block_hash, mk_ext())?;
 
 	log::info!("All tests passed for block hash: {:?}", block_hash);
 
