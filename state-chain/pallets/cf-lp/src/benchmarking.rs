@@ -143,91 +143,36 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn update_agg_stats_existing(m: Linear<0, 100>) {
-		use sp_std::collections::btree_map::BTreeMap;
-
-		// Generate m LPs with existing aggregate stats
-		let existing_lps = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
-			AccountRole::LiquidityProvider,
-			m,
-		)
-		.unwrap();
-
-		// Populate LpAggStats with existing LPs
-		let mut agg_stats_map: BTreeMap<T::AccountId, BTreeMap<Asset, pallet::AggStats>> =
-			BTreeMap::new();
-		for lp in &existing_lps {
-			let mut lp_stats: BTreeMap<Asset, pallet::AggStats> = BTreeMap::new();
-			lp_stats.insert(
-				Asset::Eth,
-				pallet::AggStats::new(pallet::DeltaStats {
-					limit_orders_swap_usd_volume: FixedU128::from_u32(100),
-				}),
-			);
-			agg_stats_map.insert(lp.clone(), lp_stats);
-		}
-		pallet::LpAggStats::<T>::put(agg_stats_map);
-
-		// Populate LpDeltaStats for existing LPs (they will be updated)
-		for lp in &existing_lps {
-			pallet::LpDeltaStats::<T>::insert(
-				lp,
-				Asset::Eth,
-				pallet::DeltaStats { limit_orders_swap_usd_volume: FixedU128::from_u32(50) },
-			);
-		}
+	fn update_agg_stats_item() {
+		let lp: T::AccountId = whitelisted_caller();
+		let agg_stats = pallet::AggStats::new(pallet::DeltaStats {
+			limit_orders_swap_usd_volume: FixedU128::from_u32(100),
+		});
+		pallet::LpDeltaStats::<T>::insert(
+			&lp,
+			Asset::Eth,
+			pallet::DeltaStats { limit_orders_swap_usd_volume: FixedU128::from_u32(50) },
+		);
 
 		#[block]
 		{
-			Pallet::<T>::update_agg_stats();
+			Pallet::<T>::process_one_agg_stats_entry(
+				&lp,
+				Asset::Eth,
+				agg_stats,
+				FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD),
+			);
 		}
 
-		// Verify existing LPs had their stats updated
-		let updated_agg_stats = pallet::LpAggStats::<T>::get();
-		for lp in &existing_lps {
-			assert!(updated_agg_stats.contains_key(lp));
-		}
-		// Verify delta stats were drained
-		assert_eq!(pallet::LpDeltaStats::<T>::iter().count(), 0);
+		assert_eq!(pallet::LpDeltaStats::<T>::get(&lp, Asset::Eth), None);
 	}
 
 	#[benchmark]
-	fn update_agg_stats_new(n: Linear<0, 100>) {
-		use sp_std::collections::btree_map::BTreeMap;
-
-		// Generate n LPs that only have delta stats (new LPs)
-		let new_lps = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
-			AccountRole::LiquidityProvider,
-			n,
-		)
-		.unwrap();
-
-		// Ensure LpAggStats is empty
-		pallet::LpAggStats::<T>::put(
-			BTreeMap::<T::AccountId, BTreeMap<Asset, pallet::AggStats>>::new(),
-		);
-
-		// Populate LpDeltaStats for new LPs (they will be inserted as new agg entries)
-		for lp in &new_lps {
-			pallet::LpDeltaStats::<T>::insert(
-				lp,
-				Asset::Eth,
-				pallet::DeltaStats { limit_orders_swap_usd_volume: FixedU128::from_u32(25) },
-			);
-		}
-
+	fn on_idle_nothing_to_do() {
 		#[block]
 		{
-			Pallet::<T>::update_agg_stats();
+			Pallet::<T>::on_idle(0u32.into(), frame_support::weights::Weight::zero());
 		}
-
-		// Verify new LPs were added to agg stats
-		let updated_agg_stats = pallet::LpAggStats::<T>::get();
-		for lp in &new_lps {
-			assert!(updated_agg_stats.contains_key(lp));
-		}
-		// Verify delta stats were drained
-		assert_eq!(pallet::LpDeltaStats::<T>::iter().count(), 0);
 	}
 
 	#[benchmark]
