@@ -28,7 +28,10 @@ use cf_chains::{
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, TransactionInId, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{chains::Bsc, Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
+use cf_primitives::{
+	chains::Bsc, AccountRole, Asset, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
+	ForeignChain,
+};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
@@ -331,6 +334,154 @@ impl<A> OperatorInfo<A> {
 				.map(|(k, v)| Ok((k, f(v)?)))
 				.collect::<Result<_, E>>()?,
 			active_delegation: self.active_delegation.map(|d| d.try_map_bids(&f)).transpose()?,
+		})
+	}
+}
+
+/// A single account's share of an epoch's projected reward, alongside its principal.
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
+pub struct AccountReward<Amount> {
+	pub account: AccountId32,
+	pub role: AccountRole,
+	/// Principal (bond/delegated amount), used as the APY denominator.
+	pub bonded_amount: Amount,
+	/// Pure earnings on this account's principal, cumulative for the in-progress epoch.
+	pub reward: Amount,
+}
+
+impl<A> AccountReward<A> {
+	pub fn try_map_amounts<B, E>(
+		self,
+		f: impl Fn(A) -> Result<B, E> + 'static,
+	) -> Result<AccountReward<B>, E> {
+		Ok(AccountReward {
+			account: self.account,
+			role: self.role,
+			bonded_amount: f(self.bonded_amount)?,
+			reward: f(self.reward)?,
+		})
+	}
+}
+
+/// Projected reward for an independent (non-delegated) validator, cumulative for the
+/// in-progress epoch.
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorRewardEstimate<Amount> {
+	pub account: AccountId32,
+	/// Principal.
+	pub bid: Amount,
+	/// Amount locked as this account's bond this epoch.
+	pub bond: Amount,
+	pub reward: Amount,
+}
+
+impl<A> ValidatorRewardEstimate<A> {
+	pub fn try_map_amounts<B, E>(
+		self,
+		f: impl Fn(A) -> Result<B, E> + 'static,
+	) -> Result<ValidatorRewardEstimate<B>, E> {
+		Ok(ValidatorRewardEstimate {
+			account: self.account,
+			bid: f(self.bid)?,
+			bond: f(self.bond)?,
+			reward: f(self.reward)?,
+		})
+	}
+}
+
+/// Projected reward split for an operator and all validators/delegators associated with it,
+/// cumulative for the in-progress epoch.
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
+pub struct OperatorRewardEstimate<Amount> {
+	pub account: AccountId32,
+	/// The commission rate in effect for this epoch's snapshot.
+	pub commission_bps: u32,
+	/// Pure commission earned so far, excluding the operator's own managed nodes' earnings.
+	pub operator_reward: Amount,
+	/// Sum of managed-validator bids (uncapped).
+	pub total_validator_stake: Amount,
+	/// Sum of delegator bids (uncapped).
+	pub total_delegator_stake: Amount,
+	pub num_authority_nodes: u32,
+	pub validators: Vec<AccountReward<Amount>>,
+	pub delegators: Vec<AccountReward<Amount>>,
+}
+
+impl<A> OperatorRewardEstimate<A> {
+	pub fn try_map_amounts<B, E>(
+		self,
+		f: impl Fn(A) -> Result<B, E> + Clone + 'static,
+	) -> Result<OperatorRewardEstimate<B>, E> {
+		Ok(OperatorRewardEstimate {
+			account: self.account,
+			commission_bps: self.commission_bps,
+			operator_reward: f.clone()(self.operator_reward)?,
+			total_validator_stake: f.clone()(self.total_validator_stake)?,
+			total_delegator_stake: f.clone()(self.total_delegator_stake)?,
+			num_authority_nodes: self.num_authority_nodes,
+			validators: self
+				.validators
+				.into_iter()
+				.map(|v| v.try_map_amounts(f.clone()))
+				.collect::<Result<_, E>>()?,
+			delegators: self
+				.delegators
+				.into_iter()
+				.map(|v| v.try_map_amounts(f.clone()))
+				.collect::<Result<_, E>>()?,
+		})
+	}
+}
+
+/// A structured, per-epoch projection of FLIP 2.1 reward distribution, covering the current
+/// on-chain reward state and each operator/validator/delegator's cumulative cut so far this
+/// epoch. Returns empty `operators`/`solo_validators` (and zeroed pool amounts) if FLIP 2.1's
+/// fee-reward distribution has not yet been activated for the current epoch.
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
+pub struct RewardDistributionEstimate<Amount> {
+	pub epoch_index: EpochIndex,
+	pub current_block: BlockNumber,
+	pub current_epoch_started_at: BlockNumber,
+	pub epoch_duration: BlockNumber,
+
+	/// The current Minimum Active Bid.
+	pub bond: Amount,
+	pub authority_count: u32,
+	/// `Reserve[ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID]`.
+	pub pool_onchain_amount: Amount,
+	/// `FlipToDistribute`, clamped to be non-negative.
+	pub pool_offchain_amount: Amount,
+	pub per_authority_share: Amount,
+
+	pub operators: Vec<OperatorRewardEstimate<Amount>>,
+	pub solo_validators: Vec<ValidatorRewardEstimate<Amount>>,
+}
+
+impl<A> RewardDistributionEstimate<A> {
+	pub fn try_map_amounts<B, E>(
+		self,
+		f: impl Fn(A) -> Result<B, E> + Clone + 'static,
+	) -> Result<RewardDistributionEstimate<B>, E> {
+		Ok(RewardDistributionEstimate {
+			epoch_index: self.epoch_index,
+			current_block: self.current_block,
+			current_epoch_started_at: self.current_epoch_started_at,
+			epoch_duration: self.epoch_duration,
+			bond: f.clone()(self.bond)?,
+			authority_count: self.authority_count,
+			pool_onchain_amount: f.clone()(self.pool_onchain_amount)?,
+			pool_offchain_amount: f.clone()(self.pool_offchain_amount)?,
+			per_authority_share: f.clone()(self.per_authority_share)?,
+			operators: self
+				.operators
+				.into_iter()
+				.map(|o| o.try_map_amounts(f.clone()))
+				.collect::<Result<_, E>>()?,
+			solo_validators: self
+				.solo_validators
+				.into_iter()
+				.map(|v| v.try_map_amounts(f.clone()))
+				.collect::<Result<_, E>>()?,
 		})
 	}
 }

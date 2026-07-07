@@ -49,6 +49,7 @@ use cf_primitives::{
 	ChannelId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, IngressOrEgress,
 	NetworkEnvironment, SemVer, STABLE_ASSET,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, ChainflipWithTargetChain, EpochKey,
 	GetBlockHeight, KeyProvider, SwapLimits, SwapParameterValidation,
@@ -904,6 +905,137 @@ impl_runtime_apis! {
 					Validator::current_epoch(),
 					account_id,
 				),
+			}
+		}
+
+		/// Projects each operator/validator/delegator's cumulative FLIP 2.1 fee-reward cut for the
+		/// in-progress epoch, as if the currently accumulated reserve were distributed right now.
+		/// Returns empty operator/validator lists (and zeroed pool amounts) if FLIP 2.1's fee-reward
+		/// distribution has not yet been activated for the current epoch.
+		fn cf_reward_distribution_estimate() -> RewardDistributionEstimate<FlipBalance> {
+			let epoch_index = Validator::current_epoch();
+			let current_block = System::block_number();
+			let current_epoch_started_at = Validator::current_epoch_started_at();
+			let epoch_duration = Validator::epoch_duration();
+			let bond = Validator::bond();
+			let authorities = pallet_cf_validator::CurrentAuthorities::<Runtime>::get();
+			let authority_count = authorities.len() as u32;
+
+			let is_active = epoch_index >= pallet_cf_flip::FeeRewardsActivationEpoch::<Runtime>::get();
+
+			let (
+				pool_onchain_amount,
+				pool_offchain_amount,
+				per_authority_share,
+				operators,
+				solo_validators,
+			) = if is_active && authority_count > 0 {
+				let pool_onchain_amount = pallet_cf_flip::Reserve::<Runtime>::get(
+					pallet_cf_flip::ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
+				);
+				let pool_offchain_amount =
+					pallet_cf_flip::FlipToDistribute::<Runtime>::get().max(0) as FlipBalance;
+				let per_authority_share =
+					(pool_onchain_amount + pool_offchain_amount) / authority_count as FlipBalance;
+
+				let mut authority_counts: BTreeMap<AccountId, u32> = BTreeMap::new();
+				let mut solo_validators = Vec::new();
+
+				for validator in &authorities {
+					match pallet_cf_validator::ValidatorToOperator::<Runtime>::get(epoch_index, validator) {
+						Some(operator) => {
+							*authority_counts.entry(operator).or_default() += 1;
+						},
+						None => {
+							solo_validators.push(ValidatorRewardEstimate {
+								account: validator.clone(),
+								bid: Flip::balance(validator),
+								bond: Flip::bond(validator),
+								reward: per_authority_share,
+							});
+						},
+					}
+				}
+
+				let operators: Vec<_> = authority_counts
+					.into_iter()
+					.filter_map(|(operator, num_authority_nodes)| {
+						let Some(snapshot) = pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
+							epoch_index,
+							&operator,
+						) else {
+							log_or_panic!(
+									"Operator {:?} has {} authority slot(s) in epoch {} but no delegation snapshot found.",
+									operator,
+									num_authority_nodes,
+									epoch_index
+								);
+							return None;
+						};
+
+						let total = per_authority_share.saturating_mul(num_authority_nodes as FlipBalance);
+						let rewards: BTreeMap<AccountId, FlipBalance> = snapshot
+							.distribute(total, bond)
+							.map(|(account, amount)| (account.clone(), amount))
+							.collect();
+						let reward_of =
+							|account: &AccountId| rewards.get(account).copied().unwrap_or_default();
+						let role_of = |account: &AccountId| {
+							pallet_cf_account_roles::AccountRoles::<Runtime>::get(account)
+								.unwrap_or_default()
+						};
+						let validator_bonds = snapshot.validator_bond_distribution(bond);
+						let bond_of =
+							|account: &AccountId| validator_bonds.get(account).copied().unwrap_or_default();
+
+						Some(OperatorRewardEstimate {
+							operator_reward: reward_of(&operator),
+							commission_bps: snapshot.delegation_fee_bps,
+							total_validator_stake: snapshot.total_validator_bid(),
+							total_delegator_stake: snapshot.total_delegator_bid(),
+							num_authority_nodes,
+							validators: snapshot
+								.validators
+								.keys()
+								.map(|account| AccountReward {
+									account: account.clone(),
+									role: role_of(account),
+									bonded_amount: bond_of(account),
+									reward: reward_of(account),
+								})
+								.collect(),
+							delegators: snapshot
+								.delegators
+								.iter()
+								.map(|(account, bid)| AccountReward {
+									account: account.clone(),
+									role: role_of(account),
+									bonded_amount: *bid,
+									reward: reward_of(account),
+								})
+								.collect(),
+							account: operator,
+						})
+					})
+					.collect();
+
+				(pool_onchain_amount, pool_offchain_amount, per_authority_share, operators, solo_validators)
+			} else {
+				(0, 0, 0, Vec::new(), Vec::new())
+			};
+
+			RewardDistributionEstimate {
+				epoch_index,
+				current_block,
+				current_epoch_started_at,
+				epoch_duration,
+				bond,
+				authority_count,
+				pool_onchain_amount,
+				pool_offchain_amount,
+				per_authority_share,
+				operators,
+				solo_validators,
 			}
 		}
 

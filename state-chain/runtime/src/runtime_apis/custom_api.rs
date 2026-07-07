@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(19)]
+	#[api_version(20)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -434,6 +434,9 @@ decl_runtime_apis!(
 		fn cf_active_delegations(
 			account: Option<AccountId32>,
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
+		#[changed_in(20)]
+		fn cf_reward_distribution_estimate();
+		fn cf_reward_distribution_estimate() -> RewardDistributionEstimate<FlipBalance>;
 		#[changed_in(8)]
 		fn cf_ingress_delay();
 		fn cf_ingress_delay(chain: ForeignChain) -> u32;
