@@ -31,6 +31,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		if new == activation_epoch {
 			Emissions::burn_and_broadcast_supply_update(
 				frame_system::Pallet::<crate::Runtime>::block_number(),
+				true,
 			);
 		} else if new > activation_epoch {
 			let flip_distributed = Flip::trigger_flip_reward_distribution(
