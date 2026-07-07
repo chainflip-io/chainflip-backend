@@ -729,8 +729,8 @@ mod test_flip_reward_distribution {
 	#[test]
 	fn distributes_offchain_and_onchain_rewards_evenly() {
 		new_test_ext().execute_with(|| {
-			FlipToDistribute::<Test>::put(300i128);
-			Reserve::<Test>::insert(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, 300u128);
+			Flip::add_to_offchain_flip_to_be_distributed(300i128);
+			Flip::bridge_in_to_distribution_reserve(300u128);
 
 			let bridged =
 				Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([ALICE, BOB, CHARLIE]));
@@ -754,8 +754,8 @@ mod test_flip_reward_distribution {
 		new_test_ext().execute_with(|| {
 			// 1 offchain bridged in + 201 onchain = 202 total; 202 / 3 = 67 each, 1 stays in
 			// reserve
-			FlipToDistribute::<Test>::put(1i128);
-			Reserve::<Test>::insert(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, 201u128);
+			Flip::add_to_offchain_flip_to_be_distributed(1i128);
+			Flip::bridge_in_to_distribution_reserve(201u128);
 
 			let bridged =
 				Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([ALICE, BOB, CHARLIE]));
@@ -776,8 +776,8 @@ mod test_flip_reward_distribution {
 	fn negative_offchain_balance_is_not_distributed() {
 		new_test_ext().execute_with(|| {
 			// Negative FlipToDistribute should be left intact; only onchain rewards are distributed
-			FlipToDistribute::<Test>::put(-100i128);
-			Reserve::<Test>::insert(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, 300u128);
+			Flip::add_to_offchain_flip_to_be_distributed(-100i128);
+			Flip::bridge_in_to_distribution_reserve(300u128);
 
 			let bridged =
 				Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([ALICE, BOB, CHARLIE]));
@@ -798,7 +798,7 @@ mod test_flip_reward_distribution {
 	#[test]
 	fn zero_onchain_reserve_only_distributes_offchain() {
 		new_test_ext().execute_with(|| {
-			FlipToDistribute::<Test>::put(300i128);
+			Flip::add_to_offchain_flip_to_be_distributed(300i128);
 			// Reserve not set → defaults to 0
 
 			let bridged =
@@ -819,7 +819,6 @@ mod test_flip_reward_distribution {
 	//
 	// Uses i64/u64 inputs (cast to i128/u128) to avoid u128 overflow when summing
 	// onchain_reserve + bridged (max sum ~2.7e19 << u128::MAX).
-	// OffchainFunds is topped up with i64::MAX before the call so bridge_in is never capped.
 	#[quickcheck]
 	fn reward_distribution_invariants(flip_to_distribute: i64, onchain_reserve: u64) -> TestResult {
 		let flip_to_distribute = flip_to_distribute as i128;
@@ -829,12 +828,13 @@ mod test_flip_reward_distribution {
 			.execute_with(|| -> TestResult {
 				const COUNT: u128 = 3; // ALICE, BOB, CHARLIE
 
-				// Top up OffchainFunds so any positive flip_to_distribute can be bridged in without
-				// being capped (initial OffchainFunds=850; i64::MAX ≈ 9.2e18 covers i64 range).
-				let _ = Flip::mint(i64::MAX as u128).offset(Flip::bridge_out(i64::MAX as u128));
+				// Top up OffchainFunds to cover both the onchain_reserve bridge-in below and the
+				// flip_to_distribute bridge-in inside trigger_flip_reward_distribution
+				let top_up = u64::MAX as u128 + i64::MAX as u128;
+				let _ = Flip::mint(top_up).offset(Flip::bridge_out(top_up));
 
-				FlipToDistribute::<Test>::put(flip_to_distribute);
-				Reserve::<Test>::insert(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, onchain_reserve);
+				Flip::add_to_offchain_flip_to_be_distributed(flip_to_distribute);
+				Flip::bridge_in_to_distribution_reserve(onchain_reserve);
 
 				let expected_bridged: u128 =
 					if flip_to_distribute > 0 { flip_to_distribute as u128 } else { 0 };
