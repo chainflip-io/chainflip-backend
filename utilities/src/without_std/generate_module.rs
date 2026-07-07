@@ -202,16 +202,48 @@ macro_rules! generate_module {
                                 )*
                             );
 
+                            #[derive(cf_proc_macros::IntroElim)]
                             pub enum StructForwardsError {
                                 $(
                                     $field(<$field as Migration<To::$field, V>>::ForwardsError),
                                 )*
                             }
 
+                            #[derive(cf_proc_macros::IntroElim)]
                             pub enum StructBackwardsError {
                                 $(
                                     $field(<$field as Migration<To::$field, V>>::BackwardsError),
                                 )*
+                            }
+
+                            impl cf_utilities::never::IsEmptyType for StructForwardsError
+                                where $(
+                                    <$field as Migration<To::$field, V>>::ForwardsError: cf_utilities::never::IsEmptyType,
+                                )*
+                            {
+                                fn as_never(&self) -> cf_utilities::never::Never {
+                                    self.elim_ref(
+                                        $(
+                                            |err: &<$field as Migration<To::$field, V>>::ForwardsError| err.as_never(),
+                                        )*
+                                        |never, _phantom| never.as_never(),
+                                    )
+                                }
+                            }
+
+                            impl cf_utilities::never::IsEmptyType for StructBackwardsError
+                                where $(
+                                    <$field as Migration<To::$field, V>>::BackwardsError: cf_utilities::never::IsEmptyType,
+                                )*
+                            {
+                                fn as_never(&self) -> cf_utilities::never::Never {
+                                    self.elim_ref(
+                                        $(
+                                            |err: &<$field as Migration<To::$field, V>>::BackwardsError| err.as_never(),
+                                        )*
+                                        |never, _phantom| never.as_never(),
+                                    )
+                                }
                             }
 
                             mod $( $( ($T $(: $TBound)?) )+ )? {
@@ -571,16 +603,48 @@ macro_rules! generate_module {
                                 )*
                             );
 
+                            #[derive(cf_proc_macros::IntroElim)]
                             pub enum EnumForwardsError {
                                 $(
                                     $variant(<$variant as Migration<To::$variant, V>>::ForwardsError),
                                 )*
                             }
 
+                            #[derive(cf_proc_macros::IntroElim)]
                             pub enum EnumBackwardsError {
                                 $(
                                     $variant(<$variant as Migration<To::$variant, V>>::BackwardsError),
                                 )*
+                            }
+
+                            impl cf_utilities::never::IsEmptyType for EnumForwardsError
+                                where $(
+                                    <$variant as Migration<To::$variant, V>>::ForwardsError: cf_utilities::never::IsEmptyType,
+                                )*
+                            {
+                                fn as_never(&self) -> cf_utilities::never::Never {
+                                    self.elim_ref(
+                                        $(
+                                            |err: &<$variant as Migration<To::$variant, V>>::ForwardsError| err.as_never(),
+                                        )*
+                                        |never, _phantom| never.as_never(),
+                                    )
+                                }
+                            }
+
+                            impl cf_utilities::never::IsEmptyType for EnumBackwardsError
+                                where $(
+                                    <$variant as Migration<To::$variant, V>>::BackwardsError: cf_utilities::never::IsEmptyType,
+                                )*
+                            {
+                                fn as_never(&self) -> cf_utilities::never::Never {
+                                    self.elim_ref(
+                                        $(
+                                            |err: &<$variant as Migration<To::$variant, V>>::BackwardsError| err.as_never(),
+                                        )*
+                                        |never, _phantom| never.as_never(),
+                                    )
+                                }
                             }
 
                             mod $( $( ($T $(: $TBound)?) )+ )? {

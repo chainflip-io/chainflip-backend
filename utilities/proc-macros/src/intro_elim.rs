@@ -87,7 +87,50 @@ fn derive_enum(input: DeriveInput) -> TokenStream {
 		}
 	});
 
+	let handler_args_ref = variants.iter().enumerate().map(|(variant_index, variant)| {
+		let handler = handler_ident(variant_index);
+		let field_types = variant.fields.iter().map(|field| {
+			let ty = &field.ty;
+			quote! { &#ty }
+		});
+		quote! {
+			#handler: impl Fn(#(#field_types),*) -> #output
+		}
+	});
+
 	let match_arms = variants.iter().enumerate().map(|(variant_index, variant)| {
+		let variant_ident = &variant.ident;
+		let handler = handler_ident(variant_index);
+		let field_bindings = (0..variant.fields.len())
+			.map(|field_index| field_ident(variant_index, field_index))
+			.collect::<Vec<_>>();
+
+		match &variant.fields {
+			Fields::Named(fields) => {
+				let patterns =
+					fields.named.iter().zip(field_bindings.iter()).map(|(field, binding)| {
+						let field_ident =
+							field.ident.as_ref().expect("named fields have identifiers");
+						quote! { #field_ident: #binding }
+					});
+				quote! {
+					Self::#variant_ident { #(#patterns),* } => #handler(#(#field_bindings),*)
+				}
+			},
+			Fields::Unnamed(_) => {
+				quote! {
+					Self::#variant_ident(#(#field_bindings),*) => #handler(#(#field_bindings),*)
+				}
+			},
+			Fields::Unit => {
+				quote! {
+					Self::#variant_ident => #handler()
+				}
+			},
+		}
+	});
+
+	let match_arms_ref = variants.iter().enumerate().map(|(variant_index, variant)| {
 		let variant_ident = &variant.ident;
 		let handler = handler_ident(variant_index);
 		let field_bindings = (0..variant.fields.len())
@@ -127,6 +170,15 @@ fn derive_enum(input: DeriveInput) -> TokenStream {
 			) -> #output {
 				match self {
 					#(#match_arms,)*
+				}
+			}
+
+			pub fn elim_ref<#output>(
+				&self,
+				#(#handler_args_ref,)*
+			) -> #output {
+				match self {
+					#(#match_arms_ref,)*
 				}
 			}
 		}

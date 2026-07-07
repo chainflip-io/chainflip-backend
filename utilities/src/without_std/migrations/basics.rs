@@ -47,15 +47,40 @@ pub trait HasVersion<V: Version>: Sized {
 	type MigrationToCurrent: Migration<Self, vCurrent, From = Self::HistoricalType>;
 }
 
-pub fn migrate_from_historical_type<V: Version, X: HasVersion<V>>(
+pub fn try_migrate_from_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X::HistoricalType,
-) -> X {
-	X::MigrationToCurrent::forwards(x)
+) -> Result<X, <X::MigrationToCurrent as Migration<X, vCurrent>>::ForwardsError> {
+	X::MigrationToCurrent::try_forwards(x)
 }
 
-pub fn migrate_to_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X) -> X::HistoricalType {
-	X::MigrationToCurrent::backwards(x)
+pub fn try_migrate_to_historical_type<V: Version, X: HasVersion<V>>(
+	_v: V,
+	x: X,
+) -> Result<X::HistoricalType, <X::MigrationToCurrent as Migration<X, vCurrent>>::BackwardsError> {
+	X::MigrationToCurrent::try_backwards(x)
+}
+
+pub fn migrate_from_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X::HistoricalType) -> X
+where
+	<X::MigrationToCurrent as Migration<X, vCurrent>>::ForwardsError: IsEmptyType,
+{
+	match X::MigrationToCurrent::try_forwards(x) {
+		Ok(x) => x,
+		#[allow(unreachable_code)]
+		Err(empty) => match empty.as_never() {},
+	}
+}
+
+pub fn migrate_to_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X) -> X::HistoricalType
+where
+	<X::MigrationToCurrent as Migration<X, vCurrent>>::BackwardsError: IsEmptyType,
+{
+	match X::MigrationToCurrent::try_backwards(x) {
+		Ok(x) => x,
+		#[allow(unreachable_code)]
+		Err(empty) => match empty.as_never() {},
+	}
 }
 // -------- identity migration --------
 pub struct IdentityMigration;
