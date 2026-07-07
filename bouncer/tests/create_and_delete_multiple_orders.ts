@@ -58,14 +58,14 @@ export async function createAndDeleteMultipleOrders<A extends WithLpAccount>(
   const ordersToDelete: PalletCfPoolsCloseOrder[] = [];
 
   for (let i = 1; i <= numberOfLimitOrders; i++) {
-    promises.push((subcf) => limitOrder(subcf, 'Btc', 0.00000001, i, i));
+    promises.push((subcf) => limitOrder(subcf, 'Btc', 0.0001, i, i));
     ordersToDelete.push({
       type: 'Limit',
       value: { baseAsset: 'Btc', quoteAsset: 'Usdc', side: 'Sell', id: BigInt(i) },
     });
   }
   for (let i = 1; i <= numberOfLimitOrders; i++) {
-    promises.push((subcf) => limitOrder(subcf, 'Eth', 0.000000000000000001, i, i));
+    promises.push((subcf) => limitOrder(subcf, 'Eth', 0.003, i, i));
     ordersToDelete.push({
       type: 'Limit',
       value: { baseAsset: 'Eth', quoteAsset: 'Usdc', side: 'Sell', id: BigInt(i) },
