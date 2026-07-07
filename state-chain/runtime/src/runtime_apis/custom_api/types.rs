@@ -352,7 +352,7 @@ pub struct AccountReward<Amount> {
 impl<A> AccountReward<A> {
 	pub fn try_map_amounts<B, E>(
 		self,
-		f: impl Fn(A) -> Result<B, E> + 'static,
+		f: impl Fn(A) -> Result<B, E>,
 	) -> Result<AccountReward<B>, E> {
 		Ok(AccountReward {
 			account: self.account,
@@ -378,7 +378,7 @@ pub struct ValidatorRewardEstimate<Amount> {
 impl<A> ValidatorRewardEstimate<A> {
 	pub fn try_map_amounts<B, E>(
 		self,
-		f: impl Fn(A) -> Result<B, E> + 'static,
+		f: impl Fn(A) -> Result<B, E>,
 	) -> Result<ValidatorRewardEstimate<B>, E> {
 		Ok(ValidatorRewardEstimate {
 			account: self.account,
@@ -410,24 +410,24 @@ pub struct OperatorRewardEstimate<Amount> {
 impl<A> OperatorRewardEstimate<A> {
 	pub fn try_map_amounts<B, E>(
 		self,
-		f: impl Fn(A) -> Result<B, E> + Clone + 'static,
+		f: impl Fn(A) -> Result<B, E>,
 	) -> Result<OperatorRewardEstimate<B>, E> {
 		Ok(OperatorRewardEstimate {
 			account: self.account,
 			commission_bps: self.commission_bps,
-			operator_reward: f.clone()(self.operator_reward)?,
-			total_validator_stake: f.clone()(self.total_validator_stake)?,
-			total_delegator_stake: f.clone()(self.total_delegator_stake)?,
+			operator_reward: f(self.operator_reward)?,
+			total_validator_stake: f(self.total_validator_stake)?,
+			total_delegator_stake: f(self.total_delegator_stake)?,
 			num_authority_nodes: self.num_authority_nodes,
 			validators: self
 				.validators
 				.into_iter()
-				.map(|v| v.try_map_amounts(f.clone()))
+				.map(|v| v.try_map_amounts(&f))
 				.collect::<Result<_, E>>()?,
 			delegators: self
 				.delegators
 				.into_iter()
-				.map(|v| v.try_map_amounts(f.clone()))
+				.map(|v| v.try_map_amounts(&f))
 				.collect::<Result<_, E>>()?,
 		})
 	}
@@ -460,27 +460,27 @@ pub struct RewardDistributionEstimate<Amount> {
 impl<A> RewardDistributionEstimate<A> {
 	pub fn try_map_amounts<B, E>(
 		self,
-		f: impl Fn(A) -> Result<B, E> + Clone + 'static,
+		f: impl Fn(A) -> Result<B, E>,
 	) -> Result<RewardDistributionEstimate<B>, E> {
 		Ok(RewardDistributionEstimate {
 			epoch_index: self.epoch_index,
 			current_block: self.current_block,
 			current_epoch_started_at: self.current_epoch_started_at,
 			epoch_duration: self.epoch_duration,
-			bond: f.clone()(self.bond)?,
+			bond: f(self.bond)?,
 			authority_count: self.authority_count,
-			pool_onchain_amount: f.clone()(self.pool_onchain_amount)?,
-			pool_offchain_amount: f.clone()(self.pool_offchain_amount)?,
-			per_authority_share: f.clone()(self.per_authority_share)?,
+			pool_onchain_amount: f(self.pool_onchain_amount)?,
+			pool_offchain_amount: f(self.pool_offchain_amount)?,
+			per_authority_share: f(self.per_authority_share)?,
 			operators: self
 				.operators
 				.into_iter()
-				.map(|o| o.try_map_amounts(f.clone()))
+				.map(|o| o.try_map_amounts(&f))
 				.collect::<Result<_, E>>()?,
 			solo_validators: self
 				.solo_validators
 				.into_iter()
-				.map(|v| v.try_map_amounts(f.clone()))
+				.map(|v| v.try_map_amounts(&f))
 				.collect::<Result<_, E>>()?,
 		})
 	}
