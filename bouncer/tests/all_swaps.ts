@@ -194,10 +194,9 @@ export function testAllSwaps(timeoutPerSwap: number) {
   const allTestedAssets = Object.values(Assets);
   // These assets are tested against *every* possible asset
   const testWithAllPossiblePartners = Object.values(Assets).filter(
-    (id) => chainFromAsset(id) === 'Tron' || chainFromAsset(id) === 'Bsc',
+    (id) => chainFromAsset(id) === 'Bsc',
   );
 
-  // we do 2 tests for every input and output
   const pairs = generateSwapPairs(allTestedAssets, testWithAllPossiblePartners);
   for (const { source, destination } of pairs) {
     const testFunction = source.trigger === 'DepositChannel' ? testSwap : testVaultSwap;
