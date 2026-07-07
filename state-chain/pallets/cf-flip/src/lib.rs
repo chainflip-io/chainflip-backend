@@ -561,13 +561,6 @@ impl<T: Config> Pallet<T> {
 			.offset(Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount));
 	}
 
-	fn credit_reward_from_reserve(account_id: &T::AccountId, amount: T::Balance) {
-		Pallet::<T>::settle(
-			account_id,
-			Pallet::<T>::withdraw_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount).into(),
-		);
-	}
-
 	pub fn trigger_flip_reward_distribution(authorities: BTreeSet<T::AccountId>) -> T::Balance {
 		// Bridge in any pending offchain rewards and deposit them into the distribution reserve so
 		// that everything is distributed from a single source.
@@ -594,7 +587,14 @@ impl<T: Config> Pallet<T> {
 				per_authority_reward,
 				authority,
 				|account, amount| {
-					Pallet::<T>::credit_reward_from_reserve(account, amount);
+					Pallet::<T>::settle(
+						account,
+						Pallet::<T>::withdraw_reserves(
+							ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
+							amount,
+						)
+						.into(),
+					);
 					flip_distributed_map
 						.entry(account.clone())
 						.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
