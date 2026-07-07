@@ -31,14 +31,8 @@ pub trait Migration<To, V: Version> {
 	type From: IsHistoricalType;
 	type ForwardsError = Never;
 	type BackwardsError = Never;
-	fn forwards(x: Self::From) -> To;
-	fn backwards(x: To) -> Self::From;
-	fn try_forwards(_x: Self::From) -> Result<To, Self::ForwardsError> {
-		todo!()
-	}
-	fn try_backwards(_x: To) -> Result<Self::From, Self::BackwardsError> {
-		todo!()
-	}
+	fn try_forwards(_x: Self::From) -> Result<To, Self::ForwardsError>;
+	fn try_backwards(_x: To) -> Result<Self::From, Self::BackwardsError>;
 }
 
 pub trait HasVersion<V: Version>: Sized {
@@ -88,14 +82,6 @@ pub struct IdentityMigration;
 impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 	type From = X;
 
-	fn forwards(x: Self::From) -> X {
-		x
-	}
-
-	fn backwards(x: X) -> Self::From {
-		x
-	}
-
 	fn try_forwards(x: Self::From) -> Result<X, Self::ForwardsError> {
 		Ok(x)
 	}
@@ -128,14 +114,6 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 	type ForwardsError = ComposedMigrationFailed<A::ForwardsError, B::ForwardsError>;
 	type BackwardsError = ComposedMigrationFailed<A::BackwardsError, B::BackwardsError>;
 
-	fn forwards(x: Self::From) -> X {
-		B::forwards(A::forwards(x))
-	}
-
-	fn backwards(x: X) -> Self::From {
-		A::backwards(B::backwards(x))
-	}
-
 	fn try_forwards(x: Self::From) -> Result<X, Self::ForwardsError> {
 		let x = A::try_forwards(x).map_err(ComposedMigrationFailed::First)?;
 		B::try_forwards(x).map_err(ComposedMigrationFailed::Second)
@@ -152,12 +130,6 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 pub struct NewFieldWithDefault;
 impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 	type From = ();
-
-	fn forwards(_x: Self::From) -> T {
-		Default::default()
-	}
-
-	fn backwards(_x: T) -> Self::From {}
 
 	fn try_forwards(_x: Self::From) -> Result<T, Self::ForwardsError> {
 		Ok(Default::default())
@@ -178,14 +150,6 @@ pub struct NewVariantBackwardsError;
 impl<T, V: Version> Migration<T, V> for NewVariant {
 	type From = Never;
 	type BackwardsError = NewVariantBackwardsError;
-
-	fn forwards(x: Self::From) -> T {
-		match x {}
-	}
-
-	fn backwards(_x: T) -> Self::From {
-		panic!("cannot migrate newly added enum variant backwards")
-	}
 
 	fn try_forwards(x: Self::From) -> Result<T, Self::ForwardsError> {
 		match x {}
@@ -235,12 +199,20 @@ pub type GetGenericVariant<X: HasGenericVariant> =
 
 pub struct GlobalMigrationFromGeneric;
 
-pub fn migrate_from_generic_type<X: HasGenericVariant>(x: X::GenericType) -> X {
-	X::MigrationFromGeneric::forwards(x)
+pub fn try_migrate_from_generic_type<X: HasGenericVariant>(x: X::GenericType) -> X {
+	match X::MigrationFromGeneric::try_forwards(x) {
+		Ok(x) => x,
+		#[allow(unreachable_code)]
+		Err(err) => match err.as_never() {},
+	}
 }
 
-pub fn migrate_to_generic_type<X: HasGenericVariant>(x: X) -> X::GenericType {
-	X::MigrationFromGeneric::backwards(x)
+pub fn try_migrate_to_generic_type<X: HasGenericVariant>(x: X) -> X::GenericType {
+	match X::MigrationFromGeneric::try_backwards(x) {
+		Ok(x) => x,
+		#[allow(unreachable_code)]
+		Err(err) => match err.as_never() {},
+	}
 }
 
 // ----------- maybe migrations (for horizontal composition) ---------

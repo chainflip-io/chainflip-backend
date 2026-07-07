@@ -95,14 +95,6 @@ macro_rules! impl_identity_migrations_with_wrapper {
 		impl Migration<$Ty, crate::migrations::vCurrent> for WrapMigration {
 			type From = $Wrapper;
 
-			fn forwards(x: Self::From) -> $Ty {
-				x.0
-			}
-
-			fn backwards(x: $Ty) -> Self::From {
-				$Wrapper(x)
-			}
-
 			fn try_forwards(x: Self::From) -> Result<$Ty, Self::ForwardsError> {
 				Ok(x.0)
 			}
@@ -187,14 +179,6 @@ pub struct NewTypeWithDefault;
 impl<V: Version, T: HasChangelog + Default> Migration<T, V> for NewTypeWithDefault {
 	type From = HistoricalEmptyPlaceholder<T>;
 
-	fn forwards(_: Self::From) -> T {
-		Default::default()
-	}
-
-	fn backwards(_: T) -> Self::From {
-		HistoricalEmptyPlaceholder(Default::default())
-	}
-
 	fn try_forwards(_: Self::From) -> Result<T, Self::ForwardsError> {
 		Ok(Default::default())
 	}
@@ -265,8 +249,6 @@ macro_rules! impl_migrations_for_container {
         $container:ident<$($ty:ident $(: ($($ty_path:tt)*))?),+>,
         $container_macro:ident,
         [$($var_M:ident $(where From: ($($from_path:tt)*) )?),+],
-        |$var_f:ident| $expr_f:expr,
-        |$var_b:ident| $expr_b:expr,
 		type ForwardsError = $forwards_error:ty,
 		type BackwardsError = $backwards_error:ty,
 		try_forwards |$var_try_f:ident| $expr_try_f:expr,
@@ -292,14 +274,6 @@ macro_rules! impl_migrations_for_container {
 			type ForwardsError = $forwards_error;
 			type BackwardsError = $backwards_error;
 
-            fn forwards($var_f: Self::From) -> $container<$($ty),+> {
-                $expr_f
-            }
-
-            fn backwards($var_b: $container<$($ty),+>) -> Self::From {
-                $expr_b
-            }
-
 			fn try_forwards($var_try_f: Self::From) -> Result<$container<$($ty),+>, Self::ForwardsError> {
 				$expr_try_f
 			}
@@ -311,14 +285,6 @@ macro_rules! impl_migrations_for_container {
 
 		impl<$($ty $(: $($ty_path)* )? ,)+ $($var_M: Migration<$ty, vCurrent, ForwardsError = Never, BackwardsError = Never $(, From: $($from_path)*)?>),+> Migration<$container<$($ty),+>, vCurrent> for GenericMapMigration<($($var_M, )+)> {
 			type From = $container<$($var_M::From),+>;
-
-			fn forwards($var_f: Self::From) -> $container<$($ty),+> {
-				$expr_f
-			}
-
-			fn backwards($var_b: $container<$($ty),+>) -> Self::From {
-				$expr_b
-			}
 
 			fn try_forwards($var_generic_try_f: Self::From) -> Result<$container<$($ty),+>, Self::ForwardsError> {
 				$expr_generic_try_f
@@ -343,8 +309,6 @@ impl_migrations_for_container! {
 	Option<X>,
 	impl_changelog_for_option,
 	[M],
-	|x| x.map(M::forwards),
-	|x| x.map(M::backwards),
 	type ForwardsError = OptionMigrationFailed<M::ForwardsError>,
 	type BackwardsError = OptionMigrationFailed<M::BackwardsError>,
 	try_forwards |x| {
@@ -383,8 +347,6 @@ impl_migrations_for_container! {
 	Vec<X>,
 	impl_changelog_for_vector,
 	[M],
-	|x| x.into_iter().map(M::forwards).collect(),
-	|x| x.into_iter().map(M::backwards).collect(),
 	type ForwardsError = VecMigrationFailed<M::ForwardsError>,
 	type BackwardsError = VecMigrationFailed<M::BackwardsError>,
 	try_forwards |x| {
@@ -435,8 +397,6 @@ impl_migrations_for_container! {
 	TupleWith1Entry<A>,
 	impl_changelog_for_tuple1,
 	[M1],
-	|x| (M1::forwards(x.0),),
-	|x| (M1::backwards(x.0),),
 	type ForwardsError = TupleWith1EntryMigrationFailed<M1::ForwardsError>,
 	type BackwardsError = TupleWith1EntryMigrationFailed<M1::BackwardsError>,
 	try_forwards |x| {
@@ -459,8 +419,6 @@ impl_migrations_for_container! {
 	TupleWith2Entries<A,B>,
 	impl_changelog_for_tuple,
 	[M1,M2],
-	|x| (M1::forwards(x.0), M2::forwards(x.1)),
-	|x| (M1::backwards(x.0), M2::backwards(x.1)),
 	type ForwardsError = TupleWith2EntriesMigrationFailed<M1::ForwardsError, M2::ForwardsError>,
 	type BackwardsError = TupleWith2EntriesMigrationFailed<M1::BackwardsError, M2::BackwardsError>,
 	try_forwards |x| {
@@ -518,14 +476,6 @@ impl<
 	type ForwardsError = BTreeMapMigrationFailed<M1::ForwardsError, M2::ForwardsError>;
 	type BackwardsError = BTreeMapMigrationFailed<M1::BackwardsError, M2::BackwardsError>;
 
-	fn forwards(x: Self::From) -> BTreeMap<A, B> {
-		x.into_iter().map(|(a, b)| (M1::forwards(a), M2::forwards(b))).collect()
-	}
-
-	fn backwards(x: BTreeMap<A, B>) -> Self::From {
-		x.into_iter().map(|(a, b)| (M1::backwards(a), M2::backwards(b))).collect()
-	}
-
 	fn try_forwards(x: Self::From) -> Result<BTreeMap<A, B>, Self::ForwardsError> {
 		let mut result = BTreeMap::new();
 
@@ -571,14 +521,6 @@ impl<
 	> Migration<BTreeMap<A, B>, vCurrent> for GenericMapMigration<(M1, M2)>
 {
 	type From = BTreeMap<M1::From, M2::From>;
-
-	fn forwards(x: Self::From) -> BTreeMap<A, B> {
-		x.into_iter().map(|(a, b)| (M1::forwards(a), M2::forwards(b))).collect()
-	}
-
-	fn backwards(x: BTreeMap<A, B>) -> Self::From {
-		x.into_iter().map(|(a, b)| (M1::backwards(a), M2::backwards(b))).collect()
-	}
 
 	fn try_forwards(x: Self::From) -> Result<BTreeMap<A, B>, Self::ForwardsError> {
 		let mut result = BTreeMap::new();

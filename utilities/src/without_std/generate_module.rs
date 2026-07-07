@@ -146,25 +146,7 @@ macro_rules! generate_module {
                                 )
                             )
                         }
-
-                        fn forwards(x: Self::From) -> UserStruct {
-                            $struct {
-                                $(
-                                    $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::forwards(x.$field),
-                                )*
-                            }
-                        }
-
-                        fn backwards(x: UserStruct) -> Self::From {
-                            Struct::intro(
-                                $(
-                                    <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::backwards(x.$field),
-                                )*
-                                Default::default(),
-                            )
-                        }
                     }
-
                 }
             }
 
@@ -257,24 +239,6 @@ macro_rules! generate_module {
                                     type BackwardsError = StructBackwardsError;
 
                                     type From = StructVariant<TyFrom>;
-
-                                    fn forwards(x: StructVariant<TyFrom>) -> StructVariant<To> {
-                                        Struct::intro(
-                                            $(
-                                                $field::forwards(x.$field),
-                                            )*
-                                            Default::default(),
-                                        )
-                                    }
-
-                                    fn backwards(x: StructVariant<To>) -> StructVariant<TyFrom> {
-                                        Struct::intro (
-                                            $(
-                                                $field::backwards(x.$field),
-                                            )*
-                                            Default::default(),
-                                        )
-                                    }
 
                                     fn try_forwards(x: Self::From) -> Result<StructVariant<To>, Self::ForwardsError> {
                                         Ok(Struct::intro(
@@ -658,24 +622,6 @@ macro_rules! generate_module {
                                     type ForwardsError = EnumForwardsError;
                                     type BackwardsError = EnumBackwardsError;
 
-                                    fn forwards(x: EnumVariant<From>) -> EnumVariant<To> {
-                                        match x {
-                                            $(
-                                                Enum::$variant(val) => Enum::$variant($variant::forwards(val)),
-                                            )*
-                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
-                                        }
-                                    }
-
-                                    fn backwards(x: EnumVariant<To>) -> EnumVariant<From> {
-                                        match x {
-                                            $(
-                                                Enum::$variant(val) => Enum::$variant($variant::backwards(val)),
-                                            )*
-                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
-                                        }
-                                    }
-
                                     fn try_forwards(x: Self::From) -> Result<EnumVariant<To>, Self::ForwardsError> {
                                         Ok(match x {
                                             $(
@@ -831,31 +777,6 @@ macro_rules! generate_module {
                         )>;
                         type ForwardsError = cf_utilities::never::Never;
                         type BackwardsError = cf_utilities::never::Never;
-
-                        fn forwards(x: Self::From) -> RealEnum {
-                            match x {
-                                $(
-                                    Enum::$variant(val) =>
-                                        (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::forwards(val)).into(),
-                                )*
-                                Enum::_phantom(never, _) => match never {},
-                            }
-                        }
-
-                        fn backwards(x: RealEnum) -> Self::From {
-                            x.elim(
-                                $(
-                                    |$($($variant_tuple_entry: $variant_ty,)*)? $($($variant_field: $variant_field_ty,)*)?|
-                                    Enum::$variant(<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::backwards(
-                                        variants::$variant::intro(
-                                            $( $( $variant_tuple_entry, )*)?
-                                            $( $( $variant_field, )*)?
-                                            Default::default(),
-                                        )
-                                    )),
-                                )*
-                            )
-                        }
 
                         fn try_forwards(x: Self::From) -> Result<RealEnum, Self::ForwardsError> {
                             Ok(
