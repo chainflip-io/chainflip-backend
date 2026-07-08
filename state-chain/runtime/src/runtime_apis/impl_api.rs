@@ -2095,7 +2095,6 @@ impl_runtime_apis! {
 					strategy,
 					balance: supported_asset_balances.collect(),
 				}
-
 			}
 
 			if let Some(lp_id) = &lp_id {
