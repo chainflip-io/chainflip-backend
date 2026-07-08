@@ -24,8 +24,8 @@ use crate::{
 };
 use frame_support::instances::*;
 
-pub type CryptoInstanceFor<C> = <C as ChainCryptoInstanceAlias>::Instance;
-pub type ChainInstanceFor<C> = <C as ChainInstanceAlias>::Instance;
+pub type CryptoInstanceFor<C: ChainCryptoInstanceAlias> = <C as ChainCryptoInstanceAlias>::Instance;
+pub type ChainInstanceFor<C: ChainInstanceAlias> = <C as ChainInstanceAlias>::Instance;
 
 /// Allows a type to be used as an alias for a pallet `Instance`.
 pub trait PalletInstanceAlias {

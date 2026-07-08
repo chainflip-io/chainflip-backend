@@ -598,6 +598,7 @@ pub struct TransactionScreeningEvents {
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[cf_proc_macros::generate_module]
 pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
@@ -617,6 +618,9 @@ pub struct VaultAddresses {
 	pub bsc: EncodedAddress,
 
 	pub predicted_seconds_until_next_vault_rotation: u64,
+}
+impl HasChangelog for VaultAddresses {
+	type if_unspecified = _VaultAddresses::see_field_changelogs;
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]

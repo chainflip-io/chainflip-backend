@@ -132,8 +132,8 @@ pub type RpcChannelRefundParameters =
 
 /// Convenience alias for unchecked refund parameters with the refund address as the chain's account
 /// type.
-pub type ChannelRefundParametersForChain<C> =
-	ChannelRefundParametersUnchecked<<C as Chain>::ChainAccount>;
+pub type ChannelRefundParametersForChain<C: Chain> =
+	ChannelRefundParametersUnchecked<C::ChainAccount>;
 
 impl<A, D> ChannelRefundParameters<A, D> {
 	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
