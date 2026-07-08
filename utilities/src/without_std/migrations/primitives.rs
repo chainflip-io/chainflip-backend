@@ -49,7 +49,7 @@ macro_rules! impl_identity_migrations {
     };
 }
 
-impl_identity_migrations! {(), bool, u8, u16, u32, u64, u128, Never, }
+impl_identity_migrations! {(), bool, u8, u16, u32, u64, u128, Never, [u8; 20], [u8; 32], }
 
 impl<T> IsHistoricalType for PhantomData<T> {
 	type GetCurrentType = Self;

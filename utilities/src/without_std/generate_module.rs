@@ -438,27 +438,51 @@ macro_rules! generate_module {
                                 }
 
                                 fn encode_to<__W: codec::Output + ?Sized>(&self, dest: &mut __W) {
-                                    let mut _disc: u8 = 0;
-                                    $(
-                                        let $variant;
-                                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
-                                            $( _disc = $variant_discriminant as u8; )?
-                                            $variant = _disc;
-                                            _disc += 1;
-                                        } else {
-                                            $variant = 0; // dummy value, variant will never be encoded
+                                    // very unfortunately we have to move the implementation into an inner module
+                                    // because for some reason the syntax
+                                    //
+                                    //  let $variant: u8;
+                                    //
+                                    // and all of its variants breaks if there is a struct (!) in scope with the
+                                    // name $variant.
+                                    //
+                                    // So we move into a module where no external symbols are in scope.
+                                    mod inner {
+                                        mod bounds {
+                                            use super::super::*;
+                                            $( $( pub trait $T = $( $TBound )?; )+ )?
                                         }
-                                    )*
+                                        pub fn do_encode<Ty: super::Types, __W: codec::Output + ?Sized, $( $( $T: bounds::$T, )+ )?>(
+                                            this: &super::Enum,
+                                            dest: &mut __W,
+                                        )
+                                        where $( Ty::$variant: cf_utilities::type_introspection::HasTypeIntrospection + codec::Encode, )*
+                                        {
+                                            let mut _disc: u8 = 0;
+                                            $(
+                                                let $variant: u8;
+                                                if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                                                    $( _disc = $variant_discriminant as u8; )?
+                                                    $variant = _disc;
+                                                    _disc += 1;
+                                                } else {
+                                                    $variant = 0; // dummy value, variant will never be encoded
+                                                }
+                                            )*
 
-                                    match self {
-                                        $(
-                                            Self::$variant(val) => {
-                                                codec::Encode::encode_to(&$variant, dest);
-                                                codec::Encode::encode_to(val, dest);
+                                            match this {
+                                                $(
+                                                    super::Enum::$variant(val) => {
+                                                        codec::Encode::encode_to(&$variant, dest);
+                                                        codec::Encode::encode_to(val, dest);
+                                                    }
+                                                )*
+                                                super::Enum::_phantom(never, _) => match *never {}
                                             }
-                                        )*
-                                        Self::_phantom(never, _) => match *never {}
+                                        }
                                     }
+
+                                    inner::do_encode(self, dest)
                                 }
                             }
 

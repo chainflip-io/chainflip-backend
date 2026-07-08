@@ -29,6 +29,7 @@ use cf_primitives::{
 	chains::{Arbitrum, Assethub, Bitcoin, Bsc, Ethereum, Polkadot, Solana, Tron},
 	ChannelId, ForeignChain, NetworkEnvironment,
 };
+use cf_utilities::migrations::HasChangelog;
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -137,6 +138,7 @@ impl ForeignChainAddress {
 	Serialize,
 	Deserialize,
 )]
+#[cf_proc_macros::generate_module]
 pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),
@@ -146,6 +148,9 @@ pub enum EncodedAddress {
 	Hub([u8; 32]),
 	Tron([u8; 20]),
 	Bsc([u8; 20]),
+}
+impl HasChangelog for EncodedAddress {
+	type if_unspecified = _EncodedAddress::see_variant_changelogs;
 }
 
 pub trait AddressConverter: Sized {

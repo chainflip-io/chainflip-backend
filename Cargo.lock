@@ -1611,6 +1611,7 @@ dependencies = [
  "bs58",
  "cf-amm-math",
  "cf-primitives",
+ "cf-proc-macros",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "curve25519-dalek 4.1.3",
