@@ -18,7 +18,7 @@ use cf_primitives::{AssetAmount, AssetAndAmount, Beneficiary, SwapRequestId};
 use cf_traits::lending::LoanId;
 use cf_utilities::migrations::{
 	basics::{HasVersion, Migration, RemovedFieldWithDefault},
-	v20100, v20200, HasChangelog,
+	v20200, HasChangelog,
 };
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
