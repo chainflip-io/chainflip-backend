@@ -504,7 +504,7 @@ pub mod balance_api {
 
 mod withdrawal_whitelist {
 	use super::*;
-	use crate::{Error, MaxPendingWhitelistUpdates, MaxWithdrawalTimelock, WhitelistChange};
+	use crate::{Error, MaxPendingWhitelistUpdates, MaxWhitelistTimelock, WhitelistChange};
 	use cf_chains::{
 		address::{AddressConverter, EncodedAddress},
 		AccountOrAddress,
@@ -559,7 +559,7 @@ mod withdrawal_whitelist {
 	}
 
 	fn set_timelock(who: &AccountId, seconds: u64) {
-		assert_ok!(Pallet::<Test>::set_withdrawal_timelock(
+		assert_ok!(Pallet::<Test>::set_whitelist_timelock(
 			RuntimeOrigin::signed(who.clone()),
 			seconds
 		));
@@ -656,21 +656,18 @@ mod withdrawal_whitelist {
 	}
 
 	#[test]
-	fn set_withdrawal_timelock_enforces_maximum_and_emits() {
+	fn set_whitelist_timelock_enforces_maximum_and_emits() {
 		new_test_ext().execute_with(|| {
 			let who = account(1);
-			let max = MaxWithdrawalTimelock::<Test>::get();
+			let max = MaxWhitelistTimelock::<Test>::get();
 			assert_noop!(
-				Pallet::<Test>::set_withdrawal_timelock(
-					RuntimeOrigin::signed(who.clone()),
-					max + 1
-				),
+				Pallet::<Test>::set_whitelist_timelock(RuntimeOrigin::signed(who.clone()), max + 1),
 				Error::<Test>::TimelockExceedsMaximum
 			);
 			// Enabling (0 -> 1000) takes effect immediately.
 			set_timelock(&who, 1000);
 			System::assert_has_event(RuntimeEvent::AssetBalances(
-				Event::WithdrawalTimelockUpdated {
+				Event::WhitelistTimelockUpdated {
 					account_id: who,
 					duration: 1000,
 					effective_at: 0,
@@ -684,9 +681,9 @@ mod withdrawal_whitelist {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Pallet::<Test>::update_pallet_config(
 				RuntimeOrigin::root(),
-				PalletConfigUpdate::MaxWithdrawalTimelock { seconds: 123 },
+				PalletConfigUpdate::MaxWhitelistTimelock { seconds: 123 },
 			));
-			assert_eq!(MaxWithdrawalTimelock::<Test>::get(), 123);
+			assert_eq!(MaxWhitelistTimelock::<Test>::get(), 123);
 
 			assert_ok!(Pallet::<Test>::update_pallet_config(
 				RuntimeOrigin::root(),

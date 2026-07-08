@@ -97,8 +97,8 @@ derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub enum PalletConfigUpdate {
 		RefundFeeMultiple { chain: ForeignChain, multiple: Option<u32> },
-		/// Maximum withdrawal timelock duration.
-		MaxWithdrawalTimelock { seconds: DurationSeconds },
+		/// Maximum whitelist timelock duration.
+		MaxWhitelistTimelock { seconds: DurationSeconds },
 		/// Maximum number of pending whitelist updates per account.
 		MaxPendingWhitelistUpdates { count: u32 },
 		/// Maximum number of active whitelist entries per account.
@@ -132,7 +132,7 @@ pub mod pallet {
 		/// Converts between encoded (wire) and internal address representations.
 		type AddressConverter: AddressConverter;
 
-		/// Wall-clock time source for the withdrawal timelock (seconds).
+		/// Wall-clock time source for the whitelist timelock (seconds).
 		type TimeSource: UnixTime;
 
 		/// Safe mode configuration.
@@ -210,8 +210,8 @@ pub mod pallet {
 			change: WhitelistChange<T::AccountId, ForeignChainAddress>,
 			apply_at: DurationSeconds,
 		},
-		/// An account's withdrawal timelock was updated.
-		WithdrawalTimelockUpdated {
+		/// An account's whitelist timelock was updated.
+		WhitelistTimelockUpdated {
 			account_id: T::AccountId,
 			duration: DurationSeconds,
 			effective_at: DurationSeconds,
@@ -270,10 +270,10 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Maximum withdrawal timelock duration (seconds). Governance-updatable via
-	/// [`PalletConfigUpdate::MaxWithdrawalTimelock`]. Defaults to 10 days.
+	/// Maximum whitelist timelock duration (seconds). Governance-updatable via
+	/// [`PalletConfigUpdate::MaxWhitelistTimelock`]. Defaults to 10 days.
 	#[pallet::storage]
-	pub type MaxWithdrawalTimelock<T> =
+	pub type MaxWhitelistTimelock<T> =
 		StorageValue<_, DurationSeconds, ValueQuery, ConstU64<{ 10 * 24 * 3600 }>>;
 
 	/// Maximum number of pending allowlist updates per account. Governance-updatable via
@@ -317,8 +317,8 @@ pub mod pallet {
 						RefundFeeMultiple::<T>::remove(chain);
 					}
 				},
-				PalletConfigUpdate::MaxWithdrawalTimelock { seconds } => {
-					MaxWithdrawalTimelock::<T>::put(seconds);
+				PalletConfigUpdate::MaxWhitelistTimelock { seconds } => {
+					MaxWhitelistTimelock::<T>::put(seconds);
 				},
 				PalletConfigUpdate::MaxPendingWhitelistUpdates { count } => {
 					MaxPendingWhitelistUpdates::<T>::put(count);
@@ -372,20 +372,20 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the caller's withdrawal timelock. Like any other change, the update is delayed by
+		/// Set the caller's whitelist timelock. Like any other change, the update is delayed by
 		/// the current timelock, so a stolen key can't instantly remove the protection. Since a
 		/// new timelock change replaces a pending one, the owner can still *cancel* a pending
 		/// malicious change at any time by scheduling their own — the recovery lever against a
 		/// stolen key.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::set_withdrawal_timelock())]
-		pub fn set_withdrawal_timelock(
+		#[pallet::weight(T::WeightInfo::set_whitelist_timelock())]
+		pub fn set_whitelist_timelock(
 			origin: OriginFor<T>,
 			duration: DurationSeconds,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			ensure!(
-				duration <= MaxWithdrawalTimelock::<T>::get(),
+				duration <= MaxWhitelistTimelock::<T>::get(),
 				Error::<T>::TimelockExceedsMaximum
 			);
 
@@ -397,7 +397,7 @@ pub mod pallet {
 				current,
 			)?;
 
-			Self::deposit_event(Event::<T>::WithdrawalTimelockUpdated {
+			Self::deposit_event(Event::<T>::WhitelistTimelockUpdated {
 				account_id,
 				duration,
 				effective_at,

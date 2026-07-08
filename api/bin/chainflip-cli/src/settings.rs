@@ -125,9 +125,9 @@ pub enum LiquidityProviderSubcommands {
 	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
 	RegisterLiquidityRefundAddress { chain: ForeignChain, address: AddressString },
-	/// Set the withdrawal timelock (seconds). 0 disables the restriction; a non-zero value turns
+	/// Set the whitelist timelock (seconds). 0 disables the restriction; a non-zero value turns
 	/// on the withdrawal allowlist. Weakening/disabling is delayed by the current timelock.
-	SetWithdrawalTimelock { duration_secs: u64 },
+	SetWhitelistTimelock { duration_secs: u64 },
 	/// Add or remove a destination from the withdrawal allowlist.
 	#[clap(subcommand)]
 	UpdateWhitelist(WhitelistSubcommands),
@@ -400,18 +400,18 @@ mod tests {
 	fn parses_lp_whitelist_subcommands() {
 		use clap::Parser;
 
-		// `lp set-withdrawal-timelock <secs>`
+		// `lp set-whitelist-timelock <secs>`
 		let opts = CLICommandLineOptions::try_parse_from([
 			"chainflip-cli",
 			"lp",
-			"set-withdrawal-timelock",
+			"set-whitelist-timelock",
 			"864000",
 		])
 		.unwrap();
 		match opts.cmd {
-			CliCommand::LiquidityProvider(
-				LiquidityProviderSubcommands::SetWithdrawalTimelock { duration_secs },
-			) => assert_eq!(duration_secs, 864_000),
+			CliCommand::LiquidityProvider(LiquidityProviderSubcommands::SetWhitelistTimelock {
+				duration_secs,
+			}) => assert_eq!(duration_secs, 864_000),
 			other => panic!("unexpected command: {other:?}"),
 		}
 

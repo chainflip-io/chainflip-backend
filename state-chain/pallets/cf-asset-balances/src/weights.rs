@@ -50,7 +50,7 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn update_pallet_config() -> Weight;
 	fn update_whitelist() -> Weight;
-	fn set_withdrawal_timelock() -> Weight;
+	fn set_whitelist_timelock() -> Weight;
 	fn on_idle_check() -> Weight;
 	fn on_idle_apply_change(n: u32) -> Weight;
 }
@@ -72,7 +72,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Minimum execution time: 30_000_000 picoseconds.
 		Weight::from_parts(30_000_000, 0)
 	}
-	fn set_withdrawal_timelock() -> Weight {
+	fn set_whitelist_timelock() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
@@ -105,7 +105,7 @@ impl WeightInfo for () {
 	fn update_whitelist() -> Weight {
 		Weight::from_parts(30_000_000, 0)
 	}
-	fn set_withdrawal_timelock() -> Weight {
+	fn set_whitelist_timelock() -> Weight {
 		Weight::from_parts(20_000_000, 0)
 	}
 	fn on_idle_check() -> Weight {

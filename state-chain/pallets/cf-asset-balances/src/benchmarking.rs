@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	Call, Config, MaxPendingWhitelistUpdates, MaxWithdrawalTimelock, Pallet, PalletConfigUpdate,
+	Call, Config, MaxPendingWhitelistUpdates, MaxWhitelistTimelock, Pallet, PalletConfigUpdate,
 	PendingChange, PendingChanges, WhitelistChange,
 };
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue, AccountOrAddress};
@@ -39,12 +39,12 @@ mod benchmarks {
 	#[benchmark]
 	fn update_pallet_config() {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let update = PalletConfigUpdate::MaxWithdrawalTimelock { seconds: 1_000 };
+		let update = PalletConfigUpdate::MaxWhitelistTimelock { seconds: 1_000 };
 
 		#[extrinsic_call]
 		update_pallet_config(origin as OriginFor<T>, update);
 
-		assert_eq!(MaxWithdrawalTimelock::<T>::get(), 1_000);
+		assert_eq!(MaxWhitelistTimelock::<T>::get(), 1_000);
 	}
 
 	#[benchmark]
@@ -77,14 +77,14 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn set_withdrawal_timelock() {
+	fn set_whitelist_timelock() {
 		let caller: T::AccountId = whitelisted_caller();
 
 		// Update an existing timelock, exercising the scheduling path.
 		Pallet::<T>::mutate_whitelist(&caller, |whitelist| whitelist.set_timelock(2_000));
 
 		#[extrinsic_call]
-		set_withdrawal_timelock(RawOrigin::Signed(caller.clone()), 1_000);
+		set_whitelist_timelock(RawOrigin::Signed(caller.clone()), 1_000);
 
 		assert!(pending_count::<T>(&caller) > 0);
 	}

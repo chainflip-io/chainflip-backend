@@ -208,10 +208,10 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			.tx_hash)
 	}
 
-	async fn set_withdrawal_timelock(&self, duration_secs: u64) -> Result<H256> {
+	async fn set_whitelist_timelock(&self, duration_secs: u64) -> Result<H256> {
 		Ok(self
 			.submit_signed_extrinsic(RuntimeCall::from(
-				pallet_cf_asset_balances::Call::set_withdrawal_timelock { duration: duration_secs },
+				pallet_cf_asset_balances::Call::set_whitelist_timelock { duration: duration_secs },
 			))
 			.await
 			.until_in_block()

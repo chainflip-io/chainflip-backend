@@ -122,9 +122,9 @@ async fn run_cli() -> Result<()> {
 							api.lp_api().register_liquidity_refund_address(chain, address).await?;
 						println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
 					},
-					LiquidityProviderSubcommands::SetWithdrawalTimelock { duration_secs } => {
-						let tx_hash = api.lp_api().set_withdrawal_timelock(duration_secs).await?;
-						println!("Withdrawal timelock set. Tx hash: {tx_hash}");
+					LiquidityProviderSubcommands::SetWhitelistTimelock { duration_secs } => {
+						let tx_hash = api.lp_api().set_whitelist_timelock(duration_secs).await?;
+						println!("Whitelist timelock set. Tx hash: {tx_hash}");
 					},
 					LiquidityProviderSubcommands::UpdateWhitelist(subcommand) => {
 						let change = match subcommand {

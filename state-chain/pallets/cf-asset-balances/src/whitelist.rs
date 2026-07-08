@@ -25,7 +25,7 @@ use cf_chains::{AccountOrAddress, ForeignChain, ForeignChainAddress};
 use frame_support::{pallet_prelude::*, DefaultNoBound};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
-/// A duration or a point in time, in seconds. The withdrawal timelock works in wall-clock time
+/// A duration or a point in time, in seconds. The whitelist timelock works in wall-clock time
 /// (via the pallet's `TimeSource`), matching cf-funding's redemption timelock.
 pub type DurationSeconds = u64;
 
@@ -45,7 +45,7 @@ pub enum WhitelistChange<AccountId, Address> {
 pub enum PendingChange<AccountId> {
 	/// An allowlist change.
 	Whitelist(WhitelistChange<AccountId, ForeignChainAddress>),
-	/// A withdrawal timelock update.
+	/// A whitelist timelock update.
 	Timelock(DurationSeconds),
 	/// A refund address update (the chain is implied by the address).
 	RefundAddress(ForeignChainAddress),
@@ -66,7 +66,7 @@ impl<AccountId> PendingChange<AccountId> {
 }
 
 /// An account's active withdrawal-whitelist state: the external/internal allowlists and the
-/// withdrawal timelock.
+/// whitelist timelock.
 #[derive(
 	Encode,
 	Decode,
