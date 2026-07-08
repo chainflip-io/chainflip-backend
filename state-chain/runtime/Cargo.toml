@@ -120,6 +120,7 @@ proptest-derive = { workspace = true }
 cf-chains = { workspace = true, features = [
 	"mocks",
 	"runtime-integration-tests",
+    "proptest"
 ] }
 cf-traits = { workspace = true, features = ["mocks"] }
 
@@ -286,6 +287,7 @@ proptest = [
 	"cf-primitives/proptest",
 	"cf-utilities/proptest",
 	"pallet-cf-lending-pools/proptest",
+    "cf-chains/proptest",
 ]
 
 # IMPORTANT: These two are required to make sure that 'turbo bouncer' works and also
