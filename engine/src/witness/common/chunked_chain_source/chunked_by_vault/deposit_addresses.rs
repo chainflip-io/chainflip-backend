@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::{instances::ChainInstanceFor, Chain};
+use cf_chains::{
+	instances::{ChainInstanceAlias, ChainInstanceFor},
+	Chain,
+};
 use cf_utilities::task_scope::Scope;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use std::sync::Arc;
@@ -27,7 +30,7 @@ use super::{builder::ChunkedByVaultBuilder, monitored_items::MonitoredSCItems, C
 pub type Addresses<Inner> = Vec<
 	DepositChannelDetails<
 		state_chain_runtime::Runtime,
-		ChainInstanceFor<<Inner as ChunkedByVault>::Chain>,
+		<<Inner as ChunkedByVault>::Chain as ChainInstanceAlias>::Instance,
 	>,
 >;
 

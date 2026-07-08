@@ -19,6 +19,9 @@
 #![feature(split_array)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(trait_alias)]
+#![feature(associated_type_defaults)]
+#![feature(lazy_type_alias)]
+#![allow(incomplete_features)]
 use crate::{
 	assets::any::Asset as AnyChainAsset,
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
@@ -1091,7 +1094,7 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
-pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+pub type TransactionInIdFor<C: Chain> = <C::ChainCrypto as ChainCrypto>::TransactionInId;
 
 // NOTE: New chain variants MUST be appended at the end to preserve SCALE discriminants for
 // backward compatibility with already-encoded storage and cross-version runtime API calls.
