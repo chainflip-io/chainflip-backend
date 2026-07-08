@@ -5,21 +5,21 @@ expression: val
 {
   "asks": {
     "limit_orders": {
-      "price": "0x1000276a3",
+      "price": "0x1000458e3",
       "depth": "0x9fbf1"
     },
     "range_orders": {
-      "price": "0x1000276a3",
+      "price": "0x100060aea",
       "depth": "0xbadf8"
     }
   },
   "bids": {
     "limit_orders": {
-      "price": "0x1000276a3",
+      "price": "0x10007bcf1",
       "depth": "0xd5fff"
     },
     "range_orders": {
-      "price": "0x1000276a3",
+      "price": "0x100096ef8",
       "depth": "0xf1206"
     }
   }
