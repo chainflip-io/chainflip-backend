@@ -933,4 +933,30 @@ mod withdrawal_whitelist {
 			);
 		});
 	}
+
+	#[test]
+	fn account_kill_clears_whitelist_state() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_1);
+			set_timelock(&who, 1000);
+			allow(&who, ETH_ADDR_2); // pending
+			assert_err!(
+				ensure_allowed_external(&who, &ARB_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+
+			crate::DeleteAccount::<Test>::on_killed_account(&who);
+
+			// All per-account state is gone: unrestricted again, no refund address, no pending.
+			assert_ok!(ensure_allowed_external(&who, &ARB_ADDR_1));
+			assert!(Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum).is_none());
+			assert!(crate::PendingChanges::<Test>::get().is_empty());
+
+			// The killed account's pending change never fires.
+			advance_clock(1001);
+			apply_pending();
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+		});
+	}
 }
