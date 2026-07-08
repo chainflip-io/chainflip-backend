@@ -210,6 +210,12 @@ pub mod pallet {
 			change: WhitelistChange<T::AccountId, ForeignChainAddress>,
 			apply_at: Seconds,
 		},
+		/// A whitelist change was not applied because the account's whitelist is already at
+		/// [`MaxWhitelistEntries`].
+		WhitelistUpdateDropped {
+			account_id: T::AccountId,
+			change: WhitelistChange<T::AccountId, ForeignChainAddress>,
+		},
 		/// An account's whitelist timelock was updated.
 		WhitelistTimelockUpdated {
 			account_id: T::AccountId,
@@ -702,10 +708,18 @@ impl<T: Config> Pallet<T> {
 
 	fn apply_pending_change(who: &T::AccountId, change: PendingChange<T::AccountId>) {
 		match change {
-			PendingChange::Whitelist(whitelist_change) =>
-				Self::mutate_whitelist(who, |whitelist| {
+			PendingChange::Whitelist(whitelist_change) => {
+				if Self::mutate_whitelist(who, |whitelist| {
 					whitelist.apply_change(&whitelist_change, MaxWhitelistEntries::<T>::get())
-				}),
+				})
+				.is_err()
+				{
+					Self::deposit_event(Event::<T>::WhitelistUpdateDropped {
+						account_id: who.clone(),
+						change: whitelist_change,
+					});
+				}
+			},
 			PendingChange::Timelock(timelock) =>
 				Self::mutate_whitelist(who, |whitelist| whitelist.set_timelock(timelock)),
 			PendingChange::RefundAddress(address) =>

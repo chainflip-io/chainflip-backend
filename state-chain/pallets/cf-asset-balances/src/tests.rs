@@ -935,6 +935,29 @@ mod withdrawal_whitelist {
 	}
 
 	#[test]
+	fn over_cap_allow_is_dropped_with_event() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::MaxWhitelistEntries { count: 1 },
+			));
+			allow(&who, ETH_ADDR_1);
+			// Over the cap: the change is dropped and announced.
+			allow(&who, ETH_ADDR_2);
+			System::assert_has_event(RuntimeEvent::AssetBalances(Event::WhitelistUpdateDropped {
+				account_id: who.clone(),
+				change: WhitelistChange::Allow(AccountOrAddress::ExternalAddress(ETH_ADDR_2)),
+			}));
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
+		});
+	}
+
+	#[test]
 	fn account_kill_clears_whitelist_state() {
 		new_test_ext().execute_with(|| {
 			let who = account(1);
