@@ -51,6 +51,8 @@ pub trait WeightInfo {
 	fn update_pallet_config() -> Weight;
 	fn update_whitelist() -> Weight;
 	fn set_withdrawal_timelock() -> Weight;
+	fn on_idle_check() -> Weight;
+	fn on_idle_apply_change(n: u32) -> Weight;
 }
 
 /// Weights for pallet_cf_asset_balances using the Substrate node and recommended hardware.
@@ -77,6 +79,22 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Minimum execution time: 20_000_000 picoseconds.
 		Weight::from_parts(20_000_000, 0)
 	}
+	fn on_idle_check() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 5_000_000 picoseconds.
+		Weight::from_parts(5_000_000, 0)
+	}
+	fn on_idle_apply_change(n: u32) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 10_000_000 picoseconds.
+		Weight::from_parts(10_000_000, 0)
+			// Standard Error: 0
+			.saturating_add(Weight::from_parts(40_000_000, 0).saturating_mul(n.into()))
+	}
 }
 
 // For backwards compatibility and tests
@@ -89,5 +107,12 @@ impl WeightInfo for () {
 	}
 	fn set_withdrawal_timelock() -> Weight {
 		Weight::from_parts(20_000_000, 0)
+	}
+	fn on_idle_check() -> Weight {
+		Weight::from_parts(5_000_000, 0)
+	}
+	fn on_idle_apply_change(n: u32) -> Weight {
+		Weight::from_parts(10_000_000, 0)
+			.saturating_add(Weight::from_parts(40_000_000, 0).saturating_mul(n.into()))
 	}
 }

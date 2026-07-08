@@ -16,16 +16,25 @@
 
 use crate::{
 	Call, Config, MaxPendingWhitelistUpdates, MaxWithdrawalTimelock, Pallet, PalletConfigUpdate,
-	WhitelistChange, WithdrawalWhitelists,
+	PendingChange, PendingChanges, WhitelistChange,
 };
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue, AccountOrAddress};
 use frame_benchmarking::v2::*;
-use frame_support::traits::{EnsureOrigin, UnixTime};
+use frame_support::traits::{EnsureOrigin, Hooks};
 use frame_system::{pallet_prelude::OriginFor, RawOrigin};
 
 #[benchmarks]
 mod benchmarks {
 	use super::*;
+	use frame_support::pallet_prelude::Weight;
+
+	fn pending_count<T: Config>(who: &T::AccountId) -> u32 {
+		PendingChanges::<T>::get()
+			.values()
+			.flatten()
+			.filter(|(account, _)| account == who)
+			.count() as u32
+	}
 
 	#[benchmark]
 	fn update_pallet_config() {
@@ -41,23 +50,21 @@ mod benchmarks {
 	#[benchmark]
 	fn update_whitelist() {
 		let caller: T::AccountId = whitelisted_caller();
-		let now = T::TimeSource::now().as_secs();
 		let max = MaxPendingWhitelistUpdates::<T>::get();
 
-		// Worst case: the restriction is on and the pending queue is nearly full, so the new change
-		// is scheduled (not applied immediately) and the pending-count walk covers a full queue.
-		WithdrawalWhitelists::<T>::mutate(&caller, |whitelist| {
-			whitelist.set_timelock(1_000, now);
-			for _ in 0..max.saturating_sub(1) {
-				whitelist.schedule_change(
-					WhitelistChange::Allow(AccountOrAddress::ExternalAddress(
-						BenchmarkValue::benchmark_value(),
-					)),
-					now,
-					max,
-				);
-			}
-		});
+		// Worst case: the pending queue is nearly full, so the pending-count walk covers a full
+		// queue.
+		Pallet::<T>::mutate_whitelist(&caller, |whitelist| whitelist.set_timelock(1_000));
+		for _ in 0..max.saturating_sub(1) {
+			Pallet::<T>::schedule_or_apply_change(
+				&caller,
+				PendingChange::Whitelist(WhitelistChange::Allow(
+					AccountOrAddress::ExternalAddress(BenchmarkValue::benchmark_value()),
+				)),
+				1_000,
+			)
+			.unwrap();
+		}
 
 		let change = WhitelistChange::Allow(AccountOrAddress::ExternalAddress(
 			EncodedAddress::benchmark_value(),
@@ -66,24 +73,61 @@ mod benchmarks {
 		#[extrinsic_call]
 		update_whitelist(RawOrigin::Signed(caller.clone()), change);
 
-		assert!(WithdrawalWhitelists::<T>::contains_key(&caller));
+		assert_eq!(pending_count::<T>(&caller), max);
 	}
 
 	#[benchmark]
 	fn set_withdrawal_timelock() {
 		let caller: T::AccountId = whitelisted_caller();
-		let now = T::TimeSource::now().as_secs();
 
-		// Worst case: an existing timelock that we lower — weakening is delayed, so this exercises
-		// the pending-timelock path (read-modify-write of the stored whitelist).
-		WithdrawalWhitelists::<T>::mutate(&caller, |whitelist| {
-			whitelist.set_timelock(2_000, now);
-		});
+		// Update an existing timelock, exercising the scheduling path.
+		Pallet::<T>::mutate_whitelist(&caller, |whitelist| whitelist.set_timelock(2_000));
 
 		#[extrinsic_call]
 		set_withdrawal_timelock(RawOrigin::Signed(caller.clone()), 1_000);
 
-		assert!(WithdrawalWhitelists::<T>::contains_key(&caller));
+		assert!(pending_count::<T>(&caller) > 0);
+	}
+
+	#[benchmark]
+	fn on_idle_check() {
+		// The no-work path: pending changes exist but none are due, so `on_idle` returns after a
+		// single read.
+		let caller: T::AccountId = whitelisted_caller();
+		Pallet::<T>::mutate_whitelist(&caller, |whitelist| whitelist.set_timelock(1_000));
+		Pallet::<T>::schedule_or_apply_change(&caller, PendingChange::Timelock(0), 1_000).unwrap();
+
+		#[block]
+		{
+			Pallet::<T>::on_idle(Default::default(), Weight::MAX);
+		}
+
+		assert!(pending_count::<T>(&caller) > 0);
+	}
+
+	#[benchmark]
+	fn on_idle_apply_change(n: Linear<1, 100>) {
+		let caller: T::AccountId = whitelisted_caller();
+		Pallet::<T>::mutate_whitelist(&caller, |whitelist| whitelist.set_timelock(1_000));
+		// Insert `n` already-due changes directly (bypassing the pending cap).
+		PendingChanges::<T>::mutate(|pending| {
+			pending.entry(0).or_default().extend((0..n).map(|_| {
+				(
+					caller.clone(),
+					PendingChange::Whitelist(WhitelistChange::Allow(
+						AccountOrAddress::ExternalAddress(BenchmarkValue::benchmark_value()),
+					)),
+				)
+			}));
+		});
+		assert_eq!(pending_count::<T>(&caller), n);
+
+		#[block]
+		{
+			Pallet::<T>::on_idle(Default::default(), Weight::MAX);
+		}
+
+		assert_eq!(pending_count::<T>(&caller), 0);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

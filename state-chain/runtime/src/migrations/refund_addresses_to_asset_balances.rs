@@ -58,9 +58,7 @@ impl OnRuntimeUpgrade for Migration {
 		// `drain` moves each entry out of the old storage, clearing it as we go.
 		for (account_id, chain, address) in old::LiquidityRefundAddress::drain() {
 			pallet_cf_asset_balances::RefundAddresses::<Runtime>::insert(
-				account_id,
-				chain,
-				pallet_cf_asset_balances::whitelist::RefundAddress::immediate(address),
+				account_id, chain, address,
 			);
 			count = count.saturating_add(1);
 		}
