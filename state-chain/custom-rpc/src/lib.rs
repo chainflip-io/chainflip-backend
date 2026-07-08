@@ -3494,7 +3494,8 @@ where
 				api.cf_vault_addresses_before_version_17(hash).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_vault_addresses_before_version_19(hash).map(Into::into)
+				api.cf_vault_addresses_before_version_19(hash)
+					.map(|x| migrate_from_historical_type(v20300, x))
 			} else {
 				api.cf_vault_addresses(hash)
 			}
