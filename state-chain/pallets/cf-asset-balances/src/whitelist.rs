@@ -27,7 +27,7 @@ use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 /// A duration or a point in time, in seconds. The whitelist timelock works in wall-clock time
 /// (via the pallet's `TimeSource`), matching cf-funding's redemption timelock.
-pub type DurationSeconds = u64;
+pub type Seconds = u64;
 
 /// A change to an account's withdrawal whitelist.
 ///
@@ -46,7 +46,7 @@ pub enum PendingChange<AccountId> {
 	/// An allowlist change.
 	Whitelist(WhitelistChange<AccountId, ForeignChainAddress>),
 	/// A whitelist timelock update.
-	Timelock(DurationSeconds),
+	Timelock(Seconds),
 	/// A refund address update (the chain is implied by the address).
 	RefundAddress(ForeignChainAddress),
 }
@@ -86,7 +86,7 @@ pub struct WithdrawalWhitelist<AccountId> {
 	internal: BTreeSet<AccountId>,
 	/// The delay applied to whitelist changes (`0` = changes apply immediately). Setting a
 	/// timelock also enforces the allowlist even while it has no entries.
-	timelock: DurationSeconds,
+	timelock: Seconds,
 }
 
 impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
@@ -111,11 +111,11 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 		}
 	}
 
-	pub(crate) fn timelock(&self) -> DurationSeconds {
+	pub(crate) fn timelock(&self) -> Seconds {
 		self.timelock
 	}
 
-	pub(crate) fn set_timelock(&mut self, timelock: DurationSeconds) {
+	pub(crate) fn set_timelock(&mut self, timelock: Seconds) {
 		self.timelock = timelock;
 	}
 
@@ -179,7 +179,7 @@ mod tests {
 	type AccountId = u64;
 	type Whitelist = WithdrawalWhitelist<AccountId>;
 
-	const DAY: DurationSeconds = 24 * 3600;
+	const DAY: Seconds = 24 * 3600;
 	const MAX_ENTRIES: u32 = 100;
 
 	// Distinct external addresses; `eth`/`arb` live on different chains.

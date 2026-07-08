@@ -98,7 +98,7 @@ derive_common_traits! {
 	pub enum PalletConfigUpdate {
 		RefundFeeMultiple { chain: ForeignChain, multiple: Option<u32> },
 		/// Maximum whitelist timelock duration.
-		MaxWhitelistTimelock { seconds: DurationSeconds },
+		MaxWhitelistTimelock { seconds: Seconds },
 		/// Maximum number of pending whitelist updates per account.
 		MaxPendingWhitelistUpdates { count: u32 },
 		/// Maximum number of active whitelist entries per account.
@@ -208,13 +208,13 @@ pub mod pallet {
 		WithdrawalAllowlistUpdateScheduled {
 			account_id: T::AccountId,
 			change: WhitelistChange<T::AccountId, ForeignChainAddress>,
-			apply_at: DurationSeconds,
+			apply_at: Seconds,
 		},
 		/// An account's whitelist timelock was updated.
 		WhitelistTimelockUpdated {
 			account_id: T::AccountId,
-			duration: DurationSeconds,
-			effective_at: DurationSeconds,
+			duration: Seconds,
+			effective_at: Seconds,
 		},
 	}
 
@@ -266,7 +266,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type PendingChanges<T: Config> = StorageValue<
 		_,
-		BTreeMap<DurationSeconds, Vec<(T::AccountId, PendingChange<T::AccountId>)>>,
+		BTreeMap<Seconds, Vec<(T::AccountId, PendingChange<T::AccountId>)>>,
 		ValueQuery,
 	>;
 
@@ -274,7 +274,7 @@ pub mod pallet {
 	/// [`PalletConfigUpdate::MaxWhitelistTimelock`]. Defaults to 10 days.
 	#[pallet::storage]
 	pub type MaxWhitelistTimelock<T> =
-		StorageValue<_, DurationSeconds, ValueQuery, ConstU64<{ 10 * 24 * 3600 }>>;
+		StorageValue<_, Seconds, ValueQuery, ConstU64<{ 10 * 24 * 3600 }>>;
 
 	/// Maximum number of pending allowlist updates per account. Governance-updatable via
 	/// [`PalletConfigUpdate::MaxPendingWhitelistUpdates`]. Defaults to 16.
@@ -379,10 +379,7 @@ pub mod pallet {
 		/// stolen key.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::set_whitelist_timelock())]
-		pub fn set_whitelist_timelock(
-			origin: OriginFor<T>,
-			duration: DurationSeconds,
-		) -> DispatchResult {
+		pub fn set_whitelist_timelock(origin: OriginFor<T>, duration: Seconds) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			ensure!(
 				duration <= MaxWhitelistTimelock::<T>::get(),
@@ -634,7 +631,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn now_secs() -> DurationSeconds {
+	fn now_secs() -> Seconds {
 		T::TimeSource::now().as_secs()
 	}
 
@@ -665,8 +662,8 @@ impl<T: Config> Pallet<T> {
 	fn schedule_or_apply_change(
 		who: &T::AccountId,
 		change: PendingChange<T::AccountId>,
-		delay: DurationSeconds,
-	) -> Result<DurationSeconds, Error<T>> {
+		delay: Seconds,
+	) -> Result<Seconds, Error<T>> {
 		Self::discard_pending_matching(who, |existing| change.replaces(existing));
 		if delay == 0 {
 			Self::apply_pending_change(who, change);
