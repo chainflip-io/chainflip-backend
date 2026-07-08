@@ -286,9 +286,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxWhitelistEntries<T> = StorageValue<_, u32, ValueQuery, ConstU32<100>>;
 
-	/// The refund address registered by an account for each chain. Relocated from `cf-lp`: a
-	/// registered refund address is a trusted destination, so it is implicitly allowed by the
-	/// withdrawal allowlist (see [`Pallet::ensure_withdrawal_allowed_to`]).
+	/// The refund address registered by an account for each chain. A registered refund address is
+	/// a trusted destination, so it is implicitly allowed by the withdrawal allowlist (see
+	/// [`Pallet::ensure_withdrawal_allowed_to`]).
 	#[pallet::storage]
 	pub type RefundAddresses<T: Config> = StorageDoubleMap<
 		_,

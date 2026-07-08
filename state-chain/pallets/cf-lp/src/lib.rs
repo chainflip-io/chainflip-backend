@@ -234,7 +234,7 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 
-		/// Refund-address registry (relocated to `cf-asset-balances`).
+		/// Refund-address registry.
 		type RefundAddressRegistry: RefundAddressRegistry<
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
