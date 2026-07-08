@@ -319,14 +319,18 @@ impl SwapDirection for BaseToQuote {
 			Then L / (L + R * A) <= 1
 			Then R * L / (L + R * A) <= u256::MAX
 		*/
-		Some(SqrtPrice::try_from_raw(mul_div_ceil_checked(
-			liquidity,
-			sqrt_price_current.as_raw(),
-			// Addition will not overflow as function is not called if amount >=
-			// amount_required_to_reach_target
-			U512::from(liquidity) + U256::full_mul(amount, sqrt_price_current.as_raw()),
-		)?))
-		.expect("next sqrt price from input stays within the valid range before reaching target")
+		Some(
+			SqrtPrice::try_from_raw(mul_div_ceil_checked(
+				liquidity,
+				sqrt_price_current.as_raw(),
+				// Addition will not overflow as function is not called if amount >=
+				// amount_required_to_reach_target
+				U512::from(liquidity) + U256::full_mul(amount, sqrt_price_current.as_raw()),
+			)?)
+			.expect(
+				"next sqrt price from input stays within the valid range before reaching target",
+			),
+		)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128 {
@@ -379,15 +383,19 @@ impl SwapDirection for QuoteToBase {
 	) -> Option<SqrtPrice> {
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
-		Some(SqrtPrice::try_from_raw(
-			sqrt_price_current.as_raw() +
-				mul_div_floor_checked(
-					amount,
-					U256::one() << SqrtPrice::FRACTIONAL_BITS,
-					liquidity,
-				)?,
-		))
-		.expect("next sqrt price from input stays within the valid range before reaching target")
+		Some(
+			SqrtPrice::try_from_raw(
+				sqrt_price_current.as_raw() +
+					mul_div_floor_checked(
+						amount,
+						U256::one() << SqrtPrice::FRACTIONAL_BITS,
+						liquidity,
+					)?,
+			)
+			.expect(
+				"next sqrt price from input stays within the valid range before reaching target",
+			),
+		)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128 {

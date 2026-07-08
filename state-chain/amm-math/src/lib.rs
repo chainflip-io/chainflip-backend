@@ -349,14 +349,6 @@ impl SqrtPrice {
 	}
 }
 
-impl TryFrom<U512> for SqrtPrice {
-	type Error = ();
-
-	fn try_from(value: U512) -> Result<Self, Self::Error> {
-		U256::try_from(value).map(SqrtPrice).map_err(|_| ())
-	}
-}
-
 /// Computes the floor and ceil of `a * b / c` in `U512` space. Returns `None` if `c` is zero.
 fn mul_div_floor_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> Option<(U512, U512)> {
 	let c: U512 = c.into();
