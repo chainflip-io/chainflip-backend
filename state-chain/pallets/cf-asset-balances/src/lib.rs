@@ -257,7 +257,7 @@ pub mod pallet {
 	/// default-valued whitelist is never stored (see [`Pallet::mutate_whitelist`]).
 	#[pallet::storage]
 	pub type WithdrawalWhitelists<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, WithdrawalWhitelist<T::AccountId>>;
+		StorageMap<_, Identity, T::AccountId, WithdrawalWhitelist<T::AccountId>>;
 
 	/// Timelocked changes awaiting activation, keyed by activation time (same-time changes keep
 	/// submission order). A single value, so `on_idle` can tell whether anything is due with one
