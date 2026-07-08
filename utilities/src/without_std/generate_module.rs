@@ -291,6 +291,16 @@ macro_rules! generate_module {
                         {
                             type $field = OverrideMigrationWith<RemovedFieldWithDefault<T>>;
                         }
+
+                        #[derive(Debug)]
+                        pub struct CustomMigration<M>(M);
+                        impl<V: Version, TargetFieldsTypes: HistoricalTypesAt<V>,
+                            M: Migration<TargetFieldsTypes::$field, V>
+                        >
+                            FieldCustomMigration<TargetFieldsTypes, V> for CustomMigration<M>
+                        {
+                            type $field = OverrideMigrationWith<M>;
+                        }
                     }
                 )*
             }
