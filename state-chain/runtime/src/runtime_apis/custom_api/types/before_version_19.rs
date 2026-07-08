@@ -20,7 +20,6 @@ use cf_chains::instances::{
 	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaCryptoInstance, SolanaInstance,
 };
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
-use pallet_cf_lending_pools::LendingPoolConfiguration;
 
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialOrd, Ord,
@@ -581,32 +580,7 @@ impl From<IngressEvents> for super::IngressEvents {
 	}
 }
 
-/// The v17-v18 wire shape of `RpcLendingPool`. The `owed_to_network` field was dropped at v19
-/// when the IOU mechanism was replaced by accruing uncollected network fees back to
-/// `pending_interest` (see PRO-2850).
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
-pub struct RpcLendingPool<Amount> {
-	pub asset: Asset,
-	pub total_amount: Amount,
-	pub available_amount: Amount,
-	pub owed_to_network: Amount,
-	pub utilisation_rate: Permill,
-	pub utilisation_cap: Permill,
-	pub current_interest_rate: Permill,
-	pub config: LendingPoolConfiguration,
-}
-
-impl<Amount> From<RpcLendingPool<Amount>> for pallet_cf_lending_pools::RpcLendingPool<Amount> {
-	fn from(value: RpcLendingPool<Amount>) -> Self {
-		Self {
-			asset: value.asset,
-			total_amount: value.total_amount,
-			available_amount: value.available_amount,
-			utilisation_rate: value.utilisation_rate,
-			utilisation_cap: value.utilisation_cap,
-			current_interest_rate: value.current_interest_rate,
-			config: value.config,
-			owed_to_network: (),
-		}
-	}
-}
+pub type RpcLendingPool<Amount: HasChangelog>
+	= <super::RpcLendingPool<Amount> as HasVersion<v20200>>::HistoricalType
+where
+	<Amount as HasVersion<v20200>>::HistoricalType: Default;

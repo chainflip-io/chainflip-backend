@@ -85,31 +85,10 @@ impl<AccountId: Clone> From<RpcLoanAccount<AccountId, AssetAmount>>
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
-pub struct RpcLendingPool<Amount> {
-	pub asset: Asset,
-	pub total_amount: Amount,
-	pub available_amount: Amount,
-	pub owed_to_network: Amount,
-	pub utilisation_rate: Permill,
-	pub current_interest_rate: Permill,
-	pub config: LendingPoolConfiguration,
-}
-
-impl<Amount> From<RpcLendingPool<Amount>> for before_version_19::RpcLendingPool<Amount> {
-	fn from(value: RpcLendingPool<Amount>) -> Self {
-		Self {
-			asset: value.asset,
-			total_amount: value.total_amount,
-			available_amount: value.available_amount,
-			owed_to_network: value.owed_to_network,
-			utilisation_rate: value.utilisation_rate,
-			utilisation_cap: Permill::one(),
-			current_interest_rate: value.current_interest_rate,
-			config: value.config,
-		}
-	}
-}
+pub type RpcLendingPool<Amount: HasChangelog>
+	= <super::RpcLendingPool<Amount> as HasVersion<v20100>>::HistoricalType
+where
+	<Amount as HasVersion<v20200>>::HistoricalType: Default;
 
 #[derive(Encode, Decode, TypeInfo, Clone, Debug)]
 pub struct LtvThresholds {

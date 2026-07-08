@@ -50,7 +50,7 @@ use cf_rpc_apis::{
 use cf_utilities::{
 	migrations::{
 		basics::{migrate_from_historical_type, try_migrate_from_historical_type},
-		v20000, v20100,
+		v20000, v20100, v20200,
 	},
 	rpc::NumberOrHex,
 };
@@ -1909,14 +1909,17 @@ where
 				api.cf_lending_pools_before_version_17(hash, asset).map(|lending_pools| {
 					lending_pools
 						.into_iter()
-						.map(state_chain_runtime::runtime_apis::custom_api::types::before_version_19::RpcLendingPool::from)
-						.map(Into::into)
+						.map(|pool| migrate_from_historical_type(v20100, pool))
 						.collect()
 				})
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_lending_pools_before_version_19(hash, asset)
-					.map(|lending_pools| lending_pools.into_iter().map(Into::into).collect())
+				api.cf_lending_pools_before_version_19(hash, asset).map(|lending_pools| {
+					lending_pools
+						.into_iter()
+						.map(|pool| migrate_from_historical_type(v20200, pool))
+						.collect()
+				})
 			} else {
 				api.cf_lending_pools(hash, asset)
 			}
@@ -1931,7 +1934,7 @@ where
 						utilisation_cap: pool.utilisation_cap,
 						current_interest_rate: pool.current_interest_rate,
 						config: pool.config,
-                        owed_to_network: (),
+						owed_to_network: (),
 					})
 					.collect()
 			})

@@ -43,6 +43,7 @@ pub struct RpcLendingPool<Amount> {
 	/// borrows" — the utilisation cap may restrict how much of this can actually be lent
 	/// out.
 	pub available_amount: Amount,
+	/// Removed in 20300.
 	pub owed_to_network: (),
 	pub utilisation_rate: Permill,
 	/// Maximum utilisation allowed when opening new loans: borrows that would push utilisation
@@ -61,6 +62,9 @@ where
 	type in_20200 = _RpcLendingPool::see_field_changelogs_and_also<
 		_RpcLendingPool::field::utilisation_cap::Added,
 	>;
+	/// The `owed_to_network` field was dropped at v19 when the IOU mechanism
+	/// was replaced by accruing uncollected network fees back to
+	/// `pending_interest` (see PRO-2850).
 	type in_20300 = _RpcLendingPool::see_field_changelogs_and_also<
 		_RpcLendingPool::field::owed_to_network::Removed<Amount>,
 	>;
