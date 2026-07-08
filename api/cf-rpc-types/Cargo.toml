@@ -25,3 +25,6 @@ frame-support = { workspace = true, default-features = true }
 pallet-cf-pools = { workspace = true, default-features = true }
 pallet-cf-funding = { workspace = true, default-features = true }
 pallet-cf-swapping = { workspace = true, default-features = true }
+
+[features]
+proptest = ["cf-chains/proptest", "cf-primitives/proptest"]
