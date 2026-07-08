@@ -83,6 +83,7 @@ enum TernaryShape {
 	Second,
 	Third,
 }
+
 #[derive(PartialEq, Debug, cf_proc_macros::HasTypeIntrospection)]
 struct NamedProduct {
 	binary: BinaryShape,
@@ -102,17 +103,15 @@ enum SumShape {
 }
 
 #[test]
-fn structs_sample_the_cartesian_product_of_field_shapes() {
+fn structs_sample_each_field_shape_against_a_baseline() {
 	assert_eq!(Singleton::sample_all_shapes(), vec![Singleton {}]);
 	assert_eq!(
 		NamedProduct::sample_all_shapes(),
 		vec![
 			NamedProduct { binary: BinaryShape::First, ternary: TernaryShape::First },
+			NamedProduct { binary: BinaryShape::Second, ternary: TernaryShape::First },
 			NamedProduct { binary: BinaryShape::First, ternary: TernaryShape::Second },
 			NamedProduct { binary: BinaryShape::First, ternary: TernaryShape::Third },
-			NamedProduct { binary: BinaryShape::Second, ternary: TernaryShape::First },
-			NamedProduct { binary: BinaryShape::Second, ternary: TernaryShape::Second },
-			NamedProduct { binary: BinaryShape::Second, ternary: TernaryShape::Third },
 		],
 	);
 
@@ -120,11 +119,9 @@ fn structs_sample_the_cartesian_product_of_field_shapes() {
 		TupleProduct::sample_all_shapes(),
 		vec![
 			TupleProduct(BinaryShape::First, TernaryShape::First),
+			TupleProduct(BinaryShape::Second, TernaryShape::First),
 			TupleProduct(BinaryShape::First, TernaryShape::Second),
 			TupleProduct(BinaryShape::First, TernaryShape::Third),
-			TupleProduct(BinaryShape::Second, TernaryShape::First),
-			TupleProduct(BinaryShape::Second, TernaryShape::Second),
-			TupleProduct(BinaryShape::Second, TernaryShape::Third),
 		],
 	);
 }
@@ -138,11 +135,9 @@ fn enums_sample_the_sum_of_variant_shapes() {
 		vec![
 			SumShape::Unit,
 			SumShape::Tuple(BinaryShape::First, TernaryShape::First),
+			SumShape::Tuple(BinaryShape::Second, TernaryShape::First),
 			SumShape::Tuple(BinaryShape::First, TernaryShape::Second),
 			SumShape::Tuple(BinaryShape::First, TernaryShape::Third),
-			SumShape::Tuple(BinaryShape::Second, TernaryShape::First),
-			SumShape::Tuple(BinaryShape::Second, TernaryShape::Second),
-			SumShape::Tuple(BinaryShape::Second, TernaryShape::Third),
 			SumShape::Named { ternary: TernaryShape::First },
 			SumShape::Named { ternary: TernaryShape::Second },
 			SumShape::Named { ternary: TernaryShape::Third },
