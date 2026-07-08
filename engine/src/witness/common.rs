@@ -84,6 +84,7 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 	> + pallet_cf_chain_tracking::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
 	+ pallet_cf_ingress_egress::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
 	+ pallet_cf_broadcast::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
+	+ cf_traits::ChainflipWithTargetChain<<TChain as ChainInstanceAlias>::Instance>
 {
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
@@ -94,6 +95,7 @@ impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Run
 		> + pallet_cf_chain_tracking::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
 		+ pallet_cf_ingress_egress::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
 		+ pallet_cf_broadcast::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
+		+ cf_traits::ChainflipWithTargetChain<<TChain as ChainInstanceAlias>::Instance>
 {
 }
 
