@@ -152,7 +152,7 @@ pub struct LiquidityDepositChannelDetails {
 	pub deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 }
 
-/// A withdrawal-allowlist destination for RPC input: an internal account, or an external address
+/// A withdrawal-whitelist destination for RPC input: an internal account, or an external address
 /// given as a human-readable string plus its chain (parsed to an on-chain address by the API).
 /// Mirrors the pallet's `AccountOrAddress`.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -161,7 +161,7 @@ pub enum WhitelistDestinationRpc {
 	ExternalAddress { chain: ForeignChain, address: AddressString },
 }
 
-/// A change to the withdrawal allowlist for RPC input. Mirrors the pallet's `WhitelistChange`.
+/// A change to the withdrawal whitelist for RPC input. Mirrors the pallet's `WhitelistChange`.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum WhitelistChangeRpc {
 	Allow(WhitelistDestinationRpc),

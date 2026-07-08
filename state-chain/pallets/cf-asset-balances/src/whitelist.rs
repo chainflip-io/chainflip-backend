@@ -17,7 +17,7 @@
 //! Per-account withdrawal-whitelist state.
 //!
 //! [`WithdrawalWhitelist`] holds an account's *active* state only — the external/internal
-//! allowlists and the timelock. Timelocked changes live in the pallet's
+//! whitelists and the timelock. Timelocked changes live in the pallet's
 //! pending queue ([`crate::PendingChanges`]) and are applied eagerly by `on_idle`, so this struct
 //! always reflects current truth and all reads are pure.
 
@@ -50,7 +50,7 @@ pub(crate) enum ApplyChangeError {
 /// A timelocked change awaiting activation in the pallet's pending queue.
 #[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum PendingChange<AccountId> {
-	/// An allowlist change.
+	/// A whitelist change.
 	Whitelist(WhitelistChange<AccountId, ForeignChainAddress>),
 	/// A whitelist timelock update.
 	Timelock(Seconds),
@@ -72,7 +72,7 @@ impl<AccountId> PendingChange<AccountId> {
 	}
 }
 
-/// An account's active withdrawal-whitelist state: the external/internal allowlists and the
+/// An account's active withdrawal-whitelist state: the external/internal whitelists and the
 /// whitelist timelock.
 #[derive(
 	Encode,
@@ -92,7 +92,7 @@ pub struct WithdrawalWhitelist<AccountId> {
 	/// Active internal (account) destinations.
 	internal: BTreeSet<AccountId>,
 	/// The delay applied to whitelist changes (`0` = changes apply immediately). Setting a
-	/// timelock also enforces the allowlist even while it has no entries.
+	/// timelock also enforces the whitelist even while it has no entries.
 	timelock: Seconds,
 }
 
@@ -100,9 +100,9 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 	/// Whether `dest` is an allowed destination.
 	///
 	/// Enforcement is **account-wide and fail-safe**: every destination must be explicitly
-	/// allowlisted, and anything unconfigured — a chain or the internal set with no entries — is
+	/// whitelisted, and anything unconfigured — a chain or the internal set with no entries — is
 	/// blocked. This stops funds being moved out via an unconfigured route, e.g. swapping into an
-	/// un-allowlisted chain and withdrawing there.
+	/// un-whitelisted chain and withdrawing there.
 	///
 	/// The *unrestricted* state (nothing configured => everything allowed) is represented by the
 	/// absence of the stored whitelist, handled at the pallet level; a default-valued whitelist
@@ -126,11 +126,11 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 		self.timelock = timelock;
 	}
 
-	/// Applies a single change to the active allowlists, pruning a chain's set once it empties.
+	/// Applies a single change to the active whitelists, pruning a chain's set once it empties.
 	///
 	/// An `Allow` that would grow the active set beyond `max_entries` is rejected — this bounds
 	/// the stored whitelist, which is decoded on every withdrawal. `Remove` always applies, so an
-	/// account can always shrink its allowlist.
+	/// account can always shrink its whitelist.
 	pub(crate) fn apply_change(
 		&mut self,
 		change: &WhitelistChange<AccountId, ForeignChainAddress>,
@@ -169,7 +169,7 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 		Ok(())
 	}
 
-	/// Number of active allowlist entries: external addresses across all chains plus internal
+	/// Number of active whitelist entries: external addresses across all chains plus internal
 	/// accounts.
 	fn active_entry_count(&self) -> u32 {
 		self.external
@@ -241,7 +241,7 @@ mod tests {
 	}
 
 	#[test]
-	fn internal_account_allowlist_enforcement() {
+	fn internal_account_whitelist_enforcement() {
 		let mut w = Whitelist::default();
 		w.apply_change(&allow_account(1), MAX_ENTRIES).unwrap();
 
@@ -258,7 +258,7 @@ mod tests {
 		let max_entries = 2;
 		w.apply_change(&allow(eth(1)), max_entries).unwrap();
 		w.apply_change(&allow_account(7), max_entries).unwrap();
-		// At the cap: a further Allow is rejected...
+		// At the cap: a further Allow is dropped...
 		assert_eq!(
 			w.apply_change(&allow(arb(1)), max_entries),
 			Err(ApplyChangeError::WhitelistFull)

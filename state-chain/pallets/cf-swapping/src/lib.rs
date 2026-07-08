@@ -627,7 +627,7 @@ pub mod pallet {
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
-		/// Restricts which destinations a broker/affiliate may withdraw fees to (allowlist +
+		/// Restricts which destinations a broker/affiliate may withdraw fees to (whitelist +
 		/// timelock).
 		type WithdrawalRestriction: WithdrawalAddressRestriction<
 			AccountId = <Self as frame_system::Config>::AccountId,

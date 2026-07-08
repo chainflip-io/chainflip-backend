@@ -148,7 +148,7 @@ async fn run_cli() -> Result<()> {
 								)),
 						};
 						let tx_hash = api.lp_api().update_whitelist(change).await?;
-						println!("Withdrawal allowlist updated. Tx hash: {tx_hash}");
+						println!("Withdrawal whitelist updated. Tx hash: {tx_hash}");
 					},
 					LiquidityProviderSubcommands::RegisterAccount => {
 						api.lp_api().register_account().await?;

@@ -2850,7 +2850,7 @@ mod bound_broker_withdrawal {
 	}
 }
 
-/// Proves that the account-wide withdrawal allowlist (implemented in `cf-asset-balances`, mocked
+/// Proves that the account-wide withdrawal whitelist (implemented in `cf-asset-balances`, mocked
 /// here) is wired into `trigger_withdrawal` — the shared exit path for both the broker `withdraw`
 /// extrinsic and `affiliate_withdrawal_request`.
 mod withdrawal_restriction {
@@ -2863,7 +2863,7 @@ mod withdrawal_restriction {
 	}
 
 	#[test]
-	fn broker_withdraw_is_gated_by_the_allowlist() {
+	fn broker_withdraw_is_gated_by_the_whitelist() {
 		new_test_ext().execute_with(|| {
 			let allowed: EthereumAddress = [0xaa; 20].into();
 			let disallowed: EthereumAddress = [0xbb; 20].into();
@@ -2875,7 +2875,7 @@ mod withdrawal_restriction {
 
 			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 1000);
 
-			// Withdrawal to a non-allowlisted address is rejected before any debit.
+			// Withdrawal to a non-whitelisted address is rejected before any debit.
 			assert_noop!(
 				Swapping::withdraw(
 					OriginTrait::signed(BROKER),
@@ -2885,7 +2885,7 @@ mod withdrawal_restriction {
 				not_allowed()
 			);
 
-			// Withdrawal to the allowlisted address succeeds.
+			// Withdrawal to the whitelisted address succeeds.
 			assert_ok!(Swapping::withdraw(
 				OriginTrait::signed(BROKER),
 				Asset::Eth,
@@ -2895,7 +2895,7 @@ mod withdrawal_restriction {
 	}
 
 	#[test]
-	fn affiliate_withdrawal_request_is_gated_by_the_allowlist() {
+	fn affiliate_withdrawal_request_is_gated_by_the_whitelist() {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 			let withdrawal_address: EthereumAddress = [0xcc; 20].into();

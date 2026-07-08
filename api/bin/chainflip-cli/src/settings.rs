@@ -126,9 +126,9 @@ pub enum LiquidityProviderSubcommands {
 	/// registered to request a deposit address for the given chain.
 	RegisterLiquidityRefundAddress { chain: ForeignChain, address: AddressString },
 	/// Set the whitelist timelock (seconds). 0 disables the restriction; a non-zero value turns
-	/// on the withdrawal allowlist. Weakening/disabling is delayed by the current timelock.
+	/// on the withdrawal whitelist. Weakening/disabling is delayed by the current timelock.
 	SetWhitelistTimelock { duration_secs: u64 },
-	/// Add or remove a destination from the withdrawal allowlist.
+	/// Add or remove a destination from the withdrawal whitelist.
 	#[clap(subcommand)]
 	UpdateWhitelist(WhitelistSubcommands),
 	/// Register this account as a liquidity provider account.
@@ -141,11 +141,11 @@ pub enum LiquidityProviderSubcommands {
 pub enum WhitelistSubcommands {
 	/// Allow withdrawals to an external address on the given chain.
 	AllowAddress { chain: ForeignChain, address: AddressString },
-	/// Remove an external address from the allowlist.
+	/// Remove an external address from the whitelist.
 	RemoveAddress { chain: ForeignChain, address: AddressString },
 	/// Allow internal transfers to an account.
 	AllowAccount { account: AccountId32 },
-	/// Remove an internal account from the allowlist.
+	/// Remove an internal account from the whitelist.
 	RemoveAccount { account: AccountId32 },
 }
 

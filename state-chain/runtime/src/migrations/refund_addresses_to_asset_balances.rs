@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Relocates the liquidity refund address registry from `cf-lp` to `cf-asset-balances`, where it
-//! is read by the withdrawal allowlist (a registered refund address is implicitly allowed). This
+//! is read by the withdrawal whitelist (a registered refund address is implicitly allowed). This
 //! is a cross-pallet move, so it lives at the runtime level and bumps both pallets' on-chain
 //! storage versions itself.
 

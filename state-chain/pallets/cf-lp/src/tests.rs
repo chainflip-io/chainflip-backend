@@ -785,7 +785,7 @@ mod withdrawal_restriction {
 	}
 
 	#[test]
-	fn external_withdrawal_is_gated_by_the_allowlist() {
+	fn external_withdrawal_is_gated_by_the_whitelist() {
 		new_test_ext().execute_with(|| {
 			let allowed = [0xaa; 20];
 			let disallowed = [0xbb; 20];
@@ -806,7 +806,7 @@ mod withdrawal_restriction {
 				),
 				not_allowed()
 			);
-			// ...the allowlisted one succeeds.
+			// ...the whitelisted one succeeds.
 			assert_ok!(LiquidityProvider::withdraw_asset(
 				RuntimeOrigin::signed(LP_ACCOUNT),
 				100,
@@ -817,7 +817,7 @@ mod withdrawal_restriction {
 	}
 
 	#[test]
-	fn internal_transfer_is_gated_by_the_allowlist() {
+	fn internal_transfer_is_gated_by_the_whitelist() {
 		new_test_ext().execute_with(|| {
 			MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, 1_000);
 			assert_ok!(LiquidityProvider::register_liquidity_refund_address(

@@ -580,7 +580,7 @@ mod withdrawal_whitelist {
 	}
 
 	#[test]
-	fn allowlist_enforced_without_timelock_until_emptied() {
+	fn whitelist_enforced_without_timelock_until_emptied() {
 		new_test_ext().execute_with(|| {
 			let who = account(1);
 			// Nothing configured => unrestricted.
@@ -608,7 +608,7 @@ mod withdrawal_whitelist {
 			// The timelock is off, so the change is scheduled for the current time.
 			allow(&who, ETH_ADDR_1);
 			System::assert_has_event(RuntimeEvent::AssetBalances(
-				Event::WithdrawalAllowlistUpdateScheduled {
+				Event::WhitelistUpdateScheduled {
 					account_id: who,
 					change: WhitelistChange::Allow(AccountOrAddress::ExternalAddress(ETH_ADDR_1)),
 					apply_at: 0,

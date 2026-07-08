@@ -154,13 +154,13 @@ pub mod pallet {
 		ChainDeprecated,
 		/// The account still has free balance.
 		FundsRemaining,
-		/// The withdrawal destination is not on the account's withdrawal allowlist.
+		/// The withdrawal destination is not on the account's withdrawal whitelist.
 		DestinationNotAllowed,
 		/// The provided address could not be decoded.
 		InvalidEncodedAddress,
 		/// The requested timelock exceeds the configured maximum.
 		TimelockExceedsMaximum,
-		/// The account has too many pending allowlist updates.
+		/// The account has too many pending whitelist updates.
 		TooManyPendingUpdates,
 		/// No liquidity refund address is registered for the account on the relevant chain.
 		NoLiquidityRefundAddressRegistered,
@@ -204,8 +204,8 @@ pub mod pallet {
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
 		},
-		/// An allowlist change was accepted.
-		WithdrawalAllowlistUpdateScheduled {
+		/// A whitelist change was accepted.
+		WhitelistUpdateScheduled {
 			account_id: T::AccountId,
 			change: WhitelistChange<T::AccountId, ForeignChainAddress>,
 			apply_at: Seconds,
@@ -255,7 +255,7 @@ pub mod pallet {
 	pub type RefundFeeMultiple<T> =
 		StorageMap<_, Twox64Concat, ForeignChain, u32, ValueQuery, ConstU32<100>>;
 
-	/// Per-account withdrawal whitelist: the *active* external/internal allowlists and the
+	/// Per-account withdrawal whitelist: the *active* external/internal whitelists and the
 	/// timelock. Timelocked changes live in [`PendingChanges`] until they are applied, so this
 	/// always reflects current truth.
 	///
@@ -282,18 +282,18 @@ pub mod pallet {
 	pub type MaxWhitelistTimelock<T> =
 		StorageValue<_, Seconds, ValueQuery, ConstU64<{ 10 * 24 * 3600 }>>;
 
-	/// Maximum number of pending allowlist updates per account. Governance-updatable via
+	/// Maximum number of pending whitelist updates per account. Governance-updatable via
 	/// [`PalletConfigUpdate::MaxPendingWhitelistUpdates`]. Defaults to 16.
 	#[pallet::storage]
 	pub type MaxPendingWhitelistUpdates<T> = StorageValue<_, u32, ValueQuery, ConstU32<16>>;
 
-	/// Maximum number of active allowlist entries per account (external addresses across all chains
+	/// Maximum number of active whitelist entries per account (external addresses across all chains
 	/// plus internal accounts).
 	#[pallet::storage]
 	pub type MaxWhitelistEntries<T> = StorageValue<_, u32, ValueQuery, ConstU32<100>>;
 
 	/// The refund address registered by an account for each chain. A registered refund address is
-	/// a trusted destination, so it is implicitly allowed by the withdrawal allowlist (see
+	/// a trusted destination, so it is implicitly allowed by the withdrawal whitelist (see
 	/// [`Pallet::ensure_withdrawal_allowed_to`]).
 	#[pallet::storage]
 	pub type RefundAddresses<T: Config> = StorageDoubleMap<
@@ -339,7 +339,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Add or remove a destination from the caller's withdrawal allowlist. The change is
+		/// Add or remove a destination from the caller's withdrawal whitelist. The change is
 		/// scheduled and takes effect after the caller's timelock elapses (at the end of the
 		/// current block when no timelock is set).
 		#[pallet::call_index(1)]
@@ -369,7 +369,7 @@ pub mod pallet {
 				timelock,
 			)?;
 
-			Self::deposit_event(Event::<T>::WithdrawalAllowlistUpdateScheduled {
+			Self::deposit_event(Event::<T>::WhitelistUpdateScheduled {
 				account_id,
 				change,
 				apply_at,

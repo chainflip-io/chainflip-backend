@@ -1252,7 +1252,7 @@ pub trait BalanceApi {
 }
 
 /// Restricts which destinations an account may withdraw or transfer funds to, based on a
-/// per-account allowlist by the asset-balances pallet.
+/// per-account whitelist by the asset-balances pallet.
 ///
 /// Invoking this is the *caller's* responsibility: the user-initiated withdrawal/transfer
 /// extrinsics call it, while protocol-level egresses (refunds, order fills, etc.) deliberately
@@ -1261,7 +1261,7 @@ pub trait WithdrawalAddressRestriction {
 	type AccountId;
 
 	/// `Ok` if `owner` is allowed to send funds to `dest`. When the account has no active
-	/// restriction this is always `Ok`; when restricted, only active allowlisted destinations are
+	/// restriction this is always `Ok`; when restricted, only active whitelisted destinations are
 	/// permitted.
 	fn ensure_withdrawal_allowed_to(
 		owner: &Self::AccountId,
