@@ -151,6 +151,10 @@ pub enum EncodedAddress {
 }
 impl HasChangelog for EncodedAddress {
 	type if_unspecified = _EncodedAddress::see_variant_changelogs;
+	type in_20200 =
+		_EncodedAddress::see_variant_changelogs_and_also<_EncodedAddress::variant::Tron::Added>;
+	type in_20300 =
+		_EncodedAddress::see_variant_changelogs_and_also<_EncodedAddress::variant::Bsc::Added>;
 }
 
 pub trait AddressConverter: Sized {
