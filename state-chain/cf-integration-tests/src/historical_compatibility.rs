@@ -159,6 +159,9 @@ fn test_all_historical_runtime_calls(
                             "cf_common_account_info",
                         )
                 );
+                incompatibilities.append(
+                    &mut tester.test_call::<$version, (), cf_rpc_types::broker::VaultAddresses>($version, "CustomRuntimeApi", "cf_vault_addresses")
+                );
 
                 // these calls only exists in versions >= 20200
                 if match $version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST.unwrap() {
