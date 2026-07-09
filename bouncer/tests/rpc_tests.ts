@@ -78,7 +78,10 @@ async function getRuntimeSupportedAssets(): Promise<SupportedAssets> {
       // Exclude Bsc at upgrade boundaries: the old runtime doesn't have Bsc
       // as a valid Asset variant, so calling pool RPCs with Bsc panics it.
       // TODO: Remove after Bsc is released.
-      a.chain !== 'Bsc',
+      a.chain !== 'Bsc' &&
+      // Exclude CBBTC at upgrade boundaries: the old runtime doesn't know about CBBTC
+      // TODO remove after CBBTC is released
+      !(a.chain === 'Ethereum' && a.asset === 'CBBTC'),
   );
   return {
     baseAsset: { chain: 'Ethereum', asset: 'USDC' },

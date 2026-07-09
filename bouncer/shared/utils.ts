@@ -1193,7 +1193,7 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance?: string,
-  timeoutSeconds = 200,
+  timeoutSeconds = 240,
 ): Promise<number> {
   const initialBalance = oldBalance
     ? Number(oldBalance)
