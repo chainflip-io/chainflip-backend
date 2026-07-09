@@ -379,6 +379,7 @@ export const palletCfFlipPalletConfigUpdate = z.discriminatedUnion('__kind', [
     __kind: z.literal('SetFeeScalingRate'),
     value: palletCfFlipOnChargeTransactionFeeScalingRateConfig,
   }),
+  z.object({ __kind: z.literal('SetFeeRewardsActivationEpoch'), value: z.number() }),
 ]);
 
 export const cfPrimitivesChainsForeignChain = simpleEnum([
