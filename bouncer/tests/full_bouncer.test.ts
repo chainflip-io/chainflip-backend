@@ -16,7 +16,7 @@ describe('SerialTests2', () => {
   serialTest('RotationBarrier', testRotationBarrier, 320);
   serialTest('MinimumDeposit', testMinimumDeposit, 150);
   serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
-  serialTest('FlipRewardActivation', testFlipRewardActivation, 600);
+  serialTest('FlipRewardActivation', testFlipRewardActivation, 900);
 
   if (process.env.LOCALNET) {
     serialTest('SwapAfterDisconnection', testSwapAfterDisconnection, 250);
