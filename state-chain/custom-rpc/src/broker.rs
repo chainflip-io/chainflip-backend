@@ -37,6 +37,7 @@ use cf_rpc_apis::{
 	},
 	NotificationBehaviour, RefundParametersRpc, RpcResult, H256,
 };
+use cf_utilities::migrations::{basics::migrate_from_historical_type, v20200};
 use futures::StreamExt;
 use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
 use pallet_cf_environment::submit_runtime_call::{SignatureData, TransactionMetadata};
@@ -735,7 +736,8 @@ where
 				api.cf_vault_addresses_before_version_17(hash).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_vault_addresses_before_version_19(hash).map(Into::into)
+				api.cf_vault_addresses_before_version_19(hash)
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_vault_addresses(hash)
 			}

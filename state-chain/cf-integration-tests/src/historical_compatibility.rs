@@ -159,13 +159,20 @@ fn test_all_historical_runtime_calls(
                             "cf_common_account_info",
                         )
                 );
+                incompatibilities.append(
+                    &mut tester.test_call::<$version, (), cf_rpc_types::broker::VaultAddresses>($version, "CustomRuntimeApi", "cf_vault_addresses")
+                );
+
+                // these calls only exists in versions >= 20200
                 if match $version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST.unwrap() {
                     CanonicalPatchVersion::Released(v) => Some(v),
                     CanonicalPatchVersion::Unreleased => None,
                 }.unwrap() > 20200 {
-                    // the `cf_supported_assets` call only exists in versions >= 20200
                     incompatibilities.append(
                         &mut tester.test_call::<$version, (), Vec<Asset>>($version, "CustomRuntimeApi", "cf_supported_assets"),
+                    );
+                    incompatibilities.append(
+                        &mut tester.test_call::<$version, Option<Asset>, Vec<pallet_cf_lending_pools::RpcLendingPool<cf_primitives::AssetAmount>>>($version, "CustomRuntimeApi", "cf_lending_pools")
                     );
                 }
 

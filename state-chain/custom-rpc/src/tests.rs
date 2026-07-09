@@ -1414,6 +1414,8 @@ fn lending_pools_serialization() {
 				interest_at_max_utilisation: Permill::from_percent(50),
 			},
 		},
+		// Removed in 20300. Serialization skipped by serde.
+		owed_to_network: (),
 	};
 
 	insta::assert_json_snapshot!(pool);

@@ -20,6 +20,9 @@ log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 nanorand = { workspace = true, features = ["wyrand"] }
 num-traits = { workspace = true, optional = true }
+derive-where = { workspace = true }
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
 
 
 # Local deps
@@ -28,6 +31,8 @@ cf-chains = { workspace = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 cf-amm-math = { workspace = true }
+cf-proc-macros = { workspace = true }
+cf-utilities = { workspace = true }
 
 
 # Parity deps
@@ -75,3 +80,4 @@ try-runtime = [
 	"frame-system/try-runtime",
 	"cf-traits/try-runtime",
 ]
+proptest = ["dep:proptest", "dep:proptest-derive"]

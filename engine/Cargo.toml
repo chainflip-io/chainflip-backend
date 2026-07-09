@@ -56,6 +56,7 @@ tracing = { workspace = true }
 derive-where = { workspace = true }
 
 # Local deps
+cf-traits = { workspace = true }
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
 cf-node-client = { workspace = true }

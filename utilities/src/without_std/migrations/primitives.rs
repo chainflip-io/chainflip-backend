@@ -49,7 +49,7 @@ macro_rules! impl_identity_migrations {
     };
 }
 
-impl_identity_migrations! {(), bool, u16, u32, u64, u128, u8, Never, }
+impl_identity_migrations! {(), bool, u8, u16, u32, u64, u128, Never, [u8; 20], [u8; 32], }
 
 impl<T> IsHistoricalType for PhantomData<T> {
 	type GetCurrentType = Self;
@@ -159,6 +159,11 @@ impl_identity_migrations_with_wrapper! {
 impl_identity_migrations_with_wrapper! {
 	#[derive(PartialOrd, PartialEq, Eq, Ord, Default)]
 	struct WrappedPermill(sp_arithmetic::Permill) where |x: u32| sp_arithmetic::Permill::from_parts(x);
+}
+
+impl_identity_migrations_with_wrapper! {
+	#[derive(PartialOrd, PartialEq, Eq, Ord, Default)]
+	struct WrappedU256(sp_core::U256) where |x: [u64; 4]| sp_core::U256(x);
 }
 
 // ----------- simple migration that introduces a new type -------------

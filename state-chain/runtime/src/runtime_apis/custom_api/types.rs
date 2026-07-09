@@ -19,7 +19,7 @@ pub use crate::{chainflip::Offence, AccountId, Block, Runtime};
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
 	self,
-	address::EncodedAddress,
+	address::{EncodedAddress, _EncodedAddress},
 	assets::any::AssetMap,
 	evm::Address as EvmAddress,
 	instances::{ArbitrumInstance, BitcoinInstance, BscInstance, EthereumInstance, TronInstance},
@@ -32,8 +32,9 @@ use cf_primitives::{chains::Bsc, Asset, BroadcastId, EpochIndex, FlipBalance, Fo
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
-		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
-		IsHistoricalType, Migration, NewFieldWithDefault,
+		migrate_to_historical_type, vCurrent, GlobalMigrationFromGeneric, HasGenericVariant,
+		HasVersion, IdentityMigration, IsHistoricalType, Migration, NewFieldWithDefault,
+		OverrideMigrationWith,
 	},
 	primitives::NewTypeWithDefault,
 	v20100, v20200, v20300, HasChangelog,
@@ -598,6 +599,7 @@ pub struct TransactionScreeningEvents {
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[cf_proc_macros::generate_module]
 pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
@@ -617,6 +619,49 @@ pub struct VaultAddresses {
 	pub bsc: EncodedAddress,
 
 	pub predicted_seconds_until_next_vault_rotation: u64,
+}
+impl HasChangelog for VaultAddresses {
+	type if_unspecified = _VaultAddresses::see_field_changelogs;
+	type in_20200 = _VaultAddresses::see_field_changelogs_and_also<
+		_VaultAddresses::field::tron::CustomMigration<NewTronEncodedAddress>,
+	>;
+	type in_20300 = _VaultAddresses::see_field_changelogs_and_also<
+		_VaultAddresses::field::bsc::CustomMigration<NewBscEncodedAddress>,
+	>;
+}
+// Currently the migrations have to be specified in a verbose form,
+// because `EncodedAddress` doesn't have a default() implementation.
+pub struct NewBscEncodedAddress;
+impl Migration<<EncodedAddress as HasVersion<v20300>>::HistoricalType, v20300>
+	for NewBscEncodedAddress
+{
+	type From = ();
+	fn try_forwards(
+		_x: Self::From,
+	) -> Result<<EncodedAddress as HasVersion<v20300>>::HistoricalType, Self::ForwardsError> {
+		Ok(_EncodedAddress::Enum::Bsc(Default::default()))
+	}
+	fn try_backwards(
+		_x: <EncodedAddress as HasVersion<v20300>>::HistoricalType,
+	) -> Result<Self::From, Self::BackwardsError> {
+		Ok(())
+	}
+}
+pub struct NewTronEncodedAddress;
+impl Migration<<EncodedAddress as HasVersion<v20200>>::HistoricalType, v20200>
+	for NewTronEncodedAddress
+{
+	type From = ();
+	fn try_forwards(
+		_x: Self::From,
+	) -> Result<<EncodedAddress as HasVersion<v20200>>::HistoricalType, Self::ForwardsError> {
+		Ok(_EncodedAddress::Enum::Tron(Default::default()))
+	}
+	fn try_backwards(
+		_x: <EncodedAddress as HasVersion<v20200>>::HistoricalType,
+	) -> Result<Self::From, Self::BackwardsError> {
+		Ok(())
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
