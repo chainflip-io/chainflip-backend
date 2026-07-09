@@ -21,7 +21,7 @@ pub mod type_describer;
 
 use std::collections::HashMap;
 
-use cf_primitives::FlipBalance;
+use cf_primitives::{Asset, FlipBalance};
 use cf_utilities::{
 	for_each_runtime_version,
 	migrations::{
@@ -147,18 +147,28 @@ fn test_all_historical_runtime_calls(
 				$version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST
 					.expect("Encountered `CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST = None` when trying to run compatibility tests for historical runtime.")
 			) {
-                let mut incompatibilities = [
-                    tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees"),
-                    tester
+                let mut incompatibilities = Vec::new();
+                incompatibilities.append(
+                    &mut tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees")
+                );
+                incompatibilities.append(
+                    &mut tester
                         .test_call::<$version, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>(
                             $version,
                             "CustomRuntimeApi",
                             "cf_common_account_info",
-                        ),
-                ]
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
+                        )
+                );
+                if match $version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST.unwrap() {
+                    CanonicalPatchVersion::Released(v) => Some(v),
+                    CanonicalPatchVersion::Unreleased => None,
+                }.unwrap() > 20200 {
+                    // the `cf_supported_assets` call only exists in versions >= 20200
+                    incompatibilities.append(
+                        &mut tester.test_call::<$version, (), Vec<Asset>>($version, "CustomRuntimeApi", "cf_supported_assets"),
+                    );
+                }
+
                 all_incompatibilities.append(&mut incompatibilities);
             }
 		};

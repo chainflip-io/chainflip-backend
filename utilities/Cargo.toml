@@ -53,10 +53,13 @@ scale-json = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 
+cf-proc-macros = { workspace = true }
+
 [dev-dependencies]
 serde_json = { workspace = true, default-features = true }
 tempfile = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
+derive-where = { workspace = true }
 
 [features]
 std = [

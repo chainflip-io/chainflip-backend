@@ -34,7 +34,7 @@ pub trait Config<I: 'static> = pallet_cf_ingress_egress::Config<I>
 	+ pallet_cf_vaults::Config<I>
 	+ pallet_cf_broadcast::Config<I>;
 
-type VaultDepositInput<T, I> =
+type VaultDepositInput<T: pallet_cf_ingress_egress::Config<I>, I: 'static> =
 	(BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>);
 
 define_empty_struct! {

@@ -27,6 +27,7 @@ scale-info = { workspace = true, features = ["derive"] }
 cf-utilities = { workspace = true }
 cf-proc-macros = { workspace = true }
 
+duplicate = { workspace = true }
 derive-where = { workspace = true }
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }

@@ -27,6 +27,10 @@
 #![feature(macro_metavar_expr)]
 #![allow(incomplete_features)]
 
+// This is required so that cf_proc_macros (which refer to this crate) can be called from this
+// crate.
+extern crate self as cf_utilities;
+
 #[cfg(feature = "std")]
 mod with_std;
 #[cfg(feature = "std")]

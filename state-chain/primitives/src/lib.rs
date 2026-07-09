@@ -18,6 +18,11 @@
 #![feature(int_roundings)]
 #![feature(associated_type_defaults)]
 #![feature(trait_alias)]
+#![feature(decl_macro)]
+#![feature(never_type)]
+#![feature(lazy_type_alias)]
+#![feature(macro_metavar_expr)]
+#![allow(incomplete_features)]
 
 //! Chainflip Primitives
 //!
