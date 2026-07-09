@@ -1007,6 +1007,18 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// Expirty blocks (in external chain's block height) of boosted vault transactions awaiting
+	/// full witnessing. Additionally stores the boosted asset required to finalise the boost.
+	///
+	/// Unlike deposit channels, vault swaps have no channel to recycle, so this is what guarantees
+	/// that a lost boosted deposit is correctly accounted for.
+	#[pallet::storage]
+	pub type BoostedVaultTransactionExpiry<T: Config<I>, I: 'static = ()> = StorageValue<
+		_,
+		BTreeMap<TransactionInIdFor<T, I>, (TargetChainBlockNumber<T, I>, TargetChainAsset<T, I>)>,
+		ValueQuery,
+	>;
+
 	#[pallet::storage]
 	pub(super) type PendingPrewitnessedDeposits<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
@@ -1247,6 +1259,16 @@ pub mod pallet {
 		fn on_idle(now: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
 
+			let external_height = match TargetChainOf::<T, I>::get() {
+				ForeignChain::Arbitrum |
+				ForeignChain::Bitcoin |
+				ForeignChain::Ethereum |
+				ForeignChain::Tron |
+				ForeignChain::Bsc => ProcessedUpTo::<T, I>::get(),
+				ForeignChain::Assethub | ForeignChain::Polkadot | ForeignChain::Solana =>
+					T::ChainTracking::get_block_height(),
+			};
+
 			// Approximate weight calculation: r/w DepositChannelLookup + w DepositChannelPool
 			let recycle_weight_per_address =
 				frame_support::weights::constants::ParityDbWeight::get().reads_writes(1, 2);
@@ -1258,33 +1280,24 @@ pub mod pallet {
 				.saturated_into::<usize>();
 
 			// In some instances, like Solana, the channel lifetime is managed by the electoral
-			// system.
+			// system (channels are recycled via `IngressSink::on_channel_closed` instead).
 			if T::MANAGE_CHANNEL_LIFETIME {
-				let addresses_to_recycle = DepositChannelRecycleBlocks::<T, I>::mutate(
-					|recycle_queue| {
+				if matches!(TargetChainOf::<T, I>::get(), ForeignChain::Solana) {
+					log_or_panic!("MANAGE_CHANNEL_LIFETIME = false for solana, this branch should be unreachable");
+				}
+
+				let addresses_to_recycle =
+					DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
 						if recycle_queue.is_empty() {
 							vec![]
 						} else {
 							Self::take_recyclable_addresses(
 								recycle_queue,
 								maximum_addresses_to_recycle,
-								match TargetChainOf::<T, I>::get() {
-									ForeignChain::Arbitrum |
-									ForeignChain::Bitcoin |
-									ForeignChain::Ethereum |
-									ForeignChain::Tron |
-									ForeignChain::Bsc => ProcessedUpTo::<T, I>::get(),
-									ForeignChain::Assethub | ForeignChain::Polkadot =>
-										T::ChainTracking::get_block_height(),
-									ForeignChain::Solana => {
-										log_or_panic!("MANAGE_CHANNEL_LIFETIME = false for solana, this branch should be unreachable");
-										Default::default()
-									},
-								},
+								external_height,
 							)
 						}
-					},
-				);
+					});
 
 				// Add weight for the DepositChannelRecycleBlocks read/write plus the
 				// DepositChannelLookup read/writes in the for loop below
@@ -1299,6 +1312,13 @@ pub mod pallet {
 					Self::recycle_channel(&mut used_weight, address);
 				}
 			}
+
+			// For boosted vault deposits (which have no channel to recycle) we check for their
+			// expiry separately:
+			used_weight = used_weight.saturating_add(Self::expire_boosted_vault_transactions(
+				external_height,
+				remaining_weight.saturating_sub(used_weight),
+			));
 
 			if T::AllowTransactionReports::get() {
 				// A report gets cleaned up after approx 1 hour and needs to be re-reported by the
@@ -1879,6 +1899,72 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				})
 			}
 		}
+	}
+
+	/// Deems boosted vault swaps lost once their expiry height is reached, within the given weight
+	/// budget (any remainder is retried on subsequent blocks). Returns the weight consumed.
+	fn expire_boosted_vault_transactions(
+		current_height: TargetChainBlockNumber<T, I>,
+		available_weight: Weight,
+	) -> Weight {
+		let db_weight = frame_support::weights::constants::ParityDbWeight::get();
+
+		// On the common path nothing is boosted (or nothing is due), so read the queue and bail
+		// out before touching storage again. This avoids writing an (empty) map back on every
+		// block, which for chains that never boost would otherwise create and rewrite a redundant
+		// storage entry indefinitely.
+		let mut expiry_queue = BoostedVaultTransactionExpiry::<T, I>::get();
+		if expiry_queue.is_empty() {
+			return db_weight.reads(1);
+		}
+
+		let expire_weight_per_tx = db_weight.reads_writes(1, 1);
+		let maximum_to_expire: usize = available_weight
+			.ref_time()
+			.checked_div(expire_weight_per_tx.ref_time())
+			.unwrap_or_default()
+			.unique_saturated_into();
+
+		// The map only holds in-flight boosts plus any not-yet-swept lost ones (finalised deposits
+		// are removed eagerly), so it stays small enough to scan in full for those whose expiry
+		// height has been reached, capped by the weight budget.
+		let due: Vec<_> = expiry_queue
+			.iter()
+			.filter(|(_, (expiry_height, _))| *expiry_height <= current_height)
+			.take(maximum_to_expire)
+			.map(|(tx_id, (_, asset))| (tx_id.clone(), *asset))
+			.collect();
+
+		let num_expired = due.len() as u64;
+		for (tx_id, asset) in due {
+			expiry_queue.remove(&tx_id);
+
+			// A no-op if the transaction was fully witnessed (and thus finalised) before it
+			// expired. Otherwise release the reserved booster/lender liquidity.
+			if let BoostStatus::Boosted { prewitnessed_deposit_id, amount } =
+				BoostedVaultTransactions::<T, I>::take(&tx_id)
+			{
+				T::BoostApi::process_deposit_as_lost(prewitnessed_deposit_id, asset.into());
+
+				Self::deposit_event(Event::<T, I>::BoostedDepositLost {
+					prewitnessed_deposit_id,
+					amount,
+				});
+			}
+		}
+
+		if num_expired == 0 {
+			// Nothing was due yet, so the queue is unchanged: skip the write-back.
+			return db_weight.reads(1);
+		}
+
+		BoostedVaultTransactionExpiry::<T, I>::put(expiry_queue);
+
+		// Weight for the queue read and write-back plus the per-transaction
+		// BoostedVaultTransactions read/writes in the loop above.
+		db_weight
+			.reads_writes(1, 1)
+			.saturating_add(expire_weight_per_tx.saturating_mul(num_expired))
 	}
 
 	fn try_broadcast_rejection_refund(
@@ -2765,6 +2851,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				boost_fee,
 			) {
 				Ok(BoostOutcome { amounts, fees }) => {
+					// If it is a vault deposit, schedule its expiry so we can detect and clean up
+					// if the corresponding full witness never arrives. (Deposit channels
+					// don't need this — they are cleaned up via recycling.)
+					if let DepositOrigin::Vault { tx_id, .. } = &origin {
+						let expiry_height = Self::expiry_and_recycle_block_height().2;
+						BoostedVaultTransactionExpiry::<T, I>::mutate(|expiry_queue| {
+							expiry_queue.insert(tx_id.clone(), (expiry_height, asset));
+						});
+					}
+
 					let total_boost_fee: AssetAmount = fees.values().copied().sum();
 					let amount_after_boost_fee =
 						amount.saturating_sub(total_boost_fee.unique_saturated_into());
@@ -3308,7 +3404,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						_ => {},
 					}
 
-					BoostedVaultTransactions::<T, I>::take(&tx_id);
+					// The transaction is finalised and can no longer be lost, so drop its expiry
+					// entry (a no-op for a consumed pending boost, which has none scheduled).
+					BoostedVaultTransactionExpiry::<T, I>::mutate(|expiry_queue| {
+						expiry_queue.remove(&tx_id);
+					});
 				},
 			Err(reason) => {
 				Self::deposit_event(Event::<T, I>::DepositFailed {

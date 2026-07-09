@@ -610,9 +610,43 @@ fn taking_network_fee_from_boost_fee() {
 
 mod vault_swaps {
 	use super::*;
-	use crate::BoostedVaultTransactions;
+	use crate::{BoostedVaultTransactionExpiry, BoostedVaultTransactions};
 	use cf_chains::AccountOrAddress;
+	use cf_test_utilities::assert_no_matching_event;
 	use cf_traits::{PriceLimitsAndExpiry, SwapOutputAction};
+	use sp_core::H256;
+
+	fn boostable_vault_deposit(
+		tx_id: H256,
+		deposit_amount: AssetAmount,
+	) -> VaultDepositWitness<Test, Instance1> {
+		let output_address = ForeignChainAddress::Eth([1; 20].into());
+		VaultDepositWitness {
+			input_asset: Asset::Eth.try_into().unwrap(),
+			deposit_address: Some([1; 20].into()),
+			channel_id: Some(1),
+			deposit_amount,
+			deposit_details: Default::default(),
+			output_asset: Asset::Flip,
+			destination_address: MockAddressConverter::to_encoded_address(output_address),
+			deposit_metadata: None,
+			tx_id,
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParametersForChain::<Ethereum> {
+				retry_duration: 2,
+				refund_address: [2; 20].into(),
+				min_price: Default::default(),
+				refund_ccm_metadata: Default::default(),
+				max_oracle_price_slippage: Default::default(),
+			},
+			dca_params: Some(DcaParameters {
+				number_of_chunks: 1,
+				chunk_interval: SWAP_DELAY_BLOCKS,
+			}),
+			boost_fee: 5,
+		}
+	}
 
 	#[test]
 	fn vault_swap_boosting() {
@@ -621,7 +655,6 @@ mod vault_swaps {
 			let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 			let block_height = 10;
-			let deposit_address = [1; 20].into();
 
 			const DEPOSIT_AMOUNT: AssetAmount = 100_000_000;
 			const INPUT_ASSET: Asset = Asset::Eth;
@@ -642,33 +675,7 @@ mod vault_swaps {
 			// Initially tx is not recorded as boosted
 			assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
 
-			let deposit = VaultDepositWitness {
-				input_asset: INPUT_ASSET.try_into().unwrap(),
-				deposit_address: Some(deposit_address),
-				channel_id: Some(CHANNEL_ID),
-				deposit_amount: DEPOSIT_AMOUNT,
-				deposit_details: Default::default(),
-				output_asset: OUTPUT_ASSET,
-				destination_address: MockAddressConverter::to_encoded_address(
-					output_address.clone(),
-				),
-				deposit_metadata: None,
-				tx_id,
-				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
-				affiliate_fees: Default::default(),
-				refund_params: ChannelRefundParametersForChain::<Ethereum> {
-					retry_duration: 2,
-					refund_address: [2; 20].into(),
-					min_price: Default::default(),
-					refund_ccm_metadata: Default::default(),
-					max_oracle_price_slippage: Default::default(),
-				},
-				dca_params: Some(DcaParameters {
-					number_of_chunks: 1,
-					chunk_interval: SWAP_DELAY_BLOCKS,
-				}),
-				boost_fee: 5,
-			};
+			let deposit = boostable_vault_deposit(tx_id, DEPOSIT_AMOUNT);
 
 			// Prewitnessing a deposit for the first time should result in a boost:
 			{
@@ -814,6 +821,86 @@ mod vault_swaps {
 				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
 			}
 		});
+	}
+
+	#[test]
+	fn boosted_vault_swap_is_deemed_lost_on_timeout() {
+		const DEPOSIT_AMOUNT: AssetAmount = 100_000_000;
+		const PREWITNESS_DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
+		let tx_id = [9u8; 32].into();
+
+		new_test_ext()
+			.execute_with(|| {
+				MockAssetConverter::set_price(Asset::Flip, Asset::Eth, 1);
+				setup();
+				MockBoostApi::set_available_amount(DEPOSIT_AMOUNT * 10);
+
+				// Boosting a vault swap via prewitness schedules it for expiry:
+				EthereumIngressEgress::process_vault_swap_request_prewitness(
+					10,
+					boostable_vault_deposit(tx_id, DEPOSIT_AMOUNT),
+				);
+				assert!(MockBoostApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
+				assert!(BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
+				assert!(
+					BoostedVaultTransactionExpiry::<Test, Instance1>::get().contains_key(&tx_id)
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// The deposit is never fully witnessed. Raise the processed height to its expiry
+				// so that on_idle (run at the end of this block) deems it lost:
+				let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+				set_eth_processed_up_to(recycle_block);
+			})
+			.then_execute_with(|_| {
+				assert!(!MockBoostApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
+				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
+				assert!(BoostedVaultTransactionExpiry::<Test, Instance1>::get().is_empty());
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::BoostedDepositLost {
+						prewitnessed_deposit_id: PREWITNESS_DEPOSIT_ID,
+						amount: DEPOSIT_AMOUNT,
+					})
+				);
+			});
+	}
+
+	#[test]
+	fn finalising_boosted_vault_swap_removes_expiry_entry() {
+		const DEPOSIT_AMOUNT: AssetAmount = 100_000_000;
+		let tx_id = [9u8; 32].into();
+
+		new_test_ext()
+			.execute_with(|| {
+				MockAssetConverter::set_price(Asset::Flip, Asset::Eth, 1);
+				setup();
+				MockBoostApi::set_available_amount(DEPOSIT_AMOUNT * 10);
+
+				let deposit = boostable_vault_deposit(tx_id, DEPOSIT_AMOUNT);
+				EthereumIngressEgress::process_vault_swap_request_prewitness(10, deposit.clone());
+				assert!(
+					BoostedVaultTransactionExpiry::<Test, Instance1>::get().contains_key(&tx_id)
+				);
+
+				// Fully witnessing the boosted deposit finalises the boost and eagerly removes
+				// the expiry entry, without waiting for the timeout:
+				EthereumIngressEgress::process_vault_swap_request_full_witness_inner(10, deposit);
+				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
+				assert!(BoostedVaultTransactionExpiry::<Test, Instance1>::get().is_empty());
+			})
+			.then_execute_at_next_block(|_| {
+				// Reaching the would-be expiry height must not deem the finalised deposit lost:
+				let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+				set_eth_processed_up_to(recycle_block);
+			})
+			.then_execute_with(|_| {
+				assert_no_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::BoostedDepositLost { .. })
+				);
+			});
 	}
 }
 
