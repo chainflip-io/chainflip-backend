@@ -43,6 +43,7 @@ pub struct RpcLendingPool<Amount> {
 	/// borrows" — the utilisation cap may restrict how much of this can actually be lent
 	/// out.
 	pub available_amount: Amount,
+	#[serde(skip)]
 	/// Removed in 20300.
 	pub owed_to_network: (),
 	pub utilisation_rate: Permill,
