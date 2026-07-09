@@ -3,6 +3,7 @@ import { testBtcUtxoConsolidation } from 'tests/btc_utxo_consolidation';
 import { testRotatesThroughBtcSwap } from 'tests/rotates_through_btc_swap';
 import { testRotationBarrier } from 'tests/rotation_barrier';
 import { testSolanaVaultSettingsGovernance } from 'tests/solana_vault_settings_governance';
+import { testFlipRewardActivation } from 'tests/flip_reward_activation';
 import { serialTest } from 'shared/utils/vitest';
 import { testMinimumDeposit } from 'tests/minimum_deposit';
 import { testSwapAfterDisconnection } from 'tests/swap_after_temp_disconnecting_chains';
@@ -15,6 +16,7 @@ describe('SerialTests2', () => {
   serialTest('RotationBarrier', testRotationBarrier, 320);
   serialTest('MinimumDeposit', testMinimumDeposit, 150);
   serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
+  serialTest('FlipRewardActivation', testFlipRewardActivation, 600);
 
   if (process.env.LOCALNET) {
     serialTest('SwapAfterDisconnection', testSwapAfterDisconnection, 250);
