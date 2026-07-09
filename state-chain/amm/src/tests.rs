@@ -276,10 +276,9 @@ fn check_price_adjustment_by_pool_fee() {
 
 		// Output is computed by adjusting the price instead:
 		let output = {
-			let sqrt_price = SqrtPrice::from(price);
-			let adjusted_sqrt_price =
-				sqrt_price_adjusted_by_pool_fee::<SD>(sqrt_price, fee_hundredth_pips);
-			let adjusted_price = Price::from(adjusted_sqrt_price);
+			let sqrt_price = price.try_into_sqrt_price().unwrap();
+			let adjusted_price =
+				Price::from(sqrt_price_adjusted_by_pool_fee::<SD>(sqrt_price, fee_hundredth_pips));
 
 			SD::output_amount_floor(input, adjusted_price)
 		};
@@ -294,29 +293,20 @@ fn check_price_adjustment_by_pool_fee() {
 	}
 }
 
-// Boundary check: `sqrt_price_adjusted_by_pool_fee` must never produce an invalid
-// SqrtPrice across the full range of allowed pool fees, for both swap directions
-// at every valid tick — including the edges of [MIN_TICK, MAX_TICK] where the
-// raw fee adjustment would overflow into an invalid SqrtPrice.
+// Near `MAX_TICK` the buy-side fee adjustment pushes the price past the representable tick range.
+// It must be clamped to `MAX_SQRT_PRICE` (rather than rejected) so a swap can still execute against
+// the order at the extreme price. The sell-side adjustment stays in range.
 #[test]
-fn sqrt_price_adjusted_by_pool_fee_never_returns_invalid_sqrt_price() {
-	use cf_amm_math::MIN_TICK;
+fn fee_adjustment_clamps_out_of_range_buy_prices() {
+	for (tick, fee) in [(887271, 100), (887267, 500), (MAX_TICK, 1), (MAX_TICK, 500_000)] {
+		let sqrt_price = Price::from_tick(tick).unwrap().try_into_sqrt_price().unwrap();
 
-	for &fee in &[0u32, 1, 100, 500, 50_000, 500_000] {
-		for &tick in &[MIN_TICK, MIN_TICK + 1, -1, 0, 1, MAX_TICK - 1, MAX_TICK] {
-			let sqrt_price = SqrtPrice::from_tick(tick);
-			for adjusted in [
-				sqrt_price_adjusted_by_pool_fee::<BaseToQuote>(sqrt_price, fee),
-				sqrt_price_adjusted_by_pool_fee::<QuoteToBase>(sqrt_price, fee),
-			] {
-				assert!(
-					adjusted.is_valid(),
-					"fee {} tick {}: adjusted SqrtPrice {:?} is invalid",
-					fee,
-					tick,
-					adjusted
-				);
-			}
-		}
+		assert_eq!(
+			sqrt_price_adjusted_by_pool_fee::<QuoteToBase>(sqrt_price, fee),
+			MAX_SQRT_PRICE,
+			"tick {tick} fee {fee}: buy-side adjusted price should clamp to MAX_SQRT_PRICE"
+		);
+
+		assert!(sqrt_price_adjusted_by_pool_fee::<BaseToQuote>(sqrt_price, fee) < MAX_SQRT_PRICE);
 	}
 }
