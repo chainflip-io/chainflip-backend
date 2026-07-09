@@ -5651,6 +5651,7 @@ mod rpcs {
 						current_interest_rate: Permill::from_parts(53_335) +
 							CONFIG.network_fee_contributions.extra_interest, // 5.33% + 1%
 						config: CONFIG.get_config_for_asset(LOAN_ASSET).clone(),
+						owed_to_network: ()
 					}]
 				)
 			});
