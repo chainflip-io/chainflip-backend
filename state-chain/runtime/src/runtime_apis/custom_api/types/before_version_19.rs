@@ -19,93 +19,24 @@ use cf_chains::instances::{
 	ArbitrumInstance, AssethubInstance, BitcoinCryptoInstance, BitcoinInstance, EthereumInstance,
 	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaCryptoInstance, SolanaInstance,
 };
-use cf_utilities::migrations::basics::migrate_from_historical_type;
+use cf_utilities::migrations::basics::{
+	migrate_from_historical_type, try_migrate_from_historical_type,
+};
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 
-pub type EncodedAddress = <super::EncodedAddress as HasVersion<v20300>>::HistoricalType;
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Hash,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Default,
-)]
-pub struct AssetMap<T> {
-	pub eth: cf_primitives::chains::assets::eth::AssetMap<T>,
-	pub dot: cf_primitives::chains::assets::dot::AssetMap<T>,
-	pub btc: cf_primitives::chains::assets::btc::AssetMap<T>,
-	pub arb: cf_primitives::chains::assets::arb::AssetMap<T>,
-	pub sol: cf_primitives::chains::assets::sol::AssetMap<T>,
-	pub hub: cf_primitives::chains::assets::hub::AssetMap<T>,
-	pub tron: cf_primitives::chains::assets::tron::AssetMap<T>,
-}
+pub type EncodedAddress = <super::EncodedAddress as HasVersion<v20200>>::HistoricalType;
 
-impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::AssetMap<T> {
-	fn from(value: AssetMap<T>) -> Self {
-		Self {
-			eth: value.eth,
-			dot: value.dot,
-			btc: value.btc,
-			arb: value.arb,
-			sol: value.sol,
-			hub: value.hub,
-			tron: value.tron,
-			bsc: Default::default(),
-		}
-	}
-}
+pub type AssetMap<T: HasChangelog + Default>
+	= <super::AssetMap<T> as HasVersion<v20200>>::HistoricalType
+where
+	<T as HasVersion<v20300>>::HistoricalType: Default,
+	<T as HasVersion<v20200>>::HistoricalType: Default,
+	<T as HasVersion<v20100>>::HistoricalType: Default;
 
-#[derive(Encode, Decode, TypeInfo, Clone)]
-pub struct NetworkFeeDetails {
-	pub standard_rate_and_minimum: FeeRateAndMinimum,
-	pub rates: AssetMap<Permill>,
-}
+pub type NetworkFees = <super::NetworkFees as HasVersion<v20200>>::HistoricalType;
 
-impl From<NetworkFeeDetails> for super::NetworkFeeDetails {
-	fn from(value: NetworkFeeDetails) -> Self {
-		Self {
-			standard_rate_and_minimum: value.standard_rate_and_minimum,
-			rates: value.rates.into(),
-		}
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone)]
-pub struct NetworkFees {
-	pub regular_network_fee: NetworkFeeDetails,
-	pub internal_swap_network_fee: NetworkFeeDetails,
-}
-
-impl From<NetworkFees> for super::NetworkFees {
-	fn from(value: NetworkFees) -> Self {
-		Self {
-			regular_network_fee: value.regular_network_fee.into(),
-			internal_swap_network_fee: value.internal_swap_network_fee.into(),
-		}
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone)]
-pub struct TradingStrategyLimits {
-	pub minimum_deployment_amount: AssetMap<Option<AssetAmount>>,
-	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
-}
-
-impl From<TradingStrategyLimits> for super::TradingStrategyLimits {
-	fn from(value: TradingStrategyLimits) -> Self {
-		Self {
-			minimum_deployment_amount: value.minimum_deployment_amount.into(),
-			minimum_added_funds_amount: value.minimum_added_funds_amount.into(),
-		}
-	}
-}
+pub type TradingStrategyLimits =
+	<super::TradingStrategyLimits as HasVersion<v20200>>::HistoricalType;
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
 pub struct LiquidityProviderInfo {
@@ -122,47 +53,22 @@ impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
 		Self {
 			refund_addresses: value.refund_addresses,
 			balances: value.balances,
-			earned_fees: value.earned_fees.into(),
-			boost_balances: value.boost_balances.into(),
+			earned_fees: migrate_from_historical_type(v20200, value.earned_fees),
+			boost_balances: migrate_from_historical_type(v20200, value.boost_balances),
 			lending_positions: value.lending_positions,
 			collateral_balances: value.collateral_balances,
 		}
 	}
 }
 
-// Decode-only intermediate (converted to the current type via `From`); no serde needed.
-#[derive(Encode, Decode, TypeInfo, Clone, Default, Debug)]
-pub struct RpcAccountInfoCommonItems<Balance> {
-	pub account_id: Option<AccountId32>,
-	pub vanity_name: VanityName,
-	pub flip_balance: Balance,
-	pub asset_balances: AssetMap<Balance>,
-	pub bond: Balance,
-	pub estimated_redeemable_balance: Balance,
-	pub bound_redeem_address: Option<EvmAddress>,
-	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-	pub current_delegation_status: Option<DelegationInfo<Balance>>,
-	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
-}
+pub type RpcAccountInfoCommonItems<Balance: HasChangelog + Default>
+	= <super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20200>>::HistoricalType
+where
+	<Balance as HasVersion<v20300>>::HistoricalType: Default,
+	<Balance as HasVersion<v20200>>::HistoricalType: Default,
+	<Balance as HasVersion<v20100>>::HistoricalType: Default;
 
-impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCommonItems<B> {
-	fn from(value: RpcAccountInfoCommonItems<B>) -> Self {
-		Self {
-			account_id: value.account_id,
-			vanity_name: value.vanity_name,
-			flip_balance: value.flip_balance,
-			asset_balances: value.asset_balances.into(),
-			bond: value.bond,
-			estimated_redeemable_balance: value.estimated_redeemable_balance,
-			bound_redeem_address: value.bound_redeem_address,
-			restricted_balances: value.restricted_balances,
-			current_delegation_status: value.current_delegation_status,
-			upcoming_delegation_status: value.upcoming_delegation_status,
-		}
-	}
-}
-
-pub type VaultAddresses = <super::VaultAddresses as HasVersion<v20300>>::HistoricalType;
+pub type VaultAddresses = <super::VaultAddresses as HasVersion<v20200>>::HistoricalType;
 #[derive(
 	Encode,
 	Decode,
@@ -400,7 +306,12 @@ pub struct RuntimeApiAccountInfoWrapper {
 
 impl From<RuntimeApiAccountInfoWrapper> for super::RuntimeApiAccountInfoWrapper {
 	fn from(value: RuntimeApiAccountInfoWrapper) -> Self {
-		Self { common_items: value.common_items.into(), role: value.role.into() }
+		// TODO!!!
+		let result = match try_migrate_from_historical_type(v20200, value.common_items) {
+			Ok(x) => x,
+			Err(err) => panic!(),
+		};
+		Self { common_items: result, role: value.role.into() }
 	}
 }
 
@@ -464,7 +375,7 @@ impl From<DepositWitnessInfo> for super::DepositWitnessInfo {
 	fn from(old: DepositWitnessInfo) -> Self {
 		Self {
 			deposit_chain_block_height: old.deposit_chain_block_height,
-			deposit_address: migrate_from_historical_type(v20300, old.deposit_address),
+			deposit_address: migrate_from_historical_type(v20200, old.deposit_address),
 			amount: old.amount,
 			asset: old.asset,
 			deposit_details: old.deposit_details.into(),
@@ -491,7 +402,7 @@ impl From<VaultDepositWitnessInfo> for super::VaultDepositWitnessInfo {
 			input_asset: old.input_asset,
 			output_asset: old.output_asset,
 			amount: old.amount,
-			destination_address: migrate_from_historical_type(v20300, old.destination_address),
+			destination_address: migrate_from_historical_type(v20200, old.destination_address),
 			deposit_details: old.deposit_details.into(),
 		}
 	}

@@ -51,7 +51,11 @@ use cf_rpc_apis::{
 	},
 	ExtrinsicResponse, NotificationBehaviour, OrderFills, RedemptionAmount, SwapChannelInfo,
 };
-use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
+use cf_utilities::{
+	migrations::{basics::migrate_from_historical_type, v20200},
+	rpc::NumberOrHex,
+	try_parse_number_or_hex,
+};
 use frame_support::BoundedVec;
 use futures::StreamExt;
 use jsonrpsee::{core::async_trait, tokio, PendingSubscriptionSink};
@@ -555,7 +559,8 @@ where
 				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_free_balances_before_version_19(hash, account_id).map(Into::into)
+				api.cf_free_balances_before_version_19(hash, account_id)
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_free_balances(hash, account_id)
 			}

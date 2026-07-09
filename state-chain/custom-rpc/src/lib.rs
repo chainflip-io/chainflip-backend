@@ -1827,7 +1827,8 @@ where
 				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_free_balances_before_version_19(hash, account_id).map(Into::into)
+				api.cf_free_balances_before_version_19(hash, account_id)
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_free_balances(hash, account_id)
 			}
@@ -1854,7 +1855,8 @@ where
 				api.cf_lp_total_balances_before_version_17(hash, account_id).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_lp_total_balances_before_version_19(hash, account_id).map(Into::into)
+				api.cf_lp_total_balances_before_version_19(hash, account_id)
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_lp_total_balances(hash, account_id)
 			}
@@ -1875,7 +1877,8 @@ where
 				api.cf_trading_strategy_limits_before_version_17(hash).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_trading_strategy_limits_before_version_19(hash).map(Into::into)
+				api.cf_trading_strategy_limits_before_version_19(hash)
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_trading_strategy_limits(hash)
 			}
@@ -2317,12 +2320,21 @@ where
 					})?
 				} else if api_version < 19 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_19(
-						hash,
-						&account_id,
-						ShouldSweep::Yes,
-					)?
-					.into()
+					try_migrate_from_historical_type(
+						v20200,
+						api.cf_common_account_info_before_version_19(
+							hash,
+							&account_id,
+							ShouldSweep::Yes,
+						)?,
+					)
+					.map_err(|_err| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InternalError.code(),
+							"Error when migrating runtime api reply",
+							None::<()>,
+						))
+					})?
 				} else {
 					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}
@@ -2719,7 +2731,7 @@ where
 				migrate_from_historical_type(v20100, api.cf_network_fees_before_version_17(hash)?)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_network_fees_before_version_19(hash)?.into()
+				migrate_from_historical_type(v20200, api.cf_network_fees_before_version_19(hash)?)
 			} else {
 				api.cf_network_fees(hash)?
 			};
@@ -2757,8 +2769,11 @@ where
 						api.cf_default_oracle_price_protection_before_version_17(hash)?.into()
 					}
 				} else if version < 19 {
-					#[expect(deprecated)]
-					api.cf_default_oracle_price_protection_before_version_19(hash)?.into()
+					migrate_from_historical_type(
+						v20200,
+						#[expect(deprecated)]
+						api.cf_default_oracle_price_protection_before_version_19(hash)?,
+					)
 				} else {
 					api.cf_default_oracle_price_protection(hash)?
 				},
@@ -3495,7 +3510,7 @@ where
 			} else if version < 19 {
 				#[expect(deprecated)]
 				api.cf_vault_addresses_before_version_19(hash)
-					.map(|x| migrate_from_historical_type(v20300, x))
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_vault_addresses(hash)
 			}
