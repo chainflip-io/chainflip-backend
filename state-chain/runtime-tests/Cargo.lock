@@ -7209,6 +7209,8 @@ dependencies = [
  "frame-support",
  "hex",
  "log",
+ "pallet-cf-validator",
+ "pallet-cf-witnesser",
  "parity-scale-codec",
  "sc-executor",
  "sc-executor-common",

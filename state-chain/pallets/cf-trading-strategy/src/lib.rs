@@ -36,7 +36,7 @@ use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABL
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
-	IncreaseOrDecrease, LpOrdersWeightsProvider, PoolApi, PriceFeedApi, RefundAddressRegistry,
+	IncreaseOrDecrease, PoolApi, PriceFeedApi, RefundAddressRegistry,
 	Side,
 };
 
@@ -65,7 +65,9 @@ pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_
 const STRATEGY_ORDER_ID_0: OrderId = 0;
 const STRATEGY_ORDER_ID_1: OrderId = 1;
 
-const MAX_NUMBER_OF_ORDERS_FOR_STRATEGY: u64 = 4;
+/// Percent of a block's leftover weight that `on_idle` will consume, leaving headroom
+/// for the other pallets' `on_idle` hooks (which run after this one on the remainder).
+const ON_IDLE_WEIGHT_PERCENT: u64 = 50;
 
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
 
@@ -182,16 +184,6 @@ impl TradingStrategy {
 		)
 	}
 
-	/// Upper-bound weight estimate for one execution of this strategy.
-	fn max_weight_estimate(&self, limit_order_update_weight: Weight) -> Weight {
-		match self {
-			TradingStrategy::TickZeroCentered { .. } | TradingStrategy::SimpleBuySell { .. } =>
-				limit_order_update_weight * 2,
-			TradingStrategy::InventoryBased { .. } | TradingStrategy::OracleTracking { .. } =>
-				limit_order_update_weight * (MAX_NUMBER_OF_ORDERS_FOR_STRATEGY * 2),
-		}
-	}
-
 	fn validate_params<T: Config>(&self) -> Result<(), Error<T>> {
 		match self {
 			TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
@@ -293,7 +285,6 @@ pub mod pallet {
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
-		type LpOrdersWeights: LpOrdersWeightsProvider;
 	}
 
 	#[pallet::pallet]
@@ -350,31 +341,55 @@ pub mod pallet {
 		StablecoinDefaults<10_000_000>, // $10 USD
 	>;
 
+	/// Cursor into `Strategies` for incremental `on_idle` processing: the raw storage
+	/// key of the last strategy processed, or `None` to (re)start from the beginning.
+	/// Bounds the per-block scan and ensures every strategy is eventually processed,
+	/// rather than always the first `max_strategies` (no starvation of the tail).
+	#[pallet::storage]
+	pub type NextStrategyCursor<T: Config> = StorageValue<_, Vec<u8>, OptionQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_current_block: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let mut weight_used: Weight = Weight::zero();
-
 			// We assume this consumes 0 weight since safe mode is likely in cache
 			if !T::SafeMode::get().strategy_execution_enabled {
-				return weight_used
+				return Weight::zero()
 			}
 
-			weight_used += T::DbWeight::get().reads(1);
-			let order_update_thresholds = LimitOrderUpdateThresholds::<T>::get();
+			let base = T::WeightInfo::on_idle(0);
+			let per_strategy = T::WeightInfo::on_idle(1).saturating_sub(base);
 
-			weight_used += T::DbWeight::get().reads(1);
-			let limit_order_update_weight = T::LpOrdersWeights::update_limit_order_weight();
+			// Use only a fraction of the block's leftover weight, so the other pallets'
+			// on_idle hooks (which run after this one on the remainder) keep some.
+			let budget = remaining_weight.ref_time().saturating_mul(ON_IDLE_WEIGHT_PERCENT) / 100;
+			let max_strategies = budget
+				.saturating_sub(base.ref_time())
+				.checked_div(per_strategy.ref_time().max(1))
+				.unwrap_or(0) as usize;
+			if max_strategies == 0 {
+				return base
+			}
+
+			let order_update_thresholds = LimitOrderUpdateThresholds::<T>::get();
 
 			// Cache of orders per asset pair to avoid redundant reads
 			let mut order_cache: BTreeMap<AssetPair, Vec<StrategyLimitOrder<T::AccountId>>> =
 				BTreeMap::new();
-
-			// Grab all of the strategies and also group them by asset pair for efficient order
-			// fetching.
 			let mut fetch_orders_for_strategies: BTreeMap<AssetPair, BTreeSet<T::AccountId>> =
 				BTreeMap::new();
-			let strategies = Strategies::<T>::iter()
+
+			// Resume from where the previous block stopped so every strategy is eventually
+			// processed, rather than always the first `max_strategies` (no tail starvation).
+			let mut iter = match NextStrategyCursor::<T>::get() {
+				Some(raw_key) => Strategies::<T>::iter_from(raw_key),
+				None => Strategies::<T>::iter(),
+			};
+
+			// Read at most `max_strategies` from storage (the bounded scan) and group the
+			// prefetch strategies by asset pair for efficient order fetching.
+			let batch = iter
+				.by_ref()
+				.take(max_strategies)
 				.map(|(_, strategy_id, strategy)| {
 					if strategy.needs_order_prefetch() {
 						if let Some(asset_pair) = strategy.asset_pair() {
@@ -388,14 +403,18 @@ pub mod pallet {
 				})
 				.collect::<Vec<_>>();
 
-			// Execute each strategy.
-			for (strategy_id, strategy) in strategies {
-				let new_weight_estimate = weight_used
-					.saturating_add(strategy.max_weight_estimate(limit_order_update_weight));
-				if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
-					break;
-				}
+			// Fewer than the affordable maximum means we reached the end of the map, so wrap
+			// back to the start next block; otherwise resume after the last key the
+			// iterator returned (no re-hashing).
+			if batch.len() < max_strategies {
+				NextStrategyCursor::<T>::kill();
+			} else {
+				NextStrategyCursor::<T>::set(Some(iter.last_raw_key().to_vec()));
+			}
+			let processed = batch.len() as u32;
 
+			// Execute each strategy in the batch.
+			for (strategy_id, strategy) in batch {
 				// Populate the order cache for strategies that require existing pool orders.
 				let existing_orders: Vec<&StrategyLimitOrder<T::AccountId>> = if strategy
 					.needs_order_prefetch()
@@ -410,7 +429,6 @@ pub mod pallet {
 					let base_asset = asset_pair.base();
 					let quote_asset = asset_pair.quote();
 					if let btree_map::Entry::Vacant(entry) = order_cache.entry(asset_pair) {
-						weight_used += T::DbWeight::get().reads(1);
 						match T::PoolApi::limit_orders(
 							base_asset,
 							quote_asset,
@@ -461,12 +479,10 @@ pub mod pallet {
 					&strategy_id,
 					&existing_orders,
 					&order_update_thresholds,
-					limit_order_update_weight,
-					&mut weight_used,
 				);
 			}
 
-			weight_used
+			T::WeightInfo::on_idle(processed)
 		}
 	}
 
@@ -779,8 +795,6 @@ impl<T: Config> Pallet<T> {
 		strategy_id: &T::AccountId,
 		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
 		thresholds: &BTreeMap<Asset, AssetAmount>,
-		limit_order_update_weight: Weight,
-		weight_used: &mut Weight,
 	) {
 		match strategy {
 			TradingStrategy::TickZeroCentered { spread_tick, base_asset } =>
@@ -790,8 +804,6 @@ impl<T: Config> Pallet<T> {
 					*spread_tick,
 					strategy_id,
 					thresholds,
-					limit_order_update_weight,
-					weight_used,
 				),
 			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } =>
 				Self::execute_simple_order(
@@ -800,8 +812,6 @@ impl<T: Config> Pallet<T> {
 					*sell_tick,
 					strategy_id,
 					thresholds,
-					limit_order_update_weight,
-					weight_used,
 				),
 			TradingStrategy::InventoryBased {
 				min_buy_tick,
@@ -818,8 +828,6 @@ impl<T: Config> Pallet<T> {
 				strategy_id,
 				existing_orders,
 				thresholds,
-				limit_order_update_weight,
-				weight_used,
 			),
 			TradingStrategy::OracleTracking {
 				min_buy_offset_tick,
@@ -838,8 +846,6 @@ impl<T: Config> Pallet<T> {
 				strategy_id,
 				existing_orders,
 				thresholds,
-				limit_order_update_weight,
-				weight_used,
 			),
 		}
 	}
@@ -854,13 +860,10 @@ impl<T: Config> Pallet<T> {
 		sell_tick: Tick,
 		strategy_id: &T::AccountId,
 		thresholds: &BTreeMap<Asset, AssetAmount>,
-		limit_order_update_weight: Weight,
-		weight_used: &mut Weight,
 	) {
 		for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
 			let sell_asset = if side == Side::Buy { STABLE_ASSET } else { base_asset };
 
-			*weight_used += T::DbWeight::get().reads(1);
 			let balance = T::BalanceApi::get_balance(strategy_id, sell_asset);
 
 			// Minimum threshold of 1 to prevent updating with 0 amounts
@@ -868,8 +871,6 @@ impl<T: Config> Pallet<T> {
 				core::cmp::max(thresholds.get(&sell_asset).copied().unwrap_or(u128::MAX), 1);
 
 			if balance >= threshold {
-				*weight_used += limit_order_update_weight;
-
 				// We expect this to fail if the pool does not exist
 				let _result = T::PoolApi::update_limit_order(
 					strategy_id,
@@ -896,8 +897,6 @@ impl<T: Config> Pallet<T> {
 		strategy_id: &T::AccountId,
 		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
 		thresholds: &BTreeMap<Asset, AssetAmount>,
-		limit_order_update_weight: Weight,
-		weight_used: &mut Weight,
 	) {
 		Self::execute_with_inventory_logic(
 			base_asset,
@@ -910,8 +909,6 @@ impl<T: Config> Pallet<T> {
 			strategy_id,
 			existing_orders,
 			thresholds,
-			limit_order_update_weight,
-			weight_used,
 		);
 	}
 
@@ -930,10 +927,7 @@ impl<T: Config> Pallet<T> {
 		strategy_id: &T::AccountId,
 		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
 		thresholds: &BTreeMap<Asset, AssetAmount>,
-		limit_order_update_weight: Weight,
-		weight_used: &mut Weight,
 	) {
-		*weight_used += T::DbWeight::get().reads(1);
 		let pricing = match T::PriceFeedApi::get_relative_price(base_asset, quote_asset) {
 			None => {
 				log_or_panic!(
@@ -970,8 +964,6 @@ impl<T: Config> Pallet<T> {
 			strategy_id,
 			existing_orders,
 			thresholds,
-			limit_order_update_weight,
-			weight_used,
 		);
 	}
 
@@ -994,8 +986,6 @@ impl<T: Config> Pallet<T> {
 		strategy_id: &T::AccountId,
 		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
 		thresholds: &BTreeMap<Asset, AssetAmount>,
-		limit_order_update_weight: Weight,
-		weight_used: &mut Weight,
 	) {
 		// This relies on autosweeping for limit orders
 		let orders_total_quote: AssetAmount = existing_orders
@@ -1012,7 +1002,6 @@ impl<T: Config> Pallet<T> {
 		let base_balance_asset = T::BalanceApi::get_balance(strategy_id, base_asset);
 		let total_quote_asset = quote_balance_asset.saturating_add(orders_total_quote);
 		let total_base_asset = base_balance_asset.saturating_add(orders_total_base);
-		*weight_used += T::DbWeight::get().reads(2);
 
 		// Minimum threshold of 1 to prevent updating with 0 amounts
 		let base_threshold =
@@ -1076,7 +1065,6 @@ impl<T: Config> Pallet<T> {
 				);
 				return;
 			}
-			*weight_used += limit_order_update_weight * MAX_NUMBER_OF_ORDERS_FOR_STRATEGY;
 
 			// Create the new desired orders.
 			let mut remaining_base_amount = total_base_asset;
@@ -1115,7 +1103,6 @@ impl<T: Config> Pallet<T> {
 						quote_amount
 					};
 
-					*weight_used += limit_order_update_weight;
 					let _result = T::PoolApi::update_limit_order(
 						strategy_id,
 						base_asset,

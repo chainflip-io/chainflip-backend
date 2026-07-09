@@ -28,7 +28,7 @@ use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASS
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
-	LpOrdersWeightsProvider, LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
+	LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
 use cf_utilities::select::Select;
 use sp_runtime::Saturating;
@@ -283,10 +283,21 @@ impl<T: Config> LimitOrderUpdate<T> {
 	MaxEncodedLen,
 )]
 pub enum PalletConfigUpdate {
-	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
+	LimitOrderAutoSweepingThreshold {
+		asset: Asset,
+		amount: AssetAmount,
+	},
+	/// Set the per-asset minimum amount required for a limit order to be created or to
+	/// remain open. The minimum applies to the asset being sold (`base_asset` for
+	/// `Side::Sell`, `quote_asset` for `Side::Buy`). Set to `0` to disable the check
+	/// for an asset.
+	SetMinimumLimitOrderAmount {
+		asset: Asset,
+		amount: AssetAmount,
+	},
 }
 
-pub const STORAGE_VERSION_U16: u16 = 8;
+pub const STORAGE_VERSION_U16: u16 = 9;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[frame_support::pallet]
@@ -421,6 +432,12 @@ pub mod pallet {
 	pub(super) type LimitOrderAutoSweepingThresholds<T: Config> =
 		StorageValue<_, SweepingThresholds, ValueQuery, StablecoinDefaults<1_000_000_000>>; // $1000 USD
 
+	/// Minimum amount of the sold asset that a limit order may hold. Set per asset by
+	/// governance. A value of `0` disables the check for that asset.
+	#[pallet::storage]
+	pub type MinimumLimitOrderAmount<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+
 	#[pallet::storage]
 	/// Historical earned fees for an account.
 	pub type HistoricalEarnedFees<T: Config> =
@@ -503,6 +520,8 @@ pub mod pallet {
 		SheduledUpdateLimitReached,
 		/// The account still has open orders.
 		OpenOrdersRemaining,
+		/// The resulting limit order amount is below the configured per-asset minimum.
+		BelowMinimumOrderAmount,
 	}
 
 	#[pallet::event]
@@ -855,6 +874,7 @@ pub mod pallet {
 				&lp,
 				[base_asset, quote_asset],
 			)?;
+			Self::ensure_min_order_amount(base_asset, quote_asset, side, sell_amount)?;
 
 			if let Some(dispatch_at) = dispatch_at {
 				LimitOrderUpdate::<T> {
@@ -1066,6 +1086,9 @@ pub mod pallet {
 						LimitOrderAutoSweepingThresholds::<T>::mutate(|thresholds| {
 							thresholds.try_insert(asset, amount).expect("Every asset will fit");
 						});
+					},
+					PalletConfigUpdate::SetMinimumLimitOrderAmount { asset, amount } => {
+						MinimumLimitOrderAmount::<T>::set(asset, amount);
 					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
@@ -1654,6 +1677,27 @@ impl<T: Config> Pallet<T> {
 		Ok((collected, position_info))
 	}
 
+	/// Enforce the per-asset minimum on the remaining amount of a limit order. The remaining amount
+	/// is denominated in the asset being sold. A `remaining_amount` of `0` is always allowed (the
+	/// order is being closed); any other value below the configured minimum is rejected.
+	fn ensure_min_order_amount(
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		remaining_amount: AssetAmount,
+	) -> DispatchResult {
+		let sold_asset = match side {
+			Side::Buy => quote_asset,
+			Side::Sell => base_asset,
+		};
+		ensure!(
+			remaining_amount == 0 ||
+				remaining_amount >= MinimumLimitOrderAmount::<T>::get(sold_asset),
+			Error::<T>::BelowMinimumOrderAmount,
+		);
+		Ok(())
+	}
+
 	pub fn inner_set_limit_order(
 		lp: &T::AccountId,
 		base_asset: any::Asset,
@@ -1708,6 +1752,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Updates limit order closing the previous one if necessary (in case of tick change)
+	// Transactional so that, if the resulting amount fails the per-asset minimum check below, the
+	// applied change (including balance debits/credits) is rolled back. This matters in particular
+	// for scheduled updates, which are dispatched from `on_initialize` and so are not otherwise
+	// wrapped in a storage layer.
+	#[transactional]
 	fn inner_update_limit_order(
 		lp: &T::AccountId,
 		base_asset: Asset,
@@ -1720,18 +1769,17 @@ impl<T: Config> Pallet<T> {
 		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(Select::Single(lp))?;
 		Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
-			let tick = match (
-				pool.limit_orders_cache[side.to_sold_pair()]
-					.get(lp)
-					.and_then(|limit_orders| limit_orders.get(&id))
-					.copied(),
-				option_tick,
-			) {
+			let existing_tick = pool.limit_orders_cache[side.to_sold_pair()]
+				.get(lp)
+				.and_then(|limit_orders| limit_orders.get(&id))
+				.copied();
+
+			let tick = match (existing_tick, option_tick) {
 				(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 				(None, Some(tick)) | (Some(tick), None) => Ok(tick),
 				(Some(previous_tick), Some(new_tick)) => {
 					if previous_tick != new_tick {
-						let withdrawn_asset_amount = Self::inner_update_limit_order_at_tick(
+						let (withdrawn_asset_amount, _) = Self::inner_update_limit_order_at_tick(
 							pool,
 							lp,
 							asset_pair,
@@ -1756,7 +1804,7 @@ impl<T: Config> Pallet<T> {
 					Ok(new_tick)
 				},
 			}?;
-			Self::inner_update_limit_order_at_tick(
+			let (_, remaining_amount) = Self::inner_update_limit_order_at_tick(
 				pool,
 				lp,
 				asset_pair,
@@ -1766,6 +1814,7 @@ impl<T: Config> Pallet<T> {
 				amount_change.map(|amount| amount.into()),
 				NoOpStatus::Error,
 			)?;
+			Self::ensure_min_order_amount(base_asset, quote_asset, side, remaining_amount)?;
 
 			Ok(())
 		})
@@ -1779,7 +1828,7 @@ impl<T: Config> Pallet<T> {
 		id: OrderId,
 		tick: Tick,
 	) -> DispatchResult {
-		let sold_amount_change = Self::inner_update_limit_order_at_tick(
+		let (sold_amount_change, _) = Self::inner_update_limit_order_at_tick(
 			pool,
 			lp,
 			asset_pair,
@@ -1799,7 +1848,10 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Updates limit order assuming that tick stays the same
+	/// Updates limit order assuming that tick stays the same.
+	///
+	/// Returns `(sold_amount_change, resulting_position_amount)`: the absolute change in the sold
+	/// amount (minted or burned) and the order's remaining sold amount after the update.
 	fn inner_update_limit_order_at_tick(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
@@ -1809,7 +1861,7 @@ impl<T: Config> Pallet<T> {
 		tick: Tick,
 		sold_amount_change: IncreaseOrDecrease<Amount>,
 		noop_status: NoOpStatus,
-	) -> Result<AssetAmount, DispatchError> {
+	) -> Result<(AssetAmount, AssetAmount), DispatchError> {
 		let (sold_amount_change, position_info, collected) = match sold_amount_change {
 			IncreaseOrDecrease::Increase(sold_amount) => {
 				let (collected, position_info) =
@@ -1861,6 +1913,8 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
+		let remaining_amount: AssetAmount = position_info.amount.saturated_into();
+
 		// Process the update
 		Self::process_limit_order_update(
 			pool,
@@ -1874,7 +1928,7 @@ impl<T: Config> Pallet<T> {
 			sold_amount_change,
 		)?;
 
-		Ok(*sold_amount_change.abs())
+		Ok((*sold_amount_change.abs(), remaining_amount))
 	}
 
 	fn inner_update_range_order(
@@ -2545,12 +2599,6 @@ pub struct DeleteHistoricalEarnedFees<T: Config>(sp_std::marker::PhantomData<T>)
 impl<T: Config> OnKilledAccount<T::AccountId> for DeleteHistoricalEarnedFees<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
-	}
-}
-
-impl<T: Config> LpOrdersWeightsProvider for Pallet<T> {
-	fn update_limit_order_weight() -> Weight {
-		T::WeightInfo::update_limit_order()
 	}
 }
 

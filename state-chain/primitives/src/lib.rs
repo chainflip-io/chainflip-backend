@@ -611,7 +611,18 @@ impl<T> ApiWaitForResult<T> {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+)]
 pub struct AssetAndAmount<Amount> {
 	#[serde(flatten)]
 	pub asset: Asset,

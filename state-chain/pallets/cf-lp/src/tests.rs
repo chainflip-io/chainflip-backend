@@ -16,8 +16,9 @@
 
 use crate::{
 	mock::*, AggStats, DeltaStats, Error, Event, LpAggStats, LpDeltaStats, Pallet, PalletSafeMode,
-	WindowedEma, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS,
-	EMA_PRUNE_THRESHOLD_USD, STATS_UPDATE_INTERVAL_IN_BLOCKS,
+	StatsLastUpdatedAt, StatsUpdateCursor, WindowedEma, ALPHA_HALF_LIFE_1_DAY,
+	ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS, EMA_PRUNE_THRESHOLD_USD,
+	STATS_UPDATE_INTERVAL_IN_BLOCKS,
 };
 use std::collections::BTreeMap;
 
@@ -587,6 +588,12 @@ fn on_limit_order_filled_updates_delta_stats() {
 
 		const USD_AMOUNT: AssetAmount = 1_500_000;
 
+		// Pre-seed LpAggStats entries so on_limit_order_filled accrues into LpDeltaStats instead
+		// of eagerly seeding a new entry (that path is covered by
+		// `on_limit_order_filled_seeds_new_lp_agg_stats_entry_immediately`).
+		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, AggStats::default());
+		LpAggStats::<Test>::insert(LP_ACCOUNT_2, Asset::Eth, AggStats::default());
+
 		// round 1
 		assert!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
 		for _ in 0..3 {
@@ -605,7 +612,6 @@ fn on_limit_order_filled_updates_delta_stats() {
 		assert_eq!(deltas_2.limit_orders_swap_usd_volume, FixedU128::from_inner(USD_AMOUNT));
 	});
 }
-// rust
 #[test]
 fn update_agg_stats_updates_correctly() {
 	new_test_ext().execute_with(|| {
@@ -615,27 +621,39 @@ fn update_agg_stats_updates_correctly() {
 			limit_orders_swap_usd_volume: FixedU128::from_inner(1_000_000_000u128),
 		}); // Avg: 1000 USD
 
-		LpAggStats::<Test>::mutate(|agg_stats_map| {
-			let lp_stats = agg_stats_map.entry(LP_ACCOUNT).or_default();
-			lp_stats.insert(Asset::Eth, pre_existing_eth_stats);
-		});
+		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, pre_existing_eth_stats);
 
-		// on_limit_order_filled for LP_ACCOUNT with pre-existing AggStats
+		// on_limit_order_filled for LP_ACCOUNT with pre-existing AggStats: accrues a delta, does
+		// not touch LpAggStats directly.
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128); // 700 usd
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128); // 700 usd
+		assert_eq!(
+			LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth)
+				.unwrap()
+				.limit_orders_swap_usd_volume,
+			FixedU128::from_inner(1_400_000_000u128)
+		);
 
-		// on_limit_order_filled for LP_ACCOUNT_2 (no pre-existing AggStats; should create new EMA
-		// equal to delta)
+		// on_limit_order_filled for LP_ACCOUNT_2 (no pre-existing AggStats): seeds a new entry
+		// immediately, unblended.
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT_2, &Asset::Flip, 500_000_000u128); // 500 usd
-
-		// Call the update function and verify that delta stats are deleted after the update
-		LiquidityProvider::update_agg_stats();
-		// After calling update_agg_stats(), all Delta stats should be deleted
-		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
+		let lp2_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).unwrap();
+		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day), 500f64);
+		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days), 500f64);
+		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days), 500f64);
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip), None);
 
-		let agg_stats_map = LpAggStats::<Test>::get();
-		let lp1_agg_stats = agg_stats_map.get(&LP_ACCOUNT).unwrap().get(&Asset::Eth).unwrap();
+		// Call the update function and verify that LP_ACCOUNT's pre-existing entry decays
+		// correctly and its delta stats are deleted after the update. Ample weight so the whole
+		// (tiny) pass completes in a single call.
+		LiquidityProvider::update_agg_stats(
+			1,
+			None,
+			frame_support::weights::Weight::from_parts(u64::MAX, u64::MAX),
+		);
+		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
+
+		let lp1_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).unwrap();
 		assert!(is_within_tiny_error(
 			fixed_u128_to_f64(lp1_agg_stats.avg_limit_usd_volume.one_day),
 			expected_ema(
@@ -661,12 +679,58 @@ fn update_agg_stats_updates_correctly() {
 			)
 		));
 
-		// Verify new EMA was created for LP_ACCOUNT_2 and is initialized correctly
-		let agg_stats_map = LpAggStats::<Test>::get();
-		let lp2_agg_stats = agg_stats_map.get(&LP_ACCOUNT_2).unwrap().get(&Asset::Flip).unwrap();
-		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day), 500f64);
-		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days), 500f64);
-		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days), 500f64);
+		// LP_ACCOUNT_2's freshly-seeded entry already exists in LpAggStats by the time
+		// update_agg_stats() runs, so it's included in the same iter() pass: with no pending
+		// delta, it decays toward zero like any other existing entry with no activity this
+		// period (same as LP_ACCOUNT's entry would if it had no delta).
+		let lp2_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).unwrap();
+		assert!(is_within_tiny_error(
+			fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day),
+			expected_ema(500f64, 0f64, 1u32)
+		));
+		assert!(is_within_tiny_error(
+			fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days),
+			expected_ema(500f64, 0f64, 7u32)
+		));
+		assert!(is_within_tiny_error(
+			fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days),
+			expected_ema(500f64, 0f64, 30u32)
+		));
+	});
+}
+
+#[test]
+fn on_limit_order_filled_seeds_new_lp_agg_stats_entry_immediately() {
+	new_test_ext().execute_with(|| {
+		assert!(LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
+
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 1_000_000_000u128); // 1000 usd
+
+		// The entry exists immediately, without update_agg_stats() ever running.
+		let agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).unwrap();
+		assert_eq!(fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.one_day), 1000f64);
+		assert_eq!(fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.seven_days), 1000f64);
+		assert_eq!(fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.thirty_days), 1000f64);
+		// No delta was recorded for this first fill — it was consumed directly into the seed.
+		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
+
+		// A second fill for the SAME (Lp, Asset), now that an entry exists, accrues as a delta
+		// instead of overwriting the seed.
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 500_000_000u128); // 500 usd
+		assert_eq!(
+			LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth)
+				.unwrap()
+				.limit_orders_swap_usd_volume,
+			FixedU128::from_inner(500_000_000u128)
+		);
+		// The seeded aggregate is unchanged until the next update_agg_stats() pass.
+		assert_eq!(
+			LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth)
+				.unwrap()
+				.avg_limit_usd_volume
+				.one_day,
+			FixedU128::from_inner(1_000_000_000u128)
+		);
 	});
 }
 
@@ -690,30 +754,189 @@ fn update_agg_stats_prunes_below_threshold() {
 			},
 		};
 
-		LpAggStats::<Test>::mutate(|agg_stats_map| {
-			let lp_stats = agg_stats_map.entry(LP_ACCOUNT).or_default();
-			lp_stats.insert(Asset::Eth, below_threshold);
-			let lp_stats = agg_stats_map.entry(LP_ACCOUNT_2).or_default();
-			lp_stats.insert(Asset::Flip, above_threshold);
-		});
+		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, below_threshold);
+		LpAggStats::<Test>::insert(LP_ACCOUNT_2, Asset::Flip, above_threshold);
 
-		LiquidityProvider::update_agg_stats();
+		// Ample weight so the whole (tiny) pass completes in a single call.
+		LiquidityProvider::update_agg_stats(
+			1,
+			None,
+			frame_support::weights::Weight::from_parts(u64::MAX, u64::MAX),
+		);
 
-		let agg_stats_map = LpAggStats::<Test>::get();
-		assert!(agg_stats_map
-			.get(&LP_ACCOUNT)
-			.and_then(|stats| stats.get(&Asset::Eth))
-			.is_none());
-		assert!(agg_stats_map
-			.get(&LP_ACCOUNT_2)
-			.and_then(|stats| stats.get(&Asset::Flip))
-			.is_some());
+		assert!(LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
+		assert!(LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).is_some());
 
-		let lp2_stats = agg_stats_map.get(&LP_ACCOUNT_2).unwrap().get(&Asset::Flip).unwrap();
+		let lp2_stats = LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).unwrap();
 		assert!(
 			lp2_stats.avg_limit_usd_volume.pruning_weighted_score() >=
 				FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD)
 		);
+	});
+}
+
+#[test]
+fn update_agg_stats_resumes_across_multiple_capped_calls() {
+	new_test_ext().execute_with(|| {
+		use crate::weights::WeightInfo as _;
+
+		const NUM_LPS: u64 = 5;
+		for lp in 0..NUM_LPS {
+			// Two fills per Lp: the first seeds the entry, the second leaves a pending delta for
+			// update_agg_stats to apply.
+			LiquidityProvider::on_limit_order_filled(&lp, &Asset::Eth, 1_000_000_000u128); // 1000 usd
+			LiquidityProvider::on_limit_order_filled(&lp, &Asset::Eth, 200_000_000u128); // 200 usd
+		}
+		assert_eq!(LpAggStats::<Test>::iter().count(), NUM_LPS as usize);
+
+		// Budget exactly one item's worth of weight per call (computed from the real WeightInfo,
+		// so this test stays correct however that weight is defined) to force the pass to span
+		// multiple calls. Each of the first NUM_LPS calls processes exactly one entry; the pass
+		// only recognises it's exhausted (and clears the cursor) on the following call, once
+		// `iter.next()` comes back empty — so completion takes NUM_LPS + 1 calls, not NUM_LPS.
+		let per_item_weight = <Test as crate::Config>::WeightInfo::update_agg_stats_item();
+
+		let mut cursor: Option<Vec<u8>> = None;
+		let mut calls = 0u64;
+		loop {
+			calls += 1;
+			assert!(calls <= NUM_LPS + 1, "pass should complete within NUM_LPS + 1 calls");
+			LiquidityProvider::update_agg_stats(calls, cursor.clone(), per_item_weight);
+			cursor = StatsUpdateCursor::<Test>::get();
+			if cursor.is_none() {
+				break;
+			}
+		}
+		assert_eq!(calls, NUM_LPS + 1, "the pass should take one extra call to detect completion");
+
+		for lp in 0..NUM_LPS {
+			assert_eq!(LpDeltaStats::<Test>::get(lp, Asset::Eth), None);
+			let agg_stats = LpAggStats::<Test>::get(lp, Asset::Eth).unwrap();
+			assert!(is_within_tiny_error(
+				fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.one_day),
+				expected_ema(1000f64, 200f64, 1u32)
+			));
+		}
+	});
+}
+
+#[test]
+fn update_agg_stats_tolerates_new_entry_inserted_mid_pass() {
+	new_test_ext().execute_with(|| {
+		use crate::weights::WeightInfo as _;
+
+		// `frame_support`'s iteration docs warn that adding/removing values in the map "while
+		// doing this" gives "undefined results". Our reading of the actual mechanism (`next_key`
+		// is a live point-query against current storage, not a snapshot) says a fresh insertion
+		// elsewhere in the map between two `update_agg_stats` calls is safe: it can't skip or
+		// re-visit any entry that already existed when the pass started. This test proves that
+		// empirically for the concrete scenario that matters here — a limit order filling for a
+		// brand-new (Lp, Asset) pair (the eager-seed path) while a decay pass is genuinely
+		// in-progress (a persisted, non-empty cursor) — rather than relying only on that reading.
+		const NUM_LPS: u64 = 3;
+		for lp in 0..NUM_LPS {
+			LiquidityProvider::on_limit_order_filled(&lp, &Asset::Eth, 1_000_000_000u128); // 1000 usd
+			LiquidityProvider::on_limit_order_filled(&lp, &Asset::Eth, 200_000_000u128); // 200 usd
+		}
+		assert_eq!(LpAggStats::<Test>::iter().count(), NUM_LPS as usize);
+
+		let per_item_weight = <Test as crate::Config>::WeightInfo::update_agg_stats_item();
+		const NEW_LP: u64 = 999;
+
+		let mut cursor: Option<Vec<u8>> = None;
+		let mut calls = 0u64;
+		let mut new_entry_seeded_mid_pass = false;
+		loop {
+			calls += 1;
+			// Generous bound: the mid-pass insertion may or may not add one more call depending
+			// on where its key falls relative to the cursor. The property under test is
+			// termination, not the exact count (already covered by the test above).
+			assert!(calls <= NUM_LPS + 3, "pass should terminate in a bounded number of calls");
+			LiquidityProvider::update_agg_stats(calls, cursor.clone(), per_item_weight);
+			cursor = StatsUpdateCursor::<Test>::get();
+
+			if calls == 1 {
+				assert!(cursor.is_some(), "pass should still be genuinely in progress");
+				// Simulate a fill landing in an intervening block, for a brand-new (Lp, Asset)
+				// pair — this exercises the eager-seed path inserting a new LpAggStats entry
+				// while the cursor above is persisted mid-pass.
+				LiquidityProvider::on_limit_order_filled(&NEW_LP, &Asset::Eth, 700_000_000u128); // 700 usd
+				assert!(LpAggStats::<Test>::get(NEW_LP, Asset::Eth).is_some());
+				new_entry_seeded_mid_pass = true;
+			}
+
+			if cursor.is_none() {
+				break;
+			}
+		}
+		assert!(new_entry_seeded_mid_pass);
+
+		// Every entry that existed when the pass started was still reached and correctly
+		// decayed exactly once — the mid-pass insertion caused no skip.
+		for lp in 0..NUM_LPS {
+			assert_eq!(LpDeltaStats::<Test>::get(lp, Asset::Eth), None);
+			let agg_stats = LpAggStats::<Test>::get(lp, Asset::Eth).unwrap();
+			assert!(is_within_tiny_error(
+				fixed_u128_to_f64(agg_stats.avg_limit_usd_volume.one_day),
+				expected_ema(1000f64, 200f64, 1u32)
+			));
+		}
+
+		// The mid-pass-inserted entry is intact either way: it was either swept into this same
+		// pass (decayed once from its seed with a zero delta, since it has no pending delta of
+		// its own) if its key fell ahead of the cursor, or left untouched, waiting for the next
+		// pass, if its key fell behind. Both are correct outcomes — what matters is that it's
+		// neither lost nor double-processed.
+		let new_lp_stats = LpAggStats::<Test>::get(NEW_LP, Asset::Eth).unwrap();
+		let seeded_value = 700f64;
+		let decayed_once = expected_ema(seeded_value, 0f64, 1u32);
+		let one_day = fixed_u128_to_f64(new_lp_stats.avg_limit_usd_volume.one_day);
+		assert!(
+			is_within_tiny_error(one_day, seeded_value) ||
+				is_within_tiny_error(one_day, decayed_once),
+			"new entry should be either untouched ({seeded_value}) or decayed exactly once \
+			 ({decayed_once}), got {one_day}"
+		);
+	});
+}
+
+#[test]
+fn on_idle_does_nothing_before_interval_elapses() {
+	new_test_ext().execute_with(|| {
+		use frame_support::{traits::Hooks, weights::Weight};
+
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 1_000_000_000u128);
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 500_000_000u128);
+		StatsLastUpdatedAt::<Test>::put(0u64);
+
+		LiquidityProvider::on_idle(
+			STATS_UPDATE_INTERVAL_IN_BLOCKS - 1,
+			Weight::from_parts(u64::MAX, u64::MAX),
+		);
+
+		// Not due yet: the pending delta is untouched and no pass has started.
+		assert!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_some());
+		assert!(StatsUpdateCursor::<Test>::get().is_none());
+	});
+}
+
+#[test]
+fn on_idle_runs_and_completes_the_pass_once_due() {
+	new_test_ext().execute_with(|| {
+		use frame_support::{traits::Hooks, weights::Weight};
+
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 1_000_000_000u128);
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 500_000_000u128);
+		StatsLastUpdatedAt::<Test>::put(0u64);
+
+		LiquidityProvider::on_idle(
+			STATS_UPDATE_INTERVAL_IN_BLOCKS,
+			Weight::from_parts(u64::MAX, u64::MAX),
+		);
+
+		assert!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
+		assert!(StatsUpdateCursor::<Test>::get().is_none());
+		assert_eq!(StatsLastUpdatedAt::<Test>::get(), STATS_UPDATE_INTERVAL_IN_BLOCKS);
 	});
 }
 

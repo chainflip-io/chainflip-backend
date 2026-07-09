@@ -975,6 +975,47 @@ fn can_update_all_config_items() {
 	});
 }
 
+#[test]
+fn on_idle_scan_is_bounded_and_wraps_around() {
+	use crate::weights::WeightInfo;
+	use frame_support::weights::Weight;
+
+	new_test_ext().then_execute_with(|_| {
+		// Insert several strategies directly under one LP.
+		let n = 5u64;
+		for i in 0..n {
+			Strategies::<Test>::insert(LP, 1000 + i, STRATEGY);
+		}
+		assert_eq!(Strategies::<Test>::iter().count() as u64, n);
+
+		// Give on_idle enough leftover weight that, after its self-imposed cap, exactly
+		// two strategies fit per pass.
+		let base = <() as WeightInfo>::on_idle(0).ref_time();
+		let per = <() as WeightInfo>::on_idle(1).ref_time().saturating_sub(base);
+		let remaining = (base + 2 * per) * 100 / crate::ON_IDLE_WEIGHT_PERCENT;
+		let budget = Weight::from_parts(remaining, u64::MAX);
+
+		// A single pass processes only a bounded subset, leaving a cursor for the rest:
+		// the scan no longer grows with the total number of deployed strategies.
+		TradingStrategyPallet::on_idle(1, budget);
+		assert!(
+			NextStrategyCursor::<Test>::get().is_some(),
+			"expected a cursor: not all strategies fit in one block"
+		);
+
+		// Subsequent passes resume from the cursor until every strategy has been reached
+		// and the cursor wraps back to `None` (no starvation of the tail).
+		let mut passes = 1u64;
+		while NextStrategyCursor::<Test>::get().is_some() {
+			TradingStrategyPallet::on_idle(1, budget);
+			passes += 1;
+			assert!(passes <= n, "cursor failed to wrap: strategies starved");
+		}
+		// Five strategies at two per pass wraps within three passes.
+		assert_eq!(passes, 3);
+	});
+}
+
 mod safe_mode {
 
 	use cf_traits::SafeMode;
