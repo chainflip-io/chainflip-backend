@@ -130,6 +130,10 @@ export async function upgradeBinaries<A = []>(
     expectedEvent: reputationPenaltyUpdatedEvent,
   });
 
+  // Drop the cached dedot client so the next extrinsic submission connects fresh to the new
+  // node, rather than relying on the stale connection's auto-reconnect.
+  await clearChainflipClientCache();
+
   // Kill engines first so they don't try to submit extrinsics while the node
   // is shutting down.
   await killEngines(cf.logger);
@@ -145,9 +149,6 @@ export async function upgradeBinaries<A = []>(
   // The API connections opened against the old node are stale after a restart.
   clearChainflipApiCache();
   clearSubscribeHeadsCache();
-  // Also drop the cached dedot client so the next extrinsic submission connects fresh to the new
-  // node, rather than relying on the stale connection's auto-reconnect.
-  await clearChainflipClientCache();
 
   // Start the new engines
   await startEngines(localnetInitPath, newBinaryPath, numberOfNodes, '-binaries-upgrade');

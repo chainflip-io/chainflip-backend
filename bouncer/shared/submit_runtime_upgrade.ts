@@ -1,4 +1,3 @@
-import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { decodeDispatchError, sleep } from 'shared/utils';
@@ -12,7 +11,9 @@ import { reputationPenaltyUpdatedEvent } from 'generated/events/reputation/penal
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
-  return compactAddLength(new Uint8Array(await fs.readFile(filePath)));
+  // Return the raw WASM bytes. The dedot codec length-prefixes the `code: Bytes` argument itself
+  // when encoding the extrinsic, so we must NOT pre-prepend a compact length here like polkadot.js did.
+  return new Uint8Array(await fs.readFile(filePath));
 }
 
 // By default we don't want to restrict that any of the nodes need to be upgraded.
