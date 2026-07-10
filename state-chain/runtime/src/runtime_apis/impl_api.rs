@@ -49,7 +49,6 @@ use cf_primitives::{
 	ChannelId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, IngressOrEgress,
 	NetworkEnvironment, SemVer, STABLE_ASSET,
 };
-use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, ChainflipWithTargetChain, EpochKey,
 	GetBlockHeight, KeyProvider, RewardsDistribution, SwapLimits, SwapParameterValidation,
@@ -983,11 +982,22 @@ impl_runtime_apis! {
 						|account: &AccountId| rewards.get(account).copied().unwrap_or_default();
 
 					for operator in operators_with_authorities {
+
+						reward_pool.push(AccountReward {
+							account: operator.clone(),
+							bid: Flip::balance(&operator),
+							bond: Flip::bond(&operator),
+							reward: reward_of(&operator),
+							role: AccountRole::Operator,
+							managed_by: None,
+							delegated_to: None,
+						});
+
 						let Some(snapshot) = pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
 							epoch_index,
 							&operator,
 						) else {
-							log_or_panic!(
+							log::warn!(
 									"Operator {:?} has authority slot(s) in epoch {} but no delegation snapshot found.",
 									operator,
 									epoch_index
@@ -995,25 +1005,12 @@ impl_runtime_apis! {
 							continue;
 						};
 
-						let validator_bonds = snapshot.validator_bond_distribution(bond);
-						let bond_of =
-							|account: &AccountId| validator_bonds.get(account).copied().unwrap_or_default();
-
-						reward_pool.push(AccountReward {
-							account: operator.clone(),
-							bid: 0,
-							bond: 0,
-							reward: reward_of(&operator),
-							role: AccountRole::Operator,
-							managed_by: None,
-							delegated_to: None,
-						});
 
 						for (account, bid) in &snapshot.validators {
 							reward_pool.push(AccountReward {
 								account: account.clone(),
 								bid: *bid,
-								bond: bond_of(account),
+								bond: Flip::bond(account),
 								reward: reward_of(account),
 								role: AccountRole::Validator,
 								managed_by: Some(operator.clone()),
@@ -1025,7 +1022,7 @@ impl_runtime_apis! {
 							reward_pool.push(AccountReward {
 								account: account.clone(),
 								bid: *bid,
-								bond: *bid,
+								bond: Flip::bond(account),
 								reward: reward_of(account),
 								role: role_of(account),
 								managed_by: managed_by(account),
