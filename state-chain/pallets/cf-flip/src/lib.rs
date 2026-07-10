@@ -224,7 +224,7 @@ pub mod pallet {
 			new_bond: T::Balance,
 		},
 		FlipDistributed {
-			amount: Vec<(T::AccountId, T::Balance)>,
+			amounts: Vec<(T::AccountId, T::Balance)>,
 		},
 	}
 
@@ -608,7 +608,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Self::deposit_event(Event::FlipDistributed {
-			amount: flip_distributed_map.into_iter().collect(),
+			amounts: flip_distributed_map.into_iter().collect(),
 		});
 		offchain_flip_bridged
 	}
