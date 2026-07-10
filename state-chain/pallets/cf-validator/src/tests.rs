@@ -3409,6 +3409,7 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 
 		// Distribute rewards to the validator.
 		DelegatedRewardsDistribution::<Test>::distribute(
+			EPOCH,
 			REWARD_AMOUNT,
 			&VALIDATOR,
 			TestMintTracker::add_minted,

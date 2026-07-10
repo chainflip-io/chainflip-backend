@@ -16,6 +16,7 @@
 
 use super::{MockPallet, MockPalletStorage};
 use crate::{Chainflip, RewardsDistribution};
+use cf_primitives::EpochIndex;
 
 pub struct MockRewardsDistribution<T>(core::marker::PhantomData<T>);
 
@@ -28,6 +29,7 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 	type AccountId = T::AccountId;
 
 	fn distribute(
+		_epoch_index: EpochIndex,
 		amount: Self::Balance,
 		beneficiary: &Self::AccountId,
 		mut settle: impl FnMut(&Self::AccountId, Self::Balance),

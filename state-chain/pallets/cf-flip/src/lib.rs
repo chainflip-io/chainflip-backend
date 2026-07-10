@@ -561,7 +561,10 @@ impl<T: Config> Pallet<T> {
 			.offset(Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount));
 	}
 
-	pub fn trigger_flip_reward_distribution(authorities: BTreeSet<T::AccountId>) -> T::Balance {
+	pub fn trigger_flip_reward_distribution(
+		epoch_index: EpochIndex,
+		authorities: Vec<T::AccountId>,
+	) -> T::Balance {
 		// Bridge in any pending offchain rewards and deposit them into the distribution reserve so
 		// that everything is distributed from a single source.
 		let offchain_flip_to_distribute = FlipToDistribute::<T>::take();
@@ -584,6 +587,7 @@ impl<T: Config> Pallet<T> {
 		let mut flip_distributed_map = BTreeMap::new();
 		for authority in &authorities {
 			T::RewardsDistribution::distribute(
+				epoch_index,
 				per_authority_reward,
 				authority,
 				|account, amount| {

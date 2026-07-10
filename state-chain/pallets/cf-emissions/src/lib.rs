@@ -347,8 +347,15 @@ where
 impl<T: Config> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
 	fn note_author(author: T::AccountId) {
 		let reward_amount = CurrentAuthorityEmissionPerBlock::<T>::get();
+
+		let epoch_index = T::EpochInfo::epoch_index();
 		if reward_amount != Zero::zero() && !T::Issuance::is_flip_2_1_activated() {
-			T::RewardsDistribution::distribute(reward_amount, &author, T::Issuance::mint);
+			T::RewardsDistribution::distribute(
+				epoch_index,
+				reward_amount,
+				&author,
+				T::Issuance::mint,
+			);
 		}
 	}
 }

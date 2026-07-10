@@ -736,8 +736,10 @@ mod test_flip_reward_distribution {
 			Flip::add_to_offchain_flip_to_be_distributed(300i128);
 			<Flip as FeePayment>::burn_or_reserve_offchain(300u128);
 
-			let bridged =
-				Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([ALICE, BOB, CHARLIE]));
+			let bridged = Flip::trigger_flip_reward_distribution(
+				1,
+				BTreeSet::from_iter([ALICE, BOB, CHARLIE]),
+			);
 
 			// 300 offchain bridged in + 300 onchain = 600 total; 600 / 3 = 200 each
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 200);
@@ -763,8 +765,10 @@ mod test_flip_reward_distribution {
 			Flip::add_to_offchain_flip_to_be_distributed(1i128);
 			<Flip as FeePayment>::burn_or_reserve_offchain(201u128);
 
-			let bridged =
-				Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([ALICE, BOB, CHARLIE]));
+			let bridged = Flip::trigger_flip_reward_distribution(
+				1,
+				BTreeSet::from_iter([ALICE, BOB, CHARLIE]),
+			);
 
 			// All authorities get the same truncated share — no winner receives the remainder
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 67);
@@ -787,8 +791,10 @@ mod test_flip_reward_distribution {
 			Flip::add_to_offchain_flip_to_be_distributed(-100i128);
 			<Flip as FeePayment>::burn_or_reserve_offchain(300u128);
 
-			let bridged =
-				Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([ALICE, BOB, CHARLIE]));
+			let bridged = Flip::trigger_flip_reward_distribution(
+				1,
+				BTreeSet::from_iter([ALICE, BOB, CHARLIE]),
+			);
 
 			// Only onchain: 100 each
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 100);
@@ -811,8 +817,10 @@ mod test_flip_reward_distribution {
 			Flip::add_to_offchain_flip_to_be_distributed(300i128);
 			// Reserve not set → defaults to 0
 
-			let bridged =
-				Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([ALICE, BOB, CHARLIE]));
+			let bridged = Flip::trigger_flip_reward_distribution(
+				1,
+				BTreeSet::from_iter([ALICE, BOB, CHARLIE]),
+			);
 
 			// 100 offchain each, 0 onchain
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 100);
@@ -910,9 +918,10 @@ mod test_flip_reward_distribution {
 
 				let total_funds_before = total_funds();
 
-				let bridged = Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([
-					ALICE, BOB, CHARLIE,
-				]));
+				let bridged = Flip::trigger_flip_reward_distribution(
+					1,
+					BTreeSet::from_iter([ALICE, BOB, CHARLIE]),
+				);
 
 				// Distribution only moves funds between the reserve, validator balances, and the
 				// FlipToDistribute offchain-accounting offset - no funds are created or destroyed.

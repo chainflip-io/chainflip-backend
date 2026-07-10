@@ -967,6 +967,7 @@ impl_runtime_apis! {
 						}
 
 						<DelegatedRewardsDistribution<Runtime> as RewardsDistribution>::distribute(
+							epoch_index,
 							per_authority_share,
 							validator,
 							|account, amount| {
