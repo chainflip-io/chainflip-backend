@@ -338,15 +338,22 @@ impl<A> OperatorInfo<A> {
 	}
 }
 
-/// A single account's share of an epoch's projected reward, alongside its principal.
+/// A single account's cumulative cut of the FLIP 2.1 fee-reward pool for the in-progress epoch.
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct AccountReward<Amount> {
 	pub account: AccountId32,
-	pub role: AccountRole,
-	/// Principal (bond/delegated amount), used as the APY denominator.
-	pub bonded_amount: Amount,
-	/// Pure earnings on this account's principal, cumulative for the in-progress epoch.
+	/// The delegated bid (principal). Zero for operators.
+	pub bid: Amount,
+	/// Amount locked as bond. Equal to `bid` for delegators; zero for operators.
+	pub bond: Amount,
+	/// Pure earnings so far this epoch.
 	pub reward: Amount,
+	pub role: AccountRole,
+	/// The operator managing this node, if this account is a validator claimed by an operator.
+	pub managed_by: Option<AccountId32>,
+	/// The operator this account delegates to, if any (can be a regular delegator or a
+	/// delegating validator).
+	pub delegated_to: Option<AccountId32>,
 }
 
 impl<A> AccountReward<A> {
@@ -356,86 +363,19 @@ impl<A> AccountReward<A> {
 	) -> Result<AccountReward<B>, E> {
 		Ok(AccountReward {
 			account: self.account,
-			role: self.role,
-			bonded_amount: f(self.bonded_amount)?,
-			reward: f(self.reward)?,
-		})
-	}
-}
-
-/// Projected reward for an independent (non-delegated) validator, cumulative for the
-/// in-progress epoch.
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
-pub struct ValidatorRewardEstimate<Amount> {
-	pub account: AccountId32,
-	/// Principal.
-	pub bid: Amount,
-	/// Amount locked as this account's bond this epoch.
-	pub bond: Amount,
-	pub reward: Amount,
-}
-
-impl<A> ValidatorRewardEstimate<A> {
-	pub fn try_map_amounts<B, E>(
-		self,
-		f: impl Fn(A) -> Result<B, E>,
-	) -> Result<ValidatorRewardEstimate<B>, E> {
-		Ok(ValidatorRewardEstimate {
-			account: self.account,
 			bid: f(self.bid)?,
 			bond: f(self.bond)?,
 			reward: f(self.reward)?,
+			role: self.role,
+			managed_by: self.managed_by,
+			delegated_to: self.delegated_to,
 		})
 	}
 }
 
-/// Projected reward split for an operator and all validators/delegators associated with it,
-/// cumulative for the in-progress epoch.
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
-pub struct OperatorRewardEstimate<Amount> {
-	pub account: AccountId32,
-	/// The commission rate in effect for this epoch's snapshot.
-	pub commission_bps: u32,
-	/// Pure commission earned so far, excluding the operator's own managed nodes' earnings.
-	pub operator_reward: Amount,
-	/// Sum of managed-validator bids (uncapped).
-	pub total_validator_stake: Amount,
-	/// Sum of delegator bids (uncapped).
-	pub total_delegator_stake: Amount,
-	pub num_authority_nodes: u32,
-	pub validators: Vec<AccountReward<Amount>>,
-	pub delegators: Vec<AccountReward<Amount>>,
-}
-
-impl<A> OperatorRewardEstimate<A> {
-	pub fn try_map_amounts<B, E>(
-		self,
-		f: impl Fn(A) -> Result<B, E>,
-	) -> Result<OperatorRewardEstimate<B>, E> {
-		Ok(OperatorRewardEstimate {
-			account: self.account,
-			commission_bps: self.commission_bps,
-			operator_reward: f(self.operator_reward)?,
-			total_validator_stake: f(self.total_validator_stake)?,
-			total_delegator_stake: f(self.total_delegator_stake)?,
-			num_authority_nodes: self.num_authority_nodes,
-			validators: self
-				.validators
-				.into_iter()
-				.map(|v| v.try_map_amounts(&f))
-				.collect::<Result<_, E>>()?,
-			delegators: self
-				.delegators
-				.into_iter()
-				.map(|v| v.try_map_amounts(&f))
-				.collect::<Result<_, E>>()?,
-		})
-	}
-}
-
-/// A structured, per-epoch projection of FLIP 2.1 reward distribution, covering the current
-/// on-chain reward state and each operator/validator/delegator's cumulative cut so far this
-/// epoch. Returns empty `operators`/`solo_validators` (and zeroed pool amounts) if FLIP 2.1's
+/// A structured, per-epoch projection of FLIP 2.1 reward distribution: the current on-chain
+/// reward state and every operator/validator/delegator's cumulative cut so far this epoch.
+/// `reward_pool` is empty (and `total_rewards`/`per_authority_share` are zero) if FLIP 2.1's
 /// fee-reward distribution has not yet been activated for the current epoch.
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct RewardDistributionEstimate<Amount> {
@@ -443,18 +383,11 @@ pub struct RewardDistributionEstimate<Amount> {
 	pub current_block: BlockNumber,
 	pub current_epoch_started_at: BlockNumber,
 	pub epoch_duration: BlockNumber,
-
-	/// The current Minimum Active Bid.
 	pub bond: Amount,
 	pub authority_count: u32,
-	/// `Reserve[ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID]`.
-	pub pool_onchain_amount: Amount,
-	/// `FlipToDistribute`, clamped to be non-negative.
-	pub pool_offchain_amount: Amount,
+	pub total_rewards: Amount,
 	pub per_authority_share: Amount,
-
-	pub operators: Vec<OperatorRewardEstimate<Amount>>,
-	pub solo_validators: Vec<ValidatorRewardEstimate<Amount>>,
+	pub reward_pool: Vec<AccountReward<Amount>>,
 }
 
 impl<A> RewardDistributionEstimate<A> {
@@ -469,18 +402,12 @@ impl<A> RewardDistributionEstimate<A> {
 			epoch_duration: self.epoch_duration,
 			bond: f(self.bond)?,
 			authority_count: self.authority_count,
-			pool_onchain_amount: f(self.pool_onchain_amount)?,
-			pool_offchain_amount: f(self.pool_offchain_amount)?,
+			total_rewards: f(self.total_rewards)?,
 			per_authority_share: f(self.per_authority_share)?,
-			operators: self
-				.operators
+			reward_pool: self
+				.reward_pool
 				.into_iter()
-				.map(|o| o.try_map_amounts(&f))
-				.collect::<Result<_, E>>()?,
-			solo_validators: self
-				.solo_validators
-				.into_iter()
-				.map(|v| v.try_map_amounts(&f))
+				.map(|r| r.try_map_amounts(&f))
 				.collect::<Result<_, E>>()?,
 		})
 	}
