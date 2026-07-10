@@ -777,16 +777,8 @@ impl_runtime_apis! {
 				asset_map
 			};
 
-			let lending_supply_balances = AssetMap::from_fn(|asset| {
-
-				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).and_then(|pool| {
-
-					pool.get_supply_position_for_account(&account_id).ok()
-
-				}).unwrap_or_default()
-
-			});
-
+			// Note that we don't add supply balances since they are already included
+			// in collateral.
 			let lending_collateral_balances = {
 				let mut asset_map = AssetMap::<AssetAmount>::default();
 
@@ -799,12 +791,10 @@ impl_runtime_apis! {
 				asset_map
 			};
 
-
 			free_balances
 				.saturating_add(open_order_balances)
 				.saturating_add(boost_pools_balances)
 				.saturating_add(trading_strategies_balances)
-				.saturating_add(lending_supply_balances)
 				.saturating_add(lending_collateral_balances)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {

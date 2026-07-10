@@ -168,3 +168,84 @@ fn basic_lending() {
 			);
 		});
 }
+
+/// `cf_lp_total_balances` should correctly sum an LP's holdings across every balance category
+/// (free, open orders, boost pools, trading strategies and lending supply/collateral). This is
+/// a regression test for PRO-2985 where supply and collateral added separately despite one already
+/// being included in the other.
+#[test]
+fn lp_total_balances_sums_all_categories() {
+	use std::collections::BTreeMap;
+
+	use pallet_cf_lending_pools::{BoostPoolId, BOOST_FEE};
+	use state_chain_runtime::runtime_apis::custom_api::runtime_decl_for_custom_runtime_api::CustomRuntimeApi;
+
+	type TradingStrategyPallet = state_chain_runtime::TradingStrategy;
+	use pallet_cf_trading_strategy::TradingStrategy as Strategy;
+
+	const LP: AccountId = AccountId::new([0xf8; 32]);
+
+	const ASSET: Asset = Asset::Eth;
+	const FREE_AMOUNT: AssetAmount = 100_000_000_000;
+	const ORDER_AMOUNT: AssetAmount = 200_000_000_000;
+	const BOOST_AMOUNT: AssetAmount = 400_000_000_000;
+	const STRATEGY_AMOUNT: AssetAmount = 800_000_000_000;
+	const SUPPLY_AMOUNT: AssetAmount = 1_600_000_000_000;
+	const EXPECTED_TOTAL: AssetAmount =
+		FREE_AMOUNT + ORDER_AMOUNT + BOOST_AMOUNT + STRATEGY_AMOUNT + SUPPLY_AMOUNT;
+
+	super::genesis::with_test_defaults()
+		.with_additional_accounts(&[(LP, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP)])
+		.build()
+		.execute_with(|| {
+			ChainlinkOracle::set_price(ASSET, Price::at_tick_zero());
+			register_refund_addresses(&LP);
+			new_pool(ASSET, 0, Price::at_tick_zero());
+
+			// Free balance: credit and leave untouched.
+			credit_account(&LP, ASSET, FREE_AMOUNT);
+
+			// Open a limit order.
+			credit_account(&LP, ASSET, ORDER_AMOUNT);
+			set_limit_order(&LP, ASSET, Asset::Usdc, 0, Some(0), ORDER_AMOUNT);
+
+			// Boost pool contribution.
+			assert_ok!(LendingPools::create_boost_pools(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				vec![BoostPoolId { asset: ASSET, tier: BOOST_FEE }],
+			));
+			credit_account(&LP, ASSET, BOOST_AMOUNT);
+			assert_ok!(LendingPools::add_boost_funds(
+				RuntimeOrigin::signed(LP),
+				ASSET,
+				BOOST_AMOUNT,
+				BOOST_FEE,
+			));
+
+			// Trading strategy funds.
+			let no_threshold = BTreeMap::from_iter([(ASSET, 0), (Asset::Usdc, 0)]);
+			pallet_cf_trading_strategy::MinimumDeploymentAmountForStrategy::<Runtime>::set(
+				no_threshold.clone(),
+			);
+			pallet_cf_trading_strategy::MinimumAddedFundsToStrategy::<Runtime>::set(no_threshold);
+			credit_account(&LP, ASSET, STRATEGY_AMOUNT);
+			assert_ok!(TradingStrategyPallet::deploy_strategy(
+				RuntimeOrigin::signed(LP),
+				Strategy::TickZeroCentered { spread_tick: 1, base_asset: ASSET },
+				BTreeMap::from_iter([(ASSET, STRATEGY_AMOUNT)]),
+			));
+
+			// Lending supply (reported as collateral).
+			assert_ok!(LendingPools::new_lending_pool(ASSET));
+			credit_account(&LP, ASSET, SUPPLY_AMOUNT);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LP),
+				ASSET,
+				SUPPLY_AMOUNT,
+			));
+
+			// The total must be the sum of every category, each counted exactly once.
+			let totals = Runtime::cf_lp_total_balances(LP);
+			assert_eq!(totals[ASSET], EXPECTED_TOTAL);
+		});
+}
