@@ -143,11 +143,12 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		vote(
-			RawOrigin::Signed(validator_id.into()),
+			RawOrigin::Signed(validator_id.clone().into()),
 			Box::new(
 				BoundedBTreeMap::try_from(
 					election_identifiers
-						.into_iter()
+						.iter()
+						.copied()
 						.take(n as usize)
 						.map(|election_identifier| {
 							(
@@ -161,6 +162,19 @@ mod benchmarks {
 				)
 				.unwrap(),
 			),
+		);
+
+		let current_elections =
+			Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
+		assert_eq!(
+			election_identifiers
+				.iter()
+				.filter(|election_identifier| current_elections
+					.get(election_identifier)
+					.and_then(|election_data| election_data.option_existing_vote.as_ref())
+					.is_some())
+				.count(),
+			n as usize,
 		);
 	}
 
