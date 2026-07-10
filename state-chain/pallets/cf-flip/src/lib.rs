@@ -56,11 +56,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 use on_charge_transaction::CallIndexFor;
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	marker::PhantomData,
-	prelude::*,
-};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
 
@@ -580,32 +576,29 @@ impl<T: Config> Pallet<T> {
 			Zero::zero()
 		};
 
-		// Distribute evenly from the combined reserve. Any remainder stays for the next epoch.
-		let per_authority_reward = Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID) /
-			(authorities.len() as u128).into();
-
 		let mut flip_distributed_map = BTreeMap::new();
-		for authority in &authorities {
-			T::RewardsDistribution::distribute(
-				epoch_index,
-				per_authority_reward,
-				authority,
-				|account, amount| {
-					Pallet::<T>::settle(
-						account,
-						Pallet::<T>::withdraw_reserves(
-							ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
-							amount,
-						)
+		T::RewardsDistribution::distribute_all(
+			epoch_index,
+			Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID),
+			&authorities,
+			|account, amount| {
+				// Skip zero-value settlements: `distribute_all` calls this for every reward-pool
+				// participant, including ones with nothing due; avoid the wasted withdrawal/event
+				// noise here rather than baking that policy into the shared distribution logic.
+				if amount.is_zero() {
+					return;
+				}
+				Pallet::<T>::settle(
+					account,
+					Pallet::<T>::withdraw_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
 						.into(),
-					);
-					flip_distributed_map
-						.entry(account.clone())
-						.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
-						.or_insert(amount);
-				},
-			);
-		}
+				);
+				flip_distributed_map
+					.entry(account.clone())
+					.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
+					.or_insert(amount);
+			},
+		);
 
 		Self::deposit_event(Event::FlipDistributed {
 			amounts: flip_distributed_map.into_iter().collect(),

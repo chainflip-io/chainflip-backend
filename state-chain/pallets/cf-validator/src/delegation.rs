@@ -13,19 +13,25 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use crate::{AuctionOutcome, Config, DelegationSnapshots, Pallet, ValidatorToOperator};
+use crate::{
+	AuctionOutcome, Config, DelegationSnapshots, HistoricalBonds, Pallet, ValidatorToOperator,
+};
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
-	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill},
+	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill, Saturating},
 	traits::IsType,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	marker::PhantomData,
+	prelude::*,
+};
 
 pub const DEFAULT_MIN_OPERATOR_FEE: u32 = 1_500;
 pub const MAX_OPERATOR_FEE: u32 = 10_000;
@@ -357,6 +363,43 @@ where
 	) {
 		distribute::<T>(epoch_index, beneficiary, reward_amount, settle);
 	}
+
+	/// `beneficiaries` must be exactly `epoch_index`'s full authority set. For a partial
+	/// set, call `distribute` directly per beneficiary instead.
+	fn distribute_all(
+		epoch_index: EpochIndex,
+		total_amount: Self::Balance,
+		beneficiaries: &[Self::AccountId],
+		mut settle: impl FnMut(&T::AccountId, T::Amount),
+	) {
+		if beneficiaries.is_empty() {
+			return;
+		}
+		let per_beneficiary_amount = total_amount / (beneficiaries.len() as u32).into();
+
+		// `snapshot.validators` is exactly this operator's set of `epoch_index` authorities
+		// (it's the source `ValidatorToOperator` is populated from at registration), so the
+		// snapshot alone tells us both which operators have authorities this epoch and how
+		// many - no per-authority `ValidatorToOperator` lookup needed.
+		let mut rewarded: BTreeSet<T::AccountId> = BTreeSet::new();
+		for (_operator, snapshot) in DelegationSnapshots::<T>::iter_prefix(epoch_index) {
+			let count = snapshot.validators.len() as u32;
+			if count == 0 {
+				continue;
+			}
+			rewarded.extend(snapshot.validators.keys().cloned());
+			let total = per_beneficiary_amount.saturating_mul(count.into());
+			snapshot
+				.distribute(total, HistoricalBonds::<T>::get(epoch_index))
+				.for_each(|(account, amount)| settle(account, amount));
+		}
+
+		for beneficiary in beneficiaries {
+			if !rewarded.contains(beneficiary) {
+				settle(beneficiary, per_beneficiary_amount);
+			}
+		}
+	}
 }
 
 pub struct DelegationSlasher<T, S>(PhantomData<(T, S)>);
@@ -404,11 +447,9 @@ pub fn distribute<T: Config>(
 
 	if let Some(operator) = ValidatorToOperator::<T>::get(epoch_index, validator) {
 		if let Some(snapshot) = DelegationSnapshots::<T>::get(epoch_index, &operator) {
-			snapshot.distribute(total, Pallet::<T>::bond()).for_each(|(account, amount)| {
-				if amount > Zero::zero() {
-					settle(account, amount);
-				}
-			});
+			snapshot
+				.distribute(total, HistoricalBonds::<T>::get(epoch_index))
+				.for_each(|(account, amount)| settle(account, amount));
 		} else {
 			settle(validator, total);
 			cf_runtime_utilities::log_or_panic!(
@@ -469,6 +510,67 @@ mod tests {
 					sum, total_to_distribute,
 					"Sum of distributions ({}) does not equal total ({})",
 					sum, total_to_distribute
+				);
+
+				Ok(())
+			});
+		}
+	}
+
+	proptest! {
+		#[test]
+		fn distribute_all_sums_to_total(
+			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
+			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 0..50),
+			per_beneficiary_amount in 1u128..10_000u128,
+			delegation_fee_bps in 2_000u32..10_000u32,
+			bond in 100_000u128..10_000_000u128,
+		) {
+			const EPOCH: EpochIndex = 1;
+			let operator_account = 1u64;
+			let per_beneficiary_amount = per_beneficiary_amount * FLIPPERINOS_PER_FLIP;
+			let bond = bond * FLIPPERINOS_PER_FLIP;
+
+			let validators: BTreeMap<ValidatorId, u128> = validator_amounts.iter().enumerate()
+				.map(|(i, amount)| (i as u64 + 100, *amount * FLIPPERINOS_PER_FLIP))
+				.collect();
+			let delegators: BTreeMap<ValidatorId, u128> = delegator_amounts.iter().enumerate()
+				.map(|(i, amount)| (i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP))
+				.collect();
+			// Every validator in the snapshot is a beneficiary this epoch - the precondition
+			// `distribute_all` relies on to derive authority counts from the snapshot alone.
+			let beneficiaries: Vec<ValidatorId> = validators.keys().cloned().collect();
+			// Constructed as an exact multiple of beneficiaries.len() so the internal division
+			// in `distribute_all` recovers `per_beneficiary_amount` exactly (no remainder).
+			let total_amount = per_beneficiary_amount * beneficiaries.len() as u128;
+
+			new_test_ext().execute_with(|| {
+				crate::HistoricalBonds::<Test>::insert(EPOCH, bond);
+
+				DelegationSnapshot::<ValidatorId, u128> {
+					operator: operator_account,
+					validators,
+					delegators,
+					delegation_fee_bps,
+				}.register_for_epoch::<Test>(EPOCH);
+
+				let mut settled: BTreeMap<ValidatorId, u128> = BTreeMap::new();
+				DelegatedRewardsDistribution::<Test>::distribute_all(
+					EPOCH,
+					total_amount,
+					&beneficiaries,
+					|account, amount| {
+						settled.entry(*account).and_modify(|a| *a += amount).or_insert(amount);
+					},
+				);
+
+				// Property: the sum of all settled amounts equals total_amount, exactly like
+				// beneficiaries.len() separate `distribute` calls would sum to.
+				let sum: u128 = settled.values().sum();
+				prop_assert_eq!(
+					sum, total_amount,
+					"Sum of settled amounts ({}) does not equal expected total ({})",
+					sum, total_amount
 				);
 
 				Ok(())

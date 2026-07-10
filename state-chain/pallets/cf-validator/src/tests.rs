@@ -3395,7 +3395,7 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		const REWARD_AMOUNT: u128 = 100_000u128;
 
 		crate::CurrentEpoch::<Test>::put(EPOCH);
-		crate::Bond::<Test>::put(BOND);
+		crate::HistoricalBonds::<Test>::insert(EPOCH, BOND);
 
 		DelegationSnapshot::<u64, u128> {
 			operator: OPERATOR,
@@ -3434,6 +3434,81 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		// Verify total
 		let total_minted: u128 = minted.values().sum();
 		assert_eq!(total_minted, REWARD_AMOUNT);
+	});
+}
+
+#[test]
+fn distribute_all_matches_looped_distribute() {
+	use crate::delegation::DelegatedRewardsDistribution;
+	use cf_traits::RewardsDistribution;
+
+	new_test_ext().execute_with(|| {
+		const VALIDATOR_A: u64 = 100;
+		const VALIDATOR_B: u64 = 101;
+		const OPERATOR: u64 = 200;
+		const DELEGATOR1: u64 = 300;
+		const DELEGATOR2: u64 = 400;
+		const SOLO_VALIDATOR: u64 = 500;
+
+		const EPOCH: u32 = 10;
+		const BOND: u128 = 1_000_000u128;
+		const PER_BENEFICIARY_AMOUNT: u128 = 100_000u128;
+
+		crate::CurrentEpoch::<Test>::put(EPOCH);
+		crate::HistoricalBonds::<Test>::insert(EPOCH, BOND);
+
+		DelegationSnapshot::<u64, u128> {
+			operator: OPERATOR,
+			validators: [(VALIDATOR_A, 200_000u128), (VALIDATOR_B, 300_000u128)]
+				.into_iter()
+				.collect(),
+			delegators: [(DELEGATOR1, 500_000u128), (DELEGATOR2, 1_500_000u128)]
+				.into_iter()
+				.collect(),
+			delegation_fee_bps: 2000, // 20% fee
+		}
+		.register_for_epoch::<Test>(EPOCH);
+
+		let beneficiaries = [VALIDATOR_A, VALIDATOR_B, SOLO_VALIDATOR];
+
+		// Ground truth: loop `distribute` once per beneficiary (the trait's default
+		// `distribute_all` behaviour), accumulating into a single map.
+		let mut looped = BTreeMap::new();
+		for beneficiary in &beneficiaries {
+			DelegatedRewardsDistribution::<Test>::distribute(
+				EPOCH,
+				PER_BENEFICIARY_AMOUNT,
+				beneficiary,
+				|account, amount| {
+					looped
+						.entry(*account)
+						.and_modify(|a: &mut u128| *a += amount)
+						.or_insert(amount);
+				},
+			);
+		}
+
+		let mut batched = BTreeMap::new();
+		DelegatedRewardsDistribution::<Test>::distribute_all(
+			EPOCH,
+			PER_BENEFICIARY_AMOUNT * beneficiaries.len() as u128,
+			&beneficiaries,
+			|account, amount| {
+				batched
+					.entry(*account)
+					.and_modify(|a: &mut u128| *a += amount)
+					.or_insert(amount);
+			},
+		);
+
+		assert_eq!(batched, looped);
+
+		// The solo authority (no operator) is settled with its full share directly.
+		assert_eq!(batched.get(&SOLO_VALIDATOR), Some(&PER_BENEFICIARY_AMOUNT));
+
+		// Total settled equals beneficiaries.len() * per_beneficiary_amount.
+		let total: u128 = batched.values().sum();
+		assert_eq!(total, PER_BENEFICIARY_AMOUNT * beneficiaries.len() as u128);
 	});
 }
 
