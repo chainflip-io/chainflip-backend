@@ -17,13 +17,13 @@
 use crate::{
 	bitmap_components::ElectionBitmapComponents,
 	electoral_system::{AuthorityVoteOf, IndividualComponentOf, VotePropertiesOf},
+	electoral_system_runner::RunnerStorageAccessTrait,
 	vote_storage::VoteStorage,
 	*,
 };
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
-use core::iter;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -110,28 +110,54 @@ mod benchmarks {
 		election_identifier
 	}
 
+	fn active_election_identifiers_for_vote<T: crate::pallet::Config<I>, I: 'static>(
+		validator_id: &T::ValidatorId,
+		count: u32,
+	) -> Vec<ElectionIdentifierOf<T::ElectoralSystemRunner>> {
+		let elections = Pallet::<T, I>::electoral_data(validator_id).unwrap().current_elections;
+		let (&template_election_identifier, template_election_data) =
+			elections.iter().next().unwrap();
+		let mut election_identifiers = vec![template_election_identifier];
+		let template_state =
+			ElectionState::<T, I>::get(template_election_identifier.unique_monotonic()).unwrap();
+
+		while election_identifiers.len() < count as usize {
+			election_identifiers.push(
+				RunnerStorageAccess::<T, I>::new_election(
+					*template_election_identifier.extra(),
+					template_election_data.properties.clone(),
+					template_state.clone(),
+				)
+				.unwrap(),
+			);
+		}
+
+		election_identifiers
+	}
+
 	#[benchmark]
-	fn vote(n: Linear<1, 10>) {
+	fn vote(n: Linear<1, MAXIMUM_VOTES_PER_EXTRINSIC>) {
 		let validator_id: T::ValidatorId = ready_validator_for_vote::<T, I>(1)[0].clone().into();
 
-		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
-		let next_election = elections.into_iter().next().unwrap();
+		let election_identifiers = active_election_identifiers_for_vote::<T, I>(&validator_id, n);
 
 		#[extrinsic_call]
 		vote(
 			RawOrigin::Signed(validator_id.into()),
 			Box::new(
 				BoundedBTreeMap::try_from(
-					iter::repeat_n(
-						(
-							next_election.0,
-							AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
-								BenchmarkValue::benchmark_value(),
-							),
-						),
-						n as usize,
-					)
-					.collect::<BTreeMap<_, _>>(),
+					election_identifiers
+						.into_iter()
+						.take(n as usize)
+						.map(|election_identifier| {
+							(
+								election_identifier,
+								AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+									BenchmarkValue::benchmark_value(),
+								),
+							)
+						})
+						.collect::<BTreeMap<_, _>>(),
 				)
 				.unwrap(),
 			),
@@ -643,7 +669,7 @@ mod benchmarks {
 		}
 
 		benchmark_tests! {
-			test_vote: _vote(10),
+			test_vote: _vote(MAXIMUM_VOTES_PER_EXTRINSIC),
 			test_stop_ignoring_my_votes: _stop_ignoring_my_votes(),
 			test_ignore_my_votes: _ignore_my_votes(),
 			test_recheck_contributed_to_consensuses: _recheck_contributed_to_consensuses(),
