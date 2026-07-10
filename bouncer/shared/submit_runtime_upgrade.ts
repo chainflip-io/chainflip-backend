@@ -3,7 +3,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { decodeDispatchError, sleep } from 'shared/utils';
 import type { CfPrimitivesSemVer } from 'generated/chaintypes/chainflip-node';
 import { tryRuntimeUpgrade } from 'shared/try_runtime_upgrade';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipApi, clearChainflipClientCache } from 'shared/utils/substrate';
 import { throwError } from 'shared/utils/logger';
 import { systemCodeUpdatedEvent } from 'generated/events/system/codeUpdated';
 import { governanceFailedExecutionEvent } from 'generated/events/governance/failedExecution';
@@ -78,6 +78,11 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
   await sleep(20000);
 
   cf.info('Runtime upgrade completed.');
+
+  // The runtime upgrade changes the metadata (e.g. new pallets shift call indices). Drop the cached
+  // dedot client so the next extrinsic is built and submitted against a fresh client that loads the
+  // new runtime's metadata from scratch.
+  await clearChainflipClientCache();
 
   cf.info('Restoring MissedAuthorshipSlot penalty defaults after runtime upgrade.');
   await cf.submitGovernance({
