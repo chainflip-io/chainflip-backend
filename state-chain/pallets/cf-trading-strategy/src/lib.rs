@@ -36,8 +36,7 @@ use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABL
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
-	IncreaseOrDecrease, PoolApi, PriceFeedApi, RefundAddressRegistry,
-	Side,
+	IncreaseOrDecrease, PoolApi, PriceFeedApi, RefundAddressRegistry, Side,
 };
 
 use frame_support::{

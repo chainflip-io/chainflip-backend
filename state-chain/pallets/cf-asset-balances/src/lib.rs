@@ -423,7 +423,7 @@ pub mod pallet {
 			let mut pending = PendingChanges::<T>::get();
 
 			// Abort if no changes matured:
-			if !pending.first_key_value().is_some_and(|(&time, _)| time <= now) {
+			if pending.first_key_value().is_none_or(|(&time, _)| time > now) {
 				return used_weight;
 			}
 
