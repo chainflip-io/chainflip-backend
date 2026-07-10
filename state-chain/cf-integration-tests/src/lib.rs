@@ -33,6 +33,7 @@ mod grandpa_delegation;
 mod historical_compatibility;
 mod lending;
 mod new_epoch;
+mod rewards;
 mod solana;
 mod swapping;
 mod trading_strategy;
