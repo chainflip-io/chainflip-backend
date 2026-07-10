@@ -88,6 +88,17 @@ macro_rules! define_all_runtime_versions {
         /// }
         /// ```
         ///
+        /// For enums, newly added variants can be marked in the same style:
+        ///
+        /// ```ignore
+        /// impl HasChangelog for RpcEnum {
+        ///     type if_unspecified = _RpcEnum::see_variant_changelogs;
+        ///     type in_20200 = _RpcEnum::see_variant_changelogs_and_also<
+        ///         _RpcEnum::variant::NewVariant::Added,
+        ///     >;
+        /// }
+        /// ```
+        ///
         /// ## Migration sequence
         ///
         /// The migrations specified in the changelog form a sequence. Every migration targets the `Migration::From` type

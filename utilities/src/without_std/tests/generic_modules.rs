@@ -14,16 +14,36 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod bounded_vec;
-pub mod conditional;
-pub mod generate_module;
-pub mod migrations;
-pub mod never;
-pub mod select;
-#[cfg(test)]
-mod tests;
-pub mod type_introspection;
+#![cfg(test)]
+#![allow(unused)]
 
-pub const fn bs58_array<const S: usize>(s: &'static str) -> [u8; S] {
-	bs58::decode(s.as_bytes()).into_array_const_unwrap()
+pub trait T1 {
+	type XY;
+}
+
+trait Good {
+	type Bad;
+}
+
+cf_proc_macros::generic_modules! {
+	mod (A: T1) {
+		type MyType = A::XY;
+		type Bla = u16;
+		struct ThisIsS {
+			value: A::XY,
+		}
+		mod (B: Clone) where (B: Clone) {
+			struct InnerWithBoth {
+				a: A,
+				b: B,
+			}
+			type MyVal = InnerWithBoth;
+		}
+		struct Without {
+			value: bool,
+		}
+		impl Good for ThisIsS {
+			type Bad = u8;
+		}
+	}
 }
