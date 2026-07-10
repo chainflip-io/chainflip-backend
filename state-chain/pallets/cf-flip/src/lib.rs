@@ -109,7 +109,7 @@ pub mod pallet {
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
 
-	pub const ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID: ReserveId = *b"FEES";
+	pub(crate) const ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID: ReserveId = *b"FEES";
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -607,6 +607,15 @@ impl<T: Config> Pallet<T> {
 			amount: flip_distributed_map.into_iter().collect(),
 		});
 		offchain_flip_bridged
+	}
+
+	/// Fee rewards pending distribution to authorities: the balance of the on-chain distribution
+	/// reserve plus any off-chain accumulated fees (which may be negative).
+	pub fn pending_rewards() -> i128 {
+		Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID)
+			.try_into()
+			.unwrap_or(i128::MAX)
+			.saturating_add(FlipToDistribute::<T>::get())
 	}
 
 	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
