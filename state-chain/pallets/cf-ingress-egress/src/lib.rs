@@ -78,6 +78,12 @@ pub use weights::WeightInfo;
 
 const MARKED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
+struct ChannelLifecycle<T: Config<I>, I: 'static> {
+	opened_at: TargetChainBlockNumber<T, I>,
+	expires_at: TargetChainBlockNumber<T, I>,
+	recycles_at: TargetChainBlockNumber<T, I>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default)]
 pub enum BoostStatus<ChainAmount, BlockNumber> {
 	// If a (pre-witnessed) deposit on a channel has been boosted, we record
@@ -2855,7 +2861,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// if the corresponding full witness never arrives. (Deposit channels
 					// don't need this — they are cleaned up via recycling.)
 					if let DepositOrigin::Vault { tx_id, .. } = &origin {
-						let expiry_height = Self::expiry_and_recycle_block_height().2;
+						let expiry_height = Self::expiry_and_recycle_block_height().recycles_at;
 						BoostedVaultTransactionExpiry::<T, I>::mutate(|expiry_queue| {
 							expiry_queue.insert(tx_id.clone(), (expiry_height, asset));
 						});
@@ -3422,9 +3428,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn expiry_and_recycle_block_height(
-	) -> (TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>)
-	{
+	fn expiry_and_recycle_block_height() -> ChannelLifecycle<T, I> {
 		// Goals:
 		// 1. When chain tracking reaches a particular block number, we want to be able to process
 		//   that block immediately on the CFE.
@@ -3457,7 +3461,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		debug_assert!(current_height < expiry_height);
 		debug_assert!(expiry_height < recycle_height);
 
-		(current_height, expiry_height, recycle_height)
+		ChannelLifecycle {
+			opened_at: current_height,
+			expires_at: expiry_height,
+			recycles_at: recycle_height,
+		}
 	}
 
 	/// Generates a new deposit channel for the given asset
@@ -3544,12 +3552,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok::<_, DispatchError>(deposit_channel)
 		})?;
 
-		let (current_height, expiry_height, recycle_height) =
+		let ChannelLifecycle { opened_at, expires_at, recycles_at } =
 			Self::expiry_and_recycle_block_height();
 
 		if T::MANAGE_CHANNEL_LIFETIME {
 			DepositChannelRecycleBlocks::<T, I>::append((
-				recycle_height,
+				recycles_at,
 				deposit_channel.address.clone(),
 			));
 		}
@@ -3559,8 +3567,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			DepositChannelDetails {
 				owner: requester.clone(),
 				deposit_channel: deposit_channel.clone(),
-				opened_at: current_height,
-				expires_at: expiry_height,
+				opened_at,
+				expires_at,
 				action,
 				boost_fee,
 				boost_status: BoostStatus::NotBoosted,
@@ -3570,11 +3578,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		<T::IngressSource as IngressSource>::open_channel(
 			deposit_channel.address.clone(),
 			deposit_channel.asset,
-			expiry_height,
+			expires_at,
 			<frame_system::Pallet<T>>::block_number(),
 		)?;
 
-		Ok((deposit_channel, expiry_height, channel_opening_fee))
+		Ok((deposit_channel, expires_at, channel_opening_fee))
 	}
 
 	pub fn get_failed_call(broadcast_id: BroadcastId) -> Option<FailedForeignChainCall> {

@@ -412,7 +412,8 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 		// When the channel expires, the record holding amounts owed to boosters
 		// from the deposit is cleared:
 		{
-			let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+			let recycle_block =
+				EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 			set_eth_processed_up_to(recycle_block);
 			EthereumIngressEgress::on_idle(recycle_block, Weight::MAX);
 
@@ -847,9 +848,20 @@ mod vault_swaps {
 				);
 			})
 			.then_execute_at_next_block(|_| {
+				// Raise the processed height just before to its expiry to make sure we haven't
+				// processed it as lost prematurely:
+				let recycle_block =
+					EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
+				set_eth_processed_up_to(recycle_block - 1);
+			})
+			.then_execute_with(|_| {
+				assert!(MockBoostApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
+			})
+			.then_execute_at_next_block(|_| {
 				// The deposit is never fully witnessed. Raise the processed height to its expiry
 				// so that on_idle (run at the end of this block) deems it lost:
-				let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+				let recycle_block =
+					EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 				set_eth_processed_up_to(recycle_block);
 			})
 			.then_execute_with(|_| {
@@ -892,7 +904,8 @@ mod vault_swaps {
 			})
 			.then_execute_at_next_block(|_| {
 				// Reaching the would-be expiry height must not deem the finalised deposit lost:
-				let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+				let recycle_block =
+					EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 				set_eth_processed_up_to(recycle_block);
 			})
 			.then_execute_with(|_| {
