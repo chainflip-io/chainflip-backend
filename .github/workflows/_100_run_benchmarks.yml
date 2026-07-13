@@ -3,11 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: "Which Commit SHA should we get the binaries from?"
-        required: true
-        type: string
-      base_branch_name:
-        description: "Which Branch should the Results PR be opened against?"
+        description: "Which Commit SHA should we get the binaries from? Must have a completed ci-benchmarks build (pushes to main / release/*)."
         required: true
         type: string
       steps:
@@ -35,14 +31,7 @@ on:
         options:
           - production
           - release
-      binary_artefact_source:
-        description: "Which source should we use for the binary artefact?"
-        required: false
-        type: choice
-        options:
-          - main
-          - release
-        default: release
+        default: production
 
 env:
   FORCE_COLOR: 1
@@ -81,10 +70,20 @@ jobs:
           FULL_SHA=$(git rev-parse "${{ inputs.commit_sha }}")
           echo "full_sha=$FULL_SHA" >> "$GITHUB_OUTPUT"
 
+      # Binaries for main commits are built by ci-benchmarks-main.yml, for
+      # release/* commits by ci-benchmarks-release.yml.
+      - name: Determine binary artefact source
+        id: artefact-source
+        run: |
+          case "$GITHUB_REF_NAME" in
+            release/*) echo "source=release" >> "$GITHUB_OUTPUT" ;;
+            *) echo "source=main" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Fetch chainflip-node with benchmarks from ${{ inputs.commit_sha }}
         uses: dawidd6/action-download-artifact@fe9d59ce33ce92db8a6ac90b2c8be6b6d90417c8
         with:
-          workflow: ci-benchmarks-${{ inputs.binary_artefact_source }}.yml
+          workflow: ci-benchmarks-${{ steps.artefact-source.outputs.source }}.yml
           workflow_conclusion: completed
           name: chainflip-node-ubuntu-benchmarks-${{ inputs.profile }}
           commit: ${{ steps.resolve-sha.outputs.full_sha }}
@@ -126,7 +125,7 @@ jobs:
       - name: Make a pull request with the changed weight files 🕯️
         uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38
         with:
-          base: ${{ inputs.base_branch_name }}
+          base: ${{ github.ref_name }}
           title: "[AUTOMATED] Benchmark results"
           commit-message: "[AUTOMATED] Benchmarking results."
           body: ${{ env.PR_BODY }}
