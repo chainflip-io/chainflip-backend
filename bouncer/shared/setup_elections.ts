@@ -74,6 +74,15 @@ export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> 
   } else {
     cf.info('Ignoring Oracle elections setup as genericElections pallet is not available.');
   }
+
+  // The DM uses the ingress_events rpc for Arbitrum, so an ingress delay is required for BLS to work.
+  const arbitrumIngressDelay = 2;
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.arbitrumIngressEgress.updatePalletConfig([
+      { SetIngressDelayArbitrum: { delayBlocks: arbitrumIngressDelay } },
+    ]),
+  );
+  cf.info(`Ingress delay for Arbitrum set to ${arbitrumIngressDelay} `);
 }
 
 export async function setupWitnessing<A>(cf: ChainflipIO<A>) {
