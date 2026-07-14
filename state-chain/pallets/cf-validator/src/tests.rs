@@ -682,6 +682,26 @@ fn test_reputation_is_reset_on_expired_epoch() {
 		assert!(MockReputationResetter::<Test>::reputation_was_reset());
 	});
 }
+#[test]
+fn epoch_transition_hooks_straddle_the_epoch_increment() {
+	new_test_ext().execute_with(|| {
+		let old_epoch = ValidatorPallet::current_epoch();
+		let _ = TestEpochTransitionHandler::take_hook_calls();
+
+		ValidatorPallet::transition_to_next_epoch(vec![1, 2], 100);
+
+		// `on_epoch_ending` must observe the ending epoch as current (reward distribution
+		// relies on this), `on_new_epoch` the new one.
+		assert_eq!(
+			TestEpochTransitionHandler::take_hook_calls(),
+			vec![
+				(EpochTransitionHook::EpochEnding, old_epoch, old_epoch),
+				(EpochTransitionHook::NewEpoch, old_epoch + 1, old_epoch + 1),
+			]
+		);
+	});
+}
+
 #[cfg(test)]
 mod bond_expiry {
 	use super::*;

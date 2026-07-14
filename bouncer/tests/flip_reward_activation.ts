@@ -107,8 +107,9 @@ export async function testFlipRewardActivation(testContext: TestContext) {
   const epochAfterActivation = await cf.stepUntilEvent(validatorNewEpochEvent);
   assert.strictEqual(epochAfterActivation, activationEpoch + 1);
 
-  // The epoch following activation distributes accrued fee rewards to authorities. With real
-  // swap volume behind it, a non-zero amount should actually have been distributed.
+  // The fee rewards accrued during the activation epoch are distributed at its end, in the same
+  // block as the transition to the next epoch. With real swap volume behind it, a non-zero
+  // amount should actually have been distributed.
   const distributed = await cf.expectEvent(flipFlipDistributedEvent);
   const totalDistributed = distributed.amounts.reduce((sum, [, amount]) => sum + amount, 0n);
   assert.ok(

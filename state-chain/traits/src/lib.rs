@@ -284,6 +284,10 @@ pub enum StartKeyActivationResult {
 pub trait EpochTransitionHandler {
 	/// When an epoch has been expired.
 	fn on_expired_epoch(_expired: EpochIndex) {}
+	/// When an epoch is ending. Called in the same block as [Self::on_new_epoch], but *before*
+	/// the epoch index is incremented, so `EpochInfo::epoch_index()` still returns the ending
+	/// epoch.
+	fn on_epoch_ending(_ending: EpochIndex) {}
 	/// When a new epoch has started.
 	fn on_new_epoch(_new: EpochIndex) {}
 }
