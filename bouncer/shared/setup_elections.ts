@@ -3,15 +3,31 @@ import { ChainflipIO } from 'shared/utils/chainflip_io';
 import type { ChainflipClient } from 'shared/utils/dedot';
 
 export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
-  await cf.submitGovernance({
-    extrinsic: (api) =>
-      api.tx.solanaIngressEgress.updatePalletConfig([
-        {
-          type: 'SetIngressDelaySolana',
-          value: { delayBlocks: 15 },
-        },
-      ]),
-  });
+  await cf.all([
+    // Solana ingress is very fast so an ingress delay is required for BLS to work.
+    (c) =>
+      c.submitGovernance({
+        extrinsic: (api) =>
+          api.tx.solanaIngressEgress.updatePalletConfig([
+            {
+              type: 'SetIngressDelaySolana',
+              value: { delayBlocks: 15 },
+            },
+          ]),
+      }),
+
+    // The DM uses the ingress_events rpc for Arbitrum, so an ingress delay is required for BLS to work.
+    (c) =>
+      c.submitGovernance({
+        extrinsic: (api) =>
+          api.tx.arbitrumIngressEgress.updatePalletConfig([
+            {
+              type: 'SetIngressDelayArbitrum',
+              value: { delayBlocks: 2 },
+            },
+          ]),
+      }),
+  ]);
 }
 
 // dedot's query proxy throws on an unknown pallet, so check the metadata before touching one (these
