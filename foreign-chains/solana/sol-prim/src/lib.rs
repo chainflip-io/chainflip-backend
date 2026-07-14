@@ -17,6 +17,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use crate::{address::Address, digest::Digest, signature::Signature};
+use cf_utilities::impl_identity_migrations;
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::str::FromStr;
 use generic_array::{typenum::U64, GenericArray};
@@ -743,3 +744,5 @@ impl FromStr for Hash {
 		}
 	}
 }
+
+impl_identity_migrations! { Address, }

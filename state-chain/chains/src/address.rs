@@ -67,6 +67,7 @@ pub trait AddressDerivationApi<C: Chain> {
 	) -> Result<(C::ChainAccount, C::DepositChannelState), AddressDerivationError>;
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(
 	Clone,
 	Debug,
@@ -91,6 +92,9 @@ pub enum ForeignChainAddress {
 	Hub(<Assethub as Chain>::ChainAccount),
 	Tron(<Tron as Chain>::ChainAccount),
 	Bsc(<Bsc as Chain>::ChainAccount),
+}
+impl HasChangelog for ForeignChainAddress {
+	type if_unspecified = _ForeignChainAddress::see_variant_changelogs;
 }
 
 impl ForeignChainAddress {
