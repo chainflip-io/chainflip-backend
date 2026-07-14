@@ -35,6 +35,7 @@ sha2-const = { workspace = true }
 thiserror = { workspace = true, optional = true }
 codec = { workspace = true, optional = true, features = ["derive"] }
 scale-info = { workspace = true, optional = true, features = ["derive"] }
+duplicate = { workspace = true }
 
 
 sp-std = { workspace = true }

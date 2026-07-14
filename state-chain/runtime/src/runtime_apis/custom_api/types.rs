@@ -91,6 +91,7 @@ pub enum NonceOrAccount {
 	Account(AccountId32),
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Serialize, Deserialize, Debug)]
 pub struct LendingPosition<Amount> {
 	#[serde(flatten)]
@@ -99,6 +100,9 @@ pub struct LendingPosition<Amount> {
 	pub total_amount: Amount,
 	// Total amount available to the lender (equals total_amount if the pool has enough liquidity)
 	pub available_amount: Amount,
+}
+impl<Amount: HasChangelog> HasChangelog for LendingPosition<Amount> {
+	type if_unspecified = _LendingPosition::see_field_changelogs;
 }
 
 pub type VanityName = Vec<u8>;
@@ -434,6 +438,7 @@ impl HasChangelog for LiquidityProviderBoostPoolInfo {
 	type if_unspecified = _LiquidityProviderBoostPoolInfo::see_field_changelogs;
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
@@ -442,6 +447,10 @@ pub struct LiquidityProviderInfo {
 	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
 	pub lending_positions: Vec<LendingPosition<AssetAmount>>,
 	pub collateral_balances: Vec<(Asset, AssetAmount)>,
+}
+
+impl HasChangelog for LiquidityProviderInfo {
+	type if_unspecified = _LiquidityProviderInfo::see_field_changelogs;
 }
 
 #[derive(Encode, Decode, TypeInfo, DefaultNoBound)]

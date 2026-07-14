@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use cf_utilities::migrations::HasChangelog;
 pub use frame_support::traits::Get;
 use sp_std::{fmt, fmt::Display, str::FromStr};
 
@@ -46,6 +47,7 @@ macro_rules! chains {
 			}
 		)+
 
+        #[cf_proc_macros::generate_module]
 		#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Copy, Hash)]
 		#[derive(Serialize, Deserialize)]
 		#[repr(u32)]
@@ -157,6 +159,14 @@ impl ForeignChain {
 			ForeignChain::Bsc => true,
 		}
 	}
+}
+
+impl HasChangelog for ForeignChain {
+	type if_unspecified = _ForeignChain::see_variant_changelogs;
+	type in_20200 =
+		_ForeignChain::see_variant_changelogs_and_also<_ForeignChain::variant::Tron::Added>;
+	type in_20300 =
+		_ForeignChain::see_variant_changelogs_and_also<_ForeignChain::variant::Bsc::Added>;
 }
 
 #[test]
