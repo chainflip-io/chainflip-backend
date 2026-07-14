@@ -438,9 +438,12 @@ export async function runWithTimeout<T>(
 }
 
 /// Runs the given promise with a timeout and handles exiting the process. Used for running commands.
+/// Pass `logExecutionTime: false` for commands whose stdout must stay clean (e.g. JSON meant for
+/// piping)
 export async function runWithTimeoutAndExit<T>(
   promise: Promise<T>,
   seconds: number,
+  logExecutionTime = true,
 ): Promise<void> {
   const start = Date.now();
   const taskDescription = process.argv[1].split('/').pop() || 'unknown task';
@@ -450,10 +453,14 @@ export async function runWithTimeoutAndExit<T>(
   });
   const executionTime = (Date.now() - start) / 1000;
 
-  if (executionTime > seconds * 0.9) {
-    console.warn(`Warning: Execution time was close to the timeout: ${executionTime}/${seconds}s`);
-  } else {
-    console.log(`Execution time: ${executionTime}/${seconds}s`);
+  if (logExecutionTime) {
+    if (executionTime > seconds * 0.9) {
+      console.warn(
+        `Warning: Execution time was close to the timeout: ${executionTime}/${seconds}s`,
+      );
+    } else {
+      console.log(`Execution time: ${executionTime}/${seconds}s`);
+    }
   }
   process.exit(0);
 }
