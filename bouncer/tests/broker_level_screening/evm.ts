@@ -140,7 +140,7 @@ export async function testEvm<A = []>(
       )
     : Promise.resolve();
 
-  if (sourceAsset === chainGasAsset('Ethereum')) {
+  if (sourceAsset === chainGasAsset(chain)) {
     await send(cf.logger, sourceAsset, swapParams.depositAddress);
     cf.debug(`Sent initial ${sourceAsset} tx...`);
 
@@ -296,7 +296,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
 
   cf.debug(`Got deposit address: ${depositAddress}`);
 
-  if (sourceAsset === chainGasAsset('Ethereum') || sourceAsset === chainGasAsset('Arbitrum')) {
+  if (sourceAsset === chainGasAsset(chain)) {
     // The first tx cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
     // succesfully to make sure the Deposit contract is deployed.
