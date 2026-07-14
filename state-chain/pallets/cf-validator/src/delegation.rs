@@ -194,15 +194,15 @@ where
 		}
 	}
 
-	pub fn total_validator_bid(&self) -> Bid {
+	fn total_validator_bid(&self) -> Bid {
 		self.validators.values().copied().sum()
 	}
 
-	pub fn total_delegator_bid(&self) -> Bid {
+	fn total_delegator_bid(&self) -> Bid {
 		self.delegators.values().copied().sum()
 	}
 
-	pub fn total_available_bid(&self) -> Bid {
+	fn total_available_bid(&self) -> Bid {
 		self.total_validator_bid() + self.total_delegator_bid()
 	}
 

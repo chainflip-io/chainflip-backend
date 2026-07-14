@@ -365,7 +365,7 @@ pub mod pallet {
 	pub type MinimumOperatorFee<T: Config> =
 		StorageValue<_, u32, ValueQuery, ConstU32<DEFAULT_MIN_OPERATOR_FEE>>;
 
-	/// Store the list of accounts that are active bidders.
+	/// Store the list of validator accounts that are active bidders.
 	#[pallet::storage]
 	#[pallet::getter(fn active_bidder)]
 	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
@@ -794,9 +794,7 @@ pub mod pallet {
 		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
 		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			// Block key rotation while a GRANDPA delegation is active.
 			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
@@ -866,9 +864,7 @@ pub mod pallet {
 
 			AccountPeerMapping::<T>::insert(&account_id, (peer_id, port, ip_address));
 
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			T::CfePeerRegistration::peer_registered(
 				validator_id.clone(),
@@ -888,9 +884,7 @@ pub mod pallet {
 		#[pallet::weight((T::ValidatorWeightInfo::cfe_version(), DispatchClass::Operational))]
 		pub fn cfe_version(origin: OriginFor<T>, new_version: Version) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 			NodeCFEVersion::<T>::try_mutate(validator_id, |current_version| {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
@@ -920,9 +914,7 @@ pub mod pallet {
 		pub fn deregister_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
 
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			// Revoke any active GRANDPA delegation before purging keys.
 			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
@@ -1425,9 +1417,7 @@ pub mod pallet {
 			proof: sp_consensus_grandpa::AuthoritySignature,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			ensure!(
 				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
@@ -1463,9 +1453,7 @@ pub mod pallet {
 			caller_grandpa_key: GrandpaAuthorityId,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			ensure!(
 				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
@@ -2127,7 +2115,7 @@ impl<T: Config> Pallet<T> {
 		ActiveBidder::<T>::get()
 			.into_iter()
 			.map(|bidder_id| Bid {
-				bidder_id: <ValidatorIdOf<T> as IsType<T::AccountId>>::from_ref(&bidder_id).clone(),
+				bidder_id: ValidatorIdOf::<T>::from_ref(&bidder_id).clone(),
 				amount: T::FundingInfo::balance(&bidder_id),
 			})
 			.collect()
@@ -2442,8 +2430,7 @@ impl<T: Config> Pallet<T> {
 	fn ensure_not_active_bidder_during_auction(validator_id: &ValidatorIdOf<T>) -> DispatchResult {
 		if Self::is_auction_phase() {
 			ensure!(
-				!ActiveBidder::<T>::get()
-					.contains(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id)),
+				!ActiveBidder::<T>::get().contains(validator_id.into_ref()),
 				Error::<T>::StillBidding
 			);
 		}
@@ -2464,13 +2451,8 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 		// reserved by their stored max_bid — the amount visible to the auction
 		// (capped at max_bid) cannot drop, but funds the user never pledged
 		// remain freely redeemable.
-		if let Some((_, max_bid)) = DelegationChoice::<T>::get(<ValidatorIdOf<T> as IsType<
-			T::AccountId,
-		>>::into_ref(validator_id))
-		{
-			let balance = T::FundingInfo::balance(
-				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id),
-			);
+		if let Some((_, max_bid)) = DelegationChoice::<T>::get(validator_id.into_ref()) {
+			let balance = T::FundingInfo::balance(validator_id.into_ref());
 			ensure!(balance.saturating_sub(amount) >= max_bid, Error::<T>::StillBidding);
 		}
 		Ok(())
@@ -2482,9 +2464,7 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 		// definition of "restricted". Additional checks (like balance checks) are
 		// outside the scope of this implementation.
 		ensure!(
-			!DelegationChoice::<T>::contains_key(
-				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(source),
-			),
+			!DelegationChoice::<T>::contains_key(source.into_ref()),
 			Error::<T>::DelegatorTransferRestricted
 		);
 
@@ -2508,9 +2488,7 @@ impl<T: Config> DeregistrationCheck for ValidatorDeregistrationCheck<T> {
 		if T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Validator) {
 			ensure!(!Pallet::<T>::is_bidding(account_id), Error::<T>::StillBidding);
 
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(account_id);
 
 			ensure!(!EpochHistory::<T>::is_keyholder(validator_id), Error::<T>::StillKeyHolder);
 		} else if T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator) {
