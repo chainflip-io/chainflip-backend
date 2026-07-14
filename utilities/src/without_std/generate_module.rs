@@ -346,6 +346,10 @@ macro_rules! generate_module {
             use cf_utilities::migrations::*;
             use cf_utilities::migrations::basics::*;
 
+            mod user_imports {
+                pub use super::super::*;
+            }
+
             pub trait Types {
                 $(
                     type $variant;
@@ -724,12 +728,11 @@ macro_rules! generate_module {
                     pub type RealEnum = $enum $(< $($T,)+ >)?;
 
                     pub mod variants {
-                        use super::*;
+                        use super::user_imports::*;
                         pub mod __impls {
-                            use super::*;
                             $(
                                 pub mod $variant {
-                                    use super::*;
+                                    use super::super::super::user_imports::*;
                                     $crate::generate_module! {
                                         pub struct variant_struct {
                                             $( $( pub $variant_tuple_entry: $variant_ty,)*)?
@@ -737,10 +740,10 @@ macro_rules! generate_module {
                                         }
                                         mod variant_mod { #![migrations] }
                                     }
-                                    impl HasChangelog for variant_struct
+                                    impl $crate::migrations::HasChangelog for variant_struct
                                     where
-                                        $( $( $variant_ty: HasChangelog, )* )?
-                                        $( $( $variant_field_ty: HasChangelog, )* )?
+                                        $( $( $variant_ty: $crate::migrations::HasChangelog, )* )?
+                                        $( $( $variant_field_ty: $crate::migrations::HasChangelog, )* )?
                                     {
                                         type if_unspecified = variant_mod::see_field_changelogs;
                                     }
@@ -751,8 +754,8 @@ macro_rules! generate_module {
                         $(
                             pub type $variant = __impls::$variant::variant_struct;
 
-                            impl From<$variant> for RealEnum {
-                                fn from(this: $variant) -> RealEnum {
+                            impl From<$variant> for super::RealEnum {
+                                fn from(this: $variant) -> super::RealEnum {
                                     $enum::$variant
                                     $(
                                         {
