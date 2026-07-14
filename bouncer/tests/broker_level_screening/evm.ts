@@ -183,7 +183,7 @@ export async function testEvm<A = []>(
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
     // successfully to make sure the Deposit contract is deployed.
-    await waitForDepositContractDeployment(chain, swapParams.depositAddress);
+    await waitForDepositContractDeployment(cf, chain, swapParams.depositAddress);
   }
 
   cf.debug(`Sending ${sourceAsset} tx to reject...`);
@@ -360,7 +360,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
       ),
     );
     cf.debug(`Account credited for ${observeAccountCreditedEvent.asset}...`);
-    await waitForDepositContractDeployment(chain, depositAddress);
+    await waitForDepositContractDeployment(cf, chain, depositAddress);
   }
 
   cf.debug(`Sending ${sourceAsset} tx to reject...`);
