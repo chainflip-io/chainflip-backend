@@ -3449,6 +3449,9 @@ fn distribute_all_matches_looped_distribute() {
 		const DELEGATOR1: u64 = 300;
 		const DELEGATOR2: u64 = 400;
 		const SOLO_VALIDATOR: u64 = 500;
+		const LOSING_OPERATOR: u64 = 600;
+		const LOSING_VALIDATOR: u64 = 601;
+		const LOSING_DELEGATOR: u64 = 602;
 
 		const EPOCH: u32 = 10;
 		const BOND: u128 = 1_000_000u128;
@@ -3470,6 +3473,16 @@ fn distribute_all_matches_looped_distribute() {
 				.into_iter()
 				.collect(),
 			delegation_fee_bps: 2000, // 20% fee
+		}
+		.register_for_epoch::<Test>(EPOCH);
+
+		// An operator whose pooled stake didn't clear the bond: its snapshot is registered for
+		// the epoch, but its sole validator is not an authority and must not earn anything.
+		DelegationSnapshot::<u64, u128> {
+			operator: LOSING_OPERATOR,
+			validators: [(LOSING_VALIDATOR, 100_000u128)].into_iter().collect(),
+			delegators: [(LOSING_DELEGATOR, 400_000u128)].into_iter().collect(),
+			delegation_fee_bps: 2000,
 		}
 		.register_for_epoch::<Test>(EPOCH);
 
@@ -3508,6 +3521,11 @@ fn distribute_all_matches_looped_distribute() {
 
 		// The solo authority (no operator) is settled with its full share directly.
 		assert_eq!(batched.get(&SOLO_VALIDATOR), Some(&PER_BENEFICIARY_AMOUNT));
+
+		// The losing operator's snapshot earns nothing.
+		assert_eq!(batched.get(&LOSING_OPERATOR), None);
+		assert_eq!(batched.get(&LOSING_VALIDATOR), None);
+		assert_eq!(batched.get(&LOSING_DELEGATOR), None);
 
 		// Total settled equals beneficiaries.len() * per_beneficiary_amount.
 		let total: u128 = batched.values().sum();

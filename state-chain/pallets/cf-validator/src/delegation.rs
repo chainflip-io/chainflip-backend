@@ -370,34 +370,47 @@ where
 		total_amount: Self::Balance,
 		mut settle: impl FnMut(&T::AccountId, T::Amount),
 	) {
-		let beneficiaries = HistoricalAuthorities::<T>::get(epoch_index);
-		if beneficiaries.is_empty() {
+		let mut authorities_to_reward: BTreeSet<T::AccountId> =
+			HistoricalAuthorities::<T>::get(epoch_index)
+				.into_iter()
+				.map(Into::into)
+				.collect();
+		if authorities_to_reward.is_empty() {
 			return;
 		}
-		let per_beneficiary_amount = total_amount / (beneficiaries.len() as u32).into();
+		let per_authority_amount = total_amount / (authorities_to_reward.len() as u32).into();
+		let bond = HistoricalBonds::<T>::get(epoch_index);
 
-		// `snapshot.validators` is exactly this operator's set of `epoch_index` authorities
-		// (it's the source `ValidatorToOperator` is populated from at registration), so the
-		// snapshot alone tells us both which operators have authorities this epoch and how
-		// many - no per-authority `ValidatorToOperator` lookup needed.
-		let mut rewarded: BTreeSet<T::AccountId> = BTreeSet::new();
-		for (_operator, snapshot) in DelegationSnapshots::<T>::iter_prefix(epoch_index) {
-			let count = snapshot.validators.len() as u32;
-			if count == 0 {
+		// Snapshots are registered for *all* operators at auction resolution, including those
+		// whose pooled stake didn't clear the bond: their last remaining validator is never
+		// demoted to delegator, so `snapshot.validators` can contain a non-authority. Only
+		// authority validators earn a share of the rewards. `remove` doubles as the membership
+		// check, draining `authorities` so that only independent (operator-less) authorities
+		// remain for the loop below.
+		for (operator, snapshot) in DelegationSnapshots::<T>::iter_prefix(epoch_index) {
+			let authority_count =
+				snapshot.validators.keys().filter(|v| authorities_to_reward.remove(*v)).count()
+					as u32;
+			if authority_count == 0 {
 				continue;
 			}
-			rewarded.extend(snapshot.validators.keys().cloned());
-			let total = per_beneficiary_amount.saturating_mul(count.into());
+			if (authority_count as usize) < snapshot.validators.len() {
+				// The auction fixed point guarantees a snapshot's validators are all-in or
+				// all-out of the authority set; a mixed snapshot means that invariant broke.
+				cf_runtime_utilities::log_or_panic!(
+					"Delegation snapshot of operator {:?} for epoch {} contains non-authority validators.",
+					operator,
+					epoch_index
+				);
+			}
+			let total = per_authority_amount.saturating_mul(authority_count.into());
 			snapshot
-				.distribute(total, HistoricalBonds::<T>::get(epoch_index))
+				.distribute(total, bond)
 				.for_each(|(account, amount)| settle(account, amount));
 		}
 
-		for beneficiary in &beneficiaries {
-			let beneficiary = beneficiary.into_ref();
-			if !rewarded.contains(beneficiary) {
-				settle(beneficiary, per_beneficiary_amount);
-			}
+		for authority in &authorities_to_reward {
+			settle(authority, per_authority_amount);
 		}
 	}
 }

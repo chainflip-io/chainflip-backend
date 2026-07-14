@@ -935,19 +935,24 @@ impl_runtime_apis! {
 
 					let mut reward_pool: Vec<AccountReward<FlipBalance>> = Vec::new();
 
-					// Authorities covered by some operator's `snapshot.validators` (mirrors
-					// `DelegatedRewardsDistribution::distribute_all`); anyone left over is
-					// independent and gets their full share directly, added after the loop below.
-					let mut rewarded: BTreeSet<AccountId> = BTreeSet::new();
+					// Mirrors `DelegatedRewardsDistribution::distribute_all`: snapshot validators
+					// are drained out of `authority_set` as we go, leaving only independent
+					// authorities, which get their full share directly after the loop below.
+					let mut authorities_to_reward: BTreeSet<&AccountId> = authorities.iter().collect();
 
 					for (operator, snapshot) in
 						pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix(epoch_index)
 					{
-						let num_authority_nodes = snapshot.validators.len() as u32;
+						// Snapshots of operators whose pooled stake didn't clear the bond are
+						// still registered but hold a non-authority validator - they earn nothing.
+						let num_authority_nodes = snapshot
+							.validators
+							.keys()
+							.filter(|v| authorities_to_reward.remove(*v))
+							.count() as u32;
 						if num_authority_nodes == 0 {
 							continue;
 						}
-						rewarded.extend(snapshot.validators.keys().cloned());
 
 						let total = per_authority_share.saturating_mul(num_authority_nodes as FlipBalance);
 						let rewards: BTreeMap<AccountId, FlipBalance> = snapshot
@@ -996,18 +1001,16 @@ impl_runtime_apis! {
 						}
 					}
 
-					for authority in &authorities {
-						if !rewarded.contains(authority) {
-							reward_pool.push(AccountReward {
-								account: authority.clone(),
-								bid: Flip::balance(authority),
-								bond: Flip::bond(authority),
-								reward: per_authority_share,
-								role: AccountRole::Validator,
-								managed_by: None,
-								delegated_to: None,
-							});
-						}
+					for authority in authorities_to_reward {
+						reward_pool.push(AccountReward {
+							account: authority.clone(),
+							bid: Flip::balance(authority),
+							bond: Flip::bond(authority),
+							reward: per_authority_share,
+							role: AccountRole::Validator,
+							managed_by: None,
+							delegated_to: None,
+						});
 					}
 
 					(total_rewards, per_authority_share, reward_pool)
