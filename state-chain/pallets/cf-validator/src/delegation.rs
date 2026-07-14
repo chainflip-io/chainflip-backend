@@ -14,7 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-	AuctionOutcome, Config, DelegationSnapshots, HistoricalBonds, Pallet, ValidatorToOperator,
+	AuctionOutcome, Config, DelegationSnapshots, HistoricalAuthorities, HistoricalBonds, Pallet,
+	ValidatorToOperator,
 };
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
@@ -364,14 +365,12 @@ where
 		distribute::<T>(epoch_index, beneficiary, reward_amount, settle);
 	}
 
-	/// `beneficiaries` must be exactly `epoch_index`'s full authority set. For a partial
-	/// set, call `distribute` directly per beneficiary instead.
 	fn distribute_all(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
-		beneficiaries: &[Self::AccountId],
 		mut settle: impl FnMut(&T::AccountId, T::Amount),
 	) {
+		let beneficiaries = HistoricalAuthorities::<T>::get(epoch_index);
 		if beneficiaries.is_empty() {
 			return;
 		}
@@ -394,7 +393,8 @@ where
 				.for_each(|(account, amount)| settle(account, amount));
 		}
 
-		for beneficiary in beneficiaries {
+		for beneficiary in &beneficiaries {
+			let beneficiary = beneficiary.into_ref();
 			if !rewarded.contains(beneficiary) {
 				settle(beneficiary, per_beneficiary_amount);
 			}
@@ -537,7 +537,7 @@ mod tests {
 			let delegators: BTreeMap<ValidatorId, u128> = delegator_amounts.iter().enumerate()
 				.map(|(i, amount)| (i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP))
 				.collect();
-			// Every validator in the snapshot is a beneficiary this epoch - the precondition
+			// Every validator in the snapshot is an authority this epoch - the invariant
 			// `distribute_all` relies on to derive authority counts from the snapshot alone.
 			let beneficiaries: Vec<ValidatorId> = validators.keys().cloned().collect();
 			// Constructed as an exact multiple of beneficiaries.len() so the internal division
@@ -546,6 +546,7 @@ mod tests {
 
 			new_test_ext().execute_with(|| {
 				crate::HistoricalBonds::<Test>::insert(EPOCH, bond);
+				crate::HistoricalAuthorities::<Test>::insert(EPOCH, &beneficiaries);
 
 				DelegationSnapshot::<ValidatorId, u128> {
 					operator: operator_account,
@@ -558,7 +559,6 @@ mod tests {
 				DelegatedRewardsDistribution::<Test>::distribute_all(
 					EPOCH,
 					total_amount,
-					&beneficiaries,
 					|account, amount| {
 						settled.entry(*account).and_modify(|a| *a += amount).or_insert(amount);
 					},

@@ -557,10 +557,7 @@ impl<T: Config> Pallet<T> {
 			.offset(Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount));
 	}
 
-	pub fn trigger_flip_reward_distribution(
-		epoch_index: EpochIndex,
-		authorities: BTreeSet<T::AccountId>,
-	) -> T::Balance {
+	pub fn trigger_flip_reward_distribution(epoch_index: EpochIndex) -> T::Balance {
 		// Bridge in any pending offchain rewards and deposit them into the distribution reserve so
 		// that everything is distributed from a single source.
 		let offchain_flip_to_distribute = FlipToDistribute::<T>::take();
@@ -580,7 +577,6 @@ impl<T: Config> Pallet<T> {
 		T::RewardsDistribution::distribute_all(
 			epoch_index,
 			Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID),
-			&authorities,
 			|account, amount| {
 				// Skip zero-value settlements: `distribute_all` calls this for every reward-pool
 				// participant, including ones with nothing due; avoid the wasted withdrawal/event

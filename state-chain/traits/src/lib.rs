@@ -396,28 +396,15 @@ pub trait RewardsDistribution {
 		settle: impl FnMut(&Self::AccountId, Self::Balance),
 	);
 
-	/// Splits `total_amount` evenly across `beneficiaries` for `epoch_index`.
-	///
-	/// `beneficiaries` must be exactly `epoch_index`'s complete set of reward recipients (e.g.
-	/// all current authorities) - implementations may batch/optimize on that assumption (e.g.
-	/// when beneficiaries share distribution state, such as the same managing operator's
-	/// snapshot). The default just divides evenly and calls `distribute` once per beneficiary.
+	/// Splits `total_amount` evenly across `epoch_index`'s complete set of reward recipients
+	/// (e.g. that epoch's full authority set), as determined by the implementation.
+	/// To settle a partial
+	/// set, call [Self::distribute] per beneficiary instead.
 	fn distribute_all(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
-		beneficiaries: &[Self::AccountId],
-		mut settle: impl FnMut(&Self::AccountId, Self::Balance),
-	) where
-		Self::Balance: Copy + core::ops::Div<Output = Self::Balance> + From<u32>,
-	{
-		if beneficiaries.is_empty() {
-			return;
-		}
-		let per_beneficiary_amount = total_amount / (beneficiaries.len() as u32).into();
-		for beneficiary in beneficiaries {
-			Self::distribute(epoch_index, per_beneficiary_amount, beneficiary, &mut settle);
-		}
-	}
+		settle: impl FnMut(&Self::AccountId, Self::Balance),
+	);
 }
 
 /// A representation of the current network state for this heartbeat interval.

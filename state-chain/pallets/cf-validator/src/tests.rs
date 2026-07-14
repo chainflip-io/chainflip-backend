@@ -3456,6 +3456,10 @@ fn distribute_all_matches_looped_distribute() {
 
 		crate::CurrentEpoch::<Test>::put(EPOCH);
 		crate::HistoricalBonds::<Test>::insert(EPOCH, BOND);
+		crate::HistoricalAuthorities::<Test>::insert(
+			EPOCH,
+			vec![VALIDATOR_A, VALIDATOR_B, SOLO_VALIDATOR],
+		);
 
 		DelegationSnapshot::<u64, u128> {
 			operator: OPERATOR,
@@ -3471,8 +3475,8 @@ fn distribute_all_matches_looped_distribute() {
 
 		let beneficiaries = [VALIDATOR_A, VALIDATOR_B, SOLO_VALIDATOR];
 
-		// Ground truth: loop `distribute` once per beneficiary (the trait's default
-		// `distribute_all` behaviour), accumulating into a single map.
+		// Ground truth: loop `distribute` once per authority with an even share, accumulating
+		// into a single map.
 		let mut looped = BTreeMap::new();
 		for beneficiary in &beneficiaries {
 			DelegatedRewardsDistribution::<Test>::distribute(
@@ -3492,7 +3496,6 @@ fn distribute_all_matches_looped_distribute() {
 		DelegatedRewardsDistribution::<Test>::distribute_all(
 			EPOCH,
 			PER_BENEFICIARY_AMOUNT * beneficiaries.len() as u128,
-			&beneficiaries,
 			|account, amount| {
 				batched
 					.entry(*account)
