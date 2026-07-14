@@ -60,8 +60,9 @@ async function submitNativeVaultSettingsGovernance(logger: Logger, settings: Vau
   logger.info('Submitting native vault settings via governance');
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.dispatchSolanaGovCall({
-      SetProgramSwapsParameters: {
-        minNativeSwapAmount,
+      type: 'SetProgramSwapsParameters',
+      value: {
+        minNativeSwapAmount: BigInt(minNativeSwapAmount),
         maxDstAddressLen,
         maxCcmMessageLen,
         maxCfParametersLen,
@@ -77,8 +78,9 @@ async function submitTokenVaultSettingsGovernance(logger: Logger, settings: Vaul
   logger.info('Submitting token vault settings via governance');
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.dispatchSolanaGovCall({
-      SetTokenSwapParameters: {
-        minSwapAmount: minTokenSwapAmount,
+      type: 'SetTokenSwapParameters',
+      value: {
+        minSwapAmount: BigInt(minTokenSwapAmount),
         tokenMintPubkey: decodeSolAddress(tokenMintPubkey.toString()),
       },
     }),

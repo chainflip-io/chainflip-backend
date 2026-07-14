@@ -11,22 +11,23 @@ export async function rangeOrder<A extends WithLpAccount>(
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const currentPools = (
-    (await chainflip.query.liquidityPools.pools({
-      assets: { quote: 'usdc', base: ccy.toLowerCase() },
-    })) as unknown as any
-  ).toJSON();
+  const currentPools = await chainflip.query.liquidityPools.pools({
+    assets: { base: ccy, quote: 'Usdc' },
+  });
   const currentSqrtPrice = currentPools!.poolState.rangeOrders.currentSqrtPrice;
-  const liquidity = BigInt(Math.round((currentSqrtPrice / 2 ** 96) * Number(fineAmount)));
+  const liquidity = BigInt(Math.round((Number(currentSqrtPrice) / 2 ** 96) * Number(fineAmount)));
 
   cf.debug('Setting up ' + ccy + ' range order');
 
   await cf.submitExtrinsic({
     extrinsic: (api) =>
-      api.tx.liquidityPools.setRangeOrder(ccy.toLowerCase(), 'usdc', orderId, [-887272, 887272], {
-        Liquidity: { Liquidity: liquidity },
-      }),
+      api.tx.liquidityPools.setRangeOrder(
+        ccy,
+        'Usdc',
+        BigInt(orderId),
+        { start: -887272, end: 887272 },
+        { type: 'Liquidity', value: { liquidity } },
+      ),
   });
 
   cf.debug(`Range order for ${ccy} with amount ${amount} successfully set up`);
