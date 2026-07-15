@@ -32,7 +32,7 @@ export async function registerLiquidityRefundAddressForChain<A extends WithLpAcc
   if (!forceRegister) {
     await using chainflip = await getChainflipApi();
     const currentRefundAddress = (
-      await chainflip.query.liquidityProvider.liquidityRefundAddress(lp.address, chain)
+      await chainflip.query.assetBalances.refundAddresses(lp.address, chain)
     ).toJSON();
     if (currentRefundAddress !== null) {
       cf.debug(`Liquidity Refund Address already registered for ${lpuri} chain: ${chain}`);

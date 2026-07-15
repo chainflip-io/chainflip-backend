@@ -356,7 +356,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   // Get existing LP refund address of //LP_1 for `sourceAsset`
   /* eslint-disable  @typescript-eslint/no-explicit-any */
   const addressReponse = (
-    await chainflip.query.liquidityProvider.liquidityRefundAddress(
+    await chainflip.query.assetBalances.refundAddresses(
       lp.address,
       getChainContractId(chainFromAsset(sourceAsset)),
     )
