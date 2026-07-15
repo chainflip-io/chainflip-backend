@@ -59,7 +59,7 @@ use cf_traits::{
 	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
-	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit,
+	IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit, RefundAddressRegistry,
 	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
 	SwapRequestType, TargetChainOf, INITIAL_FLIP_FUNDING,
 };
@@ -846,7 +846,7 @@ pub mod pallet {
 			Amount = <Self as Chainflip>::Amount,
 		>;
 
-		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
+		type RefundAddressRegistry: RefundAddressRegistry<AccountId = Self::AccountId>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -2375,7 +2375,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							&lp_account,
 							AccountRole::LiquidityProvider,
 						);
-						T::LpRegistrationApi::register_liquidity_refund_address(
+						T::RefundAddressRegistry::register_liquidity_refund_address(
 							&lp_account,
 							refund_address,
 						);

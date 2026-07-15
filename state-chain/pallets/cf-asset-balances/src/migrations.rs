@@ -14,30 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use frame_support::parameter_types;
-use sp_std::time::Duration;
+use crate::{Pallet, STORAGE_VERSION_U16};
+use cf_runtime_utilities::PlaceholderMigration;
 
-pub struct Mock;
+pub type PalletMigration<T> = PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>;
 
-const START: Duration = Duration::from_secs(0);
-
-parameter_types! {
-	pub storage FakeTime: Duration = START;
-}
-
-impl Mock {
-	/// Advances the mock clock by `duration` (cumulative, not absolute).
-	pub fn advance_clock(duration: Duration) {
-		FakeTime::set(&(FakeTime::get() + duration))
-	}
-
-	pub fn reset_to(start: Duration) {
-		FakeTime::set(&start);
-	}
-}
-
-impl frame_support::traits::UnixTime for Mock {
-	fn now() -> Duration {
-		FakeTime::get()
-	}
-}
+#[cfg(test)]
+const _: u16 =
+	<PalletMigration<crate::mock::Test> as cf_runtime_utilities::MigrationSequence>::FROM;

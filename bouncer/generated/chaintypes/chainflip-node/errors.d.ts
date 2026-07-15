@@ -1877,6 +1877,11 @@ export interface ChainErrors extends GenericChainErrors {
     OpenOrdersRemaining: GenericPalletError;
 
     /**
+     * The resulting limit order amount is below the configured per-asset minimum.
+     **/
+    BelowMinimumOrderAmount: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -2323,6 +2328,31 @@ export interface ChainErrors extends GenericChainErrors {
      * The account still has free balance.
      **/
     FundsRemaining: GenericPalletError;
+
+    /**
+     * The withdrawal destination is not on the account's withdrawal whitelist.
+     **/
+    DestinationNotAllowed: GenericPalletError;
+
+    /**
+     * The provided address could not be decoded.
+     **/
+    InvalidEncodedAddress: GenericPalletError;
+
+    /**
+     * The requested timelock exceeds the configured maximum.
+     **/
+    TimelockExceedsMaximum: GenericPalletError;
+
+    /**
+     * The account has too many pending whitelist updates.
+     **/
+    TooManyPendingUpdates: GenericPalletError;
+
+    /**
+     * No liquidity refund address is registered for the account on the relevant chain.
+     **/
+    NoLiquidityRefundAddressRegistered: GenericPalletError;
 
     /**
      * Generic pallet error

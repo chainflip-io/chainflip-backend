@@ -486,6 +486,7 @@ pub type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 	pallet_cf_lending_pools::migrations::PalletMigration<Runtime>,
+	pallet_cf_asset_balances::migrations::PalletMigration<Runtime>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BscInstance>,
@@ -540,6 +541,7 @@ pub type MigrationsForV2_3 = (
 	migrations::bsc_integration::BscIngressEgressInit,
 	migrations::bsc_integration::BscChainstate,
 	migrations::bsc_integration::BscBroadcasterInit,
+	migrations::refund_addresses_to_asset_balances::Migration,
 );
 
 #[cfg(test)]

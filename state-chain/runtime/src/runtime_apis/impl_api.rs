@@ -1195,7 +1195,8 @@ impl_runtime_apis! {
 			should_sweep: ShouldSweep,
 		) -> LiquidityProviderInfo {
 			let refund_addresses = ForeignChain::iter().map(|chain| {
-				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
+				// The *active* refund address (a timelocked repoint isn't reflected until it matures).
+				(chain, <pallet_cf_asset_balances::Pallet<Runtime> as cf_traits::RefundAddressRegistry>::get_refund_address(&account_id, chain))
 			}).collect();
 
 			if should_sweep == ShouldSweep::Yes {
