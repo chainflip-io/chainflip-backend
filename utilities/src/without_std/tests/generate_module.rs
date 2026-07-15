@@ -27,6 +27,22 @@ impl<T: HasChangelog> HasChangelog for MyS<T> {
 	type if_unspecified = _MyS::see_field_changelogs;
 }
 
+#[cf_proc_macros::generate_module]
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum EnumWithDefault {
+	Other,
+	#[default]
+	SomeDefault,
+}
+impl HasChangelog for EnumWithDefault {
+	type if_unspecified = _EnumWithDefault::see_variant_changelogs;
+}
+
+#[test]
+fn forwards_default_attributes() {
+	assert_eq!(EnumWithDefault::default(), EnumWithDefault::SomeDefault);
+}
+
 pub trait T1 {
 	type XY;
 }

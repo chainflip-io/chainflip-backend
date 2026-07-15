@@ -17,7 +17,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![feature(associated_type_defaults)]
 #![feature(iterator_try_collect)]
+#![feature(trait_alias)]
 
 mod mock;
 mod tests;

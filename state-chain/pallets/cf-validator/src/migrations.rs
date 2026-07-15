@@ -14,10 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Pallet, STORAGE_VERSION_U16};
+use crate::{Config, Pallet, STORAGE_VERSION_U16};
 use cf_runtime_utilities::PlaceholderMigration;
 
-pub type PalletMigration<T> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,);
+pub type PalletMigration<T: Config> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,);
 
 #[cfg(test)]
 const _: u16 =
