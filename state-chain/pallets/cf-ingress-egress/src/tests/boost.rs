@@ -611,7 +611,7 @@ fn taking_network_fee_from_boost_fee() {
 
 mod vault_swaps {
 	use super::*;
-	use crate::{BoostedVaultTransactionExpiry, BoostedVaultTransactions};
+	use crate::{BoostedVaultTransactionTimeout, BoostedVaultTransactions};
 	use cf_chains::AccountOrAddress;
 	use cf_test_utilities::assert_no_matching_event;
 	use cf_traits::{PriceLimitsAndExpiry, SwapOutputAction};
@@ -836,7 +836,7 @@ mod vault_swaps {
 				setup();
 				MockBoostApi::set_available_amount(DEPOSIT_AMOUNT * 10);
 
-				// Boosting a vault swap via prewitness schedules it for expiry:
+				// Boosting a vault swap via prewitness schedules its timeout:
 				EthereumIngressEgress::process_vault_swap_request_prewitness(
 					10,
 					boostable_vault_deposit(tx_id, DEPOSIT_AMOUNT),
@@ -844,30 +844,29 @@ mod vault_swaps {
 				assert!(MockBoostApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
 				assert!(BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
 				assert!(
-					BoostedVaultTransactionExpiry::<Test, Instance1>::get().contains_key(&tx_id)
+					BoostedVaultTransactionTimeout::<Test, Instance1>::get().contains_key(&tx_id)
 				);
 			})
 			.then_execute_at_next_block(|_| {
-				// Raise the processed height just before to its expiry to make sure we haven't
+				// Raise the processed height just before its timeout to make sure we haven't
 				// processed it as lost prematurely:
-				let recycle_block =
-					EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
-				set_eth_processed_up_to(recycle_block - 1);
+				let timeout_height =
+					BoostedVaultTransactionTimeout::<Test, Instance1>::get().get(&tx_id).unwrap().0;
+				set_eth_processed_up_to(timeout_height - 1);
+				timeout_height
 			})
-			.then_execute_with(|_| {
+			.then_execute_with_keep_context(|_| {
 				assert!(MockBoostApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
 			})
-			.then_execute_at_next_block(|_| {
-				// The deposit is never fully witnessed. Raise the processed height to its expiry
+			.then_execute_at_next_block(|timeout_height| {
+				// The deposit is never fully witnessed. Raise the processed height to its timeout
 				// so that on_idle (run at the end of this block) deems it lost:
-				let recycle_block =
-					EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
-				set_eth_processed_up_to(recycle_block);
+				set_eth_processed_up_to(timeout_height);
 			})
 			.then_execute_with(|_| {
 				assert!(!MockBoostApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
 				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
-				assert!(BoostedVaultTransactionExpiry::<Test, Instance1>::get().is_empty());
+				assert!(BoostedVaultTransactionTimeout::<Test, Instance1>::get().is_empty());
 
 				assert_has_matching_event!(
 					Test,
@@ -893,17 +892,17 @@ mod vault_swaps {
 				let deposit = boostable_vault_deposit(tx_id, DEPOSIT_AMOUNT);
 				EthereumIngressEgress::process_vault_swap_request_prewitness(10, deposit.clone());
 				assert!(
-					BoostedVaultTransactionExpiry::<Test, Instance1>::get().contains_key(&tx_id)
+					BoostedVaultTransactionTimeout::<Test, Instance1>::get().contains_key(&tx_id)
 				);
 
 				// Fully witnessing the boosted deposit finalises the boost and eagerly removes
-				// the expiry entry, without waiting for the timeout:
+				// the timeout entry, without waiting for the timeout:
 				EthereumIngressEgress::process_vault_swap_request_full_witness_inner(10, deposit);
 				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
-				assert!(BoostedVaultTransactionExpiry::<Test, Instance1>::get().is_empty());
+				assert!(BoostedVaultTransactionTimeout::<Test, Instance1>::get().is_empty());
 			})
 			.then_execute_at_next_block(|_| {
-				// Reaching the would-be expiry height must not deem the finalised deposit lost:
+				// Reaching the would-be timeout height must not deem the finalised deposit lost:
 				let recycle_block =
 					EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 				set_eth_processed_up_to(recycle_block);
