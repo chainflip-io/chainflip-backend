@@ -18,7 +18,8 @@ use crate::{
 	ValidatorToOperator,
 };
 use cf_primitives::EpochIndex;
-use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
+use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
+use cf_utilities::migrations::{HasChangelog, OrdMigrations};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
@@ -95,6 +96,7 @@ pub enum Change<T> {
 }
 
 /// Represents a validator's default stance on accepting delegations
+#[cf_proc_macros::generate_module]
 #[derive(
 	Copy,
 	Clone,
@@ -114,11 +116,15 @@ pub enum DelegationAcceptance {
 	/// Allow all delegators by default, except those explicitly blocked
 	Allow,
 	/// Deny all delegators by default, except those explicitly allowed
-	#[default] // Default to denying delegations
+	#[default]
 	Deny,
+}
+impl HasChangelog for DelegationAcceptance {
+	type if_unspecified = _DelegationAcceptance::see_variant_changelogs;
 }
 
 /// Parameters for validator delegation preferences
+#[cf_proc_macros::generate_module]
 #[derive(
 	Default,
 	Encode,
@@ -138,6 +144,9 @@ pub struct OperatorSettings {
 	/// Default delegation acceptance preference for this validator
 	pub delegation_acceptance: DelegationAcceptance,
 }
+impl HasChangelog for OperatorSettings {
+	type if_unspecified = _OperatorSettings::see_field_changelogs;
+}
 
 /// A snapshot of delegations to an operator for a specific epoch, including all
 /// necessary information for reward distribution.
@@ -154,6 +163,7 @@ pub struct OperatorSettings {
 	Serialize,
 	Deserialize,
 )]
+#[cf_proc_macros::generate_module]
 pub struct DelegationSnapshot<Account: Ord, Bid> {
 	pub operator: Account,
 	/// Map of validator accounts to their bid amounts.
@@ -162,6 +172,11 @@ pub struct DelegationSnapshot<Account: Ord, Bid> {
 	pub delegators: BTreeMap<Account, Bid>,
 	/// Operator fee at time of snapshot creation.
 	pub delegation_fee_bps: u32,
+}
+impl<Account: OrdMigrations + Ord, Bid: HasChangelog> HasChangelog
+	for DelegationSnapshot<Account, Bid>
+{
+	type if_unspecified = _DelegationSnapshot::see_field_changelogs;
 }
 
 impl<Account: Ord + Clone + FullCodec + 'static, Bid: FullCodec + 'static>

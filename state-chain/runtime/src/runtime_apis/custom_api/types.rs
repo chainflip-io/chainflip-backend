@@ -269,6 +269,7 @@ impl HasChangelog for ValidatorInfo {
 	type if_unspecified = _ValidatorInfo::see_field_changelogs;
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct OperatorInfo<Amount> {
 	pub managed_validators: BTreeMap<AccountId32, Amount>,
@@ -281,6 +282,9 @@ pub struct OperatorInfo<Amount> {
 	pub delegators: BTreeMap<AccountId32, Amount>,
 	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
 	pub active_delegation: Option<DelegationSnapshot<AccountId32, Amount>>,
+}
+impl<Amount: HasChangelog> HasChangelog for OperatorInfo<Amount> {
+	type if_unspecified = _OperatorInfo::see_field_changelogs;
 }
 
 #[cf_proc_macros::generate_module]
