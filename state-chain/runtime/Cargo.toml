@@ -292,6 +292,7 @@ proptest = [
 	"cf-utilities/proptest",
 	"pallet-cf-lending-pools/proptest",
     "cf-chains/proptest",
+    "pallet-cf-validator/proptest",
 ]
 
 # IMPORTANT: These two are required to make sure that 'turbo bouncer' works and also
