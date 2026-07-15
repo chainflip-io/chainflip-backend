@@ -720,6 +720,10 @@ pub struct VaultAddresses {
 }
 impl HasChangelog for VaultAddresses {
 	type if_unspecified = _VaultAddresses::see_field_changelogs;
+	type in_20100 = _VaultAddresses::see_field_changelogs_and_also<(
+		_VaultAddresses::field::usdt_token_mint_pubkey::CustomMigration<NewSolEncodedAddress>,
+		_VaultAddresses::field::solana_usdt_token_vault_ata::CustomMigration<NewSolEncodedAddress>,
+	)>;
 	type in_20200 = _VaultAddresses::see_field_changelogs_and_also<
 		_VaultAddresses::field::tron::CustomMigration<NewTronEncodedAddress>,
 	>;
@@ -757,6 +761,22 @@ impl Migration<<EncodedAddress as HasVersion<v20200>>::HistoricalType, v20200>
 	}
 	fn try_backwards(
 		_x: <EncodedAddress as HasVersion<v20200>>::HistoricalType,
+	) -> Result<Self::From, Self::BackwardsError> {
+		Ok(())
+	}
+}
+pub struct NewSolEncodedAddress;
+impl Migration<<EncodedAddress as HasVersion<v20100>>::HistoricalType, v20100>
+	for NewSolEncodedAddress
+{
+	type From = ();
+	fn try_forwards(
+		_x: Self::From,
+	) -> Result<<EncodedAddress as HasVersion<v20100>>::HistoricalType, Self::ForwardsError> {
+		Ok(_EncodedAddress::Enum::Sol(Default::default()))
+	}
+	fn try_backwards(
+		_x: <EncodedAddress as HasVersion<v20100>>::HistoricalType,
 	) -> Result<Self::From, Self::BackwardsError> {
 		Ok(())
 	}
