@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use sp_core::{bounded::BoundedVec, Get};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 pub trait HasTypeIntrospection: Sized {
@@ -62,6 +63,20 @@ impl<A: HasTypeIntrospection> HasTypeIntrospection for Vec<A> {
 
 	fn sample_all_shapes() -> Vec<Self> {
 		A::sample_all_shapes().into_iter().map(|a| vec![a]).chain([vec![]]).collect()
+	}
+}
+
+impl<S: Get<u32>, A: HasTypeIntrospection> HasTypeIntrospection for BoundedVec<A, S> {
+	fn is_empty_type() -> bool {
+		false // because a vector is always constructible
+	}
+
+	fn sample_all_shapes() -> Vec<Self> {
+		A::sample_all_shapes()
+			.into_iter()
+			.map(|a| BoundedVec::truncate_from(vec![a]))
+			.chain([BoundedVec::new()])
+			.collect()
 	}
 }
 

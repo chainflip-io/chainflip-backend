@@ -14,10 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#![feature(impl_trait_in_assoc_type)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use crate::{address::Address, digest::Digest, signature::Signature};
-use cf_utilities::impl_identity_migrations;
+use cf_utilities::{
+	impl_identity_migrations_with_wrapper, type_introspection::HasTypeIntrospection,
+};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::str::FromStr;
 use generic_array::{typenum::U64, GenericArray};
@@ -745,4 +748,8 @@ impl FromStr for Hash {
 	}
 }
 
-impl_identity_migrations! { Address, }
+// impl_identity_migrations! { Address, }
+impl_identity_migrations_with_wrapper! {
+   #[derive(PartialOrd, PartialEq, Eq, Ord)]
+   struct WrappedSolAddress(Address) where |x: [u8; 32]| Address(x);
+}

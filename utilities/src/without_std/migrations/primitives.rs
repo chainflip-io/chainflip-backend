@@ -70,6 +70,7 @@ impl<T> HasChangelog for PhantomData<T> {
 
 pub struct WrapMigration;
 
+#[macro_export]
 macro_rules! impl_identity_migrations_with_wrapper {
 	(
         $(#[$meta:meta])*
@@ -94,7 +95,7 @@ macro_rules! impl_identity_migrations_with_wrapper {
 			}
 		}
 
-		impl Migration<$Ty, crate::migrations::vCurrent> for WrapMigration {
+		impl $crate::migrations::basics::Migration<$Ty, $crate::migrations::basics::vCurrent> for $crate::migrations::primitives::WrapMigration {
 			type From = $Wrapper;
 
 			fn try_forwards(x: Self::From) -> Result<$Ty, Self::ForwardsError> {
@@ -106,15 +107,15 @@ macro_rules! impl_identity_migrations_with_wrapper {
 			}
 		}
 
-		impl IsHistoricalType for $Wrapper {
+		impl $crate::migrations::basics::IsHistoricalType for $Wrapper {
 			type GetCurrentType = $Ty;
 		}
-		impl HasGenericVariant for $Ty {
+		impl $crate::migrations::basics::HasGenericVariant for $Ty {
             type GenericType = $Wrapper;
-			type MigrationFromGeneric = WrapMigration;
+			type MigrationFromGeneric = $crate::migrations::primitives::WrapMigration;
 		}
-		impl HasChangelog for $Ty {
-			type if_unspecified = IdentityMigration;
+		impl $crate::migrations::HasChangelog for $Ty {
+			type if_unspecified = $crate::migrations::basics::IdentityMigration;
 		}
 
 		$(
@@ -148,6 +149,7 @@ macro_rules! impl_identity_migrations_with_wrapper {
         )?
 	};
 }
+pub use impl_identity_migrations_with_wrapper;
 
 impl_identity_migrations_with_wrapper! {
 	struct WrappedAccountId32(sp_core::crypto::AccountId32) where |x: [u8; 32]| sp_core::crypto::AccountId32::new(x);
