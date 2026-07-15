@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Pallet, STORAGE_VERSION_U16};
+use crate::{Config, Pallet, STORAGE_VERSION_U16};
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 

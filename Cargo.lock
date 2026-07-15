@@ -9385,9 +9385,11 @@ name = "pallet-cf-validator"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
+ "cf-proc-macros",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
+ "derive-where",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

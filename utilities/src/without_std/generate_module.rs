@@ -680,7 +680,7 @@ macro_rules! generate_module {
                                                         .map_err(EnumForwardsError::$variant)?
                                                 ),
                                             )*
-                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                                            Enum::_phantom(never, _) => Enum::_phantom(never, core::default::Default::default()),
                                         })
                                     }
 
@@ -692,7 +692,7 @@ macro_rules! generate_module {
                                                         .map_err(EnumBackwardsError::$variant)?
                                                 ),
                                             )*
-                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                                            Enum::_phantom(never, _) => Enum::_phantom(never, core::default::Default::default()),
                                         })
                                     }
                                 }

@@ -157,6 +157,7 @@ macro_rules! impl_identity_migrations_with_wrapper {
 pub use impl_identity_migrations_with_wrapper;
 
 impl_identity_migrations_with_wrapper! {
+	#[derive(PartialOrd, Ord, PartialEq, Eq)]
 	struct WrappedAccountId32(sp_core::crypto::AccountId32) where |x: [u8; 32]| sp_core::crypto::AccountId32::new(x);
 }
 
@@ -359,6 +360,20 @@ impl_migrations_for_container! {
 			None => Ok(None),
 		}
 	},
+}
+
+// ---- Box ----
+
+impl_migrations_for_container! {
+	Box<X>,
+	impl_changelog_for_box,
+	[M],
+	type ForwardsError = M::ForwardsError,
+	type BackwardsError = M::BackwardsError,
+	try_forwards |x| M::try_forwards(*x).map(Box::new),
+	try_backwards |x| M::try_backwards(*x).map(Box::new),
+	generic_try_forwards |x| M::try_forwards(*x).map(Box::new),
+	generic_try_backwards |x| M::try_backwards(*x).map(Box::new),
 }
 
 // ---- Vec ----
