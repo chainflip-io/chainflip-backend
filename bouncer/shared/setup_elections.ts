@@ -46,25 +46,19 @@ export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> 
     cf.info('Ignoring bitcoin elections setup as bitcoinElections pallet is not available.');
   }
 
-  if (chainflip.query.arbitrumElections) {
+  if (chainflip.query.arbitrumIngressEgress) {
     const ingressSafetyMargin = 3;
 
-    const response = JSON.parse(
-      (await chainflip.query.arbitrumElections.electoralUnsynchronisedSettings()) as any,
-    );
-
-    // set higher safety margin for ingresses so that we don't miss txs
-    response[1].safetyMargin = ingressSafetyMargin;
-    response[2].safetyMargin = ingressSafetyMargin;
-
-    // update election settings
+    // The runtime propagates this value to the Arbitrum ingress-related election settings.
     await submitGovernanceExtrinsic((api) =>
-      api.tx.arbitrumElections.updateSettings(response, null, 'Heed'),
+      api.tx.arbitrumIngressEgress.updatePalletConfig([
+        { SetWitnessSafetyMarginArbitrum: { margin: ingressSafetyMargin } },
+      ]),
     );
 
-    cf.info(`Ingress safety margin for arbitrum elections set to ${ingressSafetyMargin}.`);
+    cf.info(`Ingress safety margin for Arbitrum set to ${ingressSafetyMargin}.`);
   } else {
-    cf.info('Ignoring arbitrum elections setup as arbitrumElections pallet is not available.');
+    cf.info('Ignoring Arbitrum ingress setup as arbitrumIngressEgress pallet is not available.');
   }
 
   if (chainflip.query.genericElections) {
