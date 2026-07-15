@@ -36,7 +36,7 @@ use cf_primitives::{
 	VAULT_UTXO_SIZE_IN_BYTES,
 };
 use cf_runtime_utilities::log_or_panic;
-use cf_utilities::{impl_identity_migrations, migrations::HasChangelog, SliceToArray};
+use cf_utilities::{migrations::HasChangelog, SliceToArray};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
