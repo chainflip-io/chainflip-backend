@@ -640,7 +640,9 @@ const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
 	MaxEncodedLen,
 	Serialize,
 	Deserialize,
+	cf_proc_macros::HasTypeIntrospection,
 )]
+#[cfg_attr(any(test, feature = "proptest"), derive(proptest_derive::Arbitrary))]
 pub enum ScriptPubkey {
 	P2PKH([u8; 20]),
 	P2SH([u8; 20]),
