@@ -17,6 +17,7 @@
 #![allow(clippy::allow_attributes)]
 
 pub mod basics;
+pub mod bounded_vec;
 pub mod primitives;
 
 use self::basics::*;
