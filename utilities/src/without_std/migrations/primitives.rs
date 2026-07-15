@@ -480,16 +480,16 @@ impl<X: IsHistoricalType, S: sp_core::Get<u32>> IsHistoricalType for BoundedVec<
 	type GetCurrentType = BoundedVec<X::GetCurrentType, S>;
 }
 
-#[cfg(any(test, all(feature = "proptest", feature = "std")))]
-impl<X: proptest::arbitrary::Arbitrary, S> proptest::arbitrary::Arbitrary for BoundedVec<X, S> {
-	type Parameters;
+// #[cfg(any(test, all(feature = "proptest", feature = "std")))]
+// impl<X: proptest::arbitrary::Arbitrary, S> proptest::arbitrary::Arbitrary for BoundedVec<X, S> {
+// 	type Parameters;
 
-	fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
-		todo!()
-	}
+// 	fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
+// 		todo!()
+// 	}
 
-	type Strategy;
-}
+// 	type Strategy;
+// }
 
 // ---- TupleWith1Entry ----
 
