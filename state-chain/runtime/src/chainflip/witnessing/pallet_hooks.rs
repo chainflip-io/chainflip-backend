@@ -69,7 +69,7 @@ hook_impls! {
 				);
 			},
 			Witness(deposit) => {
-				pallet_cf_ingress_egress::Pallet::<T, I>::process_vault_swap_request_full_witness_inner(
+				pallet_cf_ingress_egress::Pallet::<T, I>::process_vault_swap_request_full_witness(
 					block_height,
 					deposit.clone(),
 				);
