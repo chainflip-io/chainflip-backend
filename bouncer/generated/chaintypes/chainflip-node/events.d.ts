@@ -123,6 +123,7 @@ import type {
   PalletCfElectionsElectionIdentifier,
   CfChainsChainStateSolana,
   PalletCfAssetBalancesPalletConfigUpdate,
+  PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress,
   CfChainsChainStateAssethub,
   CfPrimitivesChainsAssetsHubAsset,
   PalletCfIngressEgressDepositFailedDetailsAssethub,
@@ -4676,6 +4677,41 @@ export interface ChainEvents extends GenericChainEvents {
       'AssetBalances',
       'PalletConfigUpdated',
       { update: PalletCfAssetBalancesPalletConfigUpdate }
+    >;
+
+    /**
+     * A whitelist change was accepted.
+     **/
+    WhitelistUpdateScheduled: GenericPalletEvent<
+      'AssetBalances',
+      'WhitelistUpdateScheduled',
+      {
+        accountId: AccountId32;
+        change: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress;
+        applyAt: bigint;
+      }
+    >;
+
+    /**
+     * A whitelist change was not applied because the account's whitelist is already at
+     * [`MaxWhitelistEntries`].
+     **/
+    WhitelistUpdateDropped: GenericPalletEvent<
+      'AssetBalances',
+      'WhitelistUpdateDropped',
+      {
+        accountId: AccountId32;
+        change: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress;
+      }
+    >;
+
+    /**
+     * An account's whitelist timelock was updated.
+     **/
+    WhitelistTimelockUpdated: GenericPalletEvent<
+      'AssetBalances',
+      'WhitelistTimelockUpdated',
+      { accountId: AccountId32; duration: bigint; effectiveAt: bigint }
     >;
 
     /**

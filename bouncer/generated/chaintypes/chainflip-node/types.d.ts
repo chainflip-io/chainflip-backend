@@ -4797,10 +4797,15 @@ export type PalletCfPoolsCloseOrder =
       };
     };
 
-export type PalletCfPoolsPalletConfigUpdate = {
-  type: 'LimitOrderAutoSweepingThreshold';
-  value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
-};
+export type PalletCfPoolsPalletConfigUpdate =
+  | {
+      type: 'LimitOrderAutoSweepingThreshold';
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
+    }
+  | {
+      type: 'SetMinimumLimitOrderAmount';
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
+    };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -6107,20 +6112,56 @@ export type CfChainsSolSolTrackedData = { priorityFee: bigint };
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
  **/
-export type PalletCfAssetBalancesCall = {
-  name: 'UpdatePalletConfig';
-  params: { update: PalletCfAssetBalancesPalletConfigUpdate };
-};
+export type PalletCfAssetBalancesCall =
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfAssetBalancesPalletConfigUpdate } }
+  /**
+   * Add or remove a destination from the caller's withdrawal whitelist. The change is
+   * scheduled and takes effect after the caller's timelock elapses (at the end of the
+   * current block when no timelock is set).
+   **/
+  | { name: 'UpdateWhitelist'; params: { change: PalletCfAssetBalancesWhitelistWhitelistChange } }
+  /**
+   * Set the caller's whitelist timelock. Like any other change, the update is delayed by
+   * the current timelock, so a stolen key can't instantly remove the protection. Since a
+   * new timelock change replaces a pending one, the owner can still *cancel* a pending
+   * malicious change at any time by scheduling their own — the recovery lever against a
+   * stolen key.
+   **/
+  | { name: 'SetWhitelistTimelock'; params: { duration: bigint } };
 
-export type PalletCfAssetBalancesCallLike = {
-  name: 'UpdatePalletConfig';
-  params: { update: PalletCfAssetBalancesPalletConfigUpdate };
-};
+export type PalletCfAssetBalancesCallLike =
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfAssetBalancesPalletConfigUpdate } }
+  /**
+   * Add or remove a destination from the caller's withdrawal whitelist. The change is
+   * scheduled and takes effect after the caller's timelock elapses (at the end of the
+   * current block when no timelock is set).
+   **/
+  | { name: 'UpdateWhitelist'; params: { change: PalletCfAssetBalancesWhitelistWhitelistChange } }
+  /**
+   * Set the caller's whitelist timelock. Like any other change, the update is delayed by
+   * the current timelock, so a stolen key can't instantly remove the protection. Since a
+   * new timelock change replaces a pending one, the owner can still *cancel* a pending
+   * malicious change at any time by scheduling their own — the recovery lever against a
+   * stolen key.
+   **/
+  | { name: 'SetWhitelistTimelock'; params: { duration: bigint } };
 
-export type PalletCfAssetBalancesPalletConfigUpdate = {
-  type: 'RefundFeeMultiple';
-  value: { chain: CfPrimitivesChainsForeignChain; multiple?: number | undefined };
-};
+export type PalletCfAssetBalancesPalletConfigUpdate =
+  | {
+      type: 'RefundFeeMultiple';
+      value: { chain: CfPrimitivesChainsForeignChain; multiple?: number | undefined };
+    }
+  | { type: 'MaxWhitelistTimelock'; value: { seconds: bigint } }
+  | { type: 'MaxPendingWhitelistUpdates'; value: { count: number } }
+  | { type: 'MaxWhitelistEntries'; value: { count: number } };
+
+export type PalletCfAssetBalancesWhitelistWhitelistChange =
+  | { type: 'Allow'; value: CfChainsRefundParametersAccountOrAddress }
+  | { type: 'Remove'; value: CfChainsRefundParametersAccountOrAddress };
+
+export type CfChainsRefundParametersAccountOrAddress =
+  | { type: 'InternalAccount'; value: AccountId32 }
+  | { type: 'ExternalAddress'; value: CfChainsAddressEncodedAddress };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -14317,12 +14358,12 @@ export type CfTraitsSwappingExpiryBehaviour =
       type: 'RefundIfExpires';
       value: {
         retryDuration: number;
-        refundAddress: CfChainsRefundParametersAccountOrAddress;
+        refundAddress: CfChainsRefundParametersAccountOrAddressForeignChainAddress;
         refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
       };
     };
 
-export type CfChainsRefundParametersAccountOrAddress =
+export type CfChainsRefundParametersAccountOrAddressForeignChainAddress =
   | { type: 'InternalAccount'; value: AccountId32 }
   | { type: 'ExternalAddress'; value: CfChainsAddressForeignChainAddress };
 
@@ -15866,7 +15907,40 @@ export type PalletCfAssetBalancesEvent =
         newBalance: bigint;
       };
     }
-  | { name: 'PalletConfigUpdated'; data: { update: PalletCfAssetBalancesPalletConfigUpdate } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfAssetBalancesPalletConfigUpdate } }
+  /**
+   * A whitelist change was accepted.
+   **/
+  | {
+      name: 'WhitelistUpdateScheduled';
+      data: {
+        accountId: AccountId32;
+        change: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress;
+        applyAt: bigint;
+      };
+    }
+  /**
+   * A whitelist change was not applied because the account's whitelist is already at
+   * [`MaxWhitelistEntries`].
+   **/
+  | {
+      name: 'WhitelistUpdateDropped';
+      data: {
+        accountId: AccountId32;
+        change: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress;
+      };
+    }
+  /**
+   * An account's whitelist timelock was updated.
+   **/
+  | {
+      name: 'WhitelistTimelockUpdated';
+      data: { accountId: AccountId32; duration: bigint; effectiveAt: bigint };
+    };
+
+export type PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress =
+  | { type: 'Allow'; value: CfChainsRefundParametersAccountOrAddressForeignChainAddress }
+  | { type: 'Remove'; value: CfChainsRefundParametersAccountOrAddressForeignChainAddress };
 
 /**
  * The `Event` enum of this pallet
@@ -19248,7 +19322,11 @@ export type PalletCfPoolsError =
   /**
    * The account still has open orders.
    **/
-  | 'OpenOrdersRemaining';
+  | 'OpenOrdersRemaining'
+  /**
+   * The resulting limit order amount is below the configured per-asset minimum.
+   **/
+  | 'BelowMinimumOrderAmount';
 
 export type CfeEventsCfeEvent =
   | { type: 'EvmThresholdSignatureRequest'; value: CfeEventsThresholdSignatureRequest }
@@ -19895,6 +19973,17 @@ export type PalletCfAssetBalancesExternalOwner =
   | { type: 'AggKey' }
   | { type: 'Account'; value: CfChainsAddressForeignChainAddress };
 
+export type PalletCfAssetBalancesWhitelistWithdrawalWhitelist = {
+  external: Array<[CfPrimitivesChainsForeignChain, Array<CfChainsAddressForeignChainAddress>]>;
+  internal: Array<AccountId32>;
+  timelock: bigint;
+};
+
+export type PalletCfAssetBalancesWhitelistPendingChange =
+  | { type: 'Whitelist'; value: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress }
+  | { type: 'Timelock'; value: bigint }
+  | { type: 'RefundAddress'; value: CfChainsAddressForeignChainAddress };
+
 /**
  * The `Error` enum of this pallet.
  **/
@@ -19918,7 +20007,27 @@ export type PalletCfAssetBalancesError =
   /**
    * The account still has free balance.
    **/
-  | 'FundsRemaining';
+  | 'FundsRemaining'
+  /**
+   * The withdrawal destination is not on the account's withdrawal whitelist.
+   **/
+  | 'DestinationNotAllowed'
+  /**
+   * The provided address could not be decoded.
+   **/
+  | 'InvalidEncodedAddress'
+  /**
+   * The requested timelock exceeds the configured maximum.
+   **/
+  | 'TimelockExceedsMaximum'
+  /**
+   * The account has too many pending whitelist updates.
+   **/
+  | 'TooManyPendingUpdates'
+  /**
+   * No liquidity refund address is registered for the account on the relevant chain.
+   **/
+  | 'NoLiquidityRefundAddressRegistered';
 
 export type PalletCfVaultsVaultActivationStatus005 =
   | { type: 'AwaitingActivation'; value: { newPublicKey: CfChainsDotPolkadotAccountId } }

@@ -119,6 +119,7 @@ import type {
   PalletCfElectionsCorruptStorageAdherance,
   CfChainsChainStateSolana,
   PalletCfAssetBalancesPalletConfigUpdate,
+  PalletCfAssetBalancesWhitelistWhitelistChange,
   CfChainsChainStateAssethub,
   CfChainsHubApiAssethubApi,
   CfPrimitivesChainsAssetsHubAsset,
@@ -6712,6 +6713,48 @@ export interface ChainTx<
           palletCall: {
             name: 'UpdatePalletConfig';
             params: { update: PalletCfAssetBalancesPalletConfigUpdate };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Add or remove a destination from the caller's withdrawal whitelist. The change is
+     * scheduled and takes effect after the caller's timelock elapses (at the end of the
+     * current block when no timelock is set).
+     *
+     * @param {PalletCfAssetBalancesWhitelistWhitelistChange} change
+     **/
+    updateWhitelist: GenericTxCall<
+      (change: PalletCfAssetBalancesWhitelistWhitelistChange) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssetBalances';
+          palletCall: {
+            name: 'UpdateWhitelist';
+            params: { change: PalletCfAssetBalancesWhitelistWhitelistChange };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Set the caller's whitelist timelock. Like any other change, the update is delayed by
+     * the current timelock, so a stolen key can't instantly remove the protection. Since a
+     * new timelock change replaces a pending one, the owner can still *cancel* a pending
+     * malicious change at any time by scheduling their own — the recovery lever against a
+     * stolen key.
+     *
+     * @param {bigint} duration
+     **/
+    setWhitelistTimelock: GenericTxCall<
+      (duration: bigint) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssetBalances';
+          palletCall: {
+            name: 'SetWhitelistTimelock';
+            params: { duration: bigint };
           };
         },
         ChainKnownTypes
