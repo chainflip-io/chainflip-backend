@@ -642,7 +642,11 @@ const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
 	Deserialize,
 	cf_proc_macros::HasTypeIntrospection,
 )]
-#[cfg_attr(any(test, feature = "proptest"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(
+	any(test, all(feature = "proptest", feature = "std")),
+	derive(proptest_derive::Arbitrary)
+)]
+
 pub enum ScriptPubkey {
 	P2PKH([u8; 20]),
 	P2SH([u8; 20]),
