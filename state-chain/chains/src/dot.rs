@@ -131,11 +131,13 @@ impl PolkadotPair {
 	MaxEncodedLen,
 	Serialize,
 	Deserialize,
+	cf_proc_macros::HasTypeIntrospection,
 )]
 #[cfg_attr(
 	feature = "std",
 	serde(try_from = "SubstrateNetworkAddress", into = "SubstrateNetworkAddress")
 )]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 pub struct PolkadotAccountId(pub [u8; 32]);
 impl_identity_migrations! { PolkadotAccountId, }
 

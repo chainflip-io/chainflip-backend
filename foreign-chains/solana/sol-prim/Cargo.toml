@@ -36,7 +36,7 @@ thiserror = { workspace = true, optional = true }
 codec = { workspace = true, optional = true, features = ["derive"] }
 scale-info = { workspace = true, optional = true, features = ["derive"] }
 duplicate = { workspace = true }
-
+proptest = { workspace = true, optional = true }
 
 sp-std = { workspace = true }
 sp-core = { workspace = true }
@@ -73,3 +73,4 @@ std = [
 ]
 runtime-integration-tests = []
 test = []
+proptest = ["dep:proptest"]
