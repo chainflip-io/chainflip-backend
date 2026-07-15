@@ -95,6 +95,12 @@ pub enum ForeignChainAddress {
 }
 impl HasChangelog for ForeignChainAddress {
 	type if_unspecified = _ForeignChainAddress::see_variant_changelogs;
+	type in_20200 = _ForeignChainAddress::see_variant_changelogs_and_also<
+		_ForeignChainAddress::variant::Tron::Added,
+	>;
+	type in_20300 = _ForeignChainAddress::see_variant_changelogs_and_also<
+		_ForeignChainAddress::variant::Bsc::Added,
+	>;
 }
 
 impl ForeignChainAddress {
