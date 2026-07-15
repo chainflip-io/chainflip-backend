@@ -16,8 +16,6 @@
 
 // --------- primitives --------
 
-use proptest::arbitrary::Arbitrary;
-use sp_core::bounded::BoundedVec;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
 use crate::{
@@ -407,89 +405,6 @@ impl_migrations_for_container! {
 		Ok(result)
 	},
 }
-
-// ---- BoundedVec ----
-
-macro_rules! impl_changelog_for_bounded_vec {
-    ($($migration:ident,)*) => {
-        impl<X: HasChangelog, S: sp_core::Get<u32>> HasChangelog for BoundedVec<X, S> {
-            type if_unspecified = MapMigration<(X::if_unspecified,)>;
-
-            $(
-                type $migration = MapMigration<(X::$migration,)>;
-            )*
-        }
-    };
-}
-with_all_runtime_migrations! {impl_changelog_for_bounded_vec}
-
-impl<X, S: sp_core::Get<u32>, V: Version, M: Migration<X, V>> Migration<BoundedVec<X, S>, V>
-	for MapMigration<(M,)>
-{
-	type From = BoundedVec<M::From, S>;
-	type ForwardsError = VecMigrationFailed<M::ForwardsError>;
-	type BackwardsError = VecMigrationFailed<M::BackwardsError>;
-
-	fn try_forwards(x: Self::From) -> Result<BoundedVec<X, S>, Self::ForwardsError> {
-		let result = x
-			.into_iter()
-			.enumerate()
-			.map(|(index, x)| {
-				M::try_forwards(x).map_err(|error| VecMigrationFailed::Element { index, error })
-			})
-			.collect::<Result<Vec<_>, _>>()?;
-		Ok(BoundedVec::truncate_from(result))
-	}
-
-	fn try_backwards(x: BoundedVec<X, S>) -> Result<Self::From, Self::BackwardsError> {
-		let result = x
-			.into_iter()
-			.enumerate()
-			.map(|(index, x)| {
-				M::try_backwards(x).map_err(|error| VecMigrationFailed::Element { index, error })
-			})
-			.collect::<Result<Vec<_>, _>>()?;
-		Ok(BoundedVec::truncate_from(result))
-	}
-}
-
-impl<
-		X,
-		S: sp_core::Get<u32>,
-		M: Migration<X, vCurrent, ForwardsError = Never, BackwardsError = Never>,
-	> Migration<BoundedVec<X, S>, vCurrent> for GenericMapMigration<(M,)>
-{
-	type From = BoundedVec<M::From, S>;
-
-	fn try_forwards(x: Self::From) -> Result<BoundedVec<X, S>, Self::ForwardsError> {
-		let result = x.into_iter().map(M::try_forwards).collect::<Result<Vec<_>, _>>()?;
-		Ok(BoundedVec::truncate_from(result))
-	}
-
-	fn try_backwards(x: BoundedVec<X, S>) -> Result<Self::From, Self::BackwardsError> {
-		let result = x.into_iter().map(M::try_backwards).collect::<Result<Vec<_>, _>>()?;
-		Ok(BoundedVec::truncate_from(result))
-	}
-}
-
-impl<X: HasGenericVariant, S: sp_core::Get<u32>> HasGenericVariant for BoundedVec<X, S> {
-	type GenericType = BoundedVec<X::GenericType, S>;
-	type MigrationFromGeneric = GenericMapMigration<(X::MigrationFromGeneric,)>;
-}
-impl<X: IsHistoricalType, S: sp_core::Get<u32>> IsHistoricalType for BoundedVec<X, S> {
-	type GetCurrentType = BoundedVec<X::GetCurrentType, S>;
-}
-
-// #[cfg(any(test, all(feature = "proptest", feature = "std")))]
-// impl<X: proptest::arbitrary::Arbitrary, S> proptest::arbitrary::Arbitrary for BoundedVec<X, S> {
-// 	type Parameters;
-
-// 	fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
-// 		todo!()
-// 	}
-
-// 	type Strategy;
-// }
 
 // ---- TupleWith1Entry ----
 
