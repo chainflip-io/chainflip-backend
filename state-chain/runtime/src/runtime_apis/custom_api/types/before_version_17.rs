@@ -22,7 +22,7 @@ use cf_traits::{lending::LoanId, SafeModeSet};
 use cf_utilities::migrations::{basics::HasVersion, v20100, v20200, v20300};
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 use frame_support::sp_runtime::Percent;
-use pallet_cf_lending_pools::{LendingPoolConfiguration, NetworkFeeContributions};
+use pallet_cf_lending_pools::NetworkFeeContributions;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostConfiguration {

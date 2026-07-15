@@ -32,9 +32,8 @@ use cf_primitives::{chains::Bsc, Asset, BroadcastId, EpochIndex, FlipBalance, Fo
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
-		migrate_to_historical_type, vCurrent, GlobalMigrationFromGeneric, HasGenericVariant,
-		HasVersion, IdentityMigration, IsHistoricalType, Migration, NewFieldWithDefault,
-		OverrideMigrationWith,
+		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
+		IsHistoricalType, Migration, NewFieldWithDefault, OverrideMigrationWith,
 	},
 	primitives::NewTypeWithDefault,
 	v20100, v20200, v20300, HasChangelog,

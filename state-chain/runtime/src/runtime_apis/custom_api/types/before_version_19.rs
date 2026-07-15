@@ -309,7 +309,7 @@ impl From<RuntimeApiAccountInfoWrapper> for super::RuntimeApiAccountInfoWrapper 
 		// TODO!!!
 		let result = match try_migrate_from_historical_type(v20200, value.common_items) {
 			Ok(x) => x,
-			Err(err) => panic!(),
+			Err(_err) => panic!(),
 		};
 		Self { common_items: result, role: value.role.into() }
 	}
