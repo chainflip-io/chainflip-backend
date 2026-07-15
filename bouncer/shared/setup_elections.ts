@@ -46,6 +46,27 @@ export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> 
     cf.info('Ignoring bitcoin elections setup as bitcoinElections pallet is not available.');
   }
 
+  if (chainflip.query.arbitrumElections) {
+    const ingressSafetyMargin = 3;
+
+    const response = JSON.parse(
+      (await chainflip.query.arbitrumElections.electoralUnsynchronisedSettings()) as any,
+    );
+
+    // set higher safety margin for ingresses so that we don't miss txs
+    response[1].safetyMargin = ingressSafetyMargin;
+    response[2].safetyMargin = ingressSafetyMargin;
+
+    // update election settings
+    await submitGovernanceExtrinsic((api) =>
+      api.tx.arbitrumElections.updateSettings(response, null, 'Heed'),
+    );
+
+    cf.info(`Ingress safety margin for arbitrum elections set to ${ingressSafetyMargin}.`);
+  } else {
+    cf.info('Ignoring arbitrum elections setup as arbitrumElections pallet is not available.');
+  }
+
   if (chainflip.query.genericElections) {
     const upToDateTimeout = 86400;
 
@@ -74,15 +95,6 @@ export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> 
   } else {
     cf.info('Ignoring Oracle elections setup as genericElections pallet is not available.');
   }
-
-  // The DM uses the ingress_events rpc for Arbitrum, so an ingress delay is required for BLS to work.
-  const arbitrumIngressDelay = 2;
-  await submitGovernanceExtrinsic((api) =>
-    api.tx.arbitrumIngressEgress.updatePalletConfig([
-      { SetIngressDelayArbitrum: { delayBlocks: arbitrumIngressDelay } },
-    ]),
-  );
-  cf.info(`Ingress delay for Arbitrum set to ${arbitrumIngressDelay} `);
 }
 
 export async function setupWitnessing<A>(cf: ChainflipIO<A>) {
