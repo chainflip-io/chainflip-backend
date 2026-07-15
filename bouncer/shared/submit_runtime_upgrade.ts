@@ -1,9 +1,9 @@
-import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { decodeDispatchError, sleep } from 'shared/utils';
+import type { CfPrimitivesSemVer } from 'generated/chaintypes/chainflip-node';
 import { tryRuntimeUpgrade } from 'shared/try_runtime_upgrade';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipApi, clearChainflipClientCache } from 'shared/utils/substrate';
 import { throwError } from 'shared/utils/logger';
 import { systemCodeUpdatedEvent } from 'generated/events/system/codeUpdated';
 import { governanceFailedExecutionEvent } from 'generated/events/governance/failedExecution';
@@ -11,7 +11,9 @@ import { reputationPenaltyUpdatedEvent } from 'generated/events/reputation/penal
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
-  return compactAddLength(new Uint8Array(await fs.readFile(filePath)));
+  // Return the raw WASM bytes. The dedot codec length-prefixes the `code: Bytes` argument itself
+  // when encoding the extrinsic, so we must NOT pre-prepend a compact length here like polkadot.js did.
+  return new Uint8Array(await fs.readFile(filePath));
 }
 
 // By default we don't want to restrict that any of the nodes need to be upgraded.
@@ -43,16 +45,22 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
   cf.info('Temporarily disabling MissedAuthorshipSlot punishment during runtime upgrade.');
   await cf.submitGovernance({
     extrinsic: (api) =>
-      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-        reputation: 0,
-        suspension: 0,
-      }),
+      api.tx.reputation.setPenalty(
+        { type: 'MissedAuthorshipSlot' },
+        {
+          reputation: 0,
+          suspension: 0,
+        },
+      ),
     expectedEvent: reputationPenaltyUpdatedEvent,
   });
 
   cf.info(`Submitting runtime upgrade. WASM size is ${wasmStats.size} bytes.`);
   await submitGovernanceExtrinsic((api) =>
-    api.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
+    api.tx.governance.chainflipRuntimeUpgrade(
+      versionPercentRestriction as [CfPrimitivesSemVer, number] | undefined,
+      runtimeWasm,
+    ),
   );
 
   cf.info('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
@@ -71,13 +79,21 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
 
   cf.info('Runtime upgrade completed.');
 
+  // The runtime upgrade changes the metadata (e.g. new pallets shift call indices). Drop the cached
+  // dedot client so the next extrinsic is built and submitted against a fresh client that loads the
+  // new runtime's metadata from scratch.
+  await clearChainflipClientCache();
+
   cf.info('Restoring MissedAuthorshipSlot penalty defaults after runtime upgrade.');
   await cf.submitGovernance({
     extrinsic: (api) =>
-      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-        reputation: 120,
-        suspension: 150,
-      }),
+      api.tx.reputation.setPenalty(
+        { type: 'MissedAuthorshipSlot' },
+        {
+          reputation: 120,
+          suspension: 150,
+        },
+      ),
     expectedEvent: reputationPenaltyUpdatedEvent,
   });
 }

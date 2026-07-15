@@ -10,7 +10,9 @@ import {
   assetDecimals,
   amountToFineAmount,
   getEvmWhaleKeypair,
+  sleep,
 } from 'shared/utils';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { approveErc20 } from 'shared/approve_erc20';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { fundingFundedEvent } from 'generated/events/funding/funded';
@@ -67,7 +69,20 @@ export async function fundFlip<A = []>(cf: ChainflipIO<A>, scAddress: string, fl
       receipt2.blockHash,
   );
 
-  await cf.stepUntilEvent(
-    fundingFundedEvent.refine((event) => event.accountId === hexPubkeyToFlipAddress(pubkey)),
-  );
+  const scAccount = hexPubkeyToFlipAddress(pubkey);
+  await cf.stepUntilEvent(fundingFundedEvent.refine((event) => event.accountId === scAccount));
+
+  // The Funded event is observed via the indexer (a best-block view), but dedot validates every
+  // extrinsic against the FINALIZED block before broadcasting. A follow-up extrinsic from this
+  // freshly-funded account would otherwise be rejected with "Invalid - Payment" until the credit
+  // is finalized.
+  await using chainflip = await getChainflipApi();
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const finalized = await chainflip.at((await chainflip.block.finalized()).hash);
+    if ((await finalized.query.flip.account(scAccount)).balance > 0n) {
+      return;
+    }
+    await sleep(1000);
+  }
+  throw new Error(`Funding of ${scAccount} confirmed via event but not finalized in time`);
 }

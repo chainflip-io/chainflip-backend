@@ -3,6 +3,7 @@
 
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import type { StateChainRuntimeRuntimeCallLike } from 'generated/chaintypes/chainflip-node';
 
 // This command is for the upgrade test when updating Solana images. The deployment of Solana ALTs is non-deterministic
 // and it's address can't be known. Therefore each image will have its own ALT address. This is problematic in the
@@ -32,12 +33,14 @@ export async function updateAlt() {
       api.tx.system.setStorage([
         [
           // Environment pallet's solanaApiEnvironment
-          decodeHexStringToByteArray(
-            'ea74517f3c97f142e2fa95ff896cfe9fc5dcbcfef6c398102c351b5af0c071ad',
+          new Uint8Array(
+            decodeHexStringToByteArray(
+              'ea74517f3c97f142e2fa95ff896cfe9fc5dcbcfef6c398102c351b5af0c071ad',
+            ),
           ),
           newStorage,
         ],
-      ]),
+      ]).call as StateChainRuntimeRuntimeCallLike,
     ),
   );
 }

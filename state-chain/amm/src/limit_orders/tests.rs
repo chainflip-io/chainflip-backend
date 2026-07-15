@@ -556,9 +556,10 @@ fn swap() {
 			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 				&LiquidityProvider::from([0; 32]),
 				offset +
-					SqrtPrice::from_raw(
+					SqrtPrice::try_from_raw(
 						SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
 					)
+					.unwrap()
 					.to_tick(),
 				100000000.into()
 			));
@@ -582,9 +583,10 @@ fn swap() {
 			assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 				&LiquidityProvider::from([0; 32]),
 				offset +
-					SqrtPrice::from_raw(
+					SqrtPrice::try_from_raw(
 						SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
 					)
+					.unwrap()
 					.to_tick(),
 				100000000.into()
 			));
@@ -605,8 +607,11 @@ fn swap() {
 		));
 		assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 			&LiquidityProvider::from([0; 32]),
-			SqrtPrice::from_raw(SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt())
-				.to_tick(),
+			SqrtPrice::try_from_raw(
+				SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
+			)
+			.unwrap()
+			.to_tick(),
 			100.into()
 		));
 		assert_eq!(pool_state.swap::<BaseToQuote>(150.into(), None, 0), (200.into(), 24.into()));
@@ -621,11 +626,33 @@ fn swap() {
 		));
 		assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 			&LiquidityProvider::from([0; 32]),
-			SqrtPrice::from_raw(SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt())
-				.to_tick(),
+			SqrtPrice::try_from_raw(
+				SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
+			)
+			.unwrap()
+			.to_tick(),
 			100.into()
 		));
 		assert_eq!(pool_state.swap::<QuoteToBase>(550.into(), None, 0), (200.into(), 50.into()));
+	}
+}
+
+// Regression test: a limit order placed at the extreme boundary tick must still be matched by a
+// swap with no price limit.
+#[test]
+fn boundary_tick_limit_order_consumed_without_price_limit() {
+	for tick in [MIN_TICK, MAX_TICK] {
+		let mut pool_state = PoolState::new();
+		assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
+			&LiquidityProvider::from([0; 32]),
+			tick,
+			1000.into()
+		));
+		assert_eq!(
+			pool_state.swap::<BaseToQuote>(Amount::MAX, None, 0).0,
+			1000.into(),
+			"limit order at tick {tick} should be fully consumed by an unbounded swap"
+		);
 	}
 }
 

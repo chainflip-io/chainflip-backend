@@ -7,7 +7,7 @@ import { AssetSymbol as Asset, chainConstants, getInternalAsset } from '@chainfl
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import assert from 'assert';
 import { z } from 'zod';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { Chain, deferredPromise, handleSubstrateError, shortChainFromAsset } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 
@@ -330,7 +330,7 @@ export async function depositChannelCreation(testContext: TestContext) {
     },
   };
 
-  await using api = await getChainflipApi();
+  await using api = await getChainflipPolkadotApi();
   let nonce = (await api.rpc.system.accountNextIndex(account1.address)).toJSON() as number;
 
   const allCases = [...baseCases, ...refundCases, withDca, withCommission, withAffiliates, withCcm];

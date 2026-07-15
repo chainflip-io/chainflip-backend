@@ -67,7 +67,6 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"log/std",
-	"pallet-cf-environment/std",
 	"scale-info/std",
 	"sp-arithmetic/std",
 	"sp-std/std",
@@ -75,7 +74,6 @@ std = [
 	"serde/std",
 	"cf-runtime-utilities/std",
 	"itertools/use_std",
-	"pallet-cf-environment/std",
 ]
 runtime-benchmarks = [
 	"cf-chains/runtime-benchmarks",

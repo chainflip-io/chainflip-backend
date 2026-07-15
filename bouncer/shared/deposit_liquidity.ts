@@ -2,14 +2,15 @@ import {
   newAssetAddress,
   decodeDotAddressForContract,
   amountToFineAmount,
+  amountToFineAmountBigInt,
   isWithinOnePercent,
   chainFromAsset,
   decodeSolAddress,
   assetDecimals,
   runWithTimeout,
-  shortChainFromChain,
   doAddressesMatch,
   chainGasAsset,
+  encodedAddress,
   Chain,
   Asset,
 } from 'shared/utils';
@@ -31,10 +32,11 @@ export async function registerLiquidityRefundAddressForChain<A extends WithLpAcc
   // Check if the refund address is already registered for this chain. If so, return early.
   if (!forceRegister) {
     await using chainflip = await getChainflipApi();
-    const currentRefundAddress = (
-      await chainflip.query.assetBalances.refundAddresses(lp.address, chain)
-    ).toJSON();
-    if (currentRefundAddress !== null) {
+    const currentRefundAddress = await chainflip.query.assetBalances.refundAddresses([
+      lp.address,
+      chain,
+    ]);
+    if (currentRefundAddress !== undefined) {
       cf.debug(`Liquidity Refund Address already registered for ${lpuri} chain: ${chain}`);
       return;
     }
@@ -48,9 +50,7 @@ export async function registerLiquidityRefundAddressForChain<A extends WithLpAcc
 
   const refundAddressRegisteredEvent = await cf.submitExtrinsic({
     extrinsic: (api) =>
-      api.tx.liquidityProvider.registerLiquidityRefundAddress({
-        [shortChainFromChain(chain)]: refundAddress,
-      }),
+      api.tx.liquidityProvider.registerLiquidityRefundAddress(encodedAddress(chain, refundAddress)),
     expectedEvent: liquidityProviderLiquidityRefundAddressRegisteredEvent.refine(
       (event) =>
         doAddressesMatch(event.address, chain, refundAddress) && event.accountId === lp.address,
@@ -78,7 +78,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   cf.info(`Opening new liquidity deposit channel for ${lp.address}`);
 
   const depositAddressReadyEvent = await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, null),
+    extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, 0),
     expectedEvent: liquidityProviderLiquidityDepositAddressReadyEvent.refine(
       (event) => event.asset === ccy && event.accountId === lp.address,
     ),
@@ -98,10 +98,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
     assetBalancesAccountCreditedEvent.refine((event) => {
       if (event.asset === ccy && event.accountId === lp.address) {
         if (
-          isWithinOnePercent(
-            event.amountCredited,
-            BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
-          )
+          isWithinOnePercent(event.amountCredited, amountToFineAmountBigInt(String(amount), ccy))
         ) {
           return true;
         }

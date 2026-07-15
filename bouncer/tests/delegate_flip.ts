@@ -48,7 +48,7 @@ async function encodeAndSendDelegationApiCall(
 
   logger.info(`Requesting EVM encoding for ${evmWallet.address} ${JSON.stringify(call)}`);
 
-  const payload = await chainflip.rpc('cf_evm_calldata', evmWallet.address, {
+  const payload = await chainflip.rpc.cf_evm_calldata(evmWallet.address, {
     API: 'Delegation',
     call,
   });
@@ -162,7 +162,7 @@ export async function testDelegate(testContext: TestContext) {
 
   // Redeem only if there are no other redemptions to prevent queuing issues when
   // running this test multiple times.
-  if (pendingRedemption.toString().length === 0) {
+  if (pendingRedemption === undefined) {
     cf.info('Redeeming funds');
 
     const redeemAddress = await newAssetAddress('Flip', randomBytes(32).toString('hex'));

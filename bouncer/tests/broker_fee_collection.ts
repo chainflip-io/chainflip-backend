@@ -5,7 +5,6 @@ import {
   decodeDotAddressForContract,
   observeBalanceIncrease,
   shortChainFromAsset,
-  hexStringToBytesArray,
   amountToFineAmountBigInt,
   SwapRequestType,
   observeSwapRequested,
@@ -17,9 +16,11 @@ import {
   chainFromAsset,
   Chains,
   Asset,
+  Chain,
+  encodedAddress,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
-import { getChainflipApi } from 'shared/utils/substrate';
+import type { CfChainsRefundParametersChannelRefundParameters } from 'generated/chaintypes/chainflip-node';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
@@ -39,14 +40,15 @@ const commissionBps = 1000; // 10%
 export async function submitBrokerWithdrawal<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,
   asset: Asset,
-  addressObject: { [chain: string]: string },
+  chain: Chain,
+  address: string,
 ) {
   const broker = cf.requirements.account.keypair;
 
   cf.debug(`Submitted withdrawal for ${asset} broker: ${broker.address}`);
 
   const withdrawalRequestedEvent = await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.swapping.withdraw(asset, addressObject),
+    extrinsic: (api) => api.tx.swapping.withdraw(asset, encodedAddress(chain, address)),
     expectedEvent: swappingWithdrawalRequestedEvent.refine(
       (event) => event.accountId === broker.address && event.egressAsset === asset,
     ),
@@ -72,8 +74,13 @@ async function testBrokerFees<A extends WithBrokerAccount>(
   inputAsset: Asset,
   seed?: string,
 ): Promise<void> {
+  assert.strictEqual(
+    chainFromAsset(inputAsset),
+    Chains.Ethereum,
+    `testBrokerFees only supports Ethereum-chain input assets, got ${inputAsset}`,
+  );
+
   const broker = cf.requirements.account.keypair;
-  await using chainflip = await getChainflipApi();
 
   // Check the broker fees before the swap
   const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
@@ -95,15 +102,11 @@ async function testBrokerFees<A extends WithBrokerAccount>(
 
   const rawDepositForSwapAmount = defaultAssetAmounts(inputAsset);
 
-  const encodedEthAddr = chainflip.createType('EncodedAddress', {
-    Eth: hexStringToBytesArray(destinationAddress),
-  });
+  const encodedEthAddr = encodedAddress('Ethereum', destinationAddress);
 
-  const refundParams = {
-    refundAddress: chainflip.createType('EncodedAddress', {
-      Eth: hexStringToBytesArray(await newAssetAddress(inputAsset, 'DEFAULT_REFUND')),
-    }),
-    minPrice: '0',
+  const refundParams: CfChainsRefundParametersChannelRefundParameters = {
+    refundAddress: encodedAddress('Ethereum', await newAssetAddress(inputAsset, 'DEFAULT_REFUND')),
+    minPrice: 0n,
     retryDuration: 0,
   };
 
@@ -116,7 +119,7 @@ async function testBrokerFees<A extends WithBrokerAccount>(
         destAsset,
         encodedEthAddr,
         commissionBps,
-        null,
+        undefined,
         0,
         refundParams,
       ),
@@ -182,9 +185,7 @@ async function testBrokerFees<A extends WithBrokerAccount>(
     `Withdrawing broker fees to ${withdrawalAddress}, balance before: ${balanceBeforeWithdrawal}`,
   );
 
-  await submitBrokerWithdrawal(cf, feeAsset, {
-    [chain]: withdrawalAddress,
-  });
+  await submitBrokerWithdrawal(cf, feeAsset, chainFromAsset(feeAsset), withdrawalAddress);
 
   await observeBalanceIncrease(cf.logger, feeAsset, withdrawalAddress, balanceBeforeWithdrawal);
 

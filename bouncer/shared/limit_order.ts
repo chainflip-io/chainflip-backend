@@ -15,14 +15,14 @@ export async function limitOrder<A extends WithLpAccount>(
   await cf.submitExtrinsic({
     extrinsic: (api) =>
       api.tx.liquidityPools.setLimitOrder(
-        ccy.toLowerCase(),
-        'usdc',
-        'sell',
-        orderId,
+        ccy,
+        'Usdc',
+        'Sell',
+        BigInt(orderId),
         tick,
-        fineAmount,
-        null,
-        null,
+        BigInt(fineAmount),
+        undefined,
+        undefined,
       ),
   });
 

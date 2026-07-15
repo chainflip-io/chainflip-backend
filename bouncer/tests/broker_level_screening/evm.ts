@@ -8,9 +8,7 @@ import {
   observeBalanceIncrease,
   observeCcmReceived,
   observeFetch,
-  getChainContractId,
-  amountToFineAmount,
-  assetDecimals,
+  amountToFineAmountBigInt,
   Chain,
   Asset,
 } from 'shared/utils';
@@ -354,33 +352,27 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   const MAX_RETRIES = 120;
 
   // Get existing LP refund address of //LP_1 for `sourceAsset`
-  /* eslint-disable  @typescript-eslint/no-explicit-any */
-  const addressReponse = (
-    await chainflip.query.assetBalances.refundAddresses(
-      lp.address,
-      getChainContractId(chainFromAsset(sourceAsset)),
-    )
-  ).toJSON() as any;
-  if (addressReponse === undefined) {
+  const addressResponse = await chainflip.query.assetBalances.refundAddresses([
+    lp.address,
+    chainFromAsset(sourceAsset),
+  ]);
+  if (addressResponse === undefined) {
     throw new Error(`There was now refund address for ${sourceAsset} for the LP.`);
   }
-
-  let ethereumRefundAddress;
-  if (chain === 'Ethereum') {
-    ethereumRefundAddress = addressReponse.eth;
-  } else if (chain === 'Arbitrum') {
-    ethereumRefundAddress = addressReponse.arb;
-  } else if (chain === 'Bsc') {
-    ethereumRefundAddress = addressReponse.bsc;
-  } else {
+  if (
+    addressResponse.type !== 'Eth' &&
+    addressResponse.type !== 'Arb' &&
+    addressResponse.type !== 'Bsc'
+  ) {
     throw new Error('Unsupported Evm chain');
   }
+  const ethereumRefundAddress = addressResponse.value;
   cf.debug(`refund address is: ${ethereumRefundAddress}`);
 
   // Create new LP deposit address for //LP_1
   cf.debug('Requesting ' + sourceAsset + ' deposit address');
   const depositAddressReadyEvent = await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(sourceAsset, null),
+    extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(sourceAsset, 0),
     expectedEvent: liquidityProviderLiquidityDepositAddressReadyEvent.refine(
       (event) => event.asset === sourceAsset && event.accountId === lp.address,
     ),
@@ -410,7 +402,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
           event.accountId === lp.address &&
           isWithinOnePercent(
             event.amountCredited,
-            BigInt(amountToFineAmount(String(amount), assetDecimals(sourceAsset))),
+            amountToFineAmountBigInt(String(amount), sourceAsset),
           ),
       ),
     );

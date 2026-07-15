@@ -48,7 +48,7 @@ services:
       - "/tmp/chainflip/data/config:/config"
 
   bsc:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/bsc:test-bsc-node-15-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/bsc:v1.5.1-rc1-${NODE_COUNT}
     container_name: bsc-node
     platform: linux/amd64
     ports:

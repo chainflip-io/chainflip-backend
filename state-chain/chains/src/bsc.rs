@@ -104,8 +104,12 @@ impl Default for BscTrackedData {
 	}
 }
 
-/// Minimum gas price (wei) BSC validators will accept; below this, txs are likely dropped.
-const MIN_FEE_PER_GAS: <Bsc as Chain>::ChainAmount = 1_000_000_000; // 1 Gwei
+/// Minimum fee per gas price (wei) that BSC validators will accept; transactions below this are
+/// likely to be dropped. Set to 0.1 Gwei — the BSC Testnet minimum — which also covers the lower
+/// BSC Mainnet minimum of 0.05 Gwei, avoiding the need for per-network storage.
+/// For localnet, this must match the BSC docker image config: `[Eth.Miner] GasPrice` and
+/// `[Eth.TxPool] PriceLimit`.
+const MIN_FEE_PER_GAS: <Bsc as Chain>::ChainAmount = 100_000_000;
 
 impl BscTrackedData {
 	pub fn max_fee_per_gas(

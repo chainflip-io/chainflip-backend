@@ -40,8 +40,10 @@ pub use general_lending::config::{
 	NetworkFeeContributions,
 };
 
-pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
-use boost::{BoostPool, BoostPoolId};
+use boost::BoostPool;
+pub use boost::{
+	boost_pools_iter, get_boost_pool_details, BoostPoolDetails, BoostPoolId, OwedAmount, BOOST_FEE,
+};
 
 pub mod migrations;
 pub mod weights;
@@ -78,7 +80,7 @@ use cf_runtime_utilities::log_or_panic;
 use frame_system::pallet_prelude::*;
 use weights::WeightInfo;
 
-use crate::{boost::BOOST_FEE, core_lending_pool::CoreLendingPool};
+use crate::core_lending_pool::CoreLendingPool;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec,
