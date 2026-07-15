@@ -66,6 +66,7 @@ rand = { workspace = true, optional = true }
 # moved to the dev-dependencies though because the tests of the elections pallet depend on the
 # implementation provided in this crate when "test" is enabled.
 proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
 duplicate = { workspace = true }
 saturating_cast = "0.1.0"
 n-functor = { workspace = true }
@@ -147,4 +148,4 @@ runtime-integration-tests = [
 ]
 test = ["proptest"]
 mocks = []
-proptest = ["dep:proptest"]
+proptest = ["dep:proptest", "dep:proptest-derive", "sol-prim/proptest"]

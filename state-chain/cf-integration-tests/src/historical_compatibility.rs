@@ -159,6 +159,15 @@ fn test_all_historical_runtime_calls(
                             "cf_common_account_info",
                         )
                 );
+// state_chain_runtime::runtime_apis::types::LiquidityProviderInfo
+                incompatibilities.append(
+                    &mut tester
+                        .test_call::<$version, (AccountId32, ShouldSweep), cf_chains::ForeignChainAddress>(
+                            $version,
+                            "CustomRuntimeApi",
+                            "cf_liquidity_provider_info",
+                        )
+                );
                 incompatibilities.append(
                     &mut tester.test_call::<$version, (), cf_rpc_types::broker::VaultAddresses>($version, "CustomRuntimeApi", "cf_vault_addresses")
                 );
