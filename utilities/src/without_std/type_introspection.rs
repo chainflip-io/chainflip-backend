@@ -24,7 +24,12 @@ pub trait HasTypeIntrospection: Sized {
 
 // -------------- primitives ---------------
 
-#[duplicate::duplicate_item(Type; [()]; [bool]; [u8]; [u16]; [u32]; [u64]; [u128]; [ [u8;20] ]; [ [u8;32] ])]
+#[duplicate::duplicate_item(
+    Type;
+    [u8]; [u16]; [u32]; [u64]; [u128];
+    [i8]; [i16]; [i32]; [i64]; [i128];
+    [()]; [bool]; [ [u8;20] ]; [ [u8;32] ]
+)]
 impl HasTypeIntrospection for Type {
 	fn is_empty_type() -> bool {
 		false

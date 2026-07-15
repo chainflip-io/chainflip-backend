@@ -16,7 +16,7 @@
 
 // --------- primitives --------
 
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
 use crate::{
 	migrations::{

@@ -168,6 +168,14 @@ fn test_all_historical_runtime_calls(
                         )
                 );
                 incompatibilities.append(
+                    &mut tester
+                        .test_call::<$version, AccountId32, state_chain_runtime::runtime_apis::types::ValidatorInfo>(
+                            $version,
+                            "CustomRuntimeApi",
+                            "cf_validator_info",
+                        )
+                );
+                incompatibilities.append(
                     &mut tester.test_call::<$version, (), cf_rpc_types::broker::VaultAddresses>($version, "CustomRuntimeApi", "cf_vault_addresses")
                 );
 

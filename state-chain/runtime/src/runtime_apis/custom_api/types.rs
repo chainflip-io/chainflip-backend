@@ -233,6 +233,7 @@ pub mod validator_info_before_v7 {
 
 #[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+#[cf_proc_macros::generate_module]
 pub struct ValidatorInfo {
 	pub balance: AssetAmount,
 	pub bond: AssetAmount,
@@ -263,6 +264,9 @@ impl HasChangelog for ValidatorInfo {
 		_ValidatorInfo::field::bid::Added,
 		_ValidatorInfo::field::max_bid::Added,
 	)>;
+}
+impl HasChangelog for ValidatorInfo {
+	type if_unspecified = _ValidatorInfo::see_field_changelogs;
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
