@@ -48,7 +48,7 @@ pub mod chains;
 
 #[macro_export]
 macro_rules! define_wrapper_type {
-	($name: ident, $inner: ty $(, extra_derives: $( $extra_derive: ident ),*)? ) => {
+	($name: ident, $inner: ty $(, extra_derives: [$( $extra_derive: ident ),*])? $(, extra_attributes: [$( #[ $( $extra_attribute:tt )*] ),*])?) => {
 
 		#[derive(
 			Clone,
@@ -130,15 +130,19 @@ pub type BroadcastId = u32;
 /// in units of asset One.
 pub type Tick = i32;
 
-define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+define_wrapper_type!(SwapId, u64, extra_derives: [Serialize, Deserialize, PartialOrd, Ord]);
 
-define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+define_wrapper_type!(SwapRequestId, u64, extra_derives: [Serialize, Deserialize, PartialOrd, Ord]);
 
-define_wrapper_type!(PrewitnessedDepositId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+define_wrapper_type!(PrewitnessedDepositId, u64, extra_derives: [Serialize, Deserialize, PartialOrd, Ord]);
 
 pub type BoostPoolTier = u16;
 
-define_wrapper_type!(AffiliateShortId, u8, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+define_wrapper_type!(
+	AffiliateShortId, u8,
+	extra_derives: [Serialize, Deserialize, PartialOrd, Ord],
+	extra_attributes: [#[cfg_attr(any(test, all(feature = "proptest", feature = "std")))]]
+);
 
 impl_identity_migrations! {AffiliateShortId, }
 
