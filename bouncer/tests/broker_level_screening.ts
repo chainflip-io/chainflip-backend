@@ -159,6 +159,7 @@ export async function doTestSwapDeposits<A = []>(
     (subcf) => testEvm(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Cbbtc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Bnb', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'BscUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) =>
@@ -187,6 +188,7 @@ export async function doTestLpDeposits<A = []>(parentCf: ChainflipIO<A>) {
     (subcf) => testEvmLiquidityDeposit(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmLiquidityDeposit(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmLiquidityDeposit(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'Cbbtc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 }
 
@@ -198,6 +200,7 @@ export async function doTestVaultSwaps<A = []>(cf: ChainflipIO<A>) {
     (subcf) => testEvmVaultSwap(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'Cbbtc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testSolVaultSwap(subcf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testSolVaultSwap(subcf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testSolVaultSwap(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
