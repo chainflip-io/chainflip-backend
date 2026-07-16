@@ -184,6 +184,14 @@ fn test_all_historical_runtime_calls(
                         )
                 );
                 incompatibilities.append(
+                    &mut tester
+                        .test_call::<$version, AccountId32, state_chain_runtime::runtime_apis::types::BrokerInfo<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>>(
+                            $version,
+                            "CustomRuntimeApi",
+                            "cf_broker_info",
+                        )
+                );
+                incompatibilities.append(
                     &mut tester.test_call::<$version, (), cf_rpc_types::broker::VaultAddresses>($version, "CustomRuntimeApi", "cf_vault_addresses")
                 );
 
