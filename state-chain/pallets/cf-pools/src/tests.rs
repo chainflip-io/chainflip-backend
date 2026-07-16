@@ -16,7 +16,7 @@
 
 use crate::{self as pallet_cf_pools, mock::*, *};
 use cf_amm::{
-	common::{AskBidMap, LimitOrder, Side},
+	common::{AskBidMap, AssetPair, LimitOrder, Side},
 	math::Tick,
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
@@ -137,6 +137,57 @@ fn test_mint_range_order_with_asset_amounts() {
 			Some(POSITION),
 			RangeOrderSize::Liquidity { liquidity: 0 }
 		));
+	});
+}
+
+#[test]
+fn swap_single_leg_returns_error_instead_of_panicking() {
+	use cf_amm::{math::MAX_TICK, range_orders::Size};
+	use core::convert::Infallible;
+
+	const ASSET: Asset = Asset::Eth;
+	const POOL_FEE: u32 = 500;
+	const ORDER_ID: OrderId = 0;
+	const DANGER_RANGE: core::ops::Range<Tick> = (MAX_TICK - 2)..MAX_TICK;
+
+	new_test_ext().execute_with(|| {
+		let asset_pair = AssetPair::new(ASSET, STABLE_ASSET).unwrap();
+
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			ASSET,
+			STABLE_ASSET,
+			POOL_FEE,
+			Price::at_tick_zero(),
+		));
+
+		Pools::<Test>::mutate(asset_pair, |pool| {
+			let pool = pool.as_mut().expect("pool should exist");
+			pool.pool_state
+				.collect_and_mint_range_order(
+					&(ALICE, ORDER_ID),
+					DANGER_RANGE.clone(),
+					Size::Liquidity { liquidity: 1_000 },
+					Result::<_, Infallible>::Ok,
+				)
+				.expect("danger-band range order should mint");
+			pool.range_orders_cache
+				.entry(ALICE)
+				.or_default()
+				.insert(ORDER_ID, DANGER_RANGE.clone());
+		});
+
+		assert!(
+			LiquidityPools::pool_price(ASSET, STABLE_ASSET).unwrap().buy.is_some(),
+			"pre-swap buy price should still be available"
+		);
+
+		let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			LiquidityPools::swap_single_leg(STABLE_ASSET, ASSET, 1)
+		}));
+
+		assert!(result.is_ok(), "swap_single_leg should not panic in the danger band");
+		assert!(result.unwrap().is_ok(), "swap should execute even within the danger band");
 	});
 }
 

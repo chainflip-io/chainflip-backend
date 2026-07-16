@@ -17,19 +17,24 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
+use cf_chains::{
+	address::{AddressConverter, EncodedAddress},
+	assets::any::AssetMap,
+	AccountOrAddress, AnyChain, ForeignChain, ForeignChainAddress,
+};
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
-	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, ScheduledEgressDetails,
+	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
+	ScheduledEgressDetails, WithdrawalAddressRestriction,
 };
 use cf_utilities::derive_common_traits;
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::traits::{Saturating, Zero},
 	storage::transactional::with_storage_layer,
-	traits::{DefensiveSaturating, OnKilledAccount},
+	traits::{ConstU64, DefensiveSaturating, OnKilledAccount, UnixTime},
 };
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
@@ -43,7 +48,15 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub const STORAGE_VERSION_U16: u16 = 1;
+pub mod migrations;
+
+pub mod weights;
+pub use weights::WeightInfo;
+
+pub mod whitelist;
+use whitelist::*;
+
+pub const STORAGE_VERSION_U16: u16 = 2;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -84,6 +97,12 @@ derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub enum PalletConfigUpdate {
 		RefundFeeMultiple { chain: ForeignChain, multiple: Option<u32> },
+		/// Maximum whitelist timelock duration.
+		MaxWhitelistTimelock { seconds: Seconds },
+		/// Maximum number of pending whitelist updates per account.
+		MaxPendingWhitelistUpdates { count: u32 },
+		/// Maximum number of active whitelist entries per account.
+		MaxWhitelistEntries { count: u32 },
 	}
 }
 
@@ -93,7 +112,10 @@ impl_pallet_safe_mode!(PalletSafeMode; reconciliation_enabled);
 pub mod pallet {
 	use cf_chains::{dot::PolkadotCrypto, ForeignChain};
 	use cf_primitives::EgressId;
-	use frame_system::pallet_prelude::OriginFor;
+	use frame_system::{
+		ensure_signed,
+		pallet_prelude::{BlockNumberFor, OriginFor},
+	};
 
 	use super::*;
 	#[pallet::config]
@@ -107,8 +129,17 @@ pub mod pallet {
 
 		type PoolApi: PoolApi<AccountId = Self::AccountId>;
 
+		/// Converts between encoded (wire) and internal address representations.
+		type AddressConverter: AddressConverter;
+
+		/// Wall-clock time source for the whitelist timelock (seconds).
+		type TimeSource: UnixTime;
+
 		/// Safe mode configuration.
 		type SafeMode: Get<PalletSafeMode>;
+
+		/// Benchmark weights.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -123,6 +154,16 @@ pub mod pallet {
 		ChainDeprecated,
 		/// The account still has free balance.
 		FundsRemaining,
+		/// The withdrawal destination is not on the account's withdrawal whitelist.
+		DestinationNotAllowed,
+		/// The provided address could not be decoded.
+		InvalidEncodedAddress,
+		/// The requested timelock exceeds the configured maximum.
+		TimelockExceedsMaximum,
+		/// The account has too many pending whitelist updates.
+		TooManyPendingUpdates,
+		/// No liquidity refund address is registered for the account on the relevant chain.
+		NoLiquidityRefundAddressRegistered,
 	}
 
 	#[pallet::event]
@@ -163,6 +204,24 @@ pub mod pallet {
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
 		},
+		/// A whitelist change was accepted.
+		WhitelistUpdateScheduled {
+			account_id: T::AccountId,
+			change: WhitelistChange<T::AccountId, ForeignChainAddress>,
+			apply_at: Seconds,
+		},
+		/// A whitelist change was not applied because the account's whitelist is already at
+		/// [`MaxWhitelistEntries`].
+		WhitelistUpdateDropped {
+			account_id: T::AccountId,
+			change: WhitelistChange<T::AccountId, ForeignChainAddress>,
+		},
+		/// An account's whitelist timelock was updated.
+		WhitelistTimelockUpdated {
+			account_id: T::AccountId,
+			duration: Seconds,
+			effective_at: Seconds,
+		},
 	}
 
 	#[pallet::pallet]
@@ -196,10 +255,60 @@ pub mod pallet {
 	pub type RefundFeeMultiple<T> =
 		StorageMap<_, Twox64Concat, ForeignChain, u32, ValueQuery, ConstU32<100>>;
 
+	/// Per-account withdrawal whitelist: the *active* external/internal whitelists and the
+	/// timelock. Timelocked changes live in [`PendingChanges`] until they are applied, so this
+	/// always reflects current truth.
+	///
+	/// `None` = unrestricted (nothing configured); a stored whitelist = enforcement on. A
+	/// default-valued whitelist is never stored (see [`Pallet::mutate_whitelist`]).
+	#[pallet::storage]
+	pub type WithdrawalWhitelists<T: Config> =
+		StorageMap<_, Identity, T::AccountId, WithdrawalWhitelist<T::AccountId>>;
+
+	/// Timelocked changes awaiting activation, keyed by activation time (same-time changes keep
+	/// submission order). A single value, so `on_idle` can tell whether anything is due with one
+	/// read. Bounded per account: at most [`MaxPendingWhitelistUpdates`] whitelist changes, one
+	/// timelock change, and one refund address change per chain can be in flight at a time.
+	#[pallet::storage]
+	pub type PendingChanges<T: Config> = StorageValue<
+		_,
+		BTreeMap<Seconds, Vec<(T::AccountId, PendingChange<T::AccountId>)>>,
+		ValueQuery,
+	>;
+
+	/// Maximum whitelist timelock duration (seconds). Governance-updatable via
+	/// [`PalletConfigUpdate::MaxWhitelistTimelock`]. Defaults to 10 days.
+	#[pallet::storage]
+	pub type MaxWhitelistTimelock<T> =
+		StorageValue<_, Seconds, ValueQuery, ConstU64<{ 10 * 24 * 3600 }>>;
+
+	/// Maximum number of pending whitelist updates per account. Governance-updatable via
+	/// [`PalletConfigUpdate::MaxPendingWhitelistUpdates`]. Defaults to 16.
+	#[pallet::storage]
+	pub type MaxPendingWhitelistUpdates<T> = StorageValue<_, u32, ValueQuery, ConstU32<16>>;
+
+	/// Maximum number of active whitelist entries per account (external addresses across all chains
+	/// plus internal accounts).
+	#[pallet::storage]
+	pub type MaxWhitelistEntries<T> = StorageValue<_, u32, ValueQuery, ConstU32<100>>;
+
+	/// The refund address registered by an account for each chain. A registered refund address is
+	/// a trusted destination, so it is implicitly allowed by the withdrawal whitelist (see
+	/// [`Pallet::ensure_withdrawal_allowed_to`]).
+	#[pallet::storage]
+	pub type RefundAddresses<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		T::AccountId,
+		Twox64Concat,
+		ForeignChain,
+		ForeignChainAddress,
+	>;
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::update_pallet_config())]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
 			update: PalletConfigUpdate,
@@ -214,11 +323,140 @@ pub mod pallet {
 						RefundFeeMultiple::<T>::remove(chain);
 					}
 				},
+				PalletConfigUpdate::MaxWhitelistTimelock { seconds } => {
+					MaxWhitelistTimelock::<T>::put(seconds);
+				},
+				PalletConfigUpdate::MaxPendingWhitelistUpdates { count } => {
+					MaxPendingWhitelistUpdates::<T>::put(count);
+				},
+				PalletConfigUpdate::MaxWhitelistEntries { count } => {
+					MaxWhitelistEntries::<T>::put(count);
+				},
 			}
 
 			Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
 
 			Ok(())
+		}
+
+		/// Add or remove a destination from the caller's withdrawal whitelist. The change is
+		/// scheduled and takes effect after the caller's timelock elapses (at the end of the
+		/// current block when no timelock is set).
+		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::update_whitelist())]
+		pub fn update_whitelist(
+			origin: OriginFor<T>,
+			change: WhitelistChange<T::AccountId, EncodedAddress>,
+		) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+
+			let decode = |destination: AccountOrAddress<T::AccountId, EncodedAddress>| {
+				destination
+					.try_into_decoded::<T::AddressConverter>()
+					.map_err(|()| Error::<T>::InvalidEncodedAddress)
+			};
+			let change = match change {
+				WhitelistChange::Allow(destination) => WhitelistChange::Allow(decode(destination)?),
+				WhitelistChange::Remove(destination) =>
+					WhitelistChange::Remove(decode(destination)?),
+			};
+
+			let timelock =
+				WithdrawalWhitelists::<T>::get(&account_id).unwrap_or_default().timelock();
+			let apply_at = Self::schedule_or_apply_change(
+				&account_id,
+				PendingChange::Whitelist(change.clone()),
+				timelock,
+			)?;
+
+			Self::deposit_event(Event::<T>::WhitelistUpdateScheduled {
+				account_id,
+				change,
+				apply_at,
+			});
+
+			Ok(())
+		}
+
+		/// Set the caller's whitelist timelock. Like any other change, the update is delayed by
+		/// the current timelock, so a stolen key can't instantly remove the protection. Since a
+		/// new timelock change replaces a pending one, the owner can still *cancel* a pending
+		/// malicious change at any time by scheduling their own — the recovery lever against a
+		/// stolen key.
+		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::set_whitelist_timelock())]
+		pub fn set_whitelist_timelock(origin: OriginFor<T>, duration: Seconds) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+			ensure!(
+				duration <= MaxWhitelistTimelock::<T>::get(),
+				Error::<T>::TimelockExceedsMaximum
+			);
+
+			let current =
+				WithdrawalWhitelists::<T>::get(&account_id).unwrap_or_default().timelock();
+			let effective_at = Self::schedule_or_apply_change(
+				&account_id,
+				PendingChange::Timelock(duration),
+				current,
+			)?;
+
+			Self::deposit_event(Event::<T>::WhitelistTimelockUpdated {
+				account_id,
+				duration,
+				effective_at,
+			});
+
+			Ok(())
+		}
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Applies pending changes whose activation time has passed, within the block's leftover
+		/// weight. Slight delays in activation are possible under sustained full blocks.
+		fn on_idle(_block: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let mut used_weight = T::WeightInfo::on_idle_check();
+			if remaining_weight.any_lt(used_weight) {
+				return Weight::zero();
+			}
+			let now = Self::now_secs();
+			let mut pending = PendingChanges::<T>::get();
+
+			// Abort if no changes matured:
+			if pending.first_key_value().is_none_or(|(&time, _)| time > now) {
+				return used_weight;
+			}
+
+			// Apply matured changes only:
+			let mut not_due = pending.split_off(&now.saturating_add(1));
+
+			used_weight = used_weight.max(T::WeightInfo::on_idle_apply_change(0));
+			let per_change_weight = T::WeightInfo::on_idle_apply_change(1)
+				.saturating_sub(T::WeightInfo::on_idle_apply_change(0));
+
+			// Not enough weight to apply even one change: leave the queue untouched.
+			if remaining_weight.any_lt(used_weight.saturating_add(per_change_weight)) {
+				return T::WeightInfo::on_idle_check();
+			}
+
+			// Apply changes while we are within the weight budget (the remainder
+			// is carried over, so the next block resumes where this one stopped)
+			'apply: while let Some((time, changes)) = pending.pop_first() {
+				let mut changes = changes.into_iter();
+				while let Some((account, change)) = changes.next() {
+					if remaining_weight.any_lt(used_weight.saturating_add(per_change_weight)) {
+						let carried_over = not_due.entry(time).or_default();
+						carried_over.push((account, change));
+						carried_over.extend(changes);
+						break 'apply;
+					}
+					used_weight.saturating_accrue(per_change_weight);
+					Self::apply_pending_change(&account, change);
+				}
+			}
+			not_due.append(&mut pending);
+			PendingChanges::<T>::set(not_due);
+			used_weight
 		}
 	}
 }
@@ -398,6 +636,169 @@ impl<T: Config> Pallet<T> {
 			VaultImbalance::Surplus(withheld - owed)
 		}
 	}
+
+	fn now_secs() -> Seconds {
+		T::TimeSource::now().as_secs()
+	}
+
+	/// Mutates the account's whitelist, dropping the storage entry when it is left in its default
+	/// state. (A set timelock alone keeps the entry alive — dropping it would silently disable
+	/// the restriction.)
+	fn mutate_whitelist<R>(
+		who: &T::AccountId,
+		f: impl FnOnce(&mut WithdrawalWhitelist<T::AccountId>) -> R,
+	) -> R {
+		WithdrawalWhitelists::<T>::mutate_exists(who, |maybe| {
+			let mut whitelist = maybe.take().unwrap_or_default();
+			let result = f(&mut whitelist);
+			*maybe = (whitelist != Default::default()).then_some(whitelist);
+			result
+		})
+	}
+
+	/// Schedules `change` to take effect `delay` seconds from now, or applies it right away when
+	/// `delay` is 0 (no timelock set). Returns the activation time.
+	///
+	/// Either way, an already-pending change that the new one supersedes is discarded first (see
+	/// [`PendingChange::replaces`]): for single-value changes (timelock, per-chain refund
+	/// address) the newest submission must win — a superseded change activating later would
+	/// silently overwrite it. Eviction at submission time is also what lets the owner cancel a
+	/// pending malicious change (it never matures). Whitelist changes stack instead, capped at
+	/// [`MaxPendingWhitelistUpdates`] per account.
+	fn schedule_or_apply_change(
+		who: &T::AccountId,
+		change: PendingChange<T::AccountId>,
+		delay: Seconds,
+	) -> Result<Seconds, Error<T>> {
+		Self::discard_pending_matching(who, |existing| change.replaces(existing));
+		if delay == 0 {
+			Self::apply_pending_change(who, change);
+			return Ok(Self::now_secs());
+		}
+		let apply_at = Self::now_secs().saturating_add(delay);
+		PendingChanges::<T>::try_mutate(|pending| {
+			if matches!(change, PendingChange::Whitelist(_)) {
+				ensure!(
+					pending
+						.values()
+						.flatten()
+						.filter(|(account, change)| account == who &&
+							matches!(change, PendingChange::Whitelist(_)))
+						.count() < MaxPendingWhitelistUpdates::<T>::get() as usize,
+					Error::<T>::TooManyPendingUpdates
+				);
+			}
+			pending.entry(apply_at).or_default().push((who.clone(), change));
+			Ok(apply_at)
+		})
+	}
+
+	/// Discards all of the account's pending changes matching `filter`.
+	fn discard_pending_matching(
+		who: &T::AccountId,
+		filter: impl Fn(&PendingChange<T::AccountId>) -> bool,
+	) {
+		PendingChanges::<T>::mutate(|pending| {
+			pending.retain(|_, changes| {
+				changes.retain(|(account, change)| account != who || !filter(change));
+				!changes.is_empty()
+			});
+		});
+	}
+
+	fn apply_pending_change(who: &T::AccountId, change: PendingChange<T::AccountId>) {
+		match change {
+			PendingChange::Whitelist(whitelist_change) => {
+				if Self::mutate_whitelist(who, |whitelist| {
+					whitelist.apply_change(&whitelist_change, MaxWhitelistEntries::<T>::get())
+				})
+				.is_err()
+				{
+					Self::deposit_event(Event::<T>::WhitelistUpdateDropped {
+						account_id: who.clone(),
+						change: whitelist_change,
+					});
+				}
+			},
+			PendingChange::Timelock(timelock) =>
+				Self::mutate_whitelist(who, |whitelist| whitelist.set_timelock(timelock)),
+			PendingChange::RefundAddress(address) =>
+				RefundAddresses::<T>::insert(who, address.chain(), address),
+		}
+	}
+}
+
+impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn ensure_withdrawal_allowed_to(
+		owner: &Self::AccountId,
+		dest: AccountOrAddress<&Self::AccountId, &ForeignChainAddress>,
+	) -> DispatchResult {
+		// Extract the external address (if any) before `dest` is consumed by `is_allowed`, so a
+		// registered refund address can be treated as implicitly allowed without an extra clone.
+		let external = match &dest {
+			AccountOrAddress::ExternalAddress(address) => Some(*address),
+			AccountOrAddress::InternalAccount(_) => None,
+		};
+		// No stored whitelist = unrestricted.
+		let allowed = WithdrawalWhitelists::<T>::get(owner)
+			.is_none_or(|whitelist| whitelist.is_allowed(dest)) ||
+			external.is_some_and(|address| {
+				// The registered refund address is implicitly allowed; a pending (timelocked)
+				// repoint is not, so the old address stays the only allowed one until the new one
+				// takes effect.
+				RefundAddresses::<T>::get(owner, address.chain()).as_ref() == Some(address)
+			});
+		ensure!(allowed, Error::<T>::DestinationNotAllowed);
+		Ok(())
+	}
+}
+
+impl<T: Config> RefundAddressRegistry for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn register_liquidity_refund_address(who: &Self::AccountId, address: ForeignChainAddress) {
+		// Repointing a refund address is delayed by the account's timelock (0 = immediate); the
+		// current address stays registered until the new one takes effect.
+		let timelock = WithdrawalWhitelists::<T>::get(who).unwrap_or_default().timelock();
+		// Cannot fail: the pending cap only applies to whitelist changes.
+		let _ =
+			Self::schedule_or_apply_change(who, PendingChange::RefundAddress(address), timelock);
+	}
+
+	fn get_refund_address(
+		who: &Self::AccountId,
+		chain: ForeignChain,
+	) -> Option<ForeignChainAddress> {
+		RefundAddresses::<T>::get(who, chain)
+	}
+
+	fn clear_refund_addresses(who: &Self::AccountId) {
+		let _ = RefundAddresses::<T>::clear_prefix(who, u32::MAX, None);
+		// Also drop the account's pending refund address changes — they would otherwise
+		// re-register an address after this cleanup.
+		Self::discard_pending_matching(who, |change| {
+			matches!(change, PendingChange::RefundAddress(_))
+		});
+	}
+
+	/// Make sure refund address is either set or will be set after timelock. (If we didn't allow
+	/// the latter, it would result in bad UX where upon adding a new chain the user would have to
+	/// wait the timelock period before they can use it. This should be OK because max
+	/// timelock is capped, so the address will become active soon.
+	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult {
+		let chain = ForeignChain::from(asset);
+		ensure!(
+			RefundAddresses::<T>::contains_key(who, chain) ||
+				PendingChanges::<T>::get().values().flatten().any(|(account, change)| {
+					account == who &&
+						matches!(change, PendingChange::RefundAddress(address) if address.chain() == chain)
+				}),
+			Error::<T>::NoLiquidityRefundAddressRegistered
+		);
+		Ok(())
+	}
 }
 
 #[derive(
@@ -565,5 +966,8 @@ pub struct DeleteAccount<T: Config>(PhantomData<T>);
 impl<T: Config> OnKilledAccount<T::AccountId> for DeleteAccount<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
+		let _ = RefundAddresses::<T>::clear_prefix(who, u32::MAX, None);
+		WithdrawalWhitelists::<T>::remove(who);
+		Pallet::<T>::discard_pending_matching(who, |_| true);
 	}
 }

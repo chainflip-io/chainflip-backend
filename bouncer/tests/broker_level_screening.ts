@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { StateChainRuntimeRuntimeCallLike } from 'generated/chaintypes/chainflip-node';
 import { TestContext } from 'shared/utils/test_context';
 import { globalLogger } from 'shared/utils/logger';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
@@ -119,11 +120,13 @@ async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: U
             api.tx.governance.callAsSudo(
               api.tx.system.setStorage([
                 [
-                  decodeHexStringToByteArray(prefix).concat(Array.from(brokerAddress)),
+                  new Uint8Array(
+                    decodeHexStringToByteArray(prefix).concat(Array.from(brokerAddress)),
+                  ),
                   // Empty, we just need to insert the key.
-                  '',
+                  '0x',
                 ],
-              ]),
+              ]).call as StateChainRuntimeRuntimeCallLike,
             ),
         }),
     ),

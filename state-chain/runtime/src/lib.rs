@@ -18,6 +18,8 @@
 #![feature(step_trait)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(associated_type_defaults)]
+#![feature(lazy_type_alias)]
+#![allow(incomplete_features)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
 
@@ -419,7 +421,7 @@ pub type PalletExecutionOrder = (
 /// - Housekeeping migrations. Don't remove this - check individual housekeeping migrations and
 ///   remove them when they are no longer needed.
 /// - Release-specific migrations: remove these if they are no longer needed.
-type AllMigrations = (
+pub type AllMigrations = (
 	// This ClearEvents should only be run at the start of all migrations. This is in case another
 	// migration needs to trigger an event like a Broadcast for example.
 	pallet_cf_cfe_interface::migrations::ClearEvents<Runtime>,
@@ -434,7 +436,7 @@ type AllMigrations = (
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
 /// comment out or remove pallet migrations. Prefer to delete the migration at the pallet level and
 /// replace with a dummy migration.
-type PalletMigrations = (
+pub type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
@@ -484,6 +486,7 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 	pallet_cf_lending_pools::migrations::PalletMigration<Runtime>,
+	pallet_cf_asset_balances::migrations::PalletMigration<Runtime>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BscInstance>,
@@ -532,12 +535,13 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_3 = (
+pub type MigrationsForV2_3 = (
 	migrations::safe_mode::SafeModeMigration,
 	migrations::bsc_integration::BscElectionsInit,
 	migrations::bsc_integration::BscIngressEgressInit,
 	migrations::bsc_integration::BscChainstate,
 	migrations::bsc_integration::BscBroadcasterInit,
+	migrations::refund_addresses_to_asset_balances::Migration,
 );
 
 #[cfg(test)]

@@ -3,11 +3,11 @@ import { TestContext } from 'shared/utils/test_context';
 import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import {
-  amountToFineAmount,
-  assetDecimals,
+  amountToFineAmountBigInt,
   Assets,
   newAssetAddress,
   observeBalanceIncrease,
+  encodedAddress,
 } from 'shared/utils';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { liquidityProviderWithdrawalEgressScheduledEvent } from 'generated/events/liquidityProvider/withdrawalEgressScheduled';
@@ -41,11 +41,9 @@ export async function testRotationBarrier(testContext: TestContext) {
   const depositAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) =>
       api.tx.liquidityProvider.withdrawAsset(
-        amountToFineAmount('2', assetDecimals(Assets.ArbEth)),
+        amountToFineAmountBigInt('2', Assets.ArbEth),
         Assets.ArbEth,
-        {
-          Arb: withdrawalAddress,
-        },
+        encodedAddress('Arbitrum', withdrawalAddress),
       ),
     expectedEvent: liquidityProviderWithdrawalEgressScheduledEvent.refine(
       (event) => event.asset === Assets.ArbEth,

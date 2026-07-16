@@ -42,6 +42,22 @@ pub enum AccountOrAddress<AccountId, Address> {
 	ExternalAddress(Address),
 }
 
+impl<AccountId> AccountOrAddress<AccountId, EncodedAddress> {
+	/// Decodes the external address into its internal [`ForeignChainAddress`] representation using
+	/// the given [`AddressConverter`], leaving an internal account untouched.
+	#[expect(clippy::result_unit_err)]
+	pub fn try_into_decoded<C: AddressConverter>(
+		self,
+	) -> Result<AccountOrAddress<AccountId, ForeignChainAddress>, ()> {
+		Ok(match self {
+			AccountOrAddress::InternalAccount(account) =>
+				AccountOrAddress::InternalAccount(account),
+			AccountOrAddress::ExternalAddress(address) =>
+				AccountOrAddress::ExternalAddress(C::try_from_encoded_address(address)?),
+		})
+	}
+}
+
 /// Generic type for Refund Parameters.
 ///
 /// The abstract `RefundDetails` represents additional metadata that may be required for refunding
@@ -211,7 +227,7 @@ impl ChannelRefundParametersUncheckedEncoded {
 		self,
 	) -> Result<ChannelRefundParametersUnchecked<ForeignChainAddress>, DispatchError> {
 		Ok(self.try_map_address(|addr| {
-			C::try_from_encoded_address(addr.clone()).map_err(|_| "Invalid refund address")
+			C::try_from_encoded_address(addr).map_err(|_| "Invalid refund address")
 		})?)
 	}
 }
@@ -225,33 +241,25 @@ impl ChannelRefundParametersUnchecked<ForeignChainAddress> {
 		source_address: Option<ForeignChainAddress>,
 		refund_asset: Asset,
 	) -> Result<ChannelRefundParametersChecked<ForeignChainAddress>, DispatchError> {
-		{
-			let source_chain = self.refund_address.chain();
+		let source_chain = self.refund_address.chain();
 
-			if self.refund_ccm_metadata.is_some() && !source_chain.ccm_support() {
-				return Err(
-					"Invalid refund parameter: Ccm not supported for the refund chain.".into()
-				)
-			}
-
-			Ok(ChannelRefundParametersChecked {
-				retry_duration: self.retry_duration,
-				refund_address: self.refund_address.clone(),
-				min_price: self.min_price,
-				max_oracle_price_slippage: self.max_oracle_price_slippage,
-				refund_ccm_metadata: self
-					.refund_ccm_metadata
-					.map(|channel_metadata| {
-						CcmDepositMetadataUnchecked {
-							channel_metadata,
-							source_chain,
-							source_address,
-						}
-						.to_checked(refund_asset, self.refund_address)
-					})
-					.transpose()?,
-			})
+		if self.refund_ccm_metadata.is_some() && !source_chain.ccm_support() {
+			return Err("Invalid refund parameter: Ccm not supported for the refund chain.".into())
 		}
+
+		Ok(ChannelRefundParametersChecked {
+			retry_duration: self.retry_duration,
+			refund_address: self.refund_address.clone(),
+			min_price: self.min_price,
+			max_oracle_price_slippage: self.max_oracle_price_slippage,
+			refund_ccm_metadata: self
+				.refund_ccm_metadata
+				.map(|channel_metadata| {
+					CcmDepositMetadataUnchecked { channel_metadata, source_chain, source_address }
+						.to_checked(refund_asset, self.refund_address)
+				})
+				.transpose()?,
+		})
 	}
 }
 

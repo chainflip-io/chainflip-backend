@@ -17,7 +17,11 @@ import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
 import { compileBinaries } from 'shared/utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
 import { execWithLog } from 'shared/utils/exec_with_log';
-import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
+import {
+  clearChainflipApiCache,
+  clearChainflipClientCache,
+  clearSubscribeHeadsCache,
+} from 'shared/utils/substrate';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { Logger } from 'pino';
 import { globalLogger } from './utils/logger';
@@ -116,12 +120,19 @@ export async function upgradeBinaries<A = []>(
   cf.info('Setting MissedAuthorshipSlot suspension to 0 before restarting nodes.');
   await cf.submitGovernance({
     extrinsic: (api) =>
-      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-        reputation: 100,
-        suspension: 0,
-      }),
+      api.tx.reputation.setPenalty(
+        { type: 'MissedAuthorshipSlot' },
+        {
+          reputation: 100,
+          suspension: 0,
+        },
+      ),
     expectedEvent: reputationPenaltyUpdatedEvent,
   });
+
+  // Drop the cached dedot client so the next extrinsic submission connects fresh to the new
+  // node, rather than relying on the stale connection's auto-reconnect.
+  await clearChainflipClientCache();
 
   // Kill engines first so they don't try to submit extrinsics while the node
   // is shutting down.
@@ -146,10 +157,13 @@ export async function upgradeBinaries<A = []>(
   cf.info('Restoring MissedAuthorshipSlot penalty to defaults after nodes are back up.');
   await cf.submitGovernance({
     extrinsic: (api) =>
-      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-        reputation: 120,
-        suspension: 150,
-      }),
+      api.tx.reputation.setPenalty(
+        { type: 'MissedAuthorshipSlot' },
+        {
+          reputation: 120,
+          suspension: 150,
+        },
+      ),
     expectedEvent: reputationPenaltyUpdatedEvent,
   });
 

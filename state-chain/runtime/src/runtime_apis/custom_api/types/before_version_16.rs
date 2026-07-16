@@ -14,7 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use cf_utilities::migrations::{basics::migrate_from_historical_type, v20000};
+use cf_utilities::migrations::{
+	basics::migrate_from_historical_type, v20000, v20100, v20200, v20300,
+};
 
 #[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct VaultAddresses {
@@ -57,10 +59,19 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	}
 }
 
-pub type RpcAccountInfoCommonItems<Balance> =
-	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20000>>::HistoricalType;
+pub type RpcAccountInfoCommonItems<Balance: HasChangelog + Default>
+	= <super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20000>>::HistoricalType
+where
+	<Balance as HasVersion<v20300>>::HistoricalType: Default,
+	<Balance as HasVersion<v20200>>::HistoricalType: Default,
+	<Balance as HasVersion<v20100>>::HistoricalType: Default;
 
-pub type AssetMap<T> = <super::AssetMap<T> as HasVersion<v20000>>::HistoricalType;
+pub type AssetMap<T: HasChangelog + Default>
+	= <super::AssetMap<T> as HasVersion<v20000>>::HistoricalType
+where
+	<T as HasVersion<v20300>>::HistoricalType: Default,
+	<T as HasVersion<v20200>>::HistoricalType: Default,
+	<T as HasVersion<v20100>>::HistoricalType: Default;
 
 #[derive(Encode, Decode, TypeInfo, Default)]
 pub struct LiquidityProviderInfo {

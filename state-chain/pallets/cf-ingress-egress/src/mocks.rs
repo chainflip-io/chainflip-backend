@@ -38,7 +38,7 @@ use cf_traits::{
 		},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
-		balance_api::{MockBalance, MockLpRegistration},
+		balance_api::{MockBalance, MockRefundAddressRegistry},
 		broadcaster::MockBroadcaster,
 		ccm_additional_data_handler::MockCcmAdditionalDataHandler,
 		chain_tracking::ChainTracker,
@@ -155,7 +155,7 @@ impl Config<Instance1> for Test {
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
 	type BoostApi = MockBoostApi;
 	type FundAccount = MockFundingInfo<Test>;
-	type LpRegistrationApi = MockLpRegistration;
+	type RefundAddressRegistry = MockRefundAddressRegistry;
 }
 
 impl ChainflipWithTargetChain<Instance2> for Test {
@@ -190,7 +190,7 @@ impl Config<Instance2> for Test {
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
 	type BoostApi = MockBoostApi;
 	type FundAccount = MockFundingInfo<Test>;
-	type LpRegistrationApi = MockLpRegistration;
+	type RefundAddressRegistry = MockRefundAddressRegistry;
 }
 
 impl_mock_chainflip!(Test);

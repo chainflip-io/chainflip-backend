@@ -501,3 +501,485 @@ pub mod balance_api {
 		});
 	}
 }
+
+mod withdrawal_whitelist {
+	use super::*;
+	use crate::{Error, MaxPendingWhitelistUpdates, MaxWhitelistTimelock, WhitelistChange};
+	use cf_chains::{
+		address::{AddressConverter, EncodedAddress},
+		AccountOrAddress,
+	};
+	use cf_traits::{
+		mocks::{address_converter::MockAddressConverter, time_source},
+		RefundAddressRegistry, WithdrawalAddressRestriction,
+	};
+	use core::time::Duration;
+	use frame_support::{
+		assert_err,
+		pallet_prelude::{DispatchResult, Weight},
+		traits::Hooks,
+	};
+
+	fn account(seed: u8) -> AccountId {
+		AccountId::from([seed; 32])
+	}
+
+	/// Runs `on_idle` so that due pending changes are applied.
+	fn apply_pending() {
+		let _ = Pallet::<Test>::on_idle(System::block_number(), Weight::MAX);
+	}
+
+	fn advance_clock(seconds: u64) {
+		time_source::Mock::advance_clock(Duration::from_secs(seconds));
+	}
+
+	fn encoded(address: ForeignChainAddress) -> EncodedAddress {
+		MockAddressConverter::to_encoded_address(address)
+	}
+
+	fn allow(who: &AccountId, address: ForeignChainAddress) {
+		assert_ok!(Pallet::<Test>::update_whitelist(
+			RuntimeOrigin::signed(who.clone()),
+			WhitelistChange::Allow(AccountOrAddress::ExternalAddress(encoded(address))),
+		));
+	}
+
+	fn allow_account(who: &AccountId, account: &AccountId) {
+		assert_ok!(Pallet::<Test>::update_whitelist(
+			RuntimeOrigin::signed(who.clone()),
+			WhitelistChange::Allow(AccountOrAddress::InternalAccount(account.clone())),
+		));
+	}
+
+	fn remove(who: &AccountId, address: ForeignChainAddress) {
+		assert_ok!(Pallet::<Test>::update_whitelist(
+			RuntimeOrigin::signed(who.clone()),
+			WhitelistChange::Remove(AccountOrAddress::ExternalAddress(encoded(address))),
+		));
+	}
+
+	fn set_timelock(who: &AccountId, seconds: u64) {
+		assert_ok!(Pallet::<Test>::set_whitelist_timelock(
+			RuntimeOrigin::signed(who.clone()),
+			seconds
+		));
+	}
+
+	fn ensure_allowed_external(who: &AccountId, address: &ForeignChainAddress) -> DispatchResult {
+		Pallet::<Test>::ensure_withdrawal_allowed_to(
+			who,
+			AccountOrAddress::ExternalAddress(address),
+		)
+	}
+
+	fn ensure_allowed_internal(who: &AccountId, account: &AccountId) -> DispatchResult {
+		Pallet::<Test>::ensure_withdrawal_allowed_to(
+			who,
+			AccountOrAddress::InternalAccount(account),
+		)
+	}
+
+	#[test]
+	fn whitelist_enforced_without_timelock_until_emptied() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// Nothing configured => unrestricted.
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
+
+			// Adding an entry (applied immediately, since no timelock is set) turns enforcement
+			// on — mistake protection without any timelock.
+			allow(&who, ETH_ADDR_1);
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
+
+			// Removing the last entry leaves nothing configured => unrestricted again.
+			remove(&who, ETH_ADDR_1);
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
+		});
+	}
+
+	#[test]
+	fn update_whitelist_stores_and_emits_scheduled_event() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// The timelock is off, so the change is scheduled for the current time.
+			allow(&who, ETH_ADDR_1);
+			System::assert_has_event(RuntimeEvent::AssetBalances(
+				Event::WhitelistUpdateScheduled {
+					account_id: who,
+					change: WhitelistChange::Allow(AccountOrAddress::ExternalAddress(ETH_ADDR_1)),
+					apply_at: 0,
+				},
+			));
+		});
+	}
+
+	#[test]
+	fn update_whitelist_rejects_undecodable_address() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Pallet::<Test>::update_whitelist(
+					RuntimeOrigin::signed(account(1)),
+					WhitelistChange::Allow(AccountOrAddress::ExternalAddress(EncodedAddress::Btc(
+						vec![]
+					))),
+				),
+				Error::<Test>::InvalidEncodedAddress
+			);
+		});
+	}
+
+	#[test]
+	fn update_whitelist_enforces_pending_cap() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::MaxPendingWhitelistUpdates { count: 2 },
+			));
+			// The cap applies to *pending* changes, so the restriction must be on for changes to
+			// queue up.
+			set_timelock(&who, 1000);
+			allow(&who, ETH_ADDR_1);
+			allow(&who, ETH_ADDR_2);
+			assert_noop!(
+				Pallet::<Test>::update_whitelist(
+					RuntimeOrigin::signed(who),
+					WhitelistChange::Allow(AccountOrAddress::ExternalAddress(encoded(ARB_ADDR_1))),
+				),
+				Error::<Test>::TooManyPendingUpdates
+			);
+		});
+	}
+
+	#[test]
+	fn set_whitelist_timelock_enforces_maximum_and_emits() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			let max = MaxWhitelistTimelock::<Test>::get();
+			assert_noop!(
+				Pallet::<Test>::set_whitelist_timelock(RuntimeOrigin::signed(who.clone()), max + 1),
+				Error::<Test>::TimelockExceedsMaximum
+			);
+			// Enabling (0 -> 1000) takes effect immediately.
+			set_timelock(&who, 1000);
+			System::assert_has_event(RuntimeEvent::AssetBalances(
+				Event::WhitelistTimelockUpdated {
+					account_id: who,
+					duration: 1000,
+					effective_at: 0,
+				},
+			));
+		});
+	}
+
+	#[test]
+	fn governance_can_update_limits() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::MaxWhitelistTimelock { seconds: 123 },
+			));
+			assert_eq!(MaxWhitelistTimelock::<Test>::get(), 123);
+
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::MaxPendingWhitelistUpdates { count: 5 },
+			));
+			assert_eq!(MaxPendingWhitelistUpdates::<Test>::get(), 5);
+		});
+	}
+
+	#[test]
+	fn restriction_activates_after_timelock_elapses() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			let dest = account(2);
+			// Off by default => everything allowed.
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+			assert_ok!(ensure_allowed_internal(&who, &dest));
+
+			// Enabling turns the restriction on immediately; with nothing configured, all blocked.
+			set_timelock(&who, 1000);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+			assert_err!(ensure_allowed_internal(&who, &dest), Error::<Test>::DestinationNotAllowed);
+
+			// A scheduled change only takes effect once the timelock has elapsed.
+			allow(&who, ETH_ADDR_1);
+			allow_account(&who, &dest);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+
+			advance_clock(1001);
+
+			apply_pending();
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+			assert_ok!(ensure_allowed_internal(&who, &dest));
+			// An unconfigured chain stays blocked (account-wide fail-safe).
+			assert_err!(
+				ensure_allowed_external(&who, &ARB_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+		});
+	}
+
+	#[test]
+	fn registered_refund_address_is_implicitly_allowed() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// An LP registers a refund address first.
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_1);
+
+			// With no timelock set the restriction is off, so a refund address changes nothing:
+			// any address is still allowed, exactly as before the feature.
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
+
+			// Turn the restriction on; nothing has been added to the whitelist.
+			set_timelock(&who, 1000);
+
+			// The refund address is allowed even though it was never whitelisted (and the timelock
+			// is on) — refund addresses are trusted.
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+
+			// A different address on the same chain is still blocked.
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
+		});
+	}
+
+	#[test]
+	fn refund_address_update_is_timelocked() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// Establish a refund address, then turn the restriction on.
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_1);
+			set_timelock(&who, 1000);
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+
+			// Repointing under restriction is delayed: the old refund address stays active and the
+			// new one is not yet allowed (this is what closes the stolen-key repoint bypass).
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_2);
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
+
+			// Registering again replaces the pending repoint rather than stacking a second one.
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_3);
+
+			// Once the timelock elapses the latest refund address takes over; the replaced one
+			// never becomes active.
+			advance_clock(1001);
+			apply_pending();
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_3));
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
+		});
+	}
+
+	#[test]
+	fn scheduled_refund_address_permits_chain_interaction() {
+		new_test_ext().execute_with(|| {
+			use cf_primitives::Asset;
+			let who = account(1);
+
+			// Restriction on, no refund address yet => chain interaction is gated.
+			set_timelock(&who, 1000);
+			assert_err!(
+				Pallet::<Test>::ensure_has_refund_address_for_asset(&who, Asset::Eth),
+				Error::<Test>::NoLiquidityRefundAddressRegistered
+			);
+
+			// Registering under restriction only *schedules* the address — it is not yet
+			// effective...
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_1);
+			assert!(Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum).is_none());
+			// ...but a scheduled refund address is enough to interact with the chain.
+			assert_ok!(Pallet::<Test>::ensure_has_refund_address_for_asset(&who, Asset::Eth));
+
+			// It can't be perpetually deferred: it becomes effective within the timelock.
+			advance_clock(1001);
+			apply_pending();
+			assert_eq!(
+				Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum),
+				Some(ETH_ADDR_1)
+			);
+		});
+	}
+
+	#[test]
+	fn timelock_updates_are_delayed_and_replace_pending_ones() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// ETH_ADDR_1 is never whitelisted here; it merely probes whether the restriction is
+			// on (nothing is allowed) or off (everything is allowed).
+			set_timelock(&who, 1000);
+
+			// A timelock update is itself delayed by the current timelock, so the restriction
+			// stays on (a stolen key can't instantly disable it)...
+			set_timelock(&who, 0);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+
+			// ...and scheduling another timelock update replaces the pending one, which therefore
+			// never takes effect — this is how the owner cancels a malicious pending update.
+			set_timelock(&who, 1000);
+			advance_clock(1001);
+			apply_pending();
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+
+			// An unreplaced update takes effect once the timelock elapses.
+			set_timelock(&who, 0);
+			advance_clock(1001);
+			apply_pending();
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+		});
+	}
+
+	#[test]
+	fn on_idle_carries_over_on_weight_exhaustion() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			set_timelock(&who, 1000);
+			allow(&who, ETH_ADDR_1);
+			allow(&who, ETH_ADDR_2);
+			allow(&who, ETH_ADDR_3);
+			allow(&who, ARB_ADDR_1);
+			advance_clock(1001);
+
+			// Not enough weight to apply anything: all changes stay pending.
+			let _ = Pallet::<Test>::on_idle(
+				System::block_number(),
+				<() as crate::WeightInfo>::on_idle_check(),
+			);
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+
+			// Weight for exactly two changes: they apply in submission order and the rest are
+			// carried over.
+			let _ = Pallet::<Test>::on_idle(
+				System::block_number(),
+				<() as crate::WeightInfo>::on_idle_apply_change(2),
+			);
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_3),
+				Error::<Test>::DestinationNotAllowed
+			);
+			assert_err!(
+				ensure_allowed_external(&who, &ARB_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+
+			// The next (unconstrained) run picks up the remainder.
+			apply_pending();
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_3));
+			assert_ok!(ensure_allowed_external(&who, &ARB_ADDR_1));
+		});
+	}
+
+	#[test]
+	fn direct_registration_discards_stale_pending_repoint() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			// A repoint is scheduled under restriction, and outlives the timelock that created it:
+			// the weakening (scheduled before the repoint) matures first.
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_1);
+			set_timelock(&who, 1000);
+			set_timelock(&who, 0); // scheduled, applies at t+1000
+			advance_clock(500);
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_2); // applies at t+1500
+			advance_clock(600);
+			apply_pending(); // t=1100: timelock now off; repoint to ETH_ADDR_2 still pending
+
+			// Registering directly must discard the stale pending repoint...
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_3);
+			assert_eq!(
+				Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum),
+				Some(ETH_ADDR_3)
+			);
+
+			// ...otherwise it would fire later and overwrite the newer address.
+			advance_clock(1000);
+			apply_pending();
+			assert_eq!(
+				Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum),
+				Some(ETH_ADDR_3)
+			);
+		});
+	}
+
+	#[test]
+	fn over_cap_allow_is_dropped_with_event() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::MaxWhitelistEntries { count: 1 },
+			));
+			allow(&who, ETH_ADDR_1);
+			// Over the cap: the change is dropped and announced.
+			allow(&who, ETH_ADDR_2);
+			System::assert_has_event(RuntimeEvent::AssetBalances(Event::WhitelistUpdateDropped {
+				account_id: who.clone(),
+				change: WhitelistChange::Allow(AccountOrAddress::ExternalAddress(ETH_ADDR_2)),
+			}));
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
+		});
+	}
+
+	#[test]
+	fn account_kill_clears_whitelist_state() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_1);
+			set_timelock(&who, 1000);
+			allow(&who, ETH_ADDR_2); // pending
+			assert_err!(
+				ensure_allowed_external(&who, &ARB_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
+
+			crate::DeleteAccount::<Test>::on_killed_account(&who);
+
+			// All per-account state is gone: unrestricted again, no refund address, no pending.
+			assert_ok!(ensure_allowed_external(&who, &ARB_ADDR_1));
+			assert!(Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum).is_none());
+			assert!(crate::PendingChanges::<Test>::get().is_empty());
+
+			// The killed account's pending change never fires.
+			advance_clock(1001);
+			apply_pending();
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+		});
+	}
+}

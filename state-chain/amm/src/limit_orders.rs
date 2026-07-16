@@ -543,6 +543,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.and_then(|()| SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]))
 			.map(|entry| (*entry.key(), entry))
 			.filter(|(sqrt_price, _)| {
+				// Compare in the clamped `SqrtPrice` domain, consistently with
+				// `super::PoolState::inner_swap`.
 				let sqrt_price_adjusted = super::sqrt_price_adjusted_by_pool_fee::<SD::Inverse>(
 					*sqrt_price,
 					range_orders_pool_fee_hundredth_pips,

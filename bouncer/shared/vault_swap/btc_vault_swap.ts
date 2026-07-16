@@ -2,6 +2,7 @@ import assert from 'assert';
 import { sendVaultTransaction } from 'shared/send_btc';
 import { Asset, assetDecimals, Assets, cfMutex, fineAmountToAmount } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
+import { isDispatchError } from 'shared/utils/dedot';
 import { fundFlip } from 'shared/fund_flip';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingAffiliateRegistrationEvent } from 'generated/events/swapping/affiliateRegistration';
@@ -23,13 +24,11 @@ interface BtcVaultSwapExtraParameters {
 async function getExistingPrivateBtcChannel(brokerAddress: string): Promise<number | undefined> {
   await using chainflip = await getChainflipApi();
 
-  const existingPrivateChannel = Number(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await chainflip.query.swapping.brokerPrivateBtcChannels(brokerAddress)) as any,
-  );
+  const existingPrivateChannel =
+    await chainflip.query.swapping.brokerPrivateBtcChannels(brokerAddress);
 
   if (existingPrivateChannel) {
-    return existingPrivateChannel;
+    return Number(existingPrivateChannel);
   }
   return undefined;
 }
@@ -52,8 +51,7 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
   if (fundAccountWithBrokerBond) {
     // Fund the broker the required bond amount for opening a private channel
     const fundAmount = fineAmountToAmount(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (await chainflip.query.swapping.brokerBond()) as any as string,
+      (await chainflip.query.swapping.brokerBond()).toString(),
       assetDecimals('Flip'),
     );
     await fundFlip(cf, broker.keypair.address, fundAmount);
@@ -76,7 +74,7 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
     return Number(privateBrokerChannelOpenedEvent.channelId);
   } catch (err) {
     // Fetch the private channel instead, if the extrinsic fails
-    if (err instanceof Error && err.message.includes('swapping.PrivateChannelExistsForBroker')) {
+    if (isDispatchError(err, { pallet: 'swapping', name: 'PrivateChannelExistsForBroker' })) {
       const privateChannel = await getExistingPrivateBtcChannel(broker.keypair.address);
       if (privateChannel) {
         return privateChannel;
@@ -197,7 +195,7 @@ export async function registerAffiliate<A extends WithBrokerAccount>(
 
   cf.trace('Registering affiliate');
   const affiliateRegistration = await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.swapping.registerAffiliate(withdrawalAddress),
+    extrinsic: (api) => api.tx.swapping.registerAffiliate(withdrawalAddress as `0x${string}`),
     expectedEvent: swappingAffiliateRegistrationEvent.refine(
       (event) =>
         event.brokerId === cf.requirements.account.keypair.address &&

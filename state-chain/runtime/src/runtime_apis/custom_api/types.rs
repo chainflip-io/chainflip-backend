@@ -581,7 +581,7 @@ pub enum TransactionScreeningEvent<TxId, DepositDetails, Address> {
 	},
 }
 
-pub type BrokerRejectionEventFor<C> = TransactionScreeningEvent<
+pub type BrokerRejectionEventFor<C: Chain> = TransactionScreeningEvent<
 	<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
 	<C as Chain>::DepositDetails,
 	<C as Chain>::ChainAccount,
@@ -863,7 +863,9 @@ pub enum RuntimeApiAccountInfo {
 	Operator(Box<OperatorInfo<FlipBalance>>),
 }
 
-#[derive(Encode, Decode, TypeInfo, PartialEq, Debug, Default)]
+#[derive(
+	Encode, Decode, TypeInfo, PartialEq, Debug, Default, cf_proc_macros::HasTypeIntrospection,
+)]
 #[cfg_attr(
 	any(test, all(feature = "proptest", feature = "std")),
 	derive(proptest_derive::Arbitrary)

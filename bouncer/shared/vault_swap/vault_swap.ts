@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { ApiPromise } from '@polkadot/api';
+import type { ChainflipClient } from 'shared/utils/dedot';
 import {
   stateChainAssetFromAsset,
   chainFromAsset,
@@ -60,7 +60,7 @@ type VaultSwapInputRpc = {
  * For non-EVM source chains, the encoded result is immediately decoded via the `cf_decode_vault_swap_parameter` RPC as a sanity check.
  */
 export async function requestSwapParameterEncoding<T>(
-  chainflip: ApiPromise,
+  chainflip: ChainflipClient,
   brokerAddress: string,
   sourceAsset: Asset,
   destAsset: Asset,
@@ -80,8 +80,7 @@ export async function requestSwapParameterEncoding<T>(
   }
 
   // Encode the payload
-  const encoded = (await chainflip.rpc(
-    'cf_request_swap_parameter_encoding',
+  const encoded = (await chainflip.rpc.cf_request_swap_parameter_encoding(
     brokerAddress,
     stateChainAssetFromAsset(sourceAsset),
     stateChainAssetFromAsset(destAsset),
@@ -97,8 +96,7 @@ export async function requestSwapParameterEncoding<T>(
   // Sanity check the encoding by decoding it (only Bitcoin and Solana are supported by cf_decode_vault_swap_parameter)
   const srcChain = chainFromAsset(sourceAsset);
   if (srcChain === Chains.Bitcoin || srcChain === Chains.Solana) {
-    const decoded = (await chainflip.rpc(
-      'cf_decode_vault_swap_parameter',
+    const decoded = (await chainflip.rpc.cf_decode_vault_swap_parameter(
       brokerAddress,
       encoded,
     )) as unknown as VaultSwapInputRpc;

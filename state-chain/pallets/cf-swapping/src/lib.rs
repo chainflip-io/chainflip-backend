@@ -40,7 +40,7 @@ use cf_traits::{
 	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
 	FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
 	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -626,6 +626,12 @@ pub mod pallet {
 
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
+		/// Restricts which destinations a broker/affiliate may withdraw fees to (whitelist +
+		/// timelock).
+		type WithdrawalRestriction: WithdrawalAddressRestriction<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 
 		type LendingSystemApi: LendingSystemApi<
 			AccountId = <Self as frame_system::Config>::AccountId,
@@ -1916,6 +1922,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let earned_fees = T::BalanceApi::get_balance(account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
+
+			T::WithdrawalRestriction::ensure_withdrawal_allowed_to(
+				account_id,
+				AccountOrAddress::ExternalAddress(&destination_address),
+			)?;
+
 			T::BalanceApi::try_debit_account(account_id, asset, earned_fees)?;
 
 			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =

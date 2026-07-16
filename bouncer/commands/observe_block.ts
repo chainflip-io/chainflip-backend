@@ -13,9 +13,12 @@ import { getChainflipApi } from 'shared/utils/substrate';
 
 async function main(): Promise<void> {
   await using api = await getChainflipApi();
-  const expectedBlock = process.argv[2];
-  while ((await api.rpc.chain.getBlockHash(expectedBlock)).every((e) => e === 0)) {
+  const expectedBlock = Number(process.argv[2]);
+  // chain_getBlockHash returns the all-zero hash (or null) until the block exists.
+  let hash = await api.rpc.chain_getBlockHash(expectedBlock);
+  while (!hash || hash === '0x0000000000000000000000000000000000000000000000000000000000000000') {
     await sleep(1000);
+    hash = await api.rpc.chain_getBlockHash(expectedBlock);
   }
   process.exit(0);
 }

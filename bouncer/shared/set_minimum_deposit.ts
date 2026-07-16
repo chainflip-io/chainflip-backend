@@ -9,7 +9,7 @@ export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bi
     case 'Btc':
       await submitGovernanceExtrinsic((api) =>
         api.tx.bitcoinIngressEgress.updatePalletConfig([
-          { SetMinimumDepositBitcoin: { asset, minimumDeposit: amount } },
+          { type: 'SetMinimumDepositBitcoin', value: { asset, minimumDeposit: amount } },
         ]),
       );
       break;
@@ -21,7 +21,7 @@ export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bi
     case 'Eth':
       await submitGovernanceExtrinsic((api) =>
         api.tx.ethereumIngressEgress.updatePalletConfig([
-          { SetMinimumDepositEthereum: { asset, minimumDeposit: amount } },
+          { type: 'SetMinimumDepositEthereum', value: { asset, minimumDeposit: amount } },
         ]),
       );
       break;
@@ -30,14 +30,14 @@ export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bi
     case 'ArbEth':
       await submitGovernanceExtrinsic((api) =>
         api.tx.arbitrumIngressEgress.updatePalletConfig([
-          { SetMinimumDepositArbitrum: { asset, minimumDeposit: amount } },
+          { type: 'SetMinimumDepositArbitrum', value: { asset, minimumDeposit: amount } },
         ]),
       );
       break;
     case 'HubDot':
       await submitGovernanceExtrinsic((api) =>
         api.tx.assethubIngressEgress.updatePalletConfig([
-          { SetMinimumDepositAssethub: { asset, minimumDeposit: amount } },
+          { type: 'SetMinimumDepositAssethub', value: { asset, minimumDeposit: amount } },
         ]),
       );
       break;
@@ -46,7 +46,7 @@ export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bi
     case 'Sol':
       await submitGovernanceExtrinsic((api) =>
         api.tx.solanaIngressEgress.updatePalletConfig([
-          { SetMinimumDepositSolana: { asset, minimumDeposit: amount } },
+          { type: 'SetMinimumDepositSolana', value: { asset, minimumDeposit: amount } },
         ]),
       );
       break;
