@@ -39,71 +39,41 @@ export type StateChainRuntimeRuntimeCall =
   | { pallet: 'Session'; palletCall: PalletSessionCall }
   | { pallet: 'Grandpa'; palletCall: PalletGrandpaCall }
   | { pallet: 'Governance'; palletCall: PalletCfGovernanceCall }
-  | {
-      pallet: 'TokenholderGovernance';
-      palletCall: PalletCfTokenholderGovernanceCall;
-    }
+  | { pallet: 'TokenholderGovernance'; palletCall: PalletCfTokenholderGovernanceCall }
   | { pallet: 'Reputation'; palletCall: PalletCfReputationCall }
   | { pallet: 'EthereumChainTracking'; palletCall: PalletCfChainTrackingCall }
-  | {
-      pallet: 'PolkadotChainTracking';
-      palletCall: PalletCfChainTrackingCall002;
-    }
+  | { pallet: 'PolkadotChainTracking'; palletCall: PalletCfChainTrackingCall002 }
   | { pallet: 'BitcoinChainTracking'; palletCall: PalletCfChainTrackingCall003 }
   | { pallet: 'EthereumVault'; palletCall: PalletCfVaultsCall }
   | { pallet: 'PolkadotVault'; palletCall: PalletCfVaultsCall002 }
   | { pallet: 'BitcoinVault'; palletCall: PalletCfVaultsCall003 }
   | { pallet: 'EvmThresholdSigner'; palletCall: PalletCfThresholdSignatureCall }
-  | {
-      pallet: 'PolkadotThresholdSigner';
-      palletCall: PalletCfThresholdSignatureCall002;
-    }
-  | {
-      pallet: 'BitcoinThresholdSigner';
-      palletCall: PalletCfThresholdSignatureCall003;
-    }
+  | { pallet: 'PolkadotThresholdSigner'; palletCall: PalletCfThresholdSignatureCall002 }
+  | { pallet: 'BitcoinThresholdSigner'; palletCall: PalletCfThresholdSignatureCall003 }
   | { pallet: 'EthereumBroadcaster'; palletCall: PalletCfBroadcastCall }
   | { pallet: 'PolkadotBroadcaster'; palletCall: PalletCfBroadcastCall002 }
   | { pallet: 'BitcoinBroadcaster'; palletCall: PalletCfBroadcastCall003 }
   | { pallet: 'Swapping'; palletCall: PalletCfSwappingCall }
   | { pallet: 'LiquidityProvider'; palletCall: PalletCfLpCall }
   | { pallet: 'EthereumIngressEgress'; palletCall: PalletCfIngressEgressCall }
-  | {
-      pallet: 'PolkadotIngressEgress';
-      palletCall: PalletCfIngressEgressCall002;
-    }
+  | { pallet: 'PolkadotIngressEgress'; palletCall: PalletCfIngressEgressCall002 }
   | { pallet: 'BitcoinIngressEgress'; palletCall: PalletCfIngressEgressCall003 }
   | { pallet: 'LiquidityPools'; palletCall: PalletCfPoolsCall }
-  | {
-      pallet: 'ArbitrumChainTracking';
-      palletCall: PalletCfChainTrackingCall004;
-    }
+  | { pallet: 'ArbitrumChainTracking'; palletCall: PalletCfChainTrackingCall004 }
   | { pallet: 'ArbitrumVault'; palletCall: PalletCfVaultsCall }
   | { pallet: 'ArbitrumBroadcaster'; palletCall: PalletCfBroadcastCall004 }
-  | {
-      pallet: 'ArbitrumIngressEgress';
-      palletCall: PalletCfIngressEgressCall004;
-    }
+  | { pallet: 'ArbitrumIngressEgress'; palletCall: PalletCfIngressEgressCall004 }
   | { pallet: 'SolanaVault'; palletCall: PalletCfVaultsCall004 }
-  | {
-      pallet: 'SolanaThresholdSigner';
-      palletCall: PalletCfThresholdSignatureCall004;
-    }
+  | { pallet: 'SolanaThresholdSigner'; palletCall: PalletCfThresholdSignatureCall004 }
   | { pallet: 'SolanaBroadcaster'; palletCall: PalletCfBroadcastCall005 }
   | { pallet: 'SolanaIngressEgress'; palletCall: PalletCfIngressEgressCall005 }
   | { pallet: 'SolanaElections'; palletCall: PalletCfElectionsCall }
   | { pallet: 'SolanaChainTracking'; palletCall: PalletCfChainTrackingCall005 }
   | { pallet: 'AssetBalances'; palletCall: PalletCfAssetBalancesCall }
-  | {
-      pallet: 'AssethubChainTracking';
-      palletCall: PalletCfChainTrackingCall006;
-    }
+  | { pallet: 'AssethubChainTracking'; palletCall: PalletCfChainTrackingCall006 }
   | { pallet: 'AssethubVault'; palletCall: PalletCfVaultsCall005 }
   | { pallet: 'AssethubBroadcaster'; palletCall: PalletCfBroadcastCall006 }
-  | {
-      pallet: 'AssethubIngressEgress';
-      palletCall: PalletCfIngressEgressCall006;
-    }
+  | { pallet: 'AssethubIngressEgress'; palletCall: PalletCfIngressEgressCall006 }
   | { pallet: 'TradingStrategy'; palletCall: PalletCfTradingStrategyCall }
   | { pallet: 'LendingPools'; palletCall: PalletCfLendingPoolsCall }
   | { pallet: 'BitcoinElections'; palletCall: PalletCfElectionsCall002 }
@@ -134,108 +104,51 @@ export type StateChainRuntimeRuntimeCallLike =
   | { pallet: 'Session'; palletCall: PalletSessionCallLike }
   | { pallet: 'Grandpa'; palletCall: PalletGrandpaCallLike }
   | { pallet: 'Governance'; palletCall: PalletCfGovernanceCallLike }
-  | {
-      pallet: 'TokenholderGovernance';
-      palletCall: PalletCfTokenholderGovernanceCallLike;
-    }
+  | { pallet: 'TokenholderGovernance'; palletCall: PalletCfTokenholderGovernanceCallLike }
   | { pallet: 'Reputation'; palletCall: PalletCfReputationCallLike }
-  | {
-      pallet: 'EthereumChainTracking';
-      palletCall: PalletCfChainTrackingCallLike;
-    }
-  | {
-      pallet: 'PolkadotChainTracking';
-      palletCall: PalletCfChainTrackingCallLike002;
-    }
-  | {
-      pallet: 'BitcoinChainTracking';
-      palletCall: PalletCfChainTrackingCallLike003;
-    }
+  | { pallet: 'EthereumChainTracking'; palletCall: PalletCfChainTrackingCallLike }
+  | { pallet: 'PolkadotChainTracking'; palletCall: PalletCfChainTrackingCallLike002 }
+  | { pallet: 'BitcoinChainTracking'; palletCall: PalletCfChainTrackingCallLike003 }
   | { pallet: 'EthereumVault'; palletCall: PalletCfVaultsCallLike }
   | { pallet: 'PolkadotVault'; palletCall: PalletCfVaultsCallLike002 }
   | { pallet: 'BitcoinVault'; palletCall: PalletCfVaultsCallLike003 }
-  | {
-      pallet: 'EvmThresholdSigner';
-      palletCall: PalletCfThresholdSignatureCallLike;
-    }
-  | {
-      pallet: 'PolkadotThresholdSigner';
-      palletCall: PalletCfThresholdSignatureCallLike002;
-    }
-  | {
-      pallet: 'BitcoinThresholdSigner';
-      palletCall: PalletCfThresholdSignatureCallLike003;
-    }
+  | { pallet: 'EvmThresholdSigner'; palletCall: PalletCfThresholdSignatureCallLike }
+  | { pallet: 'PolkadotThresholdSigner'; palletCall: PalletCfThresholdSignatureCallLike002 }
+  | { pallet: 'BitcoinThresholdSigner'; palletCall: PalletCfThresholdSignatureCallLike003 }
   | { pallet: 'EthereumBroadcaster'; palletCall: PalletCfBroadcastCallLike }
   | { pallet: 'PolkadotBroadcaster'; palletCall: PalletCfBroadcastCallLike002 }
   | { pallet: 'BitcoinBroadcaster'; palletCall: PalletCfBroadcastCallLike003 }
   | { pallet: 'Swapping'; palletCall: PalletCfSwappingCallLike }
   | { pallet: 'LiquidityProvider'; palletCall: PalletCfLpCallLike }
-  | {
-      pallet: 'EthereumIngressEgress';
-      palletCall: PalletCfIngressEgressCallLike;
-    }
-  | {
-      pallet: 'PolkadotIngressEgress';
-      palletCall: PalletCfIngressEgressCallLike002;
-    }
-  | {
-      pallet: 'BitcoinIngressEgress';
-      palletCall: PalletCfIngressEgressCallLike003;
-    }
+  | { pallet: 'EthereumIngressEgress'; palletCall: PalletCfIngressEgressCallLike }
+  | { pallet: 'PolkadotIngressEgress'; palletCall: PalletCfIngressEgressCallLike002 }
+  | { pallet: 'BitcoinIngressEgress'; palletCall: PalletCfIngressEgressCallLike003 }
   | { pallet: 'LiquidityPools'; palletCall: PalletCfPoolsCallLike }
-  | {
-      pallet: 'ArbitrumChainTracking';
-      palletCall: PalletCfChainTrackingCallLike004;
-    }
+  | { pallet: 'ArbitrumChainTracking'; palletCall: PalletCfChainTrackingCallLike004 }
   | { pallet: 'ArbitrumVault'; palletCall: PalletCfVaultsCallLike }
   | { pallet: 'ArbitrumBroadcaster'; palletCall: PalletCfBroadcastCallLike004 }
-  | {
-      pallet: 'ArbitrumIngressEgress';
-      palletCall: PalletCfIngressEgressCallLike004;
-    }
+  | { pallet: 'ArbitrumIngressEgress'; palletCall: PalletCfIngressEgressCallLike004 }
   | { pallet: 'SolanaVault'; palletCall: PalletCfVaultsCallLike004 }
-  | {
-      pallet: 'SolanaThresholdSigner';
-      palletCall: PalletCfThresholdSignatureCallLike004;
-    }
+  | { pallet: 'SolanaThresholdSigner'; palletCall: PalletCfThresholdSignatureCallLike004 }
   | { pallet: 'SolanaBroadcaster'; palletCall: PalletCfBroadcastCallLike005 }
-  | {
-      pallet: 'SolanaIngressEgress';
-      palletCall: PalletCfIngressEgressCallLike005;
-    }
+  | { pallet: 'SolanaIngressEgress'; palletCall: PalletCfIngressEgressCallLike005 }
   | { pallet: 'SolanaElections'; palletCall: PalletCfElectionsCallLike }
-  | {
-      pallet: 'SolanaChainTracking';
-      palletCall: PalletCfChainTrackingCallLike005;
-    }
+  | { pallet: 'SolanaChainTracking'; palletCall: PalletCfChainTrackingCallLike005 }
   | { pallet: 'AssetBalances'; palletCall: PalletCfAssetBalancesCallLike }
-  | {
-      pallet: 'AssethubChainTracking';
-      palletCall: PalletCfChainTrackingCallLike006;
-    }
+  | { pallet: 'AssethubChainTracking'; palletCall: PalletCfChainTrackingCallLike006 }
   | { pallet: 'AssethubVault'; palletCall: PalletCfVaultsCallLike005 }
   | { pallet: 'AssethubBroadcaster'; palletCall: PalletCfBroadcastCallLike006 }
-  | {
-      pallet: 'AssethubIngressEgress';
-      palletCall: PalletCfIngressEgressCallLike006;
-    }
+  | { pallet: 'AssethubIngressEgress'; palletCall: PalletCfIngressEgressCallLike006 }
   | { pallet: 'TradingStrategy'; palletCall: PalletCfTradingStrategyCallLike }
   | { pallet: 'LendingPools'; palletCall: PalletCfLendingPoolsCallLike }
   | { pallet: 'BitcoinElections'; palletCall: PalletCfElectionsCallLike002 }
   | { pallet: 'GenericElections'; palletCall: PalletCfElectionsCallLike003 }
   | { pallet: 'EthereumElections'; palletCall: PalletCfElectionsCallLike004 }
   | { pallet: 'ArbitrumElections'; palletCall: PalletCfElectionsCallLike005 }
-  | {
-      pallet: 'TronChainTracking';
-      palletCall: PalletCfChainTrackingCallLike007;
-    }
+  | { pallet: 'TronChainTracking'; palletCall: PalletCfChainTrackingCallLike007 }
   | { pallet: 'TronVault'; palletCall: PalletCfVaultsCallLike }
   | { pallet: 'TronBroadcaster'; palletCall: PalletCfBroadcastCallLike007 }
-  | {
-      pallet: 'TronIngressEgress';
-      palletCall: PalletCfIngressEgressCallLike007;
-    }
+  | { pallet: 'TronIngressEgress'; palletCall: PalletCfIngressEgressCallLike007 }
   | { pallet: 'TronElections'; palletCall: PalletCfElectionsCallLike006 }
   | { pallet: 'BscChainTracking'; palletCall: PalletCfChainTrackingCallLike008 }
   | { pallet: 'BscVault'; palletCall: PalletCfVaultsCallLike }
@@ -457,10 +370,7 @@ export type PalletCfEnvironmentCall =
    **/
   | {
       name: 'WitnessPolkadotVaultCreation';
-      params: {
-        dotPureProxyVaultKey: CfChainsDotPolkadotAccountId;
-        txId: CfPrimitivesTxId;
-      };
+      params: { dotPureProxyVaultKey: CfChainsDotPolkadotAccountId; txId: CfPrimitivesTxId };
     }
   /**
    * Manually witnesses the current Bitcoin block number to complete the pending vault
@@ -477,10 +387,7 @@ export type PalletCfEnvironmentCall =
    *
    * See [SafeModeUpdate] for the different options.
    **/
-  | {
-      name: 'UpdateSafeMode';
-      params: { update: PalletCfEnvironmentSafeModeUpdate };
-    }
+  | { name: 'UpdateSafeMode'; params: { update: PalletCfEnvironmentSafeModeUpdate } }
   | {
       name: 'UpdateConsolidationParameters';
       params: { params: CfChainsBtcUtxoSelectionConsolidationParameters };
@@ -498,10 +405,7 @@ export type PalletCfEnvironmentCall =
    **/
   | {
       name: 'ForceRecoverSolNonce';
-      params: {
-        nonceAccount: SolPrimAddress;
-        durableNonce?: SolPrimDigest | undefined;
-      };
+      params: { nonceAccount: SolPrimAddress; durableNonce?: SolPrimDigest | undefined };
     }
   /**
    * **READ WARNINGS BEFORE USING THIS**
@@ -515,10 +419,7 @@ export type PalletCfEnvironmentCall =
    * it's a high priority action. Therefore, **DO NOT** execute this governance function
    * around a rotation as it could consume the nonce saved for rotations.
    **/
-  | {
-      name: 'DispatchSolanaGovCall';
-      params: { govCall: CfChainsSolApiSolanaGovCall };
-    }
+  | { name: 'DispatchSolanaGovCall'; params: { govCall: CfChainsSolApiSolanaGovCall } }
   /**
    * /// Manually initiates Assethub vault key rotation completion steps so Epoch rotation
    * can be continued and sets the Assethub Pure Proxy Vault in environment pallet. The
@@ -531,10 +432,7 @@ export type PalletCfEnvironmentCall =
    **/
   | {
       name: 'WitnessAssethubVaultCreation';
-      params: {
-        hubPureProxyVaultKey: CfChainsDotPolkadotAccountId;
-        txId: CfPrimitivesTxId;
-      };
+      params: { hubPureProxyVaultKey: CfChainsDotPolkadotAccountId; txId: CfPrimitivesTxId };
     }
   /**
    * Allows for submitting unsigned runtime calls where validation is done on
@@ -578,10 +476,7 @@ export type PalletCfEnvironmentCallLike =
    **/
   | {
       name: 'WitnessPolkadotVaultCreation';
-      params: {
-        dotPureProxyVaultKey: CfChainsDotPolkadotAccountId;
-        txId: CfPrimitivesTxId;
-      };
+      params: { dotPureProxyVaultKey: CfChainsDotPolkadotAccountId; txId: CfPrimitivesTxId };
     }
   /**
    * Manually witnesses the current Bitcoin block number to complete the pending vault
@@ -598,10 +493,7 @@ export type PalletCfEnvironmentCallLike =
    *
    * See [SafeModeUpdate] for the different options.
    **/
-  | {
-      name: 'UpdateSafeMode';
-      params: { update: PalletCfEnvironmentSafeModeUpdate };
-    }
+  | { name: 'UpdateSafeMode'; params: { update: PalletCfEnvironmentSafeModeUpdate } }
   | {
       name: 'UpdateConsolidationParameters';
       params: { params: CfChainsBtcUtxoSelectionConsolidationParameters };
@@ -619,10 +511,7 @@ export type PalletCfEnvironmentCallLike =
    **/
   | {
       name: 'ForceRecoverSolNonce';
-      params: {
-        nonceAccount: SolPrimAddress;
-        durableNonce?: SolPrimDigest | undefined;
-      };
+      params: { nonceAccount: SolPrimAddress; durableNonce?: SolPrimDigest | undefined };
     }
   /**
    * **READ WARNINGS BEFORE USING THIS**
@@ -636,10 +525,7 @@ export type PalletCfEnvironmentCallLike =
    * it's a high priority action. Therefore, **DO NOT** execute this governance function
    * around a rotation as it could consume the nonce saved for rotations.
    **/
-  | {
-      name: 'DispatchSolanaGovCall';
-      params: { govCall: CfChainsSolApiSolanaGovCall };
-    }
+  | { name: 'DispatchSolanaGovCall'; params: { govCall: CfChainsSolApiSolanaGovCall } }
   /**
    * /// Manually initiates Assethub vault key rotation completion steps so Epoch rotation
    * can be continued and sets the Assethub Pure Proxy Vault in environment pallet. The
@@ -652,10 +538,7 @@ export type PalletCfEnvironmentCallLike =
    **/
   | {
       name: 'WitnessAssethubVaultCreation';
-      params: {
-        hubPureProxyVaultKey: CfChainsDotPolkadotAccountId;
-        txId: CfPrimitivesTxId;
-      };
+      params: { hubPureProxyVaultKey: CfChainsDotPolkadotAccountId; txId: CfPrimitivesTxId };
     }
   /**
    * Allows for submitting unsigned runtime calls where validation is done on
@@ -678,10 +561,7 @@ export type PalletCfEnvironmentCallLike =
   /**
    * Executes an atomic batch of runtime calls. It will execute as an all-or-nothing.
    **/
-  | {
-      name: 'Batch';
-      params: { calls: Array<StateChainRuntimeRuntimeCallLike> };
-    }
+  | { name: 'Batch'; params: { calls: Array<StateChainRuntimeRuntimeCallLike> } }
   /**
    * Manually witnesses the current Tron block number to complete the pending vault
    * rotation.
@@ -693,10 +573,7 @@ export type CfChainsDotPolkadotAccountId = FixedBytes<32>;
 
 export type CfPrimitivesTxId = { blockNumber: number; extrinsicIndex: number };
 
-export type CfChainsBtcAggKey = {
-  previous?: FixedBytes<32> | undefined;
-  current: FixedBytes<32>;
-};
+export type CfChainsBtcAggKey = { previous?: FixedBytes<32> | undefined; current: FixedBytes<32> };
 
 export type PalletCfEnvironmentSafeModeUpdate =
   | { type: 'CodeRed' }
@@ -815,13 +692,9 @@ export type CfPrimitivesChainsAssetsAnyAsset =
 
 export type PalletCfReputationPalletSafeMode = { reportingEnabled: boolean };
 
-export type PalletCfAssetBalancesPalletSafeMode = {
-  reconciliationEnabled: boolean;
-};
+export type PalletCfAssetBalancesPalletSafeMode = { reconciliationEnabled: boolean };
 
-export type PalletCfThresholdSignaturePalletSafeMode = {
-  slashingEnabled: boolean;
-};
+export type PalletCfThresholdSignaturePalletSafeMode = { slashingEnabled: boolean };
 
 export type PalletCfBroadcastPalletSafeMode = {
   retryEnabled: boolean;
@@ -831,10 +704,7 @@ export type PalletCfBroadcastPalletSafeMode = {
 export type PalletCfWitnesserPalletSafeMode =
   | { type: 'CodeGreen' }
   | { type: 'CodeRed' }
-  | {
-      type: 'CodeAmber';
-      value: StateChainRuntimeSafeModeWitnesserCallPermission;
-    };
+  | { type: 'CodeAmber'; value: StateChainRuntimeSafeModeWitnesserCallPermission };
 
 export type StateChainRuntimeSafeModeWitnesserCallPermission = {
   governance: boolean;
@@ -977,10 +847,7 @@ export type PalletCfFlipCall =
    *
    * Requires Governance.
    **/
-  {
-    name: 'UpdatePalletConfig';
-    params: { updates: Array<PalletCfFlipPalletConfigUpdate> };
-  };
+  { name: 'UpdatePalletConfig'; params: { updates: Array<PalletCfFlipPalletConfigUpdate> } };
 
 export type PalletCfFlipCallLike =
   /**
@@ -988,23 +855,14 @@ export type PalletCfFlipCallLike =
    *
    * Requires Governance.
    **/
-  {
-    name: 'UpdatePalletConfig';
-    params: { updates: Array<PalletCfFlipPalletConfigUpdate> };
-  };
+  { name: 'UpdatePalletConfig'; params: { updates: Array<PalletCfFlipPalletConfigUpdate> } };
 
 export type PalletCfFlipPalletConfigUpdate =
   | { type: 'SetSlashingRate'; value: Permill }
-  | {
-      type: 'SetFeeScalingRate';
-      value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig;
-    };
+  | { type: 'SetFeeScalingRate'; value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig };
 
 export type PalletCfFlipOnChargeTransactionFeeScalingRateConfig =
-  | {
-      type: 'DelayedExponential';
-      value: { threshold: number; exponent: number };
-    }
+  | { type: 'DelayedExponential'; value: { threshold: number; exponent: number } }
   | { type: 'NoScaling' };
 
 /**
@@ -1016,10 +874,7 @@ export type PalletCfEmissionsCall =
    *
    * Can only be called by the root origin.
    **/
-  | {
-      name: 'UpdateCurrentAuthorityEmissionInflation';
-      params: { inflation: number };
-    }
+  | { name: 'UpdateCurrentAuthorityEmissionInflation'; params: { inflation: number } }
   /**
    * Updates the Supply Update interval.
    **/
@@ -1031,10 +886,7 @@ export type PalletCfEmissionsCallLike =
    *
    * Can only be called by the root origin.
    **/
-  | {
-      name: 'UpdateCurrentAuthorityEmissionInflation';
-      params: { inflation: number };
-    }
+  | { name: 'UpdateCurrentAuthorityEmissionInflation'; params: { inflation: number } }
   /**
    * Updates the Supply Update interval.
    **/
@@ -1222,17 +1074,10 @@ export type PalletCfFundingEthereumDepositAndSCCall = {
 
 export type PalletCfFundingEthereumDeposit =
   | { type: 'FlipToSCGateway'; value: { amount: bigint } }
-  | {
-      type: 'Vault';
-      value: { asset: CfPrimitivesChainsAssetsEthAsset; amount: bigint };
-    }
+  | { type: 'Vault'; value: { asset: CfPrimitivesChainsAssetsEthAsset; amount: bigint } }
   | {
       type: 'Transfer';
-      value: {
-        asset: CfPrimitivesChainsAssetsEthAsset;
-        amount: bigint;
-        destination: H160;
-      };
+      value: { asset: CfPrimitivesChainsAssetsEthAsset; amount: bigint; destination: H160 };
     }
   | { type: 'NoDeposit' };
 
@@ -1263,10 +1108,7 @@ export type PalletCfAccountRolesCall =
    * The maximum number of sub-accounts is limited by the runtime's configured
    * [frame_system::Config::MaxConsumers] (default is 128).
    **/
-  | {
-      name: 'SpawnSubAccount';
-      params: { subAccountIndex: number; initialAmount: bigint };
-    }
+  | { name: 'SpawnSubAccount'; params: { subAccountIndex: number; initialAmount: bigint } }
   /**
    * Executes a call on behalf of a sub-account, as identified by the provided
    * `sub_account_index`. Fees are paid by the parent account.
@@ -1300,10 +1142,7 @@ export type PalletCfAccountRolesCallLike =
    * The maximum number of sub-accounts is limited by the runtime's configured
    * [frame_system::Config::MaxConsumers] (default is 128).
    **/
-  | {
-      name: 'SpawnSubAccount';
-      params: { subAccountIndex: number; initialAmount: bigint };
-    }
+  | { name: 'SpawnSubAccount'; params: { subAccountIndex: number; initialAmount: bigint } }
   /**
    * Executes a call on behalf of a sub-account, as identified by the provided
    * `sub_account_index`. Fees are paid by the parent account.
@@ -1312,10 +1151,7 @@ export type PalletCfAccountRolesCallLike =
    **/
   | {
       name: 'AsSubAccount';
-      params: {
-        subAccountIndex: number;
-        call: StateChainRuntimeRuntimeCallLike;
-      };
+      params: { subAccountIndex: number; call: StateChainRuntimeRuntimeCallLike };
     };
 
 /**
@@ -1355,10 +1191,7 @@ export type PalletCfWitnesserCall =
    * - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
    * - [DuplicateWitness](Error::DuplicateWitness)
    **/
-  | {
-      name: 'WitnessAtEpoch';
-      params: { call: StateChainRuntimeRuntimeCall; epochIndex: number };
-    }
+  | { name: 'WitnessAtEpoch'; params: { call: StateChainRuntimeRuntimeCall; epochIndex: number } }
   /**
    * This allows the governance user to force through a witness call.
    *
@@ -1367,10 +1200,7 @@ export type PalletCfWitnesserCall =
    *
    * Note this does not protect against replays, so should be used with care.
    **/
-  | {
-      name: 'ForceWitness';
-      params: { call: StateChainRuntimeRuntimeCall; epochIndex: number };
-    }
+  | { name: 'ForceWitness'; params: { call: StateChainRuntimeRuntimeCall; epochIndex: number } }
   /**
    * Simply emits an event to notify that this call has been witnessed. Implicitly signals
    * that we expect the same call to be witnessed at a later block.
@@ -1380,10 +1210,7 @@ export type PalletCfWitnesserCall =
    * Emits an event to notify that this call has been witnessed. Then, it dispatches the call
    * using the prewitness threshold origin.
    **/
-  | {
-      name: 'PrewitnessAndExecute';
-      params: { call: StateChainRuntimeRuntimeCall };
-    };
+  | { name: 'PrewitnessAndExecute'; params: { call: StateChainRuntimeRuntimeCall } };
 
 export type PalletCfWitnesserCallLike =
   /**
@@ -1431,10 +1258,7 @@ export type PalletCfWitnesserCallLike =
    *
    * Note this does not protect against replays, so should be used with care.
    **/
-  | {
-      name: 'ForceWitness';
-      params: { call: StateChainRuntimeRuntimeCallLike; epochIndex: number };
-    }
+  | { name: 'ForceWitness'; params: { call: StateChainRuntimeRuntimeCallLike; epochIndex: number } }
   /**
    * Simply emits an event to notify that this call has been witnessed. Implicitly signals
    * that we expect the same call to be witnessed at a later block.
@@ -1444,10 +1268,7 @@ export type PalletCfWitnesserCallLike =
    * Emits an event to notify that this call has been witnessed. Then, it dispatches the call
    * using the prewitness threshold origin.
    **/
-  | {
-      name: 'PrewitnessAndExecute';
-      params: { call: StateChainRuntimeRuntimeCallLike };
-    };
+  | { name: 'PrewitnessAndExecute'; params: { call: StateChainRuntimeRuntimeCallLike } };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -1458,10 +1279,7 @@ export type PalletCfValidatorCall =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfValidatorPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfValidatorPalletConfigUpdate } }
   /**
    * Force a new epoch. From the next block we will try to move to a new
    * epoch and rotate our validators.
@@ -1479,10 +1297,7 @@ export type PalletCfValidatorCall =
    *
    * The dispatch origin of this function must be signed.
    **/
-  | {
-      name: 'SetKeys';
-      params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: Bytes };
-    }
+  | { name: 'SetKeys'; params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: Bytes } }
   /**
    * Allow a node to link their validator id to a peer id
    *
@@ -1565,10 +1380,7 @@ export type PalletCfValidatorCall =
    **/
   | {
       name: 'RegisterAsOperator';
-      params: {
-        settings: PalletCfValidatorDelegationOperatorSettings;
-        vanityName: Bytes;
-      };
+      params: { settings: PalletCfValidatorDelegationOperatorSettings; vanityName: Bytes };
     }
   /**
    * Executed by an operator to deregister as an operator.
@@ -1576,19 +1388,10 @@ export type PalletCfValidatorCall =
   | { name: 'DeregisterAsOperator' }
   | {
       name: 'Delegate';
-      params: {
-        operator: AccountId32;
-        increase: PalletCfValidatorDelegationDelegationAmount;
-      };
+      params: { operator: AccountId32; increase: PalletCfValidatorDelegationDelegationAmount };
     }
-  | {
-      name: 'Undelegate';
-      params: { decrease: PalletCfValidatorDelegationDelegationAmount };
-    }
-  | {
-      name: 'ReportWitnessingTaskRestart';
-      params: { task: CfPrimitivesWitnessingTaskName };
-    }
+  | { name: 'Undelegate'; params: { decrease: PalletCfValidatorDelegationDelegationAmount } }
+  | { name: 'ReportWitnessingTaskRestart'; params: { task: CfPrimitivesWitnessingTaskName } }
   /**
    * Delegate this validator's GRANDPA vote to a delegate key.
    **/
@@ -1603,10 +1406,7 @@ export type PalletCfValidatorCall =
   /**
    * Revoke this validator's GRANDPA vote delegation.
    **/
-  | {
-      name: 'RevokeGrandpaDelegation';
-      params: { callerGrandpaKey: SpConsensusGrandpaAppPublic };
-    };
+  | { name: 'RevokeGrandpaDelegation'; params: { callerGrandpaKey: SpConsensusGrandpaAppPublic } };
 
 export type PalletCfValidatorCallLike =
   /**
@@ -1614,10 +1414,7 @@ export type PalletCfValidatorCallLike =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfValidatorPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfValidatorPalletConfigUpdate } }
   /**
    * Force a new epoch. From the next block we will try to move to a new
    * epoch and rotate our validators.
@@ -1635,10 +1432,7 @@ export type PalletCfValidatorCallLike =
    *
    * The dispatch origin of this function must be signed.
    **/
-  | {
-      name: 'SetKeys';
-      params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: BytesLike };
-    }
+  | { name: 'SetKeys'; params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: BytesLike } }
   /**
    * Allow a node to link their validator id to a peer id
    *
@@ -1721,10 +1515,7 @@ export type PalletCfValidatorCallLike =
    **/
   | {
       name: 'RegisterAsOperator';
-      params: {
-        settings: PalletCfValidatorDelegationOperatorSettings;
-        vanityName: BytesLike;
-      };
+      params: { settings: PalletCfValidatorDelegationOperatorSettings; vanityName: BytesLike };
     }
   /**
    * Executed by an operator to deregister as an operator.
@@ -1732,19 +1523,10 @@ export type PalletCfValidatorCallLike =
   | { name: 'DeregisterAsOperator' }
   | {
       name: 'Delegate';
-      params: {
-        operator: AccountId32Like;
-        increase: PalletCfValidatorDelegationDelegationAmount;
-      };
+      params: { operator: AccountId32Like; increase: PalletCfValidatorDelegationDelegationAmount };
     }
-  | {
-      name: 'Undelegate';
-      params: { decrease: PalletCfValidatorDelegationDelegationAmount };
-    }
-  | {
-      name: 'ReportWitnessingTaskRestart';
-      params: { task: CfPrimitivesWitnessingTaskName };
-    }
+  | { name: 'Undelegate'; params: { decrease: PalletCfValidatorDelegationDelegationAmount } }
+  | { name: 'ReportWitnessingTaskRestart'; params: { task: CfPrimitivesWitnessingTaskName } }
   /**
    * Delegate this validator's GRANDPA vote to a delegate key.
    **/
@@ -1759,10 +1541,7 @@ export type PalletCfValidatorCallLike =
   /**
    * Revoke this validator's GRANDPA vote delegation.
    **/
-  | {
-      name: 'RevokeGrandpaDelegation';
-      params: { callerGrandpaKey: SpConsensusGrandpaAppPublic };
-    };
+  | { name: 'RevokeGrandpaDelegation'; params: { callerGrandpaKey: SpConsensusGrandpaAppPublic } };
 
 export type PalletCfValidatorPalletConfigUpdate =
   | { type: 'MinimumValidatorStake'; value: { minStake: number } }
@@ -1773,14 +1552,8 @@ export type PalletCfValidatorPalletConfigUpdate =
       type: 'AuctionParameters';
       value: { parameters: PalletCfValidatorAuctionResolverSetSizeParameters };
     }
-  | {
-      type: 'MinimumReportedCfeVersion';
-      value: { version: CfPrimitivesSemVer };
-    }
-  | {
-      type: 'MaxAuthoritySetContractionPercentage';
-      value: { percentage: Percent };
-    }
+  | { type: 'MinimumReportedCfeVersion'; value: { version: CfPrimitivesSemVer } }
+  | { type: 'MaxAuthoritySetContractionPercentage'; value: { percentage: Percent } }
   | { type: 'MinimumAuctionBid'; value: { minimumFlipBid: number } }
   | { type: 'MinimumOperatorFee'; value: { minimumOperatorFeeInBps: number } };
 
@@ -1790,11 +1563,7 @@ export type PalletCfValidatorAuctionResolverSetSizeParameters = {
   maxExpansion: number;
 };
 
-export type CfPrimitivesSemVer = {
-  major: number;
-  minor: number;
-  patch: number;
-};
+export type CfPrimitivesSemVer = { major: number; minor: number; patch: number };
 
 export type StateChainRuntimeOpaqueSessionKeys = {
   aura: SpConsensusAuraSr25519AppSr25519Public;
@@ -1843,10 +1612,7 @@ export type PalletSessionCall =
    * - `O(1)`. Actual cost depends on the number of length of `T::Keys::key_ids()` which is
    * fixed.
    **/
-  | {
-      name: 'SetKeys';
-      params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: Bytes };
-    }
+  | { name: 'SetKeys'; params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: Bytes } }
   /**
    * Removes any session key(s) of the function caller.
    *
@@ -1875,10 +1641,7 @@ export type PalletSessionCallLike =
    * - `O(1)`. Actual cost depends on the number of length of `T::Keys::key_ids()` which is
    * fixed.
    **/
-  | {
-      name: 'SetKeys';
-      params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: BytesLike };
-    }
+  | { name: 'SetKeys'; params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: BytesLike } }
   /**
    * Removes any session key(s) of the function caller.
    *
@@ -1944,10 +1707,7 @@ export type PalletGrandpaCall =
    *
    * Only callable by root.
    **/
-  | {
-      name: 'NoteStalled';
-      params: { delay: number; bestFinalizedBlockNumber: number };
-    };
+  | { name: 'NoteStalled'; params: { delay: number; bestFinalizedBlockNumber: number } };
 
 export type PalletGrandpaCallLike =
   /**
@@ -1995,10 +1755,7 @@ export type PalletGrandpaCallLike =
    *
    * Only callable by root.
    **/
-  | {
-      name: 'NoteStalled';
-      params: { delay: number; bestFinalizedBlockNumber: number };
-    };
+  | { name: 'NoteStalled'; params: { delay: number; bestFinalizedBlockNumber: number } };
 
 export type SpConsensusGrandpaEquivocationProof = {
   setId: bigint;
@@ -2025,10 +1782,7 @@ export type FinalityGrandpaEquivocationPrecommit = {
   second: [FinalityGrandpaPrecommit, SpConsensusGrandpaAppSignature];
 };
 
-export type FinalityGrandpaPrecommit = {
-  targetHash: H256;
-  targetNumber: number;
-};
+export type FinalityGrandpaPrecommit = { targetHash: H256; targetNumber: number };
 
 export type StateChainRuntimeChainflipKeyOwnerProofCurrentSessionProof = number;
 
@@ -2041,10 +1795,7 @@ export type PalletCfGovernanceCall =
    **/
   | {
       name: 'ProposeGovernanceExtrinsic';
-      params: {
-        call: StateChainRuntimeRuntimeCall;
-        execution: PalletCfGovernanceExecutionMode;
-      };
+      params: { call: StateChainRuntimeRuntimeCall; execution: PalletCfGovernanceExecutionMode };
     }
   /**
    * Sets a new set of governance members
@@ -2053,20 +1804,14 @@ export type PalletCfGovernanceCall =
    * Sets a new set of governance members. Note that this can be called with an empty vector
    * to remove the possibility to govern the chain at all.
    **/
-  | {
-      name: 'NewMembershipSet';
-      params: { newMembers: Array<AccountId32>; newThreshold: number };
-    }
+  | { name: 'NewMembershipSet'; params: { newMembers: Array<AccountId32>; newThreshold: number } }
   /**
    * Performs a runtime upgrade of the Chainflip runtime
    * **Can only be called via the Governance Origin**
    **/
   | {
       name: 'ChainflipRuntimeUpgrade';
-      params: {
-        cfeVersionRestriction?: [CfPrimitivesSemVer, Percent] | undefined;
-        code: Bytes;
-      };
+      params: { cfeVersionRestriction?: [CfPrimitivesSemVer, Percent] | undefined; code: Bytes };
     }
   /**
    * Approve a proposal by a given proposal id
@@ -2150,10 +1895,7 @@ export type PalletCfGovernanceCallLike =
    *
    * Submit a call to be executed if the gov key has already committed to it.
    **/
-  | {
-      name: 'SubmitGovkeyCall';
-      params: { call: StateChainRuntimeRuntimeCallLike };
-    }
+  | { name: 'SubmitGovkeyCall'; params: { call: StateChainRuntimeRuntimeCallLike } }
   | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } };
 
 export type PalletCfGovernanceExecutionMode = 'Automatic' | 'Manual';
@@ -2166,34 +1908,22 @@ export type PalletCfTokenholderGovernanceCall =
    * Submit a proposal. The caller will be charged a proposal fee equal to
    * [Config::ProposalFee].
    **/
-  | {
-      name: 'SubmitProposal';
-      params: { proposal: PalletCfTokenholderGovernanceProposal };
-    }
+  | { name: 'SubmitProposal'; params: { proposal: PalletCfTokenholderGovernanceProposal } }
   /**
    * Backs a proposal. The caller signals their support for a proposal.
    **/
-  | {
-      name: 'BackProposal';
-      params: { proposal: PalletCfTokenholderGovernanceProposal };
-    };
+  | { name: 'BackProposal'; params: { proposal: PalletCfTokenholderGovernanceProposal } };
 
 export type PalletCfTokenholderGovernanceCallLike =
   /**
    * Submit a proposal. The caller will be charged a proposal fee equal to
    * [Config::ProposalFee].
    **/
-  | {
-      name: 'SubmitProposal';
-      params: { proposal: PalletCfTokenholderGovernanceProposal };
-    }
+  | { name: 'SubmitProposal'; params: { proposal: PalletCfTokenholderGovernanceProposal } }
   /**
    * Backs a proposal. The caller signals their support for a proposal.
    **/
-  | {
-      name: 'BackProposal';
-      params: { proposal: PalletCfTokenholderGovernanceProposal };
-    };
+  | { name: 'BackProposal'; params: { proposal: PalletCfTokenholderGovernanceProposal } };
 
 export type PalletCfTokenholderGovernanceProposal =
   | { type: 'SetGovernanceKey'; value: [CfPrimitivesChainsForeignChain, Bytes] }
@@ -2218,17 +1948,11 @@ export type PalletCfReputationCall =
    *
    * For every `number_of_blocks` blocks, `reputation_points` points are accrued.
    **/
-  | {
-      name: 'UpdateAccrualRatio';
-      params: { reputationPoints: number; numberOfBlocks: number };
-    }
+  | { name: 'UpdateAccrualRatio'; params: { reputationPoints: number; numberOfBlocks: number } }
   /**
    * Updates the penalty for missing a heartbeat.
    **/
-  | {
-      name: 'UpdateMissedHeartbeatPenalty';
-      params: { newReputationPenalty: number };
-    }
+  | { name: 'UpdateMissedHeartbeatPenalty'; params: { newReputationPenalty: number } }
   /**
    * Set the [Penalty] for an [Offence].
    **/
@@ -2254,17 +1978,11 @@ export type PalletCfReputationCallLike =
    *
    * For every `number_of_blocks` blocks, `reputation_points` points are accrued.
    **/
-  | {
-      name: 'UpdateAccrualRatio';
-      params: { reputationPoints: number; numberOfBlocks: number };
-    }
+  | { name: 'UpdateAccrualRatio'; params: { reputationPoints: number; numberOfBlocks: number } }
   /**
    * Updates the penalty for missing a heartbeat.
    **/
-  | {
-      name: 'UpdateMissedHeartbeatPenalty';
-      params: { newReputationPenalty: number };
-    }
+  | { name: 'UpdateMissedHeartbeatPenalty'; params: { newReputationPenalty: number } }
   /**
    * Set the [Penalty] for an [Offence].
    **/
@@ -2295,10 +2013,7 @@ export type StateChainRuntimeChainflipOffencesOffence =
   | { type: 'FailedToWitnessInTime' }
   | { type: 'FailedLivenessCheck'; value: CfPrimitivesChainsForeignChain };
 
-export type PalletCfReputationPenalty = {
-  reputation: number;
-  suspension: number;
-};
+export type PalletCfReputationPenalty = { reputation: number; suspension: number };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -2334,10 +2049,7 @@ export type CfChainsChainState = {
 
 export type CfPrimitivesChainsEthereum = {};
 
-export type CfChainsEthEthereumTrackedData = {
-  baseFee: bigint;
-  priorityFee: bigint;
-};
+export type CfChainsEthEthereumTrackedData = { baseFee: bigint; priorityFee: bigint };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -2346,10 +2058,7 @@ export type PalletCfChainTrackingCall002 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStatePolkadot };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStatePolkadot } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -2361,10 +2070,7 @@ export type PalletCfChainTrackingCallLike002 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStatePolkadot };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStatePolkadot } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -2384,10 +2090,7 @@ export type CfChainsDotPolkadotTrackedData = {
   runtimeVersion: CfChainsDotRuntimeVersion;
 };
 
-export type CfChainsDotRuntimeVersion = {
-  specVersion: number;
-  transactionVersion: number;
-};
+export type CfChainsDotRuntimeVersion = { specVersion: number; transactionVersion: number };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -2396,10 +2099,7 @@ export type PalletCfChainTrackingCall003 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateBitcoin };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateBitcoin } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -2411,10 +2111,7 @@ export type PalletCfChainTrackingCallLike003 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateBitcoin };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateBitcoin } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -2429,9 +2126,7 @@ export type CfChainsChainStateBitcoin = {
 
 export type CfPrimitivesChainsBitcoin = {};
 
-export type CfChainsBtcBitcoinTrackedData = {
-  btcFeeInfo: CfChainsBtcBitcoinFeeInfo;
-};
+export type CfChainsBtcBitcoinTrackedData = { btcFeeInfo: CfChainsBtcBitcoinFeeInfo };
 
 export type CfChainsBtcBitcoinFeeInfo = { satsPerKilobyte: bigint };
 
@@ -2447,11 +2142,7 @@ export type PalletCfVaultsCall =
    **/
   | {
       name: 'VaultKeyRotatedExternally';
-      params: {
-        newPublicKey: CfChainsEvmAggKey;
-        blockNumber: bigint;
-        txId: H256;
-      };
+      params: { newPublicKey: CfChainsEvmAggKey; blockNumber: bigint; txId: H256 };
     }
   /**
    * Sets the ChainInitialized flag to true for this chain so that the chain can be
@@ -2468,11 +2159,7 @@ export type PalletCfVaultsCallLike =
    **/
   | {
       name: 'VaultKeyRotatedExternally';
-      params: {
-        newPublicKey: CfChainsEvmAggKey;
-        blockNumber: bigint;
-        txId: H256;
-      };
+      params: { newPublicKey: CfChainsEvmAggKey; blockNumber: bigint; txId: H256 };
     }
   /**
    * Sets the ChainInitialized flag to true for this chain so that the chain can be
@@ -2480,10 +2167,7 @@ export type PalletCfVaultsCallLike =
    **/
   | { name: 'InitializeChain' };
 
-export type CfChainsEvmAggKey = {
-  pubKeyX: FixedBytes<32>;
-  pubKeyYParity: CfChainsEvmParityBit;
-};
+export type CfChainsEvmAggKey = { pubKeyX: FixedBytes<32>; pubKeyYParity: CfChainsEvmParityBit };
 
 export type CfChainsEvmParityBit = 'Odd' | 'Even';
 
@@ -2544,11 +2228,7 @@ export type PalletCfVaultsCall003 =
    **/
   | {
       name: 'VaultKeyRotatedExternally';
-      params: {
-        newPublicKey: CfChainsBtcAggKey;
-        blockNumber: bigint;
-        txId: H256;
-      };
+      params: { newPublicKey: CfChainsBtcAggKey; blockNumber: bigint; txId: H256 };
     }
   /**
    * Sets the ChainInitialized flag to true for this chain so that the chain can be
@@ -2565,11 +2245,7 @@ export type PalletCfVaultsCallLike003 =
    **/
   | {
       name: 'VaultKeyRotatedExternally';
-      params: {
-        newPublicKey: CfChainsBtcAggKey;
-        blockNumber: bigint;
-        txId: H256;
-      };
+      params: { newPublicKey: CfChainsBtcAggKey; blockNumber: bigint; txId: H256 };
     }
   /**
    * Sets the ChainInitialized flag to true for this chain so that the chain can be
@@ -2591,10 +2267,7 @@ export type PalletCfThresholdSignatureCall =
    **/
   | {
       name: 'SignatureSuccess';
-      params: {
-        ceremonyId: bigint;
-        signature: CfChainsEvmSchnorrVerificationComponents;
-      };
+      params: { ceremonyId: bigint; signature: CfChainsEvmSchnorrVerificationComponents };
     }
   /**
    * Report that a threshold signature ceremony has failed and incriminate the guilty
@@ -2602,10 +2275,7 @@ export type PalletCfThresholdSignatureCall =
    *
    * The `offenders` argument takes a [BTreeSet]
    **/
-  | {
-      name: 'ReportSignatureFailed';
-      params: { ceremonyId: bigint; offenders: Array<AccountId32> };
-    }
+  | { name: 'ReportSignatureFailed'; params: { ceremonyId: bigint; offenders: Array<AccountId32> } }
   /**
    * Report the outcome of a keygen ceremony.
    *
@@ -2666,10 +2336,7 @@ export type PalletCfThresholdSignatureCallLike =
    **/
   | {
       name: 'SignatureSuccess';
-      params: {
-        ceremonyId: bigint;
-        signature: CfChainsEvmSchnorrVerificationComponents;
-      };
+      params: { ceremonyId: bigint; signature: CfChainsEvmSchnorrVerificationComponents };
     }
   /**
    * Report that a threshold signature ceremony has failed and incriminate the guilty
@@ -2762,10 +2429,7 @@ export type PalletCfThresholdSignatureCall002 =
    *
    * The `offenders` argument takes a [BTreeSet]
    **/
-  | {
-      name: 'ReportSignatureFailed';
-      params: { ceremonyId: bigint; offenders: Array<AccountId32> };
-    }
+  | { name: 'ReportSignatureFailed'; params: { ceremonyId: bigint; offenders: Array<AccountId32> } }
   /**
    * Report the outcome of a keygen ceremony.
    *
@@ -2901,20 +2565,14 @@ export type PalletCfThresholdSignatureCall003 =
    * triggered if the associated signature is valid, and therefore we don't need to check it
    * again inside the call.
    **/
-  | {
-      name: 'SignatureSuccess';
-      params: { ceremonyId: bigint; signature: Array<FixedBytes<64>> };
-    }
+  | { name: 'SignatureSuccess'; params: { ceremonyId: bigint; signature: Array<FixedBytes<64>> } }
   /**
    * Report that a threshold signature ceremony has failed and incriminate the guilty
    * participants.
    *
    * The `offenders` argument takes a [BTreeSet]
    **/
-  | {
-      name: 'ReportSignatureFailed';
-      params: { ceremonyId: bigint; offenders: Array<AccountId32> };
-    }
+  | { name: 'ReportSignatureFailed'; params: { ceremonyId: bigint; offenders: Array<AccountId32> } }
   /**
    * Report the outcome of a keygen ceremony.
    *
@@ -2973,10 +2631,7 @@ export type PalletCfThresholdSignatureCallLike003 =
    * triggered if the associated signature is valid, and therefore we don't need to check it
    * again inside the call.
    **/
-  | {
-      name: 'SignatureSuccess';
-      params: { ceremonyId: bigint; signature: Array<FixedBytes<64>> };
-    }
+  | { name: 'SignatureSuccess'; params: { ceremonyId: bigint; signature: Array<FixedBytes<64>> } }
   /**
    * Report that a threshold signature ceremony has failed and incriminate the guilty
    * participants.
@@ -3101,10 +2756,7 @@ export type PalletCfBroadcastCall =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -3196,10 +2848,7 @@ export type PalletCfBroadcastCallLike =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -3231,31 +2880,13 @@ export type PalletCfBroadcastCallLike =
 
 export type CfChainsEthApiEthereumApi =
   | { type: 'SetAggKeyWithAggKey'; value: CfChainsEvmApiEvmTransactionBuilder }
-  | {
-      type: 'RegisterRedemption';
-      value: CfChainsEvmApiEvmTransactionBuilderRegisterRedemption;
-    }
-  | {
-      type: 'UpdateFlipSupply';
-      value: CfChainsEvmApiEvmTransactionBuilderUpdateFlipSupply;
-    }
-  | {
-      type: 'SetGovKeyWithAggKey';
-      value: CfChainsEvmApiEvmTransactionBuilderSetGovKeyWithAggKey;
-    }
-  | {
-      type: 'SetCommKeyWithAggKey';
-      value: CfChainsEvmApiEvmTransactionBuilderSetCommKeyWithAggKey;
-    }
+  | { type: 'RegisterRedemption'; value: CfChainsEvmApiEvmTransactionBuilderRegisterRedemption }
+  | { type: 'UpdateFlipSupply'; value: CfChainsEvmApiEvmTransactionBuilderUpdateFlipSupply }
+  | { type: 'SetGovKeyWithAggKey'; value: CfChainsEvmApiEvmTransactionBuilderSetGovKeyWithAggKey }
+  | { type: 'SetCommKeyWithAggKey'; value: CfChainsEvmApiEvmTransactionBuilderSetCommKeyWithAggKey }
   | { type: 'AllBatch'; value: CfChainsEvmApiEvmTransactionBuilderAllBatch }
-  | {
-      type: 'ExecutexSwapAndCall';
-      value: CfChainsEvmApiEvmTransactionBuilderExecutexSwapAndCall;
-    }
-  | {
-      type: 'TransferFallback';
-      value: CfChainsEvmApiEvmTransactionBuilderTransferFallback;
-    }
+  | { type: 'ExecutexSwapAndCall'; value: CfChainsEvmApiEvmTransactionBuilderExecutexSwapAndCall }
+  | { type: 'TransferFallback'; value: CfChainsEvmApiEvmTransactionBuilderTransferFallback }
   | { type: 'RejectCall'; value: CfChainsEvmApiEvmTransactionBuilderAllBatch };
 
 export type CfChainsEvmApiEvmTransactionBuilder = {
@@ -3266,11 +2897,7 @@ export type CfChainsEvmApiEvmTransactionBuilder = {
 
 export type CfChainsEvmApiSetAggKeyWithAggKey = { newKey: CfChainsEvmAggKey };
 
-export type CfChainsEvmApiSigData = {
-  sig: U256;
-  nonce: U256;
-  kTimesGAddress: H160;
-};
+export type CfChainsEvmApiSigData = { sig: U256; nonce: U256; kTimesGAddress: H160 };
 
 export type CfChainsEvmApiEvmReplayProtection = {
   nonce: bigint;
@@ -3303,10 +2930,7 @@ export type CfChainsEvmApiEvmTransactionBuilderUpdateFlipSupply = {
   call: CfChainsEthApiUpdateFlipSupply;
 };
 
-export type CfChainsEthApiUpdateFlipSupply = {
-  newTotalSupply: U256;
-  stateChainBlockNumber: U256;
-};
+export type CfChainsEthApiUpdateFlipSupply = { newTotalSupply: U256; stateChainBlockNumber: U256 };
 
 export type CfChainsEvmApiEvmTransactionBuilderSetGovKeyWithAggKey = {
   signerAndSigData?: [CfChainsEvmAggKey, CfChainsEvmApiSigData] | undefined;
@@ -3341,10 +2965,7 @@ export type CfChainsEvmApiCommonEncodableFetchDeployAssetParams = {
   asset: H160;
 };
 
-export type CfChainsEvmApiCommonEncodableFetchAssetParams = {
-  contractAddress: H160;
-  asset: H160;
-};
+export type CfChainsEvmApiCommonEncodableFetchAssetParams = { contractAddress: H160; asset: H160 };
 
 export type CfChainsEvmApiCommonEncodableTransferAssetParams = {
   asset: H160;
@@ -3376,10 +2997,7 @@ export type CfChainsEvmApiTransferFallback = {
   transferParam: CfChainsEvmApiCommonEncodableTransferAssetParams;
 };
 
-export type CfChainsEvmTransactionFee = {
-  effectiveGasPrice: bigint;
-  gasUsed: bigint;
-};
+export type CfChainsEvmTransactionFee = { effectiveGasPrice: bigint; gasUsed: bigint };
 
 export type CfChainsEvmEvmTransactionMetadata = {
   maxFeePerGas?: U256 | undefined;
@@ -3458,10 +3076,7 @@ export type PalletCfBroadcastCall002 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -3553,10 +3168,7 @@ export type PalletCfBroadcastCallLike002 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -3589,10 +3201,7 @@ export type PalletCfBroadcastCallLike002 =
 export type CfChainsDotEncodedPolkadotPayload = Bytes;
 
 export type CfChainsDotApiPolkadotApi =
-  | {
-      type: 'BatchFetchAndTransfer';
-      value: CfChainsDotPolkadotExtrinsicBuilder;
-    }
+  | { type: 'BatchFetchAndTransfer'; value: CfChainsDotPolkadotExtrinsicBuilder }
   | { type: 'RotateVaultProxy'; value: CfChainsDotPolkadotExtrinsicBuilder }
   | { type: 'ChangeGovKey'; value: CfChainsDotPolkadotExtrinsicBuilder }
   | { type: 'ExecuteXSwapAndCall'; value: CfChainsDotPolkadotExtrinsicBuilder }
@@ -3613,29 +3222,14 @@ export type CfChainsDotPolkadotRuntimeCall =
 export type CfChainsDotSystemCall = null;
 
 export type CfChainsDotBalancesCall =
-  | {
-      type: 'TransferAllowDeath';
-      value: { dest: MultiAddressPolkadotAccountId; value: bigint };
-    }
-  | {
-      type: 'TransferAll';
-      value: { dest: MultiAddressPolkadotAccountId; keepAlive: boolean };
-    };
+  | { type: 'TransferAllowDeath'; value: { dest: MultiAddressPolkadotAccountId; value: bigint } }
+  | { type: 'TransferAll'; value: { dest: MultiAddressPolkadotAccountId; keepAlive: boolean } };
 
 export type CfChainsDotUtilityCall =
   | { type: 'Batch'; value: { calls: Array<CfChainsDotPolkadotRuntimeCall> } }
-  | {
-      type: 'AsDerivative';
-      value: { index: number; call: CfChainsDotPolkadotRuntimeCall };
-    }
-  | {
-      type: 'BatchAll';
-      value: { calls: Array<CfChainsDotPolkadotRuntimeCall> };
-    }
-  | {
-      type: 'ForceBatch';
-      value: { calls: Array<CfChainsDotPolkadotRuntimeCall> };
-    };
+  | { type: 'AsDerivative'; value: { index: number; call: CfChainsDotPolkadotRuntimeCall } }
+  | { type: 'BatchAll'; value: { calls: Array<CfChainsDotPolkadotRuntimeCall> } }
+  | { type: 'ForceBatch'; value: { calls: Array<CfChainsDotPolkadotRuntimeCall> } };
 
 export type CfChainsDotProxyCall =
   | {
@@ -3665,11 +3259,7 @@ export type CfChainsDotProxyCall =
   | { type: 'RemoveProxies' }
   | {
       type: 'CreatePure';
-      value: {
-        proxyType: CfChainsDotPolkadotProxyType;
-        delay: number;
-        index: number;
-      };
+      value: { proxyType: CfChainsDotPolkadotProxyType; delay: number; index: number };
     }
   | {
       type: 'KillPure';
@@ -3681,14 +3271,8 @@ export type CfChainsDotProxyCall =
         extIndex: number;
       };
     }
-  | {
-      type: 'Announce';
-      value: { real: MultiAddressPolkadotAccountId; callHash: H256 };
-    }
-  | {
-      type: 'RemoveAnnouncement';
-      value: { real: MultiAddressPolkadotAccountId; callHash: H256 };
-    }
+  | { type: 'Announce'; value: { real: MultiAddressPolkadotAccountId; callHash: H256 } }
+  | { type: 'RemoveAnnouncement'; value: { real: MultiAddressPolkadotAccountId; callHash: H256 } }
   | {
       type: 'RejectAnnouncement';
       value: { delegate: MultiAddressPolkadotAccountId; callHash: H256 };
@@ -3718,10 +3302,7 @@ export type CfChainsDotPolkadotReplayProtection = {
   nonce: number;
 };
 
-export type CfChainsDotPolkadotTransactionId = {
-  blockNumber: number;
-  extrinsicIndex: number;
-};
+export type CfChainsDotPolkadotTransactionId = { blockNumber: number; extrinsicIndex: number };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -3788,10 +3369,7 @@ export type PalletCfBroadcastCall003 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -3883,10 +3461,7 @@ export type PalletCfBroadcastCallLike003 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -3957,10 +3532,7 @@ export type CfChainsBtcDepositAddressTapscriptPath = {
 
 export type CfChainsBtcBitcoinScript = { bytes: Bytes };
 
-export type CfChainsBtcBitcoinOutput = {
-  amount: bigint;
-  scriptPubkey: CfChainsBtcScriptPubkey;
-};
+export type CfChainsBtcBitcoinOutput = { amount: bigint; scriptPubkey: CfChainsBtcScriptPubkey };
 
 export type CfChainsBtcScriptPubkey =
   | { type: 'P2pkh'; value: FixedBytes<20> }
@@ -4010,10 +3582,7 @@ export type PalletCfSwappingCall =
    *
    * Requires Governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { updates: Array<PalletCfSwappingPalletConfigUpdate> };
-    }
+  | { name: 'UpdatePalletConfig'; params: { updates: Array<PalletCfSwappingPalletConfigUpdate> } }
   /**
    * Register the account as a Broker.
    *
@@ -4067,10 +3636,7 @@ export type PalletCfSwappingCall =
    *
    * Note: This extrinsic is secured by the broker that has registered the affiliate account.
    **/
-  | {
-      name: 'AffiliateWithdrawalRequest';
-      params: { affiliateAccountId: AccountId32 };
-    }
+  | { name: 'AffiliateWithdrawalRequest'; params: { affiliateAccountId: AccountId32 } }
   /**
    * Sets the brokers personal minimum fee for vault swaps.
    * This minimum is used to stop encoding vault swaps with a lower broker fee.
@@ -4135,10 +3701,7 @@ export type PalletCfSwappingCallLike =
    *
    * Requires Governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { updates: Array<PalletCfSwappingPalletConfigUpdate> };
-    }
+  | { name: 'UpdatePalletConfig'; params: { updates: Array<PalletCfSwappingPalletConfigUpdate> } }
   /**
    * Register the account as a Broker.
    *
@@ -4186,19 +3749,13 @@ export type PalletCfSwappingCallLike =
    * that is unique to that combination of broker and affiliate.
    **/
   | { name: 'RegisterAffiliate'; params: { withdrawalAddress: H160 } }
-  | {
-      name: 'DeregisterAffiliate';
-      params: { affiliateAccountId: AccountId32Like };
-    }
+  | { name: 'DeregisterAffiliate'; params: { affiliateAccountId: AccountId32Like } }
   /**
    * Triggers a withdrawal to the registered withdrawal address of the affiliate.
    *
    * Note: This extrinsic is secured by the broker that has registered the affiliate account.
    **/
-  | {
-      name: 'AffiliateWithdrawalRequest';
-      params: { affiliateAccountId: AccountId32Like };
-    }
+  | { name: 'AffiliateWithdrawalRequest'; params: { affiliateAccountId: AccountId32Like } }
   /**
    * Sets the brokers personal minimum fee for vault swaps.
    * This minimum is used to stop encoding vault swaps with a lower broker fee.
@@ -4257,10 +3814,7 @@ export type CfAmmMathPrice = U256;
 export type PalletCfSwappingPalletConfigUpdate =
   | {
       type: 'MaximumSwapAmount';
-      value: {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        amount?: bigint | undefined;
-      };
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount?: bigint | undefined };
     }
   | { type: 'SwapRetryDelay'; value: { delay: number } }
   | { type: 'FlipBuyInterval'; value: { interval: number } }
@@ -4271,27 +3825,18 @@ export type PalletCfSwappingPalletConfigUpdate =
       value: { asset: CfPrimitivesChainsAssetsAnyAsset; size: bigint };
     }
   | { type: 'SetBrokerBond'; value: { bond: bigint } }
-  | {
-      type: 'SetNetworkFee';
-      value: { rate?: Permill | undefined; minimum?: bigint | undefined };
-    }
+  | { type: 'SetNetworkFee'; value: { rate?: Permill | undefined; minimum?: bigint | undefined } }
   | {
       type: 'SetInternalSwapNetworkFee';
       value: { rate?: Permill | undefined; minimum?: bigint | undefined };
     }
   | {
       type: 'SetNetworkFeeForAsset';
-      value: {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        rate?: Permill | undefined;
-      };
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; rate?: Permill | undefined };
     }
   | {
       type: 'SetInternalSwapNetworkFeeForAsset';
-      value: {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        rate?: Permill | undefined;
-      };
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; rate?: Permill | undefined };
     }
   | {
       type: 'SetDefaultOraclePriceSlippageProtectionForAsset';
@@ -4304,10 +3849,7 @@ export type PalletCfSwappingPalletConfigUpdate =
 
 export type CfPrimitivesBeneficiary = { account: AccountId32; bps: number };
 
-export type CfPrimitivesDcaParameters = {
-  numberOfChunks: number;
-  chunkInterval: number;
-};
+export type CfPrimitivesDcaParameters = { numberOfChunks: number; chunkInterval: number };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -4342,10 +3884,7 @@ export type PalletCfLpCall =
    *
    * To request a deposit address for a chain, an LRA must be registered for that chain.
    **/
-  | {
-      name: 'RegisterLiquidityRefundAddress';
-      params: { address: CfChainsAddressEncodedAddress };
-    }
+  | { name: 'RegisterLiquidityRefundAddress'; params: { address: CfChainsAddressEncodedAddress } }
   | { name: 'DeregisterLpAccount' }
   /**
    * Transfer some amount of an asset from the free balance to the free balance of another LP
@@ -4353,11 +3892,7 @@ export type PalletCfLpCall =
    **/
   | {
       name: 'TransferAsset';
-      params: {
-        amount: bigint;
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        destination: AccountId32;
-      };
+      params: { amount: bigint; asset: CfPrimitivesChainsAssetsAnyAsset; destination: AccountId32 };
     }
   | {
       name: 'ScheduleSwap';
@@ -4376,9 +3911,7 @@ export type PalletCfLpCall =
    **/
   | {
       name: 'PurgeBalances';
-      params: {
-        accounts: Array<[AccountId32, CfPrimitivesChainsAssetsAnyAsset, bigint]>;
-      };
+      params: { accounts: Array<[AccountId32, CfPrimitivesChainsAssetsAnyAsset, bigint]> };
     };
 
 export type PalletCfLpCallLike =
@@ -4411,10 +3944,7 @@ export type PalletCfLpCallLike =
    *
    * To request a deposit address for a chain, an LRA must be registered for that chain.
    **/
-  | {
-      name: 'RegisterLiquidityRefundAddress';
-      params: { address: CfChainsAddressEncodedAddress };
-    }
+  | { name: 'RegisterLiquidityRefundAddress'; params: { address: CfChainsAddressEncodedAddress } }
   | { name: 'DeregisterLpAccount' }
   /**
    * Transfer some amount of an asset from the free balance to the free balance of another LP
@@ -4445,9 +3975,7 @@ export type PalletCfLpCallLike =
    **/
   | {
       name: 'PurgeBalances';
-      params: {
-        accounts: Array<[AccountId32Like, CfPrimitivesChainsAssetsAnyAsset, bigint]>;
-      };
+      params: { accounts: Array<[AccountId32Like, CfPrimitivesChainsAssetsAnyAsset, bigint]> };
     };
 
 export type CfAmmMathPriceLimits = {
@@ -4488,11 +4016,7 @@ export type PalletCfIngressEgressCall =
    **/
   | {
       name: 'VaultTransferFailed';
-      params: {
-        asset: CfPrimitivesChainsAssetsEthAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      params: { asset: CfPrimitivesChainsAssetsEthAsset; amount: bigint; destinationAddress: H160 };
     }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -4501,22 +4025,14 @@ export type PalletCfIngressEgressCall =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdateEthereum>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateEthereum> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessEthereum;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessEthereum };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: H160 };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
 
 export type PalletCfIngressEgressCallLike =
   /**
@@ -4548,11 +4064,7 @@ export type PalletCfIngressEgressCallLike =
    **/
   | {
       name: 'VaultTransferFailed';
-      params: {
-        asset: CfPrimitivesChainsAssetsEthAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      params: { asset: CfPrimitivesChainsAssetsEthAsset; amount: bigint; destinationAddress: H160 };
     }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -4561,22 +4073,14 @@ export type PalletCfIngressEgressCallLike =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdateEthereum>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateEthereum> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessEthereum;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessEthereum };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: H160 };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
 
 export type PalletCfIngressEgressDepositWitnessEthereum = {
   depositAddress: H160;
@@ -4591,10 +4095,7 @@ export type PalletCfIngressEgressPalletConfigUpdateEthereum =
   | { type: 'ChannelOpeningFeeEthereum'; value: { fee: bigint } }
   | {
       type: 'SetMinimumDepositEthereum';
-      value: {
-        asset: CfPrimitivesChainsAssetsEthAsset;
-        minimumDeposit: bigint;
-      };
+      value: { asset: CfPrimitivesChainsAssetsEthAsset; minimumDeposit: bigint };
     }
   | { type: 'SetDepositChannelLifetimeEthereum'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginEthereum'; value: { margin: bigint } }
@@ -4706,17 +4207,12 @@ export type PalletCfIngressEgressCall002 =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdatePolkadot>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdatePolkadot> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: CfPrimitivesTxId } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: number;
-        deposit: PalletCfIngressEgressVaultDepositWitnessPolkadot;
-      };
+      params: { blockHeight: number; deposit: PalletCfIngressEgressVaultDepositWitnessPolkadot };
     }
   | {
       name: 'MarkDepositChannelForRejection';
@@ -4766,17 +4262,12 @@ export type PalletCfIngressEgressCallLike002 =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdatePolkadot>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdatePolkadot> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: CfPrimitivesTxId } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: number;
-        deposit: PalletCfIngressEgressVaultDepositWitnessPolkadot;
-      };
+      params: { blockHeight: number; deposit: PalletCfIngressEgressVaultDepositWitnessPolkadot };
     }
   | {
       name: 'MarkDepositChannelForRejection';
@@ -4796,10 +4287,7 @@ export type PalletCfIngressEgressPalletConfigUpdatePolkadot =
   | { type: 'ChannelOpeningFeePolkadot'; value: { fee: bigint } }
   | {
       type: 'SetMinimumDepositPolkadot';
-      value: {
-        asset: CfPrimitivesChainsAssetsDotAsset;
-        minimumDeposit: bigint;
-      };
+      value: { asset: CfPrimitivesChainsAssetsDotAsset; minimumDeposit: bigint };
     }
   | { type: 'SetDepositChannelLifetimePolkadot'; value: { lifetime: number } }
   | { type: 'SetWitnessSafetyMarginPolkadot'; value: { margin: number } }
@@ -4881,22 +4369,14 @@ export type PalletCfIngressEgressCall003 =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdateBitcoin>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateBitcoin> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessBitcoin;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBitcoin };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: CfChainsBtcScriptPubkey };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: CfChainsBtcScriptPubkey } };
 
 export type PalletCfIngressEgressCallLike003 =
   /**
@@ -4941,22 +4421,14 @@ export type PalletCfIngressEgressCallLike003 =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdateBitcoin>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateBitcoin> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessBitcoin;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBitcoin };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: CfChainsBtcScriptPubkey };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: CfChainsBtcScriptPubkey } };
 
 export type CfPrimitivesChainsAssetsBtcAsset = 'Btc';
 
@@ -4971,10 +4443,7 @@ export type PalletCfIngressEgressPalletConfigUpdateBitcoin =
   | { type: 'ChannelOpeningFeeBitcoin'; value: { fee: bigint } }
   | {
       type: 'SetMinimumDepositBitcoin';
-      value: {
-        asset: CfPrimitivesChainsAssetsBtcAsset;
-        minimumDeposit: bigint;
-      };
+      value: { asset: CfPrimitivesChainsAssetsBtcAsset; minimumDeposit: bigint };
     }
   | { type: 'SetDepositChannelLifetimeBitcoin'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginBitcoin'; value: { margin: bigint } }
@@ -5142,23 +4611,15 @@ export type PalletCfPoolsCall =
    **/
   | {
       name: 'SetMaximumPriceImpact';
-      params: {
-        limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]>;
-      };
+      params: { limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]> };
     }
-  | {
-      name: 'CancelOrdersBatch';
-      params: { orders: Array<PalletCfPoolsCloseOrder> };
-    }
+  | { name: 'CancelOrdersBatch'; params: { orders: Array<PalletCfPoolsCloseOrder> } }
   /**
    * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { updates: Array<PalletCfPoolsPalletConfigUpdate> };
-    };
+  | { name: 'UpdatePalletConfig'; params: { updates: Array<PalletCfPoolsPalletConfigUpdate> } };
 
 export type PalletCfPoolsCallLike =
   /**
@@ -5289,23 +4750,15 @@ export type PalletCfPoolsCallLike =
    **/
   | {
       name: 'SetMaximumPriceImpact';
-      params: {
-        limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]>;
-      };
+      params: { limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]> };
     }
-  | {
-      name: 'CancelOrdersBatch';
-      params: { orders: Array<PalletCfPoolsCloseOrder> };
-    }
+  | { name: 'CancelOrdersBatch'; params: { orders: Array<PalletCfPoolsCloseOrder> } }
   /**
    * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { updates: Array<PalletCfPoolsPalletConfigUpdate> };
-    };
+  | { name: 'UpdatePalletConfig'; params: { updates: Array<PalletCfPoolsPalletConfigUpdate> } };
 
 export type CfTraitsLiquidityIncreaseOrDecrease =
   | { type: 'Increase'; value: PalletCfPoolsRangeOrderSize }
@@ -5314,10 +4767,7 @@ export type CfTraitsLiquidityIncreaseOrDecrease =
 export type PalletCfPoolsRangeOrderSize =
   | {
       type: 'AssetAmounts';
-      value: {
-        maximum: CfAmmCommonPoolPairsMap;
-        minimum: CfAmmCommonPoolPairsMap;
-      };
+      value: { maximum: CfAmmCommonPoolPairsMap; minimum: CfAmmCommonPoolPairsMap };
     }
   | { type: 'Liquidity'; value: { liquidity: bigint } };
 
@@ -5365,10 +4815,7 @@ export type PalletCfChainTrackingCall004 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateArbitrum };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateArbitrum } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -5380,10 +4827,7 @@ export type PalletCfChainTrackingCallLike004 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateArbitrum };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateArbitrum } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -5398,10 +4842,7 @@ export type CfChainsChainStateArbitrum = {
 
 export type CfPrimitivesChainsArbitrum = {};
 
-export type CfChainsArbArbitrumTrackedData = {
-  baseFee: bigint;
-  l1BaseFeeEstimate: bigint;
-};
+export type CfChainsArbArbitrumTrackedData = { baseFee: bigint; l1BaseFeeEstimate: bigint };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -5468,10 +4909,7 @@ export type PalletCfBroadcastCall004 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -5563,10 +5001,7 @@ export type PalletCfBroadcastCallLike004 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -5599,14 +5034,8 @@ export type PalletCfBroadcastCallLike004 =
 export type CfChainsArbApiArbitrumApi =
   | { type: 'SetAggKeyWithAggKey'; value: CfChainsEvmApiEvmTransactionBuilder }
   | { type: 'AllBatch'; value: CfChainsEvmApiEvmTransactionBuilderAllBatch }
-  | {
-      type: 'ExecutexSwapAndCall';
-      value: CfChainsEvmApiEvmTransactionBuilderExecutexSwapAndCall;
-    }
-  | {
-      type: 'TransferFallback';
-      value: CfChainsEvmApiEvmTransactionBuilderTransferFallback;
-    }
+  | { type: 'ExecutexSwapAndCall'; value: CfChainsEvmApiEvmTransactionBuilderExecutexSwapAndCall }
+  | { type: 'TransferFallback'; value: CfChainsEvmApiEvmTransactionBuilderTransferFallback }
   | { type: 'RejectCall'; value: CfChainsEvmApiEvmTransactionBuilderAllBatch };
 
 /**
@@ -5642,11 +5071,7 @@ export type PalletCfIngressEgressCall004 =
    **/
   | {
       name: 'VaultTransferFailed';
-      params: {
-        asset: CfPrimitivesChainsAssetsArbAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      params: { asset: CfPrimitivesChainsAssetsArbAsset; amount: bigint; destinationAddress: H160 };
     }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -5655,22 +5080,14 @@ export type PalletCfIngressEgressCall004 =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdateArbitrum>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateArbitrum> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessArbitrum;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessArbitrum };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: H160 };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
 
 export type PalletCfIngressEgressCallLike004 =
   /**
@@ -5702,11 +5119,7 @@ export type PalletCfIngressEgressCallLike004 =
    **/
   | {
       name: 'VaultTransferFailed';
-      params: {
-        asset: CfPrimitivesChainsAssetsArbAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      params: { asset: CfPrimitivesChainsAssetsArbAsset; amount: bigint; destinationAddress: H160 };
     }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -5715,22 +5128,14 @@ export type PalletCfIngressEgressCallLike004 =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdateArbitrum>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateArbitrum> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessArbitrum;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessArbitrum };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: H160 };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
 
 export type CfPrimitivesChainsAssetsArbAsset = 'ArbEth' | 'ArbUsdc' | 'ArbUsdt';
 
@@ -5745,10 +5150,7 @@ export type PalletCfIngressEgressPalletConfigUpdateArbitrum =
   | { type: 'ChannelOpeningFeeArbitrum'; value: { fee: bigint } }
   | {
       type: 'SetMinimumDepositArbitrum';
-      value: {
-        asset: CfPrimitivesChainsAssetsArbAsset;
-        minimumDeposit: bigint;
-      };
+      value: { asset: CfPrimitivesChainsAssetsArbAsset; minimumDeposit: bigint };
     }
   | { type: 'SetDepositChannelLifetimeArbitrum'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginArbitrum'; value: { margin: bigint } }
@@ -5788,11 +5190,7 @@ export type PalletCfVaultsCall004 =
    **/
   | {
       name: 'VaultKeyRotatedExternally';
-      params: {
-        newPublicKey: SolPrimAddress;
-        blockNumber: bigint;
-        txId: [SolPrimAddress, bigint];
-      };
+      params: { newPublicKey: SolPrimAddress; blockNumber: bigint; txId: [SolPrimAddress, bigint] };
     }
   /**
    * Sets the ChainInitialized flag to true for this chain so that the chain can be
@@ -5809,11 +5207,7 @@ export type PalletCfVaultsCallLike004 =
    **/
   | {
       name: 'VaultKeyRotatedExternally';
-      params: {
-        newPublicKey: SolPrimAddress;
-        blockNumber: bigint;
-        txId: [SolPrimAddress, bigint];
-      };
+      params: { newPublicKey: SolPrimAddress; blockNumber: bigint; txId: [SolPrimAddress, bigint] };
     }
   /**
    * Sets the ChainInitialized flag to true for this chain so that the chain can be
@@ -5833,20 +5227,14 @@ export type PalletCfThresholdSignatureCall004 =
    * triggered if the associated signature is valid, and therefore we don't need to check it
    * again inside the call.
    **/
-  | {
-      name: 'SignatureSuccess';
-      params: { ceremonyId: bigint; signature: SolPrimSignature };
-    }
+  | { name: 'SignatureSuccess'; params: { ceremonyId: bigint; signature: SolPrimSignature } }
   /**
    * Report that a threshold signature ceremony has failed and incriminate the guilty
    * participants.
    *
    * The `offenders` argument takes a [BTreeSet]
    **/
-  | {
-      name: 'ReportSignatureFailed';
-      params: { ceremonyId: bigint; offenders: Array<AccountId32> };
-    }
+  | { name: 'ReportSignatureFailed'; params: { ceremonyId: bigint; offenders: Array<AccountId32> } }
   /**
    * Report the outcome of a keygen ceremony.
    *
@@ -5854,17 +5242,11 @@ export type PalletCfThresholdSignatureCall004 =
    **/
   | {
       name: 'ReportKeygenOutcome';
-      params: {
-        ceremonyId: bigint;
-        reportedOutcome: Result<SolPrimAddress, Array<AccountId32>>;
-      };
+      params: { ceremonyId: bigint; reportedOutcome: Result<SolPrimAddress, Array<AccountId32>> };
     }
   | {
       name: 'ReportKeyHandoverOutcome';
-      params: {
-        ceremonyId: bigint;
-        reportedOutcome: Result<SolPrimAddress, Array<AccountId32>>;
-      };
+      params: { ceremonyId: bigint; reportedOutcome: Result<SolPrimAddress, Array<AccountId32>> };
     }
   /**
    * A callback to be used when the threshold signing ceremony used for keygen verification
@@ -5905,10 +5287,7 @@ export type PalletCfThresholdSignatureCallLike004 =
    * triggered if the associated signature is valid, and therefore we don't need to check it
    * again inside the call.
    **/
-  | {
-      name: 'SignatureSuccess';
-      params: { ceremonyId: bigint; signature: SolPrimSignature };
-    }
+  | { name: 'SignatureSuccess'; params: { ceremonyId: bigint; signature: SolPrimSignature } }
   /**
    * Report that a threshold signature ceremony has failed and incriminate the guilty
    * participants.
@@ -6033,10 +5412,7 @@ export type PalletCfBroadcastCall005 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -6128,10 +5504,7 @@ export type PalletCfBroadcastCallLike005 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -6182,11 +5555,7 @@ export type SolPrimPubkey = FixedBytes<32>;
 
 export type SolPrimHash = FixedBytes<32>;
 
-export type SolPrimCompiledInstruction = {
-  programIdIndex: number;
-  accounts: Bytes;
-  data: Bytes;
-};
+export type SolPrimCompiledInstruction = { programIdIndex: number; accounts: Bytes; data: Bytes };
 
 export type SolPrimTransactionV0VersionedMessageV0 = {
   header: SolPrimMessageHeader;
@@ -6284,21 +5653,12 @@ export type PalletCfIngressEgressCall005 =
       name: 'UpdatePalletConfig';
       params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateSolana> };
     }
-  | {
-      name: 'MarkTransactionForRejection';
-      params: { txId: [SolPrimAddress, bigint] };
-    }
+  | { name: 'MarkTransactionForRejection'; params: { txId: [SolPrimAddress, bigint] } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessSolana;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessSolana };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: SolPrimAddress };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: SolPrimAddress } };
 
 export type PalletCfIngressEgressCallLike005 =
   /**
@@ -6345,21 +5705,12 @@ export type PalletCfIngressEgressCallLike005 =
       name: 'UpdatePalletConfig';
       params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateSolana> };
     }
-  | {
-      name: 'MarkTransactionForRejection';
-      params: { txId: [SolPrimAddress, bigint] };
-    }
+  | { name: 'MarkTransactionForRejection'; params: { txId: [SolPrimAddress, bigint] } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessSolana;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessSolana };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: SolPrimAddress };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: SolPrimAddress } };
 
 export type PalletCfIngressEgressDepositWitnessSolana = {
   depositAddress: SolPrimAddress;
@@ -6376,10 +5727,7 @@ export type PalletCfIngressEgressPalletConfigUpdateSolana =
   | { type: 'ChannelOpeningFeeSolana'; value: { fee: bigint } }
   | {
       type: 'SetMinimumDepositSolana';
-      value: {
-        asset: CfPrimitivesChainsAssetsSolAsset;
-        minimumDeposit: bigint;
-      };
+      value: { asset: CfPrimitivesChainsAssetsSolAsset; minimumDeposit: bigint };
     }
   | { type: 'SetDepositChannelLifetimeSolana'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginSolana'; value: { margin: bigint } }
@@ -6429,20 +5777,12 @@ export type PalletCfElectionsCall =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
-  | {
-      name: 'DeleteVote';
-      params: { electionIdentifier: PalletCfElectionsElectionIdentifier };
-    }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState };
-    }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -6466,10 +5806,7 @@ export type PalletCfElectionsCall =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -6491,10 +5828,7 @@ export type PalletCfElectionsCall =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | { name: 'StartNewBlockWitnesserElection'; params: { properties: [] } };
@@ -6510,20 +5844,12 @@ export type PalletCfElectionsCallLike =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
-  | {
-      name: 'DeleteVote';
-      params: { electionIdentifier: PalletCfElectionsElectionIdentifier };
-    }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState };
-    }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -6547,10 +5873,7 @@ export type PalletCfElectionsCallLike =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -6572,10 +5895,7 @@ export type PalletCfElectionsCallLike =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | { name: 'StartNewBlockWitnesserElection'; params: { properties: [] } };
@@ -6601,10 +5921,7 @@ export type PalletCfElectionsVoteStorageAuthorityVote =
       type: 'PartialVote';
       value: PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositePartialVote;
     }
-  | {
-      type: 'Vote';
-      value: PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeVote;
-    };
+  | { type: 'Vote'; value: PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeVote };
 
 export type PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositePartialVote =
   | { type: 'A'; value: bigint }
@@ -6654,10 +5971,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeVote =
         ]
       >;
     }
-  | {
-      type: 'C';
-      value: PalletCfElectionsVoteStorageChangeMonotonicChangeVoteDigest;
-    }
+  | { type: 'C'; value: PalletCfElectionsVoteStorageChangeMonotonicChangeVoteDigest }
   | {
       type: 'D';
       value: StateChainRuntimeChainflipWitnessingSolanaElectionsTransactionSuccessDetails;
@@ -6769,10 +6083,7 @@ export type PalletCfChainTrackingCall005 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateSolana };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateSolana } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -6784,10 +6095,7 @@ export type PalletCfChainTrackingCallLike005 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateSolana };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateSolana } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -6806,19 +6114,13 @@ export type CfChainsSolSolTrackedData = { priorityFee: bigint };
  * Contains a variant per dispatchable extrinsic that this pallet has.
  **/
 export type PalletCfAssetBalancesCall =
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfAssetBalancesPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfAssetBalancesPalletConfigUpdate } }
   /**
    * Add or remove a destination from the caller's withdrawal whitelist. The change is
    * scheduled and takes effect after the caller's timelock elapses (at the end of the
    * current block when no timelock is set).
    **/
-  | {
-      name: 'UpdateWhitelist';
-      params: { change: PalletCfAssetBalancesWhitelistWhitelistChange };
-    }
+  | { name: 'UpdateWhitelist'; params: { change: PalletCfAssetBalancesWhitelistWhitelistChange } }
   /**
    * Set the caller's whitelist timelock. Like any other change, the update is delayed by
    * the current timelock, so a stolen key can't instantly remove the protection. Since a
@@ -6829,19 +6131,13 @@ export type PalletCfAssetBalancesCall =
   | { name: 'SetWhitelistTimelock'; params: { duration: bigint } };
 
 export type PalletCfAssetBalancesCallLike =
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfAssetBalancesPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfAssetBalancesPalletConfigUpdate } }
   /**
    * Add or remove a destination from the caller's withdrawal whitelist. The change is
    * scheduled and takes effect after the caller's timelock elapses (at the end of the
    * current block when no timelock is set).
    **/
-  | {
-      name: 'UpdateWhitelist';
-      params: { change: PalletCfAssetBalancesWhitelistWhitelistChange };
-    }
+  | { name: 'UpdateWhitelist'; params: { change: PalletCfAssetBalancesWhitelistWhitelistChange } }
   /**
    * Set the caller's whitelist timelock. Like any other change, the update is delayed by
    * the current timelock, so a stolen key can't instantly remove the protection. Since a
@@ -6854,10 +6150,7 @@ export type PalletCfAssetBalancesCallLike =
 export type PalletCfAssetBalancesPalletConfigUpdate =
   | {
       type: 'RefundFeeMultiple';
-      value: {
-        chain: CfPrimitivesChainsForeignChain;
-        multiple?: number | undefined;
-      };
+      value: { chain: CfPrimitivesChainsForeignChain; multiple?: number | undefined };
     }
   | { type: 'MaxWhitelistTimelock'; value: { seconds: bigint } }
   | { type: 'MaxPendingWhitelistUpdates'; value: { count: number } }
@@ -6878,10 +6171,7 @@ export type PalletCfChainTrackingCall006 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateAssethub };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateAssethub } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -6893,10 +6183,7 @@ export type PalletCfChainTrackingCallLike006 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateAssethub };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateAssethub } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -7026,10 +6313,7 @@ export type PalletCfBroadcastCall006 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -7121,10 +6405,7 @@ export type PalletCfBroadcastCallLike006 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -7155,10 +6436,7 @@ export type PalletCfBroadcastCallLike006 =
     };
 
 export type CfChainsHubApiAssethubApi =
-  | {
-      type: 'BatchFetchAndTransfer';
-      value: CfChainsHubAssethubExtrinsicBuilder;
-    }
+  | { type: 'BatchFetchAndTransfer'; value: CfChainsHubAssethubExtrinsicBuilder }
   | { type: 'RotateVaultProxy'; value: CfChainsHubAssethubExtrinsicBuilder }
   | { type: 'ChangeGovKey'; value: CfChainsHubAssethubExtrinsicBuilder }
   | { type: 'ExecuteXSwapAndCall'; value: CfChainsHubAssethubExtrinsicBuilder };
@@ -7180,14 +6458,8 @@ export type CfChainsHubAssethubRuntimeCall =
 export type CfChainsHubSystemCall = null;
 
 export type CfChainsHubBalancesCall =
-  | {
-      type: 'TransferAllowDeath';
-      value: { dest: MultiAddressPolkadotAccountId; value: bigint };
-    }
-  | {
-      type: 'TransferAll';
-      value: { dest: MultiAddressPolkadotAccountId; keepAlive: boolean };
-    };
+  | { type: 'TransferAllowDeath'; value: { dest: MultiAddressPolkadotAccountId; value: bigint } }
+  | { type: 'TransferAll'; value: { dest: MultiAddressPolkadotAccountId; keepAlive: boolean } };
 
 export type CfChainsHubXcmCall =
   | {
@@ -7252,18 +6524,9 @@ export type CfChainsHubXcmCall =
     };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmVersionedLocation =
-  | {
-      type: 'V3';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV3MultilocationMultiLocation;
-    }
-  | {
-      type: 'V4';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Location;
-    }
-  | {
-      type: 'V5';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Location;
-    };
+  | { type: 'V3'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV3MultilocationMultiLocation }
+  | { type: 'V4'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Location }
+  | { type: 'V5'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Location };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV3MultilocationMultiLocation = {
   parents: number;
@@ -7378,17 +6641,11 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3Junction =
         part: CfChainsHubXcmTypesHubRuntimeTypesXcmV3JunctionBodyPart;
       };
     }
-  | {
-      type: 'GlobalConsensus';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3JunctionNetworkId;
-    };
+  | { type: 'GlobalConsensus'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3JunctionNetworkId };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3JunctionNetworkId =
   | { type: 'ByGenesis'; value: FixedBytes<32> }
-  | {
-      type: 'ByFork';
-      value: { blockNumber: bigint; blockHash: FixedBytes<32> };
-    }
+  | { type: 'ByFork'; value: { blockNumber: bigint; blockHash: FixedBytes<32> } }
   | { type: 'Polkadot' }
   | { type: 'Kusama' }
   | { type: 'Westend' }
@@ -7425,38 +6682,14 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Location = {
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junctions =
   | { type: 'Here' }
-  | {
-      type: 'X1';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 1>;
-    }
-  | {
-      type: 'X2';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 2>;
-    }
-  | {
-      type: 'X3';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 3>;
-    }
-  | {
-      type: 'X4';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 4>;
-    }
-  | {
-      type: 'X5';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 5>;
-    }
-  | {
-      type: 'X6';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 6>;
-    }
-  | {
-      type: 'X7';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 7>;
-    }
-  | {
-      type: 'X8';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 8>;
-    };
+  | { type: 'X1'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 1> }
+  | { type: 'X2'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 2> }
+  | { type: 'X3'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 3> }
+  | { type: 'X4'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 4> }
+  | { type: 'X5'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 5> }
+  | { type: 'X6'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 6> }
+  | { type: 'X7'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 7> }
+  | { type: 'X8'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction, 8> };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction =
   | { type: 'Parachain'; value: number }
@@ -7499,10 +6732,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction =
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4JunctionNetworkId =
   | { type: 'ByGenesis'; value: FixedBytes<32> }
-  | {
-      type: 'ByFork';
-      value: { blockNumber: bigint; blockHash: FixedBytes<32> };
-    }
+  | { type: 'ByFork'; value: { blockNumber: bigint; blockHash: FixedBytes<32> } }
   | { type: 'Polkadot' }
   | { type: 'Kusama' }
   | { type: 'Westend' }
@@ -7520,38 +6750,14 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Location = {
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junctions =
   | { type: 'Here' }
-  | {
-      type: 'X1';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 1>;
-    }
-  | {
-      type: 'X2';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 2>;
-    }
-  | {
-      type: 'X3';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 3>;
-    }
-  | {
-      type: 'X4';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 4>;
-    }
-  | {
-      type: 'X5';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 5>;
-    }
-  | {
-      type: 'X6';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 6>;
-    }
-  | {
-      type: 'X7';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 7>;
-    }
-  | {
-      type: 'X8';
-      value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 8>;
-    };
+  | { type: 'X1'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 1> }
+  | { type: 'X2'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 2> }
+  | { type: 'X3'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 3> }
+  | { type: 'X4'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 4> }
+  | { type: 'X5'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 5> }
+  | { type: 'X6'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 6> }
+  | { type: 'X7'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 7> }
+  | { type: 'X8'; value: FixedArray<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction, 8> };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction =
   | { type: 'Parachain'; value: number }
@@ -7594,10 +6800,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction =
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5JunctionNetworkId =
   | { type: 'ByGenesis'; value: FixedBytes<32> }
-  | {
-      type: 'ByFork';
-      value: { blockNumber: bigint; blockHash: FixedBytes<32> };
-    }
+  | { type: 'ByFork'; value: { blockNumber: bigint; blockHash: FixedBytes<32> } }
   | { type: 'Polkadot' }
   | { type: 'Kusama' }
   | { type: 'Ethereum'; value: { chainId: bigint } }
@@ -7606,18 +6809,9 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5JunctionNetworkId =
   | { type: 'PolkadotBulletin' };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmVersionedAssets =
-  | {
-      type: 'V3';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets;
-    }
-  | {
-      type: 'V4';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets;
-    }
-  | {
-      type: 'V5';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets;
-    };
+  | { type: 'V3'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets }
+  | { type: 'V4'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets }
+  | { type: 'V5'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets =
   Array<CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAsset>;
@@ -7636,10 +6830,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetAssetId =
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetFungibility =
   | { type: 'Fungible'; value: bigint }
-  | {
-      type: 'NonFungible';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetAssetInstance;
-    };
+  | { type: 'NonFungible'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetAssetInstance };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetAssetInstance =
   | { type: 'Undefined' }
@@ -7703,10 +6894,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssetInstance =
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3WeightLimit =
   | { type: 'Unlimited' }
-  | {
-      type: 'Limited';
-      value: CfChainsHubXcmTypesHubRuntimeTypesSpWeightsWeightV2Weight;
-    };
+  | { type: 'Limited'; value: CfChainsHubXcmTypesHubRuntimeTypesSpWeightsWeightV2Weight };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesSpWeightsWeightV2Weight = {
   refTime: bigint;
@@ -7717,24 +6905,12 @@ export type CfChainsHubApiTransferType =
   | { type: 'Teleport' }
   | { type: 'LocalReserve' }
   | { type: 'DestinationReserve' }
-  | {
-      type: 'RemoteReserve';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmVersionedLocation;
-    };
+  | { type: 'RemoteReserve'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmVersionedLocation };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmVersionedAssetId =
-  | {
-      type: 'V3';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetAssetId;
-    }
-  | {
-      type: 'V4';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssetId;
-    }
-  | {
-      type: 'V5';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssetId;
-    };
+  | { type: 'V3'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetAssetId }
+  | { type: 'V4'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssetId }
+  | { type: 'V5'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssetId };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmVersionedXcm =
   | { type: 'V3'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3Xcm }
@@ -7745,10 +6921,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3Xcm =
   Array<CfChainsHubXcmTypesHubRuntimeTypesXcmV3Instruction>;
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3Instruction =
-  | {
-      type: 'WithdrawAsset';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets;
-    }
+  | { type: 'WithdrawAsset'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets }
   | {
       type: 'ReserveAssetDeposited';
       value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets;
@@ -7796,19 +6969,10 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3Instruction =
       value: { sender: number; maxMessageSize: number; maxCapacity: number };
     }
   | { type: 'HrmpChannelAccepted'; value: { recipient: number } }
-  | {
-      type: 'HrmpChannelClosing';
-      value: { initiator: number; sender: number; recipient: number };
-    }
+  | { type: 'HrmpChannelClosing'; value: { initiator: number; sender: number; recipient: number } }
   | { type: 'ClearOrigin' }
-  | {
-      type: 'DescendOrigin';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3Junctions;
-    }
-  | {
-      type: 'ReportError';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3QueryResponseInfo;
-    }
+  | { type: 'DescendOrigin'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3Junctions }
+  | { type: 'ReportError'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3QueryResponseInfo }
   | {
       type: 'DepositAsset';
       value: {
@@ -7882,14 +7046,8 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3Instruction =
       };
     }
   | { type: 'UnsubscribeVersion' }
-  | {
-      type: 'BurnAsset';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets;
-    }
-  | {
-      type: 'ExpectAsset';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets;
-    }
+  | { type: 'BurnAsset'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets }
+  | { type: 'ExpectAsset'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets }
   | {
       type: 'ExpectOrigin';
       value?: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV3MultilocationMultiLocation | undefined;
@@ -7898,10 +7056,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3Instruction =
       type: 'ExpectError';
       value?: [number, CfChainsHubXcmTypesHubRuntimeTypesXcmV3TraitsError] | undefined;
     }
-  | {
-      type: 'ExpectTransactStatus';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode;
-    }
+  | { type: 'ExpectTransactStatus'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode }
   | {
       type: 'QueryPallet';
       value: {
@@ -7924,10 +7079,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3Instruction =
       value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3QueryResponseInfo;
     }
   | { type: 'ClearTransactStatus' }
-  | {
-      type: 'UniversalOrigin';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3Junction;
-    }
+  | { type: 'UniversalOrigin'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3Junction }
   | {
       type: 'ExportMessage';
       value: {
@@ -7983,23 +7135,14 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3Instruction =
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3Response =
   | { type: 'Null' }
-  | {
-      type: 'Assets';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets;
-    }
+  | { type: 'Assets'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets }
   | {
       type: 'ExecutionResult';
       value?: [number, CfChainsHubXcmTypesHubRuntimeTypesXcmV3TraitsError] | undefined;
     }
   | { type: 'Version'; value: number }
-  | {
-      type: 'PalletsInfo';
-      value: Array<CfChainsHubXcmTypesHubRuntimeTypesXcmV3PalletInfo>;
-    }
-  | {
-      type: 'DispatchResult';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode;
-    };
+  | { type: 'PalletsInfo'; value: Array<CfChainsHubXcmTypesHubRuntimeTypesXcmV3PalletInfo> }
+  | { type: 'DispatchResult'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3TraitsError =
   | { type: 'Overflow' }
@@ -8038,10 +7181,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3TraitsError =
   | { type: 'Unanchored' }
   | { type: 'NotDepositable' }
   | { type: 'UnhandledXcmVersion' }
-  | {
-      type: 'WeightLimitReached';
-      value: CfChainsHubXcmTypesHubRuntimeTypesSpWeightsWeightV2Weight;
-    }
+  | { type: 'WeightLimitReached'; value: CfChainsHubXcmTypesHubRuntimeTypesSpWeightsWeightV2Weight }
   | { type: 'Barrier' }
   | { type: 'WeightNotComputable' }
   | { type: 'ExceedsStackLimit' };
@@ -8066,9 +7206,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3OriginKind =
   | 'Superuser'
   | 'Xcm';
 
-export type CfChainsHubXcmTypesHubRuntimeTypesXcmDoubleEncoded = {
-  encoded: Bytes;
-};
+export type CfChainsHubXcmTypesHubRuntimeTypesXcmDoubleEncoded = { encoded: Bytes };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3QueryResponseInfo = {
   destination: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV3MultilocationMultiLocation;
@@ -8077,14 +7215,8 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3QueryResponseInfo = {
 };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssetFilter =
-  | {
-      type: 'Definite';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets;
-    }
-  | {
-      type: 'Wild';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetWildMultiAsset;
-    };
+  | { type: 'Definite'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetMultiAssets }
+  | { type: 'Wild'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetWildMultiAsset };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV3MultiassetWildMultiAsset =
   | { type: 'All' }
@@ -8113,10 +7245,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Xcm =
   Array<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Instruction>;
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Instruction =
-  | {
-      type: 'WithdrawAsset';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets;
-    }
+  | { type: 'WithdrawAsset'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets }
   | {
       type: 'ReserveAssetDeposited';
       value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets;
@@ -8162,19 +7291,10 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Instruction =
       value: { sender: number; maxMessageSize: number; maxCapacity: number };
     }
   | { type: 'HrmpChannelAccepted'; value: { recipient: number } }
-  | {
-      type: 'HrmpChannelClosing';
-      value: { initiator: number; sender: number; recipient: number };
-    }
+  | { type: 'HrmpChannelClosing'; value: { initiator: number; sender: number; recipient: number } }
   | { type: 'ClearOrigin' }
-  | {
-      type: 'DescendOrigin';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junctions;
-    }
-  | {
-      type: 'ReportError';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4QueryResponseInfo;
-    }
+  | { type: 'DescendOrigin'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junctions }
+  | { type: 'ReportError'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4QueryResponseInfo }
   | {
       type: 'DepositAsset';
       value: {
@@ -8248,14 +7368,8 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Instruction =
       };
     }
   | { type: 'UnsubscribeVersion' }
-  | {
-      type: 'BurnAsset';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets;
-    }
-  | {
-      type: 'ExpectAsset';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets;
-    }
+  | { type: 'BurnAsset'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets }
+  | { type: 'ExpectAsset'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets }
   | {
       type: 'ExpectOrigin';
       value?: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Location | undefined;
@@ -8264,10 +7378,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Instruction =
       type: 'ExpectError';
       value?: [number, CfChainsHubXcmTypesHubRuntimeTypesXcmV3TraitsError] | undefined;
     }
-  | {
-      type: 'ExpectTransactStatus';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode;
-    }
+  | { type: 'ExpectTransactStatus'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode }
   | {
       type: 'QueryPallet';
       value: {
@@ -8290,10 +7401,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Instruction =
       value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4QueryResponseInfo;
     }
   | { type: 'ClearTransactStatus' }
-  | {
-      type: 'UniversalOrigin';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction;
-    }
+  | { type: 'UniversalOrigin'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Junction }
   | {
       type: 'ExportMessage';
       value: {
@@ -8333,10 +7441,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Instruction =
   | { type: 'SetFeesMode'; value: { jitWithdraw: boolean } }
   | { type: 'SetTopic'; value: FixedBytes<32> }
   | { type: 'ClearTopic' }
-  | {
-      type: 'AliasOrigin';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Location;
-    }
+  | { type: 'AliasOrigin'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Location }
   | {
       type: 'UnpaidExecution';
       value: {
@@ -8347,23 +7452,14 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Instruction =
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4Response =
   | { type: 'Null' }
-  | {
-      type: 'Assets';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets;
-    }
+  | { type: 'Assets'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets }
   | {
       type: 'ExecutionResult';
       value?: [number, CfChainsHubXcmTypesHubRuntimeTypesXcmV3TraitsError] | undefined;
     }
   | { type: 'Version'; value: number }
-  | {
-      type: 'PalletsInfo';
-      value: Array<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4PalletInfo>;
-    }
-  | {
-      type: 'DispatchResult';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode;
-    };
+  | { type: 'PalletsInfo'; value: Array<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4PalletInfo> }
+  | { type: 'DispatchResult'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4PalletInfo = {
   index: number;
@@ -8381,14 +7477,8 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4QueryResponseInfo = {
 };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssetFilter =
-  | {
-      type: 'Definite';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets;
-    }
-  | {
-      type: 'Wild';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetWildAsset;
-    };
+  | { type: 'Definite'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetAssets }
+  | { type: 'Wild'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetWildAsset };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV4AssetWildAsset =
   | { type: 'All' }
@@ -8417,10 +7507,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Xcm =
   Array<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Instruction>;
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Instruction =
-  | {
-      type: 'WithdrawAsset';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets;
-    }
+  | { type: 'WithdrawAsset'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets }
   | {
       type: 'ReserveAssetDeposited';
       value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets;
@@ -8466,19 +7553,10 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Instruction =
       value: { sender: number; maxMessageSize: number; maxCapacity: number };
     }
   | { type: 'HrmpChannelAccepted'; value: { recipient: number } }
-  | {
-      type: 'HrmpChannelClosing';
-      value: { initiator: number; sender: number; recipient: number };
-    }
+  | { type: 'HrmpChannelClosing'; value: { initiator: number; sender: number; recipient: number } }
   | { type: 'ClearOrigin' }
-  | {
-      type: 'DescendOrigin';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junctions;
-    }
-  | {
-      type: 'ReportError';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5QueryResponseInfo;
-    }
+  | { type: 'DescendOrigin'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junctions }
+  | { type: 'ReportError'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5QueryResponseInfo }
   | {
       type: 'DepositAsset';
       value: {
@@ -8552,14 +7630,8 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Instruction =
       };
     }
   | { type: 'UnsubscribeVersion' }
-  | {
-      type: 'BurnAsset';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets;
-    }
-  | {
-      type: 'ExpectAsset';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets;
-    }
+  | { type: 'BurnAsset'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets }
+  | { type: 'ExpectAsset'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets }
   | {
       type: 'ExpectOrigin';
       value?: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Location | undefined;
@@ -8568,10 +7640,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Instruction =
       type: 'ExpectError';
       value?: [number, CfChainsHubXcmTypesHubRuntimeTypesXcmV5TraitsError] | undefined;
     }
-  | {
-      type: 'ExpectTransactStatus';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode;
-    }
+  | { type: 'ExpectTransactStatus'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode }
   | {
       type: 'QueryPallet';
       value: {
@@ -8594,10 +7663,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Instruction =
       value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5QueryResponseInfo;
     }
   | { type: 'ClearTransactStatus' }
-  | {
-      type: 'UniversalOrigin';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction;
-    }
+  | { type: 'UniversalOrigin'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Junction }
   | {
       type: 'ExportMessage';
       value: {
@@ -8637,10 +7703,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Instruction =
   | { type: 'SetFeesMode'; value: { jitWithdraw: boolean } }
   | { type: 'SetTopic'; value: FixedBytes<32> }
   | { type: 'ClearTopic' }
-  | {
-      type: 'AliasOrigin';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Location;
-    }
+  | { type: 'AliasOrigin'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Location }
   | {
       type: 'UnpaidExecution';
       value: {
@@ -8648,10 +7711,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Instruction =
         checkOrigin?: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Location | undefined;
       };
     }
-  | {
-      type: 'PayFees';
-      value: { asset: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Asset };
-    }
+  | { type: 'PayFees'; value: { asset: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Asset } }
   | {
       type: 'InitiateTransfer';
       value: {
@@ -8673,30 +7733,19 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Instruction =
     }
   | {
       type: 'SetHints';
-      value: {
-        hints: Array<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Hint>;
-      };
+      value: { hints: Array<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Hint> };
     };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Response =
   | { type: 'Null' }
-  | {
-      type: 'Assets';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets;
-    }
+  | { type: 'Assets'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets }
   | {
       type: 'ExecutionResult';
       value?: [number, CfChainsHubXcmTypesHubRuntimeTypesXcmV5TraitsError] | undefined;
     }
   | { type: 'Version'; value: number }
-  | {
-      type: 'PalletsInfo';
-      value: Array<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5PalletInfo>;
-    }
-  | {
-      type: 'DispatchResult';
-      value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode;
-    };
+  | { type: 'PalletsInfo'; value: Array<CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5PalletInfo> }
+  | { type: 'DispatchResult'; value: CfChainsHubXcmTypesHubRuntimeTypesXcmV3MaybeErrorCode };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesXcmV5TraitsError =
   | { type: 'Overflow' }
@@ -8736,10 +7785,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesXcmV5TraitsError =
   | { type: 'NotDepositable' }
   | { type: 'TooManyAssets' }
   | { type: 'UnhandledXcmVersion' }
-  | {
-      type: 'WeightLimitReached';
-      value: CfChainsHubXcmTypesHubRuntimeTypesSpWeightsWeightV2Weight;
-    }
+  | { type: 'WeightLimitReached'; value: CfChainsHubXcmTypesHubRuntimeTypesSpWeightsWeightV2Weight }
   | { type: 'Barrier' }
   | { type: 'WeightNotComputable' }
   | { type: 'ExceedsStackLimit' };
@@ -8760,14 +7806,8 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5QueryResponseInfo = {
 };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssetFilter =
-  | {
-      type: 'Definite';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets;
-    }
-  | {
-      type: 'Wild';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetWildAsset;
-    };
+  | { type: 'Definite'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssets }
+  | { type: 'Wild'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetWildAsset };
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetWildAsset =
   | { type: 'All' }
@@ -8793,10 +7833,7 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetWildFungibility =
   | 'NonFungible';
 
 export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssetTransferFilter =
-  | {
-      type: 'Teleport';
-      value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssetFilter;
-    }
+  | { type: 'Teleport'; value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssetFilter }
   | {
       type: 'ReserveDeposit';
       value: CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5AssetAssetFilter;
@@ -8813,18 +7850,9 @@ export type CfChainsHubXcmTypesHubRuntimeTypesStagingXcmV5Hint = {
 
 export type CfChainsHubUtilityCall =
   | { type: 'Batch'; value: { calls: Array<CfChainsHubAssethubRuntimeCall> } }
-  | {
-      type: 'AsDerivative';
-      value: { index: number; call: CfChainsHubAssethubRuntimeCall };
-    }
-  | {
-      type: 'BatchAll';
-      value: { calls: Array<CfChainsHubAssethubRuntimeCall> };
-    }
-  | {
-      type: 'ForceBatch';
-      value: { calls: Array<CfChainsHubAssethubRuntimeCall> };
-    };
+  | { type: 'AsDerivative'; value: { index: number; call: CfChainsHubAssethubRuntimeCall } }
+  | { type: 'BatchAll'; value: { calls: Array<CfChainsHubAssethubRuntimeCall> } }
+  | { type: 'ForceBatch'; value: { calls: Array<CfChainsHubAssethubRuntimeCall> } };
 
 export type CfChainsHubProxyCall =
   | {
@@ -8854,11 +7882,7 @@ export type CfChainsHubProxyCall =
   | { type: 'RemoveProxies' }
   | {
       type: 'CreatePure';
-      value: {
-        proxyType: CfChainsDotPolkadotProxyType;
-        delay: number;
-        index: number;
-      };
+      value: { proxyType: CfChainsDotPolkadotProxyType; delay: number; index: number };
     }
   | {
       type: 'KillPure';
@@ -8870,14 +7894,8 @@ export type CfChainsHubProxyCall =
         extIndex: number;
       };
     }
-  | {
-      type: 'Announce';
-      value: { real: MultiAddressPolkadotAccountId; callHash: H256 };
-    }
-  | {
-      type: 'RemoveAnnouncement';
-      value: { real: MultiAddressPolkadotAccountId; callHash: H256 };
-    }
+  | { type: 'Announce'; value: { real: MultiAddressPolkadotAccountId; callHash: H256 } }
+  | { type: 'RemoveAnnouncement'; value: { real: MultiAddressPolkadotAccountId; callHash: H256 } }
   | {
       type: 'RejectAnnouncement';
       value: { delegate: MultiAddressPolkadotAccountId; callHash: H256 };
@@ -8893,17 +7911,10 @@ export type CfChainsHubProxyCall =
     };
 
 export type CfChainsHubAssetsCall =
-  | {
-      type: 'Transfer';
-      value: { id: number; dest: MultiAddressPolkadotAccountId; value: bigint };
-    }
+  | { type: 'Transfer'; value: { id: number; dest: MultiAddressPolkadotAccountId; value: bigint } }
   | {
       type: 'TransferAll';
-      value: {
-        id: number;
-        dest: MultiAddressPolkadotAccountId;
-        keepAlive: boolean;
-      };
+      value: { id: number; dest: MultiAddressPolkadotAccountId; keepAlive: boolean };
     };
 
 /**
@@ -8952,17 +7963,12 @@ export type PalletCfIngressEgressCall006 =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdateAssethub>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateAssethub> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: CfPrimitivesTxId } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: number;
-        deposit: PalletCfIngressEgressVaultDepositWitnessAssethub;
-      };
+      params: { blockHeight: number; deposit: PalletCfIngressEgressVaultDepositWitnessAssethub };
     }
   | {
       name: 'MarkDepositChannelForRejection';
@@ -9012,17 +8018,12 @@ export type PalletCfIngressEgressCallLike006 =
    **/
   | {
       name: 'UpdatePalletConfig';
-      params: {
-        updates: Array<PalletCfIngressEgressPalletConfigUpdateAssethub>;
-      };
+      params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateAssethub> };
     }
   | { name: 'MarkTransactionForRejection'; params: { txId: CfPrimitivesTxId } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: number;
-        deposit: PalletCfIngressEgressVaultDepositWitnessAssethub;
-      };
+      params: { blockHeight: number; deposit: PalletCfIngressEgressVaultDepositWitnessAssethub };
     }
   | {
       name: 'MarkDepositChannelForRejection';
@@ -9042,10 +8043,7 @@ export type PalletCfIngressEgressPalletConfigUpdateAssethub =
   | { type: 'ChannelOpeningFeeAssethub'; value: { fee: bigint } }
   | {
       type: 'SetMinimumDepositAssethub';
-      value: {
-        asset: CfPrimitivesChainsAssetsHubAsset;
-        minimumDeposit: bigint;
-      };
+      value: { asset: CfPrimitivesChainsAssetsHubAsset; minimumDeposit: bigint };
     }
   | { type: 'SetDepositChannelLifetimeAssethub'; value: { lifetime: number } }
   | { type: 'SetWitnessSafetyMarginAssethub'; value: { margin: number } }
@@ -9131,18 +8129,11 @@ export type PalletCfTradingStrategyCallLike =
 export type PalletCfTradingStrategyTradingStrategy =
   | {
       type: 'TickZeroCentered';
-      value: {
-        spreadTick: number;
-        baseAsset: CfPrimitivesChainsAssetsAnyAsset;
-      };
+      value: { spreadTick: number; baseAsset: CfPrimitivesChainsAssetsAnyAsset };
     }
   | {
       type: 'SimpleBuySell';
-      value: {
-        buyTick: number;
-        sellTick: number;
-        baseAsset: CfPrimitivesChainsAssetsAnyAsset;
-      };
+      value: { buyTick: number; sellTick: number; baseAsset: CfPrimitivesChainsAssetsAnyAsset };
     }
   | {
       type: 'InventoryBased';
@@ -9169,17 +8160,11 @@ export type PalletCfTradingStrategyTradingStrategy =
 export type PalletCfTradingStrategyPalletConfigUpdate =
   | {
       type: 'MinimumDeploymentAmountForStrategy';
-      value: {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        amount?: bigint | undefined;
-      };
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount?: bigint | undefined };
     }
   | {
       type: 'MinimumAddedFundsToStrategy';
-      value: {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        amount?: bigint | undefined;
-      };
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount?: bigint | undefined };
     }
   | {
       type: 'LimitOrderUpdateThreshold';
@@ -9201,34 +8186,15 @@ export type PalletCfLendingPoolsCall =
     }
   | {
       name: 'AddBoostFunds';
-      params: {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        amount: bigint;
-        poolTier: number;
-      };
+      params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint; poolTier: number };
     }
-  | {
-      name: 'StopBoosting';
-      params: { asset: CfPrimitivesChainsAssetsAnyAsset; poolTier: number };
-    }
-  | {
-      name: 'CreateBoostPools';
-      params: { newPools: Array<PalletCfLendingPoolsBoostBoostPoolId> };
-    }
-  | {
-      name: 'CreateLendingPool';
-      params: { asset: CfPrimitivesChainsAssetsAnyAsset };
-    }
-  | {
-      name: 'AddLenderFunds';
-      params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
-    }
+  | { name: 'StopBoosting'; params: { asset: CfPrimitivesChainsAssetsAnyAsset; poolTier: number } }
+  | { name: 'CreateBoostPools'; params: { newPools: Array<PalletCfLendingPoolsBoostBoostPoolId> } }
+  | { name: 'CreateLendingPool'; params: { asset: CfPrimitivesChainsAssetsAnyAsset } }
+  | { name: 'AddLenderFunds'; params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint } }
   | {
       name: 'RemoveLenderFunds';
-      params: {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        amount?: bigint | undefined;
-      };
+      params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount?: bigint | undefined };
     }
   | {
       name: 'RequestLoan';
@@ -9238,16 +8204,10 @@ export type PalletCfLendingPoolsCall =
         broker?: CfPrimitivesBeneficiary | undefined;
       };
     }
-  | {
-      name: 'ExpandLoan';
-      params: { loanId: CfTraitsLendingLoanId; extraAmountToBorrow: bigint };
-    }
+  | { name: 'ExpandLoan'; params: { loanId: CfTraitsLendingLoanId; extraAmountToBorrow: bigint } }
   | {
       name: 'MakeRepayment';
-      params: {
-        loanId: CfTraitsLendingLoanId;
-        amount: CfTraitsLendingRepaymentAmount;
-      };
+      params: { loanId: CfTraitsLendingLoanId; amount: CfTraitsLendingRepaymentAmount };
     }
   | { name: 'InitiateVoluntaryLiquidation' }
   | { name: 'StopVoluntaryLiquidation' };
@@ -9264,34 +8224,15 @@ export type PalletCfLendingPoolsCallLike =
     }
   | {
       name: 'AddBoostFunds';
-      params: {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        amount: bigint;
-        poolTier: number;
-      };
+      params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint; poolTier: number };
     }
-  | {
-      name: 'StopBoosting';
-      params: { asset: CfPrimitivesChainsAssetsAnyAsset; poolTier: number };
-    }
-  | {
-      name: 'CreateBoostPools';
-      params: { newPools: Array<PalletCfLendingPoolsBoostBoostPoolId> };
-    }
-  | {
-      name: 'CreateLendingPool';
-      params: { asset: CfPrimitivesChainsAssetsAnyAsset };
-    }
-  | {
-      name: 'AddLenderFunds';
-      params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
-    }
+  | { name: 'StopBoosting'; params: { asset: CfPrimitivesChainsAssetsAnyAsset; poolTier: number } }
+  | { name: 'CreateBoostPools'; params: { newPools: Array<PalletCfLendingPoolsBoostBoostPoolId> } }
+  | { name: 'CreateLendingPool'; params: { asset: CfPrimitivesChainsAssetsAnyAsset } }
+  | { name: 'AddLenderFunds'; params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint } }
   | {
       name: 'RemoveLenderFunds';
-      params: {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        amount?: bigint | undefined;
-      };
+      params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount?: bigint | undefined };
     }
   | {
       name: 'RequestLoan';
@@ -9301,25 +8242,16 @@ export type PalletCfLendingPoolsCallLike =
         broker?: CfPrimitivesBeneficiary | undefined;
       };
     }
-  | {
-      name: 'ExpandLoan';
-      params: { loanId: CfTraitsLendingLoanId; extraAmountToBorrow: bigint };
-    }
+  | { name: 'ExpandLoan'; params: { loanId: CfTraitsLendingLoanId; extraAmountToBorrow: bigint } }
   | {
       name: 'MakeRepayment';
-      params: {
-        loanId: CfTraitsLendingLoanId;
-        amount: CfTraitsLendingRepaymentAmount;
-      };
+      params: { loanId: CfTraitsLendingLoanId; amount: CfTraitsLendingRepaymentAmount };
     }
   | { name: 'InitiateVoluntaryLiquidation' }
   | { name: 'StopVoluntaryLiquidation' };
 
 export type PalletCfLendingPoolsPalletConfigUpdate =
-  | {
-      type: 'SetBoostConfig';
-      value: { config: PalletCfLendingPoolsBoostConfiguration };
-    }
+  | { type: 'SetBoostConfig'; value: { config: PalletCfLendingPoolsBoostConfiguration } }
   | {
       type: 'SetLendingPoolConfiguration';
       value: {
@@ -9329,15 +8261,11 @@ export type PalletCfLendingPoolsPalletConfigUpdate =
     }
   | {
       type: 'SetLtvThresholds';
-      value: {
-        ltvThresholds: PalletCfLendingPoolsGeneralLendingConfigLtvThresholds;
-      };
+      value: { ltvThresholds: PalletCfLendingPoolsGeneralLendingConfigLtvThresholds };
     }
   | {
       type: 'SetNetworkFeeContributions';
-      value: {
-        contributions: PalletCfLendingPoolsGeneralLendingConfigNetworkFeeContributions;
-      };
+      value: { contributions: PalletCfLendingPoolsGeneralLendingConfigNetworkFeeContributions };
     }
   | { type: 'SetFeeSwapIntervalBlocks'; value: number }
   | { type: 'SetInterestPaymentIntervalBlocks'; value: number }
@@ -9345,16 +8273,9 @@ export type PalletCfLendingPoolsPalletConfigUpdate =
   | { type: 'SetInterestCollectionThresholdUsd'; value: bigint }
   | {
       type: 'SetOracleSlippageForSwaps';
-      value: {
-        softLiquidation: number;
-        hardLiquidation: number;
-        feeSwap: number;
-      };
+      value: { softLiquidation: number; hardLiquidation: number; feeSwap: number };
     }
-  | {
-      type: 'SetLiquidationSwapChunkSizeUsd';
-      value: { soft: bigint; hard: bigint };
-    }
+  | { type: 'SetLiquidationSwapChunkSizeUsd'; value: { soft: bigint; hard: bigint } }
   | {
       type: 'SetMinimumAmounts';
       value: {
@@ -9427,9 +8348,7 @@ export type PalletCfElectionsCall002 =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
@@ -9439,10 +8358,7 @@ export type PalletCfElectionsCall002 =
         electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
       };
     }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState002 };
-    }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState002 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -9471,10 +8387,7 @@ export type PalletCfElectionsCall002 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -9496,10 +8409,7 @@ export type PalletCfElectionsCall002 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -9523,9 +8433,7 @@ export type PalletCfElectionsCallLike002 =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
@@ -9535,10 +8443,7 @@ export type PalletCfElectionsCallLike002 =
         electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
       };
     }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState002 };
-    }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState002 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -9567,10 +8472,7 @@ export type PalletCfElectionsCallLike002 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -9592,10 +8494,7 @@ export type PalletCfElectionsCallLike002 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -9623,10 +8522,7 @@ export type PalletCfElectionsVoteStorageAuthorityVoteCompositePartialVote =
       type: 'PartialVote';
       value: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositePartialVote;
     }
-  | {
-      type: 'Vote';
-      value: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVote;
-    };
+  | { type: 'Vote'; value: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVote };
 
 export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositePartialVote =
   | { type: 'A'; value: PalletCfElectionsSharedDataHash }
@@ -9641,18 +8537,9 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVote =
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBitcoin;
     }
-  | {
-      type: 'B';
-      value: [Array<PalletCfIngressEgressDepositWitnessBitcoin>, H256 | undefined];
-    }
-  | {
-      type: 'C';
-      value: [Array<PalletCfIngressEgressVaultDepositWitnessBitcoin>, H256 | undefined];
-    }
-  | {
-      type: 'D';
-      value: [Array<PalletCfBroadcastTransactionConfirmationBitcoin>, H256 | undefined];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBitcoin>, H256 | undefined] }
+  | { type: 'C'; value: [Array<PalletCfIngressEgressVaultDepositWitnessBitcoin>, H256 | undefined] }
+  | { type: 'D'; value: [Array<PalletCfBroadcastTransactionConfirmationBitcoin>, H256 | undefined] }
   | { type: 'Ee'; value: bigint }
   | { type: 'Ff'; value: H256 };
 
@@ -9681,18 +8568,9 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedData 
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBitcoin;
     }
-  | {
-      type: 'B';
-      value: [Array<PalletCfIngressEgressDepositWitnessBitcoin>, H256 | undefined];
-    }
-  | {
-      type: 'C';
-      value: [Array<PalletCfIngressEgressVaultDepositWitnessBitcoin>, H256 | undefined];
-    }
-  | {
-      type: 'D';
-      value: [Array<PalletCfBroadcastTransactionConfirmationBitcoin>, H256 | undefined];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBitcoin>, H256 | undefined] }
+  | { type: 'C'; value: [Array<PalletCfIngressEgressVaultDepositWitnessBitcoin>, H256 | undefined] }
+  | { type: 'D'; value: [Array<PalletCfBroadcastTransactionConfirmationBitcoin>, H256 | undefined] }
   | { type: 'Ee'; value: [] }
   | { type: 'Ff'; value: [] };
 
@@ -9915,10 +8793,7 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockPr
   };
 
 export type CfPrimitivesBlockWitnesserEventVaultDepositWitnessBitcoin =
-  | {
-      type: 'PreWitness';
-      value: PalletCfIngressEgressVaultDepositWitnessBitcoin;
-    }
+  | { type: 'PreWitness'; value: PalletCfIngressEgressVaultDepositWitnessBitcoin }
   | { type: 'Witness'; value: PalletCfIngressEgressVaultDepositWitnessBitcoin };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateBitcoinEgress =
@@ -9993,10 +8868,7 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockPr
   };
 
 export type CfPrimitivesBlockWitnesserEventTransactionConfirmationBitcoin =
-  | {
-      type: 'PreWitness';
-      value: PalletCfBroadcastTransactionConfirmationBitcoin;
-    }
+  | { type: 'PreWitness'; value: PalletCfBroadcastTransactionConfirmationBitcoin }
   | { type: 'Witness'; value: PalletCfBroadcastTransactionConfirmationBitcoin };
 
 export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings = {
@@ -10016,14 +8888,8 @@ export type StateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinFeeSettin
 };
 
 export type StateChainRuntimeChainflipWitnessingBitcoinElectionsElectionTypes =
-  | {
-      type: 'DepositChannels';
-      value: Array<CfChainsDepositChannelDepositChannelBitcoin>;
-    }
-  | {
-      type: 'Vaults';
-      value: Array<[CfChainsBtcDepositAddress, AccountId32, bigint]>;
-    }
+  | { type: 'DepositChannels'; value: Array<CfChainsDepositChannelDepositChannelBitcoin> }
+  | { type: 'Vaults'; value: Array<[CfChainsBtcDepositAddress, AccountId32, bigint]> }
   | { type: 'Egresses'; value: Array<H256> };
 
 /**
@@ -10040,20 +8906,12 @@ export type PalletCfElectionsCall003 =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
-  | {
-      name: 'DeleteVote';
-      params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 };
-    }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState003 };
-    }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState003 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -10068,10 +8926,7 @@ export type PalletCfElectionsCall003 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -10093,10 +8948,7 @@ export type PalletCfElectionsCall003 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | { name: 'StartNewBlockWitnesserElection'; params: { properties: [] } };
@@ -10112,20 +8964,12 @@ export type PalletCfElectionsCallLike003 =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
-  | {
-      name: 'DeleteVote';
-      params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 };
-    }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState003 };
-    }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState003 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -10140,10 +8984,7 @@ export type PalletCfElectionsCallLike003 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -10165,10 +9006,7 @@ export type PalletCfElectionsCallLike003 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | { name: 'StartNewBlockWitnesserElection'; params: { properties: [] } };
@@ -10186,10 +9024,7 @@ export type PalletCfElectionsVoteStorageAuthorityVote003 =
       type: 'PartialVote';
       value: PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositePartialVote;
     }
-  | {
-      type: 'Vote';
-      value: PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeVote;
-    };
+  | { type: 'Vote'; value: PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeVote };
 
 export type PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositePartialVote = {
   type: 'A';
@@ -10222,9 +9057,7 @@ export type PalletCfElectionsElectoralSystemsOraclePriceChainlinkChainlinkAssetp
   | 'UsdcUsd'
   | 'UsdtUsd';
 
-export type PalletCfElectionsElectoralSystemsOraclePricePrimitivesUnixTime = {
-  seconds: bigint;
-};
+export type PalletCfElectionsElectoralSystemsOraclePricePrimitivesUnixTime = { seconds: bigint };
 
 export type PalletCfElectionsElectoralSystemsOraclePricePriceFraction = U256;
 
@@ -10341,20 +9174,12 @@ export type PalletCfElectionsCall004 =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
-  | {
-      name: 'DeleteVote';
-      params: { electionIdentifier: PalletCfElectionsElectionIdentifier004 };
-    }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState004 };
-    }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier004 } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState004 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -10376,10 +9201,7 @@ export type PalletCfElectionsCall004 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -10401,10 +9223,7 @@ export type PalletCfElectionsCall004 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -10425,20 +9244,12 @@ export type PalletCfElectionsCallLike004 =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
-  | {
-      name: 'DeleteVote';
-      params: { electionIdentifier: PalletCfElectionsElectionIdentifier004 };
-    }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState004 };
-    }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier004 } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState004 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -10460,10 +9271,7 @@ export type PalletCfElectionsCallLike004 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -10485,10 +9293,7 @@ export type PalletCfElectionsCallLike004 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -10518,10 +9323,7 @@ export type PalletCfElectionsVoteStorageAuthorityVote004 =
       type: 'PartialVote';
       value: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositePartialVote;
     }
-  | {
-      type: 'Vote';
-      value: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeVote;
-    };
+  | { type: 'Vote'; value: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeVote };
 
 export type PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositePartialVote =
   | { type: 'A'; value: PalletCfElectionsSharedDataHash }
@@ -10538,10 +9340,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeVote =
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersEthereum;
     }
-  | {
-      type: 'B';
-      value: [Array<PalletCfIngressEgressDepositWitnessEthereum>, H256 | undefined];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessEthereum>, H256 | undefined] }
   | {
       type: 'C';
       value: [
@@ -10586,14 +9385,8 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeade
 };
 
 export type StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventEthereum =
-  | {
-      type: 'VaultDepositEthereum';
-      value: PalletCfIngressEgressVaultDepositWitnessEthereum;
-    }
-  | {
-      type: 'TransferFailedEthereum';
-      value: PalletCfIngressEgressTransferFailedWitnessEthereum;
-    };
+  | { type: 'VaultDepositEthereum'; value: PalletCfIngressEgressVaultDepositWitnessEthereum }
+  | { type: 'TransferFailedEthereum'; value: PalletCfIngressEgressTransferFailedWitnessEthereum };
 
 export type PalletCfIngressEgressTransferFailedWitnessEthereum = {
   asset: CfPrimitivesChainsAssetsEthAsset;
@@ -10602,14 +9395,8 @@ export type PalletCfIngressEgressTransferFailedWitnessEthereum = {
 };
 
 export type StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventEthereum =
-  | {
-      type: 'SignatureAcceptedEthereum';
-      value: PalletCfBroadcastTransactionConfirmationEthereum;
-    }
-  | {
-      type: 'AggKeySetByGovKeyEthereum';
-      value: PalletCfVaultsVaultKeyRotatedExternallyEthereum;
-    }
+  | { type: 'SignatureAcceptedEthereum'; value: PalletCfBroadcastTransactionConfirmationEthereum }
+  | { type: 'AggKeySetByGovKeyEthereum'; value: PalletCfVaultsVaultKeyRotatedExternallyEthereum }
   | { type: 'SetWhitelistedCallHashEthereum'; value: FixedBytes<32> };
 
 export type PalletCfBroadcastTransactionConfirmationEthereum = {
@@ -10629,28 +9416,15 @@ export type PalletCfVaultsVaultKeyRotatedExternallyEthereum = {
 export type StateChainRuntimeChainflipWitnessingEthereumElectionsStateChainGatewayEvent =
   | {
       type: 'Funded';
-      value: {
-        accountId: AccountId32;
-        amount: bigint;
-        funder: H160;
-        txHash: FixedBytes<32>;
-      };
+      value: { accountId: AccountId32; amount: bigint; funder: H160; txHash: FixedBytes<32> };
     }
   | {
       type: 'RedemptionExecuted';
-      value: {
-        accountId: AccountId32;
-        redeemedAmount: bigint;
-        txHash: FixedBytes<32>;
-      };
+      value: { accountId: AccountId32; redeemedAmount: bigint; txHash: FixedBytes<32> };
     }
   | {
       type: 'RedemptionExpired';
-      value: {
-        accountId: AccountId32;
-        blockNumber: bigint;
-        txHash: FixedBytes<32>;
-      };
+      value: { accountId: AccountId32; blockNumber: bigint; txHash: FixedBytes<32> };
     };
 
 export type StateChainRuntimeChainflipWitnessingEthereumElectionsScUtilsCall = {
@@ -10665,10 +9439,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData 
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersEthereum;
     }
-  | {
-      type: 'B';
-      value: [Array<PalletCfIngressEgressDepositWitnessEthereum>, H256 | undefined];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessEthereum>, H256 | undefined] }
   | {
       type: 'C';
       value: [
@@ -11136,10 +9907,7 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectio
     | { type: 'GovernanceEthereumScUtils'; value: [] };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesOptimisticBlockEthereumScUtils =
-  {
-    hash: H256;
-    data: Array<StateChainRuntimeChainflipWitnessingEthereumElectionsScUtilsCall>;
-  };
+  { hash: H256; data: Array<StateChainRuntimeChainflipWitnessingEthereumElectionsScUtilsCall> };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserEthereumScUtilsWitnessing =
   {
@@ -11174,20 +9942,11 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockPr
   };
 
 export type CfPrimitivesBlockWitnesserEventScUtilsCall =
-  | {
-      type: 'PreWitness';
-      value: StateChainRuntimeChainflipWitnessingEthereumElectionsScUtilsCall;
-    }
-  | {
-      type: 'Witness';
-      value: StateChainRuntimeChainflipWitnessingEthereumElectionsScUtilsCall;
-    };
+  | { type: 'PreWitness'; value: StateChainRuntimeChainflipWitnessingEthereumElectionsScUtilsCall }
+  | { type: 'Witness'; value: StateChainRuntimeChainflipWitnessingEthereumElectionsScUtilsCall };
 
 export type StateChainRuntimeChainflipWitnessingEthereumElectionsElectionTypes =
-  | {
-      type: 'DepositChannels';
-      value: Array<CfChainsDepositChannelDepositChannelEthereum>;
-    }
+  | { type: 'DepositChannels'; value: Array<CfChainsDepositChannelDepositChannelEthereum> }
   | { type: 'Vaults'; value: [] }
   | { type: 'StateChainGateway'; value: [] }
   | { type: 'KeyManager'; value: [] }
@@ -11222,10 +9981,7 @@ export type PalletCfElectionsCall005 =
         electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
       };
     }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState005 };
-    }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState005 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -11245,10 +10001,7 @@ export type PalletCfElectionsCall005 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -11270,10 +10023,7 @@ export type PalletCfElectionsCall005 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -11312,10 +10062,7 @@ export type PalletCfElectionsCallLike005 =
         electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
       };
     }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState005 };
-    }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState005 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -11335,10 +10082,7 @@ export type PalletCfElectionsCallLike005 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -11360,10 +10104,7 @@ export type PalletCfElectionsCallLike005 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -11401,10 +10142,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteNonempt
         type: 'A';
         value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersArbitrum;
       }
-    | {
-        type: 'B';
-        value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined];
-      }
+    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined] }
     | {
         type: 'C';
         value: [
@@ -11437,14 +10175,8 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeade
 export type CfChainsWitnessPeriodBlockWitnessRange = { root: bigint };
 
 export type StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventArbitrum =
-  | {
-      type: 'VaultDepositArbitrum';
-      value: PalletCfIngressEgressVaultDepositWitnessArbitrum;
-    }
-  | {
-      type: 'TransferFailedArbitrum';
-      value: PalletCfIngressEgressTransferFailedWitnessArbitrum;
-    };
+  | { type: 'VaultDepositArbitrum'; value: PalletCfIngressEgressVaultDepositWitnessArbitrum }
+  | { type: 'TransferFailedArbitrum'; value: PalletCfIngressEgressTransferFailedWitnessArbitrum };
 
 export type PalletCfIngressEgressTransferFailedWitnessArbitrum = {
   asset: CfPrimitivesChainsAssetsArbAsset;
@@ -11453,14 +10185,8 @@ export type PalletCfIngressEgressTransferFailedWitnessArbitrum = {
 };
 
 export type StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventArbitrum =
-  | {
-      type: 'SignatureAcceptedArbitrum';
-      value: PalletCfBroadcastTransactionConfirmationArbitrum;
-    }
-  | {
-      type: 'AggKeySetByGovKeyArbitrum';
-      value: PalletCfVaultsVaultKeyRotatedExternallyArbitrum;
-    }
+  | { type: 'SignatureAcceptedArbitrum'; value: PalletCfBroadcastTransactionConfirmationArbitrum }
+  | { type: 'AggKeySetByGovKeyArbitrum'; value: PalletCfVaultsVaultKeyRotatedExternallyArbitrum }
   | { type: 'SetWhitelistedCallHashArbitrum'; value: FixedBytes<32> };
 
 export type PalletCfBroadcastTransactionConfirmationArbitrum = {
@@ -11483,10 +10209,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataN
         type: 'A';
         value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersArbitrum;
       }
-    | {
-        type: 'B';
-        value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined];
-      }
+    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined] }
     | {
         type: 'C';
         value: [
@@ -11828,10 +10551,7 @@ export type CfPrimitivesBlockWitnesserEventEvmKeyManagerEventArbitrum =
     };
 
 export type StateChainRuntimeChainflipWitnessingArbitrumElectionsElectionTypes =
-  | {
-      type: 'DepositChannels';
-      value: Array<CfChainsDepositChannelDepositChannelArbitrum>;
-    }
+  | { type: 'DepositChannels'; value: Array<CfChainsDepositChannelDepositChannelArbitrum> }
   | { type: 'Vaults'; value: [] }
   | { type: 'KeyManager'; value: [] };
 
@@ -11842,10 +10562,7 @@ export type PalletCfChainTrackingCall007 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateTron };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateTron } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -11857,10 +10574,7 @@ export type PalletCfChainTrackingCallLike007 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateTron };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateTron } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -11942,10 +10656,7 @@ export type PalletCfBroadcastCall007 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -12037,10 +10748,7 @@ export type PalletCfBroadcastCallLike007 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -12073,14 +10781,8 @@ export type PalletCfBroadcastCallLike007 =
 export type CfChainsTronApiTronApi =
   | { type: 'SetAggKeyWithAggKey'; value: CfChainsEvmApiEvmTransactionBuilder }
   | { type: 'AllBatch'; value: CfChainsEvmApiEvmTransactionBuilderAllBatch }
-  | {
-      type: 'ExecutexSwapAndCall';
-      value: CfChainsEvmApiEvmTransactionBuilderExecutexSwapAndCall;
-    }
-  | {
-      type: 'TransferFallback';
-      value: CfChainsEvmApiEvmTransactionBuilderTransferFallback;
-    }
+  | { type: 'ExecutexSwapAndCall'; value: CfChainsEvmApiEvmTransactionBuilderExecutexSwapAndCall }
+  | { type: 'TransferFallback'; value: CfChainsEvmApiEvmTransactionBuilderTransferFallback }
   | { type: 'RejectCall'; value: CfChainsEvmApiEvmTransactionBuilderAllBatch };
 
 export type CfChainsTronTronTransactionFee = {
@@ -12094,10 +10796,7 @@ export type CfChainsTronTronTransactionFee = {
   energyPenaltyTotal?: bigint | undefined;
 };
 
-export type CfChainsTronTronTransactionMetadata = {
-  contract: H160;
-  feeLimit?: bigint | undefined;
-};
+export type CfChainsTronTronTransactionMetadata = { contract: H160; feeLimit?: bigint | undefined };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -12109,10 +10808,7 @@ export type PalletCfIngressEgressCall007 =
    **/
   | {
       name: 'EnableOrDisableEgress';
-      params: {
-        asset: CfPrimitivesChainsAssetsTronAsset;
-        setDisabled: boolean;
-      };
+      params: { asset: CfPrimitivesChainsAssetsTronAsset; setDisabled: boolean };
     }
   /**
    * Called when funds have been deposited into the given address.
@@ -12153,15 +10849,9 @@ export type PalletCfIngressEgressCall007 =
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessTron;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessTron };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: H160 };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
 
 export type PalletCfIngressEgressCallLike007 =
   /**
@@ -12170,10 +10860,7 @@ export type PalletCfIngressEgressCallLike007 =
    **/
   | {
       name: 'EnableOrDisableEgress';
-      params: {
-        asset: CfPrimitivesChainsAssetsTronAsset;
-        setDisabled: boolean;
-      };
+      params: { asset: CfPrimitivesChainsAssetsTronAsset; setDisabled: boolean };
     }
   /**
    * Called when funds have been deposited into the given address.
@@ -12214,15 +10901,9 @@ export type PalletCfIngressEgressCallLike007 =
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessTron;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessTron };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: H160 };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
 
 export type CfPrimitivesChainsAssetsTronAsset = 'Trx' | 'TrxUsdt';
 
@@ -12237,10 +10918,7 @@ export type PalletCfIngressEgressPalletConfigUpdateTron =
   | { type: 'ChannelOpeningFeeTron'; value: { fee: bigint } }
   | {
       type: 'SetMinimumDepositTron';
-      value: {
-        asset: CfPrimitivesChainsAssetsTronAsset;
-        minimumDeposit: bigint;
-      };
+      value: { asset: CfPrimitivesChainsAssetsTronAsset; minimumDeposit: bigint };
     }
   | { type: 'SetDepositChannelLifetimeTron'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginTron'; value: { margin: bigint } }
@@ -12282,20 +10960,12 @@ export type PalletCfElectionsCall006 =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
-  | {
-      name: 'DeleteVote';
-      params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 };
-    }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState006 };
-    }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState006 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -12314,10 +10984,7 @@ export type PalletCfElectionsCall006 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -12339,10 +11006,7 @@ export type PalletCfElectionsCall006 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -12363,20 +11027,12 @@ export type PalletCfElectionsCallLike006 =
     }
   | {
       name: 'ProvideSharedData';
-      params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData;
-      };
+      params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData };
     }
   | { name: 'IgnoreMyVotes' }
   | { name: 'StopIgnoringMyVotes' }
-  | {
-      name: 'DeleteVote';
-      params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 };
-    }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState006 };
-    }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState006 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -12395,10 +11051,7 @@ export type PalletCfElectionsCallLike006 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -12420,10 +11073,7 @@ export type PalletCfElectionsCallLike006 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -12450,10 +11100,7 @@ export type PalletCfElectionsVoteStorageAuthorityVote006 =
       type: 'PartialVote';
       value: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositePartialVote;
     }
-  | {
-      type: 'Vote';
-      value: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVote;
-    };
+  | { type: 'Vote'; value: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVote };
 
 export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositePartialVote =
   | { type: 'A'; value: PalletCfElectionsSharedDataHash }
@@ -12467,10 +11114,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVote =
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersTron;
     }
-  | {
-      type: 'B';
-      value: [Array<PalletCfIngressEgressDepositWitnessTron>, H256 | undefined];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessTron>, H256 | undefined] }
   | {
       type: 'C';
       value: [
@@ -12500,14 +11144,8 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeade
 };
 
 export type StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventTron =
-  | {
-      type: 'VaultDepositTron';
-      value: PalletCfIngressEgressVaultDepositWitnessTron;
-    }
-  | {
-      type: 'TransferFailedTron';
-      value: PalletCfIngressEgressTransferFailedWitnessTron;
-    };
+  | { type: 'VaultDepositTron'; value: PalletCfIngressEgressVaultDepositWitnessTron }
+  | { type: 'TransferFailedTron'; value: PalletCfIngressEgressTransferFailedWitnessTron };
 
 export type PalletCfIngressEgressTransferFailedWitnessTron = {
   asset: CfPrimitivesChainsAssetsTronAsset;
@@ -12516,14 +11154,8 @@ export type PalletCfIngressEgressTransferFailedWitnessTron = {
 };
 
 export type StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventTron =
-  | {
-      type: 'SignatureAcceptedTron';
-      value: PalletCfBroadcastTransactionConfirmationTron;
-    }
-  | {
-      type: 'AggKeySetByGovKeyTron';
-      value: PalletCfVaultsVaultKeyRotatedExternallyTron;
-    }
+  | { type: 'SignatureAcceptedTron'; value: PalletCfBroadcastTransactionConfirmationTron }
+  | { type: 'AggKeySetByGovKeyTron'; value: PalletCfVaultsVaultKeyRotatedExternallyTron }
   | { type: 'SetWhitelistedCallHashTron'; value: FixedBytes<32> };
 
 export type PalletCfBroadcastTransactionConfirmationTron = {
@@ -12545,10 +11177,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData 
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersTron;
     }
-  | {
-      type: 'B';
-      value: [Array<PalletCfIngressEgressDepositWitnessTron>, H256 | undefined];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessTron>, H256 | undefined] }
   | {
       type: 'C';
       value: [
@@ -12863,10 +11492,7 @@ export type CfPrimitivesBlockWitnesserEventEvmKeyManagerEventTron =
     };
 
 export type StateChainRuntimeChainflipWitnessingTronElectionsElectionTypes =
-  | {
-      type: 'DepositChannels';
-      value: Array<CfChainsDepositChannelDepositChannelTron>;
-    }
+  | { type: 'DepositChannels'; value: Array<CfChainsDepositChannelDepositChannelTron> }
   | { type: 'Vaults'; value: [] }
   | { type: 'KeyManager'; value: [] };
 
@@ -12877,10 +11503,7 @@ export type PalletCfChainTrackingCall008 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateBsc };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateBsc } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -12892,10 +11515,7 @@ export type PalletCfChainTrackingCallLike008 =
   /**
    * Logs the latest known state of the external chain defined by [Config::TargetChain].
    **/
-  | {
-      name: 'UpdateChainState';
-      params: { newChainState: CfChainsChainStateBsc };
-    }
+  | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateBsc } }
   /**
    * Update the fee multiplier with the provided value
    *
@@ -12903,10 +11523,7 @@ export type PalletCfChainTrackingCallLike008 =
    **/
   | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
 
-export type CfChainsChainStateBsc = {
-  blockHeight: bigint;
-  trackedData: CfChainsBscBscTrackedData;
-};
+export type CfChainsChainStateBsc = { blockHeight: bigint; trackedData: CfChainsBscBscTrackedData };
 
 export type CfPrimitivesChainsBsc = {};
 
@@ -12977,10 +11594,7 @@ export type PalletCfBroadcastCall008 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -13072,10 +11686,7 @@ export type PalletCfBroadcastCallLike008 =
    *
    * The dispatch origin of this function must be governance.
    **/
-  | {
-      name: 'UpdatePalletConfig';
-      params: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
    *
@@ -13108,14 +11719,8 @@ export type PalletCfBroadcastCallLike008 =
 export type CfChainsBscApiBscApi =
   | { type: 'SetAggKeyWithAggKey'; value: CfChainsEvmApiEvmTransactionBuilder }
   | { type: 'AllBatch'; value: CfChainsEvmApiEvmTransactionBuilderAllBatch }
-  | {
-      type: 'ExecutexSwapAndCall';
-      value: CfChainsEvmApiEvmTransactionBuilderExecutexSwapAndCall;
-    }
-  | {
-      type: 'TransferFallback';
-      value: CfChainsEvmApiEvmTransactionBuilderTransferFallback;
-    }
+  | { type: 'ExecutexSwapAndCall'; value: CfChainsEvmApiEvmTransactionBuilderExecutexSwapAndCall }
+  | { type: 'TransferFallback'; value: CfChainsEvmApiEvmTransactionBuilderTransferFallback }
   | { type: 'RejectCall'; value: CfChainsEvmApiEvmTransactionBuilderAllBatch };
 
 /**
@@ -13151,11 +11756,7 @@ export type PalletCfIngressEgressCall008 =
    **/
   | {
       name: 'VaultTransferFailed';
-      params: {
-        asset: CfPrimitivesChainsAssetsBscAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      params: { asset: CfPrimitivesChainsAssetsBscAsset; amount: bigint; destinationAddress: H160 };
     }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -13169,15 +11770,9 @@ export type PalletCfIngressEgressCall008 =
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessBsc;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBsc };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: H160 };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
 
 export type PalletCfIngressEgressCallLike008 =
   /**
@@ -13209,11 +11804,7 @@ export type PalletCfIngressEgressCallLike008 =
    **/
   | {
       name: 'VaultTransferFailed';
-      params: {
-        asset: CfPrimitivesChainsAssetsBscAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      params: { asset: CfPrimitivesChainsAssetsBscAsset; amount: bigint; destinationAddress: H160 };
     }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -13227,15 +11818,9 @@ export type PalletCfIngressEgressCallLike008 =
   | { name: 'MarkTransactionForRejection'; params: { txId: H256 } }
   | {
       name: 'VaultSwapRequest';
-      params: {
-        blockHeight: bigint;
-        deposit: PalletCfIngressEgressVaultDepositWitnessBsc;
-      };
+      params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBsc };
     }
-  | {
-      name: 'MarkDepositChannelForRejection';
-      params: { depositAddress: H160 };
-    };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
 
 export type CfPrimitivesChainsAssetsBscAsset = 'Bnb' | 'BscUsdt';
 
@@ -13250,10 +11835,7 @@ export type PalletCfIngressEgressPalletConfigUpdateBsc =
   | { type: 'ChannelOpeningFeeBsc'; value: { fee: bigint } }
   | {
       type: 'SetMinimumDepositBsc';
-      value: {
-        asset: CfPrimitivesChainsAssetsBscAsset;
-        minimumDeposit: bigint;
-      };
+      value: { asset: CfPrimitivesChainsAssetsBscAsset; minimumDeposit: bigint };
     }
   | { type: 'SetDepositChannelLifetimeBsc'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginBsc'; value: { margin: bigint } }
@@ -13310,10 +11892,7 @@ export type PalletCfElectionsCall007 =
         electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
       };
     }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState007 };
-    }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState007 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -13333,10 +11912,7 @@ export type PalletCfElectionsCall007 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -13358,10 +11934,7 @@ export type PalletCfElectionsCall007 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -13400,10 +11973,7 @@ export type PalletCfElectionsCallLike007 =
         electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
       };
     }
-  | {
-      name: 'Initialize';
-      params: { initialState: PalletCfElectionsInitialState007 };
-    }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState007 } }
   | {
       name: 'UpdateSettings';
       params: {
@@ -13423,10 +11993,7 @@ export type PalletCfElectionsCallLike007 =
     }
   | {
       name: 'SetSharedDataReferenceLifetime';
-      params: {
-        blocks: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | {
       name: 'ClearElectionVotes';
@@ -13448,10 +12015,7 @@ export type PalletCfElectionsCallLike007 =
   | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
   | {
       name: 'ClearAllVotes';
-      params: {
-        limit: number;
-        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
-      };
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
     }
   | { name: 'ValidateStorage' }
   | {
@@ -13488,10 +12052,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteNonempt
         type: 'A';
         value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBsc;
       }
-    | {
-        type: 'B';
-        value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined];
-      }
+    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined] }
     | {
         type: 'C';
         value: [
@@ -13524,14 +12085,8 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeade
 export type CfChainsWitnessPeriodBlockWitnessRangeBsc = { root: bigint };
 
 export type StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventBsc =
-  | {
-      type: 'VaultDepositBsc';
-      value: PalletCfIngressEgressVaultDepositWitnessBsc;
-    }
-  | {
-      type: 'TransferFailedBsc';
-      value: PalletCfIngressEgressTransferFailedWitnessBsc;
-    };
+  | { type: 'VaultDepositBsc'; value: PalletCfIngressEgressVaultDepositWitnessBsc }
+  | { type: 'TransferFailedBsc'; value: PalletCfIngressEgressTransferFailedWitnessBsc };
 
 export type PalletCfIngressEgressTransferFailedWitnessBsc = {
   asset: CfPrimitivesChainsAssetsBscAsset;
@@ -13540,14 +12095,8 @@ export type PalletCfIngressEgressTransferFailedWitnessBsc = {
 };
 
 export type StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventBsc =
-  | {
-      type: 'SignatureAcceptedBsc';
-      value: PalletCfBroadcastTransactionConfirmationBsc;
-    }
-  | {
-      type: 'AggKeySetByGovKeyBsc';
-      value: PalletCfVaultsVaultKeyRotatedExternallyBsc;
-    }
+  | { type: 'SignatureAcceptedBsc'; value: PalletCfBroadcastTransactionConfirmationBsc }
+  | { type: 'AggKeySetByGovKeyBsc'; value: PalletCfVaultsVaultKeyRotatedExternallyBsc }
   | { type: 'SetWhitelistedCallHashBsc'; value: FixedBytes<32> };
 
 export type PalletCfBroadcastTransactionConfirmationBsc = {
@@ -13570,10 +12119,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataN
         type: 'A';
         value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBsc;
       }
-    | {
-        type: 'B';
-        value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined];
-      }
+    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined] }
     | {
         type: 'C';
         value: [
@@ -13855,10 +12401,7 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectio
   | { type: 'GovernanceBscKeyManager'; value: [] };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesOptimisticBlockBscKeyManager =
-  {
-    hash: H256;
-    data: Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventBsc>;
-  };
+  { hash: H256; data: Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventBsc> };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserBscKeyManagerWitnessing =
   {
@@ -13908,10 +12451,7 @@ export type CfPrimitivesBlockWitnesserEventEvmKeyManagerEventBsc =
     };
 
 export type StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes =
-  | {
-      type: 'DepositChannels';
-      value: Array<CfChainsDepositChannelDepositChannelBsc>;
-    }
+  | { type: 'DepositChannels'; value: Array<CfChainsDepositChannelDepositChannelBsc> }
   | { type: 'Vaults'; value: [] }
   | { type: 'KeyManager'; value: [] };
 
@@ -13938,9 +12478,7 @@ export type FrameSystemExtensionsCheckWeight = {};
 
 export type PalletTransactionPaymentChargeTransactionPayment = bigint;
 
-export type FrameMetadataHashExtensionCheckMetadataHash = {
-  mode: FrameMetadataHashExtensionMode;
-};
+export type FrameMetadataHashExtensionCheckMetadataHash = { mode: FrameMetadataHashExtensionMode };
 
 export type FrameMetadataHashExtensionMode = 'Disabled' | 'Enabled';
 
@@ -13981,86 +12519,41 @@ export type StateChainRuntimeRuntimeEvent =
   | { pallet: 'Session'; palletEvent: PalletSessionEvent }
   | { pallet: 'Grandpa'; palletEvent: PalletGrandpaEvent }
   | { pallet: 'Governance'; palletEvent: PalletCfGovernanceEvent }
-  | {
-      pallet: 'TokenholderGovernance';
-      palletEvent: PalletCfTokenholderGovernanceEvent;
-    }
+  | { pallet: 'TokenholderGovernance'; palletEvent: PalletCfTokenholderGovernanceEvent }
   | { pallet: 'Reputation'; palletEvent: PalletCfReputationEvent }
   | { pallet: 'EthereumChainTracking'; palletEvent: PalletCfChainTrackingEvent }
-  | {
-      pallet: 'PolkadotChainTracking';
-      palletEvent: PalletCfChainTrackingEvent002;
-    }
-  | {
-      pallet: 'BitcoinChainTracking';
-      palletEvent: PalletCfChainTrackingEvent003;
-    }
+  | { pallet: 'PolkadotChainTracking'; palletEvent: PalletCfChainTrackingEvent002 }
+  | { pallet: 'BitcoinChainTracking'; palletEvent: PalletCfChainTrackingEvent003 }
   | { pallet: 'EthereumVault'; palletEvent: PalletCfVaultsEvent }
   | { pallet: 'PolkadotVault'; palletEvent: PalletCfVaultsEvent002 }
   | { pallet: 'BitcoinVault'; palletEvent: PalletCfVaultsEvent003 }
-  | {
-      pallet: 'EvmThresholdSigner';
-      palletEvent: PalletCfThresholdSignatureEvent;
-    }
-  | {
-      pallet: 'PolkadotThresholdSigner';
-      palletEvent: PalletCfThresholdSignatureEvent002;
-    }
-  | {
-      pallet: 'BitcoinThresholdSigner';
-      palletEvent: PalletCfThresholdSignatureEvent003;
-    }
+  | { pallet: 'EvmThresholdSigner'; palletEvent: PalletCfThresholdSignatureEvent }
+  | { pallet: 'PolkadotThresholdSigner'; palletEvent: PalletCfThresholdSignatureEvent002 }
+  | { pallet: 'BitcoinThresholdSigner'; palletEvent: PalletCfThresholdSignatureEvent003 }
   | { pallet: 'EthereumBroadcaster'; palletEvent: PalletCfBroadcastEvent }
   | { pallet: 'PolkadotBroadcaster'; palletEvent: PalletCfBroadcastEvent002 }
   | { pallet: 'BitcoinBroadcaster'; palletEvent: PalletCfBroadcastEvent003 }
   | { pallet: 'Swapping'; palletEvent: PalletCfSwappingEvent }
   | { pallet: 'LiquidityProvider'; palletEvent: PalletCfLpEvent }
   | { pallet: 'EthereumIngressEgress'; palletEvent: PalletCfIngressEgressEvent }
-  | {
-      pallet: 'PolkadotIngressEgress';
-      palletEvent: PalletCfIngressEgressEvent002;
-    }
-  | {
-      pallet: 'BitcoinIngressEgress';
-      palletEvent: PalletCfIngressEgressEvent003;
-    }
+  | { pallet: 'PolkadotIngressEgress'; palletEvent: PalletCfIngressEgressEvent002 }
+  | { pallet: 'BitcoinIngressEgress'; palletEvent: PalletCfIngressEgressEvent003 }
   | { pallet: 'LiquidityPools'; palletEvent: PalletCfPoolsEvent }
-  | {
-      pallet: 'ArbitrumChainTracking';
-      palletEvent: PalletCfChainTrackingEvent004;
-    }
+  | { pallet: 'ArbitrumChainTracking'; palletEvent: PalletCfChainTrackingEvent004 }
   | { pallet: 'ArbitrumVault'; palletEvent: PalletCfVaultsEvent }
   | { pallet: 'ArbitrumBroadcaster'; palletEvent: PalletCfBroadcastEvent }
-  | {
-      pallet: 'ArbitrumIngressEgress';
-      palletEvent: PalletCfIngressEgressEvent004;
-    }
+  | { pallet: 'ArbitrumIngressEgress'; palletEvent: PalletCfIngressEgressEvent004 }
   | { pallet: 'SolanaVault'; palletEvent: PalletCfVaultsEvent004 }
-  | {
-      pallet: 'SolanaThresholdSigner';
-      palletEvent: PalletCfThresholdSignatureEvent004;
-    }
+  | { pallet: 'SolanaThresholdSigner'; palletEvent: PalletCfThresholdSignatureEvent004 }
   | { pallet: 'SolanaBroadcaster'; palletEvent: PalletCfBroadcastEvent004 }
-  | {
-      pallet: 'SolanaIngressEgress';
-      palletEvent: PalletCfIngressEgressEvent005;
-    }
+  | { pallet: 'SolanaIngressEgress'; palletEvent: PalletCfIngressEgressEvent005 }
   | { pallet: 'SolanaElections'; palletEvent: PalletCfElectionsEvent }
-  | {
-      pallet: 'SolanaChainTracking';
-      palletEvent: PalletCfChainTrackingEvent005;
-    }
+  | { pallet: 'SolanaChainTracking'; palletEvent: PalletCfChainTrackingEvent005 }
   | { pallet: 'AssetBalances'; palletEvent: PalletCfAssetBalancesEvent }
-  | {
-      pallet: 'AssethubChainTracking';
-      palletEvent: PalletCfChainTrackingEvent006;
-    }
+  | { pallet: 'AssethubChainTracking'; palletEvent: PalletCfChainTrackingEvent006 }
   | { pallet: 'AssethubVault'; palletEvent: PalletCfVaultsEvent005 }
   | { pallet: 'AssethubBroadcaster'; palletEvent: PalletCfBroadcastEvent005 }
-  | {
-      pallet: 'AssethubIngressEgress';
-      palletEvent: PalletCfIngressEgressEvent006;
-    }
+  | { pallet: 'AssethubIngressEgress'; palletEvent: PalletCfIngressEgressEvent006 }
   | { pallet: 'TradingStrategy'; palletEvent: PalletCfTradingStrategyEvent }
   | { pallet: 'LendingPools'; palletEvent: PalletCfLendingPoolsEvent }
   | { pallet: 'BitcoinElections'; palletEvent: PalletCfElectionsEvent002 }
@@ -14085,19 +12578,13 @@ export type FrameSystemEvent =
   /**
    * An extrinsic completed successfully.
    **/
-  | {
-      name: 'ExtrinsicSuccess';
-      data: { dispatchInfo: FrameSystemDispatchEventInfo };
-    }
+  | { name: 'ExtrinsicSuccess'; data: { dispatchInfo: FrameSystemDispatchEventInfo } }
   /**
    * An extrinsic failed.
    **/
   | {
       name: 'ExtrinsicFailed';
-      data: {
-        dispatchError: DispatchError;
-        dispatchInfo: FrameSystemDispatchEventInfo;
-      };
+      data: { dispatchError: DispatchError; dispatchInfo: FrameSystemDispatchEventInfo };
     }
   /**
    * `:code` was updated.
@@ -14118,17 +12605,11 @@ export type FrameSystemEvent =
   /**
    * An upgrade was authorized.
    **/
-  | {
-      name: 'UpgradeAuthorized';
-      data: { codeHash: H256; checkVersion: boolean };
-    }
+  | { name: 'UpgradeAuthorized'; data: { codeHash: H256; checkVersion: boolean } }
   /**
    * An invalid authorized upgrade was rejected while trying to apply it.
    **/
-  | {
-      name: 'RejectedInvalidAuthorizedUpgrade';
-      data: { codeHash: H256; error: DispatchError };
-    };
+  | { name: 'RejectedInvalidAuthorizedUpgrade'; data: { codeHash: H256; error: DispatchError } };
 
 export type FrameSystemDispatchEventInfo = {
   weight: SpWeightsWeightV2Weight;
@@ -14190,10 +12671,7 @@ export type PalletCfEnvironmentEvent =
   /**
    * The Safe Mode settings for the chain has been updated
    **/
-  | {
-      name: 'RuntimeSafeModeUpdated';
-      data: { safeMode: PalletCfEnvironmentSafeModeUpdate };
-    }
+  | { name: 'RuntimeSafeModeUpdated'; data: { safeMode: PalletCfEnvironmentSafeModeUpdate } }
   /**
    * Utxo consolidation parameters has been updated
    **/
@@ -14257,17 +12735,11 @@ export type PalletCfFlipEvent =
    **/
   | {
       name: 'RemainingImbalance';
-      data: {
-        who: PalletCfFlipImbalancesImbalanceSource;
-        remainingImbalance: bigint;
-      };
+      data: { who: PalletCfFlipImbalancesImbalanceSource; remainingImbalance: bigint };
     }
   | { name: 'SlashingPerformed'; data: { who: AccountId32; amount: bigint } }
   | { name: 'AccountReaped'; data: { who: AccountId32; dustBurned: bigint } }
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfFlipPalletConfigUpdate };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfFlipPalletConfigUpdate } }
   | { name: 'FlipMinted'; data: { to: AccountId32; amount: bigint } }
   | { name: 'BondUpdated'; data: { accountId: AccountId32; newBond: bigint } };
 
@@ -14302,10 +12774,7 @@ export type PalletCfEmissionsEvent =
    **/
   | {
       name: 'NetworkFeeBurned';
-      data: {
-        amount: bigint;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      };
+      data: { amount: bigint; egressId: [CfPrimitivesChainsForeignChain, bigint] };
     }
   /**
    * The Flip burn was skipped.
@@ -14330,12 +12799,7 @@ export type PalletCfFundingEvent =
     }
   | {
       name: 'RedemptionRequested';
-      data: {
-        accountId: AccountId32;
-        amount: bigint;
-        broadcastId: number;
-        expiryTime: bigint;
-      };
+      data: { accountId: AccountId32; amount: bigint; broadcastId: number; expiryTime: bigint };
     }
   /**
    * A node has redeemed their FLIP on the Ethereum chain. \[account_id,
@@ -14348,10 +12812,7 @@ export type PalletCfFundingEvent =
   /**
    * A redemption has expired without being executed.
    **/
-  | {
-      name: 'RedemptionExpired';
-      data: { accountId: AccountId32; txHash: FixedBytes<32> };
-    }
+  | { name: 'RedemptionExpired'; data: { accountId: AccountId32; txHash: FixedBytes<32> } }
   /**
    * A new restricted address has been added
    **/
@@ -14382,27 +12843,17 @@ export type PalletCfFundingEvent =
   /**
    * An account has been bound to an address.
    **/
-  | {
-      name: 'BoundRedeemAddress';
-      data: { accountId: AccountId32; address: H160 };
-    }
+  | { name: 'BoundRedeemAddress'; data: { accountId: AccountId32; address: H160 } }
   /**
    * An account has been bound to an executor address.
    **/
-  | {
-      name: 'BoundExecutorAddress';
-      data: { accountId: AccountId32; address: H160 };
-    }
+  | { name: 'BoundExecutorAddress'; data: { accountId: AccountId32; address: H160 } }
   /**
    * A rebalance between two accounts has been executed.
    **/
   | {
       name: 'Rebalance';
-      data: {
-        sourceAccountId: AccountId32;
-        recipientAccountId: AccountId32;
-        amount: bigint;
-      };
+      data: { sourceAccountId: AccountId32; recipientAccountId: AccountId32; amount: bigint };
     }
   | {
       name: 'ScCallExecuted';
@@ -14423,11 +12874,7 @@ export type PalletCfFundingEvent =
     }
   | {
       name: 'ScCallCannotBeDecoded';
-      data: {
-        caller: AccountId32;
-        scCallBytes: Bytes;
-        ethTxHash: FixedBytes<32>;
-      };
+      data: { caller: AccountId32; scCallBytes: Bytes; ethTxHash: FixedBytes<32> };
     };
 
 export type CfTraitsFundingSource =
@@ -14435,10 +12882,7 @@ export type CfTraitsFundingSource =
   | { type: 'Swap'; value: { swapRequestId: CfPrimitivesSwapRequestId } }
   | {
       type: 'InitialFunding';
-      value: {
-        channelId?: bigint | undefined;
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-      };
+      value: { channelId?: bigint | undefined; asset: CfPrimitivesChainsAssetsAnyAsset };
     };
 
 export type CfPrimitivesSwapRequestId = bigint;
@@ -14451,15 +12895,9 @@ export type StateChainRuntimeChainflipEthereumScCallsEthereumSCApi = {
 export type StateChainRuntimeChainflipEthereumScCallsDelegationApi =
   | {
       type: 'Delegate';
-      value: {
-        operator: AccountId32;
-        increase: PalletCfValidatorDelegationDelegationAmount;
-      };
+      value: { operator: AccountId32; increase: PalletCfValidatorDelegationDelegationAmount };
     }
-  | {
-      type: 'Undelegate';
-      value: { decrease: PalletCfValidatorDelegationDelegationAmount };
-    }
+  | { type: 'Undelegate'; value: { decrease: PalletCfValidatorDelegationDelegationAmount } }
   | {
       type: 'Redeem';
       value: {
@@ -14497,19 +12935,11 @@ export type PalletCfAccountRolesEvent =
   | { name: 'VanityNameSet'; data: { accountId: AccountId32; name: Bytes } }
   | {
       name: 'SubAccountCreated';
-      data: {
-        accountId: AccountId32;
-        subAccountId: AccountId32;
-        subAccountIndex: number;
-      };
+      data: { accountId: AccountId32; subAccountId: AccountId32; subAccountIndex: number };
     }
   | {
       name: 'SubAccountCallExecuted';
-      data: {
-        accountId: AccountId32;
-        subAccountId: AccountId32;
-        subAccountIndex: number;
-      };
+      data: { accountId: AccountId32; subAccountId: AccountId32; subAccountIndex: number };
     };
 
 /**
@@ -14520,10 +12950,7 @@ export type PalletTransactionPaymentEvent =
    * A transaction fee `actual_fee`, of which `tip` was added to the minimum inclusion fee,
    * has been paid by `who`.
    **/
-  {
-    name: 'TransactionFeePaid';
-    data: { who: AccountId32; actualFee: bigint; tip: bigint };
-  };
+  { name: 'TransactionFeePaid'; data: { who: AccountId32; actualFee: bigint; tip: bigint } };
 
 /**
  * The `Event` enum of this pallet
@@ -14580,10 +13007,7 @@ export type PalletCfValidatorEvent =
   /**
    * Rotation phase updated.
    **/
-  | {
-      name: 'RotationPhaseUpdated';
-      data: { newPhase: PalletCfValidatorRotationPhase };
-    }
+  | { name: 'RotationPhaseUpdated'; data: { newPhase: PalletCfValidatorRotationPhase } }
   /**
    * The CFE version has been updated.
    **/
@@ -14602,10 +13026,7 @@ export type PalletCfValidatorEvent =
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfValidatorPalletConfigUpdate };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfValidatorPalletConfigUpdate } }
   /**
    * An account has stopped bidding and will no longer take part in auctions.
    **/
@@ -14622,31 +13043,19 @@ export type PalletCfValidatorEvent =
   /**
    * A delegator has been blocked from delegating to an operator.
    **/
-  | {
-      name: 'DelegatorBlocked';
-      data: { delegator: AccountId32; operator: AccountId32 };
-    }
+  | { name: 'DelegatorBlocked'; data: { delegator: AccountId32; operator: AccountId32 } }
   /**
    * A delegator has been allowed to delegate to an operator.
    **/
-  | {
-      name: 'DelegatorAllowed';
-      data: { delegator: AccountId32; operator: AccountId32 };
-    }
+  | { name: 'DelegatorAllowed'; data: { delegator: AccountId32; operator: AccountId32 } }
   /**
    * A validator has been claimed by an operator.
    **/
-  | {
-      name: 'ValidatorClaimed';
-      data: { validator: AccountId32; operator: AccountId32 };
-    }
+  | { name: 'ValidatorClaimed'; data: { validator: AccountId32; operator: AccountId32 } }
   /**
    * A validator has accepted the claim of an operator.
    **/
-  | {
-      name: 'OperatorAcceptedByValidator';
-      data: { validator: AccountId32; operator: AccountId32 };
-    }
+  | { name: 'OperatorAcceptedByValidator'; data: { validator: AccountId32; operator: AccountId32 } }
   /**
    * A validator has been removed from an operator's managed pool.
    **/
@@ -14659,42 +13068,27 @@ export type PalletCfValidatorEvent =
    **/
   | {
       name: 'OperatorSettingsUpdated';
-      data: {
-        operator: AccountId32;
-        settings: PalletCfValidatorDelegationOperatorSettings;
-      };
+      data: { operator: AccountId32; settings: PalletCfValidatorDelegationOperatorSettings };
     }
   /**
    * An account has undelegated from an operator.
    **/
-  | {
-      name: 'Undelegated';
-      data: { delegator: AccountId32; operator: AccountId32; maxBid: bigint };
-    }
+  | { name: 'Undelegated'; data: { delegator: AccountId32; operator: AccountId32; maxBid: bigint } }
   /**
    * An account has delegated to an operator.
    **/
-  | {
-      name: 'Delegated';
-      data: { delegator: AccountId32; operator: AccountId32; maxBid: bigint };
-    }
+  | { name: 'Delegated'; data: { delegator: AccountId32; operator: AccountId32; maxBid: bigint } }
   /**
    * The undelegation process of an delegator has been finalized.
    **/
-  | {
-      name: 'UnDelegationFinalized';
-      data: { delegator: AccountId32; epoch: number };
-    }
+  | { name: 'UnDelegationFinalized'; data: { delegator: AccountId32; epoch: number } }
   /**
    * The maximum bit of an delegator was updated. If the value is None it means that the
    * max_bid has been removed entirly.
    **/
   | {
       name: 'MaxBidUpdated';
-      data: {
-        delegator: AccountId32;
-        change: PalletCfValidatorDelegationChange;
-      };
+      data: { delegator: AccountId32; change: PalletCfValidatorDelegationChange };
     }
   /**
    * A validator reported that a witnessing task crashed and was restarted.
@@ -14753,10 +13147,7 @@ export type PalletGrandpaEvent =
   /**
    * New authority set has been applied.
    **/
-  | {
-      name: 'NewAuthorities';
-      data: { authoritySet: Array<[SpConsensusGrandpaAppPublic, bigint]> };
-    }
+  | { name: 'NewAuthorities'; data: { authoritySet: Array<[SpConsensusGrandpaAppPublic, bigint]> } }
   /**
    * Current authority set has been paused.
    **/
@@ -14770,18 +13161,12 @@ export type PalletGrandpaEvent =
    **/
   | {
       name: 'GrandpaVoteDelegated';
-      data: {
-        delegator: SpConsensusGrandpaAppPublic;
-        delegate: SpConsensusGrandpaAppPublic;
-      };
+      data: { delegator: SpConsensusGrandpaAppPublic; delegate: SpConsensusGrandpaAppPublic };
     }
   /**
    * A GRANDPA vote delegation was removed.
    **/
-  | {
-      name: 'GrandpaVoteDelegationRemoved';
-      data: { delegator: SpConsensusGrandpaAppPublic };
-    };
+  | { name: 'GrandpaVoteDelegationRemoved'; data: { delegator: SpConsensusGrandpaAppPublic } };
 
 /**
  * The `Event` enum of this pallet
@@ -14822,17 +13207,11 @@ export type PalletCfGovernanceEvent =
   /**
    * Failed GovKey call
    **/
-  | {
-      name: 'GovKeyCallExecutionFailed';
-      data: { callHash: FixedBytes<32>; error: DispatchError };
-    }
+  | { name: 'GovKeyCallExecutionFailed'; data: { callHash: FixedBytes<32>; error: DispatchError } }
   /**
    * New governance council set
    **/
-  | {
-      name: 'NewGovernanceCouncil';
-      data: { newCouncil: PalletCfGovernanceGovernanceCouncil };
-    };
+  | { name: 'NewGovernanceCouncil'; data: { newCouncil: PalletCfGovernanceGovernanceCouncil } };
 
 export type PalletCfGovernanceGovernanceCouncil = {
   members: Array<AccountId32>;
@@ -14846,38 +13225,23 @@ export type PalletCfTokenholderGovernanceEvent =
   /**
    * A proposal has been submitted.
    **/
-  | {
-      name: 'ProposalSubmitted';
-      data: { proposal: PalletCfTokenholderGovernanceProposal };
-    }
+  | { name: 'ProposalSubmitted'; data: { proposal: PalletCfTokenholderGovernanceProposal } }
   /**
    * A proposal has passed.
    **/
-  | {
-      name: 'ProposalPassed';
-      data: { proposal: PalletCfTokenholderGovernanceProposal };
-    }
+  | { name: 'ProposalPassed'; data: { proposal: PalletCfTokenholderGovernanceProposal } }
   /**
    * A proposal was rejected.
    **/
-  | {
-      name: 'ProposalRejected';
-      data: { proposal: PalletCfTokenholderGovernanceProposal };
-    }
+  | { name: 'ProposalRejected'; data: { proposal: PalletCfTokenholderGovernanceProposal } }
   /**
    * A proposal was enacted.
    **/
-  | {
-      name: 'ProposalEnacted';
-      data: { proposal: PalletCfTokenholderGovernanceProposal };
-    }
+  | { name: 'ProposalEnacted'; data: { proposal: PalletCfTokenholderGovernanceProposal } }
   /**
    * Update of GOV key has failed.
    **/
-  | {
-      name: 'GovKeyUpdatedHasFailed';
-      data: { chain: CfPrimitivesChainsForeignChain; key: Bytes };
-    }
+  | { name: 'GovKeyUpdatedHasFailed'; data: { chain: CfPrimitivesChainsForeignChain; key: Bytes } }
   /**
    * Update of GOV key was successful.
    **/
@@ -14904,17 +13268,11 @@ export type PalletCfReputationEvent =
   /**
    * The accrual rate for our reputation points has been updated.
    **/
-  | {
-      name: 'AccrualRateUpdated';
-      data: { reputationPoints: number; numberOfBlocks: number };
-    }
+  | { name: 'AccrualRateUpdated'; data: { reputationPoints: number; numberOfBlocks: number } }
   /**
    * The penalty for missing a heartbeat has been updated.
    **/
-  | {
-      name: 'MissedHeartbeatPenaltyUpdated';
-      data: { newReputationPenalty: number };
-    }
+  | { name: 'MissedHeartbeatPenaltyUpdated'; data: { newReputationPenalty: number } }
   /**
    * The penalty for some offence has been updated.
    **/
@@ -14947,10 +13305,7 @@ export type PalletCfChainTrackingEvent002 =
   /**
    * The tracked state of this chain has been updated.
    **/
-  | {
-      name: 'ChainStateUpdated';
-      data: { newChainState: CfChainsChainStatePolkadot };
-    }
+  | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStatePolkadot } }
   /**
    * The fee multiplier for this chain has been updated.
    **/
@@ -14963,10 +13318,7 @@ export type PalletCfChainTrackingEvent003 =
   /**
    * The tracked state of this chain has been updated.
    **/
-  | {
-      name: 'ChainStateUpdated';
-      data: { newChainState: CfChainsChainStateBitcoin };
-    }
+  | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateBitcoin } }
   /**
    * The fee multiplier for this chain has been updated.
    **/
@@ -14988,14 +13340,8 @@ export type PalletCfVaultsEvent =
    * The new key has been generated, we must activate the new key on the external
    * chain via governance.
    **/
-  | {
-      name: 'AwaitingGovernanceActivation';
-      data: { newPublicKey: CfChainsEvmAggKey };
-    }
-  | {
-      name: 'ActivationTxFailedAwaitingGovernance';
-      data: { newPublicKey: CfChainsEvmAggKey };
-    }
+  | { name: 'AwaitingGovernanceActivation'; data: { newPublicKey: CfChainsEvmAggKey } }
+  | { name: 'ActivationTxFailedAwaitingGovernance'; data: { newPublicKey: CfChainsEvmAggKey } }
   | { name: 'ChainInitialized' };
 
 /**
@@ -15014,10 +13360,7 @@ export type PalletCfVaultsEvent002 =
    * The new key has been generated, we must activate the new key on the external
    * chain via governance.
    **/
-  | {
-      name: 'AwaitingGovernanceActivation';
-      data: { newPublicKey: CfChainsDotPolkadotAccountId };
-    }
+  | { name: 'AwaitingGovernanceActivation'; data: { newPublicKey: CfChainsDotPolkadotAccountId } }
   | {
       name: 'ActivationTxFailedAwaitingGovernance';
       data: { newPublicKey: CfChainsDotPolkadotAccountId };
@@ -15040,14 +13383,8 @@ export type PalletCfVaultsEvent003 =
    * The new key has been generated, we must activate the new key on the external
    * chain via governance.
    **/
-  | {
-      name: 'AwaitingGovernanceActivation';
-      data: { newPublicKey: CfChainsBtcAggKey };
-    }
-  | {
-      name: 'ActivationTxFailedAwaitingGovernance';
-      data: { newPublicKey: CfChainsBtcAggKey };
-    }
+  | { name: 'AwaitingGovernanceActivation'; data: { newPublicKey: CfChainsBtcAggKey } }
+  | { name: 'ActivationTxFailedAwaitingGovernance'; data: { newPublicKey: CfChainsBtcAggKey } }
   | { name: 'ChainInitialized' };
 
 /**
@@ -15067,29 +13404,18 @@ export type PalletCfThresholdSignatureEvent =
     }
   | {
       name: 'ThresholdSignatureFailed';
-      data: {
-        requestId: number;
-        ceremonyId: bigint;
-        offenders: Array<AccountId32>;
-      };
+      data: { requestId: number; ceremonyId: bigint; offenders: Array<AccountId32> };
     }
   /**
    * The threshold signature posted back to the chain was verified.
    **/
-  | {
-      name: 'ThresholdSignatureSuccess';
-      data: { requestId: number; ceremonyId: bigint };
-    }
+  | { name: 'ThresholdSignatureSuccess'; data: { requestId: number; ceremonyId: bigint } }
   /**
    * We have had a signature success and we have dispatched the associated callback
    **/
   | {
       name: 'ThresholdDispatchComplete';
-      data: {
-        requestId: number;
-        ceremonyId: bigint;
-        result: Result<[], DispatchError>;
-      };
+      data: { requestId: number; ceremonyId: bigint; result: Result<[], DispatchError> };
     }
   | { name: 'RetryRequested'; data: { requestId: number; ceremonyId: bigint } }
   /**
@@ -15103,10 +13429,7 @@ export type PalletCfThresholdSignatureEvent =
   /**
    * Not enough signers were available to reach threshold.
    **/
-  | {
-      name: 'SignersUnavailable';
-      data: { requestId: number; attemptCount: number };
-    }
+  | { name: 'SignersUnavailable'; data: { requestId: number; attemptCount: number } }
   /**
    * Request a key generation
    **/
@@ -15174,18 +13497,12 @@ export type PalletCfThresholdSignatureEvent =
    * The new key was successfully used to sign.
    **/
   | { name: 'KeygenVerificationSuccess'; data: { aggKey: CfChainsEvmAggKey } }
-  | {
-      name: 'KeyHandoverVerificationSuccess';
-      data: { aggKey: CfChainsEvmAggKey };
-    }
+  | { name: 'KeyHandoverVerificationSuccess'; data: { aggKey: CfChainsEvmAggKey } }
   /**
    * Verification of the new key has failed.
    **/
   | { name: 'KeygenVerificationFailure'; data: { keygenCeremonyId: bigint } }
-  | {
-      name: 'KeyHandoverVerificationFailure';
-      data: { handoverCeremonyId: bigint };
-    }
+  | { name: 'KeyHandoverVerificationFailure'; data: { handoverCeremonyId: bigint } }
   /**
    * Keygen has failed \[ceremony_id\]
    **/
@@ -15206,10 +13523,7 @@ export type PalletCfThresholdSignatureEvent =
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfThresholdSignaturePalletConfigUpdate };
-    };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfThresholdSignaturePalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -15228,29 +13542,18 @@ export type PalletCfThresholdSignatureEvent002 =
     }
   | {
       name: 'ThresholdSignatureFailed';
-      data: {
-        requestId: number;
-        ceremonyId: bigint;
-        offenders: Array<AccountId32>;
-      };
+      data: { requestId: number; ceremonyId: bigint; offenders: Array<AccountId32> };
     }
   /**
    * The threshold signature posted back to the chain was verified.
    **/
-  | {
-      name: 'ThresholdSignatureSuccess';
-      data: { requestId: number; ceremonyId: bigint };
-    }
+  | { name: 'ThresholdSignatureSuccess'; data: { requestId: number; ceremonyId: bigint } }
   /**
    * We have had a signature success and we have dispatched the associated callback
    **/
   | {
       name: 'ThresholdDispatchComplete';
-      data: {
-        requestId: number;
-        ceremonyId: bigint;
-        result: Result<[], DispatchError>;
-      };
+      data: { requestId: number; ceremonyId: bigint; result: Result<[], DispatchError> };
     }
   | { name: 'RetryRequested'; data: { requestId: number; ceremonyId: bigint } }
   /**
@@ -15264,10 +13567,7 @@ export type PalletCfThresholdSignatureEvent002 =
   /**
    * Not enough signers were available to reach threshold.
    **/
-  | {
-      name: 'SignersUnavailable';
-      data: { requestId: number; attemptCount: number };
-    }
+  | { name: 'SignersUnavailable'; data: { requestId: number; attemptCount: number } }
   /**
    * Request a key generation
    **/
@@ -15334,22 +13634,13 @@ export type PalletCfThresholdSignatureEvent002 =
   /**
    * The new key was successfully used to sign.
    **/
-  | {
-      name: 'KeygenVerificationSuccess';
-      data: { aggKey: CfChainsDotPolkadotAccountId };
-    }
-  | {
-      name: 'KeyHandoverVerificationSuccess';
-      data: { aggKey: CfChainsDotPolkadotAccountId };
-    }
+  | { name: 'KeygenVerificationSuccess'; data: { aggKey: CfChainsDotPolkadotAccountId } }
+  | { name: 'KeyHandoverVerificationSuccess'; data: { aggKey: CfChainsDotPolkadotAccountId } }
   /**
    * Verification of the new key has failed.
    **/
   | { name: 'KeygenVerificationFailure'; data: { keygenCeremonyId: bigint } }
-  | {
-      name: 'KeyHandoverVerificationFailure';
-      data: { handoverCeremonyId: bigint };
-    }
+  | { name: 'KeyHandoverVerificationFailure'; data: { handoverCeremonyId: bigint } }
   /**
    * Keygen has failed \[ceremony_id\]
    **/
@@ -15370,10 +13661,7 @@ export type PalletCfThresholdSignatureEvent002 =
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfThresholdSignaturePalletConfigUpdate };
-    };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfThresholdSignaturePalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -15392,29 +13680,18 @@ export type PalletCfThresholdSignatureEvent003 =
     }
   | {
       name: 'ThresholdSignatureFailed';
-      data: {
-        requestId: number;
-        ceremonyId: bigint;
-        offenders: Array<AccountId32>;
-      };
+      data: { requestId: number; ceremonyId: bigint; offenders: Array<AccountId32> };
     }
   /**
    * The threshold signature posted back to the chain was verified.
    **/
-  | {
-      name: 'ThresholdSignatureSuccess';
-      data: { requestId: number; ceremonyId: bigint };
-    }
+  | { name: 'ThresholdSignatureSuccess'; data: { requestId: number; ceremonyId: bigint } }
   /**
    * We have had a signature success and we have dispatched the associated callback
    **/
   | {
       name: 'ThresholdDispatchComplete';
-      data: {
-        requestId: number;
-        ceremonyId: bigint;
-        result: Result<[], DispatchError>;
-      };
+      data: { requestId: number; ceremonyId: bigint; result: Result<[], DispatchError> };
     }
   | { name: 'RetryRequested'; data: { requestId: number; ceremonyId: bigint } }
   /**
@@ -15428,10 +13705,7 @@ export type PalletCfThresholdSignatureEvent003 =
   /**
    * Not enough signers were available to reach threshold.
    **/
-  | {
-      name: 'SignersUnavailable';
-      data: { requestId: number; attemptCount: number };
-    }
+  | { name: 'SignersUnavailable'; data: { requestId: number; attemptCount: number } }
   /**
    * Request a key generation
    **/
@@ -15499,18 +13773,12 @@ export type PalletCfThresholdSignatureEvent003 =
    * The new key was successfully used to sign.
    **/
   | { name: 'KeygenVerificationSuccess'; data: { aggKey: CfChainsBtcAggKey } }
-  | {
-      name: 'KeyHandoverVerificationSuccess';
-      data: { aggKey: CfChainsBtcAggKey };
-    }
+  | { name: 'KeyHandoverVerificationSuccess'; data: { aggKey: CfChainsBtcAggKey } }
   /**
    * Verification of the new key has failed.
    **/
   | { name: 'KeygenVerificationFailure'; data: { keygenCeremonyId: bigint } }
-  | {
-      name: 'KeyHandoverVerificationFailure';
-      data: { handoverCeremonyId: bigint };
-    }
+  | { name: 'KeyHandoverVerificationFailure'; data: { handoverCeremonyId: bigint } }
   /**
    * Keygen has failed \[ceremony_id\]
    **/
@@ -15531,10 +13799,7 @@ export type PalletCfThresholdSignatureEvent003 =
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfThresholdSignaturePalletConfigUpdate };
-    };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfThresholdSignaturePalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -15555,10 +13820,7 @@ export type PalletCfBroadcastEvent =
   /**
    * A failed broadcast has been scheduled for retry.
    **/
-  | {
-      name: 'BroadcastRetryScheduled';
-      data: { broadcastId: number; retryBlock: number };
-    }
+  | { name: 'BroadcastRetryScheduled'; data: { broadcastId: number; retryBlock: number } }
   /**
    * A broadcast has timed out.
    **/
@@ -15585,10 +13847,7 @@ export type PalletCfBroadcastEvent =
   /**
    * The fee paid for broadcasting a transaction has been recorded.
    **/
-  | {
-      name: 'TransactionFeeDeficitRecorded';
-      data: { beneficiary: H160; amount: bigint };
-    }
+  | { name: 'TransactionFeeDeficitRecorded'; data: { beneficiary: H160; amount: bigint } }
   /**
    * The fee paid for broadcasting a transaction has been refused.
    **/
@@ -15603,20 +13862,13 @@ export type PalletCfBroadcastEvent =
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * A signature/broadcast with a historical (expired) key was requested via governance.
    **/
   | {
       name: 'HistoricalBroadcastRequested';
-      data: {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      };
+      data: { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number };
     };
 
 export type CfChainsEvmTransaction = {
@@ -15648,10 +13900,7 @@ export type PalletCfBroadcastEvent002 =
   /**
    * A failed broadcast has been scheduled for retry.
    **/
-  | {
-      name: 'BroadcastRetryScheduled';
-      data: { broadcastId: number; retryBlock: number };
-    }
+  | { name: 'BroadcastRetryScheduled'; data: { broadcastId: number; retryBlock: number } }
   /**
    * A broadcast has timed out.
    **/
@@ -15685,37 +13934,24 @@ export type PalletCfBroadcastEvent002 =
   /**
    * The fee paid for broadcasting a transaction has been refused.
    **/
-  | {
-      name: 'TransactionFeeDeficitRefused';
-      data: { beneficiary: CfChainsDotPolkadotAccountId };
-    }
+  | { name: 'TransactionFeeDeficitRefused'; data: { beneficiary: CfChainsDotPolkadotAccountId } }
   /**
    * A Call has been re-threshold-signed, and its signature data is inserted into storage.
    **/
   | {
       name: 'CallResigned';
-      data: {
-        broadcastId: number;
-        transactionPayload: CfChainsDotPolkadotTransactionData;
-      };
+      data: { broadcastId: number; transactionPayload: CfChainsDotPolkadotTransactionData };
     }
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * A signature/broadcast with a historical (expired) key was requested via governance.
    **/
   | {
       name: 'HistoricalBroadcastRequested';
-      data: {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      };
+      data: { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number };
     };
 
 export type CfChainsDotPolkadotTransactionData = { encodedExtrinsic: Bytes };
@@ -15739,10 +13975,7 @@ export type PalletCfBroadcastEvent003 =
   /**
    * A failed broadcast has been scheduled for retry.
    **/
-  | {
-      name: 'BroadcastRetryScheduled';
-      data: { broadcastId: number; retryBlock: number };
-    }
+  | { name: 'BroadcastRetryScheduled'; data: { broadcastId: number; retryBlock: number } }
   /**
    * A broadcast has timed out.
    **/
@@ -15756,11 +13989,7 @@ export type PalletCfBroadcastEvent003 =
    **/
   | {
       name: 'BroadcastSuccess';
-      data: {
-        broadcastId: number;
-        transactionOutId: H256;
-        transactionRef: H256;
-      };
+      data: { broadcastId: number; transactionOutId: H256; transactionRef: H256 };
     }
   /**
    * A broadcast's threshold signature is invalid, we will attempt to re-sign it.
@@ -15776,37 +14005,24 @@ export type PalletCfBroadcastEvent003 =
   /**
    * The fee paid for broadcasting a transaction has been refused.
    **/
-  | {
-      name: 'TransactionFeeDeficitRefused';
-      data: { beneficiary: CfChainsBtcScriptPubkey };
-    }
+  | { name: 'TransactionFeeDeficitRefused'; data: { beneficiary: CfChainsBtcScriptPubkey } }
   /**
    * A Call has been re-threshold-signed, and its signature data is inserted into storage.
    **/
   | {
       name: 'CallResigned';
-      data: {
-        broadcastId: number;
-        transactionPayload: CfChainsBtcBitcoinTransactionData;
-      };
+      data: { broadcastId: number; transactionPayload: CfChainsBtcBitcoinTransactionData };
     }
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * A signature/broadcast with a historical (expired) key was requested via governance.
    **/
   | {
       name: 'HistoricalBroadcastRequested';
-      data: {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      };
+      data: { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number };
     };
 
 export type CfChainsBtcBitcoinTransactionData = { encodedTransaction: Bytes };
@@ -15981,14 +14197,8 @@ export type PalletCfSwappingEvent =
         reason: DispatchError;
       };
     }
-  | {
-      name: 'PrivateBrokerChannelOpened';
-      data: { brokerId: AccountId32; channelId: bigint };
-    }
-  | {
-      name: 'PrivateBrokerChannelClosed';
-      data: { brokerId: AccountId32; channelId: bigint };
-    }
+  | { name: 'PrivateBrokerChannelOpened'; data: { brokerId: AccountId32; channelId: bigint } }
+  | { name: 'PrivateBrokerChannelClosed'; data: { brokerId: AccountId32; channelId: bigint } }
   | {
       name: 'AffiliateRegistration';
       data: {
@@ -16017,20 +14227,11 @@ export type PalletCfSwappingEvent =
         refundFee: bigint;
       };
     }
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfSwappingPalletConfigUpdate };
-    }
-  | {
-      name: 'VaultSwapMinimumBrokerFeeSet';
-      data: { brokerId: AccountId32; minimumFeeBps: number };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfSwappingPalletConfigUpdate } }
+  | { name: 'VaultSwapMinimumBrokerFeeSet'; data: { brokerId: AccountId32; minimumFeeBps: number } }
   | {
       name: 'SwapAborted';
-      data: {
-        swapId: CfPrimitivesSwapId;
-        reason: PalletCfSwappingSwapFailureReason;
-      };
+      data: { swapId: CfPrimitivesSwapId; reason: PalletCfSwappingSwapFailureReason };
     }
   | {
       name: 'AccountCreationDepositAddressReady';
@@ -16049,10 +14250,7 @@ export type PalletCfSwappingEvent =
   /**
    * A broker has been bound to an address.
    **/
-  | {
-      name: 'BoundBrokerWithdrawalAddress';
-      data: { broker: AccountId32; address: H160 };
-    }
+  | { name: 'BoundBrokerWithdrawalAddress'; data: { broker: AccountId32; address: H160 } }
   /**
    * An affiliate has been deregistered.
    **/
@@ -16077,10 +14275,7 @@ export type CfChainsSwapOrigin =
     }
   | {
       type: 'Vault';
-      value: {
-        txId: CfChainsTransactionInIdForAnyChain;
-        brokerId?: AccountId32 | undefined;
-      };
+      value: { txId: CfChainsTransactionInIdForAnyChain; brokerId?: AccountId32 | undefined };
     }
   | { type: 'Internal' }
   | { type: 'OnChainAccount'; value: AccountId32 };
@@ -16095,10 +14290,7 @@ export type CfChainsTransactionInIdForAnyChain =
 export type CfTraitsSwappingSwapRequestTypeGeneric =
   | { type: 'NetworkFee' }
   | { type: 'IngressEgressFee' }
-  | {
-      type: 'Regular';
-      value: { outputAction: CfTraitsSwappingSwapOutputActionGeneric };
-    }
+  | { type: 'Regular'; value: { outputAction: CfTraitsSwappingSwapOutputActionGeneric } }
   | {
       type: 'RegularNoNetworkFee';
       value: { outputAction: CfTraitsSwappingSwapOutputActionGeneric };
@@ -16113,10 +14305,7 @@ export type CfTraitsSwappingSwapOutputActionGeneric =
       };
     }
   | { type: 'CreditOnChain'; value: { accountId: AccountId32 } }
-  | {
-      type: 'CreditLendingPool';
-      value: { swapType: CfTraitsSwappingLendingSwapType };
-    }
+  | { type: 'CreditLendingPool'; value: { swapType: CfTraitsSwappingLendingSwapType } }
   | {
       type: 'CreditFlipAndTransferToGateway';
       value: { accountId: AccountId32; flipToSubtractFromSwapOutput: bigint };
@@ -16130,19 +14319,13 @@ export type CfChainsCcmDepositMetadataEncodedAddress = {
 
 export type CfChainsCcmCheckerDecodedCcmAdditionalData =
   | { type: 'NotRequired' }
-  | {
-      type: 'Solana';
-      value: CfChainsCcmCheckerVersionedSolanaCcmAdditionalData;
-    };
+  | { type: 'Solana'; value: CfChainsCcmCheckerVersionedSolanaCcmAdditionalData };
 
 export type CfChainsCcmCheckerVersionedSolanaCcmAdditionalData =
   | { type: 'V0'; value: CfChainsSolSolTxCoreCcmAccounts }
   | {
       type: 'V1';
-      value: {
-        ccmAccounts: CfChainsSolSolTxCoreCcmAccounts;
-        alts: Array<SolPrimAddress>;
-      };
+      value: { ccmAccounts: CfChainsSolSolTxCoreCcmAccounts; alts: Array<SolPrimAddress> };
     };
 
 export type CfChainsSolSolTxCoreCcmAccounts = {
@@ -16151,10 +14334,7 @@ export type CfChainsSolSolTxCoreCcmAccounts = {
   fallbackAddress: SolPrimPubkey;
 };
 
-export type CfChainsSolSolTxCoreCcmAddress = {
-  pubkey: SolPrimPubkey;
-  isWritable: boolean;
-};
+export type CfChainsSolSolTxCoreCcmAddress = { pubkey: SolPrimPubkey; isWritable: boolean };
 
 export type CfChainsCcmChannelMetadataDecodedCcmAdditionalData = {
   message: Bytes;
@@ -16303,10 +14483,7 @@ export type PalletCfIngressEgressEvent =
     }
   | {
       name: 'CcmBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      };
+      data: { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] };
     }
   | {
       name: 'CcmEgressInvalid';
@@ -16321,10 +14498,7 @@ export type PalletCfIngressEgressEvent =
     }
   | {
       name: 'BatchBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      };
+      data: { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> };
     }
   | {
       name: 'DepositFailed';
@@ -16361,10 +14535,7 @@ export type PalletCfIngressEgressEvent =
    **/
   | { name: 'FailedForeignChainCallExpired'; data: { broadcastId: number } }
   | { name: 'UtxoConsolidation'; data: { broadcastId: number } }
-  | {
-      name: 'FailedToBuildAllBatchCall';
-      data: { error: CfChainsAllBatchError };
-    }
+  | { name: 'FailedToBuildAllBatchCall'; data: { error: CfChainsAllBatchError } }
   | { name: 'ChannelOpeningFeePaid'; data: { fee: bigint } }
   | {
       name: 'DepositBoosted';
@@ -16405,45 +14576,29 @@ export type PalletCfIngressEgressEvent =
     }
   | {
       name: 'BoostedDepositLost';
-      data: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      data: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | {
       name: 'TransactionRejectionRequestReceived';
       data: { accountId: AccountId32; txId: H256; expiresAt: number };
     }
-  | {
-      name: 'TransactionRejectionRequestExpired';
-      data: { accountId: AccountId32; txId: H256 };
-    }
+  | { name: 'TransactionRejectionRequestExpired'; data: { accountId: AccountId32; txId: H256 } }
   | {
       name: 'TransactionRejectedByBroker';
       data: { broadcastId: number; txId: CfChainsEvmDepositDetails };
     }
   | {
       name: 'TransactionRejectionFailed';
-      data: {
-        txId: CfChainsEvmDepositDetails;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      };
+      data: { txId: CfChainsEvmDepositDetails; reason: PalletCfIngressEgressRefundFailureReason };
     }
   | { name: 'UnknownBroker'; data: { brokerId: AccountId32 } }
   | {
       name: 'UnknownAffiliate';
-      data: {
-        brokerId: AccountId32;
-        shortAffiliateId: CfPrimitivesAffiliateShortId;
-      };
+      data: { brokerId: AccountId32; shortAffiliateId: CfPrimitivesAffiliateShortId };
     }
   | {
       name: 'InvalidCcmRefunded';
-      data: {
-        asset: CfPrimitivesChainsAssetsEthAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      data: { asset: CfPrimitivesChainsAssetsEthAsset; amount: bigint; destinationAddress: H160 };
     }
   | {
       name: 'PalletConfigUpdated';
@@ -16490,10 +14645,7 @@ export type CfChainsDepositOriginType = 'DepositChannel' | 'Vault';
 
 export type CfChainsExecutexSwapAndCallError =
   | { type: 'Unsupported' }
-  | {
-      type: 'FailedToBuildCcmForSolana';
-      value: CfChainsSolApiSolanaTransactionBuildingError;
-    }
+  | { type: 'FailedToBuildCcmForSolana'; value: CfChainsSolApiSolanaTransactionBuildingError }
   | { type: 'DispatchError'; value: DispatchError }
   | { type: 'NoVault' }
   | { type: 'AuxDataNotReady' }
@@ -16556,10 +14708,7 @@ export type CfChainsAllBatchError =
   | { type: 'VaultAccountNotSet' }
   | { type: 'AggKeyNotSet' }
   | { type: 'UtxoSelectionFailed' }
-  | {
-      type: 'FailedToBuildSolanaTransaction';
-      value: CfChainsSolApiSolanaTransactionBuildingError;
-    }
+  | { type: 'FailedToBuildSolanaTransaction'; value: CfChainsSolApiSolanaTransactionBuildingError }
   | { type: 'DispatchError'; value: DispatchError };
 
 export type CfTraitsLendingBoostSource = 'LendingPool' | 'BoostPool';
@@ -16568,10 +14717,7 @@ export type PalletCfIngressEgressRefundFailureReason =
   | { type: 'BelowDustLimit' }
   | { type: 'InvalidRefundAddress' }
   | { type: 'FailedToBuildRejectCall'; value: CfChainsRejectError }
-  | {
-      type: 'FailedToBuildExecutexSwapAndCall';
-      value: CfChainsExecutexSwapAndCallError;
-    }
+  | { type: 'FailedToBuildExecutexSwapAndCall'; value: CfChainsExecutexSwapAndCallError }
   | { type: 'SolanaCcmWithAltsNotSupported' };
 
 export type CfChainsRejectError =
@@ -16605,10 +14751,7 @@ export type PalletCfIngressEgressEvent002 =
     }
   | {
       name: 'CcmBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      };
+      data: { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] };
     }
   | {
       name: 'CcmEgressInvalid';
@@ -16623,10 +14766,7 @@ export type PalletCfIngressEgressEvent002 =
     }
   | {
       name: 'BatchBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      };
+      data: { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> };
     }
   | {
       name: 'DepositFailed';
@@ -16663,10 +14803,7 @@ export type PalletCfIngressEgressEvent002 =
    **/
   | { name: 'FailedForeignChainCallExpired'; data: { broadcastId: number } }
   | { name: 'UtxoConsolidation'; data: { broadcastId: number } }
-  | {
-      name: 'FailedToBuildAllBatchCall';
-      data: { error: CfChainsAllBatchError };
-    }
+  | { name: 'FailedToBuildAllBatchCall'; data: { error: CfChainsAllBatchError } }
   | { name: 'ChannelOpeningFeePaid'; data: { fee: bigint } }
   | {
       name: 'DepositBoosted';
@@ -16707,27 +14844,17 @@ export type PalletCfIngressEgressEvent002 =
     }
   | {
       name: 'BoostedDepositLost';
-      data: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      data: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | {
       name: 'TransactionRejectionRequestReceived';
-      data: {
-        accountId: AccountId32;
-        txId: CfPrimitivesTxId;
-        expiresAt: number;
-      };
+      data: { accountId: AccountId32; txId: CfPrimitivesTxId; expiresAt: number };
     }
   | {
       name: 'TransactionRejectionRequestExpired';
       data: { accountId: AccountId32; txId: CfPrimitivesTxId };
     }
-  | {
-      name: 'TransactionRejectedByBroker';
-      data: { broadcastId: number; txId: number };
-    }
+  | { name: 'TransactionRejectedByBroker'; data: { broadcastId: number; txId: number } }
   | {
       name: 'TransactionRejectionFailed';
       data: { txId: number; reason: PalletCfIngressEgressRefundFailureReason };
@@ -16735,10 +14862,7 @@ export type PalletCfIngressEgressEvent002 =
   | { name: 'UnknownBroker'; data: { brokerId: AccountId32 } }
   | {
       name: 'UnknownAffiliate';
-      data: {
-        brokerId: AccountId32;
-        shortAffiliateId: CfPrimitivesAffiliateShortId;
-      };
+      data: { brokerId: AccountId32; shortAffiliateId: CfPrimitivesAffiliateShortId };
     }
   | {
       name: 'InvalidCcmRefunded';
@@ -16754,10 +14878,7 @@ export type PalletCfIngressEgressEvent002 =
     }
   | {
       name: 'ChannelRejectionRequestReceived';
-      data: {
-        accountId: AccountId32;
-        depositAddress: CfChainsDotPolkadotAccountId;
-      };
+      data: { accountId: AccountId32; depositAddress: CfChainsDotPolkadotAccountId };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsPolkadot =
@@ -16801,10 +14922,7 @@ export type PalletCfIngressEgressEvent003 =
     }
   | {
       name: 'CcmBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      };
+      data: { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] };
     }
   | {
       name: 'CcmEgressInvalid';
@@ -16819,10 +14937,7 @@ export type PalletCfIngressEgressEvent003 =
     }
   | {
       name: 'BatchBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      };
+      data: { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> };
     }
   | {
       name: 'DepositFailed';
@@ -16859,10 +14974,7 @@ export type PalletCfIngressEgressEvent003 =
    **/
   | { name: 'FailedForeignChainCallExpired'; data: { broadcastId: number } }
   | { name: 'UtxoConsolidation'; data: { broadcastId: number } }
-  | {
-      name: 'FailedToBuildAllBatchCall';
-      data: { error: CfChainsAllBatchError };
-    }
+  | { name: 'FailedToBuildAllBatchCall'; data: { error: CfChainsAllBatchError } }
   | { name: 'ChannelOpeningFeePaid'; data: { fee: bigint } }
   | {
       name: 'DepositBoosted';
@@ -16903,37 +15015,22 @@ export type PalletCfIngressEgressEvent003 =
     }
   | {
       name: 'BoostedDepositLost';
-      data: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      data: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | {
       name: 'TransactionRejectionRequestReceived';
       data: { accountId: AccountId32; txId: H256; expiresAt: number };
     }
-  | {
-      name: 'TransactionRejectionRequestExpired';
-      data: { accountId: AccountId32; txId: H256 };
-    }
-  | {
-      name: 'TransactionRejectedByBroker';
-      data: { broadcastId: number; txId: CfChainsBtcUtxo };
-    }
+  | { name: 'TransactionRejectionRequestExpired'; data: { accountId: AccountId32; txId: H256 } }
+  | { name: 'TransactionRejectedByBroker'; data: { broadcastId: number; txId: CfChainsBtcUtxo } }
   | {
       name: 'TransactionRejectionFailed';
-      data: {
-        txId: CfChainsBtcUtxo;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      };
+      data: { txId: CfChainsBtcUtxo; reason: PalletCfIngressEgressRefundFailureReason };
     }
   | { name: 'UnknownBroker'; data: { brokerId: AccountId32 } }
   | {
       name: 'UnknownAffiliate';
-      data: {
-        brokerId: AccountId32;
-        shortAffiliateId: CfPrimitivesAffiliateShortId;
-      };
+      data: { brokerId: AccountId32; shortAffiliateId: CfPrimitivesAffiliateShortId };
     }
   | {
       name: 'InvalidCcmRefunded';
@@ -17061,10 +15158,7 @@ export type PalletCfPoolsEvent =
   /**
    * A scheduled update to a limit order succeeded.
    **/
-  | {
-      name: 'ScheduledLimitOrderUpdateDispatchSuccess';
-      data: { lp: AccountId32; orderId: bigint };
-    }
+  | { name: 'ScheduledLimitOrderUpdateDispatchSuccess'; data: { lp: AccountId32; orderId: bigint } }
   /**
    * A scheduled update to a limit order failed.
    **/
@@ -17090,19 +15184,13 @@ export type PalletCfPoolsEvent =
    * An order wasn't deleted (order not found)
    **/
   | { name: 'OrderDeletionFailed'; data: { order: PalletCfPoolsCloseOrder } }
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfPoolsPalletConfigUpdate };
-    };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfPoolsPalletConfigUpdate } };
 
 export type CfTraitsLiquidityIncreaseOrDecreaseRangeOrderChange =
   | { type: 'Increase'; value: PalletCfPoolsRangeOrderChange }
   | { type: 'Decrease'; value: PalletCfPoolsRangeOrderChange };
 
-export type PalletCfPoolsRangeOrderChange = {
-  liquidity: bigint;
-  amounts: CfAmmCommonPoolPairsMap;
-};
+export type PalletCfPoolsRangeOrderChange = { liquidity: bigint; amounts: CfAmmCommonPoolPairsMap };
 
 export type CfAmmCommonAssetPair = { assets: CfAmmCommonPoolPairsMapAsset };
 
@@ -17118,10 +15206,7 @@ export type PalletCfChainTrackingEvent004 =
   /**
    * The tracked state of this chain has been updated.
    **/
-  | {
-      name: 'ChainStateUpdated';
-      data: { newChainState: CfChainsChainStateArbitrum };
-    }
+  | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateArbitrum } }
   /**
    * The fee multiplier for this chain has been updated.
    **/
@@ -17152,10 +15237,7 @@ export type PalletCfIngressEgressEvent004 =
     }
   | {
       name: 'CcmBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      };
+      data: { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] };
     }
   | {
       name: 'CcmEgressInvalid';
@@ -17170,10 +15252,7 @@ export type PalletCfIngressEgressEvent004 =
     }
   | {
       name: 'BatchBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      };
+      data: { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> };
     }
   | {
       name: 'DepositFailed';
@@ -17210,10 +15289,7 @@ export type PalletCfIngressEgressEvent004 =
    **/
   | { name: 'FailedForeignChainCallExpired'; data: { broadcastId: number } }
   | { name: 'UtxoConsolidation'; data: { broadcastId: number } }
-  | {
-      name: 'FailedToBuildAllBatchCall';
-      data: { error: CfChainsAllBatchError };
-    }
+  | { name: 'FailedToBuildAllBatchCall'; data: { error: CfChainsAllBatchError } }
   | { name: 'ChannelOpeningFeePaid'; data: { fee: bigint } }
   | {
       name: 'DepositBoosted';
@@ -17254,45 +15330,29 @@ export type PalletCfIngressEgressEvent004 =
     }
   | {
       name: 'BoostedDepositLost';
-      data: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      data: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | {
       name: 'TransactionRejectionRequestReceived';
       data: { accountId: AccountId32; txId: H256; expiresAt: number };
     }
-  | {
-      name: 'TransactionRejectionRequestExpired';
-      data: { accountId: AccountId32; txId: H256 };
-    }
+  | { name: 'TransactionRejectionRequestExpired'; data: { accountId: AccountId32; txId: H256 } }
   | {
       name: 'TransactionRejectedByBroker';
       data: { broadcastId: number; txId: CfChainsEvmDepositDetails };
     }
   | {
       name: 'TransactionRejectionFailed';
-      data: {
-        txId: CfChainsEvmDepositDetails;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      };
+      data: { txId: CfChainsEvmDepositDetails; reason: PalletCfIngressEgressRefundFailureReason };
     }
   | { name: 'UnknownBroker'; data: { brokerId: AccountId32 } }
   | {
       name: 'UnknownAffiliate';
-      data: {
-        brokerId: AccountId32;
-        shortAffiliateId: CfPrimitivesAffiliateShortId;
-      };
+      data: { brokerId: AccountId32; shortAffiliateId: CfPrimitivesAffiliateShortId };
     }
   | {
       name: 'InvalidCcmRefunded';
-      data: {
-        asset: CfPrimitivesChainsAssetsArbAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      data: { asset: CfPrimitivesChainsAssetsArbAsset; amount: bigint; destinationAddress: H160 };
     }
   | {
       name: 'PalletConfigUpdated';
@@ -17335,14 +15395,8 @@ export type PalletCfVaultsEvent004 =
    * The new key has been generated, we must activate the new key on the external
    * chain via governance.
    **/
-  | {
-      name: 'AwaitingGovernanceActivation';
-      data: { newPublicKey: SolPrimAddress };
-    }
-  | {
-      name: 'ActivationTxFailedAwaitingGovernance';
-      data: { newPublicKey: SolPrimAddress };
-    }
+  | { name: 'AwaitingGovernanceActivation'; data: { newPublicKey: SolPrimAddress } }
+  | { name: 'ActivationTxFailedAwaitingGovernance'; data: { newPublicKey: SolPrimAddress } }
   | { name: 'ChainInitialized' };
 
 /**
@@ -17362,29 +15416,18 @@ export type PalletCfThresholdSignatureEvent004 =
     }
   | {
       name: 'ThresholdSignatureFailed';
-      data: {
-        requestId: number;
-        ceremonyId: bigint;
-        offenders: Array<AccountId32>;
-      };
+      data: { requestId: number; ceremonyId: bigint; offenders: Array<AccountId32> };
     }
   /**
    * The threshold signature posted back to the chain was verified.
    **/
-  | {
-      name: 'ThresholdSignatureSuccess';
-      data: { requestId: number; ceremonyId: bigint };
-    }
+  | { name: 'ThresholdSignatureSuccess'; data: { requestId: number; ceremonyId: bigint } }
   /**
    * We have had a signature success and we have dispatched the associated callback
    **/
   | {
       name: 'ThresholdDispatchComplete';
-      data: {
-        requestId: number;
-        ceremonyId: bigint;
-        result: Result<[], DispatchError>;
-      };
+      data: { requestId: number; ceremonyId: bigint; result: Result<[], DispatchError> };
     }
   | { name: 'RetryRequested'; data: { requestId: number; ceremonyId: bigint } }
   /**
@@ -17398,10 +15441,7 @@ export type PalletCfThresholdSignatureEvent004 =
   /**
    * Not enough signers were available to reach threshold.
    **/
-  | {
-      name: 'SignersUnavailable';
-      data: { requestId: number; attemptCount: number };
-    }
+  | { name: 'SignersUnavailable'; data: { requestId: number; attemptCount: number } }
   /**
    * Request a key generation
    **/
@@ -17474,10 +15514,7 @@ export type PalletCfThresholdSignatureEvent004 =
    * Verification of the new key has failed.
    **/
   | { name: 'KeygenVerificationFailure'; data: { keygenCeremonyId: bigint } }
-  | {
-      name: 'KeyHandoverVerificationFailure';
-      data: { handoverCeremonyId: bigint };
-    }
+  | { name: 'KeyHandoverVerificationFailure'; data: { handoverCeremonyId: bigint } }
   /**
    * Keygen has failed \[ceremony_id\]
    **/
@@ -17498,10 +15535,7 @@ export type PalletCfThresholdSignatureEvent004 =
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfThresholdSignaturePalletConfigUpdate };
-    };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfThresholdSignaturePalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -17522,10 +15556,7 @@ export type PalletCfBroadcastEvent004 =
   /**
    * A failed broadcast has been scheduled for retry.
    **/
-  | {
-      name: 'BroadcastRetryScheduled';
-      data: { broadcastId: number; retryBlock: number };
-    }
+  | { name: 'BroadcastRetryScheduled'; data: { broadcastId: number; retryBlock: number } }
   /**
    * A broadcast has timed out.
    **/
@@ -17552,44 +15583,28 @@ export type PalletCfBroadcastEvent004 =
   /**
    * The fee paid for broadcasting a transaction has been recorded.
    **/
-  | {
-      name: 'TransactionFeeDeficitRecorded';
-      data: { beneficiary: SolPrimAddress; amount: bigint };
-    }
+  | { name: 'TransactionFeeDeficitRecorded'; data: { beneficiary: SolPrimAddress; amount: bigint } }
   /**
    * The fee paid for broadcasting a transaction has been refused.
    **/
-  | {
-      name: 'TransactionFeeDeficitRefused';
-      data: { beneficiary: SolPrimAddress };
-    }
+  | { name: 'TransactionFeeDeficitRefused'; data: { beneficiary: SolPrimAddress } }
   /**
    * A Call has been re-threshold-signed, and its signature data is inserted into storage.
    **/
   | {
       name: 'CallResigned';
-      data: {
-        broadcastId: number;
-        transactionPayload: CfChainsSolSolanaTransactionData;
-      };
+      data: { broadcastId: number; transactionPayload: CfChainsSolSolanaTransactionData };
     }
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * A signature/broadcast with a historical (expired) key was requested via governance.
    **/
   | {
       name: 'HistoricalBroadcastRequested';
-      data: {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      };
+      data: { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number };
     };
 
 export type CfChainsSolSolanaTransactionData = {
@@ -17622,10 +15637,7 @@ export type PalletCfIngressEgressEvent005 =
     }
   | {
       name: 'CcmBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      };
+      data: { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] };
     }
   | {
       name: 'CcmEgressInvalid';
@@ -17640,10 +15652,7 @@ export type PalletCfIngressEgressEvent005 =
     }
   | {
       name: 'BatchBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      };
+      data: { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> };
     }
   | {
       name: 'DepositFailed';
@@ -17680,10 +15689,7 @@ export type PalletCfIngressEgressEvent005 =
    **/
   | { name: 'FailedForeignChainCallExpired'; data: { broadcastId: number } }
   | { name: 'UtxoConsolidation'; data: { broadcastId: number } }
-  | {
-      name: 'FailedToBuildAllBatchCall';
-      data: { error: CfChainsAllBatchError };
-    }
+  | { name: 'FailedToBuildAllBatchCall'; data: { error: CfChainsAllBatchError } }
   | { name: 'ChannelOpeningFeePaid'; data: { fee: bigint } }
   | {
       name: 'DepositBoosted';
@@ -17724,18 +15730,11 @@ export type PalletCfIngressEgressEvent005 =
     }
   | {
       name: 'BoostedDepositLost';
-      data: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      data: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | {
       name: 'TransactionRejectionRequestReceived';
-      data: {
-        accountId: AccountId32;
-        txId: [SolPrimAddress, bigint];
-        expiresAt: number;
-      };
+      data: { accountId: AccountId32; txId: [SolPrimAddress, bigint]; expiresAt: number };
     }
   | {
       name: 'TransactionRejectionRequestExpired';
@@ -17743,10 +15742,7 @@ export type PalletCfIngressEgressEvent005 =
     }
   | {
       name: 'TransactionRejectedByBroker';
-      data: {
-        broadcastId: number;
-        txId: CfChainsSolVaultSwapOrDepositChannelId;
-      };
+      data: { broadcastId: number; txId: CfChainsSolVaultSwapOrDepositChannelId };
     }
   | {
       name: 'TransactionRejectionFailed';
@@ -17758,10 +15754,7 @@ export type PalletCfIngressEgressEvent005 =
   | { name: 'UnknownBroker'; data: { brokerId: AccountId32 } }
   | {
       name: 'UnknownAffiliate';
-      data: {
-        brokerId: AccountId32;
-        shortAffiliateId: CfPrimitivesAffiliateShortId;
-      };
+      data: { brokerId: AccountId32; shortAffiliateId: CfPrimitivesAffiliateShortId };
     }
   | {
       name: 'InvalidCcmRefunded';
@@ -17771,10 +15764,7 @@ export type PalletCfIngressEgressEvent005 =
         destinationAddress: SolPrimAddress;
       };
     }
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfIngressEgressPalletConfigUpdateSolana };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfIngressEgressPalletConfigUpdateSolana } }
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: SolPrimAddress };
@@ -17855,10 +15845,7 @@ export type PalletCfChainTrackingEvent005 =
   /**
    * The tracked state of this chain has been updated.
    **/
-  | {
-      name: 'ChainStateUpdated';
-      data: { newChainState: CfChainsChainStateSolana };
-    }
+  | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateSolana } }
   /**
    * The fee multiplier for this chain has been updated.
    **/
@@ -17895,11 +15882,7 @@ export type PalletCfAssetBalancesEvent =
    **/
   | {
       name: 'VaultDeficitDetected';
-      data: {
-        chain: CfPrimitivesChainsForeignChain;
-        amountOwed: bigint;
-        available: bigint;
-      };
+      data: { chain: CfPrimitivesChainsForeignChain; amountOwed: bigint; available: bigint };
     }
   /**
    * The account was debited.
@@ -17925,10 +15908,7 @@ export type PalletCfAssetBalancesEvent =
         newBalance: bigint;
       };
     }
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfAssetBalancesPalletConfigUpdate };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfAssetBalancesPalletConfigUpdate } }
   /**
    * A whitelist change was accepted.
    **/
@@ -17960,14 +15940,8 @@ export type PalletCfAssetBalancesEvent =
     };
 
 export type PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress =
-  | {
-      type: 'Allow';
-      value: CfChainsRefundParametersAccountOrAddressForeignChainAddress;
-    }
-  | {
-      type: 'Remove';
-      value: CfChainsRefundParametersAccountOrAddressForeignChainAddress;
-    };
+  | { type: 'Allow'; value: CfChainsRefundParametersAccountOrAddressForeignChainAddress }
+  | { type: 'Remove'; value: CfChainsRefundParametersAccountOrAddressForeignChainAddress };
 
 /**
  * The `Event` enum of this pallet
@@ -17976,10 +15950,7 @@ export type PalletCfChainTrackingEvent006 =
   /**
    * The tracked state of this chain has been updated.
    **/
-  | {
-      name: 'ChainStateUpdated';
-      data: { newChainState: CfChainsChainStateAssethub };
-    }
+  | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateAssethub } }
   /**
    * The fee multiplier for this chain has been updated.
    **/
@@ -18001,10 +15972,7 @@ export type PalletCfVaultsEvent005 =
    * The new key has been generated, we must activate the new key on the external
    * chain via governance.
    **/
-  | {
-      name: 'AwaitingGovernanceActivation';
-      data: { newPublicKey: CfChainsDotPolkadotAccountId };
-    }
+  | { name: 'AwaitingGovernanceActivation'; data: { newPublicKey: CfChainsDotPolkadotAccountId } }
   | {
       name: 'ActivationTxFailedAwaitingGovernance';
       data: { newPublicKey: CfChainsDotPolkadotAccountId };
@@ -18030,10 +15998,7 @@ export type PalletCfBroadcastEvent005 =
   /**
    * A failed broadcast has been scheduled for retry.
    **/
-  | {
-      name: 'BroadcastRetryScheduled';
-      data: { broadcastId: number; retryBlock: number };
-    }
+  | { name: 'BroadcastRetryScheduled'; data: { broadcastId: number; retryBlock: number } }
   /**
    * A broadcast has timed out.
    **/
@@ -18067,37 +16032,24 @@ export type PalletCfBroadcastEvent005 =
   /**
    * The fee paid for broadcasting a transaction has been refused.
    **/
-  | {
-      name: 'TransactionFeeDeficitRefused';
-      data: { beneficiary: CfChainsDotPolkadotAccountId };
-    }
+  | { name: 'TransactionFeeDeficitRefused'; data: { beneficiary: CfChainsDotPolkadotAccountId } }
   /**
    * A Call has been re-threshold-signed, and its signature data is inserted into storage.
    **/
   | {
       name: 'CallResigned';
-      data: {
-        broadcastId: number;
-        transactionPayload: CfChainsDotPolkadotTransactionData;
-      };
+      data: { broadcastId: number; transactionPayload: CfChainsDotPolkadotTransactionData };
     }
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * A signature/broadcast with a historical (expired) key was requested via governance.
    **/
   | {
       name: 'HistoricalBroadcastRequested';
-      data: {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      };
+      data: { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number };
     };
 
 /**
@@ -18125,10 +16077,7 @@ export type PalletCfIngressEgressEvent006 =
     }
   | {
       name: 'CcmBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      };
+      data: { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] };
     }
   | {
       name: 'CcmEgressInvalid';
@@ -18143,10 +16092,7 @@ export type PalletCfIngressEgressEvent006 =
     }
   | {
       name: 'BatchBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      };
+      data: { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> };
     }
   | {
       name: 'DepositFailed';
@@ -18183,10 +16129,7 @@ export type PalletCfIngressEgressEvent006 =
    **/
   | { name: 'FailedForeignChainCallExpired'; data: { broadcastId: number } }
   | { name: 'UtxoConsolidation'; data: { broadcastId: number } }
-  | {
-      name: 'FailedToBuildAllBatchCall';
-      data: { error: CfChainsAllBatchError };
-    }
+  | { name: 'FailedToBuildAllBatchCall'; data: { error: CfChainsAllBatchError } }
   | { name: 'ChannelOpeningFeePaid'; data: { fee: bigint } }
   | {
       name: 'DepositBoosted';
@@ -18227,27 +16170,17 @@ export type PalletCfIngressEgressEvent006 =
     }
   | {
       name: 'BoostedDepositLost';
-      data: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      data: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | {
       name: 'TransactionRejectionRequestReceived';
-      data: {
-        accountId: AccountId32;
-        txId: CfPrimitivesTxId;
-        expiresAt: number;
-      };
+      data: { accountId: AccountId32; txId: CfPrimitivesTxId; expiresAt: number };
     }
   | {
       name: 'TransactionRejectionRequestExpired';
       data: { accountId: AccountId32; txId: CfPrimitivesTxId };
     }
-  | {
-      name: 'TransactionRejectedByBroker';
-      data: { broadcastId: number; txId: number };
-    }
+  | { name: 'TransactionRejectedByBroker'; data: { broadcastId: number; txId: number } }
   | {
       name: 'TransactionRejectionFailed';
       data: { txId: number; reason: PalletCfIngressEgressRefundFailureReason };
@@ -18255,10 +16188,7 @@ export type PalletCfIngressEgressEvent006 =
   | { name: 'UnknownBroker'; data: { brokerId: AccountId32 } }
   | {
       name: 'UnknownAffiliate';
-      data: {
-        brokerId: AccountId32;
-        shortAffiliateId: CfPrimitivesAffiliateShortId;
-      };
+      data: { brokerId: AccountId32; shortAffiliateId: CfPrimitivesAffiliateShortId };
     }
   | {
       name: 'InvalidCcmRefunded';
@@ -18274,10 +16204,7 @@ export type PalletCfIngressEgressEvent006 =
     }
   | {
       name: 'ChannelRejectionRequestReceived';
-      data: {
-        accountId: AccountId32;
-        depositAddress: CfChainsDotPolkadotAccountId;
-      };
+      data: { accountId: AccountId32; depositAddress: CfChainsDotPolkadotAccountId };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsAssethub =
@@ -18310,29 +16237,17 @@ export type PalletCfTradingStrategyEvent =
     }
   | {
       name: 'FundsAddedToStrategy';
-      data: {
-        strategyId: AccountId32;
-        amounts: Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]>;
-      };
+      data: { strategyId: AccountId32; amounts: Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]> };
     }
   | { name: 'StrategyClosed'; data: { strategyId: AccountId32 } }
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfTradingStrategyPalletConfigUpdate };
-    };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfTradingStrategyPalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
  **/
 export type PalletCfLendingPoolsEvent =
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfLendingPoolsPalletConfigUpdate };
-    }
-  | {
-      name: 'BoostPoolCreated';
-      data: { boostPool: PalletCfLendingPoolsBoostBoostPoolId };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfLendingPoolsPalletConfigUpdate } }
+  | { name: 'BoostPoolCreated'; data: { boostPool: PalletCfLendingPoolsBoostBoostPoolId } }
   | {
       name: 'BoostFundsAdded';
       data: {
@@ -18350,10 +16265,7 @@ export type PalletCfLendingPoolsEvent =
         pendingBoosts: Array<CfPrimitivesPrewitnessedDepositId>;
       };
     }
-  | {
-      name: 'LendingPoolCreated';
-      data: { asset: CfPrimitivesChainsAssetsAnyAsset };
-    }
+  | { name: 'LendingPoolCreated'; data: { asset: CfPrimitivesChainsAssetsAnyAsset } }
   | {
       name: 'LendingFundsAdded';
       data: {
@@ -18382,17 +16294,10 @@ export type PalletCfLendingPoolsEvent =
         broker?: CfPrimitivesBeneficiary | undefined;
       };
     }
-  | {
-      name: 'LoanUpdated';
-      data: { loanId: CfTraitsLendingLoanId; extraPrincipalAmount: bigint };
-    }
+  | { name: 'LoanUpdated'; data: { loanId: CfTraitsLendingLoanId; extraPrincipalAmount: bigint } }
   | {
       name: 'OriginationFeeTaken';
-      data: {
-        loanId: CfTraitsLendingLoanId;
-        poolFee: bigint;
-        networkFee: bigint;
-      };
+      data: { loanId: CfTraitsLendingLoanId; poolFee: bigint; networkFee: bigint };
     }
   | {
       name: 'InterestTaken';
@@ -18421,11 +16326,7 @@ export type PalletCfLendingPoolsEvent =
     }
   | {
       name: 'LiquidationFeeTaken';
-      data: {
-        loanId: CfTraitsLendingLoanId;
-        poolFee: bigint;
-        networkFee: bigint;
-      };
+      data: { loanId: CfTraitsLendingLoanId; poolFee: bigint; networkFee: bigint };
     }
   | {
       name: 'LoanRepaid';
@@ -18453,26 +16354,17 @@ export type PalletCfLendingPoolsEvent =
         viaLiquidation: boolean;
       };
     }
-  | {
-      name: 'LendingNetworkFeeSwapInitiated';
-      data: { swapRequestId: CfPrimitivesSwapRequestId };
-    };
+  | { name: 'LendingNetworkFeeSwapInitiated'; data: { swapRequestId: CfPrimitivesSwapRequestId } };
 
 export type PalletCfLendingPoolsSupplyAddedActionType =
   | { type: 'Manual' }
   | {
       type: 'SystemLiquidationExcessAmount';
-      value: {
-        loanId: CfTraitsLendingLoanId;
-        swapRequestId: CfPrimitivesSwapRequestId;
-      };
+      value: { loanId: CfTraitsLendingLoanId; swapRequestId: CfPrimitivesSwapRequestId };
     }
   | {
       type: 'SystemLiquidationUnusedAmount';
-      value: {
-        loanId: CfTraitsLendingLoanId;
-        swapRequestId: CfPrimitivesSwapRequestId;
-      };
+      value: { loanId: CfTraitsLendingLoanId; swapRequestId: CfPrimitivesSwapRequestId };
     };
 
 export type PalletCfLendingPoolsSupplyRemovedActionType = 'Manual' | 'SystemLiquidation';
@@ -18569,9 +16461,7 @@ export type PalletCfElectionsEvent003 =
 
 export type StateChainRuntimeChainflipWitnessingGenericElectionsGenericElectoralEvents = {
   type: 'OraclePricesUpdated';
-  value: {
-    prices: Array<StateChainRuntimeChainflipWitnessingGenericElectionsOraclePriceUpdate>;
-  };
+  value: { prices: Array<StateChainRuntimeChainflipWitnessingGenericElectionsOraclePriceUpdate> };
 };
 
 export type StateChainRuntimeChainflipWitnessingGenericElectionsOraclePriceUpdate = {
@@ -18681,10 +16571,7 @@ export type PalletCfChainTrackingEvent007 =
   /**
    * The tracked state of this chain has been updated.
    **/
-  | {
-      name: 'ChainStateUpdated';
-      data: { newChainState: CfChainsChainStateTron };
-    }
+  | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateTron } }
   /**
    * The fee multiplier for this chain has been updated.
    **/
@@ -18709,10 +16596,7 @@ export type PalletCfBroadcastEvent006 =
   /**
    * A failed broadcast has been scheduled for retry.
    **/
-  | {
-      name: 'BroadcastRetryScheduled';
-      data: { broadcastId: number; retryBlock: number };
-    }
+  | { name: 'BroadcastRetryScheduled'; data: { broadcastId: number; retryBlock: number } }
   /**
    * A broadcast has timed out.
    **/
@@ -18739,10 +16623,7 @@ export type PalletCfBroadcastEvent006 =
   /**
    * The fee paid for broadcasting a transaction has been recorded.
    **/
-  | {
-      name: 'TransactionFeeDeficitRecorded';
-      data: { beneficiary: H160; amount: bigint };
-    }
+  | { name: 'TransactionFeeDeficitRecorded'; data: { beneficiary: H160; amount: bigint } }
   /**
    * The fee paid for broadcasting a transaction has been refused.
    **/
@@ -18752,28 +16633,18 @@ export type PalletCfBroadcastEvent006 =
    **/
   | {
       name: 'CallResigned';
-      data: {
-        broadcastId: number;
-        transactionPayload: CfChainsTronTronTransaction;
-      };
+      data: { broadcastId: number; transactionPayload: CfChainsTronTronTransaction };
     }
   /**
    * Some pallet configuration has been updated.
    **/
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfBroadcastPalletConfigUpdate };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfBroadcastPalletConfigUpdate } }
   /**
    * A signature/broadcast with a historical (expired) key was requested via governance.
    **/
   | {
       name: 'HistoricalBroadcastRequested';
-      data: {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      };
+      data: { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number };
     };
 
 export type CfChainsTronTronTransaction = {
@@ -18809,10 +16680,7 @@ export type PalletCfIngressEgressEvent007 =
     }
   | {
       name: 'CcmBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      };
+      data: { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] };
     }
   | {
       name: 'CcmEgressInvalid';
@@ -18827,10 +16695,7 @@ export type PalletCfIngressEgressEvent007 =
     }
   | {
       name: 'BatchBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      };
+      data: { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> };
     }
   | {
       name: 'DepositFailed';
@@ -18867,10 +16732,7 @@ export type PalletCfIngressEgressEvent007 =
    **/
   | { name: 'FailedForeignChainCallExpired'; data: { broadcastId: number } }
   | { name: 'UtxoConsolidation'; data: { broadcastId: number } }
-  | {
-      name: 'FailedToBuildAllBatchCall';
-      data: { error: CfChainsAllBatchError };
-    }
+  | { name: 'FailedToBuildAllBatchCall'; data: { error: CfChainsAllBatchError } }
   | { name: 'ChannelOpeningFeePaid'; data: { fee: bigint } }
   | {
       name: 'DepositBoosted';
@@ -18911,50 +16773,31 @@ export type PalletCfIngressEgressEvent007 =
     }
   | {
       name: 'BoostedDepositLost';
-      data: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      data: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | {
       name: 'TransactionRejectionRequestReceived';
       data: { accountId: AccountId32; txId: H256; expiresAt: number };
     }
-  | {
-      name: 'TransactionRejectionRequestExpired';
-      data: { accountId: AccountId32; txId: H256 };
-    }
+  | { name: 'TransactionRejectionRequestExpired'; data: { accountId: AccountId32; txId: H256 } }
   | {
       name: 'TransactionRejectedByBroker';
       data: { broadcastId: number; txId: CfChainsEvmDepositDetails };
     }
   | {
       name: 'TransactionRejectionFailed';
-      data: {
-        txId: CfChainsEvmDepositDetails;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      };
+      data: { txId: CfChainsEvmDepositDetails; reason: PalletCfIngressEgressRefundFailureReason };
     }
   | { name: 'UnknownBroker'; data: { brokerId: AccountId32 } }
   | {
       name: 'UnknownAffiliate';
-      data: {
-        brokerId: AccountId32;
-        shortAffiliateId: CfPrimitivesAffiliateShortId;
-      };
+      data: { brokerId: AccountId32; shortAffiliateId: CfPrimitivesAffiliateShortId };
     }
   | {
       name: 'InvalidCcmRefunded';
-      data: {
-        asset: CfPrimitivesChainsAssetsTronAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      data: { asset: CfPrimitivesChainsAssetsTronAsset; amount: bigint; destinationAddress: H160 };
     }
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfIngressEgressPalletConfigUpdateTron };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfIngressEgressPalletConfigUpdateTron } }
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: H160 };
@@ -19021,10 +16864,7 @@ export type PalletCfChainTrackingEvent008 =
   /**
    * The tracked state of this chain has been updated.
    **/
-  | {
-      name: 'ChainStateUpdated';
-      data: { newChainState: CfChainsChainStateBsc };
-    }
+  | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateBsc } }
   /**
    * The fee multiplier for this chain has been updated.
    **/
@@ -19055,10 +16895,7 @@ export type PalletCfIngressEgressEvent008 =
     }
   | {
       name: 'CcmBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      };
+      data: { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] };
     }
   | {
       name: 'CcmEgressInvalid';
@@ -19073,10 +16910,7 @@ export type PalletCfIngressEgressEvent008 =
     }
   | {
       name: 'BatchBroadcastRequested';
-      data: {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      };
+      data: { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> };
     }
   | {
       name: 'DepositFailed';
@@ -19113,10 +16947,7 @@ export type PalletCfIngressEgressEvent008 =
    **/
   | { name: 'FailedForeignChainCallExpired'; data: { broadcastId: number } }
   | { name: 'UtxoConsolidation'; data: { broadcastId: number } }
-  | {
-      name: 'FailedToBuildAllBatchCall';
-      data: { error: CfChainsAllBatchError };
-    }
+  | { name: 'FailedToBuildAllBatchCall'; data: { error: CfChainsAllBatchError } }
   | { name: 'ChannelOpeningFeePaid'; data: { fee: bigint } }
   | {
       name: 'DepositBoosted';
@@ -19157,50 +16988,31 @@ export type PalletCfIngressEgressEvent008 =
     }
   | {
       name: 'BoostedDepositLost';
-      data: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      data: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | {
       name: 'TransactionRejectionRequestReceived';
       data: { accountId: AccountId32; txId: H256; expiresAt: number };
     }
-  | {
-      name: 'TransactionRejectionRequestExpired';
-      data: { accountId: AccountId32; txId: H256 };
-    }
+  | { name: 'TransactionRejectionRequestExpired'; data: { accountId: AccountId32; txId: H256 } }
   | {
       name: 'TransactionRejectedByBroker';
       data: { broadcastId: number; txId: CfChainsEvmDepositDetails };
     }
   | {
       name: 'TransactionRejectionFailed';
-      data: {
-        txId: CfChainsEvmDepositDetails;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      };
+      data: { txId: CfChainsEvmDepositDetails; reason: PalletCfIngressEgressRefundFailureReason };
     }
   | { name: 'UnknownBroker'; data: { brokerId: AccountId32 } }
   | {
       name: 'UnknownAffiliate';
-      data: {
-        brokerId: AccountId32;
-        shortAffiliateId: CfPrimitivesAffiliateShortId;
-      };
+      data: { brokerId: AccountId32; shortAffiliateId: CfPrimitivesAffiliateShortId };
     }
   | {
       name: 'InvalidCcmRefunded';
-      data: {
-        asset: CfPrimitivesChainsAssetsBscAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      };
+      data: { asset: CfPrimitivesChainsAssetsBscAsset; amount: bigint; destinationAddress: H160 };
     }
-  | {
-      name: 'PalletConfigUpdated';
-      data: { update: PalletCfIngressEgressPalletConfigUpdateBsc };
-    }
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfIngressEgressPalletConfigUpdateBsc } }
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: H160 };
@@ -19268,15 +17080,9 @@ export type StateChainRuntimeChainflipWitnessingBscElectionsBscElectoralEvents =
   };
 };
 
-export type FrameSystemLastRuntimeUpgradeInfo = {
-  specVersion: number;
-  specName: string;
-};
+export type FrameSystemLastRuntimeUpgradeInfo = { specVersion: number; specName: string };
 
-export type FrameSystemCodeUpgradeAuthorization = {
-  codeHash: H256;
-  checkVersion: boolean;
-};
+export type FrameSystemCodeUpgradeAuthorization = { codeHash: H256; checkVersion: boolean };
 
 export type FrameSystemLimitsBlockWeights = {
   baseBlock: SpWeightsWeightV2Weight;
@@ -19297,9 +17103,7 @@ export type FrameSystemLimitsWeightsPerClass = {
   reserved?: SpWeightsWeightV2Weight | undefined;
 };
 
-export type FrameSystemLimitsBlockLength = {
-  max: FrameSupportDispatchPerDispatchClassU32;
-};
+export type FrameSystemLimitsBlockLength = { max: FrameSupportDispatchPerDispatchClassU32 };
 
 export type FrameSupportDispatchPerDispatchClassU32 = {
   normal: number;
@@ -19356,10 +17160,7 @@ export type FrameSystemError =
 
 export type SpRuntimeBlakeTwo256 = {};
 
-export type SpRuntimeBlock = {
-  header: Header;
-  extrinsics: Array<UncheckedExtrinsic>;
-};
+export type SpRuntimeBlock = { header: Header; extrinsics: Array<UncheckedExtrinsic> };
 
 export type CfChainsSolSolApiEnvironment = {
   vaultProgram: SolPrimAddress;
@@ -19889,10 +17690,7 @@ export type PalletCfGovernanceProposal = {
   execution: PalletCfGovernanceExecutionMode;
 };
 
-export type PalletCfGovernanceActiveProposal = {
-  proposalId: number;
-  expiryTime: bigint;
-};
+export type PalletCfGovernanceActiveProposal = { proposalId: number; expiryTime: bigint };
 
 /**
  * The `Error` enum of this pallet.
@@ -19978,10 +17776,7 @@ export type PalletCfChainTrackingError =
 export type PalletCfVaultsVaultActivationStatus =
   | { type: 'AwaitingActivation'; value: { newPublicKey: CfChainsEvmAggKey } }
   | { type: 'Complete' }
-  | {
-      type: 'ActivationFailedAwaitingGovernance';
-      value: { newPublicKey: CfChainsEvmAggKey };
-    };
+  | { type: 'ActivationFailedAwaitingGovernance'; value: { newPublicKey: CfChainsEvmAggKey } };
 
 /**
  * The `Error` enum of this pallet.
@@ -19997,10 +17792,7 @@ export type PalletCfVaultsError =
   | 'InvalidRotationStatus';
 
 export type PalletCfVaultsVaultActivationStatus002 =
-  | {
-      type: 'AwaitingActivation';
-      value: { newPublicKey: CfChainsDotPolkadotAccountId };
-    }
+  | { type: 'AwaitingActivation'; value: { newPublicKey: CfChainsDotPolkadotAccountId } }
   | { type: 'Complete' }
   | {
       type: 'ActivationFailedAwaitingGovernance';
@@ -20010,10 +17802,7 @@ export type PalletCfVaultsVaultActivationStatus002 =
 export type PalletCfVaultsVaultActivationStatus003 =
   | { type: 'AwaitingActivation'; value: { newPublicKey: CfChainsBtcAggKey } }
   | { type: 'Complete' }
-  | {
-      type: 'ActivationFailedAwaitingGovernance';
-      value: { newPublicKey: CfChainsBtcAggKey };
-    };
+  | { type: 'ActivationFailedAwaitingGovernance'; value: { newPublicKey: CfChainsBtcAggKey } };
 
 export type PalletCfThresholdSignatureCeremonyContextEvmCrypto = {
   requestContext: PalletCfThresholdSignatureRequestContextEvmCrypto;
@@ -20036,11 +17825,7 @@ export type PalletCfThresholdSignatureThresholdCeremonyType =
   | { type: 'KeygenVerification' }
   | {
       type: 'HistoricalKey';
-      value: {
-        candidates: Array<AccountId32>;
-        signersRequired: number;
-        retriesRemaining: number;
-      };
+      value: { candidates: Array<AccountId32>; signersRequired: number; retriesRemaining: number };
     };
 
 export type PalletCfThresholdSignatureRequestInstructionEvmCrypto = {
@@ -20052,11 +17837,7 @@ export type PalletCfThresholdSignatureRequestType =
   | { type: 'SpecificKey'; value: [CfChainsEvmAggKey, number] }
   | {
       type: 'KeygenVerification';
-      value: {
-        key: CfChainsEvmAggKey;
-        epochIndex: number;
-        participants: Array<AccountId32>;
-      };
+      value: { key: CfChainsEvmAggKey; epochIndex: number; participants: Array<AccountId32> };
     }
   | {
       type: 'HistoricalKey';
@@ -20075,10 +17856,7 @@ export type PalletCfThresholdSignatureSignerAndSignatureResultEvmCrypto = {
 };
 
 export type CfTraitsAsyncResult =
-  | {
-      type: 'Ready';
-      value: Result<CfChainsEvmSchnorrVerificationComponents, Array<AccountId32>>;
-    }
+  | { type: 'Ready'; value: Result<CfChainsEvmSchnorrVerificationComponents, Array<AccountId32>> }
   | { type: 'Pending' }
   | { type: 'Void' };
 
@@ -20092,14 +17870,8 @@ export type PalletCfThresholdSignatureKeyRotationStatusEvmCrypto =
         newEpochIndex: number;
       };
     }
-  | {
-      type: 'AwaitingKeygenVerificationEvmCrypto';
-      value: { newPublicKey: CfChainsEvmAggKey };
-    }
-  | {
-      type: 'KeygenVerificationCompleteEvmCrypto';
-      value: { newPublicKey: CfChainsEvmAggKey };
-    }
+  | { type: 'AwaitingKeygenVerificationEvmCrypto'; value: { newPublicKey: CfChainsEvmAggKey } }
+  | { type: 'KeygenVerificationCompleteEvmCrypto'; value: { newPublicKey: CfChainsEvmAggKey } }
   | {
       type: 'AwaitingKeyHandoverEvmCrypto';
       value: {
@@ -20110,18 +17882,9 @@ export type PalletCfThresholdSignatureKeyRotationStatusEvmCrypto =
         newPublicKey: CfChainsEvmAggKey;
       };
     }
-  | {
-      type: 'AwaitingKeyHandoverVerificationEvmCrypto';
-      value: { newPublicKey: CfChainsEvmAggKey };
-    }
-  | {
-      type: 'KeyHandoverCompleteEvmCrypto';
-      value: { newPublicKey: CfChainsEvmAggKey };
-    }
-  | {
-      type: 'AwaitingActivationSignaturesEvmCrypto';
-      value: { requestIds: Array<number> };
-    }
+  | { type: 'AwaitingKeyHandoverVerificationEvmCrypto'; value: { newPublicKey: CfChainsEvmAggKey } }
+  | { type: 'KeyHandoverCompleteEvmCrypto'; value: { newPublicKey: CfChainsEvmAggKey } }
+  | { type: 'AwaitingActivationSignaturesEvmCrypto'; value: { requestIds: Array<number> } }
   | { type: 'CompleteEvmCrypto' }
   | { type: 'FailedEvmCrypto'; value: { offenders: Array<AccountId32> } }
   | {
@@ -20239,10 +18002,7 @@ export type PalletCfThresholdSignatureSignerAndSignatureResultPolkadotCrypto = {
 };
 
 export type CfTraitsAsyncResultResult =
-  | {
-      type: 'Ready';
-      value: Result<CfChainsDotPolkadotSignature, Array<AccountId32>>;
-    }
+  | { type: 'Ready'; value: Result<CfChainsDotPolkadotSignature, Array<AccountId32>> }
   | { type: 'Pending' }
   | { type: 'Void' };
 
@@ -20282,18 +18042,12 @@ export type PalletCfThresholdSignatureKeyRotationStatusPolkadotCrypto =
       type: 'KeyHandoverCompletePolkadotCrypto';
       value: { newPublicKey: CfChainsDotPolkadotAccountId };
     }
-  | {
-      type: 'AwaitingActivationSignaturesPolkadotCrypto';
-      value: { requestIds: Array<number> };
-    }
+  | { type: 'AwaitingActivationSignaturesPolkadotCrypto'; value: { requestIds: Array<number> } }
   | { type: 'CompletePolkadotCrypto' }
   | { type: 'FailedPolkadotCrypto'; value: { offenders: Array<AccountId32> } }
   | {
       type: 'KeyHandoverFailedPolkadotCrypto';
-      value: {
-        newPublicKey: CfChainsDotPolkadotAccountId;
-        offenders: Array<AccountId32>;
-      };
+      value: { newPublicKey: CfChainsDotPolkadotAccountId; offenders: Array<AccountId32> };
     };
 
 export type PalletCfThresholdSignatureResponseStatus002 = {
@@ -20335,11 +18089,7 @@ export type PalletCfThresholdSignatureRequestTypeAggKey =
   | { type: 'SpecificKey'; value: [CfChainsBtcAggKey, number] }
   | {
       type: 'KeygenVerification';
-      value: {
-        key: CfChainsBtcAggKey;
-        epochIndex: number;
-        participants: Array<AccountId32>;
-      };
+      value: { key: CfChainsBtcAggKey; epochIndex: number; participants: Array<AccountId32> };
     }
   | {
       type: 'HistoricalKey';
@@ -20372,14 +18122,8 @@ export type PalletCfThresholdSignatureKeyRotationStatusBitcoinCrypto =
         newEpochIndex: number;
       };
     }
-  | {
-      type: 'AwaitingKeygenVerificationBitcoinCrypto';
-      value: { newPublicKey: CfChainsBtcAggKey };
-    }
-  | {
-      type: 'KeygenVerificationCompleteBitcoinCrypto';
-      value: { newPublicKey: CfChainsBtcAggKey };
-    }
+  | { type: 'AwaitingKeygenVerificationBitcoinCrypto'; value: { newPublicKey: CfChainsBtcAggKey } }
+  | { type: 'KeygenVerificationCompleteBitcoinCrypto'; value: { newPublicKey: CfChainsBtcAggKey } }
   | {
       type: 'AwaitingKeyHandoverBitcoinCrypto';
       value: {
@@ -20394,14 +18138,8 @@ export type PalletCfThresholdSignatureKeyRotationStatusBitcoinCrypto =
       type: 'AwaitingKeyHandoverVerificationBitcoinCrypto';
       value: { newPublicKey: CfChainsBtcAggKey };
     }
-  | {
-      type: 'KeyHandoverCompleteBitcoinCrypto';
-      value: { newPublicKey: CfChainsBtcAggKey };
-    }
-  | {
-      type: 'AwaitingActivationSignaturesBitcoinCrypto';
-      value: { requestIds: Array<number> };
-    }
+  | { type: 'KeyHandoverCompleteBitcoinCrypto'; value: { newPublicKey: CfChainsBtcAggKey } }
+  | { type: 'AwaitingActivationSignaturesBitcoinCrypto'; value: { requestIds: Array<number> } }
   | { type: 'CompleteBitcoinCrypto' }
   | { type: 'FailedBitcoinCrypto'; value: { offenders: Array<AccountId32> } }
   | {
@@ -20501,10 +18239,7 @@ export type CfTraitsSwappingSwapOutputActionGenericForeignChainAddress =
       };
     }
   | { type: 'CreditOnChain'; value: { accountId: AccountId32 } }
-  | {
-      type: 'CreditLendingPool';
-      value: { swapType: CfTraitsSwappingLendingSwapType };
-    }
+  | { type: 'CreditLendingPool'; value: { swapType: CfTraitsSwappingLendingSwapType } }
   | {
       type: 'CreditFlipAndTransferToGateway';
       value: { accountId: AccountId32; flipToSubtractFromSwapOutput: bigint };
@@ -20528,10 +18263,7 @@ export type PalletCfSwappingNetworkFeeTracker = {
   accumulatedFee: bigint;
 };
 
-export type PalletCfSwappingFeeRateAndMinimum = {
-  rate: Permill;
-  minimum: bigint;
-};
+export type PalletCfSwappingFeeRateAndMinimum = { rate: Permill; minimum: bigint };
 
 export type PalletCfSwappingSwap = {
   swapId: CfPrimitivesSwapId;
@@ -20864,10 +18596,7 @@ export type CfTraitsAdditionalDepositAction = {
 export type PalletCfIngressEgressBoostStatus =
   | {
       type: 'Boosted';
-      value: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      value: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | { type: 'NotBoosted' }
   | { type: 'BoostPending'; value: { amount: bigint; processAtBlock: number } };
@@ -20997,10 +18726,7 @@ export type PalletCfIngressEgressDepositOrigin =
         brokerId: AccountId32;
       };
     }
-  | {
-      type: 'Vault';
-      value: { txId: H256; brokerId?: AccountId32 | undefined };
-    };
+  | { type: 'Vault'; value: { txId: H256; brokerId?: AccountId32 | undefined } };
 
 export type PalletCfIngressEgressBroadcastAction =
   | { type: 'FinaliseFetch'; value: Array<H160> }
@@ -21173,10 +18899,7 @@ export type PalletCfIngressEgressPendingPrewitnessedDepositEntry002 = {
 
 export type PalletCfIngressEgressBoostStatusLookup002 =
   | { type: 'Vault'; value: { txId: CfPrimitivesTxId } }
-  | {
-      type: 'Channel';
-      value: { depositAddress: CfChainsDotPolkadotAccountId };
-    };
+  | { type: 'Channel'; value: { depositAddress: CfChainsDotPolkadotAccountId } };
 
 export type PalletCfIngressEgressPendingPrewitnessedDeposit002 = {
   blockHeight: number;
@@ -21230,10 +18953,7 @@ export type PalletCfIngressEgressDepositOrigin002 =
         brokerId: AccountId32;
       };
     }
-  | {
-      type: 'Vault';
-      value: { txId: CfPrimitivesTxId; brokerId?: AccountId32 | undefined };
-    };
+  | { type: 'Vault'; value: { txId: CfPrimitivesTxId; brokerId?: AccountId32 | undefined } };
 
 export type PalletCfIngressEgressBroadcastActionPolkadotAccountId =
   | { type: 'FinaliseFetch'; value: Array<CfChainsDotPolkadotAccountId> }
@@ -21283,10 +19003,7 @@ export type PalletCfIngressEgressChannelActionScriptPubkey =
 export type PalletCfIngressEgressBoostStatusU64 =
   | {
       type: 'Boosted';
-      value: {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      };
+      value: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
   | { type: 'NotBoosted' }
   | { type: 'BoostPending'; value: { amount: bigint; processAtBlock: number } };
@@ -21395,10 +19112,7 @@ export type PalletCfIngressEgressDepositOrigin003 =
         brokerId: AccountId32;
       };
     }
-  | {
-      type: 'Vault';
-      value: { txId: H256; brokerId?: AccountId32 | undefined };
-    };
+  | { type: 'Vault'; value: { txId: H256; brokerId?: AccountId32 | undefined } };
 
 export type PalletCfIngressEgressBroadcastActionScriptPubkey =
   | { type: 'FinaliseFetch'; value: Array<CfChainsBtcScriptPubkey> }
@@ -21616,18 +19330,9 @@ export type PalletCfPoolsError =
   | 'BelowMinimumOrderAmount';
 
 export type CfeEventsCfeEvent =
-  | {
-      type: 'EvmThresholdSignatureRequest';
-      value: CfeEventsThresholdSignatureRequest;
-    }
-  | {
-      type: 'DotThresholdSignatureRequest';
-      value: CfeEventsThresholdSignatureRequest002;
-    }
-  | {
-      type: 'BtcThresholdSignatureRequest';
-      value: CfeEventsThresholdSignatureRequest003;
-    }
+  | { type: 'EvmThresholdSignatureRequest'; value: CfeEventsThresholdSignatureRequest }
+  | { type: 'DotThresholdSignatureRequest'; value: CfeEventsThresholdSignatureRequest002 }
+  | { type: 'BtcThresholdSignatureRequest'; value: CfeEventsThresholdSignatureRequest003 }
   | { type: 'EvmKeygenRequest'; value: CfeEventsKeygenRequest }
   | { type: 'DotKeygenRequest'; value: CfeEventsKeygenRequest }
   | { type: 'BtcKeygenRequest'; value: CfeEventsKeygenRequest }
@@ -21638,21 +19343,10 @@ export type CfeEventsCfeEvent =
   | { type: 'ArbTxBroadcastRequest'; value: CfeEventsTxBroadcastRequest }
   | {
       type: 'PeerIdRegistered';
-      value: {
-        accountId: AccountId32;
-        pubkey: FixedBytes<32>;
-        port: number;
-        ip: bigint;
-      };
+      value: { accountId: AccountId32; pubkey: FixedBytes<32>; port: number; ip: bigint };
     }
-  | {
-      type: 'PeerIdDeregistered';
-      value: { accountId: AccountId32; pubkey: FixedBytes<32> };
-    }
-  | {
-      type: 'SolThresholdSignatureRequest';
-      value: CfeEventsThresholdSignatureRequest004;
-    }
+  | { type: 'PeerIdDeregistered'; value: { accountId: AccountId32; pubkey: FixedBytes<32> } }
+  | { type: 'SolThresholdSignatureRequest'; value: CfeEventsThresholdSignatureRequest004 }
   | { type: 'SolKeygenRequest'; value: CfeEventsKeygenRequest }
   | { type: 'SolTxBroadcastRequest'; value: CfeEventsTxBroadcastRequest004 }
   | { type: 'HubTxBroadcastRequest'; value: CfeEventsTxBroadcastRequest005 }
@@ -21823,10 +19517,7 @@ export type PalletCfIngressEgressPendingPrewitnessedDeposit004 = {
 export type PalletCfVaultsVaultActivationStatus004 =
   | { type: 'AwaitingActivation'; value: { newPublicKey: SolPrimAddress } }
   | { type: 'Complete' }
-  | {
-      type: 'ActivationFailedAwaitingGovernance';
-      value: { newPublicKey: SolPrimAddress };
-    };
+  | { type: 'ActivationFailedAwaitingGovernance'; value: { newPublicKey: SolPrimAddress } };
 
 export type PalletCfThresholdSignatureCeremonyContextSolanaCrypto = {
   requestContext: PalletCfThresholdSignatureRequestContextSolanaCrypto;
@@ -21853,11 +19544,7 @@ export type PalletCfThresholdSignatureRequestTypeAddress =
   | { type: 'SpecificKey'; value: [SolPrimAddress, number] }
   | {
       type: 'KeygenVerification';
-      value: {
-        key: SolPrimAddress;
-        epochIndex: number;
-        participants: Array<AccountId32>;
-      };
+      value: { key: SolPrimAddress; epochIndex: number; participants: Array<AccountId32> };
     }
   | {
       type: 'HistoricalKey';
@@ -21890,14 +19577,8 @@ export type PalletCfThresholdSignatureKeyRotationStatusSolanaCrypto =
         newEpochIndex: number;
       };
     }
-  | {
-      type: 'AwaitingKeygenVerificationSolanaCrypto';
-      value: { newPublicKey: SolPrimAddress };
-    }
-  | {
-      type: 'KeygenVerificationCompleteSolanaCrypto';
-      value: { newPublicKey: SolPrimAddress };
-    }
+  | { type: 'AwaitingKeygenVerificationSolanaCrypto'; value: { newPublicKey: SolPrimAddress } }
+  | { type: 'KeygenVerificationCompleteSolanaCrypto'; value: { newPublicKey: SolPrimAddress } }
   | {
       type: 'AwaitingKeyHandoverSolanaCrypto';
       value: {
@@ -21908,18 +19589,9 @@ export type PalletCfThresholdSignatureKeyRotationStatusSolanaCrypto =
         newPublicKey: SolPrimAddress;
       };
     }
-  | {
-      type: 'AwaitingKeyHandoverVerificationSolanaCrypto';
-      value: { newPublicKey: SolPrimAddress };
-    }
-  | {
-      type: 'KeyHandoverCompleteSolanaCrypto';
-      value: { newPublicKey: SolPrimAddress };
-    }
-  | {
-      type: 'AwaitingActivationSignaturesSolanaCrypto';
-      value: { requestIds: Array<number> };
-    }
+  | { type: 'AwaitingKeyHandoverVerificationSolanaCrypto'; value: { newPublicKey: SolPrimAddress } }
+  | { type: 'KeyHandoverCompleteSolanaCrypto'; value: { newPublicKey: SolPrimAddress } }
+  | { type: 'AwaitingActivationSignaturesSolanaCrypto'; value: { requestIds: Array<number> } }
   | { type: 'CompleteSolanaCrypto' }
   | { type: 'FailedSolanaCrypto'; value: { offenders: Array<AccountId32> } }
   | {
@@ -22107,21 +19779,14 @@ export type PalletCfIngressEgressDepositOrigin004 =
     }
   | {
       type: 'Vault';
-      value: {
-        txId: [SolPrimAddress, bigint];
-        brokerId?: AccountId32 | undefined;
-      };
+      value: { txId: [SolPrimAddress, bigint]; brokerId?: AccountId32 | undefined };
     };
 
 export type PalletCfIngressEgressBroadcastActionAddress =
   | { type: 'FinaliseFetch'; value: Array<SolPrimAddress> }
   | { type: 'CcmBroadcast' };
 
-export type PalletCfElectionsReferenceDetails = {
-  count: number;
-  created: number;
-  expires: number;
-};
+export type PalletCfElectionsReferenceDetails = { count: number; created: number; expires: number };
 
 export type PalletCfElectionsBitmapComponentsElectionBitmapComponentsSolana = {
   epoch: number;
@@ -22316,10 +19981,7 @@ export type PalletCfAssetBalancesWhitelistWithdrawalWhitelist = {
 };
 
 export type PalletCfAssetBalancesWhitelistPendingChange =
-  | {
-      type: 'Whitelist';
-      value: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress;
-    }
+  | { type: 'Whitelist'; value: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress }
   | { type: 'Timelock'; value: bigint }
   | { type: 'RefundAddress'; value: CfChainsAddressForeignChainAddress };
 
@@ -22369,10 +20031,7 @@ export type PalletCfAssetBalancesError =
   | 'NoLiquidityRefundAddressRegistered';
 
 export type PalletCfVaultsVaultActivationStatus005 =
-  | {
-      type: 'AwaitingActivation';
-      value: { newPublicKey: CfChainsDotPolkadotAccountId };
-    }
+  | { type: 'AwaitingActivation'; value: { newPublicKey: CfChainsDotPolkadotAccountId } }
   | { type: 'Complete' }
   | {
       type: 'ActivationFailedAwaitingGovernance';
@@ -22453,10 +20112,7 @@ export type PalletCfIngressEgressPendingPrewitnessedDepositEntry006 = {
 
 export type PalletCfIngressEgressBoostStatusLookup005 =
   | { type: 'Vault'; value: { txId: CfPrimitivesTxId } }
-  | {
-      type: 'Channel';
-      value: { depositAddress: CfChainsDotPolkadotAccountId };
-    };
+  | { type: 'Channel'; value: { depositAddress: CfChainsDotPolkadotAccountId } };
 
 export type PalletCfIngressEgressPendingPrewitnessedDeposit006 = {
   blockHeight: number;
@@ -22480,10 +20136,7 @@ export type PalletCfIngressEgressDepositOrigin005 =
         brokerId: AccountId32;
       };
     }
-  | {
-      type: 'Vault';
-      value: { txId: CfPrimitivesTxId; brokerId?: AccountId32 | undefined };
-    };
+  | { type: 'Vault'; value: { txId: CfPrimitivesTxId; brokerId?: AccountId32 | undefined } };
 
 /**
  * The `Error` enum of this pallet.
@@ -22867,18 +20520,9 @@ export type PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeConsen
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBitcoin;
     }
-  | {
-      type: 'B';
-      value: [Array<PalletCfIngressEgressDepositWitnessBitcoin>, H256 | undefined];
-    }
-  | {
-      type: 'C';
-      value: [Array<PalletCfIngressEgressVaultDepositWitnessBitcoin>, H256 | undefined];
-    }
-  | {
-      type: 'D';
-      value: [Array<PalletCfBroadcastTransactionConfirmationBitcoin>, H256 | undefined];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBitcoin>, H256 | undefined] }
+  | { type: 'C'; value: [Array<PalletCfIngressEgressVaultDepositWitnessBitcoin>, H256 | undefined] }
+  | { type: 'D'; value: [Array<PalletCfBroadcastTransactionConfirmationBitcoin>, H256 | undefined] }
   | { type: 'Ee'; value: bigint }
   | { type: 'Ff'; value: Array<AccountId32> };
 
@@ -22939,9 +20583,7 @@ export type PalletCfElectionsElectoralSystemsOraclePriceStateMachineVotingCondit
     }
   | {
       type: 'NewTimestamp';
-      value: {
-        lastTimestamp: PalletCfElectionsElectoralSystemsOraclePricePrimitivesUnixTime;
-      };
+      value: { lastTimestamp: PalletCfElectionsElectoralSystemsOraclePricePrimitivesUnixTime };
     };
 
 export type PalletCfElectionsElectoralSystemsCompositeTuple1ImplsCompositeElectionState = {
@@ -23118,10 +20760,7 @@ export type PalletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeConsen
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersEthereum;
     }
-  | {
-      type: 'B';
-      value: [Array<PalletCfIngressEgressDepositWitnessEthereum>, H256 | undefined];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessEthereum>, H256 | undefined] }
   | {
       type: 'C';
       value: [
@@ -23229,10 +20868,7 @@ export type PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeConsen
         type: 'A';
         value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersArbitrum;
       }
-    | {
-        type: 'B';
-        value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined];
-      }
+    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined] }
     | {
         type: 'C';
         value: [
@@ -23436,10 +21072,7 @@ export type PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeConsen
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersTron;
     }
-  | {
-      type: 'B';
-      value: [Array<PalletCfIngressEgressDepositWitnessTron>, H256 | undefined];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessTron>, H256 | undefined] }
   | {
       type: 'C';
       value: [
@@ -23610,10 +21243,7 @@ export type PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeConsen
         type: 'A';
         value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBsc;
       }
-    | {
-        type: 'B';
-        value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined];
-      }
+    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined] }
     | {
         type: 'C';
         value: [
@@ -23954,20 +21584,14 @@ export type CfAmmCommonAskBidMap002 = {
 
 export type PalletCfPoolsLimitOrderLiquidity = { tick: number; amount: U256 };
 
-export type PalletCfPoolsRangeOrderLiquidity = {
-  tick: number;
-  liquidity: U256;
-};
+export type PalletCfPoolsRangeOrderLiquidity = { tick: number; liquidity: U256 };
 
 export type PalletCfPoolsPoolOrderbook = {
   bids: Array<PalletCfPoolsPoolOrder>;
   asks: Array<PalletCfPoolsPoolOrder>;
 };
 
-export type PalletCfPoolsPoolOrder = {
-  amount: U256;
-  sqrtPrice: CfAmmMathSqrtPrice;
-};
+export type PalletCfPoolsPoolOrder = { amount: U256; sqrtPrice: CfAmmMathSqrtPrice };
 
 export type PalletCfPoolsPoolOrders = {
   limitOrders: CfAmmCommonAskBidMap003;
@@ -24046,28 +21670,13 @@ export type CfPrimitivesChainsAssetsDotAssetMap = { dot: bigint };
 
 export type CfPrimitivesChainsAssetsBtcAssetMap = { btc: bigint };
 
-export type CfPrimitivesChainsAssetsArbAssetMap = {
-  eth: bigint;
-  usdc: bigint;
-  usdt: bigint;
-};
+export type CfPrimitivesChainsAssetsArbAssetMap = { eth: bigint; usdc: bigint; usdt: bigint };
 
-export type CfPrimitivesChainsAssetsSolAssetMap = {
-  sol: bigint;
-  usdc: bigint;
-  usdt: bigint;
-};
+export type CfPrimitivesChainsAssetsSolAssetMap = { sol: bigint; usdc: bigint; usdt: bigint };
 
-export type CfPrimitivesChainsAssetsHubAssetMap = {
-  dot: bigint;
-  usdt: bigint;
-  usdc: bigint;
-};
+export type CfPrimitivesChainsAssetsHubAssetMap = { dot: bigint; usdt: bigint; usdc: bigint };
 
-export type CfPrimitivesChainsAssetsTronAssetMap = {
-  trx: bigint;
-  usdt: bigint;
-};
+export type CfPrimitivesChainsAssetsTronAssetMap = { trx: bigint; usdt: bigint };
 
 export type CfPrimitivesChainsAssetsBscAssetMap = { bnb: bigint; usdt: bigint };
 
@@ -24169,10 +21778,7 @@ export type PalletCfLendingPoolsBoostBoostPoolDetails = {
   networkFeeDeductionPercent: Percent;
 };
 
-export type PalletCfLendingPoolsBoostOwedAmount = {
-  total: bigint;
-  fee: bigint;
-};
+export type PalletCfLendingPoolsBoostOwedAmount = { total: bigint; fee: bigint };
 
 export type CfTraitsSwapLimits = {
   maxSwapRetryDurationBlocks: number;
@@ -24209,39 +21815,21 @@ export type CfChainsEvmVaultSwapExtraParameters = {
 };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesVaultSwapDetails =
-  | {
-      type: 'Bitcoin';
-      value: {
-        nulldataPayload: Bytes;
-        depositAddress: CfChainsBtcScriptPubkey;
-      };
-    }
+  | { type: 'Bitcoin'; value: { nulldataPayload: Bytes; depositAddress: CfChainsBtcScriptPubkey } }
   | {
       type: 'Ethereum';
-      value: {
-        details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails;
-      };
+      value: { details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails };
     }
   | {
       type: 'Arbitrum';
-      value: {
-        details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails;
-      };
+      value: { details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails };
     }
   | { type: 'Solana'; value: { instruction: SolPrimInstruction } }
   | {
       type: 'Tron';
-      value: {
-        details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetailsStr;
-        note: Bytes;
-      };
+      value: { details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetailsStr; note: Bytes };
     }
-  | {
-      type: 'Bsc';
-      value: {
-        details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails;
-      };
-    };
+  | { type: 'Bsc'; value: { details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails } };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails = {
   calldata: Bytes;
@@ -24256,11 +21844,7 @@ export type SolPrimInstruction = {
   data: Bytes;
 };
 
-export type SolPrimAccountMeta = {
-  pubkey: SolPrimAddress;
-  isSigner: boolean;
-  isWritable: boolean;
-};
+export type SolPrimAccountMeta = { pubkey: SolPrimAddress; isSigner: boolean; isWritable: boolean };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetailsStr = {
   calldata: Bytes;
@@ -24270,36 +21854,21 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetailsStr = {
 };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesVaultSwapDetailsStr =
-  | {
-      type: 'Bitcoin';
-      value: { nulldataPayload: Bytes; depositAddress: string };
-    }
+  | { type: 'Bitcoin'; value: { nulldataPayload: Bytes; depositAddress: string } }
   | {
       type: 'Ethereum';
-      value: {
-        details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails;
-      };
+      value: { details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails };
     }
   | {
       type: 'Arbitrum';
-      value: {
-        details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails;
-      };
+      value: { details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails };
     }
   | { type: 'Solana'; value: { instruction: SolPrimInstruction } }
   | {
       type: 'Tron';
-      value: {
-        details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetailsStr;
-        note: Bytes;
-      };
+      value: { details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetailsStr; note: Bytes };
     }
-  | {
-      type: 'Bsc';
-      value: {
-        details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails;
-      };
-    };
+  | { type: 'Bsc'; value: { details: StateChainRuntimeRuntimeApisCustomApiTypesEvmCallDetails } };
 
 export type CfChainsVaultSwapInput = {
   sourceAsset: CfPrimitivesChainsAssetsAnyAsset;
@@ -24327,41 +21896,23 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesTransactionScreeningEvents
 };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesTransactionScreeningEvent =
-  | {
-      type: 'TransactionRejectionRequestReceived';
-      value: { accountId: AccountId32; txId: H256 };
-    }
-  | {
-      type: 'TransactionRejectionRequestExpired';
-      value: { accountId: AccountId32; txId: H256 };
-    }
+  | { type: 'TransactionRejectionRequestReceived'; value: { accountId: AccountId32; txId: H256 } }
+  | { type: 'TransactionRejectionRequestExpired'; value: { accountId: AccountId32; txId: H256 } }
   | {
       type: 'TransactionRejectedByBroker';
       value: { refundBroadcastId: number; depositDetails: CfChainsBtcUtxo };
     }
   | {
       type: 'ChannelRejectionRequestReceived';
-      value: {
-        accountId: AccountId32;
-        depositAddress: CfChainsBtcScriptPubkey;
-      };
+      value: { accountId: AccountId32; depositAddress: CfChainsBtcScriptPubkey };
     };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesTransactionScreeningEventDepositDetails =
-  | {
-      type: 'TransactionRejectionRequestReceived';
-      value: { accountId: AccountId32; txId: H256 };
-    }
-  | {
-      type: 'TransactionRejectionRequestExpired';
-      value: { accountId: AccountId32; txId: H256 };
-    }
+  | { type: 'TransactionRejectionRequestReceived'; value: { accountId: AccountId32; txId: H256 } }
+  | { type: 'TransactionRejectionRequestExpired'; value: { accountId: AccountId32; txId: H256 } }
   | {
       type: 'TransactionRejectedByBroker';
-      value: {
-        refundBroadcastId: number;
-        depositDetails: CfChainsEvmDepositDetails;
-      };
+      value: { refundBroadcastId: number; depositDetails: CfChainsEvmDepositDetails };
     }
   | {
       type: 'ChannelRejectionRequestReceived';
@@ -24379,10 +21930,7 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesTransactionScreeningEvent0
     }
   | {
       type: 'TransactionRejectedByBroker';
-      value: {
-        refundBroadcastId: number;
-        depositDetails: CfChainsSolVaultSwapOrDepositChannelId;
-      };
+      value: { refundBroadcastId: number; depositDetails: CfChainsSolVaultSwapOrDepositChannelId };
     }
   | {
       type: 'ChannelRejectionRequestReceived';
@@ -24445,13 +21993,9 @@ export type CfPrimitivesChainsAssetsEthAssetMapOption = {
   cbbtc?: bigint | undefined;
 };
 
-export type CfPrimitivesChainsAssetsDotAssetMapOption = {
-  dot?: bigint | undefined;
-};
+export type CfPrimitivesChainsAssetsDotAssetMapOption = { dot?: bigint | undefined };
 
-export type CfPrimitivesChainsAssetsBtcAssetMapOption = {
-  btc?: bigint | undefined;
-};
+export type CfPrimitivesChainsAssetsBtcAssetMapOption = { btc?: bigint | undefined };
 
 export type CfPrimitivesChainsAssetsArbAssetMapOption = {
   eth?: bigint | undefined;
@@ -24533,15 +22077,9 @@ export type CfPrimitivesChainsAssetsHubAssetMapPermill = {
   usdc: Permill;
 };
 
-export type CfPrimitivesChainsAssetsTronAssetMapPermill = {
-  trx: Permill;
-  usdt: Permill;
-};
+export type CfPrimitivesChainsAssetsTronAssetMapPermill = { trx: Permill; usdt: Permill };
 
-export type CfPrimitivesChainsAssetsBscAssetMapPermill = {
-  bnb: Permill;
-  usdt: Permill;
-};
+export type CfPrimitivesChainsAssetsBscAssetMapPermill = { bnb: Permill; usdt: Permill };
 
 export type PalletCfLendingPoolsGeneralLendingRpcRpcLendingPool = {
   asset: CfPrimitivesChainsAssetsAnyAsset;
@@ -24647,22 +22185,13 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesRuntimeApiAccountInfoWrapp
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesRuntimeApiAccountInfo =
   | { type: 'Unregistered' }
-  | {
-      type: 'Broker';
-      value: StateChainRuntimeRuntimeApisCustomApiTypesBrokerInfo;
-    }
+  | { type: 'Broker'; value: StateChainRuntimeRuntimeApisCustomApiTypesBrokerInfo }
   | {
       type: 'LiquidityProvider';
       value: StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderInfo;
     }
-  | {
-      type: 'Validator';
-      value: StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo;
-    }
-  | {
-      type: 'Operator';
-      value: StateChainRuntimeRuntimeApisCustomApiTypesOperatorInfo;
-    };
+  | { type: 'Validator'; value: StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo }
+  | { type: 'Operator'; value: StateChainRuntimeRuntimeApisCustomApiTypesOperatorInfo };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesNonceOrAccount =
   | { type: 'Nonce'; value: number }
@@ -24691,21 +22220,12 @@ export type EthereumEip712Eip712Eip712Domain = {
   salt?: FixedBytes<32> | undefined;
 };
 
-export type EthereumEip712Eip712Eip712DomainType = {
-  name: string;
-  rType: string;
-};
+export type EthereumEip712Eip712Eip712DomainType = { name: string; rType: string };
 
 export type EthereumEip712MinimizedScaleValue =
-  | {
-      type: 'NamedStruct';
-      value: Array<[string, EthereumEip712MinimizedScaleValue]>;
-    }
+  | { type: 'NamedStruct'; value: Array<[string, EthereumEip712MinimizedScaleValue]> }
   | { type: 'Sequence'; value: Array<EthereumEip712MinimizedScaleValue> }
-  | {
-      type: 'Primitive';
-      value: EthereumEip712MinimizedScaleValueMinimizedPrimitive;
-    };
+  | { type: 'Primitive'; value: EthereumEip712MinimizedScaleValueMinimizedPrimitive };
 
 export type EthereumEip712MinimizedScaleValueMinimizedPrimitive =
   | { type: 'Bool'; value: boolean }
@@ -24734,13 +22254,9 @@ export type CfPrimitivesChainsAssetsEthAssetMap005 = {
   cbbtc?: number | undefined;
 };
 
-export type CfPrimitivesChainsAssetsDotAssetMap005 = {
-  dot?: number | undefined;
-};
+export type CfPrimitivesChainsAssetsDotAssetMap005 = { dot?: number | undefined };
 
-export type CfPrimitivesChainsAssetsBtcAssetMap005 = {
-  btc?: number | undefined;
-};
+export type CfPrimitivesChainsAssetsBtcAssetMap005 = { btc?: number | undefined };
 
 export type CfPrimitivesChainsAssetsArbAssetMap005 = {
   eth?: number | undefined;
@@ -24879,10 +22395,7 @@ export type StateChainRuntimeRuntimeError =
   | { pallet: 'Session'; palletError: PalletSessionError }
   | { pallet: 'Grandpa'; palletError: PalletGrandpaError }
   | { pallet: 'Governance'; palletError: PalletCfGovernanceError }
-  | {
-      pallet: 'TokenholderGovernance';
-      palletError: PalletCfTokenholderGovernanceError;
-    }
+  | { pallet: 'TokenholderGovernance'; palletError: PalletCfTokenholderGovernanceError }
   | { pallet: 'Reputation'; palletError: PalletCfReputationError }
   | { pallet: 'EthereumChainTracking'; palletError: PalletCfChainTrackingError }
   | { pallet: 'PolkadotChainTracking'; palletError: PalletCfChainTrackingError }
@@ -24890,18 +22403,9 @@ export type StateChainRuntimeRuntimeError =
   | { pallet: 'EthereumVault'; palletError: PalletCfVaultsError }
   | { pallet: 'PolkadotVault'; palletError: PalletCfVaultsError }
   | { pallet: 'BitcoinVault'; palletError: PalletCfVaultsError }
-  | {
-      pallet: 'EvmThresholdSigner';
-      palletError: PalletCfThresholdSignatureError;
-    }
-  | {
-      pallet: 'PolkadotThresholdSigner';
-      palletError: PalletCfThresholdSignatureError;
-    }
-  | {
-      pallet: 'BitcoinThresholdSigner';
-      palletError: PalletCfThresholdSignatureError;
-    }
+  | { pallet: 'EvmThresholdSigner'; palletError: PalletCfThresholdSignatureError }
+  | { pallet: 'PolkadotThresholdSigner'; palletError: PalletCfThresholdSignatureError }
+  | { pallet: 'BitcoinThresholdSigner'; palletError: PalletCfThresholdSignatureError }
   | { pallet: 'EthereumBroadcaster'; palletError: PalletCfBroadcastError }
   | { pallet: 'PolkadotBroadcaster'; palletError: PalletCfBroadcastError }
   | { pallet: 'BitcoinBroadcaster'; palletError: PalletCfBroadcastError }
@@ -24916,10 +22420,7 @@ export type StateChainRuntimeRuntimeError =
   | { pallet: 'ArbitrumBroadcaster'; palletError: PalletCfBroadcastError }
   | { pallet: 'ArbitrumIngressEgress'; palletError: PalletCfIngressEgressError }
   | { pallet: 'SolanaVault'; palletError: PalletCfVaultsError }
-  | {
-      pallet: 'SolanaThresholdSigner';
-      palletError: PalletCfThresholdSignatureError;
-    }
+  | { pallet: 'SolanaThresholdSigner'; palletError: PalletCfThresholdSignatureError }
   | { pallet: 'SolanaBroadcaster'; palletError: PalletCfBroadcastError }
   | { pallet: 'SolanaIngressEgress'; palletError: PalletCfIngressEgressError }
   | { pallet: 'SolanaElections'; palletError: PalletCfElectionsError }

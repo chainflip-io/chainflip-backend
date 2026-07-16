@@ -183,10 +183,7 @@ export interface ChainEvents extends GenericChainEvents {
     ExtrinsicFailed: GenericPalletEvent<
       'System',
       'ExtrinsicFailed',
-      {
-        dispatchError: DispatchError;
-        dispatchInfo: FrameSystemDispatchEventInfo;
-      }
+      { dispatchError: DispatchError; dispatchInfo: FrameSystemDispatchEventInfo }
     >;
 
     /**
@@ -484,12 +481,7 @@ export interface ChainEvents extends GenericChainEvents {
     RedemptionRequested: GenericPalletEvent<
       'Funding',
       'RedemptionRequested',
-      {
-        accountId: AccountId32;
-        amount: bigint;
-        broadcastId: number;
-        expiryTime: bigint;
-      }
+      { accountId: AccountId32; amount: bigint; broadcastId: number; expiryTime: bigint }
     >;
 
     /**
@@ -589,11 +581,7 @@ export interface ChainEvents extends GenericChainEvents {
     Rebalance: GenericPalletEvent<
       'Funding',
       'Rebalance',
-      {
-        sourceAccountId: AccountId32;
-        recipientAccountId: AccountId32;
-        amount: bigint;
-      }
+      { sourceAccountId: AccountId32; recipientAccountId: AccountId32; amount: bigint }
     >;
     ScCallExecuted: GenericPalletEvent<
       'Funding',
@@ -651,20 +639,12 @@ export interface ChainEvents extends GenericChainEvents {
     SubAccountCreated: GenericPalletEvent<
       'AccountRoles',
       'SubAccountCreated',
-      {
-        accountId: AccountId32;
-        subAccountId: AccountId32;
-        subAccountIndex: number;
-      }
+      { accountId: AccountId32; subAccountId: AccountId32; subAccountIndex: number }
     >;
     SubAccountCallExecuted: GenericPalletEvent<
       'AccountRoles',
       'SubAccountCallExecuted',
-      {
-        accountId: AccountId32;
-        subAccountId: AccountId32;
-        subAccountIndex: number;
-      }
+      { accountId: AccountId32; subAccountId: AccountId32; subAccountIndex: number }
     >;
 
     /**
@@ -728,11 +708,7 @@ export interface ChainEvents extends GenericChainEvents {
     ReportedWitnessingFailures: GenericPalletEvent<
       'Witnesser',
       'ReportedWitnessingFailures',
-      {
-        callHash: PalletCfWitnesserCallHash;
-        blockNumber: number;
-        accounts: Array<AccountId32>;
-      }
+      { callHash: PalletCfWitnesserCallHash; blockNumber: number; accounts: Array<AccountId32> }
     >;
 
     /**
@@ -778,11 +754,7 @@ export interface ChainEvents extends GenericChainEvents {
     CfeVersionUpdated: GenericPalletEvent<
       'Validator',
       'CFEVersionUpdated',
-      {
-        accountId: AccountId32;
-        oldVersion: CfPrimitivesSemVer;
-        newVersion: CfPrimitivesSemVer;
-      }
+      { accountId: AccountId32; oldVersion: CfPrimitivesSemVer; newVersion: CfPrimitivesSemVer }
     >;
 
     /**
@@ -874,10 +846,7 @@ export interface ChainEvents extends GenericChainEvents {
     OperatorSettingsUpdated: GenericPalletEvent<
       'Validator',
       'OperatorSettingsUpdated',
-      {
-        operator: AccountId32;
-        settings: PalletCfValidatorDelegationOperatorSettings;
-      }
+      { operator: AccountId32; settings: PalletCfValidatorDelegationOperatorSettings }
     >;
 
     /**
@@ -999,10 +968,7 @@ export interface ChainEvents extends GenericChainEvents {
     GrandpaVoteDelegated: GenericPalletEvent<
       'Grandpa',
       'GrandpaVoteDelegated',
-      {
-        delegator: SpConsensusGrandpaAppPublic;
-        delegate: SpConsensusGrandpaAppPublic;
-      }
+      { delegator: SpConsensusGrandpaAppPublic; delegate: SpConsensusGrandpaAppPublic }
     >;
 
     /**
@@ -1167,11 +1133,7 @@ export interface ChainEvents extends GenericChainEvents {
     OffencePenalty: GenericPalletEvent<
       'Reputation',
       'OffencePenalty',
-      {
-        offender: AccountId32;
-        offence: StateChainRuntimeChainflipOffencesOffence;
-        penalty: number;
-      }
+      { offender: AccountId32; offence: StateChainRuntimeChainflipOffencesOffence; penalty: number }
     >;
 
     /**
@@ -1445,11 +1407,7 @@ export interface ChainEvents extends GenericChainEvents {
     ThresholdDispatchComplete: GenericPalletEvent<
       'EvmThresholdSigner',
       'ThresholdDispatchComplete',
-      {
-        requestId: number;
-        ceremonyId: bigint;
-        result: Result<[], DispatchError>;
-      }
+      { requestId: number; ceremonyId: bigint; result: Result<[], DispatchError> }
     >;
     RetryRequested: GenericPalletEvent<
       'EvmThresholdSigner',
@@ -1685,11 +1643,7 @@ export interface ChainEvents extends GenericChainEvents {
     ThresholdDispatchComplete: GenericPalletEvent<
       'PolkadotThresholdSigner',
       'ThresholdDispatchComplete',
-      {
-        requestId: number;
-        ceremonyId: bigint;
-        result: Result<[], DispatchError>;
-      }
+      { requestId: number; ceremonyId: bigint; result: Result<[], DispatchError> }
     >;
     RetryRequested: GenericPalletEvent<
       'PolkadotThresholdSigner',
@@ -1929,11 +1883,7 @@ export interface ChainEvents extends GenericChainEvents {
     ThresholdDispatchComplete: GenericPalletEvent<
       'BitcoinThresholdSigner',
       'ThresholdDispatchComplete',
-      {
-        requestId: number;
-        ceremonyId: bigint;
-        result: Result<[], DispatchError>;
-      }
+      { requestId: number; ceremonyId: bigint; result: Result<[], DispatchError> }
     >;
     RetryRequested: GenericPalletEvent<
       'BitcoinThresholdSigner',
@@ -2245,11 +2195,7 @@ export interface ChainEvents extends GenericChainEvents {
     HistoricalBroadcastRequested: GenericPalletEvent<
       'EthereumBroadcaster',
       'HistoricalBroadcastRequested',
-      {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      }
+      { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number }
     >;
 
     /**
@@ -2348,10 +2294,7 @@ export interface ChainEvents extends GenericChainEvents {
     CallResigned: GenericPalletEvent<
       'PolkadotBroadcaster',
       'CallResigned',
-      {
-        broadcastId: number;
-        transactionPayload: CfChainsDotPolkadotTransactionData;
-      }
+      { broadcastId: number; transactionPayload: CfChainsDotPolkadotTransactionData }
     >;
 
     /**
@@ -2369,11 +2312,7 @@ export interface ChainEvents extends GenericChainEvents {
     HistoricalBroadcastRequested: GenericPalletEvent<
       'PolkadotBroadcaster',
       'HistoricalBroadcastRequested',
-      {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      }
+      { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number }
     >;
 
     /**
@@ -2468,10 +2407,7 @@ export interface ChainEvents extends GenericChainEvents {
     CallResigned: GenericPalletEvent<
       'BitcoinBroadcaster',
       'CallResigned',
-      {
-        broadcastId: number;
-        transactionPayload: CfChainsBtcBitcoinTransactionData;
-      }
+      { broadcastId: number; transactionPayload: CfChainsBtcBitcoinTransactionData }
     >;
 
     /**
@@ -2489,11 +2425,7 @@ export interface ChainEvents extends GenericChainEvents {
     HistoricalBroadcastRequested: GenericPalletEvent<
       'BitcoinBroadcaster',
       'HistoricalBroadcastRequested',
-      {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      }
+      { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number }
     >;
 
     /**
@@ -2577,11 +2509,7 @@ export interface ChainEvents extends GenericChainEvents {
     SwapRescheduled: GenericPalletEvent<
       'Swapping',
       'SwapRescheduled',
-      {
-        swapId: CfPrimitivesSwapId;
-        executeAt: number;
-        reason: PalletCfSwappingSwapFailureReason;
-      }
+      { swapId: CfPrimitivesSwapId; executeAt: number; reason: PalletCfSwappingSwapFailureReason }
     >;
 
     /**
@@ -2655,11 +2583,7 @@ export interface ChainEvents extends GenericChainEvents {
     BatchSwapFailed: GenericPalletEvent<
       'Swapping',
       'BatchSwapFailed',
-      {
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        direction: CfPrimitivesSwapLeg;
-        amount: bigint;
-      }
+      { asset: CfPrimitivesChainsAssetsAnyAsset; direction: CfPrimitivesSwapLeg; amount: bigint }
     >;
     SwapAmountConfiscated: GenericPalletEvent<
       'Swapping',
@@ -2893,10 +2817,7 @@ export interface ChainEvents extends GenericChainEvents {
     CcmBroadcastRequested: GenericPalletEvent<
       'EthereumIngressEgress',
       'CcmBroadcastRequested',
-      {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      }
+      { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] }
     >;
     CcmEgressInvalid: GenericPalletEvent<
       'EthereumIngressEgress',
@@ -2914,10 +2835,7 @@ export interface ChainEvents extends GenericChainEvents {
     BatchBroadcastRequested: GenericPalletEvent<
       'EthereumIngressEgress',
       'BatchBroadcastRequested',
-      {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      }
+      { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> }
     >;
     DepositFailed: GenericPalletEvent<
       'EthereumIngressEgress',
@@ -3024,10 +2942,7 @@ export interface ChainEvents extends GenericChainEvents {
     BoostedDepositLost: GenericPalletEvent<
       'EthereumIngressEgress',
       'BoostedDepositLost',
-      {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      }
+      { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint }
     >;
     TransactionRejectionRequestReceived: GenericPalletEvent<
       'EthereumIngressEgress',
@@ -3047,10 +2962,7 @@ export interface ChainEvents extends GenericChainEvents {
     TransactionRejectionFailed: GenericPalletEvent<
       'EthereumIngressEgress',
       'TransactionRejectionFailed',
-      {
-        txId: CfChainsEvmDepositDetails;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      }
+      { txId: CfChainsEvmDepositDetails; reason: PalletCfIngressEgressRefundFailureReason }
     >;
     UnknownBroker: GenericPalletEvent<
       'EthereumIngressEgress',
@@ -3065,11 +2977,7 @@ export interface ChainEvents extends GenericChainEvents {
     InvalidCcmRefunded: GenericPalletEvent<
       'EthereumIngressEgress',
       'InvalidCcmRefunded',
-      {
-        asset: CfPrimitivesChainsAssetsEthAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      }
+      { asset: CfPrimitivesChainsAssetsEthAsset; amount: bigint; destinationAddress: H160 }
     >;
     PalletConfigUpdated: GenericPalletEvent<
       'EthereumIngressEgress',
@@ -3115,10 +3023,7 @@ export interface ChainEvents extends GenericChainEvents {
     CcmBroadcastRequested: GenericPalletEvent<
       'PolkadotIngressEgress',
       'CcmBroadcastRequested',
-      {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      }
+      { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] }
     >;
     CcmEgressInvalid: GenericPalletEvent<
       'PolkadotIngressEgress',
@@ -3136,10 +3041,7 @@ export interface ChainEvents extends GenericChainEvents {
     BatchBroadcastRequested: GenericPalletEvent<
       'PolkadotIngressEgress',
       'BatchBroadcastRequested',
-      {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      }
+      { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> }
     >;
     DepositFailed: GenericPalletEvent<
       'PolkadotIngressEgress',
@@ -3246,10 +3148,7 @@ export interface ChainEvents extends GenericChainEvents {
     BoostedDepositLost: GenericPalletEvent<
       'PolkadotIngressEgress',
       'BoostedDepositLost',
-      {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      }
+      { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint }
     >;
     TransactionRejectionRequestReceived: GenericPalletEvent<
       'PolkadotIngressEgress',
@@ -3334,10 +3233,7 @@ export interface ChainEvents extends GenericChainEvents {
     CcmBroadcastRequested: GenericPalletEvent<
       'BitcoinIngressEgress',
       'CcmBroadcastRequested',
-      {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      }
+      { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] }
     >;
     CcmEgressInvalid: GenericPalletEvent<
       'BitcoinIngressEgress',
@@ -3355,10 +3251,7 @@ export interface ChainEvents extends GenericChainEvents {
     BatchBroadcastRequested: GenericPalletEvent<
       'BitcoinIngressEgress',
       'BatchBroadcastRequested',
-      {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      }
+      { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> }
     >;
     DepositFailed: GenericPalletEvent<
       'BitcoinIngressEgress',
@@ -3465,10 +3358,7 @@ export interface ChainEvents extends GenericChainEvents {
     BoostedDepositLost: GenericPalletEvent<
       'BitcoinIngressEgress',
       'BoostedDepositLost',
-      {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      }
+      { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint }
     >;
     TransactionRejectionRequestReceived: GenericPalletEvent<
       'BitcoinIngressEgress',
@@ -3488,10 +3378,7 @@ export interface ChainEvents extends GenericChainEvents {
     TransactionRejectionFailed: GenericPalletEvent<
       'BitcoinIngressEgress',
       'TransactionRejectionFailed',
-      {
-        txId: CfChainsBtcUtxo;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      }
+      { txId: CfChainsBtcUtxo; reason: PalletCfIngressEgressRefundFailureReason }
     >;
     UnknownBroker: GenericPalletEvent<
       'BitcoinIngressEgress',
@@ -3834,11 +3721,7 @@ export interface ChainEvents extends GenericChainEvents {
     HistoricalBroadcastRequested: GenericPalletEvent<
       'ArbitrumBroadcaster',
       'HistoricalBroadcastRequested',
-      {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      }
+      { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number }
     >;
 
     /**
@@ -3874,10 +3757,7 @@ export interface ChainEvents extends GenericChainEvents {
     CcmBroadcastRequested: GenericPalletEvent<
       'ArbitrumIngressEgress',
       'CcmBroadcastRequested',
-      {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      }
+      { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] }
     >;
     CcmEgressInvalid: GenericPalletEvent<
       'ArbitrumIngressEgress',
@@ -3895,10 +3775,7 @@ export interface ChainEvents extends GenericChainEvents {
     BatchBroadcastRequested: GenericPalletEvent<
       'ArbitrumIngressEgress',
       'BatchBroadcastRequested',
-      {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      }
+      { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> }
     >;
     DepositFailed: GenericPalletEvent<
       'ArbitrumIngressEgress',
@@ -4005,10 +3882,7 @@ export interface ChainEvents extends GenericChainEvents {
     BoostedDepositLost: GenericPalletEvent<
       'ArbitrumIngressEgress',
       'BoostedDepositLost',
-      {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      }
+      { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint }
     >;
     TransactionRejectionRequestReceived: GenericPalletEvent<
       'ArbitrumIngressEgress',
@@ -4028,10 +3902,7 @@ export interface ChainEvents extends GenericChainEvents {
     TransactionRejectionFailed: GenericPalletEvent<
       'ArbitrumIngressEgress',
       'TransactionRejectionFailed',
-      {
-        txId: CfChainsEvmDepositDetails;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      }
+      { txId: CfChainsEvmDepositDetails; reason: PalletCfIngressEgressRefundFailureReason }
     >;
     UnknownBroker: GenericPalletEvent<
       'ArbitrumIngressEgress',
@@ -4046,11 +3917,7 @@ export interface ChainEvents extends GenericChainEvents {
     InvalidCcmRefunded: GenericPalletEvent<
       'ArbitrumIngressEgress',
       'InvalidCcmRefunded',
-      {
-        asset: CfPrimitivesChainsAssetsArbAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      }
+      { asset: CfPrimitivesChainsAssetsArbAsset; amount: bigint; destinationAddress: H160 }
     >;
     PalletConfigUpdated: GenericPalletEvent<
       'ArbitrumIngressEgress',
@@ -4144,11 +4011,7 @@ export interface ChainEvents extends GenericChainEvents {
     ThresholdDispatchComplete: GenericPalletEvent<
       'SolanaThresholdSigner',
       'ThresholdDispatchComplete',
-      {
-        requestId: number;
-        ceremonyId: bigint;
-        result: Result<[], DispatchError>;
-      }
+      { requestId: number; ceremonyId: bigint; result: Result<[], DispatchError> }
     >;
     RetryRequested: GenericPalletEvent<
       'SolanaThresholdSigner',
@@ -4398,11 +4261,7 @@ export interface ChainEvents extends GenericChainEvents {
     BroadcastSuccess: GenericPalletEvent<
       'SolanaBroadcaster',
       'BroadcastSuccess',
-      {
-        broadcastId: number;
-        transactionOutId: SolPrimSignature;
-        transactionRef: SolPrimSignature;
-      }
+      { broadcastId: number; transactionOutId: SolPrimSignature; transactionRef: SolPrimSignature }
     >;
 
     /**
@@ -4438,10 +4297,7 @@ export interface ChainEvents extends GenericChainEvents {
     CallResigned: GenericPalletEvent<
       'SolanaBroadcaster',
       'CallResigned',
-      {
-        broadcastId: number;
-        transactionPayload: CfChainsSolSolanaTransactionData;
-      }
+      { broadcastId: number; transactionPayload: CfChainsSolSolanaTransactionData }
     >;
 
     /**
@@ -4459,11 +4315,7 @@ export interface ChainEvents extends GenericChainEvents {
     HistoricalBroadcastRequested: GenericPalletEvent<
       'SolanaBroadcaster',
       'HistoricalBroadcastRequested',
-      {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      }
+      { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number }
     >;
 
     /**
@@ -4499,10 +4351,7 @@ export interface ChainEvents extends GenericChainEvents {
     CcmBroadcastRequested: GenericPalletEvent<
       'SolanaIngressEgress',
       'CcmBroadcastRequested',
-      {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      }
+      { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] }
     >;
     CcmEgressInvalid: GenericPalletEvent<
       'SolanaIngressEgress',
@@ -4520,10 +4369,7 @@ export interface ChainEvents extends GenericChainEvents {
     BatchBroadcastRequested: GenericPalletEvent<
       'SolanaIngressEgress',
       'BatchBroadcastRequested',
-      {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      }
+      { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> }
     >;
     DepositFailed: GenericPalletEvent<
       'SolanaIngressEgress',
@@ -4630,19 +4476,12 @@ export interface ChainEvents extends GenericChainEvents {
     BoostedDepositLost: GenericPalletEvent<
       'SolanaIngressEgress',
       'BoostedDepositLost',
-      {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      }
+      { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint }
     >;
     TransactionRejectionRequestReceived: GenericPalletEvent<
       'SolanaIngressEgress',
       'TransactionRejectionRequestReceived',
-      {
-        accountId: AccountId32;
-        txId: [SolPrimAddress, bigint];
-        expiresAt: number;
-      }
+      { accountId: AccountId32; txId: [SolPrimAddress, bigint]; expiresAt: number }
     >;
     TransactionRejectionRequestExpired: GenericPalletEvent<
       'SolanaIngressEgress',
@@ -4804,11 +4643,7 @@ export interface ChainEvents extends GenericChainEvents {
     VaultDeficitDetected: GenericPalletEvent<
       'AssetBalances',
       'VaultDeficitDetected',
-      {
-        chain: CfPrimitivesChainsForeignChain;
-        amountOwed: bigint;
-        available: bigint;
-      }
+      { chain: CfPrimitivesChainsForeignChain; amountOwed: bigint; available: bigint }
     >;
 
     /**
@@ -5041,10 +4876,7 @@ export interface ChainEvents extends GenericChainEvents {
     CallResigned: GenericPalletEvent<
       'AssethubBroadcaster',
       'CallResigned',
-      {
-        broadcastId: number;
-        transactionPayload: CfChainsDotPolkadotTransactionData;
-      }
+      { broadcastId: number; transactionPayload: CfChainsDotPolkadotTransactionData }
     >;
 
     /**
@@ -5062,11 +4894,7 @@ export interface ChainEvents extends GenericChainEvents {
     HistoricalBroadcastRequested: GenericPalletEvent<
       'AssethubBroadcaster',
       'HistoricalBroadcastRequested',
-      {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      }
+      { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number }
     >;
 
     /**
@@ -5102,10 +4930,7 @@ export interface ChainEvents extends GenericChainEvents {
     CcmBroadcastRequested: GenericPalletEvent<
       'AssethubIngressEgress',
       'CcmBroadcastRequested',
-      {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      }
+      { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] }
     >;
     CcmEgressInvalid: GenericPalletEvent<
       'AssethubIngressEgress',
@@ -5123,10 +4948,7 @@ export interface ChainEvents extends GenericChainEvents {
     BatchBroadcastRequested: GenericPalletEvent<
       'AssethubIngressEgress',
       'BatchBroadcastRequested',
-      {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      }
+      { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> }
     >;
     DepositFailed: GenericPalletEvent<
       'AssethubIngressEgress',
@@ -5233,10 +5055,7 @@ export interface ChainEvents extends GenericChainEvents {
     BoostedDepositLost: GenericPalletEvent<
       'AssethubIngressEgress',
       'BoostedDepositLost',
-      {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      }
+      { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint }
     >;
     TransactionRejectionRequestReceived: GenericPalletEvent<
       'AssethubIngressEgress',
@@ -5309,10 +5128,7 @@ export interface ChainEvents extends GenericChainEvents {
     FundsAddedToStrategy: GenericPalletEvent<
       'TradingStrategy',
       'FundsAddedToStrategy',
-      {
-        strategyId: AccountId32;
-        amounts: Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]>;
-      }
+      { strategyId: AccountId32; amounts: Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]> }
     >;
     StrategyClosed: GenericPalletEvent<
       'TradingStrategy',
@@ -5347,11 +5163,7 @@ export interface ChainEvents extends GenericChainEvents {
     BoostFundsAdded: GenericPalletEvent<
       'LendingPools',
       'BoostFundsAdded',
-      {
-        boosterId: AccountId32;
-        boostPool: PalletCfLendingPoolsBoostBoostPoolId;
-        amount: bigint;
-      }
+      { boosterId: AccountId32; boostPool: PalletCfLendingPoolsBoostBoostPoolId; amount: bigint }
     >;
     StoppedBoosting: GenericPalletEvent<
       'LendingPools',
@@ -5848,11 +5660,7 @@ export interface ChainEvents extends GenericChainEvents {
     HistoricalBroadcastRequested: GenericPalletEvent<
       'TronBroadcaster',
       'HistoricalBroadcastRequested',
-      {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      }
+      { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number }
     >;
 
     /**
@@ -5888,10 +5696,7 @@ export interface ChainEvents extends GenericChainEvents {
     CcmBroadcastRequested: GenericPalletEvent<
       'TronIngressEgress',
       'CcmBroadcastRequested',
-      {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      }
+      { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] }
     >;
     CcmEgressInvalid: GenericPalletEvent<
       'TronIngressEgress',
@@ -5909,10 +5714,7 @@ export interface ChainEvents extends GenericChainEvents {
     BatchBroadcastRequested: GenericPalletEvent<
       'TronIngressEgress',
       'BatchBroadcastRequested',
-      {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      }
+      { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> }
     >;
     DepositFailed: GenericPalletEvent<
       'TronIngressEgress',
@@ -6019,10 +5821,7 @@ export interface ChainEvents extends GenericChainEvents {
     BoostedDepositLost: GenericPalletEvent<
       'TronIngressEgress',
       'BoostedDepositLost',
-      {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      }
+      { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint }
     >;
     TransactionRejectionRequestReceived: GenericPalletEvent<
       'TronIngressEgress',
@@ -6042,10 +5841,7 @@ export interface ChainEvents extends GenericChainEvents {
     TransactionRejectionFailed: GenericPalletEvent<
       'TronIngressEgress',
       'TransactionRejectionFailed',
-      {
-        txId: CfChainsEvmDepositDetails;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      }
+      { txId: CfChainsEvmDepositDetails; reason: PalletCfIngressEgressRefundFailureReason }
     >;
     UnknownBroker: GenericPalletEvent<
       'TronIngressEgress',
@@ -6060,11 +5856,7 @@ export interface ChainEvents extends GenericChainEvents {
     InvalidCcmRefunded: GenericPalletEvent<
       'TronIngressEgress',
       'InvalidCcmRefunded',
-      {
-        asset: CfPrimitivesChainsAssetsTronAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      }
+      { asset: CfPrimitivesChainsAssetsTronAsset; amount: bigint; destinationAddress: H160 }
     >;
     PalletConfigUpdated: GenericPalletEvent<
       'TronIngressEgress',
@@ -6305,11 +6097,7 @@ export interface ChainEvents extends GenericChainEvents {
     HistoricalBroadcastRequested: GenericPalletEvent<
       'BscBroadcaster',
       'HistoricalBroadcastRequested',
-      {
-        broadcastId: number;
-        thresholdSignatureRequestId: number;
-        epochIndex: number;
-      }
+      { broadcastId: number; thresholdSignatureRequestId: number; epochIndex: number }
     >;
 
     /**
@@ -6345,10 +6133,7 @@ export interface ChainEvents extends GenericChainEvents {
     CcmBroadcastRequested: GenericPalletEvent<
       'BscIngressEgress',
       'CcmBroadcastRequested',
-      {
-        broadcastId: number;
-        egressId: [CfPrimitivesChainsForeignChain, bigint];
-      }
+      { broadcastId: number; egressId: [CfPrimitivesChainsForeignChain, bigint] }
     >;
     CcmEgressInvalid: GenericPalletEvent<
       'BscIngressEgress',
@@ -6366,10 +6151,7 @@ export interface ChainEvents extends GenericChainEvents {
     BatchBroadcastRequested: GenericPalletEvent<
       'BscIngressEgress',
       'BatchBroadcastRequested',
-      {
-        broadcastId: number;
-        egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]>;
-      }
+      { broadcastId: number; egressIds: Array<[CfPrimitivesChainsForeignChain, bigint]> }
     >;
     DepositFailed: GenericPalletEvent<
       'BscIngressEgress',
@@ -6476,10 +6258,7 @@ export interface ChainEvents extends GenericChainEvents {
     BoostedDepositLost: GenericPalletEvent<
       'BscIngressEgress',
       'BoostedDepositLost',
-      {
-        prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
-        amount: bigint;
-      }
+      { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint }
     >;
     TransactionRejectionRequestReceived: GenericPalletEvent<
       'BscIngressEgress',
@@ -6499,10 +6278,7 @@ export interface ChainEvents extends GenericChainEvents {
     TransactionRejectionFailed: GenericPalletEvent<
       'BscIngressEgress',
       'TransactionRejectionFailed',
-      {
-        txId: CfChainsEvmDepositDetails;
-        reason: PalletCfIngressEgressRefundFailureReason;
-      }
+      { txId: CfChainsEvmDepositDetails; reason: PalletCfIngressEgressRefundFailureReason }
     >;
     UnknownBroker: GenericPalletEvent<
       'BscIngressEgress',
@@ -6517,11 +6293,7 @@ export interface ChainEvents extends GenericChainEvents {
     InvalidCcmRefunded: GenericPalletEvent<
       'BscIngressEgress',
       'InvalidCcmRefunded',
-      {
-        asset: CfPrimitivesChainsAssetsBscAsset;
-        amount: bigint;
-        destinationAddress: H160;
-      }
+      { asset: CfPrimitivesChainsAssetsBscAsset; amount: bigint; destinationAddress: H160 }
     >;
     PalletConfigUpdated: GenericPalletEvent<
       'BscIngressEgress',

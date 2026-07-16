@@ -503,10 +503,7 @@ export interface ChainTx<
           pallet: 'Environment';
           palletCall: {
             name: 'WitnessPolkadotVaultCreation';
-            params: {
-              dotPureProxyVaultKey: CfChainsDotPolkadotAccountId;
-              txId: CfPrimitivesTxId;
-            };
+            params: { dotPureProxyVaultKey: CfChainsDotPolkadotAccountId; txId: CfPrimitivesTxId };
           };
         },
         ChainKnownTypes
@@ -628,10 +625,7 @@ export interface ChainTx<
           pallet: 'Environment';
           palletCall: {
             name: 'ForceRecoverSolNonce';
-            params: {
-              nonceAccount: SolPrimAddress;
-              durableNonce: SolPrimDigest | undefined;
-            };
+            params: { nonceAccount: SolPrimAddress; durableNonce: SolPrimDigest | undefined };
           };
         },
         ChainKnownTypes
@@ -687,10 +681,7 @@ export interface ChainTx<
           pallet: 'Environment';
           palletCall: {
             name: 'WitnessAssethubVaultCreation';
-            params: {
-              hubPureProxyVaultKey: CfChainsDotPolkadotAccountId;
-              txId: CfPrimitivesTxId;
-            };
+            params: { hubPureProxyVaultKey: CfChainsDotPolkadotAccountId; txId: CfPrimitivesTxId };
           };
         },
         ChainKnownTypes
@@ -939,10 +930,7 @@ export interface ChainTx<
           pallet: 'Funding';
           palletCall: {
             name: 'UpdateRestrictedAddresses';
-            params: {
-              addressesToAdd: Array<H160>;
-              addressesToRemove: Array<H160>;
-            };
+            params: { addressesToAdd: Array<H160>; addressesToRemove: Array<H160> };
           };
         },
         ChainKnownTypes
@@ -1160,10 +1148,7 @@ export interface ChainTx<
           pallet: 'AccountRoles';
           palletCall: {
             name: 'AsSubAccount';
-            params: {
-              subAccountIndex: number;
-              call: StateChainRuntimeRuntimeCallLike;
-            };
+            params: { subAccountIndex: number; call: StateChainRuntimeRuntimeCallLike };
           };
         },
         ChainKnownTypes
@@ -1224,10 +1209,7 @@ export interface ChainTx<
           pallet: 'Witnesser';
           palletCall: {
             name: 'WitnessAtEpoch';
-            params: {
-              call: StateChainRuntimeRuntimeCallLike;
-              epochIndex: number;
-            };
+            params: { call: StateChainRuntimeRuntimeCallLike; epochIndex: number };
           };
         },
         ChainKnownTypes
@@ -1254,10 +1236,7 @@ export interface ChainTx<
           pallet: 'Witnesser';
           palletCall: {
             name: 'ForceWitness';
-            params: {
-              call: StateChainRuntimeRuntimeCallLike;
-              epochIndex: number;
-            };
+            params: { call: StateChainRuntimeRuntimeCallLike; epochIndex: number };
           };
         },
         ChainKnownTypes
@@ -1372,10 +1351,7 @@ export interface ChainTx<
           pallet: 'Validator';
           palletCall: {
             name: 'SetKeys';
-            params: {
-              keys: StateChainRuntimeOpaqueSessionKeys;
-              proof: BytesLike;
-            };
+            params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: BytesLike };
           };
         },
         ChainKnownTypes
@@ -1802,10 +1778,7 @@ export interface ChainTx<
           pallet: 'Session';
           palletCall: {
             name: 'SetKeys';
-            params: {
-              keys: StateChainRuntimeOpaqueSessionKeys;
-              proof: BytesLike;
-            };
+            params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: BytesLike };
           };
         },
         ChainKnownTypes
@@ -1995,10 +1968,7 @@ export interface ChainTx<
           pallet: 'Governance';
           palletCall: {
             name: 'NewMembershipSet';
-            params: {
-              newMembers: Array<AccountId32Like>;
-              newThreshold: number;
-            };
+            params: { newMembers: Array<AccountId32Like>; newThreshold: number };
           };
         },
         ChainKnownTypes
@@ -2440,11 +2410,7 @@ export interface ChainTx<
           pallet: 'EthereumVault';
           palletCall: {
             name: 'VaultKeyRotatedExternally';
-            params: {
-              newPublicKey: CfChainsEvmAggKey;
-              blockNumber: bigint;
-              txId: H256;
-            };
+            params: { newPublicKey: CfChainsEvmAggKey; blockNumber: bigint; txId: H256 };
           };
         },
         ChainKnownTypes
@@ -2554,11 +2520,7 @@ export interface ChainTx<
           pallet: 'BitcoinVault';
           palletCall: {
             name: 'VaultKeyRotatedExternally';
-            params: {
-              newPublicKey: CfChainsBtcAggKey;
-              blockNumber: bigint;
-              txId: H256;
-            };
+            params: { newPublicKey: CfChainsBtcAggKey; blockNumber: bigint; txId: H256 };
           };
         },
         ChainKnownTypes
@@ -2611,10 +2573,7 @@ export interface ChainTx<
           pallet: 'EvmThresholdSigner';
           palletCall: {
             name: 'SignatureSuccess';
-            params: {
-              ceremonyId: bigint;
-              signature: CfChainsEvmSchnorrVerificationComponents;
-            };
+            params: { ceremonyId: bigint; signature: CfChainsEvmSchnorrVerificationComponents };
           };
         },
         ChainKnownTypes
@@ -2802,10 +2761,7 @@ export interface ChainTx<
           pallet: 'PolkadotThresholdSigner';
           palletCall: {
             name: 'SignatureSuccess';
-            params: {
-              ceremonyId: bigint;
-              signature: CfChainsDotPolkadotSignature;
-            };
+            params: { ceremonyId: bigint; signature: CfChainsDotPolkadotSignature };
           };
         },
         ChainKnownTypes
@@ -4208,10 +4164,7 @@ export interface ChainTx<
           pallet: 'LiquidityProvider';
           palletCall: {
             name: 'RequestLiquidityDepositAddress';
-            params: {
-              asset: CfPrimitivesChainsAssetsAnyAsset;
-              boostFee: number;
-            };
+            params: { asset: CfPrimitivesChainsAssetsAnyAsset; boostFee: number };
           };
         },
         ChainKnownTypes
@@ -4411,10 +4364,7 @@ export interface ChainTx<
           pallet: 'EthereumIngressEgress';
           palletCall: {
             name: 'EnableOrDisableEgress';
-            params: {
-              asset: CfPrimitivesChainsAssetsEthAsset;
-              setDisabled: boolean;
-            };
+            params: { asset: CfPrimitivesChainsAssetsEthAsset; setDisabled: boolean };
           };
         },
         ChainKnownTypes
@@ -4495,9 +4445,7 @@ export interface ChainTx<
           pallet: 'EthereumIngressEgress';
           palletCall: {
             name: 'UpdatePalletConfig';
-            params: {
-              updates: Array<PalletCfIngressEgressPalletConfigUpdateEthereum>;
-            };
+            params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateEthereum> };
           };
         },
         ChainKnownTypes
@@ -4587,10 +4535,7 @@ export interface ChainTx<
           pallet: 'PolkadotIngressEgress';
           palletCall: {
             name: 'EnableOrDisableEgress';
-            params: {
-              asset: CfPrimitivesChainsAssetsDotAsset;
-              setDisabled: boolean;
-            };
+            params: { asset: CfPrimitivesChainsAssetsDotAsset; setDisabled: boolean };
           };
         },
         ChainKnownTypes
@@ -4671,9 +4616,7 @@ export interface ChainTx<
           pallet: 'PolkadotIngressEgress';
           palletCall: {
             name: 'UpdatePalletConfig';
-            params: {
-              updates: Array<PalletCfIngressEgressPalletConfigUpdatePolkadot>;
-            };
+            params: { updates: Array<PalletCfIngressEgressPalletConfigUpdatePolkadot> };
           };
         },
         ChainKnownTypes
@@ -4763,10 +4706,7 @@ export interface ChainTx<
           pallet: 'BitcoinIngressEgress';
           palletCall: {
             name: 'EnableOrDisableEgress';
-            params: {
-              asset: CfPrimitivesChainsAssetsBtcAsset;
-              setDisabled: boolean;
-            };
+            params: { asset: CfPrimitivesChainsAssetsBtcAsset; setDisabled: boolean };
           };
         },
         ChainKnownTypes
@@ -4845,9 +4785,7 @@ export interface ChainTx<
           pallet: 'BitcoinIngressEgress';
           palletCall: {
             name: 'UpdatePalletConfig';
-            params: {
-              updates: Array<PalletCfIngressEgressPalletConfigUpdateBitcoin>;
-            };
+            params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateBitcoin> };
           };
         },
         ChainKnownTypes
@@ -5187,9 +5125,7 @@ export interface ChainTx<
           pallet: 'LiquidityPools';
           palletCall: {
             name: 'SetMaximumPriceImpact';
-            params: {
-              limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]>;
-            };
+            params: { limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]> };
           };
         },
         ChainKnownTypes
@@ -5309,11 +5245,7 @@ export interface ChainTx<
           pallet: 'ArbitrumVault';
           palletCall: {
             name: 'VaultKeyRotatedExternally';
-            params: {
-              newPublicKey: CfChainsEvmAggKey;
-              blockNumber: bigint;
-              txId: H256;
-            };
+            params: { newPublicKey: CfChainsEvmAggKey; blockNumber: bigint; txId: H256 };
           };
         },
         ChainKnownTypes
@@ -5589,10 +5521,7 @@ export interface ChainTx<
           pallet: 'ArbitrumIngressEgress';
           palletCall: {
             name: 'EnableOrDisableEgress';
-            params: {
-              asset: CfPrimitivesChainsAssetsArbAsset;
-              setDisabled: boolean;
-            };
+            params: { asset: CfPrimitivesChainsAssetsArbAsset; setDisabled: boolean };
           };
         },
         ChainKnownTypes
@@ -5673,9 +5602,7 @@ export interface ChainTx<
           pallet: 'ArbitrumIngressEgress';
           palletCall: {
             name: 'UpdatePalletConfig';
-            params: {
-              updates: Array<PalletCfIngressEgressPalletConfigUpdateArbitrum>;
-            };
+            params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateArbitrum> };
           };
         },
         ChainKnownTypes
@@ -6237,10 +6164,7 @@ export interface ChainTx<
           pallet: 'SolanaIngressEgress';
           palletCall: {
             name: 'EnableOrDisableEgress';
-            params: {
-              asset: CfPrimitivesChainsAssetsSolAsset;
-              setDisabled: boolean;
-            };
+            params: { asset: CfPrimitivesChainsAssetsSolAsset; setDisabled: boolean };
           };
         },
         ChainKnownTypes
@@ -6319,9 +6243,7 @@ export interface ChainTx<
           pallet: 'SolanaIngressEgress';
           palletCall: {
             name: 'UpdatePalletConfig';
-            params: {
-              updates: Array<PalletCfIngressEgressPalletConfigUpdateSolana>;
-            };
+            params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateSolana> };
           };
         },
         ChainKnownTypes
@@ -7195,10 +7117,7 @@ export interface ChainTx<
           pallet: 'AssethubIngressEgress';
           palletCall: {
             name: 'EnableOrDisableEgress';
-            params: {
-              asset: CfPrimitivesChainsAssetsHubAsset;
-              setDisabled: boolean;
-            };
+            params: { asset: CfPrimitivesChainsAssetsHubAsset; setDisabled: boolean };
           };
         },
         ChainKnownTypes
@@ -7279,9 +7198,7 @@ export interface ChainTx<
           pallet: 'AssethubIngressEgress';
           palletCall: {
             name: 'UpdatePalletConfig';
-            params: {
-              updates: Array<PalletCfIngressEgressPalletConfigUpdateAssethub>;
-            };
+            params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateAssethub> };
           };
         },
         ChainKnownTypes
@@ -7433,9 +7350,7 @@ export interface ChainTx<
           pallet: 'TradingStrategy';
           palletCall: {
             name: 'UpdatePalletConfig';
-            params: {
-              updates: Array<PalletCfTradingStrategyPalletConfigUpdate>;
-            };
+            params: { updates: Array<PalletCfTradingStrategyPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -7487,11 +7402,7 @@ export interface ChainTx<
           pallet: 'LendingPools';
           palletCall: {
             name: 'AddBoostFunds';
-            params: {
-              asset: CfPrimitivesChainsAssetsAnyAsset;
-              amount: bigint;
-              poolTier: number;
-            };
+            params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint; poolTier: number };
           };
         },
         ChainKnownTypes
@@ -7512,10 +7423,7 @@ export interface ChainTx<
           pallet: 'LendingPools';
           palletCall: {
             name: 'StopBoosting';
-            params: {
-              asset: CfPrimitivesChainsAssetsAnyAsset;
-              poolTier: number;
-            };
+            params: { asset: CfPrimitivesChainsAssetsAnyAsset; poolTier: number };
           };
         },
         ChainKnownTypes
@@ -7591,10 +7499,7 @@ export interface ChainTx<
           pallet: 'LendingPools';
           palletCall: {
             name: 'RemoveLenderFunds';
-            params: {
-              asset: CfPrimitivesChainsAssetsAnyAsset;
-              amount: bigint | undefined;
-            };
+            params: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint | undefined };
           };
         },
         ChainKnownTypes
@@ -7642,10 +7547,7 @@ export interface ChainTx<
           pallet: 'LendingPools';
           palletCall: {
             name: 'ExpandLoan';
-            params: {
-              loanId: CfTraitsLendingLoanId;
-              extraAmountToBorrow: bigint;
-            };
+            params: { loanId: CfTraitsLendingLoanId; extraAmountToBorrow: bigint };
           };
         },
         ChainKnownTypes
@@ -7666,10 +7568,7 @@ export interface ChainTx<
           pallet: 'LendingPools';
           palletCall: {
             name: 'MakeRepayment';
-            params: {
-              loanId: CfTraitsLendingLoanId;
-              amount: CfTraitsLendingRepaymentAmount;
-            };
+            params: { loanId: CfTraitsLendingLoanId; amount: CfTraitsLendingRepaymentAmount };
           };
         },
         ChainKnownTypes
@@ -8169,9 +8068,7 @@ export interface ChainTx<
           pallet: 'GenericElections';
           palletCall: {
             name: 'DeleteVote';
-            params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifier003;
-            };
+            params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 };
           };
         },
         ChainKnownTypes
@@ -8494,9 +8391,7 @@ export interface ChainTx<
           pallet: 'EthereumElections';
           palletCall: {
             name: 'DeleteVote';
-            params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifier004;
-            };
+            params: { electionIdentifier: PalletCfElectionsElectionIdentifier004 };
           };
         },
         ChainKnownTypes
@@ -9168,11 +9063,7 @@ export interface ChainTx<
           pallet: 'TronVault';
           palletCall: {
             name: 'VaultKeyRotatedExternally';
-            params: {
-              newPublicKey: CfChainsEvmAggKey;
-              blockNumber: bigint;
-              txId: H256;
-            };
+            params: { newPublicKey: CfChainsEvmAggKey; blockNumber: bigint; txId: H256 };
           };
         },
         ChainKnownTypes
@@ -9448,10 +9339,7 @@ export interface ChainTx<
           pallet: 'TronIngressEgress';
           palletCall: {
             name: 'EnableOrDisableEgress';
-            params: {
-              asset: CfPrimitivesChainsAssetsTronAsset;
-              setDisabled: boolean;
-            };
+            params: { asset: CfPrimitivesChainsAssetsTronAsset; setDisabled: boolean };
           };
         },
         ChainKnownTypes
@@ -9530,9 +9418,7 @@ export interface ChainTx<
           pallet: 'TronIngressEgress';
           palletCall: {
             name: 'UpdatePalletConfig';
-            params: {
-              updates: Array<PalletCfIngressEgressPalletConfigUpdateTron>;
-            };
+            params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateTron> };
           };
         },
         ChainKnownTypes
@@ -9570,10 +9456,7 @@ export interface ChainTx<
           pallet: 'TronIngressEgress';
           palletCall: {
             name: 'VaultSwapRequest';
-            params: {
-              blockHeight: bigint;
-              deposit: PalletCfIngressEgressVaultDepositWitnessTron;
-            };
+            params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessTron };
           };
         },
         ChainKnownTypes
@@ -9695,9 +9578,7 @@ export interface ChainTx<
           pallet: 'TronElections';
           palletCall: {
             name: 'DeleteVote';
-            params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifier005;
-            };
+            params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 };
           };
         },
         ChainKnownTypes
@@ -10010,11 +9891,7 @@ export interface ChainTx<
           pallet: 'BscVault';
           palletCall: {
             name: 'VaultKeyRotatedExternally';
-            params: {
-              newPublicKey: CfChainsEvmAggKey;
-              blockNumber: bigint;
-              txId: H256;
-            };
+            params: { newPublicKey: CfChainsEvmAggKey; blockNumber: bigint; txId: H256 };
           };
         },
         ChainKnownTypes
@@ -10290,10 +10167,7 @@ export interface ChainTx<
           pallet: 'BscIngressEgress';
           palletCall: {
             name: 'EnableOrDisableEgress';
-            params: {
-              asset: CfPrimitivesChainsAssetsBscAsset;
-              setDisabled: boolean;
-            };
+            params: { asset: CfPrimitivesChainsAssetsBscAsset; setDisabled: boolean };
           };
         },
         ChainKnownTypes
@@ -10372,9 +10246,7 @@ export interface ChainTx<
           pallet: 'BscIngressEgress';
           palletCall: {
             name: 'UpdatePalletConfig';
-            params: {
-              updates: Array<PalletCfIngressEgressPalletConfigUpdateBsc>;
-            };
+            params: { updates: Array<PalletCfIngressEgressPalletConfigUpdateBsc> };
           };
         },
         ChainKnownTypes
@@ -10412,10 +10284,7 @@ export interface ChainTx<
           pallet: 'BscIngressEgress';
           palletCall: {
             name: 'VaultSwapRequest';
-            params: {
-              blockHeight: bigint;
-              deposit: PalletCfIngressEgressVaultDepositWitnessBsc;
-            };
+            params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBsc };
           };
         },
         ChainKnownTypes
