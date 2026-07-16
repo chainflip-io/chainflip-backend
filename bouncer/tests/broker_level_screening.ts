@@ -164,6 +164,9 @@ export async function doTestSwapDeposits<A = []>(
     (subcf) => testEvm(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Bnb', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'BscUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'ArbUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) =>
       testBitcoin(subcf.withChildLogger('BrokerLevelScreening_testBitcoin'), false, async (txId) =>
         setTxRiskScore(txId, 9.0),
@@ -190,6 +193,9 @@ export async function doTestLpDeposits<A = []>(parentCf: ChainflipIO<A>) {
     (subcf) => testEvmLiquidityDeposit(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmLiquidityDeposit(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmLiquidityDeposit(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'ArbUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 }
 
@@ -197,6 +203,9 @@ export async function doTestVaultSwaps<A = []>(cf: ChainflipIO<A>) {
   await cf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') }).all([
     // --- vault swaps ---
     (subcf) => testBitcoinVaultSwap(subcf, async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'ArbUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
