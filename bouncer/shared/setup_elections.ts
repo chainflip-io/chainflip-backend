@@ -47,7 +47,7 @@ export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> 
   }
 
   if (chainflip.query.arbitrumIngressEgress) {
-    const ingressSafetyMargin = 3;
+    const ingressSafetyMargin = 2;
 
     // The runtime propagates this value to the Arbitrum ingress-related election settings.
     await submitGovernanceExtrinsic((api) =>
