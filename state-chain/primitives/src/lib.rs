@@ -48,7 +48,7 @@ pub mod chains;
 
 #[macro_export]
 macro_rules! define_wrapper_type {
-	($name: ident, $inner: ty $(, extra_derives: [$( $extra_derive: ident ),*])? $(, extra_attributes: [$( #[ $( $extra_attribute:tt )*] ),*])?) => {
+	($name: ident, $inner: ty $(, extra_derives: [$( $extra_derive:path ),*])? $(, extra_attributes: [$( #[ $( $extra_attribute:tt )*] ),*])?) => {
 
 		#[derive(
 			Clone,
@@ -64,6 +64,7 @@ macro_rules! define_wrapper_type {
 			Default,
 			$($( $extra_derive ),*)?
 		)]
+		$($(#[$($extra_attribute)*])*)?
 		pub struct $name(pub $inner);
 
 		impl sp_std::ops::Deref for $name {
@@ -140,8 +141,11 @@ pub type BoostPoolTier = u16;
 
 define_wrapper_type!(
 	AffiliateShortId, u8,
-	extra_derives: [Serialize, Deserialize, PartialOrd, Ord],
-	extra_attributes: [#[cfg_attr(any(test, all(feature = "proptest", feature = "std")))]]
+	extra_derives: [Serialize, Deserialize, PartialOrd, Ord, cf_proc_macros::HasTypeIntrospection],
+	extra_attributes: [#[cfg_attr(
+		any(test, all(feature = "proptest", feature = "std")),
+		derive(proptest_derive::Arbitrary)
+	)]]
 );
 
 impl_identity_migrations! {AffiliateShortId, }
