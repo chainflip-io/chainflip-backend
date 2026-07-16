@@ -134,13 +134,6 @@ export async function doTestSwapDeposits<A = []>(
   // NOTE: We currently don't test the following assets:
   // - Flip: we don't test Flip rejections because they are currently disabled in the
   //         deposit monitor, since Elliptic doesn't provide Flip analysis.
-  // - ArbEth: we don't test ArbEth rejections since on localnet the safety margin for ArbEth
-  //           is too short for the DM, the rejections fail more often than not due
-  //           to being too late.
-  //           Most of the functionality is covered by testing `Eth` and `ArbUsdc`.
-  //           An alternative would be to increase the ArbEth safety margin on localnet.
-  // - ArbUsdc: we also don't test ArbUsdc rejections, they have caused tests to become flaky
-  //            as well (PRO-2488).
   // - Btc VaultSwaps: For bitcoin, due to ancestor screening, we have to make sure to use
   //                   a dedicated "tainted" wallet. Since it's somewhat difficult to inject
   //                   a different wallet into the `sendVaultSwap` flow, we disable the test for now.

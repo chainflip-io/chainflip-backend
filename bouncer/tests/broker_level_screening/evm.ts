@@ -62,7 +62,7 @@ async function waitForDepositContractDeployment<A = []>(
   cf.debug(`Found deployed contract at ${depositAddress}!`);
 
   // wait two SC blocks to make sure that the contract deployment + fetch has been witnessed and processed on the SC
-  // TODO: use events/SC-state for this
+  // TODO: we should instead use events or SC-state for this
   await sleep(12000);
 }
 
