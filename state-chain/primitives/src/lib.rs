@@ -28,6 +28,7 @@
 //!
 //! Primitive types to be used across Chainflip's various crates.
 
+use cf_utilities::impl_identity_migrations;
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -138,6 +139,8 @@ define_wrapper_type!(PrewitnessedDepositId, u64, extra_derives: Serialize, Deser
 pub type BoostPoolTier = u16;
 
 define_wrapper_type!(AffiliateShortId, u8, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+
+impl_identity_migrations! {AffiliateShortId, }
 
 /// The type of the Id given to threshold signature requests. Note a single request may
 /// result in multiple ceremonies, but only one ceremony should succeed.

@@ -537,9 +537,9 @@ impl HasChangelog for LiquidityProviderInfo {
 	type if_unspecified = _LiquidityProviderInfo::see_field_changelogs;
 }
 
+#[derive_n_functor]
 #[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, DefaultNoBound)]
-#[derive_n_functor]
 pub struct BrokerInfo<BtcAddress> {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 	pub btc_vault_deposit_address: Option<BtcAddress>,
@@ -1015,10 +1015,14 @@ impl<A> RpcAccountInfoCommonItems<A> {
 	}
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo)]
 pub struct RuntimeApiAccountInfoWrapper {
 	pub common_items: RpcAccountInfoCommonItems<FlipBalance>,
 	pub role: RuntimeApiAccountInfo,
+}
+impl HasChangelog for RuntimeApiAccountInfoWrapper {
+	type if_unspecified = _RuntimeApiAccountInfoWrapper::see_field_changelogs;
 }
 
 #[cf_proc_macros::generate_module]
