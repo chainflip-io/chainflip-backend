@@ -219,9 +219,10 @@ jobs:
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
           # Remove after 2.3 release.
-          # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc is the
-          # unreleased chain now, so retarget the filter to exclude Bsc assets instead.
-          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc'/" bouncer/tests/rpc_tests.ts
+          # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc and
+          # Ethereum cbBTC are the unreleased assets now, so retarget the filter to exclude
+          # them instead.
+          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" bouncer/tests/rpc_tests.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
