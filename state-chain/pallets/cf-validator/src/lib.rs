@@ -370,6 +370,13 @@ pub mod pallet {
 	#[pallet::getter(fn active_bidder)]
 	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
+	/// A validator's optional cap for its own auction bid.
+	///
+	/// When no cap is stored, the validator bids its full funding balance.
+	#[pallet::storage]
+	pub type ValidatorMaxBid<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
+
 	/// Maps an operator account to it's exceptions. An exception is a delegator that is excluded
 	/// from the operator's delegation acceptance configuration. If it's set to allow it means the
 	/// delegator is not allowed to delegate if it's in the list of exceptions and vis versa for
@@ -453,6 +460,8 @@ pub mod pallet {
 		StoppedBidding { account_id: T::AccountId },
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
+		/// A validator updated the maximum bid used for its next auction.
+		ValidatorMaxBidUpdated { validator: T::AccountId, max_bid: Option<T::Amount> },
 		/// The rotation transaction(s) for the previous rotation are still pending to be
 		/// successfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
@@ -933,6 +942,7 @@ pub mod pallet {
 			Self::do_remove_from_operator(account_id.clone());
 
 			ClaimedValidators::<T>::remove(&account_id);
+			ValidatorMaxBid::<T>::remove(&account_id);
 
 			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
 
@@ -967,6 +977,33 @@ pub mod pallet {
 				bidders.remove(&account_id).then_some(()).ok_or(Error::<T>::AlreadyNotBidding)
 			})?;
 			Self::deposit_event(Event::StoppedBidding { account_id });
+			Ok(())
+		}
+
+		/// Sets the maximum bid used for this validator in the next auction.
+		///
+		/// Passing `None` removes the cap, causing the validator to bid its full funding balance.
+		#[pallet::call_index(23)]
+		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
+		pub fn set_validator_max_bid(
+			origin: OriginFor<T>,
+			max_bid: Option<T::Amount>,
+		) -> DispatchResult {
+			let validator = T::AccountRoleRegistry::ensure_validator(origin)?;
+			ensure!(!Self::is_auction_phase(), Error::<T>::AuctionPhase);
+
+			let max_bid =
+				max_bid.map(|max_bid| core::cmp::min(max_bid, T::FundingInfo::balance(&validator)));
+			ValidatorMaxBid::<T>::mutate_exists(&validator, |current_max_bid| {
+				if *current_max_bid != max_bid {
+					*current_max_bid = max_bid;
+					Self::deposit_event(Event::ValidatorMaxBidUpdated {
+						validator: validator.clone(),
+						max_bid,
+					});
+				}
+			});
+
 			Ok(())
 		}
 
@@ -2114,9 +2151,14 @@ impl<T: Config> Pallet<T> {
 	pub fn get_active_bids() -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
 		ActiveBidder::<T>::get()
 			.into_iter()
-			.map(|bidder_id| Bid {
-				bidder_id: ValidatorIdOf::<T>::from_ref(&bidder_id).clone(),
-				amount: T::FundingInfo::balance(&bidder_id),
+			.map(|bidder_id| {
+				let balance = T::FundingInfo::balance(&bidder_id);
+				Bid {
+					bidder_id: ValidatorIdOf::<T>::from_ref(&bidder_id).clone(),
+					amount: ValidatorMaxBid::<T>::get(&bidder_id)
+						.map(|max_bid| core::cmp::min(max_bid, balance))
+						.unwrap_or(balance),
+				}
 			})
 			.collect()
 	}

@@ -1347,10 +1347,14 @@ fn validator_registration_and_deregistration() {
 
 		// Stop bidding, deregistration should be possible.
 		remove_bids(vec![ALICE]);
+
+		// Prior to deregistration, add max bid entry to check that it gets cleaned up:
+		ValidatorMaxBid::<Test>::insert(ALICE, 100);
 		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
 
 		// State should be cleaned up.
 		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
 	});
 }
 
@@ -1515,6 +1519,109 @@ fn test_start_and_stop_bidding() {
 			RuntimeEvent::ValidatorPallet(Event::StoppedBidding { account_id: ALICE })
 		);
 	});
+}
+
+mod validator_max_bid {
+
+	use super::*;
+
+	#[test]
+	fn validator_max_bid_caps_and_resets_auction_bid() {
+		new_test_ext().execute_with(|| {
+		const BALANCE: u128 = 100;
+		MockFlip::credit_funds(&ALICE, BALANCE);
+		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+
+		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
+
+		// Setting max bid to a portion of the full balance updates the bid:
+		assert_ok!(ValidatorPallet::set_validator_max_bid(
+			RuntimeOrigin::signed(ALICE),
+			Some(BALANCE / 2)
+		));
+		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE / 2));
+		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE / 2);
+		System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::ValidatorMaxBidUpdated {
+			validator: ALICE,
+			max_bid: Some(BALANCE / 2),
+		}));
+
+		// Setting to a larger than the users's balance results in full bid:
+		assert_ok!(ValidatorPallet::set_validator_max_bid(
+			RuntimeOrigin::signed(ALICE),
+			Some(BALANCE * 2)
+		));
+		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE));
+		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
+
+		// Setting max bid to None effectively removes it:
+		assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), None));
+		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
+		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
+		System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::ValidatorMaxBidUpdated {
+			validator: ALICE,
+			max_bid: None,
+		}));
+	});
+	}
+
+	#[test]
+	fn validator_max_bid_requires_validator_and_is_allowed_outside_auction() {
+		new_test_ext().execute_with(|| {
+		assert_noop!(
+			ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)),
+			BadOrigin
+		);
+
+		MockFlip::credit_funds(&ALICE, 100);
+		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+
+		assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)));
+		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(50));
+
+		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+		assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(60)));
+		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(60));
+
+		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+		assert_noop!(
+			ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)),
+			Error::<Test>::AuctionPhase
+		);
+		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(60));
+	});
+	}
+
+	#[test]
+	fn validator_is_bonded_up_to_max_bid_after_auction_resolution() {
+		const VALIDATOR: u64 = WINNING_BIDS[0].bidder_id;
+		const BALANCE: u128 = WINNING_BIDS[0].amount;
+		const MAX_BID: u128 = EXPECTED_BOND;
+
+		// Test requres that max bid is smaller than the validator's total balance:
+		const _: () = assert!(BALANCE > MAX_BID);
+
+		new_test_ext().execute_with(|| {
+			add_bids([&WINNING_BIDS[..], &LOSING_BIDS[..]].concat());
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(VALIDATOR),
+				Some(MAX_BID)
+			));
+
+			let (auction_outcome, _) =
+				ValidatorPallet::resolve_auction_iteratively(&Default::default())
+					.expect("auction bids should resolve");
+			assert!(auction_outcome.winners.contains(&VALIDATOR));
+			assert_eq!(auction_outcome.bond, MAX_BID);
+
+			ValidatorPallet::transition_to_next_epoch(
+				auction_outcome.winners,
+				auction_outcome.bond,
+			);
+			assert_eq!(MockBonderFor::<Test>::get_bond(&VALIDATOR), MAX_BID);
+		});
+	}
 }
 
 #[test]
