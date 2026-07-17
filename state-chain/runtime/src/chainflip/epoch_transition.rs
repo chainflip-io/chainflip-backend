@@ -16,7 +16,7 @@
 
 use crate::{AssetBalances, Emissions, Environment, Flip, Swapping, Witnesser};
 use cf_primitives::EpochIndex;
-use cf_traits::EpochTransitionHandler;
+use cf_traits::{EpochTransitionHandler, FeePayment};
 
 pub struct ChainflipEpochTransitions;
 
@@ -39,9 +39,12 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 					.into_iter()
 					.collect(),
 			);
-			Swapping::maybe_trigger_flip_to_gateway_egress(
+			let egress_fee_consumed = Swapping::maybe_trigger_flip_to_gateway_egress(
 				Environment::state_chain_gateway_address(),
 				flip_distributed,
+			);
+			Flip::add_to_offchain_flip_to_be_distributed(
+				i128::try_from(egress_fee_consumed).unwrap_or(i128::MAX).saturating_neg(),
 			);
 		}
 	}
