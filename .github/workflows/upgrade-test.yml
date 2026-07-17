@@ -275,6 +275,9 @@ jobs:
           # TODO: This is a temporary workaround to setup BSC.
           # To remove after BSC is released.
           ./commands/setup_new_bsc_chain.ts
+          # TODO: This is a temporary workaround to setup the new cbBTC asset.
+          # To remove after 2.3 release.
+          ./commands/setup_new_cbbtc_asset.ts
           ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗
