@@ -90,5 +90,6 @@ impl HasChangelog for Asset {
 	type in_20300 = _Asset::see_variant_changelogs_and_also<(
 		_Asset::variant::Bnb::Added,
 		_Asset::variant::BscUsdt::Added,
+		_Asset::variant::Cbbtc::Added,
 	)>;
 }
