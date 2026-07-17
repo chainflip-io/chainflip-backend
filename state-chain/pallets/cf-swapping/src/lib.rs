@@ -3149,7 +3149,7 @@ pub mod pallet {
 		pub fn maybe_trigger_flip_to_gateway_egress(
 			state_chain_gateway_address: EthereumAddress,
 			amount: AssetAmount,
-		) {
+		) -> AssetAmount {
 			// Add flip that was just distributed to validators, to be sent to the gateway
 			FlipToBeSentToGateway::<T>::mutate(|total| {
 				total.saturating_accrue(amount);
@@ -3173,13 +3173,16 @@ pub mod pallet {
 				)
 			}) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld, .. }) => {
+					FlipToBeSentToGateway::<T>::put(fee_withheld);
 					Self::deposit_event(Event::SentFlipToGateway {
-						amount: (egress_amount.saturating_add(fee_withheld)),
+						amount: egress_amount,
 						egress_id,
 					});
+					fee_withheld
 				},
 				Err(e) => {
 					Self::deposit_event(Event::FlipTransferToGatewaySkipped { reason: e });
+					0
 				},
 			}
 		}
