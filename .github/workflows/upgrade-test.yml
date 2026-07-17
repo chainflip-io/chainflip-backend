@@ -188,6 +188,13 @@ jobs:
           # Use the new solana start script (with current ledger size limit) for the pre-upgrade localnet.
           git show ${{ github.sha }}:localnet/init/scripts/start-solana.sh > localnet/init/scripts/start-solana.sh
 
+          # Remove after 2.3 release
+          # The old localnet's EVM images (v1.4.1) don't have the cbBTC token contract deployed,
+          # but the cbBTC runtime migration registers its address at upgrade. Start the
+          # pre-upgrade localnet with the new EVM images instead. The old runtime ignores the
+          # extra token, and all pre-existing contract addresses are unchanged.
+          sed -i 's|\(ghcr.io/chainflip-io/chainflip-eth-contracts/[^:]*:\)v[^ ]*|\1v1.5.1-rc2-${NODE_COUNT}|g' localnet/docker-compose.yml
+
           ./localnet/manage.sh
           git reset --hard
 
