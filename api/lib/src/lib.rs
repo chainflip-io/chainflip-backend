@@ -245,6 +245,12 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::start_bidding {})
 			.await
 	}
+	async fn set_max_bid(&self, max_bid: Option<u128>) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_validator::Call::set_validator_max_bid {
+			max_bid,
+		})
+		.await
+	}
 	async fn accept_operator(&self, operator: AccountId32) -> Result<Vec<RuntimeEvent>> {
 		let extrinsic_data = self
 			.submit_signed_extrinsic_with_dry_run(pallet_cf_validator::Call::accept_operator {
