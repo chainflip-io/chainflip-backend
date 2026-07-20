@@ -51,7 +51,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, ChainflipWithTargetChain, EpochKey,
-	GetBlockHeight, KeyProvider, SwapLimits, SwapParameterValidation,
+	GetBlockHeight, KeyProvider, RewardsDistribution, SwapLimits, SwapParameterValidation,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -77,10 +77,13 @@ use pallet_cf_pools::{
 };
 use pallet_cf_reputation::HeartbeatQualification;
 use pallet_cf_swapping::{AffiliateDetails, BrokerPrivateBtcChannels, SwapLegInfo};
-use pallet_cf_validator::{AssociationToOperator, DelegationAcceptance};
+use pallet_cf_validator::{
+	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance,
+};
 use scale_info::prelude::string::String;
 use sp_api::impl_runtime_apis;
 use sp_core::OpaqueMetadata;
+use sp_runtime::traits::Zero;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
@@ -894,6 +897,145 @@ impl_runtime_apis! {
 					Validator::current_epoch(),
 					account_id,
 				),
+			}
+		}
+
+		/// Projects each operator/validator/delegator's cumulative FLIP 2.1 fee-reward cut for the
+		/// in-progress epoch, as if the currently accumulated reserve were distributed right now.
+		/// Returns an empty reward pool (and zeroed pool amounts) if FLIP 2.1's fee-reward
+		/// distribution has not yet been activated for the current epoch.
+		fn cf_reward_distribution_estimate() -> RewardDistributionEstimate<FlipBalance> {
+			let epoch_index = Validator::current_epoch();
+			let current_block = System::block_number();
+			let current_epoch_started_at = Validator::current_epoch_started_at();
+			let epoch_duration = Validator::epoch_duration();
+			let bond = Validator::bond();
+			let authorities = pallet_cf_validator::CurrentAuthorities::<Runtime>::get();
+			let authority_count = authorities.len() as u32;
+
+			let is_active = epoch_index >= pallet_cf_flip::FeeRewardsActivationEpoch::<Runtime>::get();
+
+			let (total_rewards, per_authority_share, reward_pool) =
+				if is_active && authority_count > 0 {
+					let total_rewards = Flip::pending_rewards() as FlipBalance;
+					let per_authority_share = total_rewards / authority_count as FlipBalance;
+
+					let role_of = |account: &AccountId| {
+						pallet_cf_account_roles::AccountRoles::<Runtime>::get(account)
+							.unwrap_or_default()
+					};
+					let managed_by = |account: &AccountId| {
+						pallet_cf_validator::ValidatorToOperator::<Runtime>::get(epoch_index, account)
+					};
+
+					// `distribute` looks up each authority's managing operator (if any) and
+					// settles its cut across that operator's validators/delegators, or pays the
+					// authority directly if it's independent - mirroring
+					// `Flip::trigger_flip_reward_distribution`'s per-authority settlement, without
+					// mutating any storage.
+					let mut operators_with_authorities: BTreeSet<AccountId> = BTreeSet::new();
+					let mut rewards: BTreeMap<AccountId, FlipBalance> = BTreeMap::new();
+					let mut reward_pool = Vec::new();
+
+					for validator in &authorities {
+						match managed_by(validator) {
+							Some(operator) => {
+								operators_with_authorities.insert(operator);
+							},
+							None => {
+								reward_pool.push(AccountReward {
+									account: validator.clone(),
+									bid: Flip::balance(validator),
+									bond: Flip::bond(validator),
+									reward: per_authority_share,
+									role: AccountRole::Validator,
+									managed_by: None,
+									delegated_to: None,
+								});
+							},
+						}
+
+						<DelegatedRewardsDistribution<Runtime> as RewardsDistribution>::distribute(
+							epoch_index,
+							per_authority_share,
+							validator,
+							|account, amount| {
+								rewards
+									.entry(account.clone())
+									.and_modify(|r: &mut FlipBalance| *r = r.saturating_add(amount))
+									.or_insert(amount);
+							},
+						);
+					}
+
+					let reward_of =
+						|account: &AccountId| rewards.get(account).copied().unwrap_or_default();
+
+					for operator in operators_with_authorities {
+
+						reward_pool.push(AccountReward {
+							account: operator.clone(),
+							bid: Zero::zero(),
+							bond: Flip::bond(&operator),
+							reward: reward_of(&operator),
+							role: AccountRole::Operator,
+							managed_by: None,
+							delegated_to: None,
+						});
+
+						let Some(snapshot) = pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
+							epoch_index,
+							&operator,
+						) else {
+							log::warn!(
+									"Operator {:?} has authority slot(s) in epoch {} but no delegation snapshot found.",
+									operator,
+									epoch_index
+								);
+							continue;
+						};
+
+
+						for (account, bid) in &snapshot.validators {
+							reward_pool.push(AccountReward {
+								account: account.clone(),
+								bid: *bid,
+								bond: Flip::bond(account),
+								reward: reward_of(account),
+								role: AccountRole::Validator,
+								managed_by: Some(operator.clone()),
+								delegated_to: None,
+							});
+						}
+
+						for (account, bid) in &snapshot.delegators {
+							reward_pool.push(AccountReward {
+								account: account.clone(),
+								bid: *bid,
+								bond: Flip::bond(account),
+								reward: reward_of(account),
+								role: role_of(account),
+								managed_by: managed_by(account),
+								delegated_to: Some(operator.clone()),
+							});
+						}
+					}
+
+					(total_rewards, per_authority_share, reward_pool)
+				} else {
+					(0, 0, Vec::new())
+				};
+
+			RewardDistributionEstimate {
+				epoch_index,
+				current_block,
+				current_epoch_started_at,
+				epoch_duration,
+				bond,
+				authority_count,
+				total_rewards,
+				per_authority_share,
+				reward_pool,
 			}
 		}
 

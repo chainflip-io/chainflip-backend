@@ -388,8 +388,9 @@ pub trait RewardsDistribution {
 	type Balance;
 	type AccountId;
 
-	/// Distribute some rewards.
+	/// Distribute some rewards accrued during `epoch_index`.
 	fn distribute(
+		epoch_index: EpochIndex,
 		amount: Self::Balance,
 		beneficiary: &Self::AccountId,
 		settle: impl FnMut(&Self::AccountId, Self::Balance),

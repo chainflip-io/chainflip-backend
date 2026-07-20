@@ -350,11 +350,12 @@ where
 	type AccountId = T::AccountId;
 
 	fn distribute(
+		epoch_index: EpochIndex,
 		reward_amount: Self::Balance,
 		beneficiary: &Self::AccountId,
 		settle: impl FnMut(&T::AccountId, T::Amount),
 	) {
-		distribute::<T>(beneficiary, reward_amount, settle);
+		distribute::<T>(epoch_index, beneficiary, reward_amount, settle);
 	}
 }
 
@@ -371,7 +372,12 @@ where
 	type Balance = FlipSlasher::Balance;
 
 	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance) {
-		distribute::<T>(account_id, slash_amount, FlipSlasher::slash_balance);
+		distribute::<T>(
+			Pallet::<T>::epoch_index(),
+			account_id,
+			slash_amount,
+			FlipSlasher::slash_balance,
+		);
 	}
 
 	fn calculate_slash_amount(
@@ -382,10 +388,11 @@ where
 	}
 }
 
-/// Distribute a settlement to a given validator for the current Epoch.
+/// Distribute a settlement to a given validator for `epoch_index`.
 /// The total amount is shared among all delegators and validators associated with the operator
-/// controlling this validator.
+/// controlling this validator for that epoch.
 pub fn distribute<T: Config>(
+	epoch_index: EpochIndex,
 	validator: &T::AccountId,
 	total: T::Amount,
 	mut settle: impl FnMut(&T::AccountId, T::Amount),
@@ -394,7 +401,6 @@ pub fn distribute<T: Config>(
 	if total.is_zero() {
 		return;
 	}
-	let epoch_index = Pallet::<T>::epoch_index();
 
 	if let Some(operator) = ValidatorToOperator::<T>::get(epoch_index, validator) {
 		if let Some(snapshot) = DelegationSnapshots::<T>::get(epoch_index, &operator) {

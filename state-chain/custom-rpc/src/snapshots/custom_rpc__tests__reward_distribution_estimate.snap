@@ -1,0 +1,43 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: "serde_json::to_string_pretty(&value).unwrap()"
+---
+{
+  "epoch_index": 123,
+  "current_block": 1000500,
+  "current_epoch_started_at": 1000000,
+  "epoch_duration": 3600,
+  "bond": "0x4c4b40",
+  "authority_count": 3,
+  "total_rewards": "0xdbba0",
+  "per_authority_share": "0x493e0",
+  "reward_pool": [
+    {
+      "account": "5CT5jwBEAhveEjgiSCQbkaKcKcUyF3VJ8qNXM9rXsuQyn3Kd",
+      "bid": "0x0",
+      "bond": "0x0",
+      "reward": "0x493e0",
+      "role": "Operator",
+      "managed_by": null,
+      "delegated_to": null
+    },
+    {
+      "account": "5CqTdCcXCC7kv1Nwq2sCeJUNVqxbBPXjMAUXrbhRJtrUiyPP",
+      "bid": "0x4c4b40",
+      "bond": "0x4c4b40",
+      "reward": "0x3d090",
+      "role": "Validator",
+      "managed_by": "5CT5jwBEAhveEjgiSCQbkaKcKcUyF3VJ8qNXM9rXsuQyn3Kd",
+      "delegated_to": "5CT5jwBEAhveEjgiSCQbkaKcKcUyF3VJ8qNXM9rXsuQyn3Kd"
+    },
+    {
+      "account": "5DDqWU3pDgJsbH5BDsKoY2d8g5SD7jaAZVaYN3YJjtHygLwZ",
+      "bid": "0xf4240",
+      "bond": "0xf4240",
+      "reward": "0xc350",
+      "role": "Unregistered",
+      "managed_by": null,
+      "delegated_to": "5CT5jwBEAhveEjgiSCQbkaKcKcUyF3VJ8qNXM9rXsuQyn3Kd"
+    }
+  ]
+}

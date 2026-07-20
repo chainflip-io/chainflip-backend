@@ -137,7 +137,7 @@ fn fee_rewards_are_burned_before_activation_and_distributed_after() {
 
 			assert!(
 				events.contains(&RuntimeEvent::Flip(pallet_cf_flip::Event::FlipDistributed {
-					amount: authorities
+					amounts: authorities
 						.iter()
 						.map(|account_id| (account_id.clone(), PER_AUTHORITY_REWARD))
 						.collect(),
@@ -316,8 +316,8 @@ fn fee_rewards_are_split_according_to_the_snapshot_and_bond_of_the_epoch_in_whic
 			let distributed: std::collections::BTreeMap<AccountId, FlipBalance> = events
 				.iter()
 				.find_map(|event| match event {
-					RuntimeEvent::Flip(pallet_cf_flip::Event::FlipDistributed { amount }) =>
-						Some(amount.iter().cloned().collect()),
+					RuntimeEvent::Flip(pallet_cf_flip::Event::FlipDistributed { amounts }) =>
+						Some(amounts.iter().cloned().collect()),
 					_ => None,
 				})
 				.expect("rewards should be distributed at the epoch transition");

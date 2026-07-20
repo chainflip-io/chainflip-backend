@@ -156,6 +156,7 @@ impl RewardsDistribution for FlipDistribution {
 	type AccountId = AccountId;
 
 	fn distribute(
+		_epoch_index: cf_primitives::EpochIndex,
 		reward_amount: Self::Balance,
 		beneficiary: &Self::AccountId,
 		_settle: impl FnMut(&Self::AccountId, Self::Balance),
