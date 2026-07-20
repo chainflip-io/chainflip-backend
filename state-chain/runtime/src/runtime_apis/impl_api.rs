@@ -83,6 +83,7 @@ use pallet_cf_validator::{
 use scale_info::prelude::string::String;
 use sp_api::impl_runtime_apis;
 use sp_core::OpaqueMetadata;
+use sp_runtime::traits::Zero;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
@@ -986,7 +987,7 @@ impl_runtime_apis! {
 
 						reward_pool.push(AccountReward {
 							account: operator.clone(),
-							bid: Flip::balance(&operator),
+							bid: Zero::zero(),
 							bond: Flip::bond(&operator),
 							reward: reward_of(&operator),
 							role: AccountRole::Operator,
