@@ -32,13 +32,17 @@ import { arbitrumIngressEgressTransactionRejectedByBrokerEvent } from 'generated
 /**
  * Wait for the Deposit contract to be deployed.
  */
-async function waitForDepositContractDeployment(chain: Chain, depositAddress: string) {
+async function waitForDepositContractDeployment<A = []>(
+  cf: ChainflipIO<A>,
+  chain: Chain,
+  depositAddress: string,
+) {
   switch (chain) {
     case 'Arbitrum':
     case 'Ethereum':
       break;
     default:
-      throw new Error(`Unssuported evm chain ${chain}`);
+      throw new Error(`Unsupported evm chain ${chain}`);
   }
 
   const MAX_RETRIES = 100;
@@ -55,6 +59,11 @@ async function waitForDepositContractDeployment(chain: Chain, depositAddress: st
   if (!contractDeployed) {
     throw new Error(`${chain} contract not deployed at address ${depositAddress} within timeout!`);
   }
+  cf.debug(`Found deployed contract at ${depositAddress}!`);
+
+  // wait two SC blocks to make sure that the contract deployment + fetch has been witnessed and processed on the SC
+  // TODO: we should instead use events or SC-state for this
+  await sleep(12000);
 }
 
 async function waitForEvmTransactionRejection<A = []>(
@@ -104,6 +113,12 @@ export async function testEvm<A = []>(
 
   const chain = chainFromAsset(sourceAsset);
 
+  if (chain !== 'Arbitrum' && chain !== 'Ethereum') {
+    throw new Error(
+      `testEvm in BLS test only usable for Ethereum and Arbitrum! Found chain: ${chain}`,
+    );
+  }
+
   const destinationAddressForBtc = await newAssetAddress('Btc');
 
   cf.debug(`BTC destination address: ${destinationAddressForBtc}`);
@@ -140,24 +155,35 @@ export async function testEvm<A = []>(
       )
     : Promise.resolve();
 
-  if (sourceAsset === chainGasAsset('Ethereum')) {
+  if (sourceAsset === chainGasAsset(chain)) {
     await send(cf.logger, sourceAsset, swapParams.depositAddress);
     cf.debug(`Sent initial ${sourceAsset} tx...`);
 
-    await cf.stepUntilEvent(
-      ethereumIngressEgressDepositFinalisedEvent.refine(
-        (event) =>
-          event.depositAddress === swapParams.depositAddress &&
-          event.channelId === BigInt(swapParams.channelId),
-      ),
-    );
+    if (chain === 'Ethereum') {
+      await cf.stepUntilEvent(
+        ethereumIngressEgressDepositFinalisedEvent.refine(
+          (event) =>
+            event.depositAddress === swapParams.depositAddress &&
+            event.channelId === BigInt(swapParams.channelId),
+        ),
+      );
+    } else if (chain === 'Arbitrum') {
+      await cf.stepUntilEvent(
+        arbitrumIngressEgressDepositFinalisedEvent.refine(
+          (event) =>
+            event.depositAddress === swapParams.depositAddress &&
+            event.channelId === BigInt(swapParams.channelId),
+        ),
+      );
+    }
+
     await cf.stepOneBlock();
 
     cf.debug(`Initial deposit ${sourceAsset} received...`);
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
     // successfully to make sure the Deposit contract is deployed.
-    await waitForDepositContractDeployment(chain, swapParams.depositAddress);
+    await waitForDepositContractDeployment(cf, chain, swapParams.depositAddress);
   }
 
   cf.debug(`Sending ${sourceAsset} tx to reject...`);
@@ -296,7 +322,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
 
   cf.debug(`Got deposit address: ${depositAddress}`);
 
-  if (sourceAsset === chainGasAsset('Ethereum') || sourceAsset === chainGasAsset('Arbitrum')) {
+  if (sourceAsset === chainGasAsset(chain)) {
     // The first tx cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
     // succesfully to make sure the Deposit contract is deployed.
@@ -334,7 +360,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
       ),
     );
     cf.debug(`Account credited for ${observeAccountCreditedEvent.asset}...`);
-    await waitForDepositContractDeployment(chain, depositAddress);
+    await waitForDepositContractDeployment(cf, chain, depositAddress);
   }
 
   cf.debug(`Sending ${sourceAsset} tx to reject...`);

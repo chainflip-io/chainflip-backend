@@ -134,13 +134,6 @@ export async function doTestSwapDeposits<A = []>(
   // NOTE: We currently don't test the following assets:
   // - Flip: we don't test Flip rejections because they are currently disabled in the
   //         deposit monitor, since Elliptic doesn't provide Flip analysis.
-  // - ArbEth: we don't test ArbEth rejections since on localnet the safety margin for ArbEth
-  //           is too short for the DM, the rejections fail more often than not due
-  //           to being too late.
-  //           Most of the functionality is covered by testing `Eth` and `ArbUsdc`.
-  //           An alternative would be to increase the ArbEth safety margin on localnet.
-  // - ArbUsdc: we also don't test ArbUsdc rejections, they have caused tests to become flaky
-  //            as well (PRO-2488).
   // - Btc VaultSwaps: For bitcoin, due to ancestor screening, we have to make sure to use
   //                   a dedicated "tainted" wallet. Since it's somewhat difficult to inject
   //                   a different wallet into the `sendVaultSwap` flow, we disable the test for now.
@@ -156,6 +149,9 @@ export async function doTestSwapDeposits<A = []>(
     (subcf) => testEvm(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'ArbUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) =>
       testBitcoin(subcf.withChildLogger('BrokerLevelScreening_testBitcoin'), false, async (txId) =>
         setTxRiskScore(txId, 9.0),
@@ -182,6 +178,9 @@ export async function doTestLpDeposits<A = []>(parentCf: ChainflipIO<A>) {
     (subcf) => testEvmLiquidityDeposit(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmLiquidityDeposit(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmLiquidityDeposit(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'ArbUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 }
 
@@ -189,6 +188,9 @@ export async function doTestVaultSwaps<A = []>(cf: ChainflipIO<A>) {
   await cf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') }).all([
     // --- vault swaps ---
     (subcf) => testBitcoinVaultSwap(subcf, async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'ArbUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
