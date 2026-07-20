@@ -402,10 +402,13 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 								}
 							},
 							_ => {
+								// Tron returns the message as hex-encoded UTF-8 bytes.
 								return Err(anyhow::anyhow!(
 									"Failed to estimate energy (code: {:?}, message: {:?})",
 									energy_estimate.result.code,
-									energy_estimate.result.message,
+									energy_estimate.result.message
+									.and_then(|m| hex::decode(m).ok())
+									.and_then(|bytes| String::from_utf8(bytes).ok()),
 								));
 							},
 						}.try_into()?;
