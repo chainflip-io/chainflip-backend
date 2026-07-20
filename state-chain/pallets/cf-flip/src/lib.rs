@@ -563,7 +563,7 @@ impl<T: Config> Pallet<T> {
 
 	pub fn trigger_flip_reward_distribution(
 		epoch_index: EpochIndex,
-		authorities: Vec<T::AccountId>,
+		authorities: BTreeSet<T::AccountId>,
 	) -> T::Balance {
 		// Bridge in any pending offchain rewards and deposit them into the distribution reserve so
 		// that everything is distributed from a single source.

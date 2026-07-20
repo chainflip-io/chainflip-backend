@@ -22,7 +22,7 @@ use crate::{
 	TotalIssuance,
 };
 use cf_primitives::FlipBalance;
-use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
+use cf_traits::{AccountInfo, Bonding, EpochInfo, Funding, Issuance, Slashing};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},
@@ -850,8 +850,10 @@ mod test_flip_reward_distribution {
 			assert_eq!(OffchainFunds::<Test>::get(), offchain_before - AMOUNT);
 			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 0);
 
-			let bridged =
-				Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([ALICE, BOB, CHARLIE]));
+			let bridged = Flip::trigger_flip_reward_distribution(
+				0,
+				BTreeSet::from_iter([ALICE, BOB, CHARLIE]),
+			);
 			assert_eq!(bridged, 0);
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 0);
 
@@ -869,8 +871,10 @@ mod test_flip_reward_distribution {
 			assert_eq!(OffchainFunds::<Test>::get(), offchain_before - AMOUNT);
 			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), AMOUNT);
 
-			let bridged =
-				Flip::trigger_flip_reward_distribution(BTreeSet::from_iter([ALICE, BOB, CHARLIE]));
+			let bridged = Flip::trigger_flip_reward_distribution(
+				1,
+				BTreeSet::from_iter([ALICE, BOB, CHARLIE]),
+			);
 			assert_eq!(bridged, 0);
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 100);
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&BOB), 100);
