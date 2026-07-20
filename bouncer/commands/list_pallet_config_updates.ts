@@ -33,6 +33,8 @@
 //   echo '[{"type":"SwapRetryDelay","value":{"delay":5}}]' \
 //     | ./commands/submit_pallet_config_update.ts swapping - --dry-run
 
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
 import { getChainflipApi } from 'shared/utils/substrate';
 import {
   resolveConfigCall,
@@ -141,7 +143,11 @@ function describe(registry: Registry, typeId: number, depth: number): unknown {
 }
 
 async function main() {
-  const filter = process.argv[2]?.toLowerCase();
+  const argv = await yargs(hideBin(process.argv))
+    .usage('$0 [pallet] — list the governance config items each pallet exposes')
+    .strictOptions()
+    .help().argv;
+  const filter = argv._[0] !== undefined ? String(argv._[0]).toLowerCase() : undefined;
 
   await using client = await getChainflipApi();
   const { registry } = client;

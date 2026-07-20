@@ -1,6 +1,6 @@
 ---
 name: bouncer
-description: Use for Chainflip bouncer or localnet tasks: run end-to-end tests, start or rebuild localnet, run bouncer setup scripts, regenerate event schemas, debug bouncer logs, run pre-commit TypeScript checks, query state chain storage values, update pallet config items via governance, and set the runtime safe mode. Trigger on requests like "run the bouncer test", "run the fast bouncer tests", "start a localnet", "rebuild the localnet", "regenerate schemas", "run bouncer lints", a named bouncer test, "what is the value of X on the statechain/bouncer/mainnet", "query X storage", "change/update the bouncer X config", or "set/change the safe mode".
+description: Use for Chainflip bouncer or localnet tasks: run end-to-end tests, start or rebuild localnet, run bouncer setup scripts, regenerate event schemas, debug bouncer logs, run pre-commit TypeScript checks, query state chain storage values, fetch oracle prices, update pallet config items via governance, and set the runtime safe mode. Trigger on requests like "run the bouncer test", "run the fast bouncer tests", "start a localnet", "rebuild the localnet", "regenerate schemas", "run bouncer lints", a named bouncer test, "what is the value of X on the statechain/bouncer/mainnet", "query X storage", "what is the oracle price of X", "change/update the bouncer X config", or "set/change the safe mode".
 ---
 
 # Running bouncer tests
@@ -310,6 +310,7 @@ pnpm eslint:check          # Lint (use eslint:fix for auto-fix)
 | `list_pallet_config_updates.ts`  | List the governance config items each pallet exposes        | §10       |
 | `submit_pallet_config_update.ts` | Change a pallet config item via governance                  | §10       |
 | `set_safe_mode.ts`               | Set the runtime safe mode (per-pallet flags) via governance | §11       |
+| `oracle_prices.ts`               | Fetch the state chain's oracle prices, decoded to USD       | §12       |
 
 ### `perform_swap.ts` — a one-off test swap
 
@@ -408,6 +409,21 @@ cd bouncer
 
 - **Flags aren't all booleans.** The value is coerced to the flag's current type: booleans take `true`/`false`; nested enum flags (e.g. `lendingPools.borrowing`) and pallet-level enums (e.g. `witnesser`) take the variant name (`Red`/`Green`, `CodeRed`/`CodeGreen`). The no-arg listing shows each pallet's flags and current values; unknown pallet/flag errors list the valid options.
 - **Same governance caveats as §10**: it submits a snowWhite proposal that auto-executes on localnet, but the submit returns at the _proposed_ stage — execution lands a block or two later, so poll after submitting. Needs the localnet indexer running (proposal id read via the indexer).
+
+## 12. Oracle prices
+
+`./commands/oracle_prices.ts` reads the Chainlink oracle prices the state chain currently holds (via the `cf_oracle_prices` RPC) and decodes each into a human-readable USD value. Read-only, so safe on any network.
+
+```bash
+cd bouncer
+./commands/oracle_prices.ts --network mainnet          # all prices, decoded to USD
+./commands/oracle_prices.ts --network mainnet Eth       # just one base asset
+./commands/oracle_prices.ts --network mainnet --json    # decoded rows as JSON (pipeable)
+```
+
+Prints a table of `PAIR / USD / STATUS / UPDATED (BLOCK)` — e.g. `Eth/Usd  1880.60  UpToDate  57s ago (#14002001)`. Same network selection as §9 (`--network` / `--endpoint` / `CF_NODE_ENDPOINT`, defaults to localnet).
+
+- **`price_status`** is `UpToDate` when the feed is fresh; a stale/absent status means the price shouldn't be trusted.
 
 ## When _not_ to use the bouncer
 

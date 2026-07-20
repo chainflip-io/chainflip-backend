@@ -40,16 +40,10 @@ import { DedotClient, WsProvider as DedotWsProvider } from 'dedot';
 import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
 import { getChainflipApi } from 'shared/utils/substrate';
 import type { ChainflipClient } from 'shared/utils/dedot';
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
 import { bigintReplacer, bigintReviver, runWithTimeoutAndExit } from 'shared/utils';
-
-// Known public endpoints for the named networks. `--endpoint` overrides this for anything else.
-const NETWORKS: Record<string, string> = {
-  localnet: 'ws://127.0.0.1:9944',
-  mainnet: 'wss://mainnet-rpc.chainflip.io',
-  berghain: 'wss://mainnet-rpc.chainflip.io',
-  perseverance: 'wss://perseverance.chainflip.xyz',
-  sisyphos: 'wss://archive.sisyphos.chainflip.io',
-};
+import { networkWsEndpoint } from 'shared/utils/networks';
 
 // A storage entry is callable (returns the value). Map entries also expose `.entries()` for dumps;
 // plain `StorageValue` entries (even ones holding a map) do not, hence the optional method.
@@ -67,41 +61,31 @@ interface ParsedArgs {
   search?: string;
 }
 
-// Flags that take a value, mapped to their ParsedArgs key.
-const VALUE_FLAGS: Record<string, 'endpoint' | 'network' | 'search'> = {
-  '--endpoint': 'endpoint',
-  '--network': 'network',
-  '--search': 'search',
-  '--find': 'search',
-};
+// Parse argv with yargs. `parse-positional-numbers` is disabled so storage keys stay raw strings
+// (they're JSON-parsed later by parseKey); `--search` aliases `--find`.
+async function parseArgs(): Promise<ParsedArgs> {
+  const argv = await yargs(hideBin(process.argv))
+    .usage('$0 [pallet] [entry] [...keys] [options] — read a state chain storage value')
+    .option('network', {
+      type: 'string',
+      describe: 'Named network (mainnet|berghain|perseverance|sisyphos|localnet)',
+    })
+    .option('endpoint', { type: 'string', describe: 'Custom ws(s) endpoint (overrides --network)' })
+    .option('search', {
+      alias: 'find',
+      type: 'string',
+      describe: 'Substring-search storage entries across all pallets',
+    })
+    .strictOptions()
+    .parserConfiguration({ 'parse-positional-numbers': false })
+    .help().argv;
 
-// Parse argv into positionals plus flags. Value flags accept either `--flag value` or `--flag=value`
-// and may appear anywhere in the args.
-function parseArgs(argv: string[]): ParsedArgs {
-  const out: ParsedArgs = { positional: [] };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a.startsWith('--')) {
-      const eqIdx = a.indexOf('=');
-      const flag = eqIdx === -1 ? a : a.slice(0, eqIdx);
-      const key = VALUE_FLAGS[flag];
-      if (!key) {
-        throw new Error(`Unknown flag '${a}'`);
-      }
-      let value = eqIdx === -1 ? undefined : a.slice(eqIdx + 1);
-      if (value === undefined) {
-        value = argv[i + 1];
-        i += 1;
-      }
-      if (value === undefined) {
-        throw new Error(`${flag} requires a value`);
-      }
-      out[key] = value;
-    } else {
-      out.positional.push(a);
-    }
-  }
-  return out;
+  return {
+    positional: argv._.map(String),
+    endpoint: argv.endpoint,
+    network: argv.network,
+    search: argv.search,
+  };
 }
 
 // Resolve the ws endpoint to connect to, or undefined to use the default cached client (which
@@ -111,14 +95,7 @@ function resolveEndpoint(parsed: ParsedArgs): string | undefined {
     return parsed.endpoint;
   }
   if (parsed.network) {
-    const endpoint = NETWORKS[parsed.network.toLowerCase()];
-    if (!endpoint) {
-      throw new Error(
-        `Unknown network '${parsed.network}'. Known: ${Object.keys(NETWORKS).join(', ')}. ` +
-          `Or pass --endpoint <wss-url>.`,
-      );
-    }
-    return endpoint;
+    return networkWsEndpoint(parsed.network);
   }
   return undefined;
 }
@@ -265,7 +242,7 @@ async function runQuery(client: ChainflipClient, parsed: ParsedArgs): Promise<vo
 }
 
 async function main() {
-  const parsed = parseArgs(process.argv.slice(2));
+  const parsed = await parseArgs();
   const endpoint = resolveEndpoint(parsed);
   if (endpoint) {
     // To stderr so stdout stays clean JSON for piping.

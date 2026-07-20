@@ -18,6 +18,8 @@
 // Pallet and flag names are the camelCase keys shown by the no-arg listing. The value is coerced to
 // the flag's current type: booleans accept true/false; enum flags/pallets take the variant name.
 
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
@@ -104,12 +106,29 @@ async function buildUpdate(
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  const dryRun = args.includes('--dry-run');
-  const positional = args.filter((a) => !a.startsWith('--'));
+  const argv = await yargs(hideBin(process.argv))
+    .usage(
+      '$0 [pallet] [flag] [value] — set the runtime safe mode via governance (no args lists it)',
+    )
+    .option('list', {
+      type: 'boolean',
+      default: false,
+      describe: 'Print the current safe mode and exit',
+    })
+    .option('dry-run', {
+      type: 'boolean',
+      default: false,
+      describe: 'Encode + print the call without submitting',
+    })
+    .strictOptions()
+    .parserConfiguration({ 'parse-positional-numbers': false })
+    .help().argv;
+
+  const positional = argv._.map(String);
+  const dryRun = argv.dryRun;
 
   // No positional args (or --list): print the current safe mode and exit.
-  if (positional.length === 0 || args.includes('--list')) {
+  if (positional.length === 0 || argv.list) {
     await using client = await getChainflipApi();
     const safeMode = await client.query.environment.runtimeSafeMode();
     console.log(JSON.stringify(safeMode, null, 2));

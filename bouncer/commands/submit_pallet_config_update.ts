@@ -26,6 +26,8 @@
 //   ./commands/submit_pallet_config_update.ts swapping \
 //     '[{"type":"MaximumSwapAmount","value":{"asset":"Btc","amount":"100000000"}}]'
 
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import {
   getChainflipApi,
@@ -110,10 +112,19 @@ function buildPjsCall(
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  const dryRun = args.includes('--dry-run');
-  const positional = args.filter((a) => a !== '--dry-run');
-  const [txPallet, updatesArg] = positional;
+  const argv = await yargs(hideBin(process.argv))
+    .usage('$0 <txPallet> <updates|@file|-> [--dry-run]')
+    .option('dry-run', {
+      type: 'boolean',
+      default: false,
+      describe: 'Build + SCALE-encode the call and print it, but do NOT submit',
+    })
+    .strictOptions()
+    .parserConfiguration({ 'parse-positional-numbers': false })
+    .help().argv;
+
+  const [txPallet, updatesArg] = argv._.map(String);
+  const dryRun = argv.dryRun;
 
   if (!txPallet || updatesArg === undefined) {
     throw new Error(
