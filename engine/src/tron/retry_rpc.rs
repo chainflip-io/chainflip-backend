@@ -36,6 +36,16 @@ use super::{
 	rpc_client_api::{BlockBalance, BlockNumber, Transaction, TransactionInfo, TronAddress},
 };
 
+// Tron returns error messages as hex-encoded UTF-8 bytes; fall back to the raw string if it
+// isn't hex/UTF-8 encoded.
+fn decode_tron_error_message(message: Option<String>) -> Option<String> {
+	message
+		.clone()
+		.and_then(|m| hex::decode(m).ok())
+		.and_then(|bytes| String::from_utf8(bytes).ok())
+		.or(message)
+}
+
 #[derive(Clone)]
 pub struct TronRetryRpcClient<Rpc: TronRpcApi> {
 	rpc_retry_client: RetrierClient<Rpc>,
@@ -402,13 +412,10 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 								}
 							},
 							_ => {
-								// Tron returns the message as hex-encoded UTF-8 bytes.
 								return Err(anyhow::anyhow!(
 									"Failed to estimate energy (code: {:?}, message: {:?})",
 									energy_estimate.result.code,
-									energy_estimate.result.message
-									.and_then(|m| hex::decode(m).ok())
-									.and_then(|bytes| String::from_utf8(bytes).ok()),
+									decode_tron_error_message(energy_estimate.result.message),
 								));
 							},
 						}.try_into()?;
