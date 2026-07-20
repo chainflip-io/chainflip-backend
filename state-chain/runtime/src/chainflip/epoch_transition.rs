@@ -35,6 +35,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 			);
 		} else if new > activation_epoch {
 			let flip_distributed = Flip::trigger_flip_reward_distribution(
+				new - 1,
 				pallet_cf_validator::HistoricalAuthorities::<crate::Runtime>::get(new - 1)
 					.into_iter()
 					.collect(),
