@@ -2,6 +2,16 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.8] - 2026-08-11
+
+### Fixes
+
+- Broadcast verification requires 2/3 majority ([#2](https://github.com/chainflip-io/chainflip-backend/issues/2))
+- Key handover non receiver hardening ([#3](https://github.com/chainflip-io/chainflip-backend/issues/3))
+- Only allow (un-)delegation if rotation status is idle.
+- Registering account as operator or validator is only possible if not delegating.
+- Performance improvements ([#6756](https://github.com/chainflip-io/chainflip-backend/issues/6756))
+
 ## [2.2.7] - 2026-07-03
 
 ### Fixes
@@ -139,7 +149,7 @@ All notable changes included in each Chainflip release will be documented in thi
 ### Fixes
 
 - Properly track submissions in case of POOL_ALREADY_IMPORTED error ([#6488](https://github.com/chainflip-io/chainflip-backend/issues/6488))
-- Extrinsic submitter sometimes not finding events  ([#6494](https://github.com/chainflip-io/chainflip-backend/issues/6494))
+- Extrinsic submitter sometimes not finding events ([#6494](https://github.com/chainflip-io/chainflip-backend/issues/6494))
 - cf_btc_utxos RPC checks all the available callbacks ([#6506](https://github.com/chainflip-io/chainflip-backend/issues/6506))
 - Handle all TransactionStatus ([#6503](https://github.com/chainflip-io/chainflip-backend/issues/6503))
 - GRANDPA RPC initialization ([#6495](https://github.com/chainflip-io/chainflip-backend/issues/6495))
@@ -405,7 +415,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Make dot witnessing no-op ([#6232](https://github.com/chainflip-io/chainflip-backend/issues/6232))
 - Remove polkadot witnessing ([#6225](https://github.com/chainflip-io/chainflip-backend/issues/6225))
 - Voluntary liquidation ([#6221](https://github.com/chainflip-io/chainflip-backend/issues/6221))
-- Cherry picks from 1.12.2 release  ([#6223](https://github.com/chainflip-io/chainflip-backend/issues/6223))
+- Cherry picks from 1.12.2 release ([#6223](https://github.com/chainflip-io/chainflip-backend/issues/6223))
 - Upgrade chainflip polkadot-sdk to pull in light-rpc mode improvements ([#6178](https://github.com/chainflip-io/chainflip-backend/issues/6178))
 - Charge fees for non-native calls ([#6200](https://github.com/chainflip-io/chainflip-backend/issues/6200))
 - Ensure loan asset has refund address ([#6185](https://github.com/chainflip-io/chainflip-backend/issues/6185))
@@ -603,8 +613,8 @@ All notable changes included in each Chainflip release will be documented in thi
 - Delegate and undelegate ([#6006](https://github.com/chainflip-io/chainflip-backend/issues/6006))
 - CFE check for CF chain node connection ([#6014](https://github.com/chainflip-io/chainflip-backend/issues/6014))
 - Allow warp sync from single peer ([#6017](https://github.com/chainflip-io/chainflip-backend/issues/6017))
-- Add script to get a summary of election votes  ([#6012](https://github.com/chainflip-io/chainflip-backend/issues/6012))
-- Cli validator commands for operator  acceptance/removal ([#6008](https://github.com/chainflip-io/chainflip-backend/issues/6008))
+- Add script to get a summary of election votes ([#6012](https://github.com/chainflip-io/chainflip-backend/issues/6012))
+- Cli validator commands for operator acceptance/removal ([#6008](https://github.com/chainflip-io/chainflip-backend/issues/6008))
 - Add btc elections to the election-tracker ([#6007](https://github.com/chainflip-io/chainflip-backend/issues/6007))
 - Operator role + management extrinsic ([#5986](https://github.com/chainflip-io/chainflip-backend/issues/5986))
 - CCM refunds ([#5816](https://github.com/chainflip-io/chainflip-backend/issues/5816))
@@ -1729,7 +1739,7 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Refactor
 
-- Keyless eth rpc client  ([#4256](https://github.com/chainflip-io/chainflip-backend/issues/4256))
+- Keyless eth rpc client ([#4256](https://github.com/chainflip-io/chainflip-backend/issues/4256))
 - Remove generic from AssetPair types ([#4290](https://github.com/chainflip-io/chainflip-backend/issues/4290))
 
 ## [1.0.3] - 2023-12-07
@@ -1845,7 +1855,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Dot decode xt ([#3904](https://github.com/chainflip-io/chainflip-backend/issues/3904))
 - Is_qualified should be called for all checks ([#3910](https://github.com/chainflip-io/chainflip-backend/issues/3910))
 - Broadcast success should be witnessable after a rotation ([#3921](https://github.com/chainflip-io/chainflip-backend/issues/3921))
-- Log error when we try to transfer *more* than we have fetched ([#3930](https://github.com/chainflip-io/chainflip-backend/issues/3930))
+- Log error when we try to transfer _more_ than we have fetched ([#3930](https://github.com/chainflip-io/chainflip-backend/issues/3930))
 - Independent witnessing startup ([#3913](https://github.com/chainflip-io/chainflip-backend/issues/3913))
 - Only burn flip if non zero ([#3932](https://github.com/chainflip-io/chainflip-backend/issues/3932))
 - Duplicate logging ([#3939](https://github.com/chainflip-io/chainflip-backend/issues/3939))
@@ -1895,25 +1905,25 @@ All notable changes included in each Chainflip release will be documented in thi
 ### Features
 
 - Backup RPC
-    Operators can now configure a backup rpc provider for the engine.
+  Operators can now configure a backup rpc provider for the engine.
 - Qualify nodes by minimum cfe version
-    Operators that have not upgraded their Engines can now be excluded from Keygen ceremonies.
+  Operators that have not upgraded their Engines can now be excluded from Keygen ceremonies.
 - Calculate ccm gas limit
-    Cross chain messages now set the correct gas limit on egress.
+  Cross chain messages now set the correct gas limit on egress.
 - Executor address binding
-    Accounts can now be irreversibly bound to a specific Redemption Executor.
+  Accounts can now be irreversibly bound to a specific Redemption Executor.
 - Witnesser dispatch call filter
-    Enables selective witnessing during safe mode.
+  Enables selective witnessing during safe mode.
 - Subcribe_price and depth rpc
-    Adds AMM price and depth rpc subscriptions.
+  Adds AMM price and depth rpc subscriptions.
 - Speedy SCC
-    Extrinsic submissions via the apis no longer wait for finality.
+  Extrinsic submissions via the apis no longer wait for finality.
 - Add initiated_at block number for egresses
-    Egress event now contains the block number at which it occurred.
+  Egress event now contains the block number at which it occurred.
 - Size limit for CCM
-    Limits the size of cross-chain messages.
+  Limits the size of cross-chain messages.
 - Required changes for multi engine release
-    Adds configuration for running two Engines in parallel.
+  Adds configuration for running two Engines in parallel.
 
 ### Fixes
 
