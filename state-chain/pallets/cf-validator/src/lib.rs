@@ -1278,6 +1278,10 @@ pub mod pallet {
 				T::AccountRoleRegistry::has_account_role(&operator, AccountRole::Operator),
 				Error::<T>::NotOperator
 			);
+			ensure!(
+				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
+				Error::<T>::RotationInProgress
+			);
 
 			ensure!(
 				match OperatorSettingsLookup::<T>::get(&operator)
@@ -1357,6 +1361,11 @@ pub mod pallet {
 
 			let (current_operator, current_max_bid) =
 				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
+
+			ensure!(
+				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
+				Error::<T>::RotationInProgress
+			);
 
 			let new_max_bid = match decrease {
 				DelegationAmount::Some(decr) => {
