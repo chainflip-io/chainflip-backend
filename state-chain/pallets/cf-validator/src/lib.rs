@@ -912,6 +912,7 @@ pub mod pallet {
 				T::FundingInfo::total_balance_of(&account_id) >= MinimumValidatorStake::<T>::get(),
 				Error::<T>::NotEnoughFunds
 			);
+			ensure!(!DelegationChoice::<T>::contains_key(&account_id), Error::<T>::NotAuthorized);
 			T::AccountRoleRegistry::register_as_validator(&account_id)
 		}
 
@@ -1213,6 +1214,7 @@ pub mod pallet {
 				Error::<T>::OperatorFeeTooLow
 			);
 			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
+			ensure!(!DelegationChoice::<T>::contains_key(&account_id), Error::<T>::NotAuthorized);
 
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
 			T::AccountRoleRegistry::set_vanity_name(&account_id, vanity_name)?;
@@ -1270,14 +1272,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			ensure!(
-				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Validator),
-				Error::<T>::DelegationNotAllowed
-			);
-			ensure!(
-				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Operator),
-				Error::<T>::DelegationNotAllowed
-			);
+			ensure!(Self::is_delegation_eligible(&delegator), Error::<T>::DelegationNotAllowed);
 
 			ensure!(
 				T::AccountRoleRegistry::has_account_role(&operator, AccountRole::Operator),
@@ -2177,6 +2172,12 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Only accounts without Validator or Operator roles can be sourced from `DelegationChoice`.
+	pub(crate) fn is_delegation_eligible(account_id: &T::AccountId) -> bool {
+		!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Validator) &&
+			!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator)
+	}
+
 	/// Builds the delegation snapshots for the next epoch.
 	///
 	/// Return a tuple of the delegation snapshots and the independent bidders (standalone
@@ -2222,6 +2223,15 @@ impl<T: Config> Pallet<T> {
 		}
 
 		for (delegator, (operator, max_bid)) in DelegationChoice::<T>::iter() {
+			if !Self::is_delegation_eligible(&delegator) {
+				log::info!(
+					target: "cf-validator",
+					"ignoring ineligible DelegationChoice entry while building delegation snapshots: delegator={:?}, operator={:?}",
+					delegator,
+					operator,
+				);
+				continue;
+			}
 			if let Some(snapshot) = snapshots.get_mut(&operator) {
 				let bid = core::cmp::min(max_bid, T::FundingInfo::balance(&delegator));
 				if bid > Zero::zero() {
