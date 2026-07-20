@@ -22,7 +22,7 @@ use crate::{
 	TotalIssuance,
 };
 use cf_primitives::FlipBalance;
-use cf_traits::{AccountInfo, Bonding, EpochInfo, Funding, Issuance, Slashing};
+use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},

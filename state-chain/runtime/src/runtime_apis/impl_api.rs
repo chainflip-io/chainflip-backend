@@ -927,9 +927,7 @@ impl_runtime_apis! {
 
 			let (total_rewards, per_authority_share, reward_pool) =
 				if is_active && authority_count > 0 {
-					let total_rewards = pallet_cf_flip::Reserve::<Runtime>::get(
-						pallet_cf_flip::ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
-					) + pallet_cf_flip::FlipToDistribute::<Runtime>::get().max(0) as FlipBalance;
+					let total_rewards = Flip::pending_rewards() as FlipBalance;
 					let per_authority_share = total_rewards / authority_count as FlipBalance;
 
 					let role_of = |account: &AccountId| {
