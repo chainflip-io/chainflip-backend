@@ -238,8 +238,6 @@ async fn run_cli() -> Result<()> {
 
 /// Turns the amount of FLIP into a RedemptionAmount in Flipperinos.
 fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
-	// Using a set number of decimal places of accuracy to avoid floating point rounding errors
-	const MAX_DECIMAL_PLACES: u32 = 6;
 	match amount {
 		Some(amount) => RedemptionAmount::Exact(flip_to_flipperinos(amount)),
 		None => RedemptionAmount::Max,
@@ -247,6 +245,7 @@ fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
 }
 
 fn flip_to_flipperinos(amount: f64) -> u128 {
+	// Using a set number of decimal places of accuracy to avoid floating point rounding errors
 	const MAX_DECIMAL_PLACES: u32 = 6;
 	((round_f64(amount, MAX_DECIMAL_PLACES) * 10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
 		10_u128.pow(Asset::Flip.decimals() - MAX_DECIMAL_PLACES)
