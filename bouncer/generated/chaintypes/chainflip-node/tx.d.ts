@@ -1477,6 +1477,26 @@ export interface ChainTx<
     >;
 
     /**
+     * Sets the maximum bid used for this validator in the next auction.
+     *
+     * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+     *
+     * @param {bigint | undefined} maxBid
+     **/
+    setValidatorMaxBid: GenericTxCall<
+      (maxBid: bigint | undefined) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Validator';
+          palletCall: {
+            name: 'SetValidatorMaxBid';
+            params: { maxBid: bigint | undefined };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Executed by a operator to claim a validator. By calling this, the operator
      * signals his wish to manage the validator in his delegated staking pool. The validator
      * has to actively accept this invitation by calling the `accept_operator` extrinsic.

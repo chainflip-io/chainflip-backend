@@ -1332,6 +1332,12 @@ export type PalletCfValidatorCall =
    **/
   | { name: 'StopBidding' }
   /**
+   * Sets the maximum bid used for this validator in the next auction.
+   *
+   * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   **/
+  | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
+  /**
    * Executed by a operator to claim a validator. By calling this, the operator
    * signals his wish to manage the validator in his delegated staking pool. The validator
    * has to actively accept this invitation by calling the `accept_operator` extrinsic.
@@ -1466,6 +1472,12 @@ export type PalletCfValidatorCallLike =
    * bidding.
    **/
   | { name: 'StopBidding' }
+  /**
+   * Sets the maximum bid used for this validator in the next auction.
+   *
+   * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   **/
+  | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
   /**
    * Executed by a operator to claim a validator. By calling this, the operator
    * signals his wish to manage the validator in his delegated staking pool. The validator
@@ -4797,10 +4809,15 @@ export type PalletCfPoolsCloseOrder =
       };
     };
 
-export type PalletCfPoolsPalletConfigUpdate = {
-  type: 'LimitOrderAutoSweepingThreshold';
-  value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
-};
+export type PalletCfPoolsPalletConfigUpdate =
+  | {
+      type: 'LimitOrderAutoSweepingThreshold';
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
+    }
+  | {
+      type: 'SetMinimumLimitOrderAmount';
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
+    };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -12994,6 +13011,13 @@ export type PalletCfValidatorEvent =
    **/
   | { name: 'StartedBidding'; data: { accountId: AccountId32 } }
   /**
+   * A validator updated the maximum bid used for its next auction.
+   **/
+  | {
+      name: 'ValidatorMaxBidUpdated';
+      data: { validator: AccountId32; maxBid?: bigint | undefined };
+    }
+  /**
    * The rotation transaction(s) for the previous rotation are still pending to be
    * successfully broadcast, therefore, cannot start a new epoch rotation.
    **/
@@ -19248,7 +19272,11 @@ export type PalletCfPoolsError =
   /**
    * The account still has open orders.
    **/
-  | 'OpenOrdersRemaining';
+  | 'OpenOrdersRemaining'
+  /**
+   * The resulting limit order amount is below the configured per-asset minimum.
+   **/
+  | 'BelowMinimumOrderAmount';
 
 export type CfeEventsCfeEvent =
   | { type: 'EvmThresholdSignatureRequest'; value: CfeEventsThresholdSignatureRequest }
@@ -21361,6 +21389,7 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo = {
   restrictedBalances: Array<[H160, bigint]>;
   estimatedRedeemableBalance: bigint;
   operator?: AccountId32 | undefined;
+  maxBid?: bigint | undefined;
 };
 
 export type PalletCfValidatorAuctionResolverAuctionOutcome = {

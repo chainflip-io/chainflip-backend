@@ -1340,11 +1340,21 @@ export interface ChainStorage extends GenericChainStorage {
     minimumOperatorFee: GenericStorageQuery<() => number>;
 
     /**
-     * Store the list of accounts that are active bidders.
+     * Store the list of validator accounts that are active bidders.
      *
      * @param {Callback<Array<AccountId32>> =} callback
      **/
     activeBidder: GenericStorageQuery<() => Array<AccountId32>>;
+
+    /**
+     * A validator's optional cap for its own auction bid.
+     *
+     * When no cap is stored, the validator bids its full funding balance.
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<bigint | undefined> =} callback
+     **/
+    validatorMaxBid: GenericStorageQuery<(arg: AccountId32Like) => bigint | undefined, AccountId32>;
 
     /**
      * Maps an operator account to it's exceptions. An exception is a delegator that is excluded
@@ -3256,11 +3266,23 @@ export interface ChainStorage extends GenericChainStorage {
     /**
      * Stores exponential moving average stats for liquidity providers per asset
      *
-     * @param {Callback<Array<[AccountId32, Array<[CfPrimitivesChainsAssetsAnyAsset, PalletCfLpAggStats]>]>> =} callback
+     * @param {[AccountId32Like, CfPrimitivesChainsAssetsAnyAsset]} arg
+     * @param {Callback<PalletCfLpAggStats | undefined> =} callback
      **/
     lpAggStats: GenericStorageQuery<
-      () => Array<[AccountId32, Array<[CfPrimitivesChainsAssetsAnyAsset, PalletCfLpAggStats]>]>
+      (arg: [AccountId32Like, CfPrimitivesChainsAssetsAnyAsset]) => PalletCfLpAggStats | undefined,
+      [AccountId32, CfPrimitivesChainsAssetsAnyAsset]
     >;
+
+    /**
+     * Resumable raw-storage-key cursor for the periodic `LpAggStats` decay/prune pass. `Some`
+     * while a pass is in progress (potentially spanning many blocks); `None` when idle, in which
+     * case `on_idle` waits for `STATS_UPDATE_INTERVAL_IN_BLOCKS` to elapse before starting a new
+     * one.
+     *
+     * @param {Callback<Bytes | undefined> =} callback
+     **/
+    statsUpdateCursor: GenericStorageQuery<() => Bytes | undefined>;
 
     /**
      * Generic pallet storage query
@@ -4206,6 +4228,18 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     limitOrderAutoSweepingThresholds: GenericStorageQuery<
       () => Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]>
+    >;
+
+    /**
+     * Minimum amount of the sold asset that a limit order may hold. Set per asset by
+     * governance. A value of `0` disables the check for that asset.
+     *
+     * @param {CfPrimitivesChainsAssetsAnyAsset} arg
+     * @param {Callback<bigint> =} callback
+     **/
+    minimumLimitOrderAmount: GenericStorageQuery<
+      (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint,
+      CfPrimitivesChainsAssetsAnyAsset
     >;
 
     /**
@@ -6241,6 +6275,16 @@ export interface ChainStorage extends GenericChainStorage {
     minimumAddedFundsToStrategy: GenericStorageQuery<
       () => Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]>
     >;
+
+    /**
+     * Cursor into `Strategies` for incremental `on_idle` processing: the raw storage
+     * key of the last strategy processed, or `None` to (re)start from the beginning.
+     * Bounds the per-block scan and ensures every strategy is eventually processed,
+     * rather than always the first `max_strategies` (no starvation of the tail).
+     *
+     * @param {Callback<Bytes | undefined> =} callback
+     **/
+    nextStrategyCursor: GenericStorageQuery<() => Bytes | undefined>;
 
     /**
      * Generic pallet storage query
