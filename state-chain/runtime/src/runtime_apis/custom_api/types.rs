@@ -235,6 +235,7 @@ impl From<validator_info_before_v7::ValidatorInfo> for ValidatorInfo {
 			restricted_balances: old.restricted_balances,
 			estimated_redeemable_balance: old.estimated_redeemable_balance,
 			operator: None,
+			max_bid: None,
 		}
 	}
 }
@@ -257,6 +258,7 @@ pub struct ValidatorInfo {
 	pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
 	pub operator: Option<AccountId32>,
+	pub max_bid: Option<AssetAmount>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]

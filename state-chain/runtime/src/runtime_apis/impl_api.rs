@@ -866,6 +866,7 @@ impl_runtime_apis! {
 				restricted_balances,
 				estimated_redeemable_balance,
 				operator: pallet_cf_validator::OperatorChoice::<Runtime>::get(account_id),
+				max_bid: pallet_cf_validator::ValidatorMaxBid::<Runtime>::get(account_id),
 			}
 		}
 

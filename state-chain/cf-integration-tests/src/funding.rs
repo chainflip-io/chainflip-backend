@@ -182,6 +182,24 @@ fn validator_can_redeem_balance_above_max_bid_bond_after_auction() {
 }
 
 #[test]
+fn validator_info_includes_max_bid() {
+	use state_chain_runtime::runtime_apis::custom_api::runtime_decl_for_custom_runtime_api::CustomRuntimeApi;
+
+	const MAX_BID: FlipBalance = GENESIS_BALANCE / 2;
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let (_, _, new_validators) = crate::authorities::fund_authorities_and_join_auction(1);
+		let validator = new_validators.first().expect("a validator was created");
+
+		assert_ok!(Validator::set_validator_max_bid(
+			RuntimeOrigin::signed(validator.clone()),
+			Some(MAX_BID),
+		));
+		assert_eq!(Runtime::cf_validator_info(validator).max_bid, Some(MAX_BID));
+	});
+}
+
+#[test]
 fn can_calculate_account_apy() {
 	const EPOCH_BLOCKS: u32 = 1_000;
 	const MAX_AUTHORITIES: u32 = 10;

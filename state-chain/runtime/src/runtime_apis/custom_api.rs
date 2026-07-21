@@ -106,6 +106,8 @@ decl_runtime_apis!(
 		fn cf_account_flip_balance(account_id: &AccountId32) -> u128;
 		#[changed_in(7)]
 		fn cf_validator_info(account_id: &AccountId32) -> validator_info_before_v7::ValidatorInfo;
+		#[changed_in(19)]
+		fn cf_validator_info(account_id: &AccountId32) -> before_version_19::ValidatorInfo;
 		fn cf_validator_info(account_id: &AccountId32) -> ValidatorInfo;
 		#[changed_in(7)]
 		fn cf_operator_info();
