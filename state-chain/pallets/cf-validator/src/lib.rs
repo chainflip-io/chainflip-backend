@@ -1662,7 +1662,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Among other things, updates the authority, historical and backup sets.
 	///
-	/// Also triggers [T::EpochTransitionHandler::on_new_epoch] which may call into other pallets.
+	/// Also triggers [T::EpochTransitionHandler::on_epoch_ending] and
+	/// [T::EpochTransitionHandler::on_new_epoch] which may call into other pallets.
 	///
 	/// Note this function is not benchmarked - it is only ever triggered via the session pallet,
 	/// which at the time of writing uses `T::BlockWeights::get().max_block` ie. it implicitly fills
@@ -1673,11 +1674,12 @@ impl<T: Config> Pallet<T> {
 	) {
 		log::debug!(target: "cf-validator", "Starting new epoch");
 
+		let old_epoch = CurrentEpoch::<T>::get();
+		T::EpochTransitionHandler::on_epoch_ending(old_epoch);
+
 		// Update epoch numbers.
-		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
-			*epoch = epoch.saturating_add(One::one());
-			(*epoch - 1, *epoch)
-		});
+		let new_epoch = old_epoch.saturating_add(One::one());
+		CurrentEpoch::<T>::put(new_epoch);
 
 		// Set the expiry block number for the old epoch.
 		EpochExpiries::<T>::insert(
