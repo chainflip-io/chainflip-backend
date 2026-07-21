@@ -51,7 +51,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, ChainflipWithTargetChain, EpochKey,
-	GetBlockHeight, KeyProvider, RewardsDistribution, SwapLimits, SwapParameterValidation,
+	GetBlockHeight, KeyProvider, SwapLimits, SwapParameterValidation,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -77,13 +77,10 @@ use pallet_cf_pools::{
 };
 use pallet_cf_reputation::HeartbeatQualification;
 use pallet_cf_swapping::{AffiliateDetails, BrokerPrivateBtcChannels, SwapLegInfo};
-use pallet_cf_validator::{
-	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance,
-};
+use pallet_cf_validator::{AssociationToOperator, DelegationAcceptance};
 use scale_info::prelude::string::String;
 use sp_api::impl_runtime_apis;
 use sp_core::OpaqueMetadata;
-use sp_runtime::traits::Zero;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
@@ -934,77 +931,45 @@ impl_runtime_apis! {
 						pallet_cf_account_roles::AccountRoles::<Runtime>::get(account)
 							.unwrap_or_default()
 					};
-					let managed_by = |account: &AccountId| {
-						pallet_cf_validator::ValidatorToOperator::<Runtime>::get(epoch_index, account)
-					};
 
-					// `distribute` looks up each authority's managing operator (if any) and
-					// settles its cut across that operator's validators/delegators, or pays the
-					// authority directly if it's independent - mirroring
-					// `Flip::trigger_flip_reward_distribution`'s per-authority settlement, without
-					// mutating any storage.
-					let mut operators_with_authorities: BTreeSet<AccountId> = BTreeSet::new();
-					let mut rewards: BTreeMap<AccountId, FlipBalance> = BTreeMap::new();
-					let mut reward_pool = Vec::new();
+					let mut reward_pool: Vec<AccountReward<FlipBalance>> = Vec::new();
 
-					for validator in &authorities {
-						match managed_by(validator) {
-							Some(operator) => {
-								operators_with_authorities.insert(operator);
-							},
-							None => {
-								reward_pool.push(AccountReward {
-									account: validator.clone(),
-									bid: Flip::balance(validator),
-									bond: Flip::bond(validator),
-									reward: per_authority_share,
-									role: AccountRole::Validator,
-									managed_by: None,
-									delegated_to: None,
-								});
-							},
+					// Mirrors `DelegatedRewardsDistribution::distribute_all`: snapshot validators
+					// are drained out of `authority_set` as we go, leaving only independent
+					// authorities, which get their full share directly after the loop below.
+					let mut authorities_to_reward: BTreeSet<&AccountId> = authorities.iter().collect();
+
+					for (operator, snapshot) in
+						pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix(epoch_index)
+					{
+						// Snapshots of operators whose pooled stake didn't clear the bond are
+						// still registered but hold a non-authority validator - they earn nothing.
+						let num_authority_nodes = snapshot
+							.validators
+							.keys()
+							.filter(|v| authorities_to_reward.remove(*v))
+							.count() as u32;
+						if num_authority_nodes == 0 {
+							continue;
 						}
 
-						<DelegatedRewardsDistribution<Runtime> as RewardsDistribution>::distribute(
-							epoch_index,
-							per_authority_share,
-							validator,
-							|account, amount| {
-								rewards
-									.entry(account.clone())
-									.and_modify(|r: &mut FlipBalance| *r = r.saturating_add(amount))
-									.or_insert(amount);
-							},
-						);
-					}
-
-					let reward_of =
-						|account: &AccountId| rewards.get(account).copied().unwrap_or_default();
-
-					for operator in operators_with_authorities {
+						let total = per_authority_share.saturating_mul(num_authority_nodes as FlipBalance);
+						let rewards: BTreeMap<AccountId, FlipBalance> = snapshot
+							.distribute(total, bond)
+							.map(|(account, amount)| (account.clone(), amount))
+							.collect();
+						let reward_of =
+							|account: &AccountId| rewards.get(account).copied().unwrap_or_default();
 
 						reward_pool.push(AccountReward {
 							account: operator.clone(),
-							bid: Zero::zero(),
-							bond: Flip::bond(&operator),
+							bid: 0,
+							bond: 0,
 							reward: reward_of(&operator),
 							role: AccountRole::Operator,
 							managed_by: None,
 							delegated_to: None,
 						});
-
-						let Some(snapshot) = pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
-							epoch_index,
-							&operator,
-						) else {
-							log::warn!(
-									"Operator {:?} has authority slot(s) in epoch {} but no delegation snapshot found.",
-									operator,
-									epoch_index
-								);
-							continue;
-						};
-
 
 						for (account, bid) in &snapshot.validators {
 							reward_pool.push(AccountReward {
@@ -1019,16 +984,32 @@ impl_runtime_apis! {
 						}
 
 						for (account, bid) in &snapshot.delegators {
+							let role = role_of(account);
 							reward_pool.push(AccountReward {
 								account: account.clone(),
 								bid: *bid,
 								bond: Flip::bond(account),
 								reward: reward_of(account),
-								role: role_of(account),
-								managed_by: managed_by(account),
+								role,
+								// `Validator`-role accounts can't hold a `DelegationChoice`
+								// (`delegate` rejects Validator/Operator callers), so a Validator
+								// here can only be demoted from this same operator's own set.
+								managed_by: (role == AccountRole::Validator).then(|| operator.clone()),
 								delegated_to: Some(operator.clone()),
 							});
 						}
+					}
+
+					for authority in authorities_to_reward {
+						reward_pool.push(AccountReward {
+							account: authority.clone(),
+							bid: Flip::balance(authority),
+							bond: Flip::bond(authority),
+							reward: per_authority_share,
+							role: AccountRole::Validator,
+							managed_by: None,
+							delegated_to: None,
+						});
 					}
 
 					(total_rewards, per_authority_share, reward_pool)

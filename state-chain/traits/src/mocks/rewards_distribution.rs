@@ -44,6 +44,23 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 		);
 		settle(beneficiary, amount);
 	}
+
+	fn distribute_all(
+		epoch_index: EpochIndex,
+		total_amount: Self::Balance,
+		mut settle: impl FnMut(&Self::AccountId, Self::Balance),
+	) {
+		let beneficiaries: sp_std::vec::Vec<Self::AccountId> =
+			<Self as MockPalletStorage>::get_storage(b"BENEFICIARIES", epoch_index)
+				.unwrap_or_default();
+		if beneficiaries.is_empty() {
+			return;
+		}
+		let per_beneficiary_amount = total_amount / (beneficiaries.len() as u32).into();
+		for beneficiary in &beneficiaries {
+			Self::distribute(epoch_index, per_beneficiary_amount, beneficiary, &mut settle);
+		}
+	}
 }
 
 impl<T: Chainflip> MockRewardsDistribution<T> {
@@ -51,5 +68,12 @@ impl<T: Chainflip> MockRewardsDistribution<T> {
 		beneficiary: &<Self as RewardsDistribution>::AccountId,
 	) -> <Self as RewardsDistribution>::Balance {
 		<Self as MockPalletStorage>::get_storage(b"REWARDS", beneficiary).unwrap_or_default()
+	}
+
+	pub fn set_beneficiaries(
+		epoch_index: EpochIndex,
+		beneficiaries: sp_std::vec::Vec<<Self as RewardsDistribution>::AccountId>,
+	) {
+		<Self as MockPalletStorage>::put_storage(b"BENEFICIARIES", epoch_index, beneficiaries);
 	}
 }

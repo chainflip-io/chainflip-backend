@@ -21,7 +21,7 @@
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
 use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
-	impl_pallet_safe_mode, Broadcaster, EgressApi, FlipBurnOrMoveInfo, Issuance,
+	impl_pallet_safe_mode, Broadcaster, EgressApi, EpochInfo, FlipBurnOrMoveInfo, Issuance,
 	RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
@@ -34,7 +34,6 @@ pub mod migrations;
 mod mock;
 mod tests;
 
-use cf_traits::EpochInfo;
 use frame_support::{
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
@@ -355,7 +354,11 @@ impl<T: Config> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>>
 				epoch_index,
 				reward_amount,
 				&author,
-				T::Issuance::mint,
+				|account, amount| {
+					if !amount.is_zero() {
+						T::Issuance::mint(account, amount);
+					}
+				},
 			);
 		}
 	}

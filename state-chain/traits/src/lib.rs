@@ -395,6 +395,16 @@ pub trait RewardsDistribution {
 		beneficiary: &Self::AccountId,
 		settle: impl FnMut(&Self::AccountId, Self::Balance),
 	);
+
+	/// Splits `total_amount` evenly across `epoch_index`'s complete set of reward recipients
+	/// (e.g. that epoch's full authority set), as determined by the implementation.
+	/// To settle a partial
+	/// set, call [Self::distribute] per beneficiary instead.
+	fn distribute_all(
+		epoch_index: EpochIndex,
+		total_amount: Self::Balance,
+		settle: impl FnMut(&Self::AccountId, Self::Balance),
+	);
 }
 
 /// A representation of the current network state for this heartbeat interval.

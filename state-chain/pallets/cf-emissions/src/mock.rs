@@ -163,6 +163,14 @@ impl RewardsDistribution for FlipDistribution {
 	) {
 		pallet_cf_flip::FlipIssuance::<Test>::mint(beneficiary, reward_amount);
 	}
+
+	fn distribute_all(
+		_epoch_index: cf_primitives::EpochIndex,
+		_total_amount: Self::Balance,
+		_settle: impl FnMut(&Self::AccountId, Self::Balance),
+	) {
+		unimplemented!("not used by the emissions pallet");
+	}
 }
 
 impl pallet_cf_emissions::Config for Test {
