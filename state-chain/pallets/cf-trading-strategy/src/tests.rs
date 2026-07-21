@@ -18,7 +18,7 @@ use cf_primitives::{Asset, AssetAmount, Tick};
 use cf_test_utilities::{assert_event_sequence, assert_events_eq};
 use cf_traits::{
 	mocks::{
-		balance_api::{MockBalance, MockLpRegistration},
+		balance_api::{MockBalance, MockRefundAddressRegistry},
 		pool_api::{MockLimitOrder, MockPoolApi},
 		price_feed_api::MockPriceFeedApi,
 	},
@@ -70,7 +70,7 @@ fn deploy_strategy() -> AccountId {
 		[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
 
 	for (asset, amount) in initial_amounts.clone() {
-		MockLpRegistration::register_refund_address(LP, asset.into());
+		MockRefundAddressRegistry::register_refund_address(LP, asset.into());
 		MockBalance::credit_account(&LP, asset, amount);
 	}
 
@@ -147,8 +147,8 @@ fn check_asset_validation(f: impl Fn(BTreeMap<Asset, u128>) -> DispatchResult) {
 #[test]
 fn asset_validation_on_deploy_strategy() {
 	new_test_ext().then_execute_at_next_block(|_| {
-		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
-		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
+		MockRefundAddressRegistry::register_refund_address(LP, BASE_ASSET.into());
+		MockRefundAddressRegistry::register_refund_address(LP, QUOTE_ASSET.into());
 
 		set_thresholds(THRESHOLD);
 
@@ -273,12 +273,12 @@ fn refund_addresses_are_required() {
 		assert_err!(deploy(), DispatchError::Other("no refund address"));
 
 		// Registering a single asset should not be sufficient:
-		MockLpRegistration::register_refund_address(LP, base_asset.into());
+		MockRefundAddressRegistry::register_refund_address(LP, base_asset.into());
 
 		assert_err!(deploy(), DispatchError::Other("no refund address"));
 
 		// Should be able to deploy a strategy after registering the second asset:
-		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
+		MockRefundAddressRegistry::register_refund_address(LP, QUOTE_ASSET.into());
 
 		assert_ok!(deploy());
 	});
@@ -400,7 +400,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 				[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
 
 			for (asset, amount) in initial_amounts.clone() {
-				MockLpRegistration::register_refund_address(LP, asset.into());
+				MockRefundAddressRegistry::register_refund_address(LP, asset.into());
 				MockBalance::credit_account(&LP, asset, amount);
 			}
 
@@ -532,9 +532,9 @@ fn strategy_deployment_validation() {
 		MockBalance::credit_account(&LP, BASE_ASSET, MIN_BASE_AMOUNT * 10);
 		MockBalance::credit_account(&LP, QUOTE_ASSET, MIN_QUOTE_AMOUNT * 10);
 
-		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
-		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
-		MockLpRegistration::register_refund_address(LP, Asset::Btc.into());
+		MockRefundAddressRegistry::register_refund_address(LP, BASE_ASSET.into());
+		MockRefundAddressRegistry::register_refund_address(LP, QUOTE_ASSET.into());
+		MockRefundAddressRegistry::register_refund_address(LP, Asset::Btc.into());
 
 		MockPriceFeedApi::set_price_usd(BASE_ASSET, 1);
 		MockPriceFeedApi::set_price_usd(STABLE_ASSET, 1);
@@ -1031,7 +1031,7 @@ mod safe_mode {
 				[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
 
 			for (asset, amount) in initial_amounts.clone() {
-				MockLpRegistration::register_refund_address(LP, asset.into());
+				MockRefundAddressRegistry::register_refund_address(LP, asset.into());
 				MockBalance::credit_account(&LP, asset, amount);
 			}
 
@@ -1370,7 +1370,7 @@ mod inventory_based_strategy {
 					[(BASE_ASSET, STARTING_AMOUNT), (QUOTE_ASSET, STARTING_AMOUNT)].into();
 
 				for (asset, amount) in initial_amounts.clone() {
-					MockLpRegistration::register_refund_address(LP, asset.into());
+					MockRefundAddressRegistry::register_refund_address(LP, asset.into());
 					MockBalance::credit_account(&LP, asset, amount);
 				}
 
@@ -1516,7 +1516,7 @@ mod oracle_strategy {
 				let initial_amounts: BTreeMap<_, _> =
 					[(BASE_ASSET, AMOUNT), (QUOTE_ASSET, AMOUNT)].into();
 				for (asset, amount) in initial_amounts.clone() {
-					MockLpRegistration::register_refund_address(LP, asset.into());
+					MockRefundAddressRegistry::register_refund_address(LP, asset.into());
 					MockBalance::credit_account(&LP, asset, amount);
 				}
 
@@ -1648,7 +1648,7 @@ mod oracle_strategy {
 				let initial_amounts: BTreeMap<_, _> =
 					[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, BASE_AMOUNT)].into();
 				for (asset, amount) in initial_amounts.clone() {
-					MockLpRegistration::register_refund_address(LP, asset.into());
+					MockRefundAddressRegistry::register_refund_address(LP, asset.into());
 					MockBalance::credit_account(&LP, asset, amount);
 				}
 
@@ -1703,7 +1703,7 @@ mod oracle_strategy {
 				let initial_amounts: BTreeMap<_, _> =
 					[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, BASE_AMOUNT)].into();
 				for (asset, amount) in initial_amounts.clone() {
-					MockLpRegistration::register_refund_address(LP, asset.into());
+					MockRefundAddressRegistry::register_refund_address(LP, asset.into());
 					MockBalance::credit_account(&LP, asset, amount);
 				}
 

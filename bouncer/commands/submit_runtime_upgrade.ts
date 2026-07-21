@@ -15,6 +15,7 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
+import { runWithTimeoutAndExit } from 'shared/utils';
 import { globalLogger } from 'shared/utils/logger';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 
@@ -55,4 +56,4 @@ async function main() {
   );
 }
 
-await main();
+await runWithTimeoutAndExit(main(), 60 * 60);

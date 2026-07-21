@@ -11,7 +11,7 @@ export async function logLpPoolOrders(logger: Logger, lpAddress: string) {
   for (const asset of allPoolAssets) {
     const assetAndChain = stateChainAssetFromAsset(asset);
 
-    const orders = await chainflip.rpc('cf_pool_orders', assetAndChain, 'USDC', lpAddress);
+    const orders = await chainflip.rpc.cf_pool_orders(assetAndChain, 'USDC', lpAddress);
     logger.info(`${asset} pool: ${JSON.stringify(orders)}`);
   }
 }

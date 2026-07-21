@@ -15,7 +15,7 @@
 
 import minimist from 'minimist';
 import { runWithTimeoutAndExit } from 'shared/utils';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 
 const args = minimist(process.argv.slice(2));
 
@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   const expectedEvents = args.succeed_on.split(',');
   const printEvent = expectedEvents.length === 1;
   const badEvents = args.fail_on ? args.fail_on.split(',') : [];
-  await using api = await getChainflipApi();
+  await using api = await getChainflipPolkadotApi();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await api.query.system.events((events: any[]) => {

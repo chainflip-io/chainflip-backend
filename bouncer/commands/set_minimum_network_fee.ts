@@ -3,11 +3,11 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { runWithTimeoutAndExit } from 'shared/utils';
 
 async function main() {
-  const minFee = Number(process.argv[2] ?? 500_000);
+  const minFee = BigInt(process.argv[2] ?? 500_000);
   await submitGovernanceExtrinsic((api) =>
     api.tx.swapping.updatePalletConfig([
-      { SetMinimumNetworkFee: { minFee } },
-      { SetInternalSwapMinimumNetworkFee: { minFee } },
+      { type: 'SetNetworkFee', value: { minimum: minFee } },
+      { type: 'SetInternalSwapNetworkFee', value: { minimum: minFee } },
     ]),
   );
 }

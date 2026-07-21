@@ -20,9 +20,7 @@ mod tests;
 
 use core::convert::Infallible;
 
-use cf_amm_math::{
-	mul_div_floor_checked, Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
-};
+use cf_amm_math::{mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use common::{
 	nth_root_of_integer_as_fixed_point, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase,
@@ -64,11 +62,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		fee_hundredth_pips: u32,
 		initial_range_order_price: Price,
 	) -> Result<Self, NewError> {
+		let initial_range_order_sqrt_price = initial_range_order_price
+			.try_into_sqrt_price()
+			.ok_or(NewError::RangeOrders(range_orders::NewError::InvalidInitialPrice))?;
+
 		Ok(Self {
 			limit_orders: limit_orders::PoolState::new(),
 			range_orders: range_orders::PoolState::new(
 				fee_hundredth_pips,
-				initial_range_order_price.into(),
+				initial_range_order_sqrt_price,
 			)
 			.map_err(NewError::RangeOrders)?,
 		})
@@ -129,11 +131,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						);
 
 						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
-							*sqrt_price = SqrtPrice::from_raw(mul_div_floor_checked(
+							*sqrt_price = SqrtPrice::try_from_raw(mul_div_floor_checked(
 								sqrt_price.as_raw(),
 								U256::one() << 128,
 								root,
-							).expect("root !=0 because current_sqrt_price & worst_sqrt_price are always > 0"));
+							).expect("root !=0 because current_sqrt_price & worst_sqrt_price are always > 0"))
+							.expect(
+								"interpolated sqrt prices stay within the existing valid range",
+							);
 							Some(*sqrt_price)
 						})
 					})
@@ -150,13 +155,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						);
 
 						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
-							*sqrt_price = SqrtPrice::from_raw(
+							*sqrt_price = SqrtPrice::try_from_raw(
 								mul_div_floor_checked(
 									sqrt_price.as_raw(),
 									root,
 									U256::one() << 128,
 								)
 								.unwrap(),
+							)
+							.expect(
+								"interpolated sqrt prices stay within the existing valid range",
 							);
 							Some(*sqrt_price)
 						})
@@ -175,14 +183,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		sqrt_price: SqrtPrice,
 		delta: Tick,
 	) -> Option<SqrtPrice> {
-		if sqrt_price.is_valid() {
-			Some(match order {
-				Side::Buy => QuoteToBase::increase_sqrt_price(sqrt_price, delta),
-				Side::Sell => BaseToQuote::increase_sqrt_price(sqrt_price, delta),
-			})
-		} else {
-			None
-		}
+		let sqrt_price = SqrtPrice::try_from_raw(sqrt_price.as_raw()).ok()?;
+
+		Some(match order {
+			Side::Buy => QuoteToBase::increase_sqrt_price(sqrt_price, delta),
+			Side::Sell => BaseToQuote::increase_sqrt_price(sqrt_price, delta),
+		})
 	}
 
 	fn inner_current_sqrt_price<
@@ -556,22 +562,19 @@ fn grow_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
 	.unwrap_or(U256::MAX)
 }
 
-/// Adjusts a valid range-order sqrt price by the pool fee in the swap direction.
-///
-/// The result is clamped to `[MIN_SQRT_PRICE, MAX_SQRT_PRICE]`.
+/// Adjusts a range-order sqrt price by the pool fee in the swap direction, clamping the result into
+/// `[MIN_SQRT_PRICE, MAX_SQRT_PRICE]`.
 fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(
 	sqrt_price: SqrtPrice,
 	fee_hundredth_pips: u32,
 ) -> SqrtPrice {
 	let price = Price::from(sqrt_price);
 
-	let adjusted_price = Price::from_raw(match SD::INPUT_SIDE.sell_order() {
+	Price::from_raw(match SD::INPUT_SIDE.sell_order() {
 		Side::Buy => grow_by_pool_fee(price.as_raw(), fee_hundredth_pips),
 		Side::Sell => reduce_by_pool_fee(price.as_raw(), fee_hundredth_pips),
-	});
-
-	let adjusted_sqrt_price: SqrtPrice = adjusted_price.into();
-	adjusted_sqrt_price.clamp(MIN_SQRT_PRICE, MAX_SQRT_PRICE)
+	})
+	.to_sqrt_price_clamped()
 }
 
 pub fn input_amount_from_fee(fee: U256, fee_hundredth_pips: u32) -> Option<U256> {

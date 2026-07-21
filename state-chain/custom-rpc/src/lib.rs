@@ -48,7 +48,10 @@ use cf_rpc_apis::{
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::{
-	migrations::{basics::migrate_from_historical_type, v20000, v20100},
+	migrations::{
+		basics::{migrate_from_historical_type, try_migrate_from_historical_type},
+		v20000, v20100,
+	},
 	rpc::NumberOrHex,
 };
 use core::ops::Range;
@@ -2284,16 +2287,30 @@ where
 
 				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
-					migrate_from_historical_type(
+					try_migrate_from_historical_type(
 						v20000,
 						api.cf_common_account_info_before_version_16(hash, &account_id)?,
 					)
+					.map_err(|_err| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InternalError.code(),
+							"Error when migrating runtime api reply",
+							None::<()>,
+						))
+					})?
 				} else if api_version < 17 {
 					#[expect(deprecated)]
-					migrate_from_historical_type(
+					try_migrate_from_historical_type(
 						v20100,
 						api.cf_common_account_info_before_version_17(hash, &account_id)?,
 					)
+					.map_err(|_err| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InternalError.code(),
+							"Error when migrating runtime api reply",
+							None::<()>,
+						))
+					})?
 				} else if api_version < 19 {
 					#[expect(deprecated)]
 					api.cf_common_account_info_before_version_19(

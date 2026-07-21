@@ -36,7 +36,7 @@ use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABL
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
-	IncreaseOrDecrease, LpRegistration, PoolApi, PriceFeedApi, Side,
+	IncreaseOrDecrease, PoolApi, PriceFeedApi, RefundAddressRegistry, Side,
 };
 
 use frame_support::{
@@ -273,7 +273,7 @@ pub mod pallet {
 		type BalanceApi: BalanceApi<AccountId = Self::AccountId>;
 
 		/// LP address registration and verification.
-		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
+		type RefundAddressRegistry: RefundAddressRegistry<AccountId = Self::AccountId>;
 
 		type PoolApi: PoolApi<AccountId = Self::AccountId>;
 
@@ -536,7 +536,7 @@ pub mod pallet {
 
 			// Check that the LP has a refund address for each asset
 			for asset in strategy.supported_assets() {
-				T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, asset)?;
+				T::RefundAddressRegistry::ensure_has_refund_address_for_asset(lp, asset)?;
 			}
 
 			strategy.validate_params::<T>()?;

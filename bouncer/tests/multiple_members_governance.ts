@@ -2,19 +2,16 @@ import assert from 'assert';
 import { createStateChainKeypair } from 'shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi } from 'shared/utils/substrate';
+import { signSendAndWait } from 'shared/utils/dedot';
 import { TestContext } from 'shared/utils/test_context';
-import { Codec } from '@polkadot/types/types';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { governanceExecutedEvent } from 'generated/events/governance/executed';
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
 
-  const { members } = (await chainflip.query.governance.members()) as unknown as {
-    members: Codec;
-    threshold: number;
-  };
-  return members.toPrimitive() as string[];
+  const { members } = await chainflip.query.governance.members();
+  return members.map((member) => member.address(2112));
 }
 
 const alice = createStateChainKeypair('//Alice');
@@ -63,8 +60,12 @@ async function submitWithMultipleGovernanceMembers<A = []>(cf: ChainflipIO<A>) {
   await using chainflip = await getChainflipApi();
 
   // Note that with two members, we need to approve with the other account:
-  const nonce = (await chainflip.rpc.system.accountNextIndex(alice.address)) as unknown as number;
-  await chainflip.tx.governance.approve(proposalId).signAndSend(alice, { nonce });
+  await signSendAndWait(
+    chainflip,
+    chainflip.tx.governance.approve(proposalId),
+    alice,
+    alice.address,
+  );
   cf.info(`Approved governance proposal with ID: ${proposalId}`);
 
   await cf.stepUntilEvent(governanceExecutedEvent.refine((id) => id === proposalId));

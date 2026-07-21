@@ -8,7 +8,12 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
-import { deferredPromise, handleSubstrateError, runWithTimeoutAndExit } from 'shared/utils';
+import {
+  decodeDotAddressForContract,
+  deferredPromise,
+  handleSubstrateError,
+  runWithTimeoutAndExit,
+} from 'shared/utils';
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import { createPolkadotVault } from 'commands/setup_vaults';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
@@ -77,10 +82,13 @@ async function main(): Promise<void> {
   ]);
   cf.info('registering assethub vault on state chain');
   await submitGovernanceExtrinsic((chainflip) =>
-    chainflip.tx.environment.witnessAssethubVaultCreation(hubVaultAddress, {
-      blockNumber: hubVaultEvent.block,
-      extrinsicIndex: hubVaultEvent.eventIndex,
-    }),
+    chainflip.tx.environment.witnessAssethubVaultCreation(
+      decodeDotAddressForContract(hubVaultAddress as string),
+      {
+        blockNumber: hubVaultEvent.block,
+        extrinsicIndex: hubVaultEvent.eventIndex,
+      },
+    ),
   );
 
   cf.info('creating pools for assethub assets');

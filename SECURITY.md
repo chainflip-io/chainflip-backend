@@ -37,7 +37,7 @@ Chainflip Labs will reward security researchers for responsibly disclosing secur
 
 The severity of the issue will be assessed according to expected impacts of the issue, using other similar programs as a baseline, though Chainflip will assess severity and corresponding reward size on a case by case basis.
 
-Issues in which an attacker has no direct financial incentive to conduct the attack are automatically heavily downgraded in terms of their severity and impact, and are generally classed as out of scope DoS vectors, though there may be exceptions.
+Issues in which an attacker has no direct financial incentive to conduct the attack are automatically heavily downgraded in terms of their severity and impact, and are generally classed as out of scope, though there may be exceptions.
 
 Rewards will be issued in FLIP tokens unless otherwise agreed upon with the researcher.
 
