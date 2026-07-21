@@ -858,7 +858,8 @@ export type PalletCfFlipCallLike =
 
 export type PalletCfFlipPalletConfigUpdate =
   | { type: 'SetSlashingRate'; value: Permill }
-  | { type: 'SetFeeScalingRate'; value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig };
+  | { type: 'SetFeeScalingRate'; value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig }
+  | { type: 'SetFeeRewardsActivationEpoch'; value: number };
 
 export type PalletCfFlipOnChargeTransactionFeeScalingRateConfig =
   | { type: 'DelayedExponential'; value: { threshold: number; exponent: number } }
@@ -12740,7 +12741,8 @@ export type PalletCfFlipEvent =
   | { name: 'AccountReaped'; data: { who: AccountId32; dustBurned: bigint } }
   | { name: 'PalletConfigUpdated'; data: { update: PalletCfFlipPalletConfigUpdate } }
   | { name: 'FlipMinted'; data: { to: AccountId32; amount: bigint } }
-  | { name: 'BondUpdated'; data: { accountId: AccountId32; newBond: bigint } };
+  | { name: 'BondUpdated'; data: { accountId: AccountId32; newBond: bigint } }
+  | { name: 'FlipDistributed'; data: { amounts: Array<[AccountId32, bigint]> } };
 
 export type PalletCfFlipImbalancesImbalanceSource =
   | { type: 'External' }
@@ -14260,7 +14262,18 @@ export type PalletCfSwappingEvent =
         shortId: CfPrimitivesAffiliateShortId;
         affiliateAccountId: AccountId32;
       };
-    };
+    }
+  /**
+   * FLIP was successfully scheduled for egress to the State Chain Gateway.
+   **/
+  | {
+      name: 'SentFlipToGateway';
+      data: { amount: bigint; egressId: [CfPrimitivesChainsForeignChain, bigint] };
+    }
+  /**
+   * FLIP egress to the State Chain Gateway was skipped.
+   **/
+  | { name: 'FlipTransferToGatewaySkipped'; data: { reason: DispatchError } };
 
 export type CfChainsSwapOrigin =
   | {
@@ -22187,6 +22200,28 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesRuntimeApiAccountInfo =
     }
   | { type: 'Validator'; value: StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo }
   | { type: 'Operator'; value: StateChainRuntimeRuntimeApisCustomApiTypesOperatorInfo };
+
+export type StateChainRuntimeRuntimeApisCustomApiTypesRewardDistributionEstimate = {
+  epochIndex: number;
+  currentBlock: number;
+  currentEpochStartedAt: number;
+  epochDuration: number;
+  bond: bigint;
+  authorityCount: number;
+  totalRewards: bigint;
+  perAuthorityShare: bigint;
+  rewardPool: Array<StateChainRuntimeRuntimeApisCustomApiTypesAccountReward>;
+};
+
+export type StateChainRuntimeRuntimeApisCustomApiTypesAccountReward = {
+  account: AccountId32;
+  bid: bigint;
+  bond: bigint;
+  reward: bigint;
+  role: CfPrimitivesAccountRole;
+  managedBy?: AccountId32 | undefined;
+  delegatedTo?: AccountId32 | undefined;
+};
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesNonceOrAccount =
   | { type: 'Nonce'; value: number }
