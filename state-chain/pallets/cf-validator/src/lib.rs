@@ -984,7 +984,7 @@ pub mod pallet {
 		///
 		/// Passing `None` removes the cap, causing the validator to bid its full funding balance.
 		#[pallet::call_index(23)]
-		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
+		#[pallet::weight(T::ValidatorWeightInfo::set_validator_max_bid())]
 		pub fn set_validator_max_bid(
 			origin: OriginFor<T>,
 			max_bid: Option<T::Amount>,

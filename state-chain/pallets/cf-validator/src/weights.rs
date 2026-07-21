@@ -62,6 +62,7 @@ pub trait WeightInfo {
 	fn deregister_as_validator() -> Weight;
 	fn stop_bidding() -> Weight;
 	fn start_bidding() -> Weight;
+	fn set_validator_max_bid() -> Weight;
 	fn claim_validator() -> Weight;
 	fn accept_operator() -> Weight;
 	fn remove_validator() -> Weight;
@@ -437,6 +438,31 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Minimum execution time: 27_560_000 picoseconds.
 		Weight::from_parts(28_155_000, 5068)
 			.saturating_add(T::DbWeight::get().reads(3_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+	/// NOT MEASURED: estimated from `stop_bidding`, which has an identical access pattern.
+	/// Replace with real numbers from the benchmark runner.
+	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
+	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::CurrentRotationPhase` (r:1 w:0)
+	/// Proof: `Validator::CurrentRotationPhase` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::CurrentEpochStartedAt` (r:1 w:0)
+	/// Proof: `Validator::CurrentEpochStartedAt` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::RedemptionPeriodAsPercentage` (r:1 w:0)
+	/// Proof: `Validator::RedemptionPeriodAsPercentage` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::EpochDuration` (r:1 w:0)
+	/// Proof: `Validator::EpochDuration` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::ValidatorMaxBid` (r:1 w:1)
+	/// Proof: `Validator::ValidatorMaxBid` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn set_validator_max_bid() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1678`
+		//  Estimated: `5143`
+		// Minimum execution time: 39_172_000 picoseconds.
+		Weight::from_parts(40_053_000, 5143)
+			.saturating_add(T::DbWeight::get().reads(7_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:2 w:0)
@@ -1020,6 +1046,31 @@ impl WeightInfo for () {
 		// Minimum execution time: 27_560_000 picoseconds.
 		Weight::from_parts(28_155_000, 5068)
 			.saturating_add(ParityDbWeight::get().reads(3_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+	/// NOT MEASURED: estimated from `stop_bidding`, which has an identical access pattern.
+	/// Replace with real numbers from the benchmark runner.
+	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
+	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::CurrentRotationPhase` (r:1 w:0)
+	/// Proof: `Validator::CurrentRotationPhase` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::CurrentEpochStartedAt` (r:1 w:0)
+	/// Proof: `Validator::CurrentEpochStartedAt` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::RedemptionPeriodAsPercentage` (r:1 w:0)
+	/// Proof: `Validator::RedemptionPeriodAsPercentage` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::EpochDuration` (r:1 w:0)
+	/// Proof: `Validator::EpochDuration` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::ValidatorMaxBid` (r:1 w:1)
+	/// Proof: `Validator::ValidatorMaxBid` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn set_validator_max_bid() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1678`
+		//  Estimated: `5143`
+		// Minimum execution time: 39_172_000 picoseconds.
+		Weight::from_parts(40_053_000, 5143)
+			.saturating_add(ParityDbWeight::get().reads(7_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:2 w:0)
