@@ -99,13 +99,18 @@ fn assert_rotation_aborted() {
 	);
 }
 
+type Roles = <Test as Chainflip>::AccountRoleRegistry;
+
+fn register_validator(account_id: ValidatorId) {
+	assert_ok!(<Roles as AccountRoleRegistry<Test>>::register_as_validator(&account_id));
+}
+
 fn add_bids(bids: Vec<Bid<ValidatorId, Amount>>) {
 	bids.into_iter().for_each(|bid| {
 		MockFlip::credit_funds(&bid.bidder_id, bid.amount);
 		// Some account might have already registered, so it's Ok if this fails.
-		let _ = <<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&bid.bidder_id);
+		let _ = <Roles as AccountRoleRegistry<Test>>::register_as_validator(&bid.bidder_id);
 		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(bid.bidder_id)));
-
 	})
 }
 
@@ -330,8 +335,8 @@ fn register_peer_id() {
 	new_test_ext().then_execute_with_checks(|| {
 		use sp_core::{Encode, Pair};
 
-		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
-		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB));
+		register_validator(ALICE);
+		register_validator(BOB);
 
 		let alice_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("alice", None);
 		let alice_peer_public_key = alice_peer_keypair.public();
@@ -359,8 +364,7 @@ fn register_peer_id() {
 
 		assert_eq!(
 			MockCfeInterface::take_events(),
-			vec![
-			MockCfeEvent::PeerIdRegistered {
+			vec![MockCfeEvent::PeerIdRegistered {
 				account_id: ALICE,
 				pubkey: alice_peer_public_key,
 				port: 40044,
@@ -396,8 +400,7 @@ fn register_peer_id() {
 
 		assert_eq!(
 			MockCfeInterface::take_events(),
-			vec![
-			MockCfeEvent::PeerIdRegistered {
+			vec![MockCfeEvent::PeerIdRegistered {
 				account_id: BOB,
 				pubkey: bob_peer_public_key,
 				port: 40043,
@@ -434,8 +437,7 @@ fn register_peer_id() {
 
 		assert_eq!(
 			MockCfeInterface::take_events(),
-			vec![
-			MockCfeEvent::PeerIdRegistered {
+			vec![MockCfeEvent::PeerIdRegistered {
 				account_id: BOB,
 				pubkey: bob_peer_public_key,
 				port: 40043,
@@ -1479,7 +1481,7 @@ fn test_start_and_stop_bidding() {
 
 		assert!(!ValidatorPallet::is_bidding(&ALICE));
 
-		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+		register_validator(ALICE);
 
 		assert!(!ValidatorPallet::is_bidding(&ALICE));
 
@@ -1528,73 +1530,77 @@ mod validator_max_bid {
 	#[test]
 	fn validator_max_bid_caps_and_resets_auction_bid() {
 		new_test_ext().execute_with(|| {
-		const BALANCE: u128 = 100;
-		MockFlip::credit_funds(&ALICE, BALANCE);
-		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
-		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+			const BALANCE: u128 = 100;
+			MockFlip::credit_funds(&ALICE, BALANCE);
+			register_validator(ALICE);
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
 
-		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
 
-		// Setting max bid to a portion of the full balance updates the bid:
-		assert_ok!(ValidatorPallet::set_validator_max_bid(
-			RuntimeOrigin::signed(ALICE),
-			Some(BALANCE / 2)
-		));
-		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE / 2));
-		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE / 2);
-		System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::ValidatorMaxBidUpdated {
-			validator: ALICE,
-			max_bid: Some(BALANCE / 2),
-		}));
+			// Setting max bid to a portion of the full balance updates the bid:
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(BALANCE / 2)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE / 2));
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE / 2);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(
+				Event::ValidatorMaxBidUpdated { validator: ALICE, max_bid: Some(BALANCE / 2) },
+			));
 
-		// A cap above the balance is stored as-is, but the bid is still capped by the balance:
-		assert_ok!(ValidatorPallet::set_validator_max_bid(
-			RuntimeOrigin::signed(ALICE),
-			Some(BALANCE * 2)
-		));
-		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE * 2));
-		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
+			// A cap above the balance is stored as-is, but the bid is still capped by the balance:
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(BALANCE * 2)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE * 2));
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
 
-		// Once funded, the previously ineffective cap takes effect:
-		MockFlip::credit_funds(&ALICE, BALANCE * 2);
-		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE * 2);
+			// Once funded, the previously ineffective cap takes effect:
+			MockFlip::credit_funds(&ALICE, BALANCE * 2);
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE * 2);
 
-		// Setting max bid to None effectively removes it, restoring the full-balance bid:
-		assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), None));
-		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
-		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE * 3);
-		System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::ValidatorMaxBidUpdated {
-			validator: ALICE,
-			max_bid: None,
-		}));
-	});
+			// Setting max bid to None effectively removes it, restoring the full-balance bid:
+			assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), None));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE * 3);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(
+				Event::ValidatorMaxBidUpdated { validator: ALICE, max_bid: None },
+			));
+		});
 	}
 
 	#[test]
 	fn validator_max_bid_requires_validator_and_is_allowed_outside_auction() {
 		new_test_ext().execute_with(|| {
-		assert_noop!(
-			ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)),
-			BadOrigin
-		);
+			assert_noop!(
+				ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)),
+				BadOrigin
+			);
 
-		MockFlip::credit_funds(&ALICE, 100);
-		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+			MockFlip::credit_funds(&ALICE, 100);
+			register_validator(ALICE);
 
-		assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)));
-		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(50));
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(50)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(50));
 
-		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
-		assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(60)));
-		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(60));
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(60)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(60));
 
-		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
-		assert_noop!(
-			ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)),
-			Error::<Test>::AuctionPhase
-		);
-		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(60));
-	});
+			CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+			assert_noop!(
+				ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)),
+				Error::<Test>::AuctionPhase
+			);
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(60));
+		});
 	}
 
 	#[test]
@@ -1604,7 +1610,7 @@ mod validator_max_bid {
 
 		new_test_ext().execute_with(|| {
 			MockFlip::credit_funds(&ALICE, MIN_STAKE * 2);
-			assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+			register_validator(ALICE);
 			assert_ok!(ValidatorPallet::update_pallet_config(
 				RawOrigin::Root.into(),
 				PalletConfigUpdate::MinimumValidatorStake { min_stake: MIN_STAKE_FLIP as u32 },
