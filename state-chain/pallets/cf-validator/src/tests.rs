@@ -1547,18 +1547,22 @@ mod validator_max_bid {
 			max_bid: Some(BALANCE / 2),
 		}));
 
-		// Setting to a larger than the users's balance results in full bid:
+		// A cap above the balance is stored as-is, but the bid is still capped by the balance:
 		assert_ok!(ValidatorPallet::set_validator_max_bid(
 			RuntimeOrigin::signed(ALICE),
 			Some(BALANCE * 2)
 		));
-		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE));
+		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE * 2));
 		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
 
-		// Setting max bid to None effectively removes it:
+		// Once funded, the previously ineffective cap takes effect:
+		MockFlip::credit_funds(&ALICE, BALANCE * 2);
+		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE * 2);
+
+		// Setting max bid to None effectively removes it, restoring the full-balance bid:
 		assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), None));
 		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
-		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
+		assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE * 3);
 		System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::ValidatorMaxBidUpdated {
 			validator: ALICE,
 			max_bid: None,

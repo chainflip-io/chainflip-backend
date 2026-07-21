@@ -372,7 +372,8 @@ pub mod pallet {
 
 	/// A validator's optional cap for its own auction bid.
 	///
-	/// When no cap is stored, the validator bids its full funding balance.
+	/// When no cap is stored, the validator bids its full funding balance. The stored cap is not
+	/// bounded by the account's balance, which can fall below it at any time (e.g. via slashing).
 	#[pallet::storage]
 	pub type ValidatorMaxBid<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
@@ -983,6 +984,8 @@ pub mod pallet {
 		/// Sets the maximum bid used for this validator in the next auction.
 		///
 		/// Passing `None` removes the cap, causing the validator to bid its full funding balance.
+		/// The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+		/// at auction resolution, so a cap above the balance simply has no effect until funded.
 		#[pallet::call_index(23)]
 		#[pallet::weight(T::ValidatorWeightInfo::set_validator_max_bid())]
 		pub fn set_validator_max_bid(
@@ -992,8 +995,6 @@ pub mod pallet {
 			let validator = T::AccountRoleRegistry::ensure_validator(origin)?;
 			ensure!(!Self::is_auction_phase(), Error::<T>::AuctionPhase);
 
-			let max_bid =
-				max_bid.map(|max_bid| core::cmp::min(max_bid, T::FundingInfo::balance(&validator)));
 			ValidatorMaxBid::<T>::mutate_exists(&validator, |current_max_bid| {
 				if *current_max_bid != max_bid {
 					*current_max_bid = max_bid;
