@@ -34,7 +34,6 @@ pub mod migrations;
 mod mock;
 mod tests;
 
-use cf_traits::EpochInfo;
 use frame_support::{
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
