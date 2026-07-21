@@ -42,7 +42,9 @@ export async function testFlipRewardActivation(testContext: TestContext) {
 
   await cf.submitGovernance({
     extrinsic: (api) =>
-      api.tx.flip.updatePalletConfig([{ SetFeeRewardsActivationEpoch: activationEpoch }]),
+      api.tx.flip.updatePalletConfig([
+        { type: 'SetFeeRewardsActivationEpoch', value: activationEpoch },
+      ]),
     expectedEvent: flipPalletConfigUpdatedEvent.refine(
       (event) =>
         event.update.__kind === 'SetFeeRewardsActivationEpoch' &&
