@@ -1,6 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/tests/account_info.rs
-assertion_line: 303
 expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
 ---
 {
@@ -70,5 +69,6 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
   "is_online": true,
   "is_bidding": false,
   "apy_bp": 375,
+  "max_bid": "0x7b",
   "operator": "5EmM3XnzKd5LJMr6oDAD6wEBP1Lgs7juQozaPpurTr3yVFbc"
 }
