@@ -110,7 +110,7 @@ export async function testFlipRewardActivation(testContext: TestContext) {
   // The epoch following activation distributes accrued fee rewards to authorities. With real
   // swap volume behind it, a non-zero amount should actually have been distributed.
   const distributed = await cf.expectEvent(flipFlipDistributedEvent);
-  const totalDistributed = distributed.amount.reduce((sum, [, amount]) => sum + amount, 0n);
+  const totalDistributed = distributed.amounts.reduce((sum, [, amount]) => sum + amount, 0n);
   assert.ok(
     totalDistributed > 0n,
     `Expected a non-zero FLIP reward distribution after generating swap fee volume, got ${totalDistributed}`,
