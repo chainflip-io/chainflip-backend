@@ -1598,6 +1598,39 @@ mod validator_max_bid {
 	}
 
 	#[test]
+	fn max_bid_cannot_be_set_below_minimum_validator_stake() {
+		const MIN_STAKE_FLIP: u128 = 10_000;
+		const MIN_STAKE: u128 = MIN_STAKE_FLIP * FLIPPERINOS_PER_FLIP;
+
+		new_test_ext().execute_with(|| {
+			MockFlip::credit_funds(&ALICE, MIN_STAKE * 2);
+			assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+			assert_ok!(ValidatorPallet::update_pallet_config(
+				RawOrigin::Root.into(),
+				PalletConfigUpdate::MinimumValidatorStake { min_stake: MIN_STAKE_FLIP as u32 },
+			));
+
+			assert_noop!(
+				ValidatorPallet::set_validator_max_bid(
+					RuntimeOrigin::signed(ALICE),
+					Some(MIN_STAKE - 1)
+				),
+				Error::<Test>::MaxBidBelowMinimumValidatorStake
+			);
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
+
+			// Exactly the minimum is allowed, as is removing the cap entirely.
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(MIN_STAKE)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(MIN_STAKE));
+			assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), None));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
+		});
+	}
+
+	#[test]
 	fn validator_is_bonded_up_to_max_bid_after_auction_resolution() {
 		const VALIDATOR: u64 = WINNING_BIDS[0].bidder_id;
 		const BALANCE: u128 = WINNING_BIDS[0].amount;
