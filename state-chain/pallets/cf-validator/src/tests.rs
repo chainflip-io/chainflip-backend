@@ -3029,30 +3029,118 @@ pub mod auction_optimization {
 		op_2_bids: Vec<Bid<ValidatorId, Amount>>,
 	) {
 		set_default_test_bids();
-		add_bids(op_1_bids.iter().chain(op_2_bids.iter()).cloned().collect());
+		setup_operator(OP_1, op_1_bids);
+		setup_operator(OP_2, op_2_bids);
+	}
 
+	/// Funds and registers `validators` as bidders managed by `operator`, with no other bidders
+	/// and no other operators.
+	fn setup_operator(operator: ValidatorId, validators: Vec<Bid<ValidatorId, Amount>>) {
+		add_bids(validators.clone());
 		assert_ok!(ValidatorPallet::register_as_operator(
-			OriginTrait::signed(OP_1),
+			RuntimeOrigin::signed(operator),
 			OPERATOR_SETTINGS,
 			vanity()
 		));
-		assert_ok!(ValidatorPallet::register_as_operator(
-			OriginTrait::signed(OP_2),
-			OPERATOR_SETTINGS,
-			vanity()
-		));
-
-		for bid in op_1_bids {
-			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_1), bid.bidder_id));
-			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_1));
-			assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
+		for Bid { bidder_id, .. } in validators {
+			assert_ok!(ValidatorPallet::claim_validator(
+				RuntimeOrigin::signed(operator),
+				bidder_id
+			));
+			assert_ok!(ValidatorPallet::accept_operator(
+				RuntimeOrigin::signed(bidder_id),
+				operator
+			));
+			assert!(OperatorChoice::<Test>::get(bidder_id).is_some());
 		}
+	}
 
-		for bid in op_2_bids {
-			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_2), bid.bidder_id));
-			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_2));
-			assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
-		}
+	#[test]
+	fn operator_sacrifices_its_lowest_capped_bidder() {
+		// The operator's pool averages its members' bids, so a pool averaging below the bond wins
+		// no seats at all. The optimiser then demotes the lowest-bidding member to concentrate the
+		// pool behind the survivor. `max_bid` is what makes LOW the lowest — on balance alone it
+		// would be HIGH that got demoted — and the demoted member must carry over at its capped
+		// bid, not its balance.
+		const LOW: ValidatorId = 100;
+		const HIGH: ValidatorId = 101;
+		const LOW_BALANCE: Amount = 300;
+		const LOW_MAX_BID: Amount = 10;
+		const HIGH_BALANCE: Amount = 100;
+
+		new_test_ext().execute_with(|| {
+			// Competing bidders that fill the authority set and set the bond well above the
+			// operator's pool average of (LOW_MAX_BID + HIGH_BALANCE) / 2 = 55.
+			add_bids(WINNING_BIDS.to_vec());
+			setup_operator(
+				OP_1,
+				vec![
+					Bid { bidder_id: LOW, amount: LOW_BALANCE },
+					Bid { bidder_id: HIGH, amount: HIGH_BALANCE },
+				],
+			);
+
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(LOW),
+				Some(LOW_MAX_BID)
+			));
+
+			let (outcome, snapshots) =
+				ValidatorPallet::resolve_auction_iteratively(&Default::default())
+					.expect("auction should resolve");
+			let snapshot = snapshots.get(&OP_1).expect("operator should have a snapshot");
+
+			assert!(
+				outcome.bond > (LOW_MAX_BID + HIGH_BALANCE) / 2,
+				"test only exercises the optimiser if the pool average is below the bond"
+			);
+			assert!(
+				!snapshot.validators.contains_key(&LOW),
+				"capped validator should have been demoted to a delegator"
+			);
+			assert_eq!(
+				snapshot.delegators.get(&LOW),
+				Some(&LOW_MAX_BID),
+				"demoted validator must be delegated at its capped bid, not its balance of {LOW_BALANCE}"
+			);
+		});
+	}
+
+	#[test]
+	fn excluded_validator_contributes_its_capped_bid() {
+		// An excluded managed validator still contributes to its operator's pool as a delegator.
+		// The contribution must be its capped bid, not its balance. No competing bidders are
+		// needed: the snapshot is built directly, without resolving an auction.
+		const EXCLUDED: ValidatorId = 100;
+		const OTHER: ValidatorId = 101;
+		const BALANCE: Amount = 300;
+		const MAX_BID: Amount = 10;
+
+		new_test_ext().execute_with(|| {
+			setup_operator(
+				OP_1,
+				vec![
+					Bid { bidder_id: EXCLUDED, amount: BALANCE },
+					Bid { bidder_id: OTHER, amount: BALANCE },
+				],
+			);
+
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(EXCLUDED),
+				Some(MAX_BID)
+			));
+
+			let (snapshots, _) = ValidatorPallet::build_delegation_snapshots::<
+				<Test as Config>::KeygenQualification,
+			>(&BTreeSet::from([EXCLUDED]));
+
+			let snapshot = snapshots.get(&OP_1).expect("operator should have a snapshot");
+			assert_eq!(
+				snapshot.delegators.get(&EXCLUDED),
+				Some(&MAX_BID),
+				"excluded validator must contribute its capped bid, not its balance of {BALANCE}"
+			);
+		});
 	}
 
 	#[expect(clippy::type_complexity)]
