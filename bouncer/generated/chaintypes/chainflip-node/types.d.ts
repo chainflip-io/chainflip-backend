@@ -1335,6 +1335,10 @@ export type PalletCfValidatorCall =
    * Sets the maximum bid used for this validator in the next auction.
    *
    * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   * The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+   * at auction resolution, so a cap above the balance simply has no effect until funded.
+   * It must, however, be at least the minimum validator stake — a lower cap could never
+   * produce a winning bid.
    **/
   | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
   /**
@@ -1476,6 +1480,10 @@ export type PalletCfValidatorCallLike =
    * Sets the maximum bid used for this validator in the next auction.
    *
    * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   * The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+   * at auction resolution, so a cap above the balance simply has no effect until funded.
+   * It must, however, be at least the minimum validator stake — a lower cap could never
+   * produce a winning bid.
    **/
   | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
   /**
@@ -17513,6 +17521,11 @@ export type PalletCfValidatorError =
    * Delegation amount must be at least as large as minimum funding amount.
    **/
   | 'DelegationAmountBelowMinimum'
+  /**
+   * A validator's max bid must be at least as large as the minimum validator stake,
+   * otherwise the validator could never bid enough to be a qualified bidder.
+   **/
+  | 'MaxBidBelowMinimumValidatorStake'
   /**
    * The caller's GRANDPA key does not match their session key registration.
    **/

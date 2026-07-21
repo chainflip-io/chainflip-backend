@@ -1349,7 +1349,8 @@ export interface ChainStorage extends GenericChainStorage {
     /**
      * A validator's optional cap for its own auction bid.
      *
-     * When no cap is stored, the validator bids its full funding balance.
+     * When no cap is stored, the validator bids its full funding balance. The stored cap is not
+     * bounded by the account's balance, which can fall below it at any time (e.g. via slashing).
      *
      * @param {AccountId32Like} arg
      * @param {Callback<bigint | undefined> =} callback

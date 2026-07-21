@@ -531,6 +531,12 @@ export interface ChainErrors extends GenericChainErrors {
     DelegationAmountBelowMinimum: GenericPalletError;
 
     /**
+     * A validator's max bid must be at least as large as the minimum validator stake,
+     * otherwise the validator could never bid enough to be a qualified bidder.
+     **/
+    MaxBidBelowMinimumValidatorStake: GenericPalletError;
+
+    /**
      * The caller's GRANDPA key does not match their session key registration.
      **/
     GrandpaKeyOwnershipMismatch: GenericPalletError;
