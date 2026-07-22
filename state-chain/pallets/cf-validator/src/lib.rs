@@ -2160,17 +2160,19 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
+	/// The validator's own bid for the next auction: its balance, capped by its max bid if set.
+	pub fn validator_bid(account_id: &T::AccountId) -> T::Amount {
+		let balance = T::FundingInfo::balance(account_id);
+		ValidatorMaxBid::<T>::get(account_id)
+			.map_or(balance, |max_bid| core::cmp::min(max_bid, balance))
+	}
+
 	pub fn get_active_bids() -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
 		ActiveBidder::<T>::get()
 			.into_iter()
-			.map(|bidder_id| {
-				let balance = T::FundingInfo::balance(&bidder_id);
-				Bid {
-					bidder_id: ValidatorIdOf::<T>::from_ref(&bidder_id).clone(),
-					amount: ValidatorMaxBid::<T>::get(&bidder_id)
-						.map(|max_bid| core::cmp::min(max_bid, balance))
-						.unwrap_or(balance),
-				}
+			.map(|bidder_id| Bid {
+				bidder_id: ValidatorIdOf::<T>::from_ref(&bidder_id).clone(),
+				amount: Self::validator_bid(&bidder_id),
 			})
 			.collect()
 	}
@@ -2462,11 +2464,14 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 	}
 }
 
+/// Qualifies validators on their auction bid (balance capped by max bid, if set), so that a
+/// stale max bid below the current minimum stake disqualifies rather than entering the auction
+/// with an under-minimum bid (which would drag the whole set's bond below the minimum).
 pub struct QualifyByMinimumStake<T>(PhantomData<T>);
 
 impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumStake<T> {
 	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
-		T::FundingInfo::balance(validator_id.into_ref()) >= MinimumValidatorStake::<T>::get()
+		Pallet::<T>::validator_bid(validator_id.into_ref()) >= MinimumValidatorStake::<T>::get()
 	}
 
 	fn filter_qualified(
@@ -2475,7 +2480,7 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumS
 		let min_bid = MinimumValidatorStake::<T>::get();
 		validators
 			.into_iter()
-			.filter(|id| T::FundingInfo::balance(id.into_ref()) >= min_bid)
+			.filter(|id| Pallet::<T>::validator_bid(id.into_ref()) >= min_bid)
 			.collect()
 	}
 }

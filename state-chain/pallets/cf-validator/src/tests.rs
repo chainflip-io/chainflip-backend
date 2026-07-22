@@ -1604,6 +1604,46 @@ mod validator_max_bid {
 	}
 
 	#[test]
+	fn stale_max_bid_below_min_stake_disqualifies() {
+		// The extrinsic rejects caps below the minimum stake, but governance can raise the
+		// minimum after a cap is stored. Such a validator must be disqualified rather than
+		// entering the auction with an under-minimum bid (as the lowest winning bid, it would
+		// become the whole set's bond).
+		const STALE_MAX_BID: u128 = 50;
+
+		new_test_ext().execute_with(|| {
+			MockFlip::credit_funds(&ALICE, 2 * FLIPPERINOS_PER_FLIP);
+			register_validator(ALICE);
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(STALE_MAX_BID)
+			));
+
+			let qualified_bidders = || {
+				ValidatorPallet::get_qualified_bidders::<QualifyByMinimumStake<Test>>()
+					.into_iter()
+					.map(|bid| bid.bidder_id)
+					.collect::<Vec<_>>()
+			};
+			assert!(qualified_bidders().contains(&ALICE));
+
+			// Governance raises the minimum stake above ALICE's stored cap:
+			assert_ok!(ValidatorPallet::update_pallet_config(
+				RawOrigin::Root.into(),
+				PalletConfigUpdate::MinimumValidatorStake { min_stake: 1 },
+			));
+
+			// The balance still exceeds the minimum, but the capped bid does not:
+			assert!(!qualified_bidders().contains(&ALICE));
+
+			// Removing the cap restores the full-balance bid and re-qualifies:
+			assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), None));
+			assert!(qualified_bidders().contains(&ALICE));
+		});
+	}
+
+	#[test]
 	fn max_bid_cannot_be_set_below_minimum_validator_stake() {
 		const MIN_STAKE_FLIP: u128 = 10_000;
 		const MIN_STAKE: u128 = MIN_STAKE_FLIP * FLIPPERINOS_PER_FLIP;
