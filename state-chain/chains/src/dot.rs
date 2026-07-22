@@ -171,6 +171,8 @@ pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 	Clone,
 	PartialEq,
 	Eq,
+	PartialOrd,
+	Ord,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
@@ -422,6 +424,8 @@ pub type ResetProxyAccountNonce = bool;
 	Debug,
 	PartialEq,
 	Eq,
+	Serialize,
+	Deserialize,
 	Default,
 )]
 pub struct PolkadotChannelState;
