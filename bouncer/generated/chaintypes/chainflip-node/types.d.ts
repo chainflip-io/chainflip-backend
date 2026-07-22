@@ -89,7 +89,8 @@ export type StateChainRuntimeRuntimeCall =
   | { pallet: 'BscVault'; palletCall: PalletCfVaultsCall }
   | { pallet: 'BscBroadcaster'; palletCall: PalletCfBroadcastCall008 }
   | { pallet: 'BscIngressEgress'; palletCall: PalletCfIngressEgressCall008 }
-  | { pallet: 'BscElections'; palletCall: PalletCfElectionsCall007 };
+  | { pallet: 'BscElections'; palletCall: PalletCfElectionsCall007 }
+  | { pallet: 'AssethubElections'; palletCall: PalletCfElectionsCall008 };
 
 export type StateChainRuntimeRuntimeCallLike =
   | { pallet: 'System'; palletCall: FrameSystemCallLike }
@@ -154,7 +155,8 @@ export type StateChainRuntimeRuntimeCallLike =
   | { pallet: 'BscVault'; palletCall: PalletCfVaultsCallLike }
   | { pallet: 'BscBroadcaster'; palletCall: PalletCfBroadcastCallLike008 }
   | { pallet: 'BscIngressEgress'; palletCall: PalletCfIngressEgressCallLike008 }
-  | { pallet: 'BscElections'; palletCall: PalletCfElectionsCallLike007 };
+  | { pallet: 'BscElections'; palletCall: PalletCfElectionsCallLike007 }
+  | { pallet: 'AssethubElections'; palletCall: PalletCfElectionsCallLike008 };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -617,6 +619,7 @@ export type StateChainRuntimeSafeModeInnerRuntimeSafeMode = {
   arbitrumElections: StateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumElectionsSafeMode;
   tronElections: StateChainRuntimeChainflipWitnessingTronElectionsTronElectionsSafeMode;
   bscElections: StateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMode;
+  assethubElections: StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectionsSafeMode;
 };
 
 export type PalletCfEmissionsPalletSafeMode = { emissionsSyncEnabled: boolean };
@@ -768,6 +771,10 @@ export type StateChainRuntimeChainflipWitnessingTronElectionsTronElectionsSafeMo
 };
 
 export type StateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMode = {
+  keyManagerWitnessing: boolean;
+};
+
+export type StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectionsSafeMode = {
   keyManagerWitnessing: boolean;
 };
 
@@ -12476,6 +12483,481 @@ export type StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes =
   | { type: 'Vaults'; value: [] }
   | { type: 'KeyManager'; value: [] };
 
+/**
+ * Contains a variant per dispatchable extrinsic that this pallet has.
+ **/
+export type PalletCfElectionsCall008 =
+  | {
+      name: 'Vote';
+      params: {
+        authorityVotes: Array<
+          [PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote008]
+        >;
+      };
+    }
+  | {
+      name: 'ProvideSharedData';
+      params: {
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
+      };
+    }
+  | { name: 'IgnoreMyVotes' }
+  | { name: 'StopIgnoringMyVotes' }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState008 } }
+  | {
+      name: 'UpdateSettings';
+      params: {
+        unsynchronisedSettings?:
+          | [
+              PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
+              PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+              PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+              number,
+              [],
+            ]
+          | undefined;
+        settings?: [[], [], [], [], number] | undefined;
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+      };
+    }
+  | {
+      name: 'SetSharedDataReferenceLifetime';
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
+    }
+  | {
+      name: 'ClearElectionVotes';
+      params: {
+        electionIdentifier: PalletCfElectionsElectionIdentifier005;
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+        checkElectionExists: boolean;
+      };
+    }
+  | {
+      name: 'InvalidateElectionConsensusCache';
+      params: {
+        electionIdentifier: PalletCfElectionsElectionIdentifier005;
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+        checkElectionExists: boolean;
+      };
+    }
+  | { name: 'PauseElections' }
+  | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
+  | {
+      name: 'ClearAllVotes';
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
+    }
+  | { name: 'ValidateStorage' }
+  | {
+      name: 'StartNewBlockWitnesserElection';
+      params: {
+        properties: [
+          CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+          StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes,
+        ];
+      };
+    };
+
+export type PalletCfElectionsCallLike008 =
+  | {
+      name: 'Vote';
+      params: {
+        authorityVotes: Array<
+          [PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote008]
+        >;
+      };
+    }
+  | {
+      name: 'ProvideSharedData';
+      params: {
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
+      };
+    }
+  | { name: 'IgnoreMyVotes' }
+  | { name: 'StopIgnoringMyVotes' }
+  | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 } }
+  | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState008 } }
+  | {
+      name: 'UpdateSettings';
+      params: {
+        unsynchronisedSettings?:
+          | [
+              PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
+              PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+              PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+              number,
+              [],
+            ]
+          | undefined;
+        settings?: [[], [], [], [], number] | undefined;
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+      };
+    }
+  | {
+      name: 'SetSharedDataReferenceLifetime';
+      params: { blocks: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
+    }
+  | {
+      name: 'ClearElectionVotes';
+      params: {
+        electionIdentifier: PalletCfElectionsElectionIdentifier005;
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+        checkElectionExists: boolean;
+      };
+    }
+  | {
+      name: 'InvalidateElectionConsensusCache';
+      params: {
+        electionIdentifier: PalletCfElectionsElectionIdentifier005;
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+        checkElectionExists: boolean;
+      };
+    }
+  | { name: 'PauseElections' }
+  | { name: 'UnpauseElections'; params: { requireVotesCleared: boolean } }
+  | {
+      name: 'ClearAllVotes';
+      params: { limit: number; ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance };
+    }
+  | { name: 'ValidateStorage' }
+  | {
+      name: 'StartNewBlockWitnesserElection';
+      params: {
+        properties: [
+          CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+          StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes,
+        ];
+      };
+    };
+
+export type PalletCfElectionsVoteStorageAuthorityVote008 =
+  | {
+      type: 'PartialVote';
+      value: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositePartialVoteAssethubTrackedData;
+    }
+  | {
+      type: 'Vote';
+      value: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVoteNonemptyContinuousHeadersAssethub;
+    };
+
+export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositePartialVoteAssethubTrackedData =
+
+    | { type: 'A'; value: PalletCfElectionsSharedDataHash }
+    | { type: 'B'; value: PalletCfElectionsSharedDataHash }
+    | { type: 'C'; value: PalletCfElectionsSharedDataHash }
+    | { type: 'D'; value: CfChainsHubAssethubTrackedData }
+    | { type: 'Ee'; value: H256 };
+
+export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVoteNonemptyContinuousHeadersAssethub =
+
+    | {
+        type: 'A';
+        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub;
+      }
+    | {
+        type: 'B';
+        value: [
+          Array<PalletCfIngressEgressDepositWitnessAssethub>,
+          CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
+        ];
+      }
+    | {
+        type: 'C';
+        value: [
+          Array<PalletCfBroadcastTransactionConfirmationAssethub>,
+          CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
+        ];
+      }
+    | { type: 'D'; value: CfChainsHubAssethubTrackedData }
+    | { type: 'Ee'; value: H256 };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub =
+  {
+    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub;
+    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub>;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub = {
+  blockHeight: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+  hash: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+  parentHash: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+};
+
+export type CfChainsWitnessPeriodBlockWitnessRangeAssethub = { root: number };
+
+export type PalletCfBroadcastTransactionConfirmationAssethub = {
+  txOutId: CfChainsDotPolkadotSignature;
+  signerId: CfChainsDotPolkadotAccountId;
+  txFee: bigint;
+  txMetadata: [];
+  transactionRef: CfChainsDotPolkadotTransactionId;
+};
+
+export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub =
+
+    | {
+        type: 'A';
+        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub;
+      }
+    | {
+        type: 'B';
+        value: [
+          Array<PalletCfIngressEgressDepositWitnessAssethub>,
+          CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
+        ];
+      }
+    | {
+        type: 'C';
+        value: [
+          Array<PalletCfBroadcastTransactionConfirmationAssethub>,
+          CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
+        ];
+      }
+    | { type: 'D'; value: [] }
+    | { type: 'Ee'; value: [] };
+
+export type PalletCfElectionsInitialState008 = {
+  unsynchronisedState: [
+    PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserAssethub,
+    PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubDepositChannel,
+    PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubEgress,
+    [CfChainsHubAssethubTrackedData, number],
+    [],
+  ];
+  unsynchronisedSettings: [
+    PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
+    PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+    PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+    number,
+    [],
+  ];
+  settings: [[], [], [], [], number];
+  sharedDataReferenceLifetime: number;
+};
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserAssethub =
+  {
+    phase: PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBhwPhaseAssethub;
+    blockHeightUpdate: StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubBlockHeightWitnesser;
+    onReorg: StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubBlockHeightWitnesser;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBhwPhaseAssethub =
+  | { type: 'StartingAssethub' }
+  | {
+      type: 'RunningAssethub';
+      value: {
+        headers: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub;
+        witnessFrom: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+      };
+    };
+
+export type StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubBlockHeightWitnesser = {};
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubDepositChannel =
+  {
+    elections: PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesElectionTrackerAssethubDepositChannel;
+    generateElectionPropertiesHook: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubDepositChannelWitnessing;
+    safemodeEnabled: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubDepositChannelWitnessing;
+    blockProcessor: PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockProcessorAssethubDepositChannel;
+    processedUpTo: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubDepositChannelWitnessing;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesElectionTrackerAssethubDepositChannel =
+  {
+    seenHeightsBelow: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+    highestEverOngoingElection: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+    queuedHashElections: Array<
+      [
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+      ]
+    >;
+    queuedSafeElections: PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesCompactHeightTracker004;
+    ongoing: Array<
+      [
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+        PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionTypeAssethubDepositChannel,
+      ]
+    >;
+    optimisticBlockCache: Array<
+      [
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+        PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesOptimisticBlockAssethubDepositChannel,
+      ]
+    >;
+    debugEvents: CfTraitsHookHookTestUtilsEmptyHook;
+    safetyBuffer: number;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesCompactHeightTracker004 = {
+  elections: Array<
+    [CfChainsWitnessPeriodBlockWitnessRangeAssethub, CfChainsWitnessPeriodBlockWitnessRangeAssethub]
+  >;
+};
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionTypeAssethubDepositChannel =
+
+    | { type: 'OptimisticAssethubDepositChannel' }
+    | {
+        type: 'ByHashAssethubDepositChannel';
+        value: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+      }
+    | { type: 'SafeBlockHeightAssethubDepositChannel' }
+    | {
+        type: 'GovernanceAssethubDepositChannel';
+        value: Array<CfChainsDepositChannelDepositChannelAssethub>;
+      };
+
+export type CfChainsDepositChannelDepositChannelAssethub = {
+  channelId: bigint;
+  address: CfChainsDotPolkadotAccountId;
+  asset: CfPrimitivesChainsAssetsHubAsset;
+  state: CfChainsDotPolkadotChannelState;
+};
+
+export type CfChainsDotPolkadotChannelState = {};
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesOptimisticBlockAssethubDepositChannel =
+  {
+    hash: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+    data: Array<PalletCfIngressEgressDepositWitnessAssethub>;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubDepositChannelWitnessing =
+  {
+    rules: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceJustWitnessAtSafetyMarginDepositWitnessAssethub;
+    execute: StateChainRuntimeChainflipWitnessingPalletHooks;
+  };
+
+export type StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubDepositChannelWitnessing =
+  {};
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserInstanceJustWitnessAtSafetyMarginDepositWitnessAssethub =
+  {};
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockProcessorAssethubDepositChannel =
+  {
+    blocksData: Array<
+      [
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+        PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockProcessingInfoAssethubDepositChannel,
+      ]
+    >;
+    processedEvents: Array<
+      [
+        CfPrimitivesBlockWitnesserEventDepositWitnessAssethub,
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+      ]
+    >;
+    rules: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubDepositChannelWitnessing;
+    execute: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubDepositChannelWitnessing;
+    debugEvents: CfTraitsHookHookTestUtilsEmptyHook;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockProcessingInfoAssethubDepositChannel =
+  {
+    blockData: Array<PalletCfIngressEgressDepositWitnessAssethub>;
+    nextAgeToProcess: number;
+    safetyMargin: number;
+  };
+
+export type CfPrimitivesBlockWitnesserEventDepositWitnessAssethub =
+  | { type: 'PreWitness'; value: PalletCfIngressEgressDepositWitnessAssethub }
+  | { type: 'Witness'; value: PalletCfIngressEgressDepositWitnessAssethub };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubEgress =
+  {
+    elections: PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesElectionTrackerAssethubEgress;
+    generateElectionPropertiesHook: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubEgressWitnessing;
+    safemodeEnabled: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubEgressWitnessing;
+    blockProcessor: PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockProcessorAssethubEgress;
+    processedUpTo: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubEgressWitnessing;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesElectionTrackerAssethubEgress =
+  {
+    seenHeightsBelow: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+    highestEverOngoingElection: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+    queuedHashElections: Array<
+      [
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+      ]
+    >;
+    queuedSafeElections: PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesCompactHeightTracker004;
+    ongoing: Array<
+      [
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+        PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionTypeAssethubEgress,
+      ]
+    >;
+    optimisticBlockCache: Array<
+      [
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+        PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesOptimisticBlockAssethubEgress,
+      ]
+    >;
+    debugEvents: CfTraitsHookHookTestUtilsEmptyHook;
+    safetyBuffer: number;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionTypeAssethubEgress =
+
+    | { type: 'OptimisticAssethubEgress' }
+    | { type: 'ByHashAssethubEgress'; value: CfChainsWitnessPeriodBlockWitnessRangeAssethub }
+    | { type: 'SafeBlockHeightAssethubEgress' }
+    | { type: 'GovernanceAssethubEgress'; value: Array<CfChainsDotPolkadotSignature> };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesOptimisticBlockAssethubEgress =
+  {
+    hash: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+    data: Array<PalletCfBroadcastTransactionConfirmationAssethub>;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubEgressWitnessing =
+  {
+    rules: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceJustWitnessAtSafetyMarginTransactionConfirmationAssethub;
+    execute: StateChainRuntimeChainflipWitnessingPalletHooks;
+  };
+
+export type StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubEgressWitnessing = {};
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserInstanceJustWitnessAtSafetyMarginTransactionConfirmationAssethub =
+  {};
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockProcessorAssethubEgress =
+  {
+    blocksData: Array<
+      [
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+        PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockProcessingInfoAssethubEgress,
+      ]
+    >;
+    processedEvents: Array<
+      [
+        CfPrimitivesBlockWitnesserEventTransactionConfirmationAssethub,
+        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+      ]
+    >;
+    rules: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubEgressWitnessing;
+    execute: PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubEgressWitnessing;
+    debugEvents: CfTraitsHookHookTestUtilsEmptyHook;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserBlockProcessorBlockProcessingInfoAssethubEgress =
+  {
+    blockData: Array<PalletCfBroadcastTransactionConfirmationAssethub>;
+    nextAgeToProcess: number;
+    safetyMargin: number;
+  };
+
+export type CfPrimitivesBlockWitnesserEventTransactionConfirmationAssethub =
+  | { type: 'PreWitness'; value: PalletCfBroadcastTransactionConfirmationAssethub }
+  | { type: 'Witness'; value: PalletCfBroadcastTransactionConfirmationAssethub };
+
+export type StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes = 'DepositChannels';
+
 export type SpRuntimeMultiSignature =
   | { type: 'Ed25519'; value: FixedBytes<64> }
   | { type: 'Sr25519'; value: FixedBytes<64> }
@@ -12590,7 +13072,8 @@ export type StateChainRuntimeRuntimeEvent =
   | { pallet: 'BscVault'; palletEvent: PalletCfVaultsEvent }
   | { pallet: 'BscBroadcaster'; palletEvent: PalletCfBroadcastEvent }
   | { pallet: 'BscIngressEgress'; palletEvent: PalletCfIngressEgressEvent008 }
-  | { pallet: 'BscElections'; palletEvent: PalletCfElectionsEvent007 };
+  | { pallet: 'BscElections'; palletEvent: PalletCfElectionsEvent007 }
+  | { pallet: 'AssethubElections'; palletEvent: PalletCfElectionsEvent008 };
 
 /**
  * Event for the System pallet.
@@ -17120,6 +17603,49 @@ export type StateChainRuntimeChainflipWitnessingBscElectionsBscElectoralEvents =
   };
 };
 
+/**
+ * The `Event` enum of this pallet
+ **/
+export type PalletCfElectionsEvent008 =
+  /**
+   * Corrupted storage was detected, and so all elections and voting has been paused.
+   **/
+  | { name: 'CorruptStorage' }
+  /**
+   * A request was made, but the pallet hasn't been initialized.
+   **/
+  | { name: 'Uninitialized' }
+  /**
+   * All vote data was cleared.
+   **/
+  | { name: 'AllVotesCleared' }
+  /**
+   * Not all vote data was cleared. *You should continue clearing votes until you receive
+   * the AllVotesCleared event*.
+   **/
+  | { name: 'AllVotesNotCleared' }
+  /**
+   * Received vote for an unknown election
+   **/
+  | { name: 'UnknownElection'; data: PalletCfElectionsElectionIdentifier005 }
+  /**
+   * Events generated by any of the contained electoral systems
+   **/
+  | {
+      name: 'ElectoralEvent';
+      data: StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectoralEvents;
+    };
+
+export type StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectoralEvents = {
+  type: 'ReorgDetected';
+  value: {
+    reorgedBlocks: {
+      start: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+      end: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+    };
+  };
+};
+
 export type FrameSystemLastRuntimeUpgradeInfo = { specVersion: number; specName: string };
 
 export type FrameSystemCodeUpgradeAuthorization = { codeHash: H256; checkVersion: boolean };
@@ -18859,8 +19385,6 @@ export type CfChainsDepositChannelDepositChannelPolkadot = {
   state: CfChainsDotPolkadotChannelState;
 };
 
-export type CfChainsDotPolkadotChannelState = {};
-
 export type PalletCfIngressEgressChannelActionPolkadotAccountId =
   | {
       type: 'Swap';
@@ -20097,13 +20621,6 @@ export type PalletCfIngressEgressDepositChannelDetailsAssethub = {
   isMarkedForRejection: boolean;
 };
 
-export type CfChainsDepositChannelDepositChannelAssethub = {
-  channelId: bigint;
-  address: CfChainsDotPolkadotAccountId;
-  asset: CfPrimitivesChainsAssetsHubAsset;
-  state: CfChainsDotPolkadotChannelState;
-};
-
 export type PalletCfIngressEgressFetchOrTransferAssethub =
   | {
       type: 'Fetch';
@@ -21300,6 +21817,94 @@ export type PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeConsen
       }
     | { type: 'Ee'; value: CfChainsBscBscTrackedData }
     | { type: 'Ff'; value: Array<AccountId32> };
+
+export type PalletCfElectionsBitmapComponentsElectionBitmapComponentsAssethub = {
+  epoch: number;
+  bitmaps: Array<
+    [PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeBitmapComponent002, BitSequence]
+  >;
+};
+
+export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeBitmapComponent002 =
+  | { type: 'A'; value: PalletCfElectionsSharedDataHash }
+  | { type: 'B'; value: PalletCfElectionsSharedDataHash }
+  | { type: 'C'; value: PalletCfElectionsSharedDataHash }
+  | { type: 'D'; value: [] }
+  | { type: 'Ee'; value: H256 };
+
+export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeIndividualComponentAssethubTrackedData =
+
+    | { type: 'A'; value: [] }
+    | { type: 'B'; value: [] }
+    | { type: 'C'; value: [] }
+    | { type: 'D'; value: CfChainsHubAssethubTrackedData }
+    | { type: 'Ee'; value: [] };
+
+export type PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionPropertiesHeightWitnesserPropertiesAssethub =
+
+    | {
+        type: 'A';
+        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserHeightWitnesserPropertiesAssethub;
+      }
+    | {
+        type: 'B';
+        value: PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionPropertiesAssethubDepositChannel;
+      }
+    | {
+        type: 'C';
+        value: PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionPropertiesAssethubEgress;
+      }
+    | { type: 'D'; value: [] }
+    | { type: 'Ee'; value: bigint };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserHeightWitnesserPropertiesAssethub =
+  { witnessFromIndex: CfChainsWitnessPeriodBlockWitnessRangeAssethub };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionPropertiesAssethubDepositChannel =
+  {
+    electionType: PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineEngineElectionTypeAssethub;
+    blockHeight: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+    properties: Array<CfChainsDepositChannelDepositChannelAssethub>;
+  };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineEngineElectionTypeAssethub =
+  | { type: 'ByHashAssethub'; value: CfChainsWitnessPeriodBlockWitnessRangeAssethub }
+  | { type: 'BlockHeightAssethub'; value: { submitHash: boolean } };
+
+export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionPropertiesAssethubEgress =
+  {
+    electionType: PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineEngineElectionTypeAssethub;
+    blockHeight: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+    properties: Array<CfChainsDotPolkadotSignature>;
+  };
+
+export type PalletCfElectionsConsensusHistory008 = {
+  mostRecent: PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeConsensusNonemptyContinuousHeadersAssethub;
+  lostSince: boolean;
+};
+
+export type PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeConsensusNonemptyContinuousHeadersAssethub =
+
+    | {
+        type: 'A';
+        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub;
+      }
+    | {
+        type: 'B';
+        value: [
+          Array<PalletCfIngressEgressDepositWitnessAssethub>,
+          CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
+        ];
+      }
+    | {
+        type: 'C';
+        value: [
+          Array<PalletCfBroadcastTransactionConfirmationAssethub>,
+          CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
+        ];
+      }
+    | { type: 'D'; value: CfChainsHubAssethubTrackedData }
+    | { type: 'Ee'; value: Array<AccountId32> };
 
 export type SpRuntimeExtrinsicInclusionMode = 'AllExtrinsics' | 'OnlyInherents';
 
@@ -22509,4 +23114,5 @@ export type StateChainRuntimeRuntimeError =
   | { pallet: 'BscVault'; palletError: PalletCfVaultsError }
   | { pallet: 'BscBroadcaster'; palletError: PalletCfBroadcastError }
   | { pallet: 'BscIngressEgress'; palletError: PalletCfIngressEgressError }
-  | { pallet: 'BscElections'; palletError: PalletCfElectionsError };
+  | { pallet: 'BscElections'; palletError: PalletCfElectionsError }
+  | { pallet: 'AssethubElections'; palletError: PalletCfElectionsError };
