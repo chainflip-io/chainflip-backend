@@ -325,6 +325,7 @@ fn test_validator_serialization() {
 			is_qualified: true,
 			apy_bp: Some(375u32), // 3.75% APY
 			operator: Some(AccountId32::new([0x77; 32])),
+			bid: U256::from(121),
 			max_bid: Some(U256::from(123)),
 		},
 	};
@@ -357,6 +358,7 @@ fn test_all_account_infos_serialization() {
 			is_online: true,
 			is_qualified: true,
 			apy_bp: Some(375),
+			bid: U256::from(121),
 			max_bid: Some(U256::from(123)),
 			operator: Some(AccountId32::new([0x77; 32])),
 		},

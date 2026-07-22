@@ -182,7 +182,7 @@ fn validator_can_redeem_balance_above_max_bid_bond_after_auction() {
 }
 
 #[test]
-fn validator_info_includes_max_bid() {
+fn validator_info_includes_bid_and_max_bid() {
 	use state_chain_runtime::runtime_apis::custom_api::runtime_decl_for_custom_runtime_api::CustomRuntimeApi;
 
 	const MAX_BID: FlipBalance = GENESIS_BALANCE / 2;
@@ -195,7 +195,9 @@ fn validator_info_includes_max_bid() {
 			RuntimeOrigin::signed(validator.clone()),
 			Some(MAX_BID),
 		));
-		assert_eq!(Runtime::cf_validator_info(validator).max_bid, Some(MAX_BID));
+		let validator_info = Runtime::cf_validator_info(validator);
+		assert_eq!(validator_info.max_bid, Some(MAX_BID));
+		assert_eq!(validator_info.bid, MAX_BID);
 	});
 }
 

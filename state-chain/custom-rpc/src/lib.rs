@@ -286,6 +286,7 @@ pub enum RpcAccountInfo {
 		is_online: bool,
 		is_bidding: bool,
 		apy_bp: Option<u32>,
+		bid: U256,
 		max_bid: Option<U256>,
 		#[serde(skip_serializing_if = "Option::is_none")]
 		operator: Option<AccountId32>,
@@ -385,6 +386,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					is_online,
 					is_bidding,
 					apy_bp,
+					bid: flip_balance.into(),
 					max_bid: None,
 					operator: None,
 				},
@@ -2179,6 +2181,7 @@ where
 										is_online,
 										is_bidding,
 										apy_bp,
+										bid,
 										max_bid,
 										operator,
 										..
@@ -2193,6 +2196,7 @@ where
 										is_online,
 										is_bidding,
 										apy_bp,
+										bid: bid.into(),
 										max_bid: max_bid.map(Into::into),
 										operator,
 									}
@@ -2459,6 +2463,7 @@ where
 								is_bidding,
 								apy_bp,
 								max_bid,
+								bid,
 								operator,
 								..
 							} = if api_version < 19 {
@@ -2478,6 +2483,7 @@ where
 								is_bidding,
 								apy_bp,
 								max_bid: max_bid.map(Into::into),
+								bid: bid.into(),
 								operator,
 							}
 						},

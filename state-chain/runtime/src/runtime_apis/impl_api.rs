@@ -849,8 +849,10 @@ impl_runtime_apis! {
 			let estimated_redeemable_balance = pallet_cf_funding::Redemption::<Runtime>::for_rpc(
 				account_id,
 			).map(|redemption| redemption.redeem_amount).unwrap_or_default();
+			let balance = account_info.total();
+			let max_bid = pallet_cf_validator::ValidatorMaxBid::<Runtime>::get(account_id);
 			ValidatorInfo {
-				balance: account_info.total(),
+				balance,
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
 				reputation_points: reputation_info.reputation_points,
@@ -866,7 +868,8 @@ impl_runtime_apis! {
 				restricted_balances,
 				estimated_redeemable_balance,
 				operator: pallet_cf_validator::OperatorChoice::<Runtime>::get(account_id),
-				max_bid: pallet_cf_validator::ValidatorMaxBid::<Runtime>::get(account_id),
+				max_bid,
+				bid: balance.min(max_bid.unwrap_or(balance)),
 			}
 		}
 
