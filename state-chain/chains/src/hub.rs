@@ -52,6 +52,13 @@ use sp_runtime::{
 pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 4_000_000u128; //4 usd
 pub const ONE_DOT: PolkadotBalance = 10_000_000_000u128;
 
+pub const ASSETHUB_WITNESS_PERIOD: u32 = 3;
+
+impl ChainWitnessConfig for Assethub {
+	type ChainBlockNumber = PolkadotBlockNumber;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 3;
+}
+
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
 	const GAS_ASSET: Self::ChainAsset = assets::hub::Asset::HubDot;
@@ -320,6 +327,8 @@ impl AssethubExtrinsicBuilder {
 	Debug,
 	PartialEq,
 	Eq,
+	PartialOrd,
+	Ord,
 	Serialize,
 	Deserialize,
 )]

@@ -3159,4 +3159,25 @@ export interface ChainErrors extends GenericChainErrors {
      **/
     [error: string]: GenericPalletError;
   };
+  /**
+   * Pallet `AssethubElections`'s errors
+   **/
+  assethubElections: {
+    Uninitialized: GenericPalletError;
+    AlreadyInitialized: GenericPalletError;
+    UnknownElection: GenericPalletError;
+    Unauthorised: GenericPalletError;
+    Paused: GenericPalletError;
+    NotPaused: GenericPalletError;
+    UnreferencedSharedData: GenericPalletError;
+    CorruptStorage: GenericPalletError;
+    VotesNotCleared: GenericPalletError;
+    NotContributing: GenericPalletError;
+    NoVotesSpecified: GenericPalletError;
+
+    /**
+     * Generic pallet error
+     **/
+    [error: string]: GenericPalletError;
+  };
 }
