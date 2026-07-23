@@ -16,7 +16,7 @@
 
 use crate::{
 	common::option_inner,
-	dot::http_rpc::DotRpcClientBuilder,
+	dot::{cached_rpc::DotRetryRpcApiWithResult, http_rpc::DotRpcClientBuilder},
 	retrier::{Attempt, RetryLimitReturn, MAX_RPC_RETRY_DELAY, MAX_SUBSCRIPTION_RETRY_DELAY},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
@@ -49,6 +49,7 @@ const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(28 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
+const MAX_RETRY_FOR_WITH_RESULT: Attempt = 2;
 
 impl DotRetryRpcClient {
 	pub fn new(
@@ -242,6 +243,103 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 }
 
 #[async_trait::async_trait]
+impl DotRetryRpcApiWithResult for DotRetryRpcClient {
+	async fn block_hash(
+		&self,
+		block_number: PolkadotBlockNumber,
+	) -> anyhow::Result<Option<PolkadotHash>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("block_hash".to_string(), Some(format!("{block_number}"))),
+				Box::pin(move |client| {
+					Box::pin(
+						async move { client.http_client().await.block_hash(block_number).await },
+					)
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> anyhow::Result<Vec<Bytes>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("extrinsics".to_string(), Some(format!("{block_hash:?}"))),
+				Box::pin(move |client| {
+					Box::pin(async move {
+						client.http_client().await.extrinsics(block_hash).await?.ok_or(anyhow!(
+							"Block not found when querying for extrinsics at block hash {block_hash:?}"
+						))
+					})
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn events(
+		&self,
+		block_hash: PolkadotHash,
+		parent_hash: PolkadotHash,
+	) -> anyhow::Result<Option<Events<PolkadotConfig>>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("events".to_string(), Some(format!("{block_hash:?}"))),
+				Box::pin(move |client| {
+					Box::pin(async move {
+						client.http_client().await.events(block_hash, parent_hash).await
+					})
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn runtime_version(
+		&self,
+		block_hash: Option<PolkadotHash>,
+	) -> anyhow::Result<RuntimeVersion> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("runtime_version".to_string(), None),
+				Box::pin(move |client| {
+					Box::pin(
+						async move { client.http_client().await.runtime_version(block_hash).await },
+					)
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn liquid_account_balance(
+		&self,
+		account_id: PolkadotAccountId,
+		asset: HubAsset,
+		block_hash: PolkadotHash,
+	) -> anyhow::Result<u128> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"liquid_account_balance".to_string(),
+					Some(format!("{account_id:?}, {asset:?}, {block_hash:?}")),
+				),
+				Box::pin(move |client| {
+					Box::pin(async move {
+						client
+							.http_client()
+							.await
+							.liquid_account_balance(account_id, asset, block_hash)
+							.await
+					})
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+}
+
+#[async_trait::async_trait]
 pub trait DotRetrySubscribeApi {
 	async fn subscribe_best_heads(
 		&self,
@@ -374,9 +472,11 @@ mod tests {
 
 	use cf_utilities::task_scope::task_scope;
 
-	use crate::retrier::NoRetryLimit;
-
-	use super::*;
+	use crate::{
+		dot::retry_rpc::DotRetryRpcClient,
+		retrier::NoRetryLimit,
+		settings::{NodeContainer, WsHttpEndpoints},
+	};
 
 	#[tokio::test]
 	#[ignore = "Requires network connection and will last forever with failing extrinsic submission"]
