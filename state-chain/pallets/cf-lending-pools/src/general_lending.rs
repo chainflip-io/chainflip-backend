@@ -87,6 +87,14 @@ pub enum LiquidationStatus {
 	},
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LiquidationStatusChange {
+	NoChange,
+	HealthyToLiquidation { liquidation_type: LiquidationType },
+	ChangeLiquidationType { liquidation_type: LiquidationType },
+	AbortLiquidation { reason: LiquidationCompletionReason },
+}
+
 /// High precision interest amounts broken down by type
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default)]
 pub struct InterestBreakdown {
@@ -267,31 +275,15 @@ impl<T: Config> LoanAccount<T> {
 			.try_fold(0u128, |acc, x| Ok(acc.saturating_add(x?)))
 	}
 
-	#[transactional]
-	pub fn update_liquidation_status(
-		&mut self,
-		borrower_id: &T::AccountId,
+	fn determine_liquidation_status_change(
+		&self,
 		ltv: FixedU64,
-		price_cache: &OraclePriceCache<T>,
 		config: &LendingConfiguration,
-		weight_used: &mut Weight,
-	) -> DispatchResult {
+	) -> LiquidationStatusChange {
 		// This will saturate at 100%, but that's good enough (none of our thresholds exceed 100%):
 		let ltv: Permill = ltv.into_clamped_perthing();
 
-		#[derive(Debug)]
-		enum LiquidationStatusChange {
-			NoChange,
-			HealthyToLiquidation { liquidation_type: LiquidationType },
-			ChangeLiquidationType { liquidation_type: LiquidationType },
-			AbortLiquidation { reason: LiquidationCompletionReason },
-		}
-
-		// Every time we transition from a liquidating state we abort all liquidation swaps
-		// and repay any swapped into principal. If the next state is "NoLiquidation", the
-		// collateral is returned into the loan account; if it is "Liquidating", the collateral
-		// is used in the new liquidation swaps.
-		let new_status = match &mut self.liquidation_status {
+		match &self.liquidation_status {
 			LiquidationStatus::NoLiquidation => {
 				// If LTV requires us to initiate liquidation, we start a forced liquidation.
 				// Otherwise, if check if voluntary liquidation is requested and initiate it if so.
@@ -390,9 +382,23 @@ impl<T: Config> LoanAccount<T> {
 					LiquidationStatusChange::NoChange
 				}
 			},
-		};
+		}
+	}
 
-		match new_status {
+	#[transactional]
+	fn apply_liquidation_status_change(
+		&mut self,
+		borrower_id: &T::AccountId,
+		change: LiquidationStatusChange,
+		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
+		weight_used: &mut Weight,
+	) -> DispatchResult {
+		// Every time we transition from a liquidating state we abort all liquidation swaps
+		// and repay any swapped into principal. If the next state is "NoLiquidation", the
+		// collateral is returned into the loan account; if it is "Liquidating", the collateral
+		// is used in the new liquidation swaps.
+		match change {
 			LiquidationStatusChange::HealthyToLiquidation { liquidation_type } => {
 				ensure!(T::SafeMode::get().liquidations_enabled, Error::<T>::LiquidationsDisabled);
 				let collateral =
@@ -1375,30 +1381,31 @@ fn remove_loan_account_if_settled<T: Config>(maybe_account: &mut Option<LoanAcco
 	}
 }
 
-/// Run a single upkeep tick for one borrower. Wrapped in `#[transactional]` so any
-/// error rolls back the full set of storage writes for this account (interest
-/// collection touches pool and `PendingNetworkFees` storage outside of
-/// `LoanAccounts`, which `try_mutate_exists` does not roll back on its own).
-#[transactional]
+/// Run a single upkeep tick for one borrower.
 fn upkeep_for_borrower<T: Config>(
 	borrower_id: &T::AccountId,
 	price_cache: &OraclePriceCache<T>,
 	config: &LendingConfiguration,
 	weight_used: &mut Weight,
-) -> DispatchResult {
-	LoanAccounts::<T>::try_mutate_exists(borrower_id, |maybe_account| {
+) {
+	let change = LoanAccounts::<T>::mutate_exists(borrower_id, |maybe_account| {
 		let Some(loan_account) = maybe_account.as_mut() else {
 			log_or_panic!("Loan account missing for borrower {borrower_id:?} during upkeep");
-			return Ok(());
+			return None;
 		};
 
+		// Interest accrual does not need oracle prices and thus cannot fail. This simply records
+		// the owed amount; it remains pending until it can be collected (collection does require
+		// oracle prices).
 		loan_account.derive_and_charge_interest(config, weight_used);
 
-		// Some of these may fail due to oracle prices being unavailable, but that's
-		// OK and doesn't need any specific error handling (they will simply be re-tried
-		// at a later point).
 		weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
-		let ltv = loan_account.derive_ltv(price_cache)?;
+
+		// No point proceeding further if we can't determine LTV (the risk of liquidation checks
+		// not running in case of oracle outages is accepted):
+		let Ok(ltv) = loan_account.derive_ltv(price_cache) else {
+			return None;
+		};
 
 		loan_account.check_low_ltv_penalty_and_collect_interest(
 			ltv,
@@ -1407,20 +1414,39 @@ fn upkeep_for_borrower<T: Config>(
 			weight_used,
 		);
 
-		loan_account.update_liquidation_status(
-			borrower_id,
-			ltv,
-			price_cache,
-			config,
-			weight_used,
-		)?;
+		Some(loan_account.determine_liquidation_status_change(ltv, config))
+	});
 
-		// If all loans are repaid manually while in liquidation, liquidation swaps will be
-		// aborted above and we need to delete the account:
-		remove_loan_account_if_settled(maybe_account);
+	// Updating liquidation status is done in a separate storage mutation so it can be rolled back
+	// if necessary without affecting interest accrual above. Importantly, liquidation status
+	// updates are rare, so this doesn't cost us extra storage access most of the time:
+	if let Some(change) = change.filter(|change| *change != LiquidationStatusChange::NoChange) {
+		weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+		// Swallowing the error is fine (most likely reason is liquidation being disabled via safe
+		// mode): this will be retried on the next block.
+		let _ = LoanAccounts::<T>::try_mutate_exists(borrower_id, |maybe_account| {
+			let Some(loan_account) = maybe_account.as_mut() else {
+				log_or_panic!(
+					"Loan account missing for borrower {borrower_id:?} during liquidation"
+				);
+				return Ok(());
+			};
 
-		Ok::<_, DispatchError>(())
-	})
+			loan_account.apply_liquidation_status_change(
+				borrower_id,
+				change,
+				price_cache,
+				config,
+				weight_used,
+			)?;
+
+			// If all loans are repaid manually while in liquidation, liquidation swaps will be
+			// aborted above and we need to delete the account:
+			remove_loan_account_if_settled(maybe_account);
+
+			Ok::<_, DispatchError>(())
+		});
+	}
 }
 
 /// Check collateralisation ratio (triggering/aborting liquidations if necessary) and
@@ -1437,9 +1463,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 		.collect::<Vec<_>>()
 		.iter()
 	{
-		// Not being able to process a loan account is acceptable (expected when oracle
-		// prices are down or when liquidations are disabled).
-		let _ = upkeep_for_borrower::<T>(borrower_id, &price_cache, &config, &mut weight_used);
+		upkeep_for_borrower::<T>(borrower_id, &price_cache, &config, &mut weight_used);
 	}
 
 	// Swap fees in every asset every fee_swap_interval_blocks, but only if they exceed

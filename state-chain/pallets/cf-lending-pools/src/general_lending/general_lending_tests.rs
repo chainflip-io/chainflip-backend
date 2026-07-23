@@ -4770,23 +4770,18 @@ mod safe_mode {
 			});
 	}
 
-	// Regression test for PRO-2860.
+	// Regression test for PRO-2973.
 	//
-	// When `update_liquidation_status` returns `Err(LiquidationsDisabled)` from inside
-	// `lending_upkeep`'s `try_mutate_exists` closure, the prior
-	// `check_low_ltv_penalty_and_collect_interest` call writes to external storage
-	// (lending pool totals, `PendingNetworkFees`). Those writes must roll back together
-	// with the borrower-side mutations (which `try_mutate_exists` discards on `Err`),
-	// otherwise the pool/network books reflect interest the borrower no longer owes.
+	// When liquidation is disabled, the failed liquidation transition must not roll back the
+	// borrower's interest accrual and the matching pool/network accounting.
 	#[test]
-	fn upkeep_does_not_commit_fees_when_liquidations_are_disabled() {
+	fn upkeep_commits_interest_when_liquidations_are_disabled() {
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
 			.with_default_loan()
 			.then_execute_with(|_| {
-				// Snapshot pool / fee / loan state right after loan creation — once the
-				// origination fee has been taken. With the fix, this is exactly what we
-				// expect to see after upkeep runs while liquidations are disabled.
+				// Snapshot state right after loan creation, once the origination fee has been
+				// taken.
 				let pool_before = GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap();
 				let pending_network_fees_before = PendingNetworkFees::<Test>::get(LOAN_ASSET);
 				let loan_account_before = LoanAccounts::<Test>::get(BORROWER).unwrap();
@@ -4795,7 +4790,7 @@ mod safe_mode {
 				//  - liquidations disabled via safe mode,
 				//  - collection threshold low enough that any accrued interest gets collected,
 				//  - oracle price moved so that LTV exceeds the hard liquidation threshold (forces
-				//    `update_liquidation_status` down the `LiquidationsDisabled` path).
+				//    `apply_liquidation_status_change` down the `LiquidationsDisabled` path).
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
 					liquidations_enabled: false,
 					..PalletSafeMode::code_green()
@@ -4810,10 +4805,8 @@ mod safe_mode {
 
 				(pool_before, pending_network_fees_before, loan_account_before)
 			})
-			// Process up to the first interest payment block so that upkeep runs
-			// `derive_and_charge_interest` followed by
-			// `check_low_ltv_penalty_and_collect_interest` followed by
-			// `update_liquidation_status` (which errors).
+			// Process up to the first interest payment block. The liquidation transition
+			// will fail, but the preceding interest accounting must commit.
 			.then_process_blocks_until_block(
 				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
 			)
@@ -4828,23 +4821,57 @@ mod safe_mode {
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated { .. })
 				);
 
-				// The invariant: because the per-account closure returned `Err`, the
-				// upkeep tick for this borrower must be a no-op across all storage.
-				assert_eq!(
+				assert_ne!(
 					GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 					pool_before,
-					"pool accounting moved despite the loan-account mutations being rolled back",
+					"pool accounting did not receive the collected interest",
 				);
-				assert_eq!(
+				assert_ne!(
 					PendingNetworkFees::<Test>::get(LOAN_ASSET),
 					fees_before,
-					"network fees were collected without a matching borrower receivable",
+					"network fees did not receive the collected interest",
 				);
-				assert_eq!(
+				assert_ne!(
 					LoanAccounts::<Test>::get(BORROWER).unwrap(),
 					loan_account_before,
-					"loan account changed but upkeep was supposed to be a no-op",
+					"borrower debt did not reflect the collected interest",
 				);
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::InterestTaken { .. })
+				);
+			});
+	}
+
+	#[test]
+	fn upkeep_accrues_interest_when_oracle_prices_are_stale() {
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT)
+			.with_default_loan()
+			.then_execute_with(|_| {
+				let loan_account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+
+				// No fees have been accrued:
+				assert_eq!(
+					loan_account.loans.get(&LOAN_ID).unwrap().pending_interest,
+					InterestBreakdown::default()
+				);
+
+				MockPriceFeedApi::set_stale(LOAN_ASSET, true);
+				System::reset_events();
+			})
+			.then_process_blocks_until_block(
+				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+			)
+			.then_execute_with(|_| {
+				let loan_account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+
+				// Fees have been accrued (but not collected):
+				assert_ne!(
+					loan_account.loans.get(&LOAN_ID).unwrap().pending_interest,
+					InterestBreakdown::default()
+				);
+
 				assert_no_matching_event!(
 					Test,
 					RuntimeEvent::LendingPools(Event::<Test>::InterestTaken { .. })
