@@ -550,8 +550,10 @@ mod tests {
 			let delegators: BTreeMap<ValidatorId, u128> = delegator_amounts.iter().enumerate()
 				.map(|(i, amount)| (i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP))
 				.collect();
-			// Every validator in the snapshot is an authority this epoch - the invariant
-			// `distribute_all` relies on to derive authority counts from the snapshot alone.
+			// This proptest covers the all-in case: the authority set is exactly this operator's
+			// snapshot validators, so distribute_all routes the whole total through its pool.
+			// (All-out snapshots from losing operators, which distribute_all skips, are covered
+			// by `distribute_all_matches_looped_distribute`.)
 			let beneficiaries: Vec<ValidatorId> = validators.keys().cloned().collect();
 			// Constructed as an exact multiple of beneficiaries.len() so the internal division
 			// in `distribute_all` recovers `per_beneficiary_amount` exactly (no remainder).
