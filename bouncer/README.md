@@ -38,6 +38,29 @@ To connect to a remote network such as a Devnet, you need to set the following e
 
 The values for your network can be found in the `eth-contracts` vault in 1Password.
 
+## Running against a live network (Perseverance)
+
+`commands/live/submit_live_swap.ts` submits a real swap from one of our controlled external
+wallets on a live network and writes a structured JSON report of everything that happened
+(events, rates, fees, chunks, external balance deltas). See the header of that file for the
+full instructions. In short:
+
+1. Source the `perseverance/bouncer environment variables` file from 1Password, and export
+   `BOUNCER_NETWORK`, which the file does not set:
+
+   ```bash
+   source /path/to/your/perseverance-bouncer-env.sh
+   export BOUNCER_NETWORK=perseverance
+   ```
+
+2. Submit a swap:
+
+   ```bash
+   ./commands/live/submit_live_swap.ts Eth Usdc --amount 0.005
+   ```
+
+The command uses the given broker and LP to facilitate the swap. The LP will return the funds to the swapping account after the swap is complete.
+
 ## Useful commands
 
 The following commands should be executed from the bouncer directory.

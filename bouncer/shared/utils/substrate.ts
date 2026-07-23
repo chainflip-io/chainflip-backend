@@ -159,25 +159,35 @@ export type DisposableChainflipClient = ChainflipClient & {
 // native private fields (`#client`), and a get-trap rebinds `this` to the Proxy, throwing
 // "Cannot read private member". Instead we attach `Symbol.asyncDispose` directly to the real
 // instance as a no-op, so `await using` works while the connection stays open for reuse.
+
+// dedot only knows the standard Substrate subscriptions, so the chainflip-specific ones have to be
+// registered as `[notificationName, unsubscribeMethod]`. Without an entry here `client.rpc.<method>`
+// makes a one-shot call instead of subscribing. jsonrpsee names the notification after the
+// subscribe method itself, hence the repetition.
+const CHAINFLIP_SUBSCRIPTIONS: Record<string, [string, string]> = {
+  cf_subscribe_scheduled_swaps: ['cf_subscribe_scheduled_swaps', 'cf_unsubscribe_scheduled_swaps'],
+};
+
 const makeCachedDedotClientFactory = (endpoint: string) => {
   let clientPromise: Promise<DisposableChainflipClient> | undefined;
 
   return {
     getClient: async (): Promise<DisposableChainflipClient> => {
       if (!clientPromise) {
-        clientPromise = DedotClient.new<ChainflipNodeApi>(new DedotWsProvider(endpoint)).then(
-          (client) => {
-            const disposable = client as unknown as DisposableChainflipClient;
-            Object.defineProperty(disposable, Symbol.asyncDispose, {
-              configurable: true,
-              writable: true,
-              value: async () => {
-                // noop: keep the connection cached for reuse
-              },
-            });
-            return disposable;
-          },
-        );
+        clientPromise = DedotClient.new<ChainflipNodeApi>({
+          provider: new DedotWsProvider(endpoint),
+          subscriptions: CHAINFLIP_SUBSCRIPTIONS,
+        }).then((client) => {
+          const disposable = client as unknown as DisposableChainflipClient;
+          Object.defineProperty(disposable, Symbol.asyncDispose, {
+            configurable: true,
+            writable: true,
+            value: async () => {
+              // noop: keep the connection cached for reuse
+            },
+          });
+          return disposable;
+        });
       }
       return clientPromise;
     },
@@ -198,7 +208,11 @@ const makeCachedDedotClientFactory = (endpoint: string) => {
 export const { getClient: getChainflipApi, clearCache: clearChainflipClientCache } =
   makeCachedDedotClientFactory(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
 
-export const CHAINFLIP_HTTP_ENDPOINT = process.env.CF_NODE_HTTP_ENDPOINT ?? 'http://127.0.0.1:9944';
+// One-shot JSON-RPC calls go over HTTP; derived from the websocket endpoint unless overridden.
+export const CHAINFLIP_HTTP_ENDPOINT =
+  process.env.CF_NODE_HTTP_ENDPOINT ??
+  process.env.CF_NODE_ENDPOINT?.replace(/^ws/, 'http') ??
+  'http://127.0.0.1:9944';
 
 export const { cachedDisposableFactory: getPolkadotApi } = getCachedSubstrateApi(
   process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9947',

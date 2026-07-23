@@ -209,12 +209,12 @@ async function waitForCcmExecution<A = []>(
 // Wait for the broadcast that fulfils the given (non-CCM) egress to either succeed or be aborted
 // on the state chain. This lets a swap fail fast on BroadcastAborted (e.g. an Assethub nonce
 // stall where all authorities failed to broadcast) instead of silently waiting out the
-// destination balance timeout
-async function waitForBroadcastOutcome<A = []>(
+// destination balance timeout. Returns the broadcast id.
+export async function waitForBroadcastOutcome<A = []>(
   cf: ChainflipIO<A>,
   destAsset: Asset,
   egressId: z.infer<typeof swappingSwapEgressScheduled>['egressId'],
-): Promise<void> {
+): Promise<number> {
   const destChain = chainFromAsset(destAsset);
 
   const batchBroadcastRequested = batchBroadcastRequestedEventFor(cf.logger, destChain);
@@ -248,6 +248,7 @@ async function waitForBroadcastOutcome<A = []>(
     );
   }
   cf.debug(`Broadcast ${broadcastId} to ${destChain} succeeded.`);
+  return broadcastId;
 }
 
 // Note: if using the swap context, the logger must contain the tag

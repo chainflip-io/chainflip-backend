@@ -25,6 +25,7 @@ export async function registerLiquidityRefundAddressForChain<A extends WithLpAcc
   cf: ChainflipIO<A>,
   chain: Chain,
   forceRegister = false,
+  explicitRefundAddress?: string,
 ) {
   const lpuri = cf.requirements.account.uri;
   const lp = cf.requirements.account.keypair;
@@ -42,7 +43,7 @@ export async function registerLiquidityRefundAddressForChain<A extends WithLpAcc
     }
   }
 
-  let refundAddress = await newAssetAddress(chainGasAsset(chain), lpuri);
+  let refundAddress = explicitRefundAddress ?? (await newAssetAddress(chainGasAsset(chain), lpuri));
   refundAddress = chain === 'Assethub' ? decodeDotAddressForContract(refundAddress) : refundAddress;
   refundAddress = chain === 'Solana' ? decodeSolAddress(refundAddress) : refundAddress;
 
@@ -66,6 +67,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   cf: ChainflipIO<A>,
   ccy: Asset,
   givenAmount: number,
+  explicitRefundAddress?: string,
 ) {
   const amount = Math.round(givenAmount * 10 ** assetDecimals(ccy)) / 10 ** assetDecimals(ccy);
 
@@ -73,7 +75,12 @@ export async function depositLiquidity<A extends WithLpAccount>(
   cf.debug(`Depositing ${amount} ${ccy} of liquidity for ${cf.requirements.account.uri}`);
 
   // If no liquidity refund address is registered, then do that now
-  await registerLiquidityRefundAddressForChain(cf, chainFromAsset(ccy), false);
+  await registerLiquidityRefundAddressForChain(
+    cf,
+    chainFromAsset(ccy),
+    false,
+    explicitRefundAddress,
+  );
 
   cf.info(`Opening new liquidity deposit channel for ${lp.address}`);
 
