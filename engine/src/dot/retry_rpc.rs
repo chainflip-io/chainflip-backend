@@ -109,6 +109,8 @@ impl DotRetryRpcClient {
 pub trait DotRetryRpcApi: Clone {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
+	async fn finalized_head(&self) -> PolkadotHash;
+
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
 
 	async fn events<R: RetryLimitReturn>(
@@ -143,6 +145,17 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					Box::pin(
 						async move { client.http_client().await.block_hash(block_number).await },
 					)
+				}),
+			)
+			.await
+	}
+
+	async fn finalized_head(&self) -> PolkadotHash {
+		self.rpc_retry_client
+			.request(
+				RequestLog::new("finalized_head".to_string(), None),
+				Box::pin(move |client| {
+					Box::pin(async move { client.http_client().await.finalized_head().await })
 				}),
 			)
 			.await
@@ -255,6 +268,18 @@ impl DotRetryRpcApiWithResult for DotRetryRpcClient {
 					Box::pin(
 						async move { client.http_client().await.block_hash(block_number).await },
 					)
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn finalized_head(&self) -> anyhow::Result<PolkadotHash> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("finalized_head".to_string(), None),
+				Box::pin(move |client| {
+					Box::pin(async move { client.http_client().await.finalized_head().await })
 				}),
 				MAX_RETRY_FOR_WITH_RESULT,
 			)
@@ -444,6 +469,8 @@ pub mod mocks {
 		impl DotRetryRpcApi for DotRpcClient {
 			async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
+			async fn finalized_head(&self) -> PolkadotHash;
+
 			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
 
 			async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, parent_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
@@ -473,7 +500,7 @@ mod tests {
 	use cf_utilities::task_scope::task_scope;
 
 	use crate::{
-		dot::retry_rpc::DotRetryRpcClient,
+		dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 		retrier::NoRetryLimit,
 		settings::{NodeContainer, WsHttpEndpoints},
 	};
