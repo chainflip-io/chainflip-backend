@@ -132,7 +132,12 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for BscAssetsMigration<T>
 			},
 			_ => {
 				assert_eq!(BscChainId::<T>::get(), 343);
-				assert!(BscSupportedAssets::<T>::get(BscAsset::BscUsdt).is_some());
+				assert_eq!(
+					BscSupportedAssets::<T>::get(BscAsset::BscUsdt),
+					Some(EvmAddress::from(hex_literal::hex!(
+						"Dc64a140Aa3E981100a9becA4E685f962f0cF6C9"
+					)))
+				);
 				assert_eq!(
 					BscKeyManagerAddress::<T>::get(),
 					EvmAddress::from(hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"))
