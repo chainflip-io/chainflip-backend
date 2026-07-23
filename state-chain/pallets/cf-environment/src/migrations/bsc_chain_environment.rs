@@ -40,13 +40,12 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for BscAssetsMigration<T>
 				EvmAddress::default(),
 				EvmAddress::default(),
 			),
-			// TODO: Replace with actual PERSEVERANCE addresses
 			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 				cf_chains::bsc::CHAIN_ID_TESTNET,
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
+				EvmAddress::from(hex_literal::hex!("337610d27c682E347C9cD60BD4b3b107C9d34dDd")),
+				EvmAddress::from(hex_literal::hex!("77864880BA7D2F8A95d540D85233A250EcfafDc0")),
+				EvmAddress::from(hex_literal::hex!("98b9829Cc96e910B1253163E708e4cBF3F5BE277")),
+				EvmAddress::from(hex_literal::hex!("0fDA3D36ce05531F1cb14E519672dd52C314Fd28")),
 			),
 			// TODO: Replace with actual SISYPHOS addresses
 			cf_runtime_utilities::genesis_hashes::SISYPHOS => (
@@ -94,12 +93,22 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for BscAssetsMigration<T>
 				assert_eq!(BscChainId::<T>::get(), cf_chains::bsc::CHAIN_ID_TESTNET);
 				assert_eq!(
 					BscSupportedAssets::<T>::get(BscAsset::BscUsdt),
-					Some(EvmAddress::default()) // TODO: update when real address is known
+					Some(EvmAddress::from(hex_literal::hex!(
+						"337610d27c682E347C9cD60BD4b3b107C9d34dDd"
+					)))
 				);
-				// TODO: update when real addresses are known
-				assert_eq!(BscKeyManagerAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscVaultAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscAddressCheckerAddress::<T>::get(), EvmAddress::default());
+				assert_eq!(
+					BscKeyManagerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("77864880BA7D2F8A95d540D85233A250EcfafDc0"))
+				);
+				assert_eq!(
+					BscVaultAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("98b9829Cc96e910B1253163E708e4cBF3F5BE277"))
+				);
+				assert_eq!(
+					BscAddressCheckerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("0fDA3D36ce05531F1cb14E519672dd52C314Fd28"))
+				);
 			},
 			cf_runtime_utilities::genesis_hashes::SISYPHOS => {
 				assert_eq!(BscChainId::<T>::get(), cf_chains::bsc::CHAIN_ID_TESTNET);
