@@ -47,13 +47,12 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for BscAssetsMigration<T>
 				EvmAddress::from(hex_literal::hex!("98b9829Cc96e910B1253163E708e4cBF3F5BE277")),
 				EvmAddress::from(hex_literal::hex!("0fDA3D36ce05531F1cb14E519672dd52C314Fd28")),
 			),
-			// TODO: Replace with actual SISYPHOS addresses
 			cf_runtime_utilities::genesis_hashes::SISYPHOS => (
 				cf_chains::bsc::CHAIN_ID_TESTNET,
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
+				EvmAddress::from(hex_literal::hex!("337610d27c682E347C9cD60BD4b3b107C9d34dDd")),
+				EvmAddress::from(hex_literal::hex!("cA2Fc8ABb5ACEc1CA19c684BdF2959B32e83bacF")),
+				EvmAddress::from(hex_literal::hex!("3362FD7D8264387Ac7D686084CBB774bB09732DF")),
+				EvmAddress::from(hex_literal::hex!("6b5A4f429aAA2E049919b69D95f2A26bef01912C")),
 			),
 			_ => (
 				343u64, // localnet Bsc Chain ID
@@ -114,12 +113,22 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for BscAssetsMigration<T>
 				assert_eq!(BscChainId::<T>::get(), cf_chains::bsc::CHAIN_ID_TESTNET);
 				assert_eq!(
 					BscSupportedAssets::<T>::get(BscAsset::BscUsdt),
-					Some(EvmAddress::default()) // TODO: update when real address is known
+					Some(EvmAddress::from(hex_literal::hex!(
+						"337610d27c682E347C9cD60BD4b3b107C9d34dDd"
+					)))
 				);
-				// TODO: update when real addresses are known
-				assert_eq!(BscKeyManagerAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscVaultAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscAddressCheckerAddress::<T>::get(), EvmAddress::default());
+				assert_eq!(
+					BscKeyManagerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("cA2Fc8ABb5ACEc1CA19c684BdF2959B32e83bacF"))
+				);
+				assert_eq!(
+					BscVaultAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("3362FD7D8264387Ac7D686084CBB774bB09732DF"))
+				);
+				assert_eq!(
+					BscAddressCheckerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("6b5A4f429aAA2E049919b69D95f2A26bef01912C"))
+				);
 			},
 			_ => {
 				assert_eq!(BscChainId::<T>::get(), 343);
