@@ -2,6 +2,7 @@ import axios from 'axios';
 import type { StateChainRuntimeRuntimeCallLike } from 'generated/chaintypes/chainflip-node';
 import { TestContext } from 'shared/utils/test_context';
 import { globalLogger } from 'shared/utils/logger';
+import { sleep } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { testSol, testSolVaultSwap } from 'tests/broker_level_screening/sol';
 import {
@@ -74,15 +75,37 @@ async function setTxRiskScore(txid: string, score: number) {
 
 /**
  * Checks that the deposit monitor has started up successfully and is healthy.
+ *
+ * We poll rather than judge on a single sample: the health endpoint may not be listening yet while
+ * the deposit monitor is still starting (the request throws), and a chain's external state is
+ * reported unhealthy if it hasn't updated recently, which happens transiently when a chain is idle
+ * or its ingress subscription reconnects.
  */
 async function ensureHealth() {
-  const response = await postToDepositMonitor(':6060/health', {});
-  globalLogger.info(`DM health response is: ${JSON.stringify(response)}`);
-  if (response.starting === true || response.all_processors === false) {
-    throw new Error(
-      `Deposit monitor is running, but not healthy. It's response was: ${JSON.stringify(response)}`,
-    );
+  const pollIntervalMs = 2000;
+  const maxAttempts = 30;
+
+  let lastStatus = 'no response';
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      await sleep(pollIntervalMs);
+    }
+    try {
+      const response = await postToDepositMonitor(':6060/health', {});
+      globalLogger.info(`DM health response is: ${JSON.stringify(response)}`);
+      if (response.starting !== true && response.all_processors !== false) {
+        return;
+      }
+      lastStatus = JSON.stringify(response);
+    } catch (error) {
+      // Endpoint not up yet, or a transient request failure: keep polling.
+      lastStatus = `${error}`;
+    }
   }
+
+  throw new Error(
+    `Deposit monitor did not become healthy within ${(pollIntervalMs * maxAttempts) / 1000}s. Last status: ${lastStatus}`,
+  );
 }
 
 // Sets the ingress_egress broker whitelist to the given `broker`. Use the storage key for
