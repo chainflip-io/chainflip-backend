@@ -24,6 +24,7 @@ pub mod eth_elections;
 pub mod evm;
 pub mod generic_elections;
 pub mod hub;
+pub mod hub_elections;
 pub mod sol;
 pub mod start;
 pub mod tron;
