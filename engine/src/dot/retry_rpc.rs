@@ -111,6 +111,8 @@ pub trait DotRetryRpcApi: Clone {
 
 	async fn finalized_head(&self) -> PolkadotHash;
 
+	async fn header(&self, block_hash: PolkadotHash) -> Option<PolkadotHeader>;
+
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
 
 	async fn events<R: RetryLimitReturn>(
@@ -156,6 +158,17 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 				RequestLog::new("finalized_head".to_string(), None),
 				Box::pin(move |client| {
 					Box::pin(async move { client.http_client().await.finalized_head().await })
+				}),
+			)
+			.await
+	}
+
+	async fn header(&self, block_hash: PolkadotHash) -> Option<PolkadotHeader> {
+		self.rpc_retry_client
+			.request(
+				RequestLog::new("header".to_string(), Some(format!("{block_hash:?}"))),
+				Box::pin(move |client| {
+					Box::pin(async move { client.http_client().await.header(block_hash).await })
 				}),
 			)
 			.await
@@ -280,6 +293,18 @@ impl DotRetryRpcApiWithResult for DotRetryRpcClient {
 				RequestLog::new("finalized_head".to_string(), None),
 				Box::pin(move |client| {
 					Box::pin(async move { client.http_client().await.finalized_head().await })
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn header(&self, block_hash: PolkadotHash) -> anyhow::Result<Option<PolkadotHeader>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("header".to_string(), Some(format!("{block_hash:?}"))),
+				Box::pin(move |client| {
+					Box::pin(async move { client.http_client().await.header(block_hash).await })
 				}),
 				MAX_RETRY_FOR_WITH_RESULT,
 			)
@@ -470,6 +495,8 @@ pub mod mocks {
 			async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
 			async fn finalized_head(&self) -> PolkadotHash;
+
+			async fn header(&self, block_hash: PolkadotHash) -> Option<PolkadotHeader>;
 
 			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
 
