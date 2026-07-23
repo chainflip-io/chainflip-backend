@@ -40,7 +40,8 @@ use crate::{
 		evm::{
 			contract_common::address_states,
 			erc20_deposits::{
-				flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents,
+				cbbtc::CbbtcEvents, flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents,
+				wbtc::WbtcEvents,
 			},
 			key_manager::KeyManagerEvents,
 			vault::VaultEvents,
@@ -561,6 +562,9 @@ where
 	let wbtc_contract_address =
 		*supported_erc20_tokens.get(&EthAsset::Wbtc).context("WBTC not supported")?;
 
+	let cbbtc_contract_address =
+		*supported_erc20_tokens.get(&EthAsset::Cbbtc).context("cbBTC not supported")?;
+
 	let supported_erc20_tokens: HashMap<H160, assets::eth::Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset))
@@ -578,6 +582,7 @@ where
 		(EthAsset::Usdt, EvmEventSource::new::<UsdtEvents>(usdt_contract_address)),
 		(EthAsset::Flip, EvmEventSource::new::<FlipEvents>(flip_contract_address)),
 		(EthAsset::Wbtc, EvmEventSource::new::<WbtcEvents>(wbtc_contract_address)),
+		(EthAsset::Cbbtc, EvmEventSource::new::<CbbtcEvents>(cbbtc_contract_address)),
 	]
 	.into_iter()
 	.collect();

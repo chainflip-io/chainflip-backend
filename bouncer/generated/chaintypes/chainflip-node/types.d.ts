@@ -673,6 +673,7 @@ export type CfPrimitivesChainsAssetsAnyAsset =
   | 'Usdc'
   | 'Usdt'
   | 'Wbtc'
+  | 'Cbbtc'
   | 'Dot'
   | 'Btc'
   | 'ArbEth'
@@ -1080,7 +1081,7 @@ export type PalletCfFundingEthereumDeposit =
     }
   | { type: 'NoDeposit' };
 
-export type CfPrimitivesChainsAssetsEthAsset = 'Eth' | 'Flip' | 'Usdc' | 'Usdt' | 'Wbtc';
+export type CfPrimitivesChainsAssetsEthAsset = 'Eth' | 'Flip' | 'Usdc' | 'Usdt' | 'Wbtc' | 'Cbbtc';
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -21662,6 +21663,7 @@ export type CfPrimitivesChainsAssetsEthAssetMap = {
   usdc: bigint;
   usdt: bigint;
   wbtc: bigint;
+  cbbtc: bigint;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMap = { dot: bigint };
@@ -21703,6 +21705,7 @@ export type CfPrimitivesChainsAssetsEthAssetMap002 = {
   usdc: Array<StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderBoostPoolInfo>;
   usdt: Array<StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderBoostPoolInfo>;
   wbtc: Array<StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderBoostPoolInfo>;
+  cbbtc: Array<StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderBoostPoolInfo>;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMap002 = {
@@ -21987,6 +21990,7 @@ export type CfPrimitivesChainsAssetsEthAssetMapOption = {
   usdc?: bigint | undefined;
   usdt?: bigint | undefined;
   wbtc?: bigint | undefined;
+  cbbtc?: bigint | undefined;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMapOption = { dot?: bigint | undefined };
@@ -22048,6 +22052,7 @@ export type CfPrimitivesChainsAssetsEthAssetMapPermill = {
   usdc: Permill;
   usdt: Permill;
   wbtc: Permill;
+  cbbtc: Permill;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMapPermill = { dot: Permill };
@@ -22246,6 +22251,7 @@ export type CfPrimitivesChainsAssetsEthAssetMap005 = {
   usdc?: number | undefined;
   usdt?: number | undefined;
   wbtc?: number | undefined;
+  cbbtc?: number | undefined;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMap005 = { dot?: number | undefined };

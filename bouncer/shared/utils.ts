@@ -161,6 +161,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return process.env.ETH_USDT_ADDRESS ?? '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
         case 'Wbtc':
           return process.env.ETH_WBTC_ADDRESS ?? '0x67d269191c92Caf3cD7723F116c85e6E9bf55933';
+        case 'Cbbtc':
+          return process.env.ETH_CBBTC_ADDRESS ?? '0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E';
         case 'CFTESTER':
           return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
         case 'GATEWAY':
@@ -338,6 +340,7 @@ export function defaultAssetAmounts(asset: Asset): string {
   switch (asset) {
     case 'Btc':
     case 'Wbtc':
+    case 'Cbbtc':
       return '0.1';
     case 'Eth':
     case 'ArbEth':
@@ -1210,7 +1213,7 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance?: string,
-  timeoutSeconds = 200,
+  timeoutSeconds = 240,
 ): Promise<number> {
   const initialBalance = oldBalance
     ? Number(oldBalance)

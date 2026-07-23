@@ -16,6 +16,7 @@ export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bi
     case 'Usdc':
     case 'Usdt':
     case 'Wbtc':
+    case 'Cbbtc':
     case 'Flip':
     case 'Eth':
       await submitGovernanceExtrinsic((api) =>

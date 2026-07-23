@@ -2647,7 +2647,7 @@ where
 				minimum_deposit_amounts: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(0u128.into());
 					}
@@ -2656,7 +2656,7 @@ where
 				ingress_fees: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(None);
 					}
@@ -2665,7 +2665,7 @@ where
 				egress_fees: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(None);
 					}
@@ -2675,7 +2675,7 @@ where
 				egress_dust_limits: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(0u128.into());
 					}
@@ -2723,7 +2723,7 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(None);
 					}
@@ -2739,7 +2739,7 @@ where
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
 				minimum_chunk_size: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
-					if version < 19 && chain == ForeignChain::Bsc {
+					if version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc) {
 						return Ok(0u128.into());
 					}
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
@@ -3698,10 +3698,12 @@ where
 		Asset::all()
 			.filter(|asset| {
 				if (version < 17 && ForeignChain::from(*asset) == ForeignChain::Tron) ||
-					(version < 19 && ForeignChain::from(*asset) == ForeignChain::Bsc)
+					(version < 19 &&
+						(ForeignChain::from(*asset) == ForeignChain::Bsc ||
+							*asset == Asset::Cbbtc))
 				{
-					// Tron support was added in version 17, Bsc support added in version 19
-					// so skip it for older versions.
+					// Tron support was added in version 17, Bsc and Cbbtc support added in
+					// version 19, so skip them for older versions.
 					false
 				} else {
 					true

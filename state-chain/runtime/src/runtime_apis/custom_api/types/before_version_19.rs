@@ -63,7 +63,7 @@ impl From<EncodedAddress> for super::EncodedAddress {
 	Default,
 )]
 pub struct AssetMap<T> {
-	pub eth: cf_primitives::chains::assets::eth::AssetMap<T>,
+	pub eth: EthAssetMap<T>,
 	pub dot: cf_primitives::chains::assets::dot::AssetMap<T>,
 	pub btc: cf_primitives::chains::assets::btc::AssetMap<T>,
 	pub arb: cf_primitives::chains::assets::arb::AssetMap<T>,
@@ -75,7 +75,7 @@ pub struct AssetMap<T> {
 impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::AssetMap<T> {
 	fn from(value: AssetMap<T>) -> Self {
 		Self {
-			eth: value.eth,
+			eth: value.eth.into(),
 			dot: value.dot,
 			btc: value.btc,
 			arb: value.arb,
@@ -83,6 +83,43 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 			hub: value.hub,
 			tron: value.tron,
 			bsc: Default::default(),
+		}
+	}
+}
+
+// cbBTC was added to the eth asset set in the 2.3 (v20300) cycle. It must not leak into this
+// historical shape, so the eth map is frozen here to its pre-cbBTC fields.
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Hash,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Default,
+)]
+pub struct EthAssetMap<T> {
+	pub eth: T,
+	pub flip: T,
+	pub usdc: T,
+	pub usdt: T,
+	pub wbtc: T,
+}
+
+impl<T: Default> From<EthAssetMap<T>> for cf_primitives::chains::assets::eth::AssetMap<T> {
+	fn from(value: EthAssetMap<T>) -> Self {
+		Self {
+			eth: value.eth,
+			flip: value.flip,
+			usdc: value.usdc,
+			usdt: value.usdt,
+			wbtc: value.wbtc,
+			cbbtc: Default::default(),
 		}
 	}
 }

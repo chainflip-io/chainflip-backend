@@ -754,6 +754,16 @@ assets!(
 				index: 14,
 				usd_stablecoin: false,
 				decimals: 8,
+			},
+			Asset {
+				variant: Cbbtc,
+				member: cbbtc,
+				string: "CBBTC" (aliases: ["Cbbtc", "cbbtc"]),
+				json: "CBBTC",
+				gas: false,
+				index: 21,
+				usd_stablecoin: false,
+				decimals: 8,
 			}
 		],
 	},
@@ -1008,6 +1018,7 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(18).unwrap(), any::Asset::TrxUsdt);
 		assert_eq!(any::Asset::try_from(19).unwrap(), any::Asset::Bnb);
 		assert_eq!(any::Asset::try_from(20).unwrap(), any::Asset::BscUsdt);
+		assert_eq!(any::Asset::try_from(21).unwrap(), any::Asset::Cbbtc);
 	}
 
 	#[test]
@@ -1017,6 +1028,7 @@ mod test_assets {
 		assert_conversion!(eth, Usdc);
 		assert_conversion!(eth, Usdt);
 		assert_conversion!(eth, Wbtc);
+		assert_conversion!(eth, Cbbtc);
 		assert_conversion!(dot, Dot);
 		assert_conversion!(btc, Btc);
 		assert_conversion!(arb, ArbEth);
@@ -1045,6 +1057,8 @@ mod test_assets {
 		assert_incompatible!(btc, SolUsdc);
 		assert_incompatible!(btc, Wbtc);
 		assert_incompatible!(arb, Wbtc);
+		assert_incompatible!(btc, Cbbtc);
+		assert_incompatible!(arb, Cbbtc);
 	}
 
 	#[test]
@@ -1186,13 +1200,13 @@ mod test_assets {
 	fn asset_map_from_iterator() {
 		assert_eq!(
 			eth::AssetMap::from_iter(vec![(eth::Asset::Eth, 1), (eth::Asset::Flip, 2),]),
-			eth::AssetMap { eth: 1, flip: 2, usdc: 0, usdt: 0, wbtc: 0 }
+			eth::AssetMap { eth: 1, flip: 2, usdc: 0, usdt: 0, wbtc: 0, cbbtc: 0 }
 		);
 		assert_eq!(any::AssetMap::<u128>::from_iter(vec![]), Default::default());
 		assert_eq!(
 			any::AssetMap::from_iter(vec![(any::Asset::Eth, 1), (any::Asset::Dot, 2),]),
 			any::AssetMap {
-				eth: eth::AssetMap { eth: 1, flip: 0, usdc: 0, usdt: 0, wbtc: 0 },
+				eth: eth::AssetMap { eth: 1, flip: 0, usdc: 0, usdt: 0, wbtc: 0, cbbtc: 0 },
 				dot: dot::AssetMap { dot: 2 },
 				..Default::default()
 			}

@@ -55,6 +55,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_usdc_address: hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"),
 	eth_usdt_address: hex_literal::hex!("0DCd1Bf9A1b36cE34237eEaFef220932846BCD82"),
 	eth_wbtc_address: hex_literal::hex!("67d269191c92Caf3cD7723F116c85e6E9bf55933"),
+	eth_cbbtc_address: hex_literal::hex!("E6E340D132b5f46d1e472DebcD681B2aBc16e57E"),
 	eth_sc_utils_address: hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d"),
 
 	arb_key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),

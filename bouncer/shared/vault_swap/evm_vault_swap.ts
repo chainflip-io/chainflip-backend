@@ -19,7 +19,16 @@ import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { ChannelRefundParameters, requestSwapParameterEncoding } from './vault_swap';
 
-const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt', 'BscUsdt'];
+const erc20Assets: Asset[] = [
+  'Flip',
+  'Usdc',
+  'Usdt',
+  'Wbtc',
+  'Cbbtc',
+  'ArbUsdc',
+  'ArbUsdt',
+  'BscUsdt',
+];
 
 interface EvmVaultSwapDetails {
   chain: 'Ethereum' | 'Arbitrum' | 'Bsc';
