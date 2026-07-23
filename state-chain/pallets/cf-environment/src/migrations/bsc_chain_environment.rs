@@ -32,13 +32,12 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for BscAssetsMigration<T>
 			vault_address,
 			address_checker_address,
 		) = match cf_runtime_utilities::genesis_hashes::genesis_hash::<T>() {
-			// TODO: Replace with actual mainnet addresses
 			cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 				cf_chains::bsc::CHAIN_ID_MAINNET,
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
+				EvmAddress::from(hex_literal::hex!("55d398326f99059fF775485246999027B3197955")),
+				EvmAddress::from(hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275")),
+				EvmAddress::from(hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920")),
+				EvmAddress::from(hex_literal::hex!("c1B12993f760B654897F0257573202fba13D5481")),
 			),
 			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 				cf_chains::bsc::CHAIN_ID_TESTNET,
@@ -81,12 +80,22 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for BscAssetsMigration<T>
 				assert_eq!(BscChainId::<T>::get(), cf_chains::bsc::CHAIN_ID_MAINNET);
 				assert_eq!(
 					BscSupportedAssets::<T>::get(BscAsset::BscUsdt),
-					Some(EvmAddress::default()) // TODO: update when real address is known
+					Some(EvmAddress::from(hex_literal::hex!(
+						"55d398326f99059fF775485246999027B3197955"
+					)))
 				);
-				// TODO: update when real addresses are known
-				assert_eq!(BscKeyManagerAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscVaultAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscAddressCheckerAddress::<T>::get(), EvmAddress::default());
+				assert_eq!(
+					BscKeyManagerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275"))
+				);
+				assert_eq!(
+					BscVaultAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"))
+				);
+				assert_eq!(
+					BscAddressCheckerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("c1B12993f760B654897F0257573202fba13D5481"))
+				);
 			},
 			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => {
 				assert_eq!(BscChainId::<T>::get(), cf_chains::bsc::CHAIN_ID_TESTNET);
