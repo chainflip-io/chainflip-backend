@@ -116,12 +116,12 @@ fn fee_rewards_are_burned_before_activation_and_distributed_after() {
 			let issuance_before = pallet_cf_flip::TotalIssuance::<Runtime>::get();
 			assert_ok!(<Flip as FeePayment>::try_take_fee(&fee_payer, ONCHAIN_FEE));
 			assert_eq!(pallet_cf_flip::TotalIssuance::<Runtime>::get(), issuance_before);
-			assert_eq!(Flip::pending_rewards(), ONCHAIN_FEE as i128);
+			assert_eq!(Flip::pending_rewards(), ONCHAIN_FEE);
 
 			// ...and off-chain fees (eg. FLIP bought with swap network fees) accumulate for the
 			// same distribution.
 			<Flip as FeePayment>::add_to_offchain_flip_to_be_distributed(OFFCHAIN_FEE as i128);
-			assert_eq!(Flip::pending_rewards(), (ONCHAIN_FEE + OFFCHAIN_FEE) as i128);
+			assert_eq!(Flip::pending_rewards(), (ONCHAIN_FEE + OFFCHAIN_FEE));
 
 			let authorities: BTreeSet<AccountId> =
 				Validator::current_authorities().into_iter().collect();
@@ -188,8 +188,7 @@ fn fee_rewards_are_burned_before_activation_and_distributed_after() {
 			// The remainder stays pending for the next distribution.
 			assert_eq!(
 				Flip::pending_rewards(),
-				(REMAINDER as i128) -
-					(pallet_cf_swapping::FlipToBeSentToGateway::<Runtime>::get() as i128)
+				REMAINDER - pallet_cf_swapping::FlipToBeSentToGateway::<Runtime>::get()
 			);
 		});
 }

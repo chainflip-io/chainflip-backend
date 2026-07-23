@@ -113,6 +113,7 @@ pub mod pallet {
 		/// The balance of an account.
 		type Balance: frame_support::traits::tokens::Balance
 			+ From<u128>
+			+ Into<u128>
 			+ From<u64>
 			+ TryInto<i128>;
 
@@ -603,12 +604,12 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Fee rewards pending distribution to authorities: the balance of the on-chain distribution
-	/// reserve plus any off-chain accumulated fees (which may be negative).
-	pub fn pending_rewards() -> i128 {
-		Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID)
+	/// reserve plus any off-chain accumulated fees.
+	pub fn pending_rewards() -> u128 {
+		FlipToDistribute::<T>::get()
 			.try_into()
-			.unwrap_or(i128::MAX)
-			.saturating_add(FlipToDistribute::<T>::get())
+			.unwrap_or(0u128)
+			.saturating_add(Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID).into())
 	}
 
 	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
