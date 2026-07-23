@@ -53,7 +53,7 @@ use engine_sc_client::{
 use self::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
-	dot::{retry_rpc::DotRetryRpcClient, PolkadotHash},
+	dot::{cached_rpc::DotCachingClient, retry_rpc::DotRetryRpcClient, PolkadotHash},
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	sol::retry_rpc::SolRetryRpcClient,
@@ -346,6 +346,7 @@ async fn run_main(
 				);
 				DotRetryRpcClient::new(scope, settings.hub.nodes, expected_hub_genesis_hash)?
 			};
+			let hub_caching_client = DotCachingClient::new(scope, hub_client.clone());
 
 			let tron_client = {
 				let expected_tron_chain_id = U256::from(
@@ -400,6 +401,7 @@ async fn run_main(
 				btc_client.clone(),
 				sol_client.clone(),
 				hub_client.clone(),
+				hub_caching_client.clone(),
 				tron_client.clone(),
 				bsc_client.clone(),
 				state_chain_client.clone(),
@@ -414,7 +416,7 @@ async fn run_main(
 				arb_client,
 				btc_client,
 				sol_client,
-				hub_client,
+				hub_caching_client,
 				tron_client,
 				bsc_client,
 				eth_multisig_client,

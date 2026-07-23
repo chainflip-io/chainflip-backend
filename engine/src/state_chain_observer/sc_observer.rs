@@ -44,8 +44,9 @@ use std::{
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::{
-	btc::rpc::BtcRpcApi, dot::retry_rpc::DotRetryRpcApi, evm::retry_rpc::EvmRetrySigningRpcApi,
-	sol::retry_rpc::SolRetryRpcApi, tron::retry_rpc::TronRetrySigningRpcApi,
+	btc::rpc::BtcRpcApi, dot::retry_rpc::DotRetrySigningRpcApi,
+	evm::retry_rpc::EvmRetrySigningRpcApi, sol::retry_rpc::SolRetryRpcApi,
+	tron::retry_rpc::TronRetrySigningRpcApi,
 };
 use cf_utilities::task_scope::{task_scope, Scope};
 use engine_sc_client::{
@@ -261,7 +262,7 @@ pub async fn start<
 where
 	BlockStream: StreamApi<FINALIZED>,
 	EvmRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
-	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
+	DotRpc: DotRetrySigningRpcApi + Send + Sync + Clone + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + Clone + 'static,
 	SolRpc: SolRetryRpcApi + Send + Sync + 'static,
 	TronRpc: TronRetrySigningRpcApi + Send + Sync + Clone + 'static,

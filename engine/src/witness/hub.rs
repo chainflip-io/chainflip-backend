@@ -42,14 +42,15 @@ use futures::FutureExt;
 use crate::{
 	db::PersistentKeyDB,
 	dot::{
+		cached_rpc::DotCachingClient,
 		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 		PolkadotHash,
 	},
 	witness::common::chain_source::extension::ChainSourceExt,
 };
 use engine_sc_client::{
-	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-	STATE_CHAIN_CONNECTION,
+	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
 pub use hub_source::{HubFinalisedSource, HubUnfinalisedSource};
 
@@ -257,11 +258,18 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	hub_client: DotRetryRpcClient,
+	hub_caching_client: DotCachingClient,
 	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
 ) where
-	StateChainClient: ChainApi + StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: ChainApi
+		+ StorageApi
+		+ SignedExtrinsicApi
+		+ ElectoralApi<AssethubInstance>
+		+ 'static
+		+ Send
+		+ Sync,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync
@@ -274,6 +282,7 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 		"hub_witnessing",
 		move || {
 			let hub_client = hub_client.clone();
+			let hub_caching_client = hub_caching_client.clone();
 			let process_call = process_call.clone();
 			let state_chain_client = state_chain_client.clone();
 			let db = db.clone();
@@ -360,7 +369,8 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 							.logging("witnessing")
 							.spawn(scope);
 
-						Ok(())
+						super::hub_elections::start(scope, hub_caching_client, state_chain_client)
+							.await
 					}
 					.boxed()
 				})
