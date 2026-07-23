@@ -16,7 +16,10 @@
 
 use crate::{
 	caching_request::CachingRequest,
-	dot::{retry_rpc::DotRetryRpcClient, PolkadotHash, PolkadotHeader},
+	dot::{
+		retry_rpc::{DotRetryRpcClient, DotRetrySigningRpcApi},
+		PolkadotHash, PolkadotHeader,
+	},
 };
 use cf_chains::dot::{PolkadotAccountId, RuntimeVersion};
 use cf_primitives::{chains::assets::hub::Asset as HubAsset, PolkadotBlockNumber};
@@ -60,6 +63,7 @@ pub trait DotRetryRpcApiWithResult: Clone {
 
 #[derive(Clone)]
 pub struct DotCachingClient {
+	retry_client: DotRetryRpcClient,
 	block_hash: CachingRequest<PolkadotBlockNumber, Option<PolkadotHash>, DotRetryRpcClient>,
 	finalized_head: CachingRequest<(), PolkadotHash, DotRetryRpcClient>,
 	header: CachingRequest<PolkadotHash, Option<PolkadotHeader>, DotRetryRpcClient>,
@@ -109,9 +113,10 @@ impl DotCachingClient {
 			(RawPolkadotAccountId, HubAsset, PolkadotHash),
 			u128,
 			DotRetryRpcClient,
-		>::new(scope, client);
+		>::new(scope, client.clone());
 
 		Self {
+			retry_client: client,
 			block_hash,
 			finalized_head,
 			header,
@@ -129,6 +134,16 @@ impl DotCachingClient {
 				liquid_account_balance_cache,
 			],
 		}
+	}
+}
+
+#[async_trait::async_trait]
+impl DotRetrySigningRpcApi for DotCachingClient {
+	async fn submit_raw_encoded_extrinsic(
+		&self,
+		encoded_bytes: Vec<u8>,
+	) -> anyhow::Result<PolkadotHash> {
+		self.retry_client.submit_raw_encoded_extrinsic(encoded_bytes).await
 	}
 }
 

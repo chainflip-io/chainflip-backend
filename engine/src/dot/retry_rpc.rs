@@ -124,17 +124,20 @@ pub trait DotRetryRpcApi: Clone {
 
 	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
 
-	async fn submit_raw_encoded_extrinsic(
-		&self,
-		encoded_bytes: Vec<u8>,
-	) -> anyhow::Result<PolkadotHash>;
-
 	async fn liquid_account_balance(
 		&self,
 		account_id: PolkadotAccountId,
 		asset: HubAsset,
 		block_hash: PolkadotHash,
 	) -> u128;
+}
+
+#[async_trait::async_trait]
+pub trait DotRetrySigningRpcApi {
+	async fn submit_raw_encoded_extrinsic(
+		&self,
+		encoded_bytes: Vec<u8>,
+	) -> anyhow::Result<PolkadotHash>;
 }
 
 #[async_trait::async_trait]
@@ -221,27 +224,6 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn submit_raw_encoded_extrinsic(
-		&self,
-		encoded_bytes: Vec<u8>,
-	) -> anyhow::Result<PolkadotHash> {
-		self.rpc_retry_client
-			.request_with_limit(
-				RequestLog::new(
-					"submit_raw_encoded_extrinsic".to_string(),
-					Some(format!("0x{}", hex::encode(&encoded_bytes[..]))),
-				),
-				Box::pin(move |client| {
-					let encoded_bytes = encoded_bytes.clone();
-					Box::pin(async move {
-						client.ws_client().await.submit_raw_encoded_extrinsic(encoded_bytes).await
-					})
-				}),
-				MAX_BROADCAST_RETRIES,
-			)
-			.await
-	}
-
 	async fn liquid_account_balance(
 		&self,
 		account_id: PolkadotAccountId,
@@ -263,6 +245,30 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 							.await
 					})
 				}),
+			)
+			.await
+	}
+}
+
+#[async_trait::async_trait]
+impl DotRetrySigningRpcApi for DotRetryRpcClient {
+	async fn submit_raw_encoded_extrinsic(
+		&self,
+		encoded_bytes: Vec<u8>,
+	) -> anyhow::Result<PolkadotHash> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"submit_raw_encoded_extrinsic".to_string(),
+					Some(format!("0x{}", hex::encode(&encoded_bytes[..]))),
+				),
+				Box::pin(move |client| {
+					let encoded_bytes = encoded_bytes.clone();
+					Box::pin(async move {
+						client.ws_client().await.submit_raw_encoded_extrinsic(encoded_bytes).await
+					})
+				}),
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}
@@ -504,17 +510,20 @@ pub mod mocks {
 
 			async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
 
-			async fn submit_raw_encoded_extrinsic(
-				&self,
-				encoded_bytes: Vec<u8>,
-			) -> anyhow::Result<PolkadotHash>;
-
 			async fn liquid_account_balance(
 				&self,
 				account_id: PolkadotAccountId,
 				asset: HubAsset,
 				block_hash: PolkadotHash,
 			) -> u128;
+		}
+
+		#[async_trait::async_trait]
+		impl DotRetrySigningRpcApi for DotRpcClient {
+			async fn submit_raw_encoded_extrinsic(
+				&self,
+				encoded_bytes: Vec<u8>,
+			) -> anyhow::Result<PolkadotHash>;
 		}
 
 	}
@@ -527,7 +536,7 @@ mod tests {
 	use cf_utilities::task_scope::task_scope;
 
 	use crate::{
-		dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
+		dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient, DotRetrySigningRpcApi},
 		retrier::NoRetryLimit,
 		settings::{NodeContainer, WsHttpEndpoints},
 	};
