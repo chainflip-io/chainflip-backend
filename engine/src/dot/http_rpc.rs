@@ -263,6 +263,10 @@ impl DotRpcApi for DotRpcClient {
 		Ok(self.rpc_methods.chain_get_block_hash(Some(block_number.into())).await?)
 	}
 
+	async fn finalized_head(&self) -> Result<PolkadotHash> {
+		Ok(self.rpc_methods.chain_get_finalized_head().await?)
+	}
+
 	async fn block(
 		&self,
 		block_hash: PolkadotHash,

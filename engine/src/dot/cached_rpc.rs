@@ -33,6 +33,8 @@ pub trait DotRetryRpcApiWithResult: Clone {
 		block_number: PolkadotBlockNumber,
 	) -> anyhow::Result<Option<PolkadotHash>>;
 
+	async fn finalized_head(&self) -> anyhow::Result<PolkadotHash>;
+
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> anyhow::Result<Vec<Bytes>>;
 
 	async fn events(
@@ -57,6 +59,7 @@ pub trait DotRetryRpcApiWithResult: Clone {
 #[derive(Clone)]
 pub struct DotCachingClient {
 	block_hash: CachingRequest<PolkadotBlockNumber, Option<PolkadotHash>, DotRetryRpcClient>,
+	finalized_head: CachingRequest<(), PolkadotHash, DotRetryRpcClient>,
 	extrinsics: CachingRequest<PolkadotHash, Vec<Bytes>, DotRetryRpcClient>,
 	events: CachingRequest<
 		(PolkadotHash, PolkadotHash),
@@ -77,6 +80,8 @@ impl DotCachingClient {
 			Option<PolkadotHash>,
 			DotRetryRpcClient,
 		>::new(scope, client.clone());
+		let (finalized_head, finalized_head_cache) =
+			CachingRequest::<(), PolkadotHash, DotRetryRpcClient>::new(scope, client.clone());
 		let (extrinsics, extrinsics_cache) = CachingRequest::<
 			PolkadotHash,
 			Vec<Bytes>,
@@ -100,12 +105,14 @@ impl DotCachingClient {
 
 		Self {
 			block_hash,
+			finalized_head,
 			extrinsics,
 			events,
 			runtime_version,
 			liquid_account_balance,
 			cache_invalidation_senders: vec![
 				block_hash_cache,
+				finalized_head_cache,
 				extrinsics_cache,
 				events_cache,
 				runtime_version_cache,
@@ -129,6 +136,17 @@ impl DotRetryRpcApiWithResult for DotCachingClient {
 					})
 				}),
 				block_number,
+			)
+			.await
+	}
+
+	async fn finalized_head(&self) -> anyhow::Result<PolkadotHash> {
+		self.finalized_head
+			.get_or_fetch(
+				Box::pin(move |client| {
+					Box::pin(async move { DotRetryRpcApiWithResult::finalized_head(&client).await })
+				}),
+				(),
 			)
 			.await
 	}
