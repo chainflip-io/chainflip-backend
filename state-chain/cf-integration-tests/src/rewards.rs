@@ -186,10 +186,7 @@ fn fee_rewards_are_burned_before_activation_and_distributed_after() {
 			}
 
 			// The remainder stays pending for the next distribution.
-			assert_eq!(
-				Flip::pending_rewards(),
-				REMAINDER - pallet_cf_swapping::FlipToBeSentToGateway::<Runtime>::get()
-			);
+			assert_eq!(Flip::pending_rewards(), REMAINDER);
 		});
 }
 
