@@ -48,6 +48,7 @@ use tracing::{error, warn};
 
 use crate::{
 	constants::RPC_RETRY_CONNECTION_INTERVAL,
+	dot::PolkadotHeader,
 	witness::hub::assethub::{self, runtime_types::pallet_assets::types::AccountStatus},
 };
 
@@ -265,6 +266,10 @@ impl DotRpcApi for DotRpcClient {
 
 	async fn finalized_head(&self) -> Result<PolkadotHash> {
 		Ok(self.rpc_methods.chain_get_finalized_head().await?)
+	}
+
+	async fn header(&self, block_hash: PolkadotHash) -> Result<Option<PolkadotHeader>> {
+		Ok(self.rpc_methods.chain_get_header(Some(block_hash)).await?)
 	}
 
 	async fn block(
