@@ -51,6 +51,8 @@ pub trait DotRpcApi: Send + Sync {
 
 	async fn finalized_head(&self) -> Result<PolkadotHash>;
 
+	async fn header(&self, block_hash: PolkadotHash) -> Result<Option<PolkadotHeader>>;
+
 	async fn block(&self, block_hash: PolkadotHash)
 		-> Result<Option<BlockDetails<PolkadotConfig>>>;
 
