@@ -1933,6 +1933,7 @@ impl<T: Config> Pallet<T> {
 
 				// Register the delegation snapshots for the next epoch.
 				let next_epoch_index = CurrentEpoch::<T>::get() + 1;
+				DelegationSnapshot::clear_epoch_registrations::<T>(next_epoch_index);
 				for snapshot in delegation_snapshots.into_values() {
 					snapshot.register_for_epoch::<T>(next_epoch_index);
 				}

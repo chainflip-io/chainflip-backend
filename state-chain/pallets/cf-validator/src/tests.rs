@@ -3565,6 +3565,46 @@ mod keygen_failure_with_delegation {
 	}
 
 	#[test]
+	fn fresh_rotation_clears_pending_delegation_registrations() {
+		const STALE_OPERATOR: u64 = 2000;
+		const STALE_VALIDATOR: u64 = 201;
+		const STALE_MAPPING_VALIDATOR: u64 = 202;
+
+		new_test_ext().execute_with(|| {
+			setup_operator_with_validators();
+			let next_epoch = CurrentEpoch::<Test>::get() + 1;
+
+			// Model state left by an aborted attempt: one operator will be overwritten by the
+			// fresh auction, while the other will not be present in its result.
+			DelegationSnapshot::<u64, u128> {
+				operator: OPERATOR,
+				validators: [(STALE_MAPPING_VALIDATOR, 100)].into_iter().collect(),
+				delegators: Default::default(),
+				delegation_fee_bps: DEFAULT_MIN_OPERATOR_FEE,
+			}
+			.register_for_epoch::<Test>(next_epoch);
+			DelegationSnapshot::<u64, u128> {
+				operator: STALE_OPERATOR,
+				validators: [(STALE_VALIDATOR, 100)].into_iter().collect(),
+				delegators: Default::default(),
+				delegation_fee_bps: DEFAULT_MIN_OPERATOR_FEE,
+			}
+			.register_for_epoch::<Test>(next_epoch);
+
+			ValidatorPallet::start_authority_rotation();
+
+			let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
+			assert!(snapshot.validators.contains_key(&VALIDATOR_1));
+			assert_eq!(ValidatorToOperator::<Test>::get(next_epoch, VALIDATOR_1), Some(OPERATOR));
+
+			assert!(!snapshot.validators.contains_key(&STALE_MAPPING_VALIDATOR));
+			assert_eq!(ValidatorToOperator::<Test>::get(next_epoch, STALE_MAPPING_VALIDATOR), None);
+			assert!(!DelegationSnapshots::<Test>::contains_key(next_epoch, STALE_OPERATOR));
+			assert_eq!(ValidatorToOperator::<Test>::get(next_epoch, STALE_VALIDATOR), None);
+		});
+	}
+
+	#[test]
 	fn keygen_failure_updates_delegation_snapshot() {
 		new_test_ext().execute_with(|| {
 			setup_operator_with_validators();
