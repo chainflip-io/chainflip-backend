@@ -19,7 +19,7 @@ use std::sync::Arc;
 use crate::{
 	btc::cached_rpc::BtcCachingClient,
 	db::PersistentKeyDB,
-	dot::retry_rpc::DotRetryRpcClient,
+	dot::{cached_rpc::DotCachingClient, retry_rpc::DotRetryRpcClient},
 	evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
 	tron::{
@@ -34,7 +34,8 @@ use engine_sc_client::{
 };
 use futures::try_join;
 use state_chain_runtime::{
-	ArbitrumInstance, BitcoinInstance, BscInstance, EthereumInstance, SolanaInstance, TronInstance,
+	ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
+	SolanaInstance, TronInstance,
 };
 
 use anyhow::Result;
@@ -51,6 +52,7 @@ pub async fn start<StateChainClient>(
 	btc_client: BtcCachingClient,
 	sol_client: SolRetryRpcClient,
 	hub_client: DotRetryRpcClient,
+	hub_caching_client: DotCachingClient,
 	tron_client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
 	bsc_client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
@@ -65,6 +67,7 @@ where
 		+ ElectoralApi<()>
 		+ ElectoralApi<EthereumInstance>
 		+ ElectoralApi<ArbitrumInstance>
+		+ ElectoralApi<AssethubInstance>
 		+ ElectoralApi<TronInstance>
 		+ ElectoralApi<BscInstance>
 		+ 'static
@@ -99,7 +102,14 @@ where
 	let start_eth =
 		super::eth_elections::start(scope, eth_client.clone(), state_chain_client.clone());
 
-	super::hub::start(scope, hub_client, witness_call.clone(), state_chain_client.clone(), db);
+	super::hub::start(
+		scope,
+		hub_client,
+		hub_caching_client,
+		witness_call.clone(),
+		state_chain_client.clone(),
+		db,
+	);
 
 	let start_tron = super::tron_elections::start(scope, tron_client, state_chain_client.clone());
 
