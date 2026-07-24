@@ -118,6 +118,7 @@ import type {
   PalletCfElectionsElectoralSystemsOraclePricePricePriceAsset,
   StateChainRuntimeRuntimeApisCustomApiTypesRpcAccountInfoCommonItems,
   StateChainRuntimeRuntimeApisCustomApiTypesRuntimeApiAccountInfoWrapper,
+  StateChainRuntimeRuntimeApisCustomApiTypesRewardDistributionEstimate,
   PalletCfLendingPoolsBoostConfiguration,
   StateChainRuntimeRuntimeApisCustomApiTypesEncodedNonNativeCallGeneric,
   PalletCfEnvironmentSubmitRuntimeCallTransactionMetadata,
@@ -1874,6 +1875,14 @@ export interface RuntimeApis extends GenericRuntimeApis {
       (
         account?: AccountId32Like | undefined,
       ) => Promise<Array<PalletCfValidatorDelegationDelegationSnapshot>>
+    >;
+
+    /**
+     *
+     * @callname: CustomRuntimeApi_cf_reward_distribution_estimate
+     **/
+    cfRewardDistributionEstimate: GenericRuntimeApiMethod<
+      () => Promise<StateChainRuntimeRuntimeApisCustomApiTypesRewardDistributionEstimate>
     >;
 
     /**

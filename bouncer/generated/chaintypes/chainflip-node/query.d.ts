@@ -902,6 +902,20 @@ export interface ChainStorage extends GenericChainStorage {
     feeScalingRate: GenericStorageQuery<() => PalletCfFlipOnChargeTransactionFeeScalingRateConfig>;
 
     /**
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    flipToDistribute: GenericStorageQuery<() => bigint>;
+
+    /**
+     * The epoch from which flip 2.1 activates.
+     * Defaults to u32::MAX (effectively disabled) until set via governance.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    feeRewardsActivationEpoch: GenericStorageQuery<() => number>;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
@@ -3053,7 +3067,7 @@ export interface ChainStorage extends GenericChainStorage {
     flipToBeSentToGateway: GenericStorageQuery<() => bigint>;
 
     /**
-     * Interval at which we buy FLIP in order to burn it.
+     * Interval at which we buy FLIP from swap fees in order to distribute as rewards.
      *
      * @param {Callback<number> =} callback
      **/

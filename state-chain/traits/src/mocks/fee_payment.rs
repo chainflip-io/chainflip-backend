@@ -29,10 +29,18 @@ impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayme
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
 
-	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult {
+	fn try_take_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult {
 		MockFundingInfo::<T>::try_debit_funds(account_id, amount)
 			.map(|_| ())
 			.ok_or(ERROR_INSUFFICIENT_LIQUIDITY)
+	}
+
+	fn add_to_offchain_flip_to_be_distributed(_amount: i128) {}
+
+	fn burn_or_reserve_offchain(_amount: Self::Amount) {}
+
+	fn is_flip_2_1_activated() -> bool {
+		false
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

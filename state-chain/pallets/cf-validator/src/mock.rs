@@ -25,7 +25,8 @@ use cf_traits::{
 	mocks::{
 		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
 		minimum_funding::MockMinimumFundingProvider, qualify_node::QualifyAll,
-		reputation_resetter::MockReputationResetter, waived_fees::WaivedFeesMock,
+		reputation_resetter::MockReputationResetter, rewards_distribution::MockRewardsDistribution,
+		waived_fees::WaivedFeesMock,
 	},
 	AccountRoleRegistry, RotationBroadcastsPending,
 };
@@ -80,6 +81,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = sp_core::ConstU64<14400>;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock<Self>;
+	type RewardsDistribution = MockRewardsDistribution<Self>;
 	// Required to satisfy trait bounds on InspectHold implementation, required by
 	// pallet_session::Config::Currency.
 	type RuntimeHoldReason = pallet_session::HoldReason;
@@ -117,7 +119,45 @@ pub const EXPECTED_BOND: Amount = WINNING_BIDS[WINNING_BIDS.len() - 1].amount;
 
 pub struct TestEpochTransitionHandler;
 
-impl EpochTransitionHandler for TestEpochTransitionHandler {}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EpochTransitionHook {
+	EpochEnding,
+	NewEpoch,
+}
+
+thread_local! {
+	pub static EPOCH_TRANSITION_HOOK_CALLS: RefCell<Vec<(EpochTransitionHook, EpochIndex, EpochIndex)>> =
+		RefCell::new(Default::default());
+}
+
+impl TestEpochTransitionHandler {
+	/// Drains the recorded `(hook, passed_epoch, CurrentEpoch at call time)` tuples.
+	pub fn take_hook_calls() -> Vec<(EpochTransitionHook, EpochIndex, EpochIndex)> {
+		EPOCH_TRANSITION_HOOK_CALLS.with(|calls| calls.take())
+	}
+}
+
+impl EpochTransitionHandler for TestEpochTransitionHandler {
+	fn on_epoch_ending(ending: EpochIndex) {
+		EPOCH_TRANSITION_HOOK_CALLS.with(|calls| {
+			calls.borrow_mut().push((
+				EpochTransitionHook::EpochEnding,
+				ending,
+				CurrentEpoch::<Test>::get(),
+			))
+		});
+	}
+
+	fn on_new_epoch(new: EpochIndex) {
+		EPOCH_TRANSITION_HOOK_CALLS.with(|calls| {
+			calls.borrow_mut().push((
+				EpochTransitionHook::NewEpoch,
+				new,
+				CurrentEpoch::<Test>::get(),
+			))
+		});
+	}
+}
 
 thread_local! {
 	pub static MISSED_SLOTS: RefCell<(u64, u64)> = RefCell::new(Default::default());
