@@ -13,20 +13,17 @@ const SWAP_FEE_VOLUME_COUNT = 5;
 
 async function getCurrentEpoch(): Promise<number> {
   await using chainflip = await getChainflipApi();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return ((await chainflip.query.validator.currentEpoch()) as any).toNumber();
+  return chainflip.query.validator.currentEpoch();
 }
 
 async function getFeeRewardsActivationEpoch(): Promise<number> {
   await using chainflip = await getChainflipApi();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return ((await chainflip.query.flip.feeRewardsActivationEpoch()) as any).toNumber();
+  return chainflip.query.flip.feeRewardsActivationEpoch();
 }
 
 async function getTotalIssuance(): Promise<bigint> {
   await using chainflip = await getChainflipApi();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return ((await chainflip.query.flip.totalIssuance()) as any).toBigInt();
+  return chainflip.query.flip.totalIssuance();
 }
 
 // Tests the activation flow of the FLIP 2.1 reward system: governance sets an activation epoch
