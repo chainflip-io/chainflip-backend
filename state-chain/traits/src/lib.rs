@@ -1268,6 +1268,15 @@ pub trait WithdrawalAddressRestriction {
 	) -> DispatchResult;
 }
 
+/// Stores the immutable Ethereum withdrawal address that a broker may bind to their account.
+pub trait BrokerWithdrawalAddressRegistry {
+	type AccountId;
+
+	fn broker_withdrawal_address(owner: &Self::AccountId) -> Option<cf_chains::evm::Address>;
+
+	fn bind_broker_withdrawal_address(owner: &Self::AccountId, address: cf_chains::evm::Address);
+}
+
 pub trait DerivedIngressSink<Account, DepositDetails> {
 	fn derive_deposit_details(account: Account) -> DepositDetails;
 }

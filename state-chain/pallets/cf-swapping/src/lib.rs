@@ -37,10 +37,11 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
-	FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
-	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
+	BrokerWithdrawalAddressRegistry, ChainflipNetworkInfo, ChannelIdAllocator, DepositApi,
+	DeregistrationCheck, ExpiryBehaviour, FundingInfo, FundingSource, GetMinimumFunding,
+	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi, WithdrawalAddressRestriction,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -86,7 +87,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const STORAGE_VERSION_U16: u16 = 16;
+pub const STORAGE_VERSION_U16: u16 = 17;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
@@ -633,6 +634,10 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 
+		type BrokerWithdrawalAddressRegistry: BrokerWithdrawalAddressRegistry<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
+
 		type LendingSystemApi: LendingSystemApi<
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
@@ -798,12 +803,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type VaultSwapMinimumBrokerFee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, BasisPoints, ValueQuery>;
-
-	/// Map of bound addresses for accounts.
-	#[pallet::storage]
-	#[pallet::getter(fn bound_broker_withdrawal_address)]
-	pub type BoundBrokerWithdrawalAddress<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, EthereumAddress, OptionQuery>;
 
 	#[pallet::storage]
 	pub type DefaultOraclePriceSlippageProtection<T: Config> = StorageMap<
@@ -1084,9 +1083,6 @@ pub mod pallet {
 		AccountAlreadyExists,
 		/// The broker is already bound to a withdrawal address.
 		BrokerAlreadyBound,
-		/// The broker tried to withdraw to an address which is not the address the broker is bound
-		/// to.
-		BrokerBoundWithdrawalAddressRestrictionViolated,
 		/// A zero default slippage protection will result in most swaps failing. Set to `None` to
 		/// reset to the permissive default (100bps).
 		ZeroDefaultSlippageNotAllowed,
@@ -1236,15 +1232,6 @@ pub mod pallet {
 					asset,
 				)
 				.map_err(address_error_to_pallet_error::<T>)?;
-
-			if ForeignChain::from(asset) == ForeignChain::Ethereum {
-				if let Some(bound_address) = BoundBrokerWithdrawalAddress::<T>::get(&account_id) {
-					ensure!(
-						destination_address_internal == ForeignChainAddress::Eth(bound_address),
-						Error::<T>::BrokerBoundWithdrawalAddressRestrictionViolated
-					);
-				}
-			}
 
 			Self::trigger_withdrawal(&account_id, asset, destination_address_internal)?;
 
@@ -1793,10 +1780,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(
-				!BoundBrokerWithdrawalAddress::<T>::contains_key(&broker),
+				T::BrokerWithdrawalAddressRegistry::broker_withdrawal_address(&broker).is_none(),
 				Error::<T>::BrokerAlreadyBound
 			);
-			BoundBrokerWithdrawalAddress::<T>::insert(&broker, address);
+			T::BrokerWithdrawalAddressRegistry::bind_broker_withdrawal_address(&broker, address);
 			Self::deposit_event(Event::BoundBrokerWithdrawalAddress { broker, address });
 			Ok(())
 		}

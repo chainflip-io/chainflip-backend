@@ -1284,7 +1284,8 @@ impl_runtime_apis! {
 					.map(|channel| derive_btc_vault_deposit_addresses(channel).current),
 				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
 				bond: account_info.bond(),
-				bound_fee_withdrawal_address: Swapping::bound_broker_withdrawal_address(account_id),
+				bound_fee_withdrawal_address:
+					AssetBalances::bound_broker_withdrawal_address(account_id),
 			}
 		}
 
