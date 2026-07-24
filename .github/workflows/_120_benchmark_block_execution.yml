@@ -33,7 +33,7 @@ on:
         description: "How many minutes to warp-sync against Berghain before stopping and benchmarking?"
         required: false
         type: string
-        default: "15"
+        default: "3"
       benchmark_machine_spec:
         description: "What machine spec should the benchmark run on?"
         required: true
@@ -137,8 +137,8 @@ jobs:
             > "$BASE_PATH/sync.log" 2>&1 &
           echo "sync_pid=$!" >> "$GITHUB_ENV"
 
-          echo "Syncing for ${{ inputs.sync_duration_minutes || '15' }} minutes..."
-          sleep $(( ${{ inputs.sync_duration_minutes || '15' }} * 60 ))
+          echo "Syncing for ${{ inputs.sync_duration_minutes || '3' }} minutes..."
+          sleep $(( ${{ inputs.sync_duration_minutes || '3' }} * 60 ))
 
       - name: Stop sync and determine imported block range 🛑
         id: block-range
