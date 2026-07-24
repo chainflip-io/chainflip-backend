@@ -38,7 +38,7 @@ use sp_runtime::{
 };
 use state_chain_runtime::{BlockNumber, Nonce, RuntimeEvent, UncheckedExtrinsic};
 use thiserror::Error;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 use tracing::{debug, error, info, warn};
 
 use cf_node_client::{error_decoder, signer, ExtrinsicData};
@@ -47,7 +47,7 @@ use crate::{
 	base_rpc_api,
 	extrinsic_api::common::{invalid_err_obj, POOL_ALREADY_IMPORTED, POOL_TOO_LOW_PRIORITY},
 	storage_api::{CheckBlockCompatibility, StorageApi},
-	SUBSTRATE_BEHAVIOUR,
+	BlockInfo, SUBSTRATE_BEHAVIOUR,
 };
 use futures::StreamExt;
 use jsonrpsee::{core::ClientError, types::ErrorObjectOwned};
@@ -154,9 +154,16 @@ pub struct SubmissionWatcher<
 		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<SubmissionStatus>>,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: Nonce,
-	finalized_block_hash: state_chain_runtime::Hash,
 	finalized_block_number: BlockNumber,
+	// Node's latest finalized block, kept fresh by a dedicated subscription task. Used only as
+	// the era (mortality) anchor when signing, so it can't go stale behind the contiguous
+	// `finalized_block_*` scan position above (which advances one block at a time and lags under
+	// back-pressure).
+	latest_finalized_block_watcher: watch::Receiver<BlockInfo>,
 	runtime_version: sp_version::RuntimeVersion,
+	// Finalized block at which `runtime_version` was last refetched, to rate-limit the refetch in
+	// the recovery path to once per block (the version only changes on a runtime upgrade).
+	last_runtime_version_refresh_block: Option<BlockNumber>,
 	genesis_hash: state_chain_runtime::Hash,
 	extrinsic_lifetime: BlockNumber,
 	#[expect(clippy::type_complexity)]
@@ -181,6 +188,9 @@ pub enum SubmissionLogicError {
 	NonceTooLow,
 	StateDiscarded,
 	ImmediatelyDropped,
+	/// A `BadProof`/`AncientBirthBlock` persisted across recovery resubmissions despite
+	/// refreshing the runtime version and era anchor. Retriable (with backoff), not fatal.
+	RecoveryExhausted,
 }
 
 impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
@@ -271,8 +281,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		scope: &'a Scope<'env, anyhow::Error>,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
 		finalized_nonce: Nonce,
-		finalized_block_hash: state_chain_runtime::Hash,
 		finalized_block_number: BlockNumber,
+		latest_finalized_block_watcher: watch::Receiver<BlockInfo>,
 		runtime_version: sp_version::RuntimeVersion,
 		genesis_hash: state_chain_runtime::Hash,
 		extrinsic_lifetime: BlockNumber,
@@ -286,9 +296,10 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				submission_status_futures: Default::default(),
 				signer,
 				finalized_nonce,
-				finalized_block_hash,
 				finalized_block_number,
+				latest_finalized_block_watcher,
 				runtime_version,
+				last_runtime_version_refresh_block: None,
 				genesis_hash,
 				extrinsic_lifetime,
 				block_cache: Default::default(),
@@ -309,21 +320,22 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		request: &mut Request,
 		nonce: Nonce,
 	) -> Result<Result<H256, SubmissionLogicError>, anyhow::Error> {
-		// The era block hash and number used as anchor when signing the extrinsic. Stored as
-		// local copies so we can overwrite them on AncientBirthBlock failure.
-		let mut era_block_hash = self.finalized_block_hash;
-		let mut era_block_number = self.finalized_block_number;
+		// Recovery resubmissions for this nonce before giving up to the outer loop's backoff.
+		const MAX_RECOVERY_RESUBMISSIONS: usize = 3;
+		let mut recovery_resubmissions: usize = 0;
 		loop {
+			// Era (mortality) anchor: re-read from the watch on each attempt to ensure it stays
+			// fresh.
+			let latest_finalized = *self.latest_finalized_block_watcher.borrow();
 			let (signed_extrinsic, lifetime) = self.signer.new_signed_extrinsic(
 				request.call.clone(),
 				&self.runtime_version,
 				self.genesis_hash,
-				era_block_hash,
-				era_block_number,
+				latest_finalized.hash,
+				latest_finalized.number,
 				self.extrinsic_lifetime,
 				nonce,
 			);
-			assert!(lifetime.contains(&(self.finalized_block_number + 1)));
 
 			let tx_hash: H256 = {
 				let encoded = signed_extrinsic.encode();
@@ -377,36 +389,44 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							warn!(target: "state_chain_client", request_id = request.id, "Submission failed as the transaction is stale: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
+						// BadProof = bad signature. Assuming no issues with the crypto, the only
+						// possible explanation is that the implicit Tx Metadata is invalid. At the time
+						// of writing this implies one of:
+						// - runtime upgrade (runtime version changed)
+						// - era anchor (mortality) block hash changed (can happen if the submission is delayed for a long time)
 						ClientError::Call(obj)
 							if obj == invalid_err_obj(InvalidTransaction::BadProof) =>
 						{
-							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refetching the runtime version.");
-
-							// TODO: Check if hash and block number should also be updated
-							// here
-
-							let new_runtime_version =
-								self.base_rpc_client.runtime_version(None).await?;
-							if new_runtime_version == self.runtime_version {
-								// break, as the error is now very unlikely to be solved by
-								// fetching again
-								return Err(anyhow!("Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", self.runtime_version))
+							recovery_resubmissions += 1;
+							if recovery_resubmissions > MAX_RECOVERY_RESUBMISSIONS {
+								warn!(target: "state_chain_client", request_id = request.id, "Submission still failing with a bad proof after {MAX_RECOVERY_RESUBMISSIONS} resubmissions: {obj:?}. Giving up on this nonce; will retry with backoff.");
+								break Ok(Err(SubmissionLogicError::RecoveryExhausted))
 							}
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refreshing runtime version and resubmitting (attempt {recovery_resubmissions}/{MAX_RECOVERY_RESUBMISSIONS}).");
 
-							self.runtime_version = new_runtime_version;
+							// Refetch the runtime version at most once per finalized block (it only changes on runtime upgrades).
+							if self.last_runtime_version_refresh_block != Some(latest_finalized.number) {
+								self.last_runtime_version_refresh_block = Some(latest_finalized.number);
+								let new_runtime_version =
+									self.base_rpc_client.runtime_version(None).await?;
+								if new_runtime_version != self.runtime_version {
+									self.runtime_version = new_runtime_version;
+								}
+							}
 						},
-						// AncientBirthBlock can fire transiently during tx pool re-validation.
-						// Handle gracefully by resubmitting with the updated era anchor.
-						// We deliberately leave `self.finalized_block_*` untouched, since
-						// `on_block_finalized` asserts strictly-increasing finalized block numbers.
+						// AncientBirthBlock can fire transiently during tx pool re-validation. The loop
+						// re-reads the era anchor from the watch on resubmit; bounded so it can't
+						// tight-loop if the watch hasn't advanced yet (the outer backoff lets it
+						// catch up).
 						ClientError::Call(obj)
 							if obj == invalid_err_obj(InvalidTransaction::AncientBirthBlock) =>
 						{
-							warn!(target: "state_chain_client", request_id = request.id, "Submission failed with AncientBirthBlock: {obj:?}. Refreshing era anchor.");
-							era_block_hash =
-								self.base_rpc_client.latest_finalized_block_hash().await?;
-							era_block_number =
-								self.base_rpc_client.block_header(era_block_hash).await?.number;
+							recovery_resubmissions += 1;
+							if recovery_resubmissions > MAX_RECOVERY_RESUBMISSIONS {
+								warn!(target: "state_chain_client", request_id = request.id, "Submission still failing with AncientBirthBlock after {MAX_RECOVERY_RESUBMISSIONS} resubmissions: {obj:?}. Giving up on this nonce; will retry with backoff.");
+								break Ok(Err(SubmissionLogicError::RecoveryExhausted))
+							}
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed with AncientBirthBlock: {obj:?}. Resubmitting with refreshed era anchor (attempt {recovery_resubmissions}/{MAX_RECOVERY_RESUBMISSIONS}).");
 						},
 						ClientError::Call(obj)
 							if obj.code() == 1002 &&
@@ -456,9 +476,10 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					);
 					self.invalidate_best_nonce();
 					match err {
-						SubmissionLogicError::ImmediatelyDropped => {
-							// ImmediatelyDropped implies that the mempool was full. In this case,
-							// we wait for block duration and try again.
+						SubmissionLogicError::ImmediatelyDropped |
+						SubmissionLogicError::RecoveryExhausted => {
+							// Mempool full, or version/era anchor still stale: wait ~one block
+							// (lets the finalized-head watch advance) and retry.
 							timeout = Some(Duration::from_secs(6));
 						},
 						SubmissionLogicError::NonceTooLow |
@@ -505,12 +526,13 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			self.base_rpc_client.runtime_version(Some(hash)),
 		)?;
 
+		let latest_finalized = *self.latest_finalized_block_watcher.borrow();
 		let (signed_extrinsic, _) = self.signer.new_signed_extrinsic(
 			call.clone(),
 			&runtime_version,
 			self.genesis_hash,
-			self.finalized_block_hash,
-			self.finalized_block_number,
+			latest_finalized.hash,
+			latest_finalized.number,
 			self.extrinsic_lifetime,
 			account_info.nonce,
 		);
@@ -762,7 +784,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		} else {
 			// Update the finalized data
 			self.finalized_block_number = block.header.number;
-			self.finalized_block_hash = block_hash;
 			self.finalized_nonce = nonce;
 
 			for (extrinsic_index, extrinsic_events) in events

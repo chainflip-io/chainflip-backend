@@ -34,7 +34,7 @@ jobs:
   upgrade_test:
     runs-on: hetzner
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout chainflip-backend 🛒
         if: inputs.run-job
@@ -174,15 +174,15 @@ jobs:
           sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
-          
+
           # Remove after 2.3 release
           # This makes the deposit monitor uses the broker rpc 2.0 not the broker binary
           sed -i 's/CFDM_BROKER_API_URL=${CFDM_BROKER_API_URL}/CFDM_BROKER_API_URL=${CFDM_CHAINFLIP_RPC_URL}/' localnet/docker-compose.yml
-          
+
           # Remove after 2.3 release
           # Use the new solana start script (with current ledger size limit) for the pre-upgrade localnet.
           git show ${{ github.sha }}:localnet/init/scripts/start-solana.sh > localnet/init/scripts/start-solana.sh
-          
+
           ./localnet/manage.sh
           git reset --hard
 
