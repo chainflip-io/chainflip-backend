@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { sleep } from 'shared/utils';
-import prisma from 'shared/utils/prisma_client';
+import {
+  IndexedExtrinsic,
+  queryAnyEventAtBlock,
+  queryEventsByName,
+  queryExtrinsicByHash,
+  queryHighestIndexedBlock,
+} from 'shared/utils/indexer_db';
 import { Logger } from 'shared/utils/logger';
 import { chainflipBlockTimeMs } from 'shared/utils/substrate';
 
@@ -56,31 +62,14 @@ export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuer
 
 // Make sure to use the events table to query for the highest block
 // to avoid any races between indexing blocks and indexing events operations
-export const highestBlock = async (): Promise<number> => {
-  const result = await prisma.event.findFirst({
-    orderBy: {
-      block: { height: 'desc' },
-    },
-    include: {
-      block: true,
-    },
-  });
-  return result?.block.height ?? 0;
-};
+export const highestBlock = queryHighestIndexedBlock;
 
 // ------------ Querying for transaction hashes --------------
 
-async function findTxHash(txhash: string) {
+async function findTxHash(txhash: string): Promise<IndexedExtrinsic> {
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const result = await prisma.extrinsic.findFirst({
-      where: {
-        hash: { equals: txhash },
-      },
-      include: {
-        block: true,
-      },
-    });
+    const result = await queryExtrinsicByHash(txhash);
 
     if (result) {
       return result;
@@ -99,22 +88,26 @@ async function findTxHash(txhash: string) {
  * @returns block height of the block where the transaction was found
  */
 export async function blockHeightOfTransactionHash(txhash: string): Promise<number> {
-  return (await findTxHash(txhash)).block.height;
+  return (await findTxHash(txhash)).blockHeight;
 }
 
 // ------------ Querying for events --------------
-export const findOneEventOfMany = async <Descriptions extends EventDescriptions>(
-  logger: Logger,
+/**
+ * Waits until at least one event matching any of the descriptions shows up, and returns every match
+ * found. Several of them landing together is normal (a swap can execute, egress and complete in one
+ * block), so this reports them all rather than picking one.
+ */
+export const findAnyEventsOfMany = async <Descriptions extends EventDescriptions>(
   descriptions: Descriptions,
   timing: EventTime,
-): Promise<OneOfEventsResult<Descriptions>> => {
+): Promise<OneOfEventsResult<Descriptions>[]> => {
   // before searching for events, we collect all call ids for events that have an associated txhash
   const txBlockHeights: number[] = [];
   const callIdsList: { [x: string]: string | undefined }[] = await Promise.all(
     Object.entries(descriptions).map(([key, description]) =>
       description.txHash
         ? findTxHash(description.txHash).then((tx) => {
-            txBlockHeights.push(tx.block.height);
+            txBlockHeights.push(tx.blockHeight);
             return { [key]: tx.callId };
           })
         : Promise.resolve({ [key]: undefined }),
@@ -127,9 +120,7 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
   // so once any event from the block appears, we know that the block events started to be indexed,
   // this doesn't guarantee that all events are indexed.
   for (const blockHeight of txBlockHeights) {
-    while (
-      !(await prisma.event.findFirst({ where: { block: { height: { equals: blockHeight } } } }))
-    ) {
+    while (!(await queryAnyEventAtBlock(blockHeight))) {
       await sleep(100);
     }
   }
@@ -139,24 +130,11 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
   //  - the callId that's associated with the event to be the one belonging to the provided `txHash`
   let foundEventsKeyAndData: { key: string; data: unknown; blockHeight: number }[] = [];
   while (foundEventsKeyAndData.length === 0) {
-    const matchingEvents = await prisma.event.findMany({
-      where: {
-        OR: Object.entries(descriptions).map(([key, d]) => ({
-          name: d.name.startsWith('.') ? { endsWith: d.name } : { equals: d.name },
-          callId: callIds[key],
-        })),
-        block: {
-          height: {
-            gte: timing.startFromBlock,
-            lt: timing.endBeforeBlock,
-          },
-        },
-      },
-      include: {
-        block: true,
-      },
-      orderBy: [{ block: { height: 'asc' } }, { id: 'asc' }],
-    });
+    const matchingEvents = await queryEventsByName(
+      Object.entries(descriptions).map(([key, d]) => ({ name: d.name, callId: callIds[key] })),
+      timing.startFromBlock,
+      timing.endBeforeBlock,
+    );
 
     // using an OR query might return the same event multiple times
     const uniqueEvents = new Map(matchingEvents.map((ev) => [ev.id, ev])).values().toArray();
@@ -176,7 +154,7 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
         // also match the given schema.
         const parsingResults = schemas.flatMap(({ key, schema }) => {
           const r = schema.safeParse(event.args);
-          return r.success ? [{ key, data: r.data, blockHeight: event.block.height }] : [];
+          return r.success ? [{ key, data: r.data, blockHeight: event.blockHeight }] : [];
         });
 
         if (parsingResults.length > 1) {
@@ -200,21 +178,32 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
     await sleep(500);
   }
 
-  if (foundEventsKeyAndData.length > 1) {
+  return foundEventsKeyAndData;
+};
+
+/**
+ * As `findAnyEventsOfMany`, but for callers that expect exactly one match and should be told when
+ * that assumption turns out to be wrong.
+ */
+export const findOneEventOfMany = async <Descriptions extends EventDescriptions>(
+  logger: Logger,
+  descriptions: Descriptions,
+  timing: EventTime,
+): Promise<OneOfEventsResult<Descriptions>> => {
+  const found = await findAnyEventsOfMany(descriptions, timing);
+
+  if (found.length > 1) {
     logger.warn(
-      `Found multiple events matching event descriptions, but only one was expected. Found: ${JSON.stringify(foundEventsKeyAndData)}`,
+      `Found multiple events matching event descriptions, but only one was expected. Found: ${JSON.stringify(found)}`,
     );
   }
 
-  return foundEventsKeyAndData[0];
+  return found[0];
 };
 
 export async function findAllEventsByName(name: string) {
-  return prisma.event.findMany({
-    where: { name },
-    include: { block: true },
-    orderBy: { block: { height: 'asc' } },
-  });
+  const events = await queryEventsByName([{ name }], 0);
+  return events.map((event) => ({ ...event, block: { height: event.blockHeight } }));
 }
 
 // ------------ General fix  ---------------

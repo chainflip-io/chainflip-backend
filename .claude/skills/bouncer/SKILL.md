@@ -1,6 +1,6 @@
 ---
 name: bouncer
-description: Use for Chainflip bouncer or localnet tasks: run end-to-end tests, start or rebuild localnet, run bouncer setup scripts, regenerate event schemas, debug bouncer logs, and run pre-commit TypeScript checks. Trigger on requests like "run the bouncer test", "run the fast bouncer tests", "start a localnet", "rebuild the localnet", "regenerate schemas", "run bouncer lints", or when a specific bouncer test is named.
+description: Use for Chainflip bouncer or localnet tasks: run end-to-end tests, start or rebuild localnet, run bouncer setup scripts, regenerate event schemas, debug bouncer logs, run pre-commit TypeScript checks, and run Perseverance swaps. Trigger on requests like "run the bouncer test", "run the fast bouncer tests", "start a localnet", "rebuild the localnet", "regenerate schemas", "run bouncer lints", "run a live testnet swap" / "do a Perseverance swap", or when a specific bouncer test is named.
 ---
 
 # Running bouncer tests
@@ -306,6 +306,7 @@ pnpm eslint:check          # Lint (use eslint:fix for auto-fix)
 | `run_test.ts`               | Run a single test by name, file, or swap number        | §4        |
 | `generate_event_schemas.ts` | Regenerate the zod event schemas from runtime metadata | §5        |
 | `perform_swap.ts`           | Run one real end-to-end swap                           | see below |
+| `live/submit_live_swap.ts`  | Run one real swap on a **live** network (Perseverance) | §9        |
 
 ### `perform_swap.ts` — a one-off test swap
 
@@ -318,6 +319,17 @@ Exercises the full deposit → swap → egress path without running a vitest tes
 ```
 
 Omitting the destination address generates a fresh one for the destination asset. It opens a deposit channel, sends the deposit, and waits through to egress (a couple of minutes).
+
+## 9. Perseverance testnet swaps
+
+`commands/live/submit_live_swap.ts` runs a **real swap on a live network** — it moves real funds from a controlled whale wallet, fills the swap with our own JIT LP, and writes a JSON report. This is **not** localnet; only do it when the user explicitly asks for a Perseverance swap.
+
+> ⚠️ **Only run this when the user gives you the path to their env file.** That file (from 1Password) holds the endpoints and, crucially, the broker/LP/whale **private keys**. Without it the command refuses to run (genesis-hash mismatch), which is the safe default — never improvise the missing variables.
+
+```bash
+cd bouncer && source "<ENV_FILE_PATH>" && export BOUNCER_NETWORK=perseverance \
+  && ./commands/live/submit_live_swap.ts <SOURCE> <DEST> --amount <AMOUNT>
+```
 
 ## When _not_ to use the bouncer
 
