@@ -170,7 +170,7 @@ jobs:
             --base-path="$BASE_PATH" \
             --from=${{ steps.block-range.outputs.from }} \
             --to=${{ steps.block-range.outputs.to }} \
-            | tee benchmark-block-output.txt
+            2>&1 | tee benchmark-block-output.txt
 
       - name: Upload benchmark output 📦
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
@@ -188,6 +188,15 @@ jobs:
             cat benchmark-block-output.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Zip chain database 🗄️
+        run: (cd "$BASE_PATH" && zip -rq "$GITHUB_WORKSPACE/berghain-chaindata.zip" .)
+
+      - name: Upload chain database 📦
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        with:
+          name: berghain-chaindata-${{ steps.block-range.outputs.from }}-${{ steps.block-range.outputs.to }}
+          path: berghain-chaindata.zip
 
       - name: Cleanup 🧹
         if: always()
