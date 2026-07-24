@@ -1,84 +1,110 @@
-import { chainflipChains, legacyChainflipChains } from '@chainflip/utils/chainflip';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 // prettier is a dev/tooling-only dependency and this is a codegen helper, not runtime code.
 // eslint-disable-next-line import/no-extraneous-dependencies
 import prettier from 'prettier';
 
-// Several state-chain pallets are instanced per chain (IngressEgress, Broadcaster,
-// ChainTracking, ThresholdSigner, Vault, Elections, ...). The event codegen emits a
-// separate `<chain><Pallet>/<event>.ts` file for each instance. This script groups
-// those per-chain files back together into a single chain-indexed ("generic") event per
-// pallet+event, e.g. `generic/ingressEgress/batchBroadcastRequested.ts`:
+// Several state-chain pallets are instanced — most per chain (IngressEgress, Broadcaster,
+// ChainTracking, Vault, Elections, ...), some per cryptographic scheme (ThresholdSigner). The
+// event codegen emits a separate `<prefix><Pallet>/<event>.ts` file for each instance. This
+// script groups those files back together into a single prefix-indexed ("generic") event per
+// pallet+event, e.g. `generic/thresholdSigner/thresholdSignatureFailed.ts`:
 //
-//   export const ingressEgressBatchBroadcastRequestedEvent = {
-//     Bitcoin: bitcoinIngressEgressBatchBroadcastRequestedEvent,
-//     Ethereum: ethereumIngressEgressBatchBroadcastRequestedEvent,
+//   export const thresholdSignerThresholdSignatureFailedEvent = {
+//     Bitcoin: bitcoinThresholdSignerThresholdSignatureFailedEvent,
+//     Evm: evmThresholdSignerThresholdSignatureFailedEvent,
 //     ...
 //   } as const;
 //
-// It is pure string/file manipulation over the already-generated flat tree — it does
-// not parse metadata or generate any schemas itself.
+// Prefixes are not configured anywhere; they are detected from the directory tree itself (see
+// resolveInstances). It is pure string/file manipulation over the already-generated flat tree —
+// it does not parse metadata or generate any schemas itself.
 
 const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const uncap = (s: string): string => (s ? s[0].toLowerCase() + s.slice(1) : s);
 
-const chains = [...chainflipChains, ...legacyChainflipChains];
-
-// Some pallets are instanced per *cryptographic scheme* rather than per chain, so one generated
-// directory backs several chains via a non-chain prefix (e.g. `evmThresholdSigner`).
-const cryptoInstanceChains: Record<string, string[]> = {
-  evm: ['Ethereum', 'Arbitrum'],
-  polkadot: ['Assethub'],
+/**
+ * Split a directory name into its first camelCase word and the rest, e.g.
+ * `bitcoinIngressEgress` -> `bitcoin` + `IngressEgress`. Returns `null` for single-word names
+ * (e.g. `swapping`).
+ */
+const splitFirstWord = (name: string): { prefix: string; suffix: string } | null => {
+  const boundary = [...name].findIndex((c) => c >= 'A' && c <= 'Z');
+  return boundary > 0 ? { prefix: name.slice(0, boundary), suffix: name.slice(boundary) } : null;
 };
 
-const instancePrefixes = [...chains, ...Object.keys(cryptoInstanceChains)];
-const instancePrefix = new RegExp(`^(${instancePrefixes.join('|')})(.+)$`, 'i');
+const addToSet = (map: Map<string, Set<string>>, key: string, value: string): void => {
+  const set = map.get(key) ?? new Set();
+  set.add(value);
+  map.set(key, set);
+};
+
+type ResolvedInstance = {
+  /** Instance prefix used as the entry key — a chain (`Bitcoin`) or a crypto scheme (`Evm`). */
+  prefix: string;
+  /** Pallet name with the prefix stripped, e.g. `ingressEgress`. */
+  strippedCamel: string;
+};
+
+/**
+ * Detect which pallet directories are instanced and split each into `prefix` + pallet name.
+ *
+ * A pallet suffix counts as instanced when it appears under at least two prefixes, at least one
+ * of which is corroborated. A prefix is corroborated when it instances at least two such shared
+ * suffixes — true for every chain and crypto scheme, but not for coincidental pairings like
+ * `lendingPools`/`liquidityPools` (`liquidity` only precedes one shared suffix, so `Pools` never
+ * qualifies). Directories with no qualifying split (e.g. `swapping`) are non-instanced and
+ * excluded from the result.
+ */
+const resolveInstances = (palletDirs: string[]): Map<string, ResolvedInstance> => {
+  const splits = new Map(
+    palletDirs.flatMap((dir) => {
+      const split = splitFirstWord(dir);
+      return split ? [[dir, split] as const] : [];
+    }),
+  );
+
+  const prefixesBySuffix = new Map<string, Set<string>>();
+  const suffixesByPrefix = new Map<string, Set<string>>();
+  for (const { prefix, suffix } of splits.values()) {
+    addToSet(prefixesBySuffix, suffix, prefix);
+    addToSet(suffixesByPrefix, prefix, suffix);
+  }
+
+  const isShared = (suffix: string): boolean => (prefixesBySuffix.get(suffix)?.size ?? 0) >= 2;
+  const isCorroborated = (prefix: string): boolean =>
+    [...(suffixesByPrefix.get(prefix) ?? [])].filter(isShared).length >= 2;
+  const isInstancedPallet = (suffix: string): boolean =>
+    isShared(suffix) && [...(prefixesBySuffix.get(suffix) ?? [])].some(isCorroborated);
+
+  const resolved = new Map<string, ResolvedInstance>();
+  for (const [dir, { prefix, suffix }] of splits) {
+    if (isInstancedPallet(suffix)) {
+      resolved.set(dir, { prefix: cap(prefix), strippedCamel: uncap(suffix) });
+    }
+  }
+  return resolved;
+};
 
 type Instance = {
-  /** Canonical ChainflipChain name, e.g. `Bitcoin`. */
-  chain: string;
+  /** Instance prefix, e.g. `Bitcoin` or `Evm`. */
+  prefix: string;
   /** Source pallet directory, e.g. `bitcoinIngressEgress`. */
   palletDir: string;
   /** Event file basename without extension, e.g. `batchBroadcastRequested`. */
   eventBase: string;
-  /** True if the directory is named after `chain` itself; an exact match wins over a crypto expansion. */
-  exact: boolean;
-};
-
-// Resolve a pallet directory to the stripped pallet name and the chains it serves (each flagged
-// `exact` if the directory is named after that chain). Returns `null` for non-instanced pallets
-// (e.g. `genericElections`, `swapping`).
-const resolveInstance = (
-  palletDir: string,
-): { strippedCamel: string; instanceChains: { chain: string; exact: boolean }[] } | null => {
-  const match = palletDir.match(instancePrefix);
-  if (!match) {
-    return null;
-  }
-  const token = match[1].toLowerCase();
-  const exactChain = chains.find((c) => c.toLowerCase() === token);
-  const instanceChains = [
-    ...(exactChain ? [{ chain: exactChain, exact: true }] : []),
-    ...(cryptoInstanceChains[token] ?? []).map((chain) => ({ chain, exact: false })),
-  ];
-  return instanceChains.length > 0 ? { strippedCamel: uncap(match[2]), instanceChains } : null;
 };
 
 const renderModule = (constName: string, instances: Instance[]): string => {
-  // A crypto-shared instance (e.g. `evmThresholdSigner`) backs multiple chains via the same
-  // binding, so dedupe imports while keeping one entry per chain below.
-  const imports = [
-    ...new Set(
-      instances.map(
-        ({ palletDir, eventBase }) =>
-          `import { ${palletDir}${cap(eventBase)}Event } from '../../${palletDir}/${eventBase}';`,
-      ),
-    ),
-  ].join('\n');
+  const imports = instances
+    .map(
+      ({ palletDir, eventBase }) =>
+        `import { ${palletDir}${cap(eventBase)}Event } from '../../${palletDir}/${eventBase}';`,
+    )
+    .join('\n');
 
   const entries = instances
-    .map(({ chain, palletDir, eventBase }) => `  ${chain}: ${palletDir}${cap(eventBase)}Event,`)
+    .map(({ prefix, palletDir, eventBase }) => `  ${prefix}: ${palletDir}${cap(eventBase)}Event,`)
     .join('\n');
 
   return `${imports}\n\nexport const ${constName} = {\n${entries}\n} as const;\n`;
@@ -89,53 +115,33 @@ export default async function generateGenericEvents(eventsDir: string): Promise<
   // Clear the output directory
   await fs.rm(genericDir, { recursive: true, force: true });
 
-  // Group key `<strippedPalletCamel>/<eventBase>` -> per-chain instances
+  const palletDirs = (await fs.readdir(eventsDir, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  // Group key `<strippedPalletCamel>/<eventBase>` -> per-prefix instances
   const groups = new Map<string, Instance[]>();
 
-  for (const palletEntry of await fs.readdir(eventsDir, { withFileTypes: true })) {
-    const palletDir = palletEntry.name;
-    const resolved = palletEntry.isDirectory() ? resolveInstance(palletDir) : null;
-
-    if (resolved) {
-      const { strippedCamel, instanceChains } = resolved;
-
-      for (const file of await fs.readdir(path.join(eventsDir, palletDir))) {
-        if (file.endsWith('.ts')) {
-          const eventBase = file.slice(0, -'.ts'.length);
-          const key = `${strippedCamel}/${eventBase}`;
-          const instances = groups.get(key) ?? [];
-          for (const { chain, exact } of instanceChains) {
-            instances.push({ chain, palletDir, eventBase, exact });
-          }
-          groups.set(key, instances);
-        }
+  for (const [palletDir, { prefix, strippedCamel }] of resolveInstances(palletDirs)) {
+    for (const file of await fs.readdir(path.join(eventsDir, palletDir))) {
+      if (file.endsWith('.ts')) {
+        const eventBase = file.slice(0, -'.ts'.length);
+        const key = `${strippedCamel}/${eventBase}`;
+        const instances = groups.get(key) ?? [];
+        instances.push({ prefix, palletDir, eventBase });
+        groups.set(key, instances);
       }
     }
   }
 
   const prettierConfig = await prettier.resolveConfig(eventsDir);
   let written = 0;
-  const skipped: string[] = [];
 
-  for (const [key, rawInstances] of groups) {
-    // Pick one instance per chain, preferring a chain's own directory over a crypto expansion
-    // (e.g. `assethubBroadcaster` wins over the `polkadot` crypto expansion).
-    const byChain = new Map<string, Instance>();
-    for (const inst of rawInstances) {
-      const existing = byChain.get(inst.chain);
-      if (!existing || (!existing.exact && inst.exact)) {
-        byChain.set(inst.chain, inst);
-      }
-    }
-    const instances = [...byChain.values()];
-
-    // Only emit a generic event for events that exist on more than one chain; a single-chain event
-    // has nothing to combine. Record the rest rather than dropping them silently, so a
-    // genuinely-missing instance (e.g. a chain whose pallet directory failed to resolve) is visible.
-    if (instances.length < 2) {
-      skipped.push(`${key} (only ${instances[0].chain})`);
-    } else {
-      instances.sort((a, b) => a.chain.localeCompare(b.chain));
+  for (const [key, instances] of groups) {
+    // Only emit a generic event for events that exist on more than one instance; a
+    // single-instance event has nothing to combine.
+    if (instances.length >= 2) {
+      instances.sort((a, b) => a.prefix.localeCompare(b.prefix));
 
       const [strippedCamel, eventBase] = key.split('/');
       const constName = `${strippedCamel}${cap(eventBase)}Event`;
@@ -153,9 +159,4 @@ export default async function generateGenericEvents(eventsDir: string): Promise<
   }
 
   console.log(`generated ${written} generic event files in ${genericDir}`);
-  if (skipped.length > 0) {
-    console.log(
-      `skipped ${skipped.length} single-chain event(s) (no generic event emitted):\n  ${skipped.sort().join('\n  ')}`,
-    );
-  }
 }
