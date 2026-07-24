@@ -511,7 +511,7 @@ mod withdrawal_whitelist {
 	};
 	use cf_traits::{
 		mocks::{address_converter::MockAddressConverter, time_source},
-		RefundAddressRegistry, WithdrawalAddressRestriction,
+		BrokerWithdrawalAddressRegistry, RefundAddressRegistry, WithdrawalAddressRestriction,
 	};
 	use core::time::Duration;
 	use frame_support::{
@@ -980,6 +980,55 @@ mod withdrawal_whitelist {
 			advance_clock(1001);
 			apply_pending();
 			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+		});
+	}
+
+	#[test]
+	fn broker_bound_address_restricts_ethereum_withdrawals() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			let ForeignChainAddress::Eth(bound) = ETH_ADDR_1 else {
+				panic!("ETH_ADDR_1 must be an Ethereum address")
+			};
+			Pallet::<Test>::bind_broker_withdrawal_address(&who, bound);
+
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
+			assert_ok!(ensure_allowed_external(&who, &SOL_ADDR));
+		});
+	}
+
+	#[test]
+	fn broker_binding_overrides_a_whitelisted_ethereum_address() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			let ForeignChainAddress::Eth(bound) = ETH_ADDR_1 else {
+				panic!("ETH_ADDR_1 must be an Ethereum address")
+			};
+			Pallet::<Test>::bind_broker_withdrawal_address(&who, bound);
+			allow(&who, ETH_ADDR_2);
+
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
+		});
+	}
+
+	#[test]
+	fn whitelist_is_enforced_without_a_broker_binding() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			allow(&who, ETH_ADDR_2);
+
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_1),
+				Error::<Test>::DestinationNotAllowed
+			);
 		});
 	}
 }

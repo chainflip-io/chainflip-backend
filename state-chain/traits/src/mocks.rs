@@ -31,6 +31,7 @@ pub mod block_height_provider;
 pub mod bonding;
 pub mod broadcast_outcome_handler;
 pub mod broadcaster;
+pub mod broker_withdrawal_address_registry;
 pub mod ccm_additional_data_handler;
 pub mod ceremony_id_provider;
 pub mod cfe_interface_mock;

@@ -22,7 +22,7 @@ use cf_chains::{
 	address::EncodedAddress, benchmarking_value::BenchmarkValue, evm::Address as EthereumAddress,
 };
 use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_FLIP};
-use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
+use cf_traits::{AccountRoleRegistry, BrokerWithdrawalAddressRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_err, assert_ok,
@@ -383,7 +383,7 @@ mod benchmarks {
 		bind_broker_fee_withdrawal_address(RawOrigin::Signed(caller.clone()), address);
 
 		assert_eq!(
-			BoundBrokerWithdrawalAddress::<T>::get(&caller),
+			T::BrokerWithdrawalAddressRegistry::broker_withdrawal_address(&caller),
 			Some(address),
 			"Broker withdrawal address should be bound"
 		);

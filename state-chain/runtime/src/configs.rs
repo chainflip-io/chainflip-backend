@@ -248,6 +248,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
 	type BalanceApi = AssetBalances;
 	type WithdrawalRestriction = AssetBalances;
+	type BrokerWithdrawalAddressRegistry = AssetBalances;
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;

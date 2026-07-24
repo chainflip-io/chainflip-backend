@@ -50,8 +50,8 @@ use cf_traits::{
 		pool_price_api::MockPoolPriceApi,
 		price_feed_api::MockPriceFeedApi,
 	},
-	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode, SwapExecutionProgress,
-	INITIAL_FLIP_FUNDING,
+	AccountRoleRegistry, AssetConverter, BrokerWithdrawalAddressRegistry, Chainflip, SetSafeMode,
+	SwapExecutionProgress, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	assert_noop, assert_ok,
@@ -2751,6 +2751,7 @@ mod lending_liquidation_swaps {
 
 mod bound_broker_withdrawal {
 	use super::*;
+	use cf_traits::mocks::withdrawal_address_restriction::MockWithdrawalAddressRestriction;
 
 	#[test]
 	fn can_bind_withdrawal_address() {
@@ -2762,7 +2763,12 @@ mod bound_broker_withdrawal {
 				address
 			));
 
-			assert_eq!(BoundBrokerWithdrawalAddress::<Test>::get(BROKER), Some(address));
+			assert_eq!(
+				<Test as Config>::BrokerWithdrawalAddressRegistry::broker_withdrawal_address(
+					&BROKER
+				),
+				Some(address)
+			);
 
 			System::assert_has_event(RuntimeEvent::Swapping(
 				Event::<Test>::BoundBrokerWithdrawalAddress { broker: BROKER, address },
@@ -2789,7 +2795,10 @@ mod bound_broker_withdrawal {
 				OriginTrait::signed(BROKER),
 				bound_addr
 			));
-
+			MockWithdrawalAddressRestriction::restrict_to(
+				&BROKER,
+				vec![AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(bound_addr))],
+			);
 			// Fund broker
 			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Usdc, 1000);
 			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 1000);
@@ -2801,7 +2810,7 @@ mod bound_broker_withdrawal {
 					Asset::Usdc,
 					EncodedAddress::Eth(other_addr.into()),
 				),
-				Error::<Test>::BrokerBoundWithdrawalAddressRestrictionViolated
+				DispatchError::Other("MockWithdrawalAddressRestriction: destination not allowed")
 			);
 			assert_noop!(
 				Swapping::withdraw(
@@ -2809,7 +2818,7 @@ mod bound_broker_withdrawal {
 					Asset::Eth,
 					EncodedAddress::Eth(other_addr.into()),
 				),
-				Error::<Test>::BrokerBoundWithdrawalAddressRestrictionViolated
+				DispatchError::Other("MockWithdrawalAddressRestriction: destination not allowed")
 			);
 
 			// Withdraw to bound address succeeds
