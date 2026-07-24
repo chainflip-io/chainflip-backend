@@ -7,6 +7,7 @@
 // Callers must pass the argument with the matching shape.
 
 import type { ChainflipClient } from 'shared/utils/dedot';
+import { lowercaseFirstLetter } from 'shared/utils';
 
 // The runtime call that carries config updates, as it appears (snake_case) in metadata.
 export const CONFIG_CALL = 'update_pallet_config';
@@ -47,11 +48,6 @@ function vecElementTypeId(registry: Registry, typeId: number, depth = 0): number
   return null;
 }
 
-// dedot lower-cases the first letter of the pallet name for its `client.tx.<pallet>` key.
-function toTxPallet(palletName: string): string {
-  return palletName.charAt(0).toLowerCase() + palletName.slice(1);
-}
-
 // If `pallet` exposes an `update_pallet_config` call, resolve its arity and the config-update enum,
 // else return null.
 export function resolveConfigCall(registry: Registry, pallet: PalletInfo): ConfigCallInfo | null {
@@ -76,7 +72,7 @@ export function resolveConfigCall(registry: Registry, pallet: PalletInfo): Confi
     return null;
   }
 
-  return { txPallet: toTxPallet(pallet.name), arity, elementType };
+  return { txPallet: lowercaseFirstLetter(pallet.name), arity, elementType };
 }
 
 // Resolve the config call for a single dedot tx pallet key, throwing a helpful error if absent.
@@ -85,14 +81,12 @@ export function resolveConfigCallByTxPallet(
   txPallet: string,
 ): ConfigCallInfo {
   const { registry } = client;
-  for (const pallet of client.metadata.latest.pallets) {
-    if (toTxPallet(pallet.name) === txPallet) {
-      const info = resolveConfigCall(registry, pallet);
-      if (info) {
-        return info;
-      }
-      break;
-    }
+  const pallet = client.metadata.latest.pallets.find(
+    (p) => lowercaseFirstLetter(p.name) === txPallet,
+  );
+  const info = pallet && resolveConfigCall(registry, pallet);
+  if (info) {
+    return info;
   }
   throw new Error(
     `'${txPallet}' has no update_pallet_config call. Run list_pallet_config_updates.ts to see valid pallets.`,

@@ -1,3 +1,5 @@
+import type { Argv } from 'yargs';
+
 // Public ws JSON-RPC endpoints for the named Chainflip networks, shared by the read-only CLI
 // commands that accept a `--network` flag (query_storage, oracle_prices, ...). `--endpoint`
 // overrides these. The state chain node serves both HTTP and WS on the same RPC port, so callers
@@ -22,17 +24,37 @@ export function networkWsEndpoint(network: string): string {
   return endpoint;
 }
 
-// Resolve the http(s) JSON-RPC endpoint from CLI-style selection (precedence: explicit endpoint, a
-// named network, then CF_NODE_ENDPOINT / localnet), returned in http(s) form. The node serves HTTP
-// and WS on the same RPC port, so the result is usable directly for one-shot `fetch()` JSON-RPC POSTs.
-export function resolveHttpEndpoint(opts: { endpoint?: string; network?: string }): string {
-  let ws: string;
+// Resolve the ws(s) JSON-RPC endpoint from CLI-style selection (precedence: explicit endpoint, a
+// named network, then CF_NODE_ENDPOINT / localnet). This is the single source of truth for the
+// `--endpoint` > `--network` > env selection ladder shared by the read-only commands.
+export function resolveWsEndpoint(opts: { endpoint?: string; network?: string }): string {
   if (opts.endpoint) {
-    ws = opts.endpoint;
-  } else if (opts.network) {
-    ws = networkWsEndpoint(opts.network);
-  } else {
-    ws = process.env.CF_NODE_ENDPOINT ?? NETWORKS.localnet;
+    return opts.endpoint;
   }
-  return ws.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
+  if (opts.network) {
+    return networkWsEndpoint(opts.network);
+  }
+  return process.env.CF_NODE_ENDPOINT ?? NETWORKS.localnet;
+}
+
+// As {@link resolveWsEndpoint} but in http(s) form. The node serves HTTP and WS on the same RPC
+// port, so the result is usable directly for one-shot `fetch()` JSON-RPC POSTs.
+export function resolveHttpEndpoint(opts: { endpoint?: string; network?: string }): string {
+  return resolveWsEndpoint(opts)
+    .replace(/^wss:\/\//, 'https://')
+    .replace(/^ws:\/\//, 'http://');
+}
+
+// Apply the shared `--network` / `--endpoint` selection flags to a yargs builder, so every
+// read-only command exposes them identically.
+export function withNetworkOptions<T>(y: Argv<T>) {
+  return y
+    .option('network', {
+      type: 'string',
+      describe: `Named network (${Object.keys(NETWORKS).join('|')})`,
+    })
+    .option('endpoint', {
+      type: 'string',
+      describe: 'Custom ws(s) endpoint (overrides --network)',
+    });
 }

@@ -38,12 +38,17 @@
 
 import { DedotClient, WsProvider as DedotWsProvider } from 'dedot';
 import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipApi, type DisposableChainflipClient } from 'shared/utils/substrate';
 import type { ChainflipClient } from 'shared/utils/dedot';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { bigintReplacer, bigintReviver, runWithTimeoutAndExit } from 'shared/utils';
-import { networkWsEndpoint } from 'shared/utils/networks';
+import {
+  bigintReplacer,
+  bigintReviver,
+  lowercaseFirstLetter,
+  runWithTimeoutAndExit,
+} from 'shared/utils';
+import { resolveWsEndpoint, withNetworkOptions } from 'shared/utils/networks';
 
 // A storage entry is callable (returns the value). Map entries also expose `.entries()` for dumps;
 // plain `StorageValue` entries (even ones holding a map) do not, hence the optional method.
@@ -52,65 +57,26 @@ type StorageQueryFn = ((...keys: unknown[]) => Promise<unknown>) & {
 };
 type DynamicQuery = Record<string, Record<string, StorageQueryFn | undefined>>;
 
-const lcFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
-
-interface ParsedArgs {
-  positional: string[];
+// Connect to a chosen `--endpoint`/`--network`, or reuse the process-wide cached client when neither
+// is given (it honours CF_NODE_ENDPOINT, falling back to localnet). The result is `await using`-
+// friendly: the cached client disposes to a no-op, a one-off remote client disconnects.
+async function connect(opts: {
   endpoint?: string;
   network?: string;
-  search?: string;
-}
-
-// Parse argv with yargs. `parse-positional-numbers` is disabled so storage keys stay raw strings
-// (they're JSON-parsed later by parseKey); `--search` aliases `--find`.
-async function parseArgs(): Promise<ParsedArgs> {
-  const argv = await yargs(hideBin(process.argv))
-    .usage('$0 [pallet] [entry] [...keys] [options] — read a state chain storage value')
-    .option('network', {
-      type: 'string',
-      describe: 'Named network (mainnet|berghain|perseverance|sisyphos|localnet)',
-    })
-    .option('endpoint', { type: 'string', describe: 'Custom ws(s) endpoint (overrides --network)' })
-    .option('search', {
-      alias: 'find',
-      type: 'string',
-      describe: 'Substring-search storage entries across all pallets',
-    })
-    .strictOptions()
-    .parserConfiguration({ 'parse-positional-numbers': false })
-    .help().argv;
-
-  return {
-    positional: argv._.map(String),
-    endpoint: argv.endpoint,
-    network: argv.network,
-    search: argv.search,
-  };
-}
-
-// Resolve the ws endpoint to connect to, or undefined to use the default cached client (which
-// honours CF_NODE_ENDPOINT, falling back to localnet).
-function resolveEndpoint(parsed: ParsedArgs): string | undefined {
-  if (parsed.endpoint) {
-    return parsed.endpoint;
+}): Promise<DisposableChainflipClient> {
+  if (!opts.endpoint && !opts.network) {
+    return getChainflipApi();
   }
-  if (parsed.network) {
-    return networkWsEndpoint(parsed.network);
-  }
-  return undefined;
-}
-
-// Connect to `endpoint`, or reuse the default cached client when none is given. Returns a matching
-// `dispose`: a real disconnect for a one-off remote client, a no-op for the shared cached one.
-async function connect(
-  endpoint: string | undefined,
-): Promise<{ client: ChainflipClient; dispose: () => Promise<void> }> {
-  if (!endpoint) {
-    const client = await getChainflipApi();
-    return { client, dispose: async () => undefined };
-  }
-  const client = await DedotClient.new<ChainflipNodeApi>(new DedotWsProvider(endpoint));
-  return { client, dispose: () => client.disconnect() };
+  const endpoint = resolveWsEndpoint(opts);
+  console.error(`Connecting to ${endpoint}`); // stderr keeps stdout clean JSON for piping
+  const client = (await DedotClient.new<ChainflipNodeApi>(
+    new DedotWsProvider(endpoint),
+  )) as DisposableChainflipClient;
+  Object.defineProperty(client, Symbol.asyncDispose, {
+    configurable: true,
+    value: () => client.disconnect(),
+  });
+  return client;
 }
 
 // Try to parse a CLI key as JSON (number/object/array), falling back to the raw string.
@@ -126,16 +92,22 @@ function parseKey(s: string): unknown {
 function palletsWithStorage(client: ChainflipClient): string[] {
   return client.metadata.latest.pallets
     .filter((p) => p.storage && p.storage.entries.length > 0)
-    .map((p) => lcFirst(p.name))
+    .map((p) => lowercaseFirstLetter(p.name))
     .sort();
+}
+
+// The pallet metadata whose dedot key (camelCased name) is `txPallet`, or undefined.
+function findPallet(client: ChainflipClient, txPallet: string) {
+  return client.metadata.latest.pallets.find((p) => lowercaseFirstLetter(p.name) === txPallet);
 }
 
 // Number of keys an entry takes: 0 for a plain `StorageValue`, 1 for a `StorageMap`, n for an
 // n-map. Read from metadata, so we can decide between dumping all entries and an exact lookup
 // without a flag.
 function storageArity(client: ChainflipClient, txPallet: string, txEntry: string): number {
-  const pallet = client.metadata.latest.pallets.find((p) => lcFirst(p.name) === txPallet);
-  const entry = pallet?.storage?.entries.find((e) => lcFirst(e.name) === txEntry);
+  const entry = findPallet(client, txPallet)?.storage?.entries.find(
+    (e) => lowercaseFirstLetter(e.name) === txEntry,
+  );
   if (!entry) {
     return 0;
   }
@@ -144,11 +116,11 @@ function storageArity(client: ChainflipClient, txPallet: string, txEntry: string
 
 // camelCase dedot keys for a pallet's storage entries, or null if the pallet isn't found.
 function storageEntriesOf(client: ChainflipClient, txPallet: string): string[] | null {
-  const pallet = client.metadata.latest.pallets.find((p) => lcFirst(p.name) === txPallet);
+  const pallet = findPallet(client, txPallet);
   if (!pallet || !pallet.storage) {
     return null;
   }
-  return pallet.storage.entries.map((e) => lcFirst(e.name)).sort();
+  return pallet.storage.entries.map((e) => lowercaseFirstLetter(e.name)).sort();
 }
 
 interface StorageMatch {
@@ -164,9 +136,9 @@ function searchStorage(client: ChainflipClient, term: string): StorageMatch[] {
   const needle = term.toLowerCase();
   const matches: StorageMatch[] = [];
   for (const p of client.metadata.latest.pallets) {
-    const pallet = lcFirst(p.name);
+    const pallet = lowercaseFirstLetter(p.name);
     for (const e of p.storage?.entries ?? []) {
-      const entry = lcFirst(e.name);
+      const entry = lowercaseFirstLetter(e.name);
       const docs = e.docs.join(' ').trim();
       if (`${pallet}.${entry} ${docs}`.toLowerCase().includes(needle)) {
         matches.push({ pallet, entry, docs });
@@ -177,14 +149,18 @@ function searchStorage(client: ChainflipClient, term: string): StorageMatch[] {
 }
 
 // Run the query against `client`, printing the result to stdout. Returns nothing.
-async function runQuery(client: ChainflipClient, parsed: ParsedArgs): Promise<void> {
+async function runQuery(
+  client: ChainflipClient,
+  positional: string[],
+  search: string | undefined,
+): Promise<void> {
   // Search mode takes precedence over positional pallet/entry.
-  if (parsed.search !== undefined) {
-    console.log(JSON.stringify(searchStorage(client, parsed.search), null, 2));
+  if (search !== undefined) {
+    console.log(JSON.stringify(searchStorage(client, search), null, 2));
     return;
   }
 
-  const [pallet, entry, ...rawKeys] = parsed.positional;
+  const [pallet, entry, ...rawKeys] = positional;
 
   // No pallet -> list pallets. Pallet but no entry -> list that pallet's entries.
   if (!pallet) {
@@ -242,19 +218,24 @@ async function runQuery(client: ChainflipClient, parsed: ParsedArgs): Promise<vo
 }
 
 async function main() {
-  const parsed = await parseArgs();
-  const endpoint = resolveEndpoint(parsed);
-  if (endpoint) {
-    // To stderr so stdout stays clean JSON for piping.
-    console.error(`Connecting to ${endpoint}`);
-  }
+  // `parse-positional-numbers` is disabled so storage keys stay raw strings (JSON-parsed later by
+  // parseKey); `--search` aliases `--find`.
+  const argv = await withNetworkOptions(
+    yargs(hideBin(process.argv)).usage(
+      '$0 [pallet] [entry] [...keys] [options] — read a state chain storage value',
+    ),
+  )
+    .option('search', {
+      alias: 'find',
+      type: 'string',
+      describe: 'Substring-search storage entries across all pallets',
+    })
+    .strictOptions()
+    .parserConfiguration({ 'parse-positional-numbers': false })
+    .help().argv;
 
-  const { client, dispose } = await connect(endpoint);
-  try {
-    await runQuery(client, parsed);
-  } finally {
-    await dispose().catch(() => undefined);
-  }
+  await using client = await connect({ endpoint: argv.endpoint, network: argv.network });
+  await runQuery(client, argv._.map(String), argv.search);
 }
 
 // `logExecutionTime: false` keeps stdout pure JSON for piping.

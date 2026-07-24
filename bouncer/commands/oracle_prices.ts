@@ -23,7 +23,7 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { Asset, assetDecimals, runWithTimeoutAndExit } from 'shared/utils';
-import { resolveHttpEndpoint } from 'shared/utils/networks';
+import { resolveHttpEndpoint, withNetworkOptions } from 'shared/utils/networks';
 import { jsonRpc } from 'shared/json_rpc';
 import { globalLogger } from 'shared/utils/logger';
 
@@ -65,13 +65,11 @@ function ago(unixSeconds: number): string {
 }
 
 async function main() {
-  const argv = await yargs(hideBin(process.argv))
-    .usage('$0 [baseAsset] [options] — fetch the state chain oracle prices, decoded to USD')
-    .option('network', {
-      type: 'string',
-      describe: 'Named network (mainnet|berghain|perseverance|sisyphos|localnet)',
-    })
-    .option('endpoint', { type: 'string', describe: 'Custom ws(s) endpoint (overrides --network)' })
+  const argv = await withNetworkOptions(
+    yargs(hideBin(process.argv)).usage(
+      '$0 [baseAsset] [options] — fetch the state chain oracle prices, decoded to USD',
+    ),
+  )
     .option('json', { type: 'boolean', default: false, describe: 'Output decoded rows as JSON' })
     .strictOptions()
     .help().argv;

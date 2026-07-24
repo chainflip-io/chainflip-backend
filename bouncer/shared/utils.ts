@@ -410,6 +410,10 @@ export const bigintReviver = (_key: string, value: unknown) =>
 export const bigintReplacer = (_key: string, value: unknown) =>
   typeof value === 'bigint' ? value.toString() : value;
 
+// Lower-case the first letter of a pallet name to get dedot's `client.tx`/`client.query`/`errors`
+// key (dedot camelCases the leading char). Used wherever we match a runtime-chosen pallet by key.
+export const lowercaseFirstLetter = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
+
 export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
   const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
   return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
