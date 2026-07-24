@@ -47,12 +47,12 @@ import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingSwapEgressIgnoredEvent } from 'generated/events/swapping/swapEgressIgnored';
 import z from 'zod';
 import { hexToTronAddress } from '@chainflip/utils/tron';
-import { ingressEgressBatchBroadcastRequestedEvent } from 'generated/events/aggregated/ingressEgress/batchBroadcastRequested';
-import { broadcasterBroadcastSuccessEvent } from 'generated/events/aggregated/broadcaster/broadcastSuccess';
-import { broadcasterBroadcastAbortedEvent } from 'generated/events/aggregated/broadcaster/broadcastAborted';
-import { ingressEgressCcmBroadcastRequestedEvent } from 'generated/events/aggregated/ingressEgress/ccmBroadcastRequested';
-import { ingressEgressCcmEgressInvalidEvent } from 'generated/events/aggregated/ingressEgress/ccmEgressInvalid';
-import { ingressEgressCcmBroadcastFailedEvent } from 'generated/events/aggregated/ingressEgress/ccmBroadcastFailed';
+import { ingressEgressBatchBroadcastRequestedEvent } from 'generated/events/generic/ingressEgress/batchBroadcastRequested';
+import { broadcasterBroadcastSuccessEvent } from 'generated/events/generic/broadcaster/broadcastSuccess';
+import { broadcasterBroadcastAbortedEvent } from 'generated/events/generic/broadcaster/broadcastAborted';
+import { ingressEgressCcmBroadcastRequestedEvent } from 'generated/events/generic/ingressEgress/ccmBroadcastRequested';
+import { ingressEgressCcmEgressInvalidEvent } from 'generated/events/generic/ingressEgress/ccmEgressInvalid';
+import { ingressEgressCcmBroadcastFailedEvent } from 'generated/events/generic/ingressEgress/ccmBroadcastFailed';
 import { executeTronVaultSwap } from './vault_swap/tron_vault_swap';
 
 export type SwapParams = {

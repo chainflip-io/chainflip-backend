@@ -25,11 +25,11 @@ import { afterAll, beforeAll, describe } from 'vitest';
 import { concurrentTest } from 'shared/utils/vitest';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { swappingSwapEgressScheduledEvent } from 'generated/events/swapping/swapEgressScheduled';
-import { chainTrackingChainStateUpdatedEvent } from 'generated/events/aggregated/chainTracking/chainStateUpdated';
-import { ingressEgressCcmBroadcastRequestedEvent } from 'generated/events/aggregated/ingressEgress/ccmBroadcastRequested';
-import { broadcasterTransactionBroadcastRequestEvent } from 'generated/events/aggregated/broadcaster/transactionBroadcastRequest';
-import { broadcasterTransactionFeeDeficitRecordedEvent } from 'generated/events/aggregated/broadcaster/transactionFeeDeficitRecorded';
-import { broadcasterBroadcastAbortedEvent } from 'generated/events/aggregated/broadcaster/broadcastAborted';
+import { chainTrackingChainStateUpdatedEvent } from 'generated/events/generic/chainTracking/chainStateUpdated';
+import { ingressEgressCcmBroadcastRequestedEvent } from 'generated/events/generic/ingressEgress/ccmBroadcastRequested';
+import { broadcasterTransactionBroadcastRequestEvent } from 'generated/events/generic/broadcaster/transactionBroadcastRequest';
+import { broadcasterTransactionFeeDeficitRecordedEvent } from 'generated/events/generic/broadcaster/transactionFeeDeficitRecorded';
+import { broadcasterBroadcastAbortedEvent } from 'generated/events/generic/broadcaster/broadcastAborted';
 
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
@@ -132,49 +132,20 @@ async function executeAndTrackCcmSwap<A = []>(
   );
   cf.debug(`${tag} Found broadcastId: ${broadcastId}`);
 
-  // transactionPayload is chain-specific
-  switch (destChain) {
-    case 'Ethereum':
-    case 'Arbitrum':
-    case 'Bsc': {
-      const { transactionPayload } = await cf.stepUntilEvent(
-        broadcasterTransactionBroadcastRequestEvent[destChain].refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-      );
-      return {
-        tag,
-        destAddress,
-        broadcastId,
-        maxFeePerGas: Number(transactionPayload.maxFeePerGas),
-        gasLimitBudget: Number(transactionPayload.gasLimit),
-      };
-    }
-    case 'Tron': {
-      const { transactionPayload } = await cf.stepUntilEvent(
-        broadcasterTransactionBroadcastRequestEvent.Tron.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-      );
-      return {
-        tag,
-        destAddress,
-        broadcastId,
-        maxFeePerGas: 0,
-        gasLimitBudget: Number(transactionPayload.feeLimit),
-      };
-    }
-    case 'Solana': {
-      await cf.stepUntilEvent(
-        broadcasterTransactionBroadcastRequestEvent.Solana.refine(
-          (event) => event.broadcastId === broadcastId,
-        ),
-      );
-      return { tag, destAddress, broadcastId, maxFeePerGas: 0, gasLimitBudget: 0 };
-    }
-    default:
-      throw new Error(`Chain ${destChain} is not supported for CCM`);
-  }
+  const { transactionPayload } = await cf.stepUntilEvent(
+    broadcasterTransactionBroadcastRequestEvent[destChain].refine(
+      (event) => event.broadcastId === broadcastId,
+    ),
+  );
+
+  // transactionPayload is chain-specific: EVM exposes maxFeePerGas + gasLimit, Tron a feeLimit,
+  // Solana neither.
+  const maxFeePerGas =
+    'maxFeePerGas' in transactionPayload ? Number(transactionPayload.maxFeePerGas) : 0;
+  const gasLimit = 'gasLimit' in transactionPayload ? Number(transactionPayload.gasLimit) : 0;
+  const feeLimit = 'feeLimit' in transactionPayload ? Number(transactionPayload.feeLimit) : 0;
+
+  return { tag, destAddress, broadcastId, maxFeePerGas, gasLimitBudget: gasLimit || feeLimit };
 }
 
 async function testGasLimitSwapToSolana<A = []>(

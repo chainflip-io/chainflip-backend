@@ -51,8 +51,8 @@ import {
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequestedEvent } from 'generated/events/swapping/swapRequested';
-import { broadcasterBroadcastSuccessEvent } from 'generated/events/aggregated/broadcaster/broadcastSuccess';
-import { broadcasterBroadcastAbortedEvent } from 'generated/events/aggregated/broadcaster/broadcastAborted';
+import { broadcasterBroadcastSuccessEvent } from 'generated/events/generic/broadcaster/broadcastSuccess';
+import { broadcasterBroadcastAbortedEvent } from 'generated/events/generic/broadcaster/broadcastAborted';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { randomBytes } from 'crypto';
 import { HexString } from '@polkadot/util/types';

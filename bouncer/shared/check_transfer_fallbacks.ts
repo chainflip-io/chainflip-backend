@@ -2,7 +2,7 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Chains, ingressEgressPalletForChain } from 'shared/utils';
 import { findAllEventsByName } from 'shared/utils/indexer';
-import { ingressEgressTransferFallbackRequestedEvent } from 'generated/events/aggregated/ingressEgress/transferFallbackRequested';
+import { ingressEgressTransferFallbackRequestedEvent } from 'generated/events/generic/ingressEgress/transferFallbackRequested';
 
 // TransferNativeFailed and TransferTokenFailed are events emitted by the EVM vault contracts
 // when a transfer fails on-chain. The engine witnesses these and the State Chain responds by
