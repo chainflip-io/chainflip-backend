@@ -211,7 +211,7 @@ fn dont_burn_flip_below_threshold() {
 		assert_eq!(total_issuance, TOTAL_ISSUANCE);
 		// Set the fee to be too high.
 		MockEgressHandler::<Ethereum>::set_fee(FLIP_TO_BURN / BURN_FEE_MULTIPLE);
-		Pallet::<Test>::burn_flip_network_fee();
+		Pallet::<Test>::burn_flip_network_fee(false);
 		assert_has_event::<Test>(
 			Event::FlipBurnSkipped {
 				reason: crate::Error::<Test>::FlipBalanceBelowBurnThreshold.into(),
@@ -234,7 +234,7 @@ fn dont_burn_flip_below_threshold() {
 		// Set a lower fee.
 		const LOW_FEE: u128 = FLIP_TO_BURN / BURN_FEE_MULTIPLE / 2;
 		MockEgressHandler::<Ethereum>::set_fee(LOW_FEE);
-		Pallet::<Test>::burn_flip_network_fee();
+		Pallet::<Test>::burn_flip_network_fee(false);
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Emissions(Event::NetworkFeeBurned {
@@ -276,7 +276,7 @@ fn burn_also_moves_flip_to_gateway() {
 		// the burning
 		MockFlipBurnOrMoveInfo::set_flip_to_be_sent_to_gateway(1_000);
 
-		Pallet::<Test>::burn_flip_network_fee();
+		Pallet::<Test>::burn_flip_network_fee(false);
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Emissions(Event::NetworkFeeBurned {

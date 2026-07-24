@@ -31,14 +31,15 @@ use cf_chains::{
 use cf_primitives::{
 	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
 	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId,
-	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, ONE_AS_BASIS_POINTS,
-	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP,
+	FLIP_TO_GATEWAY_MULTIPLE, ONE_AS_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
 	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
-	FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
+	FeePayment, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
 	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
 	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
 };
@@ -52,7 +53,7 @@ use frame_support::{
 		traits::{ConstU16, Get, Saturating},
 		DispatchError, Permill, TransactionOutcome,
 	},
-	storage::with_transaction_unchecked,
+	storage::{with_storage_layer, with_transaction_unchecked},
 	traits::HandleLifetime,
 	transactional, CloneNoBound, Hashable,
 };
@@ -520,7 +521,7 @@ pub enum PalletConfigUpdate<T: Config> {
 	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
 	/// Set the delay in blocks before retrying a previously failed swap.
 	SwapRetryDelay { delay: BlockNumberFor<T> },
-	/// Set the interval at which we buy FLIP in order to burn it.
+	/// Set the interval at which we buy FLIP using the swap fee that was taken in USDC.
 	FlipBuyInterval { interval: BlockNumberFor<T> },
 	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
 	/// refunded
@@ -616,8 +617,7 @@ pub mod pallet {
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 
-		#[cfg(feature = "runtime-benchmarks")]
-		type FeePayment: cf_traits::FeePayment<
+		type FeePayment: FeePayment<
 			Amount = <Self as Chainflip>::Amount,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
@@ -700,7 +700,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
-	/// Interval at which we buy FLIP in order to burn it.
+	/// Interval at which we buy FLIP from swap fees in order to distribute as rewards.
 	#[pallet::storage]
 	pub type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
@@ -1000,6 +1000,15 @@ pub mod pallet {
 			short_id: AffiliateShortId,
 			affiliate_account_id: T::AccountId,
 		},
+		/// FLIP was successfully scheduled for egress to the State Chain Gateway.
+		SentFlipToGateway {
+			amount: AssetAmount,
+			egress_id: EgressId,
+		},
+		/// FLIP egress to the State Chain Gateway was skipped.
+		FlipTransferToGatewaySkipped {
+			reason: DispatchError,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -1097,18 +1106,23 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub flip_buy_interval: BlockNumberFor<T>,
+		pub network_fee: FeeRateAndMinimum,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
+			NetworkFee::<T>::set(self.network_fee.clone());
 		}
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
+			Self {
+				flip_buy_interval: BlockNumberFor::<T>::zero(),
+				network_fee: FeeRateAndMinimum::default(),
+			}
 		}
 	}
 
@@ -2621,14 +2635,19 @@ pub mod pallet {
 										if output_amount < *flip_to_subtract_from_swap_output {
 											// In the rare event that this occurs we will track the
 											// deficit and offset it against the next burn
-											FlipToBurn::<T>::mutate(|total| {
-												total.saturating_reduce(
-													flip_to_subtract_from_swap_output
-														.saturating_sub(output_amount)
-														.try_into()
-														.unwrap_or(i128::MAX),
+											let deficit: i128 = flip_to_subtract_from_swap_output
+												.saturating_sub(output_amount)
+												.try_into()
+												.unwrap_or(i128::MAX);
+											if T::FeePayment::is_flip_2_1_activated() {
+												T::FeePayment::add_to_offchain_flip_to_be_distributed(
+													-deficit,
 												);
-											});
+											} else {
+												FlipToBurn::<T>::mutate(|total| {
+													total.saturating_reduce(deficit);
+												});
+											}
 											FlipToBeSentToGateway::<T>::mutate(|total| {
 												total.saturating_accrue(
 													*flip_to_subtract_from_swap_output,
@@ -2659,9 +2678,17 @@ pub mod pallet {
 					},
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
-						FlipToBurn::<T>::mutate(|total| {
-							total.saturating_accrue(output_amount.try_into().unwrap_or(i128::MAX));
-						});
+						if T::FeePayment::is_flip_2_1_activated() {
+							T::FeePayment::add_to_offchain_flip_to_be_distributed(
+								output_amount.try_into().unwrap_or(i128::MAX),
+							);
+						} else {
+							FlipToBurn::<T>::mutate(|total| {
+								total.saturating_accrue(
+									output_amount.try_into().unwrap_or(i128::MAX),
+								);
+							});
+						}
 					} else {
 						log_or_panic!(
 							"NetworkFee burning should not be in asset: {:?}",
@@ -3114,6 +3141,47 @@ pub mod pallet {
 						Some(input_lpp.saturating_add(output_lpp)),
 					(Some(lpp), None) | (None, Some(lpp)) => Some(lpp),
 					(None, None) => None,
+				},
+			}
+		}
+
+		pub fn maybe_trigger_flip_to_gateway_egress(
+			state_chain_gateway_address: EthereumAddress,
+			amount: AssetAmount,
+		) -> AssetAmount {
+			// Add flip that was just distributed to validators, to be sent to the gateway
+			FlipToBeSentToGateway::<T>::mutate(|total| {
+				total.saturating_accrue(amount);
+			});
+			match with_storage_layer(|| {
+				T::EgressHandler::schedule_egress(
+					cf_chains::assets::any::Asset::Flip,
+					FlipToBeSentToGateway::<T>::take(),
+					ForeignChainAddress::Eth(state_chain_gateway_address),
+					None,
+				)
+				.map_err(Into::into)
+				.and_then(
+					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
+						if egress_amount < FLIP_TO_GATEWAY_MULTIPLE * fee_withheld {
+							Err(DispatchError::Other("flip to gateway multiple below threshold"))
+						} else {
+							Ok(result)
+						}
+					},
+				)
+			}) {
+				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld, .. }) => {
+					FlipToBeSentToGateway::<T>::put(fee_withheld);
+					Self::deposit_event(Event::SentFlipToGateway {
+						amount: egress_amount,
+						egress_id,
+					});
+					fee_withheld
+				},
+				Err(e) => {
+					Self::deposit_event(Event::FlipTransferToGatewaySkipped { reason: e });
+					0
 				},
 			}
 		}

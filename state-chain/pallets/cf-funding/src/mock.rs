@@ -20,7 +20,10 @@ use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::{broadcaster::MockBroadcaster, time_source, waived_fees::WaivedFeesMock},
+	mocks::{
+		broadcaster::MockBroadcaster, rewards_distribution::MockRewardsDistribution, time_source,
+		waived_fees::WaivedFeesMock,
+	},
 	AccountRoleRegistry, RedemptionCheck,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
@@ -65,6 +68,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock<Self>;
+	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type CallIndexer = ();
 	type RuntimeHoldReason = ();
 }

@@ -284,6 +284,10 @@ pub enum StartKeyActivationResult {
 pub trait EpochTransitionHandler {
 	/// When an epoch has been expired.
 	fn on_expired_epoch(_expired: EpochIndex) {}
+	/// When an epoch is ending. Called in the same block as [Self::on_new_epoch], but *before*
+	/// the epoch index is incremented, so `EpochInfo::epoch_index()` still returns the ending
+	/// epoch.
+	fn on_epoch_ending(_ending: EpochIndex) {}
 	/// When a new epoch has started.
 	fn on_new_epoch(_new: EpochIndex) {}
 }
@@ -377,6 +381,10 @@ pub trait Issuance {
 	///
 	/// Use with care.
 	fn burn_offchain(amount: Self::Balance);
+
+	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
+	/// rather than burned.
+	fn is_flip_2_1_activated() -> bool;
 }
 
 /// Distribute rewards somehow.
@@ -384,8 +392,23 @@ pub trait RewardsDistribution {
 	type Balance;
 	type AccountId;
 
-	/// Distribute some rewards.
-	fn distribute(amount: Self::Balance, beneficiary: &Self::AccountId);
+	/// Distribute some rewards accrued during `epoch_index`.
+	fn distribute(
+		epoch_index: EpochIndex,
+		amount: Self::Balance,
+		beneficiary: &Self::AccountId,
+		settle: impl FnMut(&Self::AccountId, Self::Balance),
+	);
+
+	/// Splits `total_amount` evenly across `epoch_index`'s complete set of reward recipients
+	/// (e.g. that epoch's full authority set), as determined by the implementation.
+	/// To settle a partial
+	/// set, call [Self::distribute] per beneficiary instead.
+	fn distribute_all(
+		epoch_index: EpochIndex,
+		total_amount: Self::Balance,
+		settle: impl FnMut(&Self::AccountId, Self::Balance),
+	);
 }
 
 /// A representation of the current network state for this heartbeat interval.
@@ -751,7 +774,19 @@ pub trait FeePayment {
 	}
 
 	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
-	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
+	fn try_take_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
+
+	/// Accumulate FLIP to be distributed off-chain (e.g. via the StateChainGateway).
+	fn add_to_offchain_flip_to_be_distributed(amount: i128);
+
+	/// Burns `amount` of off-chain funds (eg. in the StateChainGateway contract), unless FLIP 2.1
+	/// is active, in which case the funds are bridged in and reserved for distribution to
+	/// authorities instead.
+	fn burn_or_reserve_offchain(amount: Self::Amount);
+
+	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
+	/// rather than burned.
+	fn is_flip_2_1_activated() -> bool;
 }
 
 /// Provides information about on-chain funds.
