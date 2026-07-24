@@ -1,0 +1,133 @@
+name: Cherry-Pick release to main
+
+# Whenever commits land on a live release branch (release/X.Y) — via a merged PR
+# OR a direct admin/bot push — open a cherry-pick PR PER COMMIT back onto `main`,
+# so fixes made on a release branch are not lost on the next release.
+#
+# Triggers on `push` (not `pull_request`) so it also covers direct pushes that
+# bypass the PR requirement. Because push events carry no PR label, the loop is
+# broken by PATCH EQUIVALENCE instead:
+#   - `git cherry` drops any pushed commit whose change is already on `main`
+#     (i.e. anything cherry-picked from main -> release, even manually), so it is
+#     never ported back to where it came from.
+#   - Creating a release branch off `main` pushes commits already on `main` ->
+#     all dropped.
+#   - The PRs we open target `main` and are NOT labelled `non-breaking`, so they
+#     won't re-trigger the main->release cherry-pick workflow.
+#
+# `chore:` commits are intentionally not forward-ported.
+
+on:
+  push:
+    branches:
+      # Only the canonical live release branches (release/X.Y).
+      # This excludes patch branches (release/X.Y.Z), release-candidate branches (…-rcN) and
+      # any other suffixed release/* branch.
+      - "release/[0-9]+.[0-9]+"
+
+run-name: Forward-port `${{ github.ref_name }}` to main
+
+jobs:
+  prepare:
+    runs-on: namespace-profile-default-light
+    outputs:
+      commits: ${{ steps.collect.outputs.commits }}
+      count: ${{ steps.collect.outputs.count }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Collect commits to forward-port
+        id: collect
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+          git fetch --all --prune
+
+          ZERO="0000000000000000000000000000000000000000"
+          empty() { echo "commits=[]" >> "$GITHUB_OUTPUT"; echo "count=0" >> "$GITHUB_OUTPUT"; exit 0; }
+
+          # Branch created/deleted, or history rewritten (force-push) so the
+          # previous tip is gone -> can't diff the range reliably -> nothing.
+          if [ "$BEFORE" = "$ZERO" ] || [ "$AFTER" = "$ZERO" ]; then
+            echo "Branch created or deleted; nothing to forward-port."; empty
+          fi
+          if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            echo "Previous tip $BEFORE unavailable (force-push?); nothing to forward-port."; empty
+          fi
+
+          # Loop guard: '+' = change not yet on main, '-' = already on main.
+          PICK_SET="$(git cherry main "$AFTER" "$BEFORE" | awk '/^\+ /{print $2}')"
+
+          # Build a JSON array of {sha, subject}, oldest-first, excluding merge
+          # commits, commits already on main, and `chore:` commits.
+          commits='[]'
+          for sha in $(git rev-list --reverse --no-merges "${BEFORE}..${AFTER}"); do
+            grep -qxF "$sha" <<<"$PICK_SET" || continue
+            subject="$(git log -1 --format=%s "$sha")"
+            # Conventional-commit type = text before the first '(', '!' or ':'.
+            # Drops `chore:`, `chore(scope):`, `chore!:`, `chore(scope)!:` while
+            # not matching `chores:` / `chore-thing:`.
+            if [ "${subject%%[(:!]*}" = "chore" ]; then
+              echo "Skipping chore commit $sha: $subject"
+              continue
+            fi
+            commits="$(jq -c --arg s "$sha" --arg sub "$subject" '. + [{sha: $s, subject: $sub}]' <<<"$commits")"
+          done
+
+          echo "commits=$commits" >> "$GITHUB_OUTPUT"
+          echo "count=$(jq 'length' <<<"$commits")" >> "$GITHUB_OUTPUT"
+          echo "Forward-porting $(jq 'length' <<<"$commits") commit(s)."
+
+  forward-port:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.count != '0' }}
+    runs-on: namespace-profile-default-light
+    strategy:
+      fail-fast: false
+      matrix:
+        commit: ${{ fromJSON(needs.prepare.outputs.commits) }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Git 🛠️
+        uses: ./.github/actions/setup-git
+        with:
+          ssh-private-key: ${{ secrets.CF_GITHUB_BOT_SSH_PRIVATE_KEY }}
+
+      - name: Cherry-pick ${{ matrix.commit.sha }} onto main 🍒
+        run: |
+          set -euo pipefail
+          git fetch --all --prune
+          git checkout main
+          # A conflict fails the step loudly so a human does the manual
+          # forward-port; other commits' PRs are unaffected (fail-fast: false).
+          git cherry-pick -x "${{ matrix.commit.sha }}"
+
+      - name: Create Pull Request 🐂
+        uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38
+        with:
+          token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+          commit-message: "forward-port: ${{ matrix.commit.sha }} to main"
+          title: "${{ matrix.commit.subject }}"
+          body: |
+            This is an automated forward-port of `${{ matrix.commit.sha }}` from `${{ github.ref_name }}` to `main`.
+            Pushed by: @${{ github.actor }}
+
+            Please review and merge if appropriate.
+          branch: forward-port/${{ matrix.commit.sha }}
+          base: main
+          # No explicit reviewer request: `github.actor` can be a bot or the PR
+          # author, which makes create-pull-request fail. The PR body @-mentions
+          # the pusher, and normal review rules (CODEOWNERS) still apply.
+          labels: cherry-pick
+          delete-branch: true
