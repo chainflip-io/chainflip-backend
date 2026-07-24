@@ -224,6 +224,74 @@ impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCom
 	}
 }
 
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+pub struct ValidatorInfo {
+	pub balance: AssetAmount,
+	pub bond: AssetAmount,
+	pub last_heartbeat: u32,
+	pub reputation_points: i32,
+	pub keyholder_epochs: Vec<EpochIndex>,
+	pub is_current_authority: bool,
+	#[deprecated]
+	pub is_current_backup: bool,
+	pub is_qualified: bool,
+	pub is_online: bool,
+	pub is_bidding: bool,
+	pub bound_redeem_address: Option<EvmAddress>,
+	pub apy_bp: Option<u32>,
+	pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
+	pub estimated_redeemable_balance: AssetAmount,
+	pub operator: Option<AccountId32>,
+}
+
+impl From<ValidatorInfo> for super::ValidatorInfo {
+	fn from(old: ValidatorInfo) -> Self {
+		Self {
+			balance: old.balance,
+			bond: old.bond,
+			last_heartbeat: old.last_heartbeat,
+			reputation_points: old.reputation_points,
+			keyholder_epochs: old.keyholder_epochs,
+			is_current_authority: old.is_current_authority,
+			#[expect(deprecated)]
+			is_current_backup: old.is_current_backup,
+			is_qualified: old.is_qualified,
+			is_online: old.is_online,
+			is_bidding: old.is_bidding,
+			bound_redeem_address: old.bound_redeem_address,
+			apy_bp: old.apy_bp,
+			restricted_balances: old.restricted_balances,
+			estimated_redeemable_balance: old.estimated_redeemable_balance,
+			operator: old.operator,
+			max_bid: None,
+			bid: old.balance,
+		}
+	}
+}
+
+impl From<super::ValidatorInfo> for ValidatorInfo {
+	fn from(current: super::ValidatorInfo) -> Self {
+		Self {
+			balance: current.balance,
+			bond: current.bond,
+			last_heartbeat: current.last_heartbeat,
+			reputation_points: current.reputation_points,
+			keyholder_epochs: current.keyholder_epochs,
+			is_current_authority: current.is_current_authority,
+			#[expect(deprecated)]
+			is_current_backup: current.is_current_backup,
+			is_qualified: current.is_qualified,
+			is_online: current.is_online,
+			is_bidding: current.is_bidding,
+			bound_redeem_address: current.bound_redeem_address,
+			apy_bp: current.apy_bp,
+			restricted_balances: current.restricted_balances,
+			estimated_redeemable_balance: current.estimated_redeemable_balance,
+			operator: current.operator,
+		}
+	}
+}
+
 #[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
@@ -481,7 +549,7 @@ pub enum RuntimeApiAccountInfo {
 	Unregistered,
 	Broker(Box<super::BrokerInfo<<Bitcoin as Chain>::ChainAccount>>),
 	LiquidityProvider(Box<LiquidityProviderInfo>),
-	Validator(Box<super::ValidatorInfo>),
+	Validator(Box<ValidatorInfo>),
 	Operator(Box<super::OperatorInfo<FlipBalance>>),
 }
 
@@ -492,7 +560,7 @@ impl From<RuntimeApiAccountInfo> for super::RuntimeApiAccountInfo {
 			RuntimeApiAccountInfo::Broker(info) => Self::Broker(info),
 			RuntimeApiAccountInfo::LiquidityProvider(info) =>
 				Self::LiquidityProvider(Box::new((*info).into())),
-			RuntimeApiAccountInfo::Validator(info) => Self::Validator(info),
+			RuntimeApiAccountInfo::Validator(info) => Self::Validator(Box::new((*info).into())),
 			RuntimeApiAccountInfo::Operator(info) => Self::Operator(info),
 		}
 	}

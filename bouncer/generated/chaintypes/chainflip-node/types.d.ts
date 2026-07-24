@@ -1333,6 +1333,16 @@ export type PalletCfValidatorCall =
    **/
   | { name: 'StopBidding' }
   /**
+   * Sets the maximum bid used for this validator in the next auction.
+   *
+   * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   * The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+   * at auction resolution, so a cap above the balance simply has no effect until funded.
+   * It must, however, be at least the minimum validator stake — a lower cap could never
+   * produce a winning bid.
+   **/
+  | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
+  /**
    * Executed by a operator to claim a validator. By calling this, the operator
    * signals his wish to manage the validator in his delegated staking pool. The validator
    * has to actively accept this invitation by calling the `accept_operator` extrinsic.
@@ -1467,6 +1477,16 @@ export type PalletCfValidatorCallLike =
    * bidding.
    **/
   | { name: 'StopBidding' }
+  /**
+   * Sets the maximum bid used for this validator in the next auction.
+   *
+   * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   * The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+   * at auction resolution, so a cap above the balance simply has no effect until funded.
+   * It must, however, be at least the minimum validator stake — a lower cap could never
+   * produce a winning bid.
+   **/
+  | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
   /**
    * Executed by a operator to claim a validator. By calling this, the operator
    * signals his wish to manage the validator in his delegated staking pool. The validator
@@ -13036,6 +13056,13 @@ export type PalletCfValidatorEvent =
    **/
   | { name: 'StartedBidding'; data: { accountId: AccountId32 } }
   /**
+   * A validator updated the maximum bid used for its next auction.
+   **/
+  | {
+      name: 'ValidatorMaxBidUpdated';
+      data: { validator: AccountId32; maxBid?: bigint | undefined };
+    }
+  /**
    * The rotation transaction(s) for the previous rotation are still pending to be
    * successfully broadcast, therefore, cannot start a new epoch rotation.
    **/
@@ -17565,6 +17592,11 @@ export type PalletCfValidatorError =
    **/
   | 'DelegationAmountBelowMinimum'
   /**
+   * A validator's max bid must be at least as large as the minimum validator stake,
+   * otherwise the validator could never bid enough to be a qualified bidder.
+   **/
+  | 'MaxBidBelowMinimumValidatorStake'
+  /**
    * The caller's GRANDPA key does not match their session key registration.
    **/
   | 'GrandpaKeyOwnershipMismatch'
@@ -21471,6 +21503,7 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo = {
   restrictedBalances: Array<[H160, bigint]>;
   estimatedRedeemableBalance: bigint;
   operator?: AccountId32 | undefined;
+  maxBid?: bigint | undefined;
 };
 
 export type PalletCfValidatorAuctionResolverAuctionOutcome = {

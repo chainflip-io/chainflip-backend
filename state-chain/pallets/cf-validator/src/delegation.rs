@@ -194,15 +194,15 @@ where
 		}
 	}
 
-	pub fn total_validator_bid(&self) -> Bid {
+	fn total_validator_bid(&self) -> Bid {
 		self.validators.values().copied().sum()
 	}
 
-	pub fn total_delegator_bid(&self) -> Bid {
+	fn total_delegator_bid(&self) -> Bid {
 		self.delegators.values().copied().sum()
 	}
 
-	pub fn total_available_bid(&self) -> Bid {
+	fn total_available_bid(&self) -> Bid {
 		self.total_validator_bid() + self.total_delegator_bid()
 	}
 
@@ -491,12 +491,19 @@ mod tests {
 				let total_available_stake = snapshot.validators.values().sum();
 
 				prop_assert!(
-					total_bonded == core::cmp::min(
-						total_available_stake
-						,max_expected_bond
-
-					)
+					total_bonded == core::cmp::min(total_available_stake, max_expected_bond)
 				);
+
+				// No validator is bonded above its own bid, regardless of how high its
+				// pool-mates bid. Since the bid is already capped by the validator's max bid,
+				// this is what keeps pooling from bonding anyone above their max bid.
+				for (validator, individual_bond) in &dist {
+					prop_assert!(
+						individual_bond <= snapshot.validators.get(validator).unwrap(),
+						"validator {} bonded {} above its bid {}",
+						validator, individual_bond, snapshot.validators[validator]
+					);
+				}
 
 				Ok(())
 			});

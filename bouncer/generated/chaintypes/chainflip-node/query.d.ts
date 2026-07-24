@@ -1342,11 +1342,22 @@ export interface ChainStorage extends GenericChainStorage {
     minimumOperatorFee: GenericStorageQuery<() => number>;
 
     /**
-     * Store the list of accounts that are active bidders.
+     * Store the list of validator accounts that are active bidders.
      *
      * @param {Callback<Array<AccountId32>> =} callback
      **/
     activeBidder: GenericStorageQuery<() => Array<AccountId32>>;
+
+    /**
+     * A validator's optional cap for its own auction bid.
+     *
+     * When no cap is stored, the validator bids its full funding balance. The stored cap is not
+     * bounded by the account's balance, which can fall below it at any time (e.g. via slashing).
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<bigint | undefined> =} callback
+     **/
+    validatorMaxBid: GenericStorageQuery<(arg: AccountId32Like) => bigint | undefined, AccountId32>;
 
     /**
      * Maps an operator account to it's exceptions. An exception is a delegator that is excluded

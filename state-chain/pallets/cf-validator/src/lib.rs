@@ -365,10 +365,18 @@ pub mod pallet {
 	pub type MinimumOperatorFee<T: Config> =
 		StorageValue<_, u32, ValueQuery, ConstU32<DEFAULT_MIN_OPERATOR_FEE>>;
 
-	/// Store the list of accounts that are active bidders.
+	/// Store the list of validator accounts that are active bidders.
 	#[pallet::storage]
 	#[pallet::getter(fn active_bidder)]
 	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+
+	/// A validator's optional cap for its own auction bid.
+	///
+	/// When no cap is stored, the validator bids its full funding balance. The stored cap is not
+	/// bounded by the account's balance, which can fall below it at any time (e.g. via slashing).
+	#[pallet::storage]
+	pub type ValidatorMaxBid<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
 
 	/// Maps an operator account to it's exceptions. An exception is a delegator that is excluded
 	/// from the operator's delegation acceptance configuration. If it's set to allow it means the
@@ -453,6 +461,8 @@ pub mod pallet {
 		StoppedBidding { account_id: T::AccountId },
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
+		/// A validator updated the maximum bid used for its next auction.
+		ValidatorMaxBidUpdated { validator: T::AccountId, max_bid: Option<T::Amount> },
 		/// The rotation transaction(s) for the previous rotation are still pending to be
 		/// successfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
@@ -554,6 +564,9 @@ pub mod pallet {
 		TooManyValidators,
 		/// Delegation amount must be at least as large as minimum funding amount.
 		DelegationAmountBelowMinimum,
+		/// A validator's max bid must be at least as large as the minimum validator stake,
+		/// otherwise the validator could never bid enough to be a qualified bidder.
+		MaxBidBelowMinimumValidatorStake,
 		/// The caller's GRANDPA key does not match their session key registration.
 		GrandpaKeyOwnershipMismatch,
 		/// The delegate key proof signature is invalid.
@@ -794,9 +807,7 @@ pub mod pallet {
 		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
 		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			// Block key rotation while a GRANDPA delegation is active.
 			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
@@ -866,9 +877,7 @@ pub mod pallet {
 
 			AccountPeerMapping::<T>::insert(&account_id, (peer_id, port, ip_address));
 
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			T::CfePeerRegistration::peer_registered(
 				validator_id.clone(),
@@ -888,9 +897,7 @@ pub mod pallet {
 		#[pallet::weight((T::ValidatorWeightInfo::cfe_version(), DispatchClass::Operational))]
 		pub fn cfe_version(origin: OriginFor<T>, new_version: Version) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 			NodeCFEVersion::<T>::try_mutate(validator_id, |current_version| {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
@@ -920,9 +927,7 @@ pub mod pallet {
 		pub fn deregister_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
 
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			// Revoke any active GRANDPA delegation before purging keys.
 			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
@@ -941,6 +946,7 @@ pub mod pallet {
 			Self::do_remove_from_operator(account_id.clone());
 
 			ClaimedValidators::<T>::remove(&account_id);
+			ValidatorMaxBid::<T>::remove(&account_id);
 
 			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
 
@@ -975,6 +981,41 @@ pub mod pallet {
 				bidders.remove(&account_id).then_some(()).ok_or(Error::<T>::AlreadyNotBidding)
 			})?;
 			Self::deposit_event(Event::StoppedBidding { account_id });
+			Ok(())
+		}
+
+		/// Sets the maximum bid used for this validator in the next auction.
+		///
+		/// Passing `None` removes the cap, causing the validator to bid its full funding balance.
+		/// The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+		/// at auction resolution, so a cap above the balance simply has no effect until funded.
+		/// It must, however, be at least the minimum validator stake — a lower cap could never
+		/// produce a winning bid.
+		#[pallet::call_index(23)]
+		#[pallet::weight(T::ValidatorWeightInfo::set_validator_max_bid())]
+		pub fn set_validator_max_bid(
+			origin: OriginFor<T>,
+			max_bid: Option<T::Amount>,
+		) -> DispatchResult {
+			let validator = T::AccountRoleRegistry::ensure_validator(origin)?;
+			ensure!(!Self::is_auction_phase(), Error::<T>::AuctionPhase);
+			if let Some(max_bid) = max_bid {
+				ensure!(
+					max_bid >= MinimumValidatorStake::<T>::get(),
+					Error::<T>::MaxBidBelowMinimumValidatorStake
+				);
+			}
+
+			ValidatorMaxBid::<T>::mutate_exists(&validator, |current_max_bid| {
+				if *current_max_bid != max_bid {
+					*current_max_bid = max_bid;
+					Self::deposit_event(Event::ValidatorMaxBidUpdated {
+						validator: validator.clone(),
+						max_bid,
+					});
+				}
+			});
+
 			Ok(())
 		}
 
@@ -1425,9 +1466,7 @@ pub mod pallet {
 			proof: sp_consensus_grandpa::AuthoritySignature,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			ensure!(
 				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
@@ -1463,9 +1502,7 @@ pub mod pallet {
 			caller_grandpa_key: GrandpaAuthorityId,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(&account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
 
 			ensure!(
 				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
@@ -2123,12 +2160,19 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
+	/// The validator's own bid for the next auction: its balance, capped by its max bid if set.
+	pub fn validator_bid(account_id: &T::AccountId) -> T::Amount {
+		let balance = T::FundingInfo::balance(account_id);
+		ValidatorMaxBid::<T>::get(account_id)
+			.map_or(balance, |max_bid| core::cmp::min(max_bid, balance))
+	}
+
 	pub fn get_active_bids() -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
 		ActiveBidder::<T>::get()
 			.into_iter()
 			.map(|bidder_id| Bid {
-				bidder_id: <ValidatorIdOf<T> as IsType<T::AccountId>>::from_ref(&bidder_id).clone(),
-				amount: T::FundingInfo::balance(&bidder_id),
+				bidder_id: ValidatorIdOf::<T>::from_ref(&bidder_id).clone(),
+				amount: Self::validator_bid(&bidder_id),
 			})
 			.collect()
 	}
@@ -2420,11 +2464,14 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 	}
 }
 
+/// Qualifies validators on their auction bid (balance capped by max bid, if set), so that a
+/// stale max bid below the current minimum stake disqualifies rather than entering the auction
+/// with an under-minimum bid (which would drag the whole set's bond below the minimum).
 pub struct QualifyByMinimumStake<T>(PhantomData<T>);
 
 impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumStake<T> {
 	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
-		T::FundingInfo::balance(validator_id.into_ref()) >= MinimumValidatorStake::<T>::get()
+		Pallet::<T>::validator_bid(validator_id.into_ref()) >= MinimumValidatorStake::<T>::get()
 	}
 
 	fn filter_qualified(
@@ -2433,7 +2480,7 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumS
 		let min_bid = MinimumValidatorStake::<T>::get();
 		validators
 			.into_iter()
-			.filter(|id| T::FundingInfo::balance(id.into_ref()) >= min_bid)
+			.filter(|id| Pallet::<T>::validator_bid(id.into_ref()) >= min_bid)
 			.collect()
 	}
 }
@@ -2442,8 +2489,7 @@ impl<T: Config> Pallet<T> {
 	fn ensure_not_active_bidder_during_auction(validator_id: &ValidatorIdOf<T>) -> DispatchResult {
 		if Self::is_auction_phase() {
 			ensure!(
-				!ActiveBidder::<T>::get()
-					.contains(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id)),
+				!ActiveBidder::<T>::get().contains(validator_id.into_ref()),
 				Error::<T>::StillBidding
 			);
 		}
@@ -2464,13 +2510,8 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 		// reserved by their stored max_bid — the amount visible to the auction
 		// (capped at max_bid) cannot drop, but funds the user never pledged
 		// remain freely redeemable.
-		if let Some((_, max_bid)) = DelegationChoice::<T>::get(<ValidatorIdOf<T> as IsType<
-			T::AccountId,
-		>>::into_ref(validator_id))
-		{
-			let balance = T::FundingInfo::balance(
-				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id),
-			);
+		if let Some((_, max_bid)) = DelegationChoice::<T>::get(validator_id.into_ref()) {
+			let balance = T::FundingInfo::balance(validator_id.into_ref());
 			ensure!(balance.saturating_sub(amount) >= max_bid, Error::<T>::StillBidding);
 		}
 		Ok(())
@@ -2482,9 +2523,7 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 		// definition of "restricted". Additional checks (like balance checks) are
 		// outside the scope of this implementation.
 		ensure!(
-			!DelegationChoice::<T>::contains_key(
-				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(source),
-			),
+			!DelegationChoice::<T>::contains_key(source.into_ref()),
 			Error::<T>::DelegatorTransferRestricted
 		);
 
@@ -2508,9 +2547,7 @@ impl<T: Config> DeregistrationCheck for ValidatorDeregistrationCheck<T> {
 		if T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Validator) {
 			ensure!(!Pallet::<T>::is_bidding(account_id), Error::<T>::StillBidding);
 
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(account_id);
+			let validator_id = ValidatorIdOf::<T>::from_ref(account_id);
 
 			ensure!(!EpochHistory::<T>::is_keyholder(validator_id), Error::<T>::StillKeyHolder);
 		} else if T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator) {

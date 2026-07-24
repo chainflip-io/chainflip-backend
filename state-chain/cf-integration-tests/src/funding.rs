@@ -21,7 +21,7 @@ use cf_primitives::{FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_test_utilities::TestExternalities;
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, EpochInfo};
 use mock_runtime::MIN_FUNDING;
-use pallet_cf_funding::pallet::Error;
+use pallet_cf_funding::{pallet::Error, RedemptionAmount};
 use pallet_cf_validator::CurrentRotationPhase;
 use sp_runtime::{FixedPointNumber, FixedU64};
 use state_chain_runtime::chainflip::{calculate_account_apy, Offence};
@@ -135,6 +135,70 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			}
 		},
 	);
+}
+
+#[test]
+fn validator_can_redeem_balance_above_max_bid_bond_after_auction() {
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	const INITIAL_FUNDING: FlipBalance = GENESIS_BALANCE * 2;
+	const MAX_BID: FlipBalance = GENESIS_BALANCE * 3 / 2;
+
+	super::genesis::with_test_defaults()
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, new_validators) =
+				crate::authorities::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			let validator = new_validators.first().expect("a validator was created");
+
+			assert_ok!(Validator::set_validator_max_bid(
+				RuntimeOrigin::signed(validator.clone()),
+				Some(MAX_BID),
+			));
+			assert_eq!(Flip::balance(validator), INITIAL_FUNDING);
+
+			testnet.move_to_the_next_epoch();
+
+			assert!(Validator::current_authorities().contains(validator));
+			assert_eq!(Flip::bond(validator), MAX_BID);
+			let balance_before_redemption = Flip::balance(validator);
+
+			assert_ok!(Funding::redeem(
+				RuntimeOrigin::signed(validator.clone()),
+				RedemptionAmount::Max,
+				ETH_DUMMY_ADDR,
+				None,
+			));
+
+			assert_eq!(Flip::balance(validator), MAX_BID);
+			assert_eq!(
+				pallet_cf_flip::PendingRedemptionsReserve::<Runtime>::get(validator),
+				Some(
+					balance_before_redemption -
+						MAX_BID - pallet_cf_funding::RedemptionTax::<Runtime>::get()
+				),
+			);
+		});
+}
+
+#[test]
+fn validator_info_includes_bid_and_max_bid() {
+	use state_chain_runtime::runtime_apis::custom_api::runtime_decl_for_custom_runtime_api::CustomRuntimeApi;
+
+	const MAX_BID: FlipBalance = GENESIS_BALANCE / 2;
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let (_, _, new_validators) = crate::authorities::fund_authorities_and_join_auction(1);
+		let validator = new_validators.first().expect("a validator was created");
+
+		assert_ok!(Validator::set_validator_max_bid(
+			RuntimeOrigin::signed(validator.clone()),
+			Some(MAX_BID),
+		));
+		let validator_info = Runtime::cf_validator_info(validator);
+		assert_eq!(validator_info.max_bid, Some(MAX_BID));
+		assert_eq!(validator_info.bid, MAX_BID);
+	});
 }
 
 #[test]

@@ -99,13 +99,18 @@ fn assert_rotation_aborted() {
 	);
 }
 
+type Roles = <Test as Chainflip>::AccountRoleRegistry;
+
+fn register_validator(account_id: ValidatorId) {
+	assert_ok!(<Roles as AccountRoleRegistry<Test>>::register_as_validator(&account_id));
+}
+
 fn add_bids(bids: Vec<Bid<ValidatorId, Amount>>) {
 	bids.into_iter().for_each(|bid| {
 		MockFlip::credit_funds(&bid.bidder_id, bid.amount);
 		// Some account might have already registered, so it's Ok if this fails.
-		let _ = <<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&bid.bidder_id);
+		let _ = <Roles as AccountRoleRegistry<Test>>::register_as_validator(&bid.bidder_id);
 		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(bid.bidder_id)));
-
 	})
 }
 
@@ -330,8 +335,8 @@ fn register_peer_id() {
 	new_test_ext().then_execute_with_checks(|| {
 		use sp_core::{Encode, Pair};
 
-		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
-		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB));
+		register_validator(ALICE);
+		register_validator(BOB);
 
 		let alice_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("alice", None);
 		let alice_peer_public_key = alice_peer_keypair.public();
@@ -359,8 +364,7 @@ fn register_peer_id() {
 
 		assert_eq!(
 			MockCfeInterface::take_events(),
-			vec![
-			MockCfeEvent::PeerIdRegistered {
+			vec![MockCfeEvent::PeerIdRegistered {
 				account_id: ALICE,
 				pubkey: alice_peer_public_key,
 				port: 40044,
@@ -396,8 +400,7 @@ fn register_peer_id() {
 
 		assert_eq!(
 			MockCfeInterface::take_events(),
-			vec![
-			MockCfeEvent::PeerIdRegistered {
+			vec![MockCfeEvent::PeerIdRegistered {
 				account_id: BOB,
 				pubkey: bob_peer_public_key,
 				port: 40043,
@@ -434,8 +437,7 @@ fn register_peer_id() {
 
 		assert_eq!(
 			MockCfeInterface::take_events(),
-			vec![
-			MockCfeEvent::PeerIdRegistered {
+			vec![MockCfeEvent::PeerIdRegistered {
 				account_id: BOB,
 				pubkey: bob_peer_public_key,
 				port: 40043,
@@ -1347,10 +1349,14 @@ fn validator_registration_and_deregistration() {
 
 		// Stop bidding, deregistration should be possible.
 		remove_bids(vec![ALICE]);
+
+		// Prior to deregistration, add max bid entry to check that it gets cleaned up:
+		ValidatorMaxBid::<Test>::insert(ALICE, 100);
 		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
 
 		// State should be cleaned up.
 		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+		assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
 	});
 }
 
@@ -1475,7 +1481,7 @@ fn test_start_and_stop_bidding() {
 
 		assert!(!ValidatorPallet::is_bidding(&ALICE));
 
-		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+		register_validator(ALICE);
 
 		assert!(!ValidatorPallet::is_bidding(&ALICE));
 
@@ -1515,6 +1521,190 @@ fn test_start_and_stop_bidding() {
 			RuntimeEvent::ValidatorPallet(Event::StoppedBidding { account_id: ALICE })
 		);
 	});
+}
+
+mod validator_max_bid {
+
+	use super::*;
+
+	#[test]
+	fn validator_max_bid_caps_and_resets_auction_bid() {
+		new_test_ext().execute_with(|| {
+			const BALANCE: u128 = 100;
+			MockFlip::credit_funds(&ALICE, BALANCE);
+			register_validator(ALICE);
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
+
+			// Setting max bid to a portion of the full balance updates the bid:
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(BALANCE / 2)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE / 2));
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE / 2);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(
+				Event::ValidatorMaxBidUpdated { validator: ALICE, max_bid: Some(BALANCE / 2) },
+			));
+
+			// A cap above the balance is stored as-is, but the bid is still capped by the balance:
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(BALANCE * 2)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(BALANCE * 2));
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE);
+
+			// Once funded, the previously ineffective cap takes effect:
+			MockFlip::credit_funds(&ALICE, BALANCE * 2);
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE * 2);
+
+			// Setting max bid to None effectively removes it, restoring the full-balance bid:
+			assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), None));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
+			assert_eq!(ValidatorPallet::get_active_bids()[0].amount, BALANCE * 3);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(
+				Event::ValidatorMaxBidUpdated { validator: ALICE, max_bid: None },
+			));
+		});
+	}
+
+	#[test]
+	fn validator_max_bid_requires_validator_and_is_allowed_outside_auction() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)),
+				BadOrigin
+			);
+
+			MockFlip::credit_funds(&ALICE, 100);
+			register_validator(ALICE);
+
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(50)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(50));
+
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(60)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(60));
+
+			CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+			assert_noop!(
+				ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), Some(50)),
+				Error::<Test>::AuctionPhase
+			);
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(60));
+		});
+	}
+
+	#[test]
+	fn stale_max_bid_below_min_stake_disqualifies() {
+		// The extrinsic rejects caps below the minimum stake, but governance can raise the
+		// minimum after a cap is stored. Such a validator must be disqualified rather than
+		// entering the auction with an under-minimum bid (as the lowest winning bid, it would
+		// become the whole set's bond).
+		const STALE_MAX_BID: u128 = 50;
+
+		new_test_ext().execute_with(|| {
+			MockFlip::credit_funds(&ALICE, 2 * FLIPPERINOS_PER_FLIP);
+			register_validator(ALICE);
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(STALE_MAX_BID)
+			));
+
+			let qualified_bidders = || {
+				ValidatorPallet::get_qualified_bidders::<QualifyByMinimumStake<Test>>()
+					.into_iter()
+					.map(|bid| bid.bidder_id)
+					.collect::<Vec<_>>()
+			};
+			assert!(qualified_bidders().contains(&ALICE));
+
+			// Governance raises the minimum stake above ALICE's stored cap:
+			assert_ok!(ValidatorPallet::update_pallet_config(
+				RawOrigin::Root.into(),
+				PalletConfigUpdate::MinimumValidatorStake { min_stake: 1 },
+			));
+
+			// The balance still exceeds the minimum, but the capped bid does not:
+			assert!(!qualified_bidders().contains(&ALICE));
+
+			// Removing the cap restores the full-balance bid and re-qualifies:
+			assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), None));
+			assert!(qualified_bidders().contains(&ALICE));
+		});
+	}
+
+	#[test]
+	fn max_bid_cannot_be_set_below_minimum_validator_stake() {
+		const MIN_STAKE_FLIP: u128 = 10_000;
+		const MIN_STAKE: u128 = MIN_STAKE_FLIP * FLIPPERINOS_PER_FLIP;
+
+		new_test_ext().execute_with(|| {
+			MockFlip::credit_funds(&ALICE, MIN_STAKE * 2);
+			register_validator(ALICE);
+			assert_ok!(ValidatorPallet::update_pallet_config(
+				RawOrigin::Root.into(),
+				PalletConfigUpdate::MinimumValidatorStake { min_stake: MIN_STAKE_FLIP as u32 },
+			));
+
+			assert_noop!(
+				ValidatorPallet::set_validator_max_bid(
+					RuntimeOrigin::signed(ALICE),
+					Some(MIN_STAKE - 1)
+				),
+				Error::<Test>::MaxBidBelowMinimumValidatorStake
+			);
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
+
+			// Exactly the minimum is allowed, as is removing the cap entirely.
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(ALICE),
+				Some(MIN_STAKE)
+			));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), Some(MIN_STAKE));
+			assert_ok!(ValidatorPallet::set_validator_max_bid(RuntimeOrigin::signed(ALICE), None));
+			assert_eq!(ValidatorMaxBid::<Test>::get(ALICE), None);
+		});
+	}
+
+	#[test]
+	fn validator_is_bonded_up_to_max_bid_after_auction_resolution() {
+		const VALIDATOR: u64 = WINNING_BIDS[0].bidder_id;
+		const BALANCE: u128 = WINNING_BIDS[0].amount;
+		const MAX_BID: u128 = EXPECTED_BOND;
+
+		// Test requres that max bid is smaller than the validator's total balance:
+		const _: () = assert!(BALANCE > MAX_BID);
+
+		new_test_ext().execute_with(|| {
+			add_bids([&WINNING_BIDS[..], &LOSING_BIDS[..]].concat());
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(VALIDATOR),
+				Some(MAX_BID)
+			));
+
+			let (auction_outcome, _) =
+				ValidatorPallet::resolve_auction_iteratively(&Default::default())
+					.expect("auction bids should resolve");
+			assert!(auction_outcome.winners.contains(&VALIDATOR));
+			assert_eq!(auction_outcome.bond, MAX_BID);
+
+			ValidatorPallet::transition_to_next_epoch(
+				auction_outcome.winners,
+				auction_outcome.bond,
+			);
+			assert_eq!(MockBonderFor::<Test>::get_bond(&VALIDATOR), MAX_BID);
+		});
+	}
 }
 
 #[test]
@@ -2918,30 +3108,118 @@ pub mod auction_optimization {
 		op_2_bids: Vec<Bid<ValidatorId, Amount>>,
 	) {
 		set_default_test_bids();
-		add_bids(op_1_bids.iter().chain(op_2_bids.iter()).cloned().collect());
+		setup_operator(OP_1, op_1_bids);
+		setup_operator(OP_2, op_2_bids);
+	}
 
+	/// Funds and registers `validators` as bidders managed by `operator`, with no other bidders
+	/// and no other operators.
+	fn setup_operator(operator: ValidatorId, validators: Vec<Bid<ValidatorId, Amount>>) {
+		add_bids(validators.clone());
 		assert_ok!(ValidatorPallet::register_as_operator(
-			OriginTrait::signed(OP_1),
+			RuntimeOrigin::signed(operator),
 			OPERATOR_SETTINGS,
 			vanity()
 		));
-		assert_ok!(ValidatorPallet::register_as_operator(
-			OriginTrait::signed(OP_2),
-			OPERATOR_SETTINGS,
-			vanity()
-		));
-
-		for bid in op_1_bids {
-			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_1), bid.bidder_id));
-			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_1));
-			assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
+		for Bid { bidder_id, .. } in validators {
+			assert_ok!(ValidatorPallet::claim_validator(
+				RuntimeOrigin::signed(operator),
+				bidder_id
+			));
+			assert_ok!(ValidatorPallet::accept_operator(
+				RuntimeOrigin::signed(bidder_id),
+				operator
+			));
+			assert!(OperatorChoice::<Test>::get(bidder_id).is_some());
 		}
+	}
 
-		for bid in op_2_bids {
-			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_2), bid.bidder_id));
-			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_2));
-			assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
-		}
+	#[test]
+	fn operator_sacrifices_its_lowest_capped_bidder() {
+		// The operator's pool averages its members' bids, so a pool averaging below the bond wins
+		// no seats at all. The optimiser then demotes the lowest-bidding member to concentrate the
+		// pool behind the survivor. `max_bid` is what makes LOW the lowest — on balance alone it
+		// would be HIGH that got demoted — and the demoted member must carry over at its capped
+		// bid, not its balance.
+		const LOW: ValidatorId = 100;
+		const HIGH: ValidatorId = 101;
+		const LOW_BALANCE: Amount = 300;
+		const LOW_MAX_BID: Amount = 10;
+		const HIGH_BALANCE: Amount = 100;
+
+		new_test_ext().execute_with(|| {
+			// Competing bidders that fill the authority set and set the bond well above the
+			// operator's pool average of (LOW_MAX_BID + HIGH_BALANCE) / 2 = 55.
+			add_bids(WINNING_BIDS.to_vec());
+			setup_operator(
+				OP_1,
+				vec![
+					Bid { bidder_id: LOW, amount: LOW_BALANCE },
+					Bid { bidder_id: HIGH, amount: HIGH_BALANCE },
+				],
+			);
+
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(LOW),
+				Some(LOW_MAX_BID)
+			));
+
+			let (outcome, snapshots) =
+				ValidatorPallet::resolve_auction_iteratively(&Default::default())
+					.expect("auction should resolve");
+			let snapshot = snapshots.get(&OP_1).expect("operator should have a snapshot");
+
+			assert!(
+				outcome.bond > (LOW_MAX_BID + HIGH_BALANCE) / 2,
+				"test only exercises the optimiser if the pool average is below the bond"
+			);
+			assert!(
+				!snapshot.validators.contains_key(&LOW),
+				"capped validator should have been demoted to a delegator"
+			);
+			assert_eq!(
+				snapshot.delegators.get(&LOW),
+				Some(&LOW_MAX_BID),
+				"demoted validator must be delegated at its capped bid, not its balance of {LOW_BALANCE}"
+			);
+		});
+	}
+
+	#[test]
+	fn excluded_validator_contributes_its_capped_bid() {
+		// An excluded managed validator still contributes to its operator's pool as a delegator.
+		// The contribution must be its capped bid, not its balance. No competing bidders are
+		// needed: the snapshot is built directly, without resolving an auction.
+		const EXCLUDED: ValidatorId = 100;
+		const OTHER: ValidatorId = 101;
+		const BALANCE: Amount = 300;
+		const MAX_BID: Amount = 10;
+
+		new_test_ext().execute_with(|| {
+			setup_operator(
+				OP_1,
+				vec![
+					Bid { bidder_id: EXCLUDED, amount: BALANCE },
+					Bid { bidder_id: OTHER, amount: BALANCE },
+				],
+			);
+
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(EXCLUDED),
+				Some(MAX_BID)
+			));
+
+			let (snapshots, _) = ValidatorPallet::build_delegation_snapshots::<
+				<Test as Config>::KeygenQualification,
+			>(&BTreeSet::from([EXCLUDED]));
+
+			let snapshot = snapshots.get(&OP_1).expect("operator should have a snapshot");
+			assert_eq!(
+				snapshot.delegators.get(&EXCLUDED),
+				Some(&MAX_BID),
+				"excluded validator must contribute its capped bid, not its balance of {BALANCE}"
+			);
+		});
 	}
 
 	#[expect(clippy::type_complexity)]

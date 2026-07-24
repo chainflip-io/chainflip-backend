@@ -263,9 +263,16 @@ where
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>> {
-		let accounts_info = self
-			.rpc_backend
-			.with_runtime_api(at, |api, hash| api.cf_accounts_info(hash, accounts))?;
+		let accounts_info =
+			self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+				if api_version < 4 {
+					#[expect(deprecated)]
+					api.cf_accounts_info_before_version_4(hash, accounts)
+						.map(|accounts| accounts.into_iter().map(Into::into).collect())
+				} else {
+					api.cf_accounts_info(hash, accounts)
+				}
+			})?;
 		Ok(accounts_info
 			.into_iter()
 			.map(|account_info| RpcAccountInfoV2 {

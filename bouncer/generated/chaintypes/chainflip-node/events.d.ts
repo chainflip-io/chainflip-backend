@@ -786,6 +786,15 @@ export interface ChainEvents extends GenericChainEvents {
     StartedBidding: GenericPalletEvent<'Validator', 'StartedBidding', { accountId: AccountId32 }>;
 
     /**
+     * A validator updated the maximum bid used for its next auction.
+     **/
+    ValidatorMaxBidUpdated: GenericPalletEvent<
+      'Validator',
+      'ValidatorMaxBidUpdated',
+      { validator: AccountId32; maxBid?: bigint | undefined }
+    >;
+
+    /**
      * The rotation transaction(s) for the previous rotation are still pending to be
      * successfully broadcast, therefore, cannot start a new epoch rotation.
      **/
