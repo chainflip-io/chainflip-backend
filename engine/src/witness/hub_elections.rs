@@ -15,13 +15,17 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
 	dot::cached_rpc::{DotCachingClient, DotRetryRpcApiWithResult},
-	witness::common::{
-		block_height_witnesser::witness_headers,
-		block_witnesser::GenericBwVoter,
-		traits::{WitnessClient, WitnessClientForBlockData},
+	witness::{
+		common::{
+			block_height_witnesser::witness_headers,
+			block_witnesser::GenericBwVoter,
+			traits::{WitnessClient, WitnessClientForBlockData},
+		},
+		hub::{filter_map_events, hub_deposits::deposit_witnesses, EventWrapper},
 	},
 };
 use cf_chains::{
+	assets,
 	dot::PolkadotSignature,
 	hub::ASSETHUB_WITNESS_PERIOD,
 	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange, SaturatingStep},
@@ -32,6 +36,7 @@ use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi,
 };
+use futures::future;
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::primitives::Header, ElectoralSystemTypes, VoteOf,
@@ -46,6 +51,7 @@ use state_chain_runtime::{
 	AssethubInstance, Runtime,
 };
 use std::sync::Arc;
+use subxt::events::Phase;
 
 use crate::elections::voter_api::{CompositeVoter, VoterApi};
 
@@ -56,9 +62,19 @@ pub struct AssethubVoter {
 	pub client: DotCachingClient,
 }
 
+/// Almost all assethub witnessing tasks need access to a block hash
+/// and list of events in a block, so it makes sense to combine them
+/// into this struct. This is *not* the format of an official substrate header.
+#[derive(Debug, Clone)]
+pub struct AssethubBlockHeader {
+	pub block_hash: sp_core::H256,
+	pub parent_block_hash: sp_core::H256,
+	pub parsed_events: Vec<(Phase, EventWrapper)>,
+}
+
 #[async_trait::async_trait]
 impl WitnessClient<AssethubChain> for AssethubVoter {
-	type BlockQuery = AssethubWitnessBatchNumber;
+	type BlockQuery = Vec<AssethubBlockHeader>;
 
 	// --- BHW methods ---
 
@@ -80,7 +96,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 				block_height: height.clone(),
 				// assethub blocks are identified by block height (i.e BlockWitnessRange)
 				hash: height.clone(),
-				// this means the parent "hash" is just the previous block height
+				// this means the parent "hash" is just the previous witness range
 				parent_hash: height.saturating_backward(1),
 			})
 		}
@@ -117,7 +133,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 		height: AssethubWitnessBatchNumber,
 	) -> Result<Self::BlockQuery> {
 		if hash == height {
-			Ok(hash)
+			self.block_query_from_height(height).await
 		} else {
 			Err(anyhow::anyhow!(
 				"Encountered hash != height when creating block query to vote for assethub. {hash:?} != {height:?}"
@@ -127,16 +143,50 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 
 	async fn block_query_from_height(
 		&self,
-		height: AssethubWitnessBatchNumber,
+		witness_range: AssethubWitnessBatchNumber,
 	) -> Result<Self::BlockQuery> {
-		Ok(height)
+		let block_headers = future::join_all(witness_range.into_range_inclusive().map(
+			|finalized_block_height: u64| async move {
+				let finalized_block_height: u32 = finalized_block_height
+					.try_into()
+					.map_err(|_| anyhow::anyhow!("block height doesn't fit into u32!"))?;
+
+				// get events of this block
+				let Some(block_hash) = self.client.block_hash(finalized_block_height).await? else {
+					return Err(anyhow::anyhow!(
+						"No blockhash for block height {finalized_block_height}"
+					));
+				};
+				let Some(header) = self.client.header(block_hash).await? else {
+					return Err(anyhow::anyhow!("No header for block hash {block_hash}"));
+				};
+				let Some(events) = self.client.events(block_hash, header.parent_hash).await? else {
+					return Err(anyhow::anyhow!("No events for block hash {block_hash}"));
+				};
+
+				let parsed_events =
+					events.iter().filter_map(crate::witness::hub::filter_map_events).collect();
+
+				Ok(AssethubBlockHeader {
+					block_hash,
+					parent_block_hash: header.parent_hash,
+					parsed_events,
+				})
+			},
+		))
+		.await;
+
+		// This only succeeds if *all* futures were successful
+		let block_headers: Vec<_> = block_headers.into_iter().collect::<anyhow::Result<_>>()?;
+
+		Ok(block_headers)
 	}
 
 	async fn block_query_and_hash_from_height(
 		&self,
 		height: AssethubWitnessBatchNumber,
 	) -> Result<(Self::BlockQuery, AssethubWitnessBatchNumber)> {
-		Ok((height.clone(), height))
+		Ok((self.block_query_from_height(height.clone()).await?, height))
 	}
 }
 
@@ -165,10 +215,48 @@ impl WitnessClientForBlockData<AssethubChain, Vec<DepositWitness<Assethub>>> for
 	async fn block_data_from_query(
 		&self,
 		_config: &Self::Config,
-		_election_properties: &Self::ElectionProperties,
-		_query: &Self::BlockQuery,
+		deposit_channels: &Self::ElectionProperties,
+		block_headers: &Self::BlockQuery,
 	) -> Result<Vec<DepositWitness<Assethub>>> {
-		Err(anyhow::anyhow!("BW not implemented"))
+		let results = future::join_all(block_headers.into_iter().map(|header| async move {
+			// compute deposit witneses
+			let addresses = deposit_channels
+				.into_iter()
+				.map(|deposit_channel| {
+					assert!(
+						deposit_channel.asset == assets::hub::Asset::HubDot ||
+							deposit_channel.asset == assets::hub::Asset::HubUsdc ||
+							deposit_channel.asset == assets::hub::Asset::HubUsdt
+					);
+					deposit_channel.address
+				})
+				.collect();
+
+			let deposit_witnesses = deposit_witnesses(
+				header.block_hash,
+				Some(header.parent_block_hash),
+				&self.client,
+				addresses,
+				&header.parsed_events,
+			)
+			.await?;
+
+			Ok(deposit_witnesses)
+		}))
+		.await;
+
+		// This converts a vector of results into a result with a vector
+		// I.e., if one of the requests failed, we don't submit anything
+		let successes: Vec<Vec<DepositWitness<Assethub>>> =
+			results.into_iter().collect::<anyhow::Result<Vec<_>>>()?;
+
+		let mut deposit_witnesses: Vec<DepositWitness<Assethub>> =
+			successes.into_iter().flatten().collect();
+
+		// Ensure that the vote is deterministic and doesn't depend on accidental ordering
+		deposit_witnesses.sort();
+
+		Ok(deposit_witnesses)
 	}
 }
 
@@ -184,8 +272,8 @@ impl
 	async fn block_data_from_query(
 		&self,
 		_config: &Self::Config,
-		_election_properties: &Self::ElectionProperties,
-		_query: &Self::BlockQuery,
+		pending_tx_signatures: &Self::ElectionProperties,
+		block_witness_range: &Self::BlockQuery,
 	) -> Result<Vec<TransactionConfirmation<Runtime, AssethubInstance>>> {
 		Err(anyhow::anyhow!("BW not implemented"))
 	}
