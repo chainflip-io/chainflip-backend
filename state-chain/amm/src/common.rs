@@ -544,10 +544,11 @@ mod test {
 			let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([0; 32]);
 
 			for _i in 0..10000000 {
-				let sqrt_price = SqrtPrice::from_raw(rng_u256_inclusive_bound(
+				let sqrt_price = SqrtPrice::try_from_raw(rng_u256_inclusive_bound(
 					&mut rng,
 					(MIN_SQRT_PRICE.as_raw() + 1)..=(MAX_SQRT_PRICE.as_raw() - 1),
-				));
+				))
+				.unwrap();
 				assert!(SD::sqrt_price_op_more_than(
 					SD::increase_sqrt_price(sqrt_price, 1),
 					sqrt_price

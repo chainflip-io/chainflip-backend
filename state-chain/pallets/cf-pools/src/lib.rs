@@ -34,7 +34,7 @@ use cf_utilities::select::Select;
 use sp_runtime::Saturating;
 
 pub use cf_traits::IncreaseOrDecrease;
-use cf_traits::LpRegistration;
+use cf_traits::RefundAddressRegistry;
 use core::ops::Range;
 use frame_support::{
 	pallet_prelude::*,
@@ -389,7 +389,7 @@ pub mod pallet {
 		type LpStats: LpStatsApi<AccountId = Self::AccountId>;
 
 		/// LP address registration and verification.
-		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
+		type RefundAddressRegistry: RefundAddressRegistry<AccountId = Self::AccountId>;
 
 		type SwapRequestHandler: SwapRequestHandler;
 
@@ -644,7 +644,7 @@ pub mod pallet {
 			);
 
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
+			T::RefundAddressRegistry::ensure_has_refund_address_for_assets(
 				&lp,
 				[base_asset, quote_asset],
 			)?;
@@ -728,7 +728,7 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
+			T::RefundAddressRegistry::ensure_has_refund_address_for_assets(
 				&lp,
 				[base_asset, quote_asset],
 			)?;
@@ -815,7 +815,7 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
+			T::RefundAddressRegistry::ensure_has_refund_address_for_assets(
 				&lp,
 				[base_asset, quote_asset],
 			)?;
@@ -870,7 +870,7 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin.clone())?;
-			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
+			T::RefundAddressRegistry::ensure_has_refund_address_for_assets(
 				&lp,
 				[base_asset, quote_asset],
 			)?;

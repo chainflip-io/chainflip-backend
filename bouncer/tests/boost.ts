@@ -1,15 +1,14 @@
 import z from 'zod';
 import assert from 'assert';
 import {
-  amountToFineAmount,
-  assetDecimals,
   Assets,
   doBtcAddressesMatch,
   newAssetAddress,
-  shortChainFromAsset,
   Asset,
+  amountToFineAmountBigInt,
 } from 'shared/utils';
 import { send } from 'shared/send';
+import { isDispatchError } from 'shared/utils/dedot';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { requestNewSwap } from 'shared/perform_swap';
 import { jsonRpc } from 'shared/json_rpc';
@@ -41,11 +40,7 @@ export async function stopBoosting(
 ): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
   try {
     return await cf.submitExtrinsic({
-      extrinsic: (api) =>
-        api.tx.lendingPools.stopBoosting(
-          shortChainFromAsset(Assets.Btc).toUpperCase(),
-          boostPoolFee,
-        ),
+      extrinsic: (api) => api.tx.lendingPools.stopBoosting(Assets.Btc, boostPoolFee),
       expectedEvent: lendingPoolsStoppedBoostingEvent.refine(
         (event) =>
           event.boosterId === cf.requirements.account.keypair.address &&
@@ -54,7 +49,7 @@ export async function stopBoosting(
       ),
     });
   } catch (err) {
-    if (err instanceof Error && err.message.includes('lendingPools.AccountNotFoundInPool')) {
+    if (isDispatchError(err, { pallet: 'lendingPools', name: 'AccountNotFoundInPool' })) {
       cf.debug(
         `Already stopped boosting Btc at ${boostPoolFee}bps booster: ${cf.requirements.account.uri}`,
       );
@@ -74,8 +69,8 @@ export async function addBoostFunds(
   return cf.submitExtrinsic({
     extrinsic: (api) =>
       api.tx.lendingPools.addBoostFunds(
-        shortChainFromAsset(Assets.Btc).toUpperCase(),
-        amountToFineAmount(amount.toString(), assetDecimals(Assets.Btc)),
+        Assets.Btc,
+        amountToFineAmountBigInt(amount.toString(), Assets.Btc),
         boostPoolFee,
       ),
     expectedEvent: lendingPoolsBoostFundsAddedEvent.refine(
@@ -181,10 +176,7 @@ export async function testBoostingSwap(testContext: TestContext) {
   const lpUri = '//LP_BOOST';
   const cf = parentCf.with({ account: fullAccountFromUri(lpUri, 'LP') });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const boostPool: any = (
-    await chainflip.query.lendingPools.boostPools(Assets.Btc, boostPoolFee)
-  ).toJSON();
+  const boostPool = await chainflip.query.lendingPools.boostPools([Assets.Btc, boostPoolFee]);
 
   assert(boostPool?.feeBps, `Boost pool for tier ${boostPoolFee} does not exist`);
 
@@ -195,12 +187,11 @@ export async function testBoostingSwap(testContext: TestContext) {
   await submitGovernanceExtrinsic((api) =>
     api.tx.lendingPools.updatePalletConfig([
       {
-        SetBoostConfig: {
+        type: 'SetBoostConfig',
+        value: {
           config: {
             networkFeeDeductionFromBoostPercent: 50,
-            minimumAddFundsAmount: new Map(
-              minimums.map(([asset, amount]) => [{ [asset]: {} }, amount]),
-            ),
+            minimumAddFundsAmount: minimums.map(([asset, amount]) => [asset, BigInt(amount)]),
             minLendingPoolShare: 30,
           },
         },

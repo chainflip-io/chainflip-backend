@@ -31,7 +31,7 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 	)
 	.unwrap();
 
-	T::LpRegistrationApi::register_liquidity_refund_address(
+	T::RefundAddressRegistry::register_liquidity_refund_address(
 		&caller,
 		ForeignChainAddress::Eth(Default::default()),
 	);

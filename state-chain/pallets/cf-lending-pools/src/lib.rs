@@ -40,8 +40,10 @@ pub use general_lending::config::{
 	NetworkFeeContributions,
 };
 
-pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
-use boost::{BoostPool, BoostPoolId};
+use boost::BoostPool;
+pub use boost::{
+	boost_pools_iter, get_boost_pool_details, BoostPoolDetails, BoostPoolId, OwedAmount, BOOST_FEE,
+};
 
 pub mod migrations;
 pub mod weights;
@@ -59,8 +61,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
-	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, LpRegistration, PoolApi,
-	PriceFeedApi, SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, PoolApi, PriceFeedApi,
+	RefundAddressRegistry, SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	fail,
@@ -78,7 +80,7 @@ use cf_runtime_utilities::log_or_panic;
 use frame_system::pallet_prelude::*;
 use weights::WeightInfo;
 
-use crate::{boost::BOOST_FEE, core_lending_pool::CoreLendingPool};
+use crate::core_lending_pool::CoreLendingPool;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec,
@@ -337,7 +339,7 @@ pub mod pallet {
 
 		type PriceApi: PriceFeedApi;
 
-		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
+		type RefundAddressRegistry: RefundAddressRegistry<AccountId = Self::AccountId>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;

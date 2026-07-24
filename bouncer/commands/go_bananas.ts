@@ -206,14 +206,10 @@ async function playLp<A = []>(cf: ChainflipIO<A>, asset: Asset, price: number, l
 
 async function launchTornado<A = []>(cf: ChainflipIO<A>) {
   await using chainflip = await getChainflipApi();
-  const epoch = (
-    await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()
-  ).toJSON()! as number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const thresholdKeys = (await chainflip.query.bitcoinThresholdSigner.keys(epoch)).toJSON() as any;
-  const pubkey = (thresholdKeys!.current as string).substring(2);
-  const salt =
-    ((await chainflip.query.bitcoinIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
+  const epoch = (await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch())!;
+  const thresholdKeys = await chainflip.query.bitcoinThresholdSigner.keys(epoch);
+  const pubkey = thresholdKeys!.current.substring(2);
+  const salt = Number(await chainflip.query.bitcoinIngressEgress.channelIdCounter()) + 1;
   const btcAddress = predictBtcAddress(pubkey, salt);
   // shuffle
   const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Usdt', 'Wbtc', 'ArbEth', 'ArbUsdc', 'ArbUsdt'];

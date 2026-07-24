@@ -20,18 +20,16 @@ const TRANSFER_FALLBACK_EVENTS = EVM_VAULT_CHAINS.map(
 const INGRESS_EGRESS_STORAGE_PALLETS = EVM_VAULT_CHAINS.map(ingressEgressPalletForChain);
 
 // FailedForeignChainCalls is shared between transfer fallbacks and failed CCM broadcasts.
-// BroadcastActions is set to { ccmBroadcast: null } for CCM broadcasts and absent for
+// BroadcastActions is set to ccmBroadcast for CCM broadcasts and absent for
 // transfer fallbacks, so we use it to distinguish the two.
 async function isCcmBroadcast(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   palletQuery: any,
   broadcastId: number,
 ): Promise<boolean> {
-  const action = (await palletQuery.broadcastActions(broadcastId)).toJSON() as Record<
-    string,
-    unknown
-  > | null;
-  return action?.ccmBroadcast !== undefined;
+  // dedot decodes the BroadcastActions enum as a tagged `{ type, value }` union.
+  const action = (await palletQuery.broadcastActions(broadcastId)) as { type: string } | undefined;
+  return action?.type === 'CcmBroadcast';
 }
 
 export async function checkNoTransferFallbacks(testContext: TestContext) {
@@ -57,8 +55,8 @@ export async function checkNoTransferFallbacks(testContext: TestContext) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const palletQuery = (chainflipApi.query as any)[pallet];
     const entries = await palletQuery.failedForeignChainCalls.entries();
-    const allCalls = (entries as [unknown, { toJSON(): { broadcastId: number }[] }][]).flatMap(
-      ([, calls]) => calls.toJSON(),
+    const allCalls = (entries as [unknown, { broadcastId: number }[]][]).flatMap(
+      ([, calls]) => calls,
     );
 
     const transferFallbackCalls = (

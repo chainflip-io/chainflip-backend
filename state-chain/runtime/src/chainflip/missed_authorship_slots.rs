@@ -72,7 +72,7 @@ mod test_missed_authorship_slots {
 	use sp_consensus_aura::ed25519::AuthorityId;
 	use sp_core::ConstBool;
 
-	type Block = frame_system::mocking::MockBlock<Test>;
+	pub type Block = frame_system::mocking::MockBlock<Test>;
 
 	fn current_aura_slot() -> Slot {
 		pallet_aura::CurrentSlot::<crate::Runtime>::get()

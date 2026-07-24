@@ -79,9 +79,10 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
       [...price.keys()]
         .filter((a): a is Asset => a !== 'Usdc')
         .map((asset) => ({
-          SetDefaultOraclePriceSlippageProtectionForAsset: {
+          type: 'SetDefaultOraclePriceSlippageProtectionForAsset' as const,
+          value: {
             baseAsset: asset,
-            quoteAsset: 'Usdc',
+            quoteAsset: 'Usdc' as const,
             bps: 10000,
           },
         })),

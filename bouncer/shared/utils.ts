@@ -20,7 +20,7 @@ import {
 import Web3 from 'web3';
 import { TronWeb } from 'tronweb';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { hexToU8a, u8aToHex, BN, assertUnreachable } from '@polkadot/util';
+import { hexToU8a, u8aToHex, assertUnreachable } from '@polkadot/util';
 import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
@@ -34,7 +34,8 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
 import { SwapParams } from 'shared/perform_swap';
 import { newSolAddress } from 'shared/new_sol_address';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import type { CfChainsAddressEncodedAddress } from 'generated/chaintypes/chainflip-node';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
@@ -48,12 +49,14 @@ import {
   cfChainsSwapOrigin,
   cfTraitsSwappingSwapRequestTypeGeneric,
   spRuntimeDispatchError,
+  spRuntimeModuleError,
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequestedEvent } from 'generated/events/swapping/swapRequested';
 import { broadcasterBroadcastSuccessEvent } from 'generated/events/generic/broadcaster/broadcastSuccess';
 import { broadcasterBroadcastAbortedEvent } from 'generated/events/generic/broadcaster/broadcastAborted';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
+import { type ChainflipClient, formatDispatchError } from 'shared/utils/dedot';
 import { randomBytes } from 'crypto';
 import { HexString } from '@polkadot/util/types';
 import bitcoin from 'bitcoinjs-lib';
@@ -312,6 +315,15 @@ export function shortChainFromChain(chain: Chain) {
   }
 }
 
+/**
+ * Builds a typed `EncodedAddress` from a chain and a pre-encoded address value.
+ * `address` should already be in the chain's on-chain encoding (hex for EVM/Sol/Dot/Hub,
+ *  hex-encoded bytes for Btc).
+ */
+export function encodedAddress(chain: Chain, address: string): CfChainsAddressEncodedAddress {
+  return { type: shortChainFromChain(chain), value: address } as CfChainsAddressEncodedAddress;
+}
+
 export function shortChainFromAsset(asset: Asset) {
   return shortChainFromChain(chainFromAsset(asset));
 }
@@ -391,6 +403,14 @@ export function chainGasAsset(chain: Chain): Asset {
       throw new Error(`Unsupported chain: ${chain}`);
   }
 }
+
+// JSON has no BigInt. Decode decimal-string values to BigInt so large u64/u128 amounts survive;
+// non-numeric strings (asset names, addresses) and JS numbers are left as-is.
+export const bigintReviver = (_key: string, value: unknown) =>
+  typeof value === 'string' && /^-?\d+$/.test(value) ? BigInt(value) : value;
+
+export const bigintReplacer = (_key: string, value: unknown) =>
+  typeof value === 'bigint' ? value.toString() : value;
 
 export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
   const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
@@ -1173,7 +1193,7 @@ export function hexPubkeyToFlipAddress(hexPubkey: string) {
   return keyring.encodeAddress(hexPubkey);
 }
 
-export function decodeSolAddress(address: string): string {
+export function decodeSolAddress(address: string): `0x${string}` {
   return u8aToHex(base58Decode(address));
 }
 
@@ -1346,20 +1366,19 @@ export function waitForExt(
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function decodeModuleError(module: any, api: any): string {
-  const errorIndex = {
-    index: new BN(module.index),
-    error: new Uint8Array(Buffer.from(module.error.slice(2), 'hex')),
-  };
-  const { docs, name, section } = api.registry.findMetaError(errorIndex);
-  return `${section}.${name}: ${docs}`;
+export function decodeModuleError(
+  module: z.infer<typeof spRuntimeModuleError>,
+  api: ChainflipClient,
+): string {
+  return formatDispatchError(api, {
+    type: 'Module',
+    value: { index: module.index, error: module.error },
+  });
 }
 
 export function decodeDispatchError(
   reason: z.infer<typeof spRuntimeDispatchError>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  api: any,
+  api: ChainflipClient,
 ): string {
   if (reason.__kind === 'Module') {
     return decodeModuleError(reason.value, api);
@@ -1419,7 +1438,7 @@ type SwapRate = {
   output: string;
 };
 export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
-  await using chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipPolkadotApi();
 
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(
@@ -1469,7 +1488,7 @@ export async function checkAvailabilityAllSolanaNonces(testContext: TestContext)
   testContext.info('Checking Solana Nonce Availability');
 
   // Check that all Solana nonces are available
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
   const maxRetries = 10; // 60 seconds
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
@@ -1584,7 +1603,7 @@ export async function retryRpcCall<T>(
 
 /// Returns the statechain "free balance" of an LP account for a specific asset.
 export async function getFreeBalance(accountAddress: string, asset: Asset): Promise<bigint> {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
   return (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ((await chainflip.query.assetBalances.freeBalances(accountAddress, asset)) as any).toBigInt()

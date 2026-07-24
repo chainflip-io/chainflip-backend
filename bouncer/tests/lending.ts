@@ -31,8 +31,7 @@ export interface Loan {
 
 async function getLoanAccount(address: string) {
   await using chainflip = await getChainflipApi();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loanAccounts = (await chainflip.rpc('cf_loan_accounts', address)) as any[];
+  const loanAccounts = (await chainflip.rpc.cf_loan_accounts(address)) as { loans: Loan[] }[];
   if (!loanAccounts) {
     throw new Error('Invalid loan accounts response');
   }
@@ -84,7 +83,7 @@ async function lendingTestForAsset<A = []>(
     extrinsic: (api) =>
       api.tx.lendingPools.addLenderFunds(
         collateralAsset,
-        amountToFineAmount(collateralAmount.toString(), assetDecimals(collateralAsset)),
+        amountToFineAmountBigInt(collateralAmount.toString(), collateralAsset),
       ),
     expectedEvent: lendingPoolsLendingFundsAddedEvent.refine(
       (event) => event.lenderId === lp.address && event.asset === collateralAsset,
@@ -113,8 +112,8 @@ async function lendingTestForAsset<A = []>(
     extrinsic: (api) =>
       api.tx.lendingPools.requestLoan(
         loanAsset,
-        amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset)),
-        null,
+        amountToFineAmountBigInt(loanAmount.toString(), loanAsset),
+        undefined,
       ),
     expectedEvent: lendingPoolsLoanCreatedEvent.refine(
       (event) => event.loanType.__kind === 'User' && event.loanType.value === lp.address,
@@ -158,8 +157,11 @@ async function lendingTestForAsset<A = []>(
   const partialRepaymentAmount = loanAmount / 2;
   await cf.submitExtrinsic({
     extrinsic: (api) =>
-      api.tx.lendingPools.makeRepayment(loanId, {
-        Exact: amountToFineAmount(partialRepaymentAmount.toString(), assetDecimals(loanAsset)),
+      api.tx.lendingPools.makeRepayment(BigInt(loanId), {
+        type: 'Exact',
+        value: BigInt(
+          amountToFineAmount(partialRepaymentAmount.toString(), assetDecimals(loanAsset)),
+        ),
       }),
   });
 
@@ -183,14 +185,14 @@ async function lendingTestForAsset<A = []>(
   );
   cf.debug(`Repaying the rest of the loan`);
   const loanSettledEvent = await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.lendingPools.makeRepayment(loanId, 'Full'),
+    extrinsic: (api) => api.tx.lendingPools.makeRepayment(BigInt(loanId), { type: 'Full' }),
     expectedEvent: lendingPoolsLoanSettledEvent.refine((event) => Number(event.loanId) === loanId),
   });
   cf.debug(`Loan successfully settled loanId: ${loanSettledEvent.loanId}`);
 
   // Recover the supplied collateral by withdrawing all lender funds
   const fundsRemovedEvent = await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.lendingPools.removeLenderFunds(collateralAsset, null),
+    extrinsic: (api) => api.tx.lendingPools.removeLenderFunds(collateralAsset, undefined),
     expectedEvent: lendingPoolsLendingFundsRemovedEvent.refine(
       (event) => event.lenderId === lp.address && event.asset === collateralAsset,
     ),
@@ -217,10 +219,7 @@ export async function lendingTest(testContext: TestContext): Promise<void> {
 
   // Check if the lending pool exists. This can be removed after the `upgrade_test` uses the new lending pool setup.
   await using chainflip = await getChainflipApi();
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const btcPool: any = (
-    await chainflip.query.lendingPools.generalLendingPools(Assets.Btc)
-  ).toJSON();
+  const btcPool = await chainflip.query.lendingPools.generalLendingPools(Assets.Btc);
   if (!btcPool) {
     cf.info('Btc lending pool not found, running setupLendingPools');
     await setupLendingPools(cf);
@@ -230,8 +229,8 @@ export async function lendingTest(testContext: TestContext): Promise<void> {
   cf.debug(`Setting interest payment interval to 1 block and threshold to 1 usd`);
   await submitGovernanceExtrinsic((api) =>
     api.tx.lendingPools.updatePalletConfig([
-      { SetInterestPaymentIntervalBlocks: 1 },
-      { SetInterestCollectionThresholdUsd: 1 },
+      { type: 'SetInterestPaymentIntervalBlocks', value: 1 },
+      { type: 'SetInterestCollectionThresholdUsd', value: 1n },
     ]),
   );
 

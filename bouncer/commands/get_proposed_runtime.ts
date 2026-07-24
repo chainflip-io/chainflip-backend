@@ -8,10 +8,10 @@
 // For example: ./commands/get_proposed_runtime.ts 123
 
 import fs from 'fs';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 
 const proposalId = process.argv[2];
-const api = await getChainflipApi();
+const api = await getChainflipPolkadotApi();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const proposal: any = await api.query.governance.proposals(proposalId);
 const extrinsic = api.registry.createType('Call', proposal.unwrap().call);

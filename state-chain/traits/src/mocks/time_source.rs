@@ -26,7 +26,8 @@ parameter_types! {
 }
 
 impl Mock {
-	pub fn tick(duration: Duration) {
+	/// Advances the mock clock by `duration` (cumulative, not absolute).
+	pub fn advance_clock(duration: Duration) {
 		FakeTime::set(&(FakeTime::get() + duration))
 	}
 

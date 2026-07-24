@@ -29,6 +29,7 @@ use cf_traits::{
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		lending_pools::MockLendingSystemApi, minimum_funding::MockMinimumFundingProvider,
 		pool_price_api::MockPoolPriceApi, price_feed_api::MockPriceFeedApi,
+		withdrawal_address_restriction::MockWithdrawalAddressRestriction,
 	},
 	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
 };
@@ -230,6 +231,8 @@ impl pallet_cf_swapping::Config for Test {
 	type LendingSystemApi = MockLendingSystemApi;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
 	type BalanceApi = MockBalance;
+	type WithdrawalRestriction =
+		MockWithdrawalAddressRestriction<<Self as frame_system::Config>::AccountId>;
 	type ChannelIdAllocator = MockChannelIdAllocator;
 	type Bonder = MockBonderFor<Self>;
 	type PoolPriceApi = MockPoolPriceApi;

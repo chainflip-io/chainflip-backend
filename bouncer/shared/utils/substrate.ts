@@ -1,5 +1,8 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { DedotClient, WsProvider as DedotWsProvider } from 'dedot';
+import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
+import type { ChainflipClient } from 'shared/utils/dedot';
 import { Observable, Subject } from 'rxjs';
 import { runWithTimeout } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
@@ -139,8 +142,61 @@ const getCachedSubstrateApi = (endpoint: string) =>
     });
   });
 
-export const { cachedDisposableFactory: getChainflipApi, clearCache: clearChainflipApiCache } =
-  getCachedSubstrateApi(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
+export const {
+  cachedDisposableFactory: getChainflipPolkadotApi,
+  clearCache: clearChainflipApiCache,
+} = getCachedSubstrateApi(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
+
+export type DisposableChainflipClient = ChainflipClient & {
+  [Symbol.asyncDispose](): Promise<void>;
+};
+
+// dedot-based, compile-time-typed client for the state chain. The connection is cached and
+// reused for the lifetime of the process (like the polkadot.js api above; nodes limit the
+// number of simultaneous connections from one IP).
+//
+// Unlike the polkadot.js factory we can NOT wrap the client in a Proxy: `DedotClient` uses
+// native private fields (`#client`), and a get-trap rebinds `this` to the Proxy, throwing
+// "Cannot read private member". Instead we attach `Symbol.asyncDispose` directly to the real
+// instance as a no-op, so `await using` works while the connection stays open for reuse.
+const makeCachedDedotClientFactory = (endpoint: string) => {
+  let clientPromise: Promise<DisposableChainflipClient> | undefined;
+
+  return {
+    getClient: async (): Promise<DisposableChainflipClient> => {
+      if (!clientPromise) {
+        clientPromise = DedotClient.new<ChainflipNodeApi>(new DedotWsProvider(endpoint)).then(
+          (client) => {
+            const disposable = client as unknown as DisposableChainflipClient;
+            Object.defineProperty(disposable, Symbol.asyncDispose, {
+              configurable: true,
+              writable: true,
+              value: async () => {
+                // noop: keep the connection cached for reuse
+              },
+            });
+            return disposable;
+          },
+        );
+      }
+      return clientPromise;
+    },
+    clearCache: async () => {
+      const existing = clientPromise;
+      clientPromise = undefined;
+      if (existing) {
+        // Best-effort disconnect: dropping the reference above is what actually invalidates the
+        // cache; the next getClient() builds a fresh connection regardless. dedot's disconnect()
+        // can hang if the socket is mid-reconnect (e.g. called right after a node restart), so
+        // cap it and move on rather than let it block the caller indefinitely.
+        await runWithTimeout((async () => (await existing).disconnect())(), 5).catch(() => null);
+      }
+    },
+  };
+};
+
+export const { getClient: getChainflipApi, clearCache: clearChainflipClientCache } =
+  makeCachedDedotClientFactory(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
 
 export const CHAINFLIP_HTTP_ENDPOINT = process.env.CF_NODE_HTTP_ENDPOINT ?? 'http://127.0.0.1:9944';
 
@@ -153,7 +209,7 @@ export const { cachedDisposableFactory: getAssethubApi } = getCachedSubstrateApi
 );
 
 const apiMap = {
-  chainflip: getChainflipApi,
+  chainflip: getChainflipPolkadotApi,
   polkadot: getPolkadotApi,
   assethub: getAssethubApi,
 } as const;

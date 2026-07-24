@@ -16,7 +16,7 @@
 
 // ---------- definition of migrations ------------
 
-use crate::migrations::HasChangelog;
+use crate::never::{IsEmptyType, Never};
 
 pub trait Version: Copy {
 	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<CanonicalPatchVersion>;
@@ -27,27 +27,54 @@ pub enum CanonicalPatchVersion {
 	Released(u32),
 }
 
-pub trait Migration<To: ?Sized, V: Version> {
+pub trait Migration<To, V: Version> {
 	type From: IsHistoricalType;
-	fn forwards(x: Self::From) -> To;
-	fn backwards(x: To) -> Self::From;
+	type ForwardsError = Never;
+	type BackwardsError = Never;
+	fn try_forwards(_x: Self::From) -> Result<To, Self::ForwardsError>;
+	fn try_backwards(_x: To) -> Result<Self::From, Self::BackwardsError>;
 }
 
-pub trait HasVersion<V: Version> {
+pub trait HasVersion<V: Version>: Sized {
 	type HistoricalType;
 	type HistoricalMigration: Migration<Self::HistoricalType, V>;
 	type MigrationToCurrent: Migration<Self, vCurrent, From = Self::HistoricalType>;
 }
 
-pub fn migrate_from_historical_type<V: Version, X: HasVersion<V>>(
+pub fn try_migrate_from_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X::HistoricalType,
-) -> X {
-	X::MigrationToCurrent::forwards(x)
+) -> Result<X, <X::MigrationToCurrent as Migration<X, vCurrent>>::ForwardsError> {
+	X::MigrationToCurrent::try_forwards(x)
 }
 
-pub fn migrate_to_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X) -> X::HistoricalType {
-	X::MigrationToCurrent::backwards(x)
+pub fn try_migrate_to_historical_type<V: Version, X: HasVersion<V>>(
+	_v: V,
+	x: X,
+) -> Result<X::HistoricalType, <X::MigrationToCurrent as Migration<X, vCurrent>>::BackwardsError> {
+	X::MigrationToCurrent::try_backwards(x)
+}
+
+pub fn migrate_from_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X::HistoricalType) -> X
+where
+	<X::MigrationToCurrent as Migration<X, vCurrent>>::ForwardsError: IsEmptyType,
+{
+	match X::MigrationToCurrent::try_forwards(x) {
+		Ok(x) => x,
+		#[allow(unreachable_code)]
+		Err(empty) => match empty.as_never() {},
+	}
+}
+
+pub fn migrate_to_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X) -> X::HistoricalType
+where
+	<X::MigrationToCurrent as Migration<X, vCurrent>>::BackwardsError: IsEmptyType,
+{
+	match X::MigrationToCurrent::try_backwards(x) {
+		Ok(x) => x,
+		#[allow(unreachable_code)]
+		Err(empty) => match empty.as_never() {},
+	}
 }
 // -------- identity migration --------
 pub struct IdentityMigration;
@@ -55,27 +82,46 @@ pub struct IdentityMigration;
 impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 	type From = X;
 
-	fn forwards(x: Self::From) -> X {
-		x
+	fn try_forwards(x: Self::From) -> Result<X, Self::ForwardsError> {
+		Ok(x)
 	}
 
-	fn backwards(x: X) -> Self::From {
-		x
+	fn try_backwards(x: X) -> Result<Self::From, Self::BackwardsError> {
+		Ok(x)
 	}
 }
 
 // -------- composition of migrations --------
+
+pub enum ComposedMigrationFailed<A, B> {
+	First(A),
+	Second(B),
+}
+
+impl<A: IsEmptyType, B: IsEmptyType> IsEmptyType for ComposedMigrationFailed<A, B> {
+	fn as_never(&self) -> Never {
+		match self {
+			Self::First(error) => error.as_never(),
+			Self::Second(error) => error.as_never(),
+		}
+	}
+}
+
 impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Migration<X, V>
 	for (A, W, B)
 {
 	type From = A::From;
+	type ForwardsError = ComposedMigrationFailed<A::ForwardsError, B::ForwardsError>;
+	type BackwardsError = ComposedMigrationFailed<A::BackwardsError, B::BackwardsError>;
 
-	fn forwards(x: Self::From) -> X {
-		B::forwards(A::forwards(x))
+	fn try_forwards(x: Self::From) -> Result<X, Self::ForwardsError> {
+		let x = A::try_forwards(x).map_err(ComposedMigrationFailed::First)?;
+		B::try_forwards(x).map_err(ComposedMigrationFailed::Second)
 	}
 
-	fn backwards(x: X) -> Self::From {
-		A::backwards(B::backwards(x))
+	fn try_backwards(x: X) -> Result<Self::From, Self::BackwardsError> {
+		let x = B::try_backwards(x).map_err(ComposedMigrationFailed::Second)?;
+		A::try_backwards(x).map_err(ComposedMigrationFailed::First)
 	}
 }
 
@@ -85,17 +131,39 @@ pub struct NewFieldWithDefault;
 impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 	type From = ();
 
-	fn forwards(_x: Self::From) -> T {
-		Default::default()
+	fn try_forwards(_x: Self::From) -> Result<T, Self::ForwardsError> {
+		Ok(Default::default())
 	}
 
-	fn backwards(_x: T) -> Self::From {}
+	fn try_backwards(_x: T) -> Result<Self::From, Self::BackwardsError> {
+		Ok(())
+	}
+}
+
+// ------- migration for new enum variant --------
+
+pub struct NewVariant;
+
+#[derive(Debug)]
+pub struct NewVariantBackwardsError;
+
+impl<T, V: Version> Migration<T, V> for NewVariant {
+	type From = Never;
+	type BackwardsError = NewVariantBackwardsError;
+
+	fn try_forwards(x: Self::From) -> Result<T, Self::ForwardsError> {
+		match x {}
+	}
+
+	fn try_backwards(_x: T) -> Result<Self::From, Self::BackwardsError> {
+		Err(NewVariantBackwardsError)
+	}
 }
 
 // ----------- lookups ------------
 
 pub trait IsHistoricalType {
-	type GetCurrentType: HasChangelog;
+	type GetCurrentType;
 }
 pub trait IsHistoricalTypeAt<V: Version> =
 	IsHistoricalType<GetCurrentType: HasVersion<V, HistoricalType = Self>>;
@@ -117,7 +185,13 @@ impl Version for vCurrent {
 
 pub trait HasGenericVariant: Sized {
 	type GenericType;
-	type MigrationFromGeneric: Migration<Self, vCurrent, From = Self::GenericType>;
+	type MigrationFromGeneric: Migration<
+		Self,
+		vCurrent,
+		From = Self::GenericType,
+		ForwardsError = Never,
+		BackwardsError = Never,
+	>;
 }
 
 pub type GetGenericVariant<X: HasGenericVariant> =
@@ -125,12 +199,20 @@ pub type GetGenericVariant<X: HasGenericVariant> =
 
 pub struct GlobalMigrationFromGeneric;
 
-pub fn migrate_from_generic_type<X: HasGenericVariant>(x: X::GenericType) -> X {
-	X::MigrationFromGeneric::forwards(x)
+pub fn try_migrate_from_generic_type<X: HasGenericVariant>(x: X::GenericType) -> X {
+	match X::MigrationFromGeneric::try_forwards(x) {
+		Ok(x) => x,
+		#[allow(unreachable_code)]
+		Err(err) => match err.as_never() {},
+	}
 }
 
-pub fn migrate_to_generic_type<X: HasGenericVariant>(x: X) -> X::GenericType {
-	X::MigrationFromGeneric::backwards(x)
+pub fn try_migrate_to_generic_type<X: HasGenericVariant>(x: X) -> X::GenericType {
+	match X::MigrationFromGeneric::try_backwards(x) {
+		Ok(x) => x,
+		#[allow(unreachable_code)]
+		Err(err) => match err.as_never() {},
+	}
 }
 
 // ----------- maybe migrations (for horizontal composition) ---------

@@ -16,7 +16,7 @@
 // ./explorer.ts live | grep -F -e "Block" -e "ChainStateUpdated"
 
 import { ApiPromise } from '@polkadot/api';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function argsToString(args: any): string {
@@ -77,7 +77,7 @@ async function processBlock(blockNumber: number, api: ApiPromise) {
 async function main() {
   const start = process.argv[2];
   const end = process.argv[3];
-  await using api = await getChainflipApi();
+  await using api = await getChainflipPolkadotApi();
   if (start === 'live') {
     const unsubscribe = await api.rpc.chain.subscribeNewHeads(async (header) => {
       if (end && parseInt(end) < header.number.toNumber()) {

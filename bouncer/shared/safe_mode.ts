@@ -1,10 +1,16 @@
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { globalLogger } from 'shared/utils/logger';
 import { observeEvent } from 'shared/utils/substrate';
+import type { PalletCfEnvironmentSafeModeUpdate } from 'generated/chaintypes/chainflip-node';
 
 async function setSafeMode(mode: string, options?: TranslatedOptions) {
   const eventHandle = observeEvent(globalLogger, 'environment:RuntimeSafeModeUpdated');
-  await submitGovernanceExtrinsic((api) => api.tx.environment.updateSafeMode({ [mode]: options }));
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.environment.updateSafeMode({
+      type: mode,
+      value: options,
+    } as PalletCfEnvironmentSafeModeUpdate),
+  );
 
   await eventHandle.event;
 }

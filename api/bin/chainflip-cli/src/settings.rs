@@ -16,7 +16,7 @@
 
 use chainflip_api::{
 	primitives::{state_chain_runtime, Asset, EpochIndex, ForeignChain},
-	AddressString, BasisPoints,
+	AccountId32, AddressString, BasisPoints,
 };
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
@@ -125,10 +125,28 @@ pub enum LiquidityProviderSubcommands {
 	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
 	RegisterLiquidityRefundAddress { chain: ForeignChain, address: AddressString },
+	/// Set the whitelist timelock (seconds). 0 disables the restriction; a non-zero value turns
+	/// on the withdrawal whitelist. Weakening/disabling is delayed by the current timelock.
+	SetWhitelistTimelock { duration_secs: u64 },
+	/// Add or remove a destination from the withdrawal whitelist.
+	#[clap(subcommand)]
+	UpdateWhitelist(WhitelistSubcommands),
 	/// Register this account as a liquidity provider account.
 	RegisterAccount,
 	/// De-register this liquidity provider account.
 	DeregisterAccount,
+}
+
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum WhitelistSubcommands {
+	/// Allow withdrawals to an external address on the given chain.
+	AllowAddress { chain: ForeignChain, address: AddressString },
+	/// Remove an external address from the whitelist.
+	RemoveAddress { chain: ForeignChain, address: AddressString },
+	/// Allow internal transfers to an account.
+	AllowAccount { account: AccountId32 },
+	/// Remove an internal account from the whitelist.
+	RemoveAccount { account: AccountId32 },
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -376,5 +394,96 @@ mod tests {
 			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
 			settings.state_chain.signing_key_file
 		);
+	}
+
+	#[test]
+	fn parses_lp_whitelist_subcommands() {
+		use clap::Parser;
+
+		// `lp set-whitelist-timelock <secs>`
+		let opts = CLICommandLineOptions::try_parse_from([
+			"chainflip-cli",
+			"lp",
+			"set-whitelist-timelock",
+			"864000",
+		])
+		.unwrap();
+		match opts.cmd {
+			CliCommand::LiquidityProvider(LiquidityProviderSubcommands::SetWhitelistTimelock {
+				duration_secs,
+			}) => assert_eq!(duration_secs, 864_000),
+			other => panic!("unexpected command: {other:?}"),
+		}
+
+		// `lp update-whitelist allow-address <chain> <address>`
+		let address_str = "0x0000000000000000000000000000000000000001";
+		let opts = CLICommandLineOptions::try_parse_from([
+			"chainflip-cli",
+			"lp",
+			"update-whitelist",
+			"allow-address",
+			"Ethereum",
+			address_str,
+		])
+		.unwrap();
+		match opts.cmd {
+			CliCommand::LiquidityProvider(LiquidityProviderSubcommands::UpdateWhitelist(
+				WhitelistSubcommands::AllowAddress { chain, address },
+			)) => {
+				assert_eq!(chain, ForeignChain::Ethereum);
+				assert_eq!(address, AddressString::from(address_str.to_string()));
+			},
+			other => panic!("unexpected command: {other:?}"),
+		}
+
+		// `lp update-whitelist remove-address <chain> <address>` (also checks a different chain)
+		let opts = CLICommandLineOptions::try_parse_from([
+			"chainflip-cli",
+			"lp",
+			"update-whitelist",
+			"remove-address",
+			"Arbitrum",
+			"0x0000000000000000000000000000000000000002",
+		])
+		.unwrap();
+		assert!(matches!(
+			opts.cmd,
+			CliCommand::LiquidityProvider(LiquidityProviderSubcommands::UpdateWhitelist(
+				WhitelistSubcommands::RemoveAddress { chain: ForeignChain::Arbitrum, .. }
+			))
+		));
+
+		// `lp update-whitelist allow-account <ss58>` (confirms AccountId32 ss58 parsing)
+		let account_ss58 = "cFHsUq1uK5opJudRDd1ArTC2bDzKkJ5x17wiw96YE1eDkkHJa";
+		let opts = CLICommandLineOptions::try_parse_from([
+			"chainflip-cli",
+			"lp",
+			"update-whitelist",
+			"allow-account",
+			account_ss58,
+		])
+		.unwrap();
+		match opts.cmd {
+			CliCommand::LiquidityProvider(LiquidityProviderSubcommands::UpdateWhitelist(
+				WhitelistSubcommands::AllowAccount { account },
+			)) => assert_eq!(account, AccountId32::from_str(account_ss58).unwrap()),
+			other => panic!("unexpected command: {other:?}"),
+		}
+
+		// `lp update-whitelist remove-account <ss58>`
+		let opts = CLICommandLineOptions::try_parse_from([
+			"chainflip-cli",
+			"lp",
+			"update-whitelist",
+			"remove-account",
+			account_ss58,
+		])
+		.unwrap();
+		assert!(matches!(
+			opts.cmd,
+			CliCommand::LiquidityProvider(LiquidityProviderSubcommands::UpdateWhitelist(
+				WhitelistSubcommands::RemoveAccount { .. }
+			))
+		));
 	}
 }

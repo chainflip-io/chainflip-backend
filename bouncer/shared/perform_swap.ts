@@ -32,7 +32,7 @@ import {
   isEvmChain,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipApi, getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { executeEvmVaultSwap } from 'shared/vault_swap/evm_vault_swap';
 import { executeSolVaultSwap } from 'shared/vault_swap/sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from 'shared/vault_swap/btc_vault_swap';
@@ -369,7 +369,7 @@ export async function performAndTrackSwap<A = []>(
   destAddress: string,
   amount?: string,
 ) {
-  await using chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipPolkadotApi();
 
   const swapParams = await requestNewSwap(cf, sourceAsset, destAsset, destAddress);
 

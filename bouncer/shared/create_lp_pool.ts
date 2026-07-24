@@ -7,11 +7,8 @@ export async function createLpPool(logger: Logger, ccy: Asset, initialPrice: num
   await using chainflip = await getChainflipApi();
 
   if (
-    (
-      await chainflip.query.liquidityPools.pools({
-        assets: { quote: 'usdc', base: ccy.toLowerCase() },
-      })
-    ).toJSON()! === null
+    (await chainflip.query.liquidityPools.pools({ assets: { base: ccy, quote: 'Usdc' } })) ===
+    undefined
   ) {
     const price = assetPriceToInternalAssetPrice(ccy, 'Usdc', initialPrice);
     logger.info(
@@ -20,7 +17,9 @@ export async function createLpPool(logger: Logger, ccy: Asset, initialPrice: num
     const poolCreatedEvent = observeEvent(logger, 'liquidityPools:NewPoolCreated', {
       test: (event) => event.data.baseAsset === ccy,
     }).event;
-    await submitGovernanceExtrinsic((api) => api.tx.liquidityPools.newPool(ccy, 'usdc', 20, price));
+    await submitGovernanceExtrinsic((api) =>
+      api.tx.liquidityPools.newPool(ccy, 'Usdc', 20, BigInt(price)),
+    );
     await poolCreatedEvent;
   }
 }
