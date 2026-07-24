@@ -490,42 +490,84 @@ pub mod mocks {
 	use mockall::mock;
 
 	mock! {
-		pub DotRpcClient {}
+			pub DotRpcClient {}
 
-		impl Clone for DotRpcClient {
+			impl Clone for DotRpcClient {
+				fn clone(&self) -> Self;
+			}
+
+			#[async_trait::async_trait]
+			impl DotRetryRpcApi for DotRpcClient {
+				async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
+
+				async fn finalized_head(&self) -> PolkadotHash;
+
+				async fn header(&self, block_hash: PolkadotHash) -> Option<PolkadotHeader>;
+
+				async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
+
+				async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, parent_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
+
+				async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
+
+				async fn liquid_account_balance(
+					&self,
+					account_id: PolkadotAccountId,
+					asset: HubAsset,
+					block_hash: PolkadotHash,
+				) -> u128;
+			}
+
+			#[async_trait::async_trait]
+			impl DotRetrySigningRpcApi for DotRpcClient {
+				async fn submit_raw_encoded_extrinsic(
+					&self,
+					encoded_bytes: Vec<u8>,
+				) -> anyhow::Result<PolkadotHash>;
+			}
+	}
+
+	mock! {
+		pub DotRpcClientWithResult {}
+
+		impl Clone for DotRpcClientWithResult {
 			fn clone(&self) -> Self;
 		}
 
 		#[async_trait::async_trait]
-		impl DotRetryRpcApi for DotRpcClient {
-			async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
+		impl DotRetryRpcApiWithResult for DotRpcClientWithResult {
+			async fn block_hash(
+				&self,
+				block_number: PolkadotBlockNumber,
+			) -> anyhow::Result<Option<PolkadotHash>>;
 
-			async fn finalized_head(&self) -> PolkadotHash;
+			async fn finalized_head(&self) -> anyhow::Result<PolkadotHash>;
 
-			async fn header(&self, block_hash: PolkadotHash) -> Option<PolkadotHeader>;
+			async fn header(
+				&self,
+				block_hash: PolkadotHash,
+			) -> anyhow::Result<Option<PolkadotHeader>>;
 
-			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
+			async fn extrinsics(&self, block_hash: PolkadotHash) -> anyhow::Result<Vec<Bytes>>;
 
-			async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, parent_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
+			async fn events(
+				&self,
+				block_hash: PolkadotHash,
+				parent_hash: PolkadotHash,
+			) -> anyhow::Result<Option<Events<PolkadotConfig>>>;
 
-			async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
+			async fn runtime_version(
+				&self,
+				block_hash: Option<PolkadotHash>,
+			) -> anyhow::Result<RuntimeVersion>;
 
 			async fn liquid_account_balance(
 				&self,
 				account_id: PolkadotAccountId,
 				asset: HubAsset,
 				block_hash: PolkadotHash,
-			) -> u128;
+			) -> anyhow::Result<u128>;
 		}
-
-		#[async_trait::async_trait]
-		impl DotRetrySigningRpcApi for DotRpcClient {
-			async fn submit_raw_encoded_extrinsic(
-				&self,
-				encoded_bytes: Vec<u8>,
-			) -> anyhow::Result<PolkadotHash>;
-		}
-
 	}
 }
 

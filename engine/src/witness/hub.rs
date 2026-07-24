@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod hub_chain_tracking;
-mod hub_deposits;
+pub mod hub_deposits;
 mod hub_source;
 
 use cf_chains::dot::{
