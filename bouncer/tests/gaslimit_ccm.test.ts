@@ -72,31 +72,12 @@ async function getChainFees<A = []>(
   cf: ChainflipIO<A>,
   chain: 'Ethereum' | 'Arbitrum' | 'Solana' | 'Bsc',
 ): Promise<{ baseFee: number; priorityFee: number }> {
-  switch (chain) {
-    case 'Ethereum': {
-      const { newChainState } = await cf.stepUntilEvent(
-        chainTrackingChainStateUpdatedEvent.Ethereum,
-      );
-      const { baseFee, priorityFee } = newChainState.trackedData;
-      return { baseFee: Number(baseFee), priorityFee: Number(priorityFee) };
-    }
-    case 'Arbitrum': {
-      const { newChainState } = await cf.stepUntilEvent(
-        chainTrackingChainStateUpdatedEvent.Arbitrum,
-      );
-      return { baseFee: Number(newChainState.trackedData.baseFee), priorityFee: 0 };
-    }
-    case 'Solana': {
-      const { newChainState } = await cf.stepUntilEvent(chainTrackingChainStateUpdatedEvent.Solana);
-      return { baseFee: 0, priorityFee: Number(newChainState.trackedData.priorityFee) };
-    }
-    case 'Bsc': {
-      const { newChainState } = await cf.stepUntilEvent(chainTrackingChainStateUpdatedEvent.Bsc);
-      return { baseFee: 0, priorityFee: Number(newChainState.trackedData.priorityFee) };
-    }
-    default:
-      throw new Error(`Chain ${chain} does not support CCM`);
-  }
+  const data = (await cf.stepUntilEvent(chainTrackingChainStateUpdatedEvent[chain])).newChainState
+    .trackedData;
+  return {
+    baseFee: 'baseFee' in data ? Number(data.baseFee) : 0,
+    priorityFee: 'priorityFee' in data ? Number(data.priorityFee) : 0,
+  };
 }
 
 async function executeAndTrackCcmSwap<A = []>(
