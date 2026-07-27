@@ -48,6 +48,7 @@ scale-info = { workspace = true, features = ["derive", "bit-vec"] }
 sp-core = { workspace = true }
 sp-std = { workspace = true }
 sp-runtime = { workspace = true }
+sp-tracing = { workspace = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
@@ -73,6 +74,7 @@ std = [
 	"scale-info/std",
 	"sp-std/std",
 	"sp-core/std",
+	"sp-tracing/std",
 	"log/std",
 	"serde/std",
 	"frame-benchmarking?/std",

@@ -407,54 +407,79 @@ impl
 		),
 	) -> Result<(), CorruptStorageError> {
 		let current_sc_block_number = crate::System::block_number();
-		let block_height = SolanaBlockHeightTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				SolanaBlockHeightTracking,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
-		>(block_height_identifiers, &())?;
-		SolanaLiveness::on_finalize::<
-			DerivedElectoralAccess<_, SolanaLiveness, RunnerStorageAccess<Runtime, SolanaInstance>>,
-		>(
-			liveness_identifiers,
-			&(current_sc_block_number, block_height, crate::Validator::current_epoch()),
-		)?;
-		SolanaNonceTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				SolanaNonceTracking,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
-		>(nonce_tracking_identifiers, &())?;
-		SolanaEgressWitnessing::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				SolanaEgressWitnessing,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
-		>(egress_witnessing_identifiers, &())?;
-		SolanaIngressTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				SolanaIngressTracking,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
-		>(ingress_identifiers, &block_height)?;
-		SolanaVaultSwapTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				SolanaVaultSwapTracking,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
-		>(vault_swap_identifiers, &current_sc_block_number)?;
-		SolanaAltWitnessing::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				SolanaAltWitnessing,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
-		>(alt_witnessing_identifiers, &())?;
+		let block_height = {
+			sp_tracing::enter_span!(sp_tracing::trace_span!("SolanaBlockHeightTracking"));
+			SolanaBlockHeightTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaBlockHeightTracking,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(block_height_identifiers, &())?
+		};
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("SolanaLiveness"));
+			SolanaLiveness::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaLiveness,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(
+				liveness_identifiers,
+				&(current_sc_block_number, block_height, crate::Validator::current_epoch()),
+			)?;
+		}
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("SolanaNonceTracking"));
+			SolanaNonceTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaNonceTracking,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(nonce_tracking_identifiers, &())?;
+		}
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("SolanaEgressWitnessing"));
+			SolanaEgressWitnessing::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaEgressWitnessing,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(egress_witnessing_identifiers, &())?;
+		}
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("SolanaIngressTracking"));
+			SolanaIngressTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaIngressTracking,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(ingress_identifiers, &block_height)?;
+		}
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("SolanaVaultSwapTracking"));
+			SolanaVaultSwapTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaVaultSwapTracking,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(vault_swap_identifiers, &current_sc_block_number)?;
+		}
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("SolanaAltWitnessing"));
+			SolanaAltWitnessing::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaAltWitnessing,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(alt_witnessing_identifiers, &())?;
+		}
 		Ok(())
 	}
 }

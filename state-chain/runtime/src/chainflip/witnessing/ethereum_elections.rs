@@ -523,81 +523,107 @@ impl
 			});
 		}
 
-		let chain_progress = EthereumBlockHeightWitnesserES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumBlockHeightWitnesserES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(block_height_witnesser_identifiers, &Vec::from([()]))?;
+		let chain_progress = {
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumBlockHeightWitnesserES"));
+			EthereumBlockHeightWitnesserES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumBlockHeightWitnesserES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(block_height_witnesser_identifiers, &Vec::from([()]))?
+		};
 
-		EthereumDepositChannelWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumDepositChannelWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumDepositChannelWitnessingES"));
+			EthereumDepositChannelWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumDepositChannelWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		}
 
-		EthereumVaultDepositWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumVaultDepositWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(vault_deposits_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumVaultDepositWitnessingES"));
+			EthereumVaultDepositWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumVaultDepositWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(vault_deposits_identifiers, &chain_progress.clone())?;
+		}
 
-		EthereumKeyManagerWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumKeyManagerWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(key_manager_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumKeyManagerWitnessingES"));
+			EthereumKeyManagerWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumKeyManagerWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(key_manager_identifiers, &chain_progress.clone())?;
+		}
 
-		EthereumFeeTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumFeeTracking,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(fee_identifiers, &current_sc_block_number)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumFeeTracking"));
+			EthereumFeeTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumFeeTracking,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(fee_identifiers, &current_sc_block_number)?;
+		}
 
-		EthereumLiveness::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumLiveness,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(
-			liveness_identifiers,
-			&(
-				crate::System::block_number(),
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get()
-					.unwrap()
-					.block_height
-					// We subtract the safety buffer so we don't ask for liveness for blocks that
-					// could be reorged out.
-					.saturating_sub(ETHEREUM_MAINNET_SAFETY_BUFFER.into()),
-				crate::Validator::current_epoch(),
-			),
-		)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumLiveness"));
+			EthereumLiveness::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumLiveness,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(
+				liveness_identifiers,
+				&(
+					crate::System::block_number(),
+					pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get()
+						.unwrap()
+						.block_height
+						// We subtract the safety buffer so we don't ask for liveness for
+						// blocks that could be reorged out.
+						.saturating_sub(ETHEREUM_MAINNET_SAFETY_BUFFER.into()),
+					crate::Validator::current_epoch(),
+				),
+			)?;
+		}
 
-		EthereumStateChainGatewayWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumStateChainGatewayWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(state_chain_gateway_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!(
+				"EthereumStateChainGatewayWitnessingES"
+			));
+			EthereumStateChainGatewayWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumStateChainGatewayWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(state_chain_gateway_identifiers, &chain_progress.clone())?;
+		}
 
-		EthereumScUtilsWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumScUtilsWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(sc_utils_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumScUtilsWitnessingES"));
+			EthereumScUtilsWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumScUtilsWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(sc_utils_identifiers, &chain_progress.clone())?;
+		}
 
 		Ok(())
 	}

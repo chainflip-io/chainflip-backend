@@ -1341,6 +1341,20 @@ pub mod pallet {
 			// Box to avoid RuntimeCall size
 			authority_votes: Box<AuthorityVotes<T, I>>,
 		) -> DispatchResult {
+			// Labels the span with this instance's name in the runtime (e.g. `EthereumElections`),
+			// so that spans from the different `cf-elections` instances can be told apart when
+			// profiling a block with the runtime's `runtime-tracing` feature. Without a label they
+			// are indistinguishable: the span FRAME emits per extrinsic and per hook is targeted at
+			// `module_path!()`, which is identical for every instance.
+			//
+			// `enter_span!` discards its argument - including the `name()` lookup - unless
+			// `sp-tracing` is built with `with-tracing` (wasm) or `std` (tests), so this compiles
+			// to nothing at all in a production runtime.
+			sp_tracing::enter_span!(sp_tracing::trace_span!(
+				"vote",
+				pallet = <Self as frame_support::traits::PalletInfoAccess>::name()
+			));
+
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
 			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
@@ -1711,6 +1725,13 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
+			// See the note on the `vote` extrinsic: labels this span with the instance name, and
+			// compiles to nothing unless the runtime is built with `runtime-tracing`.
+			sp_tracing::enter_span!(sp_tracing::trace_span!(
+				"on_finalize",
+				pallet = <Self as frame_support::traits::PalletInfoAccess>::name()
+			));
+
 			if let Some(status) = Status::<T, I>::get() {
 				match status {
 					ElectionPalletStatus::Paused { detected_corrupt_storage } =>

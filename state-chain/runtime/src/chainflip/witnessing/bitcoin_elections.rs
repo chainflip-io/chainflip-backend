@@ -402,65 +402,83 @@ impl
 			});
 		}
 
-		let chain_progress = BitcoinBlockHeightWitnesserES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinBlockHeightWitnesserES,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(block_height_witnesser_identifiers, &Vec::from([()]))?;
+		let chain_progress = {
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinBlockHeightWitnesserES"));
+			BitcoinBlockHeightWitnesserES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinBlockHeightWitnesserES,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(block_height_witnesser_identifiers, &Vec::from([()]))?
+		};
 
-		BitcoinDepositChannelWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinDepositChannelWitnessingES,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinDepositChannelWitnessingES"));
+			BitcoinDepositChannelWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinDepositChannelWitnessingES,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(deposit_channel_witnessing_identifiers.clone(), &chain_progress.clone())?;
+		}
 
-		BitcoinVaultDepositWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinVaultDepositWitnessingES,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(vault_deposits_identifiers.clone(), &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinVaultDepositWitnessingES"));
+			BitcoinVaultDepositWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinVaultDepositWitnessingES,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(vault_deposits_identifiers.clone(), &chain_progress.clone())?;
+		}
 
-		BitcoinEgressWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinEgressWitnessingES,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(egress_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinEgressWitnessingES"));
+			BitcoinEgressWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinEgressWitnessingES,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(egress_identifiers, &chain_progress.clone())?;
+		}
 
-		BitcoinFeeTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinFeeTracking,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(fee_identifiers, &current_sc_block_number)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinFeeTracking"));
+			BitcoinFeeTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinFeeTracking,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(fee_identifiers, &current_sc_block_number)?;
+		}
 
-		BitcoinLiveness::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinLiveness,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(
-			liveness_identifiers,
-			&(
-				crate::System::block_number(),
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get()
-					.unwrap()
-					.block_height
-					// We subtract the safety buffer so we don't ask for liveness for blocks that
-					// could be reorged out.
-					.saturating_sub(BITCOIN_MAINNET_SAFETY_BUFFER.into()),
-				crate::Validator::current_epoch(),
-			),
-		)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinLiveness"));
+			BitcoinLiveness::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinLiveness,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(
+				liveness_identifiers,
+				&(
+					crate::System::block_number(),
+					pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get()
+						.unwrap()
+						.block_height
+						// We subtract the safety buffer so we don't ask for liveness for
+						// blocks that could be reorged out.
+						.saturating_sub(BITCOIN_MAINNET_SAFETY_BUFFER.into()),
+					crate::Validator::current_epoch(),
+				),
+			)?;
+		}
 
 		Ok(())
 	}

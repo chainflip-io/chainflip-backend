@@ -336,65 +336,83 @@ impl
 			});
 		}
 
-		let chain_progress = ArbitrumBlockHeightWitnesserES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumBlockHeightWitnesserES,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(block_height_witnesser_identifiers, &Vec::from([()]))?;
+		let chain_progress = {
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumBlockHeightWitnesserES"));
+			ArbitrumBlockHeightWitnesserES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumBlockHeightWitnesserES,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(block_height_witnesser_identifiers, &Vec::from([()]))?
+		};
 
-		ArbitrumDepositChannelWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumDepositChannelWitnessingES,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumDepositChannelWitnessingES"));
+			ArbitrumDepositChannelWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumDepositChannelWitnessingES,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		}
 
-		ArbitrumVaultDepositWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumVaultDepositWitnessingES,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(vault_deposits_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumVaultDepositWitnessingES"));
+			ArbitrumVaultDepositWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumVaultDepositWitnessingES,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(vault_deposits_identifiers, &chain_progress.clone())?;
+		}
 
-		ArbitrumKeyManagerWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumKeyManagerWitnessingES,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(key_manager_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumKeyManagerWitnessingES"));
+			ArbitrumKeyManagerWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumKeyManagerWitnessingES,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(key_manager_identifiers, &chain_progress.clone())?;
+		}
 
-		ArbitrumFeeTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumFeeTracking,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(fee_identifiers, &current_sc_block_number)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumFeeTracking"));
+			ArbitrumFeeTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumFeeTracking,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(fee_identifiers, &current_sc_block_number)?;
+		}
 
-		ArbitrumLiveness::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumLiveness,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(
-			liveness_identifiers,
-			&(
-				crate::System::block_number(),
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get()
-					.unwrap()
-					.block_height
-					// We subtract the safety buffer so we don't ask for liveness for blocks that
-					// could be reorged out.
-					.saturating_sub(ARBITRUM_MAINNET_SAFETY_BUFFER.into()),
-				crate::Validator::current_epoch(),
-			),
-		)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumLiveness"));
+			ArbitrumLiveness::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumLiveness,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(
+				liveness_identifiers,
+				&(
+					crate::System::block_number(),
+					pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get()
+						.unwrap()
+						.block_height
+						// We subtract the safety buffer so we don't ask for liveness for
+						// blocks that could be reorged out.
+						.saturating_sub(ARBITRUM_MAINNET_SAFETY_BUFFER.into()),
+					crate::Validator::current_epoch(),
+				),
+			)?;
+		}
 
 		Ok(())
 	}
