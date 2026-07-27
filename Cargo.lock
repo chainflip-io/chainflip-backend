@@ -713,7 +713,7 @@ version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290f7f2596bd5b78a9fec8088ccd89180d7f9f55b94b0576823bbbdc72ee8311"
 dependencies = [
- "event-listener 5.4.2",
+ "event-listener 5.4.1",
  "event-listener-strategy",
  "pin-project-lite",
 ]
@@ -742,7 +742,7 @@ dependencies = [
  "async-task",
  "blocking",
  "cfg-if",
- "event-listener 5.4.2",
+ "event-listener 5.4.1",
  "futures-lite",
  "rustix",
 ]
@@ -1720,7 +1720,7 @@ dependencies = [
  "scale-json",
  "secp256k1 0.29.1",
  "serde_json",
- "similar 3.1.1",
+ "similar 3.2.0",
  "sp-arithmetic",
  "sp-block-builder",
  "sp-consensus-aura",
@@ -4502,10 +4502,11 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "event-listener"
-version = "5.4.2"
+version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
+checksum = "e13b66accf52311f30a0db42147dadea9850cb48cd070028831ae5f5d4b856ab"
 dependencies = [
+ "concurrent-queue",
  "parking",
  "pin-project-lite",
 ]
@@ -4516,7 +4517,7 @@ version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
- "event-listener 5.4.2",
+ "event-listener 5.4.1",
  "pin-project-lite",
 ]
 
@@ -13518,9 +13519,9 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "similar"
-version = "3.1.1"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6505efef05804732ed8a3f2d4f279429eb485bd69d5b0cc6b19cc02005cda16"
+checksum = "4f66ca1f7aca2474dc10c942eb22feffc897735f54cd1db90138c2fddb490987"
 dependencies = [
  "bstr",
 ]
@@ -13620,7 +13621,7 @@ dependencies = [
  "derive_more 0.99.20",
  "ed25519-zebra",
  "either",
- "event-listener 5.4.2",
+ "event-listener 5.4.1",
  "fnv",
  "futures-lite",
  "futures-util",
@@ -13674,7 +13675,7 @@ dependencies = [
  "derive_more 2.1.1",
  "ed25519-zebra",
  "either",
- "event-listener 5.4.2",
+ "event-listener 5.4.1",
  "fnv",
  "futures-lite",
  "futures-util",
@@ -13723,7 +13724,7 @@ dependencies = [
  "bs58",
  "derive_more 0.99.20",
  "either",
- "event-listener 5.4.2",
+ "event-listener 5.4.1",
  "fnv",
  "futures-channel",
  "futures-lite",
@@ -13759,7 +13760,7 @@ dependencies = [
  "bs58",
  "derive_more 2.1.1",
  "either",
- "event-listener 5.4.2",
+ "event-listener 5.4.1",
  "fnv",
  "futures-channel",
  "futures-lite",
@@ -14804,6 +14805,7 @@ dependencies = [
  "sp-session",
  "sp-std",
  "sp-storage",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",

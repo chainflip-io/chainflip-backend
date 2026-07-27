@@ -97,6 +97,8 @@ sp-runtime = { workspace = true, features = ["serde"] }
 sp-session = { workspace = true }
 sp-storage = { workspace = true }
 sp-std = { workspace = true }
+sp-io = { workspace = true, optional = true }
+sp-tracing = { workspace = true, optional = true }
 sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true }
 generic-typeinfo-derive = { workspace = true }
@@ -276,6 +278,7 @@ try-runtime = [
 skip-wasm-build = []
 metadata-hash = ["substrate-wasm-builder/metadata-hash"]
 mocks = ["cf-chains/mocks", "cf-traits/mocks"]
+runtime-tracing = ["sp-io/with-tracing", "sp-tracing/with-tracing"]
 runtime-integration-tests = [
 	"cf-traits/runtime-integration-tests",
 	"pallet-cf-elections/runtime-integration-tests",
