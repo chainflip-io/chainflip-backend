@@ -188,6 +188,59 @@ Things that fail silently, and how to tell:
   timing, e.g. `INFO frame_executive: apply_extrinsic; ext=...`. If you see those instead of
   `sc_tracing:` lines, the runtime being executed is not instrumented.
 
+#### Visualising the log
+
+`state-chain/scripts/spans-to-profile.py` turns a log into a flamegraph, either way round:
+
+```bash
+# Interactive, in the Firefox Profiler UI (cargo install samply)
+./state-chain/scripts/spans-to-profile.py --per-execution trace.log spans.json
+samply load spans.json
+
+# Standalone SVG (cargo install inferno)
+./state-chain/scripts/spans-to-profile.py --per-execution --folded trace.log trace.folded
+inferno-flamegraph trace.folded > flame.svg
+```
+
+`benchmark block` replays each block `--repeat` times (10 by default) and accepts a block range, so
+a log normally holds many executions and the raw figures are their sum — a `--from`/`--to` pair with
+the default repeat count shows `apply_extrinsic x20220` and an 8-second root. `--per-execution`
+divides through by the number of executions, counted from the merged root frame, so both times and
+frame counts read as a single block. Pass `--executions N` instead if the log has no frame enclosing
+everything (filters that exclude `frame_executive` leave several roots, and nothing to count).
+
+Note that averaging across a block *range* blends different blocks together, so profile one block at
+a time when attributing cost. Heavy capture also inflates absolute times — a log with tens of
+thousands of spans, each crossing the wasm boundary and writing a line, took one block from 453 ms
+to 770 ms. Proportions stay trustworthy; absolute milliseconds do not.
+
+Wasm spans reach the host as explicit roots (`parent_id: None`), so the script rebuilds the tree
+from span ids — which increase on entry — against the log's exit order, and merges identical sibling
+frames as any flamegraph does. Sample weights are the real span durations
+(`weightType: tracing-ms`), so every figure in the profiler is measured milliseconds rather than a
+sample count. The Firefox Profiler front-end is Mozilla-hosted but fetches from samply's
+`127.0.0.1` server and parses in the browser — nothing leaves the machine unless you press Upload.
+
+`samply record` measures something different and cannot replace this. It samples native stacks, and
+wasmtime emits no symbols for the runtime's code on macOS (jitdump is Linux-only), so the fraction
+of samples that *is* pallet code stays nameless — around 10% in a measured run, with half the
+samples in the node's own native host code. It answers the complementary question (how much of a
+hook is storage, hashing and allocation) at the cost of inflating what it measures: one block went
+from 453 ms to roughly 705 ms at the default 1 kHz.
+
+#### Telling pallet instances apart
+
+FRAME's hook and dispatch spans are targeted at `module_path!()`, which is identical for every
+instance of an instanced pallet — six `cf-elections` instances produce six indistinguishable
+`pallet_cf_elections::pallet: on_finalize` lines. Two ways to resolve them:
+
+- `cf-elections` labels its own spans with the instance's runtime name, which shows up as
+  `params=" { pallet: EthereumElections }"`. Copy that `sp_tracing::enter_span!` into any other
+  pallet that needs it; it compiles to nothing without `runtime-tracing`.
+- Otherwise attribute by position: hooks run in `PalletExecutionOrder` order
+  (`state-chain/runtime/src/lib.rs`), so the k-th span of a given pallet within a block belongs to
+  its k-th instance. This does not work for extrinsic dispatches, which interleave.
+
 ## Localnet
 
 You can run a local single-node testnet (Localnet), in Docker. This will allow you to quickly iterate on a particular

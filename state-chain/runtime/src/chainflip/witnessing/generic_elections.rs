@@ -253,9 +253,12 @@ impl Hooks<ChainlinkOraclePriceES> for GenericElectionHooks {
 	fn on_finalize(
 		(oracle_price_election_identifiers,): (Vec<ElectionIdentifierOf<ChainlinkOraclePriceES>>,),
 	) -> Result<(), CorruptStorageError> {
-		ChainlinkOraclePriceES::on_finalize::<
-			DerivedElectoralAccess<_, ChainlinkOraclePriceES, RunnerStorageAccess<Runtime, ()>>,
-		>(oracle_price_election_identifiers, &Vec::from([()]))?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ChainlinkOraclePriceES"));
+			ChainlinkOraclePriceES::on_finalize::<
+				DerivedElectoralAccess<_, ChainlinkOraclePriceES, RunnerStorageAccess<Runtime, ()>>,
+			>(oracle_price_election_identifiers, &Vec::from([()]))?;
+		}
 		Ok(())
 	}
 }
