@@ -1,6 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/tests/account_info.rs
-assertion_line: 237
 expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
 ---
 {
@@ -12,7 +11,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "FLIP": "0x7fffffffffffffffffffffffffffffff",
       "USDC": "0x989680",
       "USDT": "0x4c4b40",
-      "WBTC": "0x1dcd6500"
+      "WBTC": "0x1dcd6500",
+      "CBBTC": "0x1dcd6500"
     },
     "Polkadot": {
       "DOT": "0x174876e800"
@@ -60,7 +60,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "FLIP": "0xffffffffffffffff",
       "USDC": "0x7ffffffffffffffe",
       "USDT": "0x3d090",
-      "WBTC": "0x17d7840"
+      "WBTC": "0x17d7840",
+      "CBBTC": "0x17d7840"
     },
     "Polkadot": {
       "DOT": "0x37e11d600"
@@ -98,7 +99,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "FLIP": [],
       "USDC": [],
       "USDT": [],
-      "WBTC": []
+      "WBTC": [],
+      "CBBTC": []
     },
     "Polkadot": {
       "DOT": []

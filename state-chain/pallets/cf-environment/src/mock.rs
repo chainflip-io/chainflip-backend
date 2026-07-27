@@ -378,6 +378,7 @@ cf_test_utilities::impl_test_helpers! {
 			eth_usdc_address: [0x2; 20].into(),
 			eth_usdt_address: [0x2; 20].into(),
 			eth_wbtc_address: [0x2; 20].into(),
+			eth_cbbtc_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
 			assethub_genesis_hash: H256([0u8; 32]),

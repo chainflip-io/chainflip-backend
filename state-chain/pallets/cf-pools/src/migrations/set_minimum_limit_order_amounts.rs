@@ -31,7 +31,7 @@ use sp_std::vec::Vec;
 
 /// Initial minimum limit order amount per asset, in the asset's smallest unit (decimals noted
 /// per row). The minimum applies to the asset being *sold* by an order
-const MINIMUMS: [(Asset, AssetAmount); 20] = [
+const MINIMUMS: [(Asset, AssetAmount); 21] = [
 	(Asset::Eth, 3_000_000_000_000_000), // 0.003ETH, 18 decimals
 	(Asset::Flip, 10_000_000_000_000_000_000), // 10FLIP, 18 decimals
 	(Asset::Usdc, 5_000_000),            // 5USDC, 6 decimals
@@ -52,6 +52,7 @@ const MINIMUMS: [(Asset, AssetAmount); 20] = [
 	(Asset::TrxUsdt, 5_000_000),         // 5TRXUSDT, 6 decimals
 	(Asset::Bnb, 10_000_000_000_000_000), // 0.01BNB, 18 decimals
 	(Asset::BscUsdt, 5_000_000_000_000_000_000), // 5BSCUSDT, 18 decimals
+	(Asset::Cbbtc, 10000),               // 0.0001CBBTC, 8 decimals
 ];
 
 pub struct Migration<T>(PhantomData<T>);

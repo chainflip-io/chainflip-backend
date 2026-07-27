@@ -67,6 +67,7 @@ pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAsse
 		any::Asset::Usdc => Some(UsdcUsd),
 		any::Asset::Usdt => Some(UsdtUsd),
 		any::Asset::Wbtc => None,
+		any::Asset::Cbbtc => None,
 		any::Asset::Dot => None,
 		any::Asset::Btc => Some(BtcUsd),
 		any::Asset::ArbEth => Some(EthUsd),
@@ -81,7 +82,7 @@ pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAsse
 		any::Asset::Trx => None,
 		any::Asset::TrxUsdt => Some(UsdtUsd),
 		any::Asset::Bnb => None,
-		any::Asset::BscUsdt => Some(UsdtUsd),
+		any::Asset::BscUsdt => None,
 	}
 }
 

@@ -25,6 +25,11 @@ env:
   SOLANA_VERSION: v2.1.13
   NODE_COUNT: "1-node"
   CHAIN: "dev"
+  # Chains and assets introduced in the current release, consumed by bouncer/tests/rpc_tests.ts
+  # to skip unknown assets to the old runtime at upgrade boundaries.
+  # TODO: set to "" after 2.3 release
+  NEW_RELEASED_CHAINS: "Bsc"
+  NEW_RELEASED_ASSETS: "Ethereum:CBBTC"
 
 permissions:
   packages: read
@@ -183,6 +188,13 @@ jobs:
           # Use the new solana start script (with current ledger size limit) for the pre-upgrade localnet.
           git show ${{ github.sha }}:localnet/init/scripts/start-solana.sh > localnet/init/scripts/start-solana.sh
 
+          # Remove after 2.3 release
+          # The old localnet's EVM images (v1.4.1) don't have the cbBTC token contract deployed,
+          # but the cbBTC runtime migration registers its address at upgrade. Start the
+          # pre-upgrade localnet with the new EVM images instead. The old runtime ignores the
+          # extra token, and all pre-existing contract addresses are unchanged.
+          sed -i 's|\(ghcr.io/chainflip-io/chainflip-eth-contracts/[^:]*:\)v[^ ]*|\1v1.5.1-rc2-${NODE_COUNT}|g' localnet/docker-compose.yml
+
           ./localnet/manage.sh
           git reset --hard
 
@@ -219,9 +231,10 @@ jobs:
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
           # Remove after 2.3 release.
-          # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc is the
-          # unreleased chain now, so retarget the filter to exclude Bsc assets instead.
-          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc'/" bouncer/tests/rpc_tests.ts
+          # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc and
+          # Ethereum cbBTC are the unreleased assets now, so retarget the filter to exclude
+          # them instead.
+          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" bouncer/tests/rpc_tests.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
@@ -269,6 +282,9 @@ jobs:
           # TODO: This is a temporary workaround to setup BSC.
           # To remove after BSC is released.
           ./commands/setup_new_bsc_chain.ts
+          # TODO: This is a temporary workaround to setup the new cbBTC asset.
+          # To remove after 2.3 release.
+          ./commands/setup_new_cbbtc_asset.ts
           ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗

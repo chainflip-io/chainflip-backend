@@ -47,14 +47,12 @@ import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingSwapEgressIgnoredEvent } from 'generated/events/swapping/swapEgressIgnored';
 import z from 'zod';
 import { hexToTronAddress } from '@chainflip/utils/tron';
-import {
-  batchBroadcastRequestedEventFor,
-  broadcastSuccessEventFor,
-  broadcastAbortedEventFor,
-  ccmBroadcastRequestedEventFor,
-  ccmEgressInvalidEventFor,
-  ccmBroadcastFailedEventFor,
-} from 'shared/utils/events_lookup';
+import { ingressEgressBatchBroadcastRequestedEvent } from 'generated/events/generic/ingressEgress/batchBroadcastRequested';
+import { broadcasterBroadcastSuccessEvent } from 'generated/events/generic/broadcaster/broadcastSuccess';
+import { broadcasterBroadcastAbortedEvent } from 'generated/events/generic/broadcaster/broadcastAborted';
+import { ingressEgressCcmBroadcastRequestedEvent } from 'generated/events/generic/ingressEgress/ccmBroadcastRequested';
+import { ingressEgressCcmEgressInvalidEvent } from 'generated/events/generic/ingressEgress/ccmEgressInvalid';
+import { ingressEgressCcmBroadcastFailedEvent } from 'generated/events/generic/ingressEgress/ccmBroadcastFailed';
 import { executeTronVaultSwap } from './vault_swap/tron_vault_swap';
 
 export type SwapParams = {
@@ -175,17 +173,16 @@ async function waitForCcmExecution<A = []>(
 ) {
   const destChain = chainFromAsset(destAsset);
 
-  const ccmBroadcastRequested = ccmBroadcastRequestedEventFor(cf.logger, destChain);
-  const ccmEgressInvalid = ccmEgressInvalidEventFor(cf.logger, destChain);
-  const ccmBroadcastFailed = ccmBroadcastFailedEventFor(cf.logger, destChain);
-  const broadcastSuccess = broadcastSuccessEventFor(cf.logger, destChain);
-
   const egressMatches = (e: z.infer<typeof swappingSwapEgressScheduled>['egressId']) =>
     e[0] === egressId[0] && `${e[1]}` === `${egressId[1]}`;
 
   const ccmEgressResult = await cf.stepUntilOneEventOf({
-    ccmBroadcastRequested: ccmBroadcastRequested.refine((event) => egressMatches(event.egressId)),
-    ccmEgressInvalid: ccmEgressInvalid.refine((event) => egressMatches(event.egressId)),
+    ccmBroadcastRequested: ingressEgressCcmBroadcastRequestedEvent[destChain].refine((event) =>
+      egressMatches(event.egressId),
+    ),
+    ccmEgressInvalid: ingressEgressCcmEgressInvalidEvent[destChain].refine((event) =>
+      egressMatches(event.egressId),
+    ),
   });
 
   if (ccmEgressResult.key === 'ccmEgressInvalid') {
@@ -197,8 +194,12 @@ async function waitForCcmExecution<A = []>(
   const { broadcastId } = ccmEgressResult.data;
 
   const broadcastResult = await cf.stepUntilOneEventOf({
-    broadcastSuccess: broadcastSuccess.refine((event) => event.broadcastId === broadcastId),
-    ccmBroadcastFailed: ccmBroadcastFailed.refine((event) => event.broadcastId === broadcastId),
+    broadcastSuccess: broadcasterBroadcastSuccessEvent[destChain].refine(
+      (event) => event.broadcastId === broadcastId,
+    ),
+    ccmBroadcastFailed: ingressEgressCcmBroadcastFailedEvent[destChain].refine(
+      (event) => event.broadcastId === broadcastId,
+    ),
   });
 
   if (broadcastResult.key === 'ccmBroadcastFailed') {
@@ -217,13 +218,9 @@ async function waitForBroadcastOutcome<A = []>(
 ): Promise<void> {
   const destChain = chainFromAsset(destAsset);
 
-  const batchBroadcastRequested = batchBroadcastRequestedEventFor(cf.logger, destChain);
-  const broadcastSuccess = broadcastSuccessEventFor(cf.logger, destChain);
-  const broadcastAborted = broadcastAbortedEventFor(cf.logger, destChain);
-
   // Map the egress to the broadcast that carries it
   const { broadcastId } = await cf.stepUntilEvent(
-    batchBroadcastRequested.refine((event) =>
+    ingressEgressBatchBroadcastRequestedEvent[destChain].refine((event) =>
       event.egressIds.some((e) => e[0] === egressId[0] && `${e[1]}` === `${egressId[1]}`),
     ),
   );
@@ -233,8 +230,12 @@ async function waitForBroadcastOutcome<A = []>(
 
   // Wait for the broadcaster to report success or give up (abort).
   const outcome = await cf.stepUntilOneEventOf({
-    broadcastSuccess: broadcastSuccess.refine((e) => e.broadcastId === broadcastId),
-    broadcastAborted: broadcastAborted.refine((e) => e.broadcastId === broadcastId),
+    broadcastSuccess: broadcasterBroadcastSuccessEvent[destChain].refine(
+      (e) => e.broadcastId === broadcastId,
+    ),
+    broadcastAborted: broadcasterBroadcastAbortedEvent[destChain].refine(
+      (e) => e.broadcastId === broadcastId,
+    ),
   });
 
   if (outcome.key === 'broadcastAborted') {
@@ -379,7 +380,7 @@ export async function performAndTrackSwap<A = []>(
   const broadcastId = await observeSwapEvents(cf.logger, swapParams, chainflipApi);
 
   if (broadcastId) {
-    await observeBroadcastSuccess(cf.logger, broadcastId);
+    await observeBroadcastSuccess(cf, broadcastId);
   } else {
     throwError(cf.logger, new Error(`Failed to retrieve broadcastId!`));
   }
