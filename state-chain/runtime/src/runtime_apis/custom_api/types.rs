@@ -28,7 +28,10 @@ use cf_chains::{
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, TransactionInId, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{chains::Bsc, Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
+use cf_primitives::{
+	chains::Bsc, AccountRole, Asset, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
+	ForeignChain,
+};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
@@ -331,6 +334,81 @@ impl<A> OperatorInfo<A> {
 				.map(|(k, v)| Ok((k, f(v)?)))
 				.collect::<Result<_, E>>()?,
 			active_delegation: self.active_delegation.map(|d| d.try_map_bids(&f)).transpose()?,
+		})
+	}
+}
+
+/// A single account's cumulative cut of the FLIP 2.1 fee-reward pool for the in-progress epoch.
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
+pub struct AccountReward<Amount> {
+	pub account: AccountId32,
+	/// The delegated bid (principal). Zero for operators.
+	pub bid: Amount,
+	/// Amount locked as bond. Equal to `bid` for delegators; zero for operators.
+	pub bond: Amount,
+	/// Pure earnings so far this epoch.
+	pub reward: Amount,
+	pub role: AccountRole,
+	/// The operator managing this node, if this account is a validator claimed by an operator.
+	pub managed_by: Option<AccountId32>,
+	/// The operator this account delegates to, if any (can be a regular delegator or a
+	/// delegating validator).
+	pub delegated_to: Option<AccountId32>,
+}
+
+impl<A> AccountReward<A> {
+	pub fn try_map_amounts<B, E>(
+		self,
+		f: impl Fn(A) -> Result<B, E>,
+	) -> Result<AccountReward<B>, E> {
+		Ok(AccountReward {
+			account: self.account,
+			bid: f(self.bid)?,
+			bond: f(self.bond)?,
+			reward: f(self.reward)?,
+			role: self.role,
+			managed_by: self.managed_by,
+			delegated_to: self.delegated_to,
+		})
+	}
+}
+
+/// A structured, per-epoch projection of FLIP 2.1 reward distribution: the current on-chain
+/// reward state and every operator/validator/delegator's cumulative cut so far this epoch.
+/// `reward_pool` is empty (and `total_rewards`/`per_authority_share` are zero) if FLIP 2.1's
+/// fee-reward distribution has not yet been activated for the current epoch.
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
+pub struct RewardDistributionEstimate<Amount> {
+	pub epoch_index: EpochIndex,
+	pub current_block: BlockNumber,
+	pub current_epoch_started_at: BlockNumber,
+	pub epoch_duration: BlockNumber,
+	pub bond: Amount,
+	pub authority_count: u32,
+	pub total_rewards: Amount,
+	pub per_authority_share: Amount,
+	pub reward_pool: Vec<AccountReward<Amount>>,
+}
+
+impl<A> RewardDistributionEstimate<A> {
+	pub fn try_map_amounts<B, E>(
+		self,
+		f: impl Fn(A) -> Result<B, E>,
+	) -> Result<RewardDistributionEstimate<B>, E> {
+		Ok(RewardDistributionEstimate {
+			epoch_index: self.epoch_index,
+			current_block: self.current_block,
+			current_epoch_started_at: self.current_epoch_started_at,
+			epoch_duration: self.epoch_duration,
+			bond: f(self.bond)?,
+			authority_count: self.authority_count,
+			total_rewards: f(self.total_rewards)?,
+			per_authority_share: f(self.per_authority_share)?,
+			reward_pool: self
+				.reward_pool
+				.into_iter()
+				.map(|r| r.try_map_amounts(&f))
+				.collect::<Result<_, E>>()?,
 		})
 	}
 }

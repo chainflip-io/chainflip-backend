@@ -682,6 +682,26 @@ fn test_reputation_is_reset_on_expired_epoch() {
 		assert!(MockReputationResetter::<Test>::reputation_was_reset());
 	});
 }
+#[test]
+fn epoch_transition_hooks_straddle_the_epoch_increment() {
+	new_test_ext().execute_with(|| {
+		let old_epoch = ValidatorPallet::current_epoch();
+		let _ = TestEpochTransitionHandler::take_hook_calls();
+
+		ValidatorPallet::transition_to_next_epoch(vec![1, 2], 100);
+
+		// `on_epoch_ending` must observe the ending epoch as current (reward distribution
+		// relies on this), `on_new_epoch` the new one.
+		assert_eq!(
+			TestEpochTransitionHandler::take_hook_calls(),
+			vec![
+				(EpochTransitionHook::EpochEnding, old_epoch, old_epoch),
+				(EpochTransitionHook::NewEpoch, old_epoch + 1, old_epoch + 1),
+			]
+		);
+	});
+}
+
 #[cfg(test)]
 mod bond_expiry {
 	use super::*;
@@ -3380,25 +3400,10 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 				frame_support::storage::unhashed::get(b"test_minted").unwrap_or_default()
 			}
 
-			fn add_minted(account: u64, amount: u128) {
+			fn add_minted(account: &u64, amount: u128) {
 				let mut minted = Self::get_minted();
-				*minted.entry(account).or_insert(0) += amount;
+				*minted.entry(*account).or_insert(0) += amount;
 				frame_support::storage::unhashed::put(b"test_minted", &minted);
-			}
-		}
-
-		struct MockIssuance;
-		impl cf_traits::Issuance for MockIssuance {
-			type AccountId = u64;
-			type Balance = u128;
-
-			fn mint(account: &Self::AccountId, amount: Self::Balance) {
-				TestMintTracker::add_minted(*account, amount);
-			}
-
-			fn burn_offchain(_amount: Self::Balance) {}
-			fn total_issuance() -> Self::Balance {
-				0
 			}
 		}
 
@@ -3410,7 +3415,7 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		const REWARD_AMOUNT: u128 = 100_000u128;
 
 		crate::CurrentEpoch::<Test>::put(EPOCH);
-		crate::Bond::<Test>::put(BOND);
+		crate::HistoricalBonds::<Test>::insert(EPOCH, BOND);
 
 		DelegationSnapshot::<u64, u128> {
 			operator: OPERATOR,
@@ -3423,7 +3428,12 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		.register_for_epoch::<Test>(EPOCH);
 
 		// Distribute rewards to the validator.
-		DelegatedRewardsDistribution::<Test, MockIssuance>::distribute(REWARD_AMOUNT, &VALIDATOR);
+		DelegatedRewardsDistribution::<Test>::distribute(
+			EPOCH,
+			REWARD_AMOUNT,
+			&VALIDATOR,
+			TestMintTracker::add_minted,
+		);
 
 		// Check minted amounts
 		let minted = TestMintTracker::get_minted();
@@ -3444,6 +3454,102 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		// Verify total
 		let total_minted: u128 = minted.values().sum();
 		assert_eq!(total_minted, REWARD_AMOUNT);
+	});
+}
+
+#[test]
+fn distribute_all_matches_looped_distribute() {
+	use crate::delegation::DelegatedRewardsDistribution;
+	use cf_traits::RewardsDistribution;
+
+	new_test_ext().execute_with(|| {
+		const VALIDATOR_A: u64 = 100;
+		const VALIDATOR_B: u64 = 101;
+		const OPERATOR: u64 = 200;
+		const DELEGATOR1: u64 = 300;
+		const DELEGATOR2: u64 = 400;
+		const SOLO_VALIDATOR: u64 = 500;
+		const LOSING_OPERATOR: u64 = 600;
+		const LOSING_VALIDATOR: u64 = 601;
+		const LOSING_DELEGATOR: u64 = 602;
+
+		const EPOCH: u32 = 10;
+		const BOND: u128 = 1_000_000u128;
+		const PER_BENEFICIARY_AMOUNT: u128 = 100_000u128;
+
+		crate::CurrentEpoch::<Test>::put(EPOCH);
+		crate::HistoricalBonds::<Test>::insert(EPOCH, BOND);
+		crate::HistoricalAuthorities::<Test>::insert(
+			EPOCH,
+			vec![VALIDATOR_A, VALIDATOR_B, SOLO_VALIDATOR],
+		);
+
+		DelegationSnapshot::<u64, u128> {
+			operator: OPERATOR,
+			validators: [(VALIDATOR_A, 200_000u128), (VALIDATOR_B, 300_000u128)]
+				.into_iter()
+				.collect(),
+			delegators: [(DELEGATOR1, 500_000u128), (DELEGATOR2, 1_500_000u128)]
+				.into_iter()
+				.collect(),
+			delegation_fee_bps: 2000, // 20% fee
+		}
+		.register_for_epoch::<Test>(EPOCH);
+
+		// An operator whose pooled stake didn't clear the bond: its snapshot is registered for
+		// the epoch, but its sole validator is not an authority and must not earn anything.
+		DelegationSnapshot::<u64, u128> {
+			operator: LOSING_OPERATOR,
+			validators: [(LOSING_VALIDATOR, 100_000u128)].into_iter().collect(),
+			delegators: [(LOSING_DELEGATOR, 400_000u128)].into_iter().collect(),
+			delegation_fee_bps: 2000,
+		}
+		.register_for_epoch::<Test>(EPOCH);
+
+		let beneficiaries = [VALIDATOR_A, VALIDATOR_B, SOLO_VALIDATOR];
+
+		// Ground truth: loop `distribute` once per authority with an even share, accumulating
+		// into a single map.
+		let mut looped = BTreeMap::new();
+		for beneficiary in &beneficiaries {
+			DelegatedRewardsDistribution::<Test>::distribute(
+				EPOCH,
+				PER_BENEFICIARY_AMOUNT,
+				beneficiary,
+				|account, amount| {
+					looped
+						.entry(*account)
+						.and_modify(|a: &mut u128| *a += amount)
+						.or_insert(amount);
+				},
+			);
+		}
+
+		let mut batched = BTreeMap::new();
+		DelegatedRewardsDistribution::<Test>::distribute_all(
+			EPOCH,
+			PER_BENEFICIARY_AMOUNT * beneficiaries.len() as u128,
+			|account, amount| {
+				batched
+					.entry(*account)
+					.and_modify(|a: &mut u128| *a += amount)
+					.or_insert(amount);
+			},
+		);
+
+		assert_eq!(batched, looped);
+
+		// The solo authority (no operator) is settled with its full share directly.
+		assert_eq!(batched.get(&SOLO_VALIDATOR), Some(&PER_BENEFICIARY_AMOUNT));
+
+		// The losing operator's snapshot earns nothing.
+		assert_eq!(batched.get(&LOSING_OPERATOR), None);
+		assert_eq!(batched.get(&LOSING_VALIDATOR), None);
+		assert_eq!(batched.get(&LOSING_DELEGATOR), None);
+
+		// Total settled equals beneficiaries.len() * per_beneficiary_amount.
+		let total: u128 = batched.values().sum();
+		assert_eq!(total, PER_BENEFICIARY_AMOUNT * beneficiaries.len() as u128);
 	});
 }
 

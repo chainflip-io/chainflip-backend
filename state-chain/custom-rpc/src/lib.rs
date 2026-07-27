@@ -101,9 +101,9 @@ use state_chain_runtime::{
 			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
 			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, IngressEvents,
 			LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-			NonceOrAccount, OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems,
-			RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty,
-			ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+			NonceOrAccount, OpenedDepositChannels, OperatorInfo, RewardDistributionEstimate,
+			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo,
+			RuntimeApiPenalty, ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
 			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
 			VaultAddresses, VaultSwapDetails,
 		},
@@ -1425,6 +1425,11 @@ pub trait CustomApi {
 		operator: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DelegationSnapshot<state_chain_runtime::AccountId, NumberOrHex>>>;
+	#[method(name = "reward_distribution_estimate")]
+	fn cf_reward_distribution_estimate(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RewardDistributionEstimate<NumberOrHex>>;
 	#[method(name = "encode_non_native_call")]
 	fn cf_encode_non_native_call(
 		&self,
@@ -3393,6 +3398,31 @@ where
 					.into_iter()
 					.map(|delegation| delegation.try_map_bids(TryInto::try_into))
 					.try_collect()
+					.map_err(|s| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InvalidParams.code(),
+							format!("Failed to convert call parameters: {s}."),
+							None::<()>,
+						))
+					})
+			}
+		})
+	}
+
+	fn cf_reward_distribution_estimate(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RewardDistributionEstimate<NumberOrHex>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 20 {
+				Err(CfApiError::ErrorObject(call_error(
+					"Reward distribution estimates are not supported at this runtime api version",
+					CfErrorCode::RuntimeApiError,
+				)))
+			} else {
+				api.cf_reward_distribution_estimate(hash)
+					.map_err(CfApiError::from)?
+					.try_map_amounts(TryInto::try_into)
 					.map_err(|s| {
 						CfApiError::ErrorObject(ErrorObject::owned(
 							ErrorCode::InvalidParams.code(),

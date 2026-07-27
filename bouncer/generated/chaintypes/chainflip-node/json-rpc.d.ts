@@ -164,6 +164,7 @@ export type ChainJsonRpcApis = Pick<
   | 'cf_pools_environment'
   | 'cf_request_swap_parameter_encoding'
   | 'cf_required_asset_ratio_for_range_order'
+  | 'cf_reward_distribution_estimate'
   | 'cf_safe_mode_statuses'
   | 'cf_scheduled_swaps'
   | 'cf_solana_electoral_data'
