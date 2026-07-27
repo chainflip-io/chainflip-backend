@@ -97,6 +97,10 @@ sp-runtime = { workspace = true, features = ["serde"] }
 sp-session = { workspace = true }
 sp-storage = { workspace = true }
 sp-std = { workspace = true }
+# Only needed to be able to enable `sp-io/with-tracing` from `runtime-tracing`
+# below: a feature reference on a dev-dependency has no effect on the wasm build.
+sp-io = { workspace = true, optional = true }
+sp-tracing = { workspace = true, optional = true }
 sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true }
 generic-typeinfo-derive = { workspace = true }
@@ -265,6 +269,19 @@ try-runtime = [
 	"sp-runtime/try-runtime",
 ]
 metadata-hash = ["substrate-wasm-builder/metadata-hash"]
+# Enables `sp_tracing` span instrumentation (on_initialize/on_finalize/extrinsic
+# dispatch) in the wasm runtime, to profile per-pallet/per-extrinsic execution
+# time. Not for production builds - the on-chain wasm never has this enabled.
+#
+# Both features are required:
+# - `sp-tracing/with-tracing` makes the `enter_span!` macros non-noop in no_std.
+# - `sp-io/with-tracing` compiles in the wasm-side subscriber that forwards spans
+#   to the host (`sp_io::init_tracing`). Without it the macros are live but no
+#   subscriber is set, so every span is "disabled" and `tracing`'s log fallback
+#   silently downgrades it to a plain log line with no timing information.
+#
+# See "Profiling runtime execution" in the README for how to use this.
+runtime-tracing = ["sp-io/with-tracing", "sp-tracing/with-tracing"]
 mocks = ["cf-chains/mocks", "cf-traits/mocks"]
 runtime-integration-tests = [
 	"cf-traits/runtime-integration-tests",
