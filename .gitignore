@@ -48,3 +48,4 @@ tfplan
 *rustc-ice*
 
 node_modules
+/spans.json
