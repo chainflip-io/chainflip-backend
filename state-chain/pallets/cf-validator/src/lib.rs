@@ -575,6 +575,10 @@ pub mod pallet {
 		GrandpaDelegationActive,
 		/// Delegator funds cannot be transferred between accounts.
 		DelegatorTransferRestricted,
+		/// Only accounts registered as a Liquidity Provider can delegate.
+		NotLiquidityProvider,
+		/// The account cannot deregister as a Liquidity Provider while actively delegating.
+		StillDelegating,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1311,14 +1315,18 @@ pub mod pallet {
 		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			ensure!(
-				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Validator),
-				Error::<T>::DelegationNotAllowed
-			);
-			ensure!(
-				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Operator),
-				Error::<T>::DelegationNotAllowed
-			);
+			// Delegation is only available to Liquidity Providers. Accounts that haven't yet
+			// registered a role (e.g. freshly-funded accounts delegating via the SC Utils EVM
+			// contract) are implicitly registered as Liquidity Providers on first delegation.
+			match T::AccountRoleRegistry::account_role(&delegator) {
+				AccountRole::Unregistered =>
+					T::AccountRoleRegistry::register_as_liquidity_provider(&delegator)?,
+				AccountRole::LiquidityProvider => {},
+				other => {
+					log::error!("DEBUG role was: {:?}", other);
+					return Err(Error::<T>::NotLiquidityProvider.into())
+				},
+			}
 
 			ensure!(
 				T::AccountRoleRegistry::has_account_role(&operator, AccountRole::Operator),
@@ -1404,6 +1412,16 @@ pub mod pallet {
 			let (current_operator, current_max_bid) =
 				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
 
+			// An account with an entry in `DelegationChoice` can only have got there via
+			// `delegate`, which requires (and enforces) the Liquidity Provider role.
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(
+					&delegator,
+					AccountRole::LiquidityProvider
+				),
+				Error::<T>::NotLiquidityProvider
+			);
+
 			let new_max_bid = match decrease {
 				DelegationAmount::Some(decr) => {
 					let max_bid = current_max_bid.saturating_sub(decr);
@@ -1434,6 +1452,11 @@ pub mod pallet {
 					operator: current_operator,
 					max_bid: current_max_bid,
 				});
+
+				// Mirrors the auto-registration in `delegate`. Best-effort: accounts that also
+				// hold other LP state (open orders, balances, etc.) fail the deregistration
+				// check and simply remain registered as a Liquidity Provider.
+				let _ = T::AccountRoleRegistry::deregister_as_liquidity_provider(&delegator);
 			} else {
 				DelegationChoice::<T>::mutate(&delegator, |choice| {
 					if let Some((_, ref mut max_bid)) = choice {
@@ -2561,6 +2584,19 @@ impl<T: Config> DeregistrationCheck for ValidatorDeregistrationCheck<T> {
 				Error::<T>::OperatorStillActive,
 			);
 		}
+
+		Ok(())
+	}
+}
+
+pub struct DelegatorDeregistrationCheck<T>(PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for DelegatorDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		ensure!(!DelegationChoice::<T>::contains_key(account_id), Error::<T>::StillDelegating);
 
 		Ok(())
 	}
