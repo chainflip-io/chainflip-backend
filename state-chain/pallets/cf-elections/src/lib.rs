@@ -1349,6 +1349,9 @@ pub mod pallet {
 				Error::<T, I>::NotContributing
 			);
 
+			// Constant for the whole extrinsic, so read it once rather than for every vote.
+			let block_number = frame_system::Pallet::<T>::current_block_number();
+
 			for (election_identifier, authority_vote) in *authority_votes {
 				// if an identifier refers to a non existent election, skip this vote,
 				// but continue processing others.
@@ -1397,7 +1400,6 @@ pub mod pallet {
 							partial_vote
 						)?;
 
-						let block_number = frame_system::Pallet::<T>::current_block_number();
 						if let Some(bitmap_component) = components.bitmap_component {
 							// Store bitmap component and update shared data reference counts
 							election_bitmap_components.add(
