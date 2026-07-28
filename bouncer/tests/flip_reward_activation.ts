@@ -82,10 +82,12 @@ export async function testFlipRewardActivation(testContext: TestContext) {
 
   const issuanceAtActivation = await getTotalIssuance();
 
-  // The block(s) right after a rotation completes are still congested with rotation-related
-  // extrinsics, so give the chain a couple of blocks to settle before submitting a burst of
-  // concurrent swaps (otherwise the deposit address requests can fail with ExhaustsResources).
-  await sleep(12_000);
+  // The rotation-completion block is Mandatory-class-heavy (on_new_epoch hooks, forced supply
+  // sync), and `system_dryRun` (used by the engine before submitting) validates against the tip's
+  // persisted post-execution state, which still carries that block's weight until a new block
+  // lands. Wait for the next block so dry-run doesn't reject the swap extrinsics with
+  // ExhaustsResources.
+  await sleep(6_000);
 
   // Generate some real swap fee volume during the activation epoch, so that the reserve has a
   // non-zero balance to distribute at the next rotation.
