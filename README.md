@@ -193,26 +193,60 @@ Things that fail silently, and how to tell:
 `state-chain/scripts/spans-to-profile.py` turns a log into a flamegraph, either way round:
 
 ```bash
-# Interactive, in the Firefox Profiler UI (cargo install samply)
-./state-chain/scripts/spans-to-profile.py --per-execution trace.log spans.json
+# Prints the tables below and writes spans.json
+./state-chain/scripts/spans-to-profile.py trace.log
+
+# Interactive flamegraph in the Firefox Profiler UI (cargo install samply)
 samply load spans.json
 
 # Standalone SVG (cargo install inferno)
-./state-chain/scripts/spans-to-profile.py --per-execution --folded trace.log trace.folded
+./state-chain/scripts/spans-to-profile.py --folded trace.log trace.folded
 inferno-flamegraph trace.folded > flame.svg
 ```
 
-`benchmark block` replays each block `--repeat` times (10 by default) and accepts a block range, so
-a log normally holds many executions and the raw figures are their sum — a `--from`/`--to` pair with
-the default repeat count shows `apply_extrinsic x20220` and an 8-second root. `--per-execution`
-divides through by the number of executions, counted from the merged root frame, so both times and
-frame counts read as a single block. Pass `--executions N` instead if the log has no frame enclosing
-everything (filters that exclude `frame_executive` leave several roots, and nothing to count).
+The report covers where the block spent its time, every pallet's `on_initialize` and
+`on_finalize`, each elections instance broken down into its electoral systems, and the extrinsic
+dispatches per instance — whatever the log contains, so sections with no matching spans are
+skipped. For example:
 
-Note that averaging across a block *range* blends different blocks together, so profile one block at
-a time when attributing cost. Heavy capture also inflates absolute times — a log with tens of
-thousands of spans, each crossing the wasm boundary and writing a line, took one block from 453 ms
-to 770 ms. Proportions stay trustworthy; absolute milliseconds do not.
+```text
+┌──────────┬─────────────┬────────────┬──────────────┬─────────────────────────────────────────┐
+│ instance │ on_finalize │ in systems │ unattributed │ biggest systems (ms)                    │
+├──────────┼─────────────┼────────────┼──────────────┼─────────────────────────────────────────┤
+│ Ethereum │       29.11 │      28.95 │         0.16 │ DepositChannelWitnessing 15.26, FeeT... │
+│ Tron     │       24.43 │      24.28 │         0.15 │ DepositChannelWitnessing 11.85, Vaul... │
+└──────────┴─────────────┴────────────┴──────────────┴─────────────────────────────────────────┘
+```
+
+`--no-tables` writes only the profile.
+
+**Blocks and repeats are worked out from the log.** Nothing needs passing on the command line.
+`benchmark block` replays each block `--repeat` times (10 by default) and accepts a block range;
+the `Block N with … tx used …` line it logs once a block's repeats are done terminates that
+block's spans and supplies its extrinsic count and weight, and the executions within a block are
+its root frames. The report opens with what it found:
+
+```text
+┌──────────┬────────────┬────────┬────────────┬──────────┬────────┬──────────────────┬──────────────────┐
+│ block    │ extrinsics │ weight │ executions │ averaged │  spans │ ms per execution │ benchmark avg ms │
+├──────────┼────────────┼────────┼────────────┼──────────┼────────┼──────────────────┼──────────────────┤
+│ 14066340 │        998 │ 87.87% │         10 │        9 │ 28,400 │           373.70 │           701.21 │
+└──────────┴────────────┴────────┴────────────┴──────────┴────────┴──────────────────┴──────────────────┘
+```
+
+Every figure is a mean per execution, and the **first execution of each block is excluded** from
+it — wasmtime compiles the runtime inside that pass, which is why `benchmark block`'s own average
+(701.21 ms above, and over 2 s for a `--repeat 1` run) sits so far above the spans. Excluding it,
+the two agree closely: on a second pass 362.66 ms measured against 360.51 ms of spans.
+
+Each block gets its own root frame in the profile, named `block <n>`, so a range never averages
+unrelated blocks together; `--block N` reports on one of them alone. When the filter captures no
+frame enclosing a whole execution (anything excluding `frame_executive`), there is no execution
+boundary to find — the table says so and pools the passes instead.
+
+Heavy capture inflates absolute times regardless: a log with tens of thousands of spans, each
+crossing the wasm boundary and writing a line, took one block from 453 ms to 770 ms. Proportions
+stay trustworthy; absolute milliseconds do not.
 
 Wasm spans reach the host as explicit roots (`parent_id: None`), so the script rebuilds the tree
 from span ids — which increase on entry — against the log's exit order, and merges identical sibling
