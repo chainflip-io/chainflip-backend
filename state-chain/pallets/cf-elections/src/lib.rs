@@ -1386,6 +1386,7 @@ pub mod pallet {
 					unique_monotonic_identifier,
 					&authority,
 					authority_index,
+					true, // Ensured before the loop.
 					|option_existing_vote, election_bitmap_components| {
 						let components = <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::partial_vote_into_components(
 							<T::ElectoralSystemRunner as ElectoralSystemRunner>::generate_vote_properties(
@@ -1496,6 +1497,7 @@ pub mod pallet {
 				unique_monotonic_identifier,
 				&authority,
 				authority_index,
+				ContributingAuthorities::<T, I>::contains_key(&authority),
 				|_, _| Ok(()),
 			))?;
 			Ok(())
@@ -2065,6 +2067,10 @@ pub mod pallet {
 			unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,
+			// Whether `authority` is in `ContributingAuthorities`. An argument rather than a
+			// storage read because `vote` has already established it, and would otherwise
+			// re-read it for every vote in the extrinsic.
+			is_contributing_authority: bool,
 			f: F,
 		) -> Result<R, CorruptStorageError> {
 			ElectionBitmapComponents::<T, I>::with_mut(
@@ -2094,7 +2100,9 @@ pub mod pallet {
 						);
 					}
 
-					if ContributingAuthorities::<T, I>::contains_key(authority) {
+					// Invalidate any cached consensus, since the votes have changed. Only a
+					// contributing authority's vote counts towards consensus.
+					if is_contributing_authority {
 						ElectionConsensusHistoryUpToDate::<T, I>::remove(
 							unique_monotonic_identifier,
 						);
