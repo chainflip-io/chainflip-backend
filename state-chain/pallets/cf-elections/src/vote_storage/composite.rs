@@ -27,7 +27,7 @@ macro_rules! generate_vote_storage_tuple_impls {
             #[allow(unused_imports)]
             use crate::{CorruptStorageError, SharedDataHash};
 
-            use super::super::{private, VoteStorage, AuthorityVote, VoteComponents};
+            use super::super::{private, VoteStorage, AuthorityVote, ComponentStorageKind, VoteComponents};
 
             use codec::{Encode, Decode, DecodeWithMemTracking};
             use scale_info::TypeInfo;
@@ -107,6 +107,14 @@ macro_rules! generate_vote_storage_tuple_impls {
                         // For when we have a composite of 1
                         #[allow(unreachable_patterns)]
                         _ => Err(CorruptStorageError::new()),
+                    }
+                }
+
+                fn component_storage_kind(partial_vote: &Self::PartialVote) -> ComponentStorageKind {
+                    match partial_vote {
+                        $(
+                            CompositePartialVote::$t(partial_vote) => <$t as VoteStorage>::component_storage_kind(partial_vote),
+                        )*
                     }
                 }
 

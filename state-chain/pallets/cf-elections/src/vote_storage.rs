@@ -38,6 +38,48 @@ pub struct VoteComponents<VS: VoteStorage> {
 	pub bitmap_component: Option<<VS as VoteStorage>::BitmapComponent>,
 }
 
+/// Which of the two vote-component storages a vote can occupy.
+///
+/// This lets the pallet skip reading and writing a component storage that a vote can never
+/// occupy. It cannot be derived from `partial_vote_into_components`, whose `Properties` argument
+/// is only available after those reads have happened.
+///
+/// May over-report, must never under-report: reporting a component as unusable while
+/// `partial_vote_into_components` can still produce it drops votes and leaks shared data
+/// references, so the pallet treats that inconsistency as corrupt storage.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ComponentStorageKind {
+	BitmapOnly,
+	IndividualOnly,
+	Both,
+}
+
+impl ComponentStorageKind {
+	pub fn has_bitmap(&self) -> bool {
+		matches!(self, Self::BitmapOnly | Self::Both)
+	}
+
+	pub fn has_individual(&self) -> bool {
+		matches!(self, Self::IndividualOnly | Self::Both)
+	}
+
+	/// Errors if `components` populates a storage that this kind excludes, i.e. if the
+	/// `VoteStorage` under-reported. The pallet skips reads on the strength of this value, so
+	/// continuing would leak the shared data references held by the vote being replaced.
+	pub fn ensure_matches<VS: VoteStorage>(
+		&self,
+		components: &VoteComponents<VS>,
+	) -> Result<(), CorruptStorageError> {
+		if (components.bitmap_component.is_some() && !self.has_bitmap()) ||
+			(components.individual_component.is_some() && !self.has_individual())
+		{
+			Err(CorruptStorageError::new())
+		} else {
+			Ok(())
+		}
+	}
+}
+
 /// Describes a method of storing vote information.
 ///
 /// Implementations of this trait should *NEVER* directly access the storage of the election pallet,
@@ -78,6 +120,10 @@ pub trait VoteStorage: private::Sealed + Sized {
 		partial_vote: Self::PartialVote,
 	) -> Result<VoteComponents<Self>, CorruptStorageError>;
 
+	/// Which components `partial_vote_into_components` can populate for this partial vote. See
+	/// [`ComponentStorageKind`] for the over/under-reporting contract.
+	fn component_storage_kind(partial_vote: &Self::PartialVote) -> ComponentStorageKind;
+
 	/// Note: If all components are `None` this *MUST* always return `None`.
 	#[expect(clippy::type_complexity)]
 	fn components_into_authority_vote<
@@ -107,4 +153,150 @@ pub trait VoteStorage: private::Sealed + Sized {
 mod private {
 	/// Ensures `VoteStorage` can only be implemented here.
 	pub trait Sealed {}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{
+		bitmap::Bitmap,
+		bitmap_numerical::BitmapNoHash,
+		change::{MonotonicChange, MonotonicChangeVote},
+		composite::tuple_5_impls::{CompositePartialVote, CompositeVoteProperties},
+		individual::{identity::Identity, Individual},
+		ComponentStorageKind, VoteComponents, VoteStorage,
+	};
+	use crate::SharedDataHash;
+	use cf_utilities::{assert_err, assert_ok};
+
+	/// `component_storage_kind` is what allows the pallet to skip reading and writing a component
+	/// storage, so it must never report a component as unusable while
+	/// `partial_vote_into_components` still produces one. Over-reporting is merely slower, and so
+	/// is allowed - but each impl below is exact today, and the equality assertions pin that down.
+	fn assert_component_storage_kind<VS: VoteStorage>(
+		expected: ComponentStorageKind,
+		properties: VS::Properties,
+		partial_vote: VS::PartialVote,
+	) {
+		let declared = VS::component_storage_kind(&partial_vote);
+		assert_eq!(declared, expected);
+
+		let produced = VS::partial_vote_into_components(properties, partial_vote).unwrap();
+		assert_eq!(produced.bitmap_component.is_some(), declared.has_bitmap());
+		assert_eq!(produced.individual_component.is_some(), declared.has_individual());
+	}
+
+	#[test]
+	fn component_storage_kind_agrees_with_produced_components() {
+		assert_component_storage_kind::<Bitmap<u64>>(
+			ComponentStorageKind::BitmapOnly,
+			(),
+			SharedDataHash::of(&7u64),
+		);
+		assert_component_storage_kind::<BitmapNoHash<u64>>(
+			ComponentStorageKind::BitmapOnly,
+			(),
+			7u64,
+		);
+		assert_component_storage_kind::<Individual<(), Identity<u64>>>(
+			ComponentStorageKind::IndividualOnly,
+			(),
+			7u64,
+		);
+		assert_component_storage_kind::<MonotonicChange<u64, u32>>(
+			ComponentStorageKind::Both,
+			(),
+			MonotonicChangeVote { value: SharedDataHash::of(&7u64), block: 1u32 },
+		);
+	}
+
+	#[test]
+	fn composite_component_storage_kind_follows_the_voted_variant() {
+		type Composite = (
+			Bitmap<u64>,
+			BitmapNoHash<u64>,
+			Individual<(), Identity<u64>>,
+			MonotonicChange<u64, u32>,
+			Bitmap<u32>,
+		);
+
+		// Each variant must report its own electoral system's components, not the first one's.
+		assert_component_storage_kind::<Composite>(
+			ComponentStorageKind::BitmapOnly,
+			CompositeVoteProperties::A(()),
+			CompositePartialVote::A(SharedDataHash::of(&7u64)),
+		);
+		assert_component_storage_kind::<Composite>(
+			ComponentStorageKind::BitmapOnly,
+			CompositeVoteProperties::B(()),
+			CompositePartialVote::B(7u64),
+		);
+		assert_component_storage_kind::<Composite>(
+			ComponentStorageKind::IndividualOnly,
+			CompositeVoteProperties::C(()),
+			CompositePartialVote::C(7u64),
+		);
+		assert_component_storage_kind::<Composite>(
+			ComponentStorageKind::Both,
+			CompositeVoteProperties::D(()),
+			CompositePartialVote::D(MonotonicChangeVote {
+				value: SharedDataHash::of(&7u64),
+				block: 1u32,
+			}),
+		);
+	}
+
+	/// A `VoteStorage` that under-reports would have the pallet skip a read it needed to perform,
+	/// silently leaking the previous vote's shared data references. `ensure_matches` is the guard
+	/// that turns that into a `CorruptStorageError` instead, so exercise it in both directions.
+	///
+	/// The components are built by hand rather than by a deliberately-broken `VoteStorage`: the
+	/// trait is sealed, and every real impl is consistent, so an under-reporting pairing is not
+	/// otherwise reachable.
+	#[test]
+	fn under_reported_components_are_rejected() {
+		// `Bitmap`'s `IndividualComponent` and `Properties` are both `()`.
+		let individual_present = VoteComponents::<Bitmap<u64>> {
+			individual_component: Some(((), ())),
+			bitmap_component: None,
+		};
+		assert_err!(ComponentStorageKind::BitmapOnly.ensure_matches(&individual_present));
+
+		let bitmap_present = VoteComponents::<Bitmap<u64>> {
+			individual_component: None,
+			bitmap_component: Some(SharedDataHash::of(&7u64)),
+		};
+		assert_err!(ComponentStorageKind::IndividualOnly.ensure_matches(&bitmap_present));
+
+		// Both components present is under-reporting for either single-component kind.
+		let both_present = VoteComponents::<Bitmap<u64>> {
+			individual_component: Some(((), ())),
+			bitmap_component: Some(SharedDataHash::of(&7u64)),
+		};
+		assert_err!(ComponentStorageKind::BitmapOnly.ensure_matches(&both_present));
+		assert_err!(ComponentStorageKind::IndividualOnly.ensure_matches(&both_present));
+	}
+
+	#[test]
+	fn matching_and_over_reported_components_are_accepted() {
+		let bitmap_present = VoteComponents::<Bitmap<u64>> {
+			individual_component: None,
+			bitmap_component: Some(SharedDataHash::of(&7u64)),
+		};
+		let individual_present = VoteComponents::<Bitmap<u64>> {
+			individual_component: Some(((), ())),
+			bitmap_component: None,
+		};
+		let neither_present =
+			VoteComponents::<Bitmap<u64>> { individual_component: None, bitmap_component: None };
+
+		assert_ok!(ComponentStorageKind::BitmapOnly.ensure_matches(&bitmap_present));
+		assert_ok!(ComponentStorageKind::IndividualOnly.ensure_matches(&individual_present));
+
+		// Over-reporting is permitted: `Both` accepts whatever is produced, and a kind that
+		// claims a component the vote did not produce is merely slower, not unsound.
+		assert_ok!(ComponentStorageKind::Both.ensure_matches(&bitmap_present));
+		assert_ok!(ComponentStorageKind::Both.ensure_matches(&individual_present));
+		assert_ok!(ComponentStorageKind::BitmapOnly.ensure_matches(&neither_present));
+		assert_ok!(ComponentStorageKind::IndividualOnly.ensure_matches(&neither_present));
+	}
 }
