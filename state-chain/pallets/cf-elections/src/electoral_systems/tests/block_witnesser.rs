@@ -40,7 +40,7 @@ use crate::{
 	vote_storage,
 };
 use cf_traits::{
-	hook_test_utils::{ConstantHook, MockHook},
+	hook_test_utils::{ConstantBatchHook, ConstantHook, MockHook},
 	Hook, HookType,
 };
 use cf_utilities::define_empty_struct;
@@ -92,8 +92,11 @@ impl BWProcessorTypes for Types {
 /// Associating BW types to the struct
 impl BWTypes for Types {
 	type ElectionProperties = ElectionProperties;
-	type ElectionPropertiesHook =
-		MockHook<HookTypeFor<Self, ElectionPropertiesHook>, "generate_election_properties">;
+	type ElectionPropertiesHook = MockHook<
+		HookTypeFor<Self, ElectionPropertiesHook>,
+		"generate_election_properties",
+		ConstantBatchHook<ElectionProperties>,
+	>;
 	type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>, "safe_mode">;
 	type ProcessedUpToHook = MockHook<HookTypeFor<Self, ProcessedUpToHook>, "processed_up_to">;
 	type ElectionTrackerDebugEventHook = MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
@@ -118,9 +121,13 @@ type SimpleBlockWitnesser = StatemachineElectoralSystem<Types>;
 register_checks! {
 	SimpleBlockWitnesser {
 		generate_election_properties_called_n_times(pre, post, n: u8) {
-			let pre_calls = pre.unsynchronised_state.generate_election_properties_hook.call_history.len();
-			let post_calls = post.unsynchronised_state.generate_election_properties_hook.call_history.len();
-			assert_eq!((post_calls - pre_calls) as u8, n, "generate_election_properties should have been called {} times in this `on_finalize`!", n);
+			// Properties are generated for every open election in a single batched call, so count
+			// the heights across the batches rather than the calls.
+			let generated_for = |state: &ElectoralSystemState<StatemachineElectoralSystem<Types>>| {
+				state.unsynchronised_state.generate_election_properties_hook.call_history.iter().map(Vec::len).sum::<usize>()
+			};
+			let generated = generated_for(post) - generated_for(pre);
+			assert_eq!(generated as u8, n, "generate_election_properties should have been called for {} heights in this `on_finalize`!", n);
 		},
 		number_of_open_elections_is(_pre, post, n: ElectionCount) {
 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);

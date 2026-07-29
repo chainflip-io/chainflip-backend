@@ -14,6 +14,7 @@ use crate::{
 	generic_tools::*,
 };
 use cf_chains::witness_period::SaturatingStep;
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{Hook, HookType, Validate};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::ops::Range;
@@ -77,8 +78,8 @@ impl<T: BWTypes> HookType for HookTypeFor<T, SafeModeEnabledHook> {
 
 pub struct ElectionPropertiesHook;
 impl<T: BWTypes> HookType for HookTypeFor<T, ElectionPropertiesHook> {
-	type Input = ChainBlockNumberOf<T::Chain>;
-	type Output = T::ElectionProperties;
+	type Input = Vec<ChainBlockNumberOf<T::Chain>>;
+	type Output = Vec<T::ElectionProperties>;
 }
 
 pub struct RulesHook;
@@ -258,29 +259,42 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	type State = BlockWitnesserState<T>;
 
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
-		state
-			.elections
-			.ongoing
-			.clone()
+		let ongoing = state.elections.ongoing.clone();
+
+		// One call for every ongoing height, rather than one per election: generating properties
+		// reads storage for some instances, so per-election would dominate this hook's cost.
+		let generated_properties =
+			state.generate_election_properties_hook.run(ongoing.keys().copied().collect());
+
+		if generated_properties.len() != ongoing.len() {
+			log_or_panic!(
+				"ElectionPropertiesHook returned {} properties for {} requested heights",
+				generated_properties.len(),
+				ongoing.len(),
+			);
+		}
+
+		ongoing
 			.into_iter()
-			.map(|(block_height, election_type)| match election_type {
+			.zip(generated_properties)
+			.map(|((block_height, election_type), generated_properties)| match election_type {
 				BWElectionType::Governance(properties) => BWElectionProperties {
 					properties,
 					election_type: EngineElectionType::BlockHeight { submit_hash: false },
 					block_height,
 				},
 				BWElectionType::Optimistic => BWElectionProperties {
-					properties: state.generate_election_properties_hook.run(block_height),
+					properties: generated_properties,
 					election_type: EngineElectionType::BlockHeight { submit_hash: true },
 					block_height,
 				},
 				BWElectionType::SafeBlockHeight => BWElectionProperties {
-					properties: state.generate_election_properties_hook.run(block_height),
+					properties: generated_properties,
 					election_type: EngineElectionType::BlockHeight { submit_hash: false },
 					block_height,
 				},
 				BWElectionType::ByHash(hash) => BWElectionProperties {
-					properties: state.generate_election_properties_hook.run(block_height),
+					properties: generated_properties,
 					election_type: EngineElectionType::ByHash(hash),
 					block_height,
 				},
@@ -578,7 +592,8 @@ pub mod tests {
 		for TypesFor<(N, H, Vec<D>)>
 	{
 		type ElectionProperties = ();
-		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;
+		type ElectionPropertiesHook =
+			MockHook<HookTypeFor<Self, ElectionPropertiesHook>, "", ConstantBatchHook<()>>;
 		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 		type ElectionTrackerDebugEventHook =
 			MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;

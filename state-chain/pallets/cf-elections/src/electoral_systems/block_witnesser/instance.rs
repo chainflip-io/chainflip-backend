@@ -53,8 +53,8 @@ pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 
 	fn is_enabled() -> bool;
 	fn election_properties(
-		block_height: ChainBlockNumberOf<Self::Chain>,
-	) -> Self::ElectionProperties;
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties>;
 	fn processed_up_to(block_height: ChainBlockNumberOf<Self::Chain>);
 }
 
@@ -130,8 +130,8 @@ impls! {
 	}
 
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, input: ChainBlockNumberOf<I::Chain>) -> I::ElectionProperties {
-			I::election_properties(input)
+		fn run(&mut self, input: Vec<ChainBlockNumberOf<I::Chain>>) -> Vec<I::ElectionProperties> {
+			I::election_properties(&input)
 		}
 	}
 
