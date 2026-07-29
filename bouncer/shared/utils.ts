@@ -34,7 +34,7 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
 import { SwapParams } from 'shared/perform_swap';
 import { newSolAddress } from 'shared/new_sol_address';
-import { getChainflipPolkadotApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import type { CfChainsAddressEncodedAddress } from 'generated/chaintypes/chainflip-node';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
@@ -53,6 +53,8 @@ import {
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequestedEvent } from 'generated/events/swapping/swapRequested';
+import { broadcasterBroadcastSuccessEvent } from 'generated/events/generic/broadcaster/broadcastSuccess';
+import { broadcasterBroadcastAbortedEvent } from 'generated/events/generic/broadcaster/broadcastAborted';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { type ChainflipClient, formatDispatchError } from 'shared/utils/dedot';
 import { randomBytes } from 'crypto';
@@ -730,19 +732,24 @@ export async function observeSwapRequested<A = []>(
   );
 }
 
-export async function observeBroadcastSuccess(logger: Logger, broadcastId: BroadcastChainAndId) {
-  const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
-  const broadcastIdNumber = broadcastId[1];
+export async function observeBroadcastSuccess<A = []>(
+  cf: ChainflipIO<A>,
+  broadcastId: BroadcastChainAndId,
+) {
+  const [chain, broadcastIdNumber] = broadcastId;
 
-  const observeBroadcastFailure = observeBadEvent(logger, `${broadcaster}:BroadcastAborted`, {
-    test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
+  const outcome = await cf.stepUntilOneEventOf({
+    broadcastSuccess: broadcasterBroadcastSuccessEvent[chain].refine(
+      (event) => event.broadcastId === broadcastIdNumber,
+    ),
+    broadcastAborted: broadcasterBroadcastAbortedEvent[chain].refine(
+      (event) => event.broadcastId === broadcastIdNumber,
+    ),
   });
 
-  await observeEvent(logger, `${broadcaster}:BroadcastSuccess`, {
-    test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
-  }).event;
-
-  await observeBroadcastFailure.stop();
+  if (outcome.key === 'broadcastAborted') {
+    throwError(cf.logger, new Error(`Broadcast ${broadcastIdNumber} on ${chain} was aborted`));
+  }
 }
 
 export type ExtendedBtcAddressType = BtcAddressType | 'Taproot';

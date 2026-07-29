@@ -405,6 +405,11 @@ export interface ChainEvents extends GenericChainEvents {
       'BondUpdated',
       { accountId: AccountId32; newBond: bigint }
     >;
+    FlipDistributed: GenericPalletEvent<
+      'Flip',
+      'FlipDistributed',
+      { amounts: Array<[AccountId32, bigint]> }
+    >;
 
     /**
      * Generic pallet event
@@ -2707,6 +2712,24 @@ export interface ChainEvents extends GenericChainEvents {
         shortId: CfPrimitivesAffiliateShortId;
         affiliateAccountId: AccountId32;
       }
+    >;
+
+    /**
+     * FLIP was successfully scheduled for egress to the State Chain Gateway.
+     **/
+    SentFlipToGateway: GenericPalletEvent<
+      'Swapping',
+      'SentFlipToGateway',
+      { amount: bigint; egressId: [CfPrimitivesChainsForeignChain, bigint] }
+    >;
+
+    /**
+     * FLIP egress to the State Chain Gateway was skipped.
+     **/
+    FlipTransferToGatewaySkipped: GenericPalletEvent<
+      'Swapping',
+      'FlipTransferToGatewaySkipped',
+      { reason: DispatchError }
     >;
 
     /**

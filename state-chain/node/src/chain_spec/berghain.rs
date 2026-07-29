@@ -70,11 +70,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	tron_key_manager_address: hex_literal::hex!("67d11affdff89ba412e60ecfc8db778950486039"), /* TKS96iibRRLvLHL6cDNyTfbziC2vBPcFvB */
 	tron_vault_address: hex_literal::hex!("32e07e5dfcb75c2977adddc593eb8d6b6e71f96e"), /* TEcDijvKSXcfWT7S6rd44H5vNgufm7Y4XC */
 	trx_usdt_token_address: hex_literal::hex!("a614f803b6fd780986a42c78ec9c7f77e6ded13c"), /* TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t */
-	// TODO: fill in real BSC mainnet contract addresses
-	bsc_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
-	bsc_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
-	bsc_usdt_token_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
-	bsc_address_checker_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	bsc_key_manager_address: hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275"),
+	bsc_vault_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
+	bsc_usdt_token_address: hex_literal::hex!("55d398326f99059fF775485246999027B3197955"),
+	bsc_address_checker_address: hex_literal::hex!("c1B12993f760B654897F0257573202fba13D5481"),
 	bsc_chain_id: cf_chains::bsc::CHAIN_ID_MAINNET,
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_MAINNET,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,

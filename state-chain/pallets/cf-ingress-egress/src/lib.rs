@@ -426,7 +426,7 @@ pub enum BroadcastAction<ChainAccount> {
 )]
 #[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
-	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
+	/// Set the fixed fee that is taken when opening a channel, denominated in Flipperinos.
 	ChannelOpeningFee {
 		fee: T::Amount,
 	},
@@ -3517,7 +3517,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		if channel_opening_fee > T::Amount::zero() {
-			T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
+			T::FeePayment::try_take_fee(requester, channel_opening_fee)?;
 		}
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 

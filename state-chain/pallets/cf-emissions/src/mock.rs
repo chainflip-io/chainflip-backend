@@ -74,6 +74,7 @@ impl pallet_cf_flip::Config for Test {
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
+	type RewardsDistribution = FlipDistribution;
 	type WaivedFees = WaivedFeesMock<Self>;
 	type CallIndexer = ();
 	type RuntimeHoldReason = ();
@@ -154,8 +155,21 @@ impl RewardsDistribution for FlipDistribution {
 	type Balance = FlipBalance;
 	type AccountId = AccountId;
 
-	fn distribute(reward_amount: Self::Balance, beneficiary: &Self::AccountId) {
+	fn distribute(
+		_epoch_index: cf_primitives::EpochIndex,
+		reward_amount: Self::Balance,
+		beneficiary: &Self::AccountId,
+		_settle: impl FnMut(&Self::AccountId, Self::Balance),
+	) {
 		pallet_cf_flip::FlipIssuance::<Test>::mint(beneficiary, reward_amount);
+	}
+
+	fn distribute_all(
+		_epoch_index: cf_primitives::EpochIndex,
+		_total_amount: Self::Balance,
+		_settle: impl FnMut(&Self::AccountId, Self::Balance),
+	) {
+		unimplemented!("not used by the emissions pallet");
 	}
 }
 

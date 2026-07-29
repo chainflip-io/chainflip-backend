@@ -67,11 +67,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	tron_key_manager_address: hex_literal::hex!("fa989a8351b3ada8f871d12a75635d1589cf74a0"), /* TYpEk6eqy6Y7FXydzqMb5nvWfDy8Bs8qiT */
 	tron_vault_address: hex_literal::hex!("d7ce126fafc5c3463124e275d5e18865081e9d61"), /* TVeH9SKF3GHSo663iuNVmWXqFHBYUcSSXy */
 	trx_usdt_token_address: hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f"), /* TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf */
-	// TODO: fill in real BSC sisyphos contract addresses
-	bsc_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
-	bsc_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
-	bsc_usdt_token_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
-	bsc_address_checker_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	bsc_key_manager_address: hex_literal::hex!("cA2Fc8ABb5ACEc1CA19c684BdF2959B32e83bacF"),
+	bsc_vault_address: hex_literal::hex!("3362FD7D8264387Ac7D686084CBB774bB09732DF"),
+	bsc_usdt_token_address: hex_literal::hex!("337610d27c682E347C9cD60BD4b3b107C9d34dDd"),
+	bsc_address_checker_address: hex_literal::hex!("6b5A4f429aAA2E049919b69D95f2A26bef01912C"),
 	bsc_chain_id: cf_chains::bsc::CHAIN_ID_TESTNET,
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
