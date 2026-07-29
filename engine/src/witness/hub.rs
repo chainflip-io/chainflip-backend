@@ -24,7 +24,8 @@ use cf_chains::dot::{
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
-use state_chain_runtime::AssethubInstance;
+use pallet_cf_broadcast::TransactionConfirmation;
+use state_chain_runtime::{AssethubInstance, Runtime};
 use subxt::{
 	backend::legacy::rpc_methods::Bytes,
 	config::PolkadotConfig,
@@ -42,11 +43,13 @@ use futures::FutureExt;
 use crate::{
 	db::PersistentKeyDB,
 	dot::{
-		cached_rpc::DotCachingClient,
+		cached_rpc::{DotCachingClient, DotRetryRpcApiWithResult},
 		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 		PolkadotHash,
 	},
-	witness::common::chain_source::extension::ChainSourceExt,
+	witness::{
+		common::chain_source::extension::ChainSourceExt, hub_elections::AssethubBlockHeader,
+	},
 };
 use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
@@ -149,7 +152,9 @@ pub async fn proxy_added_witnessing(
 	(events, proxy_added_broadcasts)
 }
 
-fn extract_state_chain_signature(raw_extrinsic: &[u8]) -> Option<PolkadotSignature> {
+fn extract_state_chain_signer_and_signature(
+	raw_extrinsic: &[u8],
+) -> Option<(PolkadotAccountId, PolkadotSignature)> {
 	const LEGACY_EXTRINSIC_FORMAT_VERSION: u8 = 4;
 	const VERSION_MASK: u8 = 0b0011_1111;
 	const TYPE_MASK: u8 = 0b1100_0000;
@@ -167,14 +172,19 @@ fn extract_state_chain_signature(raw_extrinsic: &[u8]) -> Option<PolkadotSignatu
 
 	match (version, xt_type) {
 		(LEGACY_EXTRINSIC_FORMAT_VERSION, SIGNED_EXTRINSIC) => {
-			let _address = MultiAddress::<AccountId32, u32>::decode(&mut input).ok()?;
+			let signer = match MultiAddress::<AccountId32, u32>::decode(&mut input).ok()? {
+				MultiAddress::Id(account_id) => PolkadotAccountId(account_id.0),
+				MultiAddress::Address32(account_id_bytes) => PolkadotAccountId(account_id_bytes),
+				MultiAddress::Index(_) | MultiAddress::Raw(_) | MultiAddress::Address20(_) =>
+					return None,
+			};
 			let signature = MultiSignature::decode(&mut input).ok()?;
 
 			// we only use the Sr25519 for threshold signatures, so we only look out for them
 			match signature {
 				MultiSignature::Ed25519(_) => None,
 				MultiSignature::Sr25519(polkadot_signature) =>
-					Some(PolkadotSignature::from_aliased(polkadot_signature)),
+					Some((signer, PolkadotSignature::from_aliased(polkadot_signature))),
 				MultiSignature::Ecdsa(_) => None,
 			}
 		},
@@ -182,77 +192,59 @@ fn extract_state_chain_signature(raw_extrinsic: &[u8]) -> Option<PolkadotSignatu
 	}
 }
 
-#[expect(clippy::type_complexity)]
-pub async fn process_egress<ProcessCall, ProcessingFut>(
-	epoch: Vault<cf_chains::Assethub, PolkadotAccountId, ()>,
-	header: Header<
-		PolkadotBlockNumber,
-		PolkadotHash,
-		(
-			(Vec<(Phase, EventWrapper)>, BTreeSet<u32>),
-			Vec<(PolkadotSignature, PolkadotBlockNumber)>,
-		),
-	>,
-	process_call: ProcessCall,
-	hub_client: DotRetryRpcClient,
-) where
-	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	ProcessingFut: Future<Output = ()> + Send + 'static,
-{
-	let ((events, mut extrinsic_indices), monitored_egress_data) = header.data;
+pub async fn process_egresses_in_block(
+	hub_client: &impl DotRetryRpcApiWithResult,
+	pending_tx_signatures: &Vec<PolkadotSignature>,
+	header: &AssethubBlockHeader,
+) -> anyhow::Result<Vec<TransactionConfirmation<Runtime, AssethubInstance>>> {
+	let mut transaction_confirmations = Vec::new();
 
-	let monitored_egress_ids = monitored_egress_data
-		.into_iter()
-		.map(|(signature, _)| signature)
-		.collect::<BTreeSet<_>>();
+	let monitored_egress_ids: BTreeSet<_> = pending_tx_signatures.iter().cloned().collect();
 
-	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
-	extrinsic_indices.extend(extrinsic_success_indices(&events));
+	// all indices of all successful extrinsics. This includes both egresses and
+	// extrinsics that caused ProxyAdded events.
+	let extrinsic_indices = extrinsic_success_indices(&header.parsed_events);
 
-	let extrinsics: Vec<Bytes> = hub_client.extrinsics(header.hash).await;
+	let extrinsics: Vec<Bytes> = hub_client.extrinsics(header.block_hash).await?;
 
-	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
+	for (extrinsic_index, tx_fee) in
+		transaction_fee_paids(&extrinsic_indices, &header.parsed_events)
+	{
 		let xt = extrinsics.get(extrinsic_index as usize).expect(
 			"We know this exists since we got
 	this index from the event, from the block we are querying.",
 		);
 
-		match extract_state_chain_signature(&xt.0[..]) {
-			Some(signature) =>
+		match extract_state_chain_signer_and_signature(&xt.0[..]) {
+			Some((signer, signature)) =>
 				if monitored_egress_ids.contains(&signature) {
 					tracing::info!(
 						"Witnessing Assethub transaction succeeded. signature: {signature:?}"
 					);
-					process_call(
-						pallet_cf_broadcast::Call::<_, AssethubInstance>::transaction_succeeded {
-							tx_out_id: signature,
-							signer_id: epoch.info.0,
-							tx_fee,
-							tx_metadata: (),
-							transaction_ref: PolkadotTransactionId {
-								block_number: header.index,
-								extrinsic_index,
-							},
-						}
-						.into(),
-						epoch.index,
-					)
-					.await;
+					transaction_confirmations.push(pallet_cf_broadcast::TransactionConfirmation {
+						tx_out_id: signature,
+						signer_id: signer, /* this is the account that gets refunded for
+						                    * submitting this tx */
+						tx_fee,
+						tx_metadata: (),
+						transaction_ref: PolkadotTransactionId {
+							block_number: header.block_height,
+							extrinsic_index,
+						},
+					});
 				},
 			None => {
 				// We expect this to occur when attempting to decode v5 or bare extrinsics.
 				tracing::debug!(
 					"Unable to extract signature for extrinsic {}:{}.",
-					header.hash,
+					header.block_hash,
 					extrinsic_index,
 				);
 			},
 		}
 	}
+
+	Ok(transaction_confirmations)
 }
 
 pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
@@ -357,12 +349,16 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 								let process_call = process_call.clone();
 								let hub_client = hub_client.clone();
 								move |epoch, header| {
-									process_egress(
-										epoch,
-										header,
-										process_call.clone(),
-										hub_client.clone(),
-									)
+									// this is now handled by election based witnessing
+
+									// process_egress(
+									// 	epoch,
+									// 	header,
+									// 	process_call.clone(),
+									// 	hub_client.clone(),
+									// )
+
+									async { () }
 								}
 							})
 							.continuous("Assethub".to_string(), db)

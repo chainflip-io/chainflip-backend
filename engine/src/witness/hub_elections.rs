@@ -21,7 +21,10 @@ use crate::{
 			block_witnesser::GenericBwVoter,
 			traits::{WitnessClient, WitnessClientForBlockData},
 		},
-		hub::{filter_map_events, hub_deposits::deposit_witnesses, EventWrapper},
+		hub::{
+			filter_map_events, hub_deposits::deposit_witnesses, process_egresses_in_block,
+			EventWrapper,
+		},
 	},
 };
 use cf_chains::{
@@ -69,6 +72,7 @@ pub struct AssethubVoter {
 pub struct AssethubBlockHeader {
 	pub block_hash: sp_core::H256,
 	pub parent_block_hash: sp_core::H256,
+	pub block_height: u32,
 	pub parsed_events: Vec<(Phase, EventWrapper)>,
 }
 
@@ -168,6 +172,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 					events.iter().filter_map(crate::witness::hub::filter_map_events).collect();
 
 				Ok(AssethubBlockHeader {
+					block_height: finalized_block_height,
 					block_hash,
 					parent_block_hash: header.parent_hash,
 					parsed_events,
@@ -273,9 +278,23 @@ impl
 		&self,
 		_config: &Self::Config,
 		pending_tx_signatures: &Self::ElectionProperties,
-		block_witness_range: &Self::BlockQuery,
+		block_headers: &Self::BlockQuery,
 	) -> Result<Vec<TransactionConfirmation<Runtime, AssethubInstance>>> {
-		Err(anyhow::anyhow!("BW not implemented"))
+		let results = future::join_all(block_headers.into_iter().map(|header| async move {
+			process_egresses_in_block(&self.client, pending_tx_signatures, header).await
+		}))
+		.await;
+
+		// This converts a vector of results into a result with a vector
+		// I.e., if one of the requests failed, we don't submit anything
+		let successes: Vec<Vec<_>> = results.into_iter().collect::<anyhow::Result<Vec<_>>>()?;
+
+		let mut egress_witnesses: Vec<_> = successes.into_iter().flatten().collect();
+
+		// Ensure that the vote is deterministic and doesn't depend on accidental ordering
+		egress_witnesses.sort();
+
+		Ok(egress_witnesses)
 	}
 }
 
