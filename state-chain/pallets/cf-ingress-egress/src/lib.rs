@@ -3619,19 +3619,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 	}
 
-	// TODO: Write test
+	/// Every deposit channel currently in the lookup, active or not.
+	///
+	/// Pair this with `filter_active_deposit_channels` to get the active set at a height. They are
+	/// split so that the block witnessers, which need the active set at every open election's
+	/// height on every block, can pay for the storage iteration once per block rather than once
+	/// per election.
+	pub fn all_deposit_channels() -> Vec<DepositChannelDetails<T, I>> {
+		DepositChannelLookup::<T, I>::iter_values().collect()
+	}
 
-	// This should only be used if we're using ProcessedUpTo to track the block height.
-	pub fn active_deposit_channels_at(
+	/// The subset of `channels` that is active at the given height.
+	///
+	/// This should only be used if we're using ProcessedUpTo to track the block height.
+	pub fn filter_active_deposit_channels(
+		channels: &[DepositChannelDetails<T, I>],
 		opened_at_or_before: TargetChainBlockNumber<T, I>,
 		expires_after: TargetChainBlockNumber<T, I>,
 	) -> Vec<DepositChannelDetails<T, I>> {
 		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(opened_at_or_before));
 
-		DepositChannelLookup::<T, I>::iter_values()
+		channels
+			.iter()
 			.filter(|details| {
 				details.opened_at <= opened_at_or_before && details.expires_at >= expires_after
 			})
+			.cloned()
 			.collect()
 	}
 }
