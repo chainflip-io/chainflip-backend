@@ -400,12 +400,10 @@ async fn run_main(
 				arb_client.clone(),
 				btc_client.clone(),
 				sol_client.clone(),
-				hub_client.clone(),
 				hub_caching_client.clone(),
 				tron_client.clone(),
 				bsc_client.clone(),
 				state_chain_client.clone(),
-				db.clone(),
 			)
 			.await?;
 

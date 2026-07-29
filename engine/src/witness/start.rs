@@ -51,12 +51,10 @@ pub async fn start<StateChainClient>(
 	arb_client: EvmCachingClient<EvmRpcSigningClient>,
 	btc_client: BtcCachingClient,
 	sol_client: SolRetryRpcClient,
-	hub_client: DotRetryRpcClient,
-	hub_caching_client: DotCachingClient,
+	hub_client: DotCachingClient,
 	tron_client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
 	bsc_client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
-	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -74,21 +72,6 @@ where
 		+ Send
 		+ Sync,
 {
-	let witness_call = {
-		let state_chain_client = state_chain_client.clone();
-		move |call, epoch_index| {
-			let state_chain_client = state_chain_client.clone();
-			async move {
-				let _ = state_chain_client
-					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(call),
-						epoch_index,
-					})
-					.await;
-			}
-		}
-	};
-
 	let start_arb =
 		super::arb_elections::start(scope, arb_client.clone(), state_chain_client.clone());
 
@@ -102,14 +85,7 @@ where
 	let start_eth =
 		super::eth_elections::start(scope, eth_client.clone(), state_chain_client.clone());
 
-	super::hub::start(
-		scope,
-		hub_client,
-		hub_caching_client,
-		witness_call.clone(),
-		state_chain_client.clone(),
-		db,
-	);
+	let start_hub = super::hub_elections::start(scope, hub_client, state_chain_client.clone());
 
 	let start_tron = super::tron_elections::start(scope, tron_client, state_chain_client.clone());
 
@@ -123,6 +99,7 @@ where
 		start_sol,
 		start_btc,
 		start_tron,
+		start_hub,
 		start_generic_elections
 	)?;
 

@@ -21,10 +21,7 @@ use crate::{
 			block_witnesser::GenericBwVoter,
 			traits::{WitnessClient, WitnessClientForBlockData},
 		},
-		hub::{
-			filter_map_events, hub_deposits::deposit_witnesses, process_egresses_in_block,
-			EventWrapper,
-		},
+		hub::{hub_deposits::deposit_witnesses, process_egresses_in_block, EventWrapper},
 	},
 };
 use cf_chains::{
@@ -34,12 +31,12 @@ use cf_chains::{
 	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange, SaturatingStep},
 	Assethub, DepositChannel,
 };
-use cf_utilities::task_scope::Scope;
+use cf_utilities::task_scope::{self, Scope};
 use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi,
 };
-use futures::future;
+use futures::{future, FutureExt};
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::primitives::Header, ElectoralSystemTypes, VoteOf,
@@ -370,23 +367,47 @@ where
 		+ Send
 		+ Sync,
 {
-	tracing::debug!("Starting Assethub election witness");
+	tracing::debug!("Starting Assethub witness");
 
-	crate::elections::Voter::new(
-		scope,
-		state_chain_client,
-		CompositeVoter::<AssethubElectoralSystemRunner, _>::new((
-			AssethubVoter { client: client.clone() },
-			GenericBwVoter::new(AssethubVoter { client: client.clone() }, ()),
-			GenericBwVoter::new(AssethubVoter { client: client.clone() }, ()),
-			AssethubVoter { client: client.clone() },
-			AssethubLivenessVoter { client: client.clone() },
-		)),
-		Some(client.cache_invalidation_senders),
-		"Assethub",
-	)
-	.continuously_vote()
-	.await;
+	let sos_client = state_chain_client.clone();
+	scope.spawn_with_restart(
+		"assethub_witnessing",
+		move || {
+			let client = client.clone();
+			let state_chain_client = state_chain_client.clone();
+			async move {
+				task_scope::task_scope(|scope| {
+					async {
+						crate::elections::Voter::new(
+							scope,
+							state_chain_client,
+							CompositeVoter::<AssethubElectoralSystemRunner, _>::new((
+								AssethubVoter { client: client.clone() },
+								GenericBwVoter::new(AssethubVoter { client: client.clone() }, ()),
+								GenericBwVoter::new(AssethubVoter { client: client.clone() }, ()),
+								AssethubVoter { client: client.clone() },
+								AssethubLivenessVoter { client: client.clone() },
+							)),
+							Some(client.cache_invalidation_senders),
+							"Assethub",
+						)
+						.continuously_vote()
+						.await;
+
+						Ok(())
+					}
+					.boxed()
+				})
+				.await
+			}
+		},
+		move || {
+			crate::witness::common::submit_sos_extrinsic(
+				sos_client.clone(),
+				cf_primitives::WitnessingTaskName::Assethub,
+			)
+		},
+	);
 
 	Ok(())
 }
