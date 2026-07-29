@@ -869,6 +869,8 @@ pub mod pallet {
 							IndividualComponents::<T, I>::iter_prefix(unique_monotonic_identifier)
 								.collect::<BTreeMap<_, _>>();
 
+						let mut shared_data_cache = BTreeMap::new();
+
 						let votes = current_authorities
 							.into_iter()
 							.map(|validator_id| {
@@ -891,7 +893,10 @@ pub mod pallet {
 								 	// We don't bother to check if the reference has expired, as if we have the
 									// data we may as well use it, even if it was provided after the shared data
 									// reference expired (But before the reference was cleaned up `on_finalize`).
-									Ok(SharedData::<T, I>::get(shared_data_hash))
+									Ok(shared_data_cache
+										.entry(shared_data_hash)
+										.or_insert_with(|| SharedData::<T, I>::get(shared_data_hash))
+										.clone())
 								}) {
 									// Only a full vote can count towards consensus.
 									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))),
