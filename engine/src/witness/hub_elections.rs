@@ -298,19 +298,41 @@ impl
 	}
 }
 
-#[derive(Clone)]
-pub struct AssethubFeeVoter {
-	_client: DotCachingClient,
-}
-
 #[async_trait::async_trait]
-impl VoterApi<AssethubFeeTracking> for AssethubFeeVoter {
+impl VoterApi<AssethubFeeTracking> for AssethubVoter {
 	async fn vote(
 		&self,
 		_settings: <AssethubFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <AssethubFeeTracking as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<AssethubFeeTracking>>> {
-		Err(anyhow::anyhow!("Fee voter not implemented"))
+		// the latest finalized block range
+		let best_block_height = self.best_block_number().await?;
+
+		// get the block headers and extract the latest header
+		let latest_blocks = self.block_query_from_height(best_block_height).await?;
+		let Some(latest_block_header) = latest_blocks.into_iter().last() else {
+			return Err(anyhow::anyhow!(
+				"Could not get block query for block height {best_block_height:?}"
+			));
+		};
+
+		// extract tips
+		let mut tips = Vec::new();
+		for (phase, wrapped_event) in latest_block_header.parsed_events.iter() {
+			if let Phase::ApplyExtrinsic(_) = phase {
+				if let EventWrapper::TransactionFeePaid { tip, .. } = wrapped_event {
+					tips.push(*tip);
+				}
+			}
+		}
+
+		Ok(Some(cf_chains::hub::AssethubTrackedData {
+			median_tip: {
+				tips.sort();
+				tips.get(tips.len().saturating_sub(1) / 2).cloned().unwrap_or_default()
+			},
+			runtime_version: self.client.runtime_version(None).await?,
+		}))
 	}
 }
 
@@ -353,7 +375,7 @@ where
 			AssethubVoter { client: client.clone() },
 			GenericBwVoter::new(AssethubVoter { client: client.clone() }, ()),
 			GenericBwVoter::new(AssethubVoter { client: client.clone() }, ()),
-			AssethubFeeVoter { _client: client.clone() },
+			AssethubVoter { client: client.clone() },
 			AssethubLivenessVoter { _client: client.clone() },
 		)),
 		Some(client.cache_invalidation_senders),
