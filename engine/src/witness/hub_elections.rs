@@ -338,7 +338,7 @@ impl VoterApi<AssethubFeeTracking> for AssethubVoter {
 
 #[derive(Clone)]
 pub struct AssethubLivenessVoter {
-	_client: DotCachingClient,
+	client: DotCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -346,9 +346,13 @@ impl VoterApi<AssethubLiveness> for AssethubLivenessVoter {
 	async fn vote(
 		&self,
 		_settings: <AssethubLiveness as ElectoralSystemTypes>::ElectoralSettings,
-		_properties: <AssethubLiveness as ElectoralSystemTypes>::ElectionProperties,
+		block_height: <AssethubLiveness as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<AssethubLiveness>>> {
-		Err(anyhow::anyhow!("Liveness voter not implemented"))
+		let Some(block_height) = block_height.try_into().ok() else {
+			return Err(anyhow::anyhow!("Encountered assethub block height > u32::MAX"));
+		};
+		// the vote is simply the block hash for that height
+		self.client.block_hash(block_height).await
 	}
 }
 
@@ -376,7 +380,7 @@ where
 			GenericBwVoter::new(AssethubVoter { client: client.clone() }, ()),
 			GenericBwVoter::new(AssethubVoter { client: client.clone() }, ()),
 			AssethubVoter { client: client.clone() },
-			AssethubLivenessVoter { _client: client.clone() },
+			AssethubLivenessVoter { client: client.clone() },
 		)),
 		Some(client.cache_invalidation_senders),
 		"Assethub",
