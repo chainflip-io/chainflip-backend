@@ -511,7 +511,7 @@ mod withdrawal_whitelist {
 	};
 	use cf_traits::{
 		mocks::{address_converter::MockAddressConverter, time_source},
-		BrokerWithdrawalAddressRegistry, RefundAddressRegistry, WithdrawalAddressRestriction,
+		RefundAddressRegistry, WithdrawalAddressAlreadyBound, WithdrawalAddressRestriction,
 	};
 	use core::time::Duration;
 	use frame_support::{
@@ -990,7 +990,7 @@ mod withdrawal_whitelist {
 			let ForeignChainAddress::Eth(bound) = ETH_ADDR_1 else {
 				panic!("ETH_ADDR_1 must be an Ethereum address")
 			};
-			Pallet::<Test>::bind_broker_withdrawal_address(&who, bound);
+			assert_ok!(Pallet::<Test>::bind_broker_withdrawal_address(&who, bound));
 
 			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
 			assert_err!(
@@ -1008,9 +1008,33 @@ mod withdrawal_whitelist {
 			let ForeignChainAddress::Eth(bound) = ETH_ADDR_1 else {
 				panic!("ETH_ADDR_1 must be an Ethereum address")
 			};
-			Pallet::<Test>::bind_broker_withdrawal_address(&who, bound);
+			assert_ok!(Pallet::<Test>::bind_broker_withdrawal_address(&who, bound));
 			allow(&who, ETH_ADDR_2);
 
+			assert_err!(
+				ensure_allowed_external(&who, &ETH_ADDR_2),
+				Error::<Test>::DestinationNotAllowed
+			);
+		});
+	}
+
+	#[test]
+	fn broker_binding_is_immutable() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			let (ForeignChainAddress::Eth(bound), ForeignChainAddress::Eth(other)) =
+				(ETH_ADDR_1, ETH_ADDR_2)
+			else {
+				panic!("ETH_ADDR_1 and ETH_ADDR_2 must be Ethereum addresses")
+			};
+			assert_ok!(Pallet::<Test>::bind_broker_withdrawal_address(&who, bound));
+
+			assert_err!(
+				Pallet::<Test>::bind_broker_withdrawal_address(&who, other),
+				WithdrawalAddressAlreadyBound
+			);
+			// The original binding still stands.
+			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
 			assert_err!(
 				ensure_allowed_external(&who, &ETH_ADDR_2),
 				Error::<Test>::DestinationNotAllowed

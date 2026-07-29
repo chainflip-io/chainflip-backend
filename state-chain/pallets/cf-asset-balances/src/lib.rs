@@ -25,10 +25,9 @@ use cf_chains::{
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi,
-	BrokerWithdrawalAddressRegistry, Chainflip, DeregistrationCheck, EgressApi, KeyProvider,
-	LiabilityTracker, PoolApi, RefundAddressRegistry, ScheduledEgressDetails,
-	WithdrawalAddressRestriction,
+	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
+	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
+	ScheduledEgressDetails, WithdrawalAddressAlreadyBound, WithdrawalAddressRestriction,
 };
 use cf_utilities::derive_common_traits;
 use frame_support::{
@@ -771,17 +770,18 @@ impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
 		ensure!(allowed, Error::<T>::DestinationNotAllowed);
 		Ok(())
 	}
-}
 
-impl<T: Config> BrokerWithdrawalAddressRegistry for Pallet<T> {
-	type AccountId = T::AccountId;
-
-	fn broker_withdrawal_address(owner: &Self::AccountId) -> Option<cf_chains::evm::Address> {
-		BoundBrokerWithdrawalAddress::<T>::get(owner)
-	}
-
-	fn bind_broker_withdrawal_address(owner: &Self::AccountId, address: cf_chains::evm::Address) {
-		BoundBrokerWithdrawalAddress::<T>::insert(owner, address);
+	fn bind_broker_withdrawal_address(
+		owner: &Self::AccountId,
+		address: cf_chains::evm::Address,
+	) -> Result<(), WithdrawalAddressAlreadyBound> {
+		BoundBrokerWithdrawalAddress::<T>::try_mutate(owner, |bound| match bound {
+			Some(_) => Err(WithdrawalAddressAlreadyBound),
+			None => {
+				*bound = Some(address);
+				Ok(())
+			},
+		})
 	}
 }
 

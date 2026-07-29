@@ -37,11 +37,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	BrokerWithdrawalAddressRegistry, ChainflipNetworkInfo, ChannelIdAllocator, DepositApi,
-	DeregistrationCheck, ExpiryBehaviour, FundingInfo, FundingSource, GetMinimumFunding,
-	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi, WithdrawalAddressRestriction,
+	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
+	FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
+	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -629,12 +628,8 @@ pub mod pallet {
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// Restricts which destinations a broker/affiliate may withdraw fees to (whitelist +
-		/// timelock).
+		/// timelock + bound broker address).
 		type WithdrawalRestriction: WithdrawalAddressRestriction<
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
-
-		type BrokerWithdrawalAddressRegistry: BrokerWithdrawalAddressRegistry<
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 
@@ -1779,11 +1774,8 @@ pub mod pallet {
 			address: EthereumAddress,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			ensure!(
-				T::BrokerWithdrawalAddressRegistry::broker_withdrawal_address(&broker).is_none(),
-				Error::<T>::BrokerAlreadyBound
-			);
-			T::BrokerWithdrawalAddressRegistry::bind_broker_withdrawal_address(&broker, address);
+			T::WithdrawalRestriction::bind_broker_withdrawal_address(&broker, address)
+				.map_err(|_| Error::<T>::BrokerAlreadyBound)?;
 			Self::deposit_event(Event::BoundBrokerWithdrawalAddress { broker, address });
 			Ok(())
 		}

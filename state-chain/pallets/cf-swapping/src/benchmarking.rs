@@ -22,7 +22,7 @@ use cf_chains::{
 	address::EncodedAddress, benchmarking_value::BenchmarkValue, evm::Address as EthereumAddress,
 };
 use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_FLIP};
-use cf_traits::{AccountRoleRegistry, BrokerWithdrawalAddressRegistry, Chainflip, FeePayment};
+use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_err, assert_ok,
@@ -382,10 +382,13 @@ mod benchmarks {
 		#[extrinsic_call]
 		bind_broker_fee_withdrawal_address(RawOrigin::Signed(caller.clone()), address);
 
-		assert_eq!(
-			T::BrokerWithdrawalAddressRegistry::broker_withdrawal_address(&caller),
-			Some(address),
-			"Broker withdrawal address should be bound"
+		// The binding is observable only through its immutability: a second bind must fail.
+		assert_err!(
+			Pallet::<T>::bind_broker_fee_withdrawal_address(
+				RawOrigin::Signed(caller).into(),
+				[0xcd; 20].into(),
+			),
+			Error::<T>::BrokerAlreadyBound
 		);
 	}
 
