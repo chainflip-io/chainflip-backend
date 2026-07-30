@@ -23,7 +23,7 @@ use cf_traits::{
 	lending::LendingSystemApi,
 	mocks::{
 		account_role_registry::MockAccountRoleRegistry,
-		balance_api::{MockBalance, MockLpRegistration},
+		balance_api::{MockBalance, MockRefundAddressRegistry},
 		network_fee_api::MockNetworkFeeApi,
 		price_feed_api::MockPriceFeedApi,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
@@ -105,7 +105,7 @@ impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<T
 	fn with_default_loan(self) -> Self {
 		self.then_execute_with(|ctx| {
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			assert_eq!(
 				create_loan_and_supply_collateral(
@@ -395,7 +395,7 @@ fn basic_general_lending() {
 			});
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			System::reset_events();
 
@@ -678,7 +678,7 @@ fn broker_interest_credited_to_broker() {
 		.disable_network_fees()
 		.then_execute_with(|_| {
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 			register_as_broker(&BROKER);
 
 			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
@@ -798,7 +798,7 @@ fn broker_fee_collected_after_pool_replenished() {
 		.disable_network_fees()
 		.then_execute_with(|_| {
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 			register_as_broker(&BROKER);
 
 			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
@@ -931,7 +931,7 @@ fn pending_interest_settled_from_repayment_on_close() {
 		.with_funded_pool(init_pool_amount)
 		.then_execute_with(|_| {
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 			register_as_broker(&BROKER);
 
 			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
@@ -1082,7 +1082,7 @@ fn pending_interest_settled_when_loan_liquidated() {
 		.with_funded_pool(init_pool_amount)
 		.then_execute_with(|_| {
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 			register_as_broker(&BROKER);
 
 			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
@@ -1164,7 +1164,7 @@ mod broker_fees {
 	#[transactional]
 	fn try_loan_with_broker(broker: Beneficiary<AccountId>) -> Result<LoanId, DispatchError> {
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 		assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
 		assert_ok!(supply_funds::<Test>(
 			BORROWER,
@@ -1244,7 +1244,7 @@ fn basic_loan_aggregation() {
 		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 		assert_eq!(
 			create_loan_and_supply_collateral(
@@ -2586,8 +2586,11 @@ mod multi_asset_collateral_liquidation {
 				// Fund borrower account
 				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, INIT_COLLATERAL_2);
-				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-				MockLpRegistration::register_refund_address(BORROWER, ForeignChain::Ethereum);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(
+					BORROWER,
+					ForeignChain::Ethereum,
+				);
 
 				assert_eq!(
 					create_loan_and_supply_collateral(
@@ -2801,7 +2804,7 @@ mod multi_asset_collateral_liquidation {
 			.with_funded_pool(INIT_POOL_AMOUNT * 4)
 			.then_execute_with(|_| {
 				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, TOTAL_COLLATERAL);
-				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 				assert_eq!(
 					create_loan_and_supply_collateral(
@@ -2908,7 +2911,7 @@ mod multi_asset_collateral_liquidation {
 			.with_funded_pool(INIT_POOL_AMOUNT * 4)
 			.then_execute_with(|_| {
 				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, TOTAL_COLLATERAL);
-				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 				assert_eq!(
 					create_loan_and_supply_collateral(
@@ -3051,7 +3054,7 @@ fn small_interest_amounts_accumulate() {
 			LendingConfig::<Test>::set(config.clone());
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			assert_eq!(
 				create_loan_and_supply_collateral(
@@ -3402,7 +3405,7 @@ fn origination_rejected_when_pool_cant_cover_network_fee() {
 	new_test_ext().with_funded_pool(pool_funds).execute_with(|| {
 		// Supply collateral up front so loan attempts only differ in the requested principal.
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 		LendingPools::new_lending_pool(COLLATERAL_ASSET).unwrap();
 		assert_ok!(LendingPools::add_lender_funds(
 			RuntimeOrigin::signed(BORROWER),
@@ -4657,7 +4660,7 @@ mod safe_mode {
 		let try_to_borrow = || LendingPools::new_loan(LP, LOAN_ASSET, PRINCIPAL, None);
 
 		new_test_ext().with_funded_pool(2 * INIT_POOL_AMOUNT).execute_with(|| {
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			MockBalance::credit_account(&LP, COLLATERAL_ASSET, 10 * INIT_COLLATERAL);
 
@@ -4767,23 +4770,18 @@ mod safe_mode {
 			});
 	}
 
-	// Regression test for PRO-2860.
+	// Regression test for PRO-2973.
 	//
-	// When `update_liquidation_status` returns `Err(LiquidationsDisabled)` from inside
-	// `lending_upkeep`'s `try_mutate_exists` closure, the prior
-	// `check_low_ltv_penalty_and_collect_interest` call writes to external storage
-	// (lending pool totals, `PendingNetworkFees`). Those writes must roll back together
-	// with the borrower-side mutations (which `try_mutate_exists` discards on `Err`),
-	// otherwise the pool/network books reflect interest the borrower no longer owes.
+	// When liquidation is disabled, the failed liquidation transition must not roll back the
+	// borrower's interest accrual and the matching pool/network accounting.
 	#[test]
-	fn upkeep_does_not_commit_fees_when_liquidations_are_disabled() {
+	fn upkeep_commits_interest_when_liquidations_are_disabled() {
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
 			.with_default_loan()
 			.then_execute_with(|_| {
-				// Snapshot pool / fee / loan state right after loan creation — once the
-				// origination fee has been taken. With the fix, this is exactly what we
-				// expect to see after upkeep runs while liquidations are disabled.
+				// Snapshot state right after loan creation, once the origination fee has been
+				// taken.
 				let pool_before = GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap();
 				let pending_network_fees_before = PendingNetworkFees::<Test>::get(LOAN_ASSET);
 				let loan_account_before = LoanAccounts::<Test>::get(BORROWER).unwrap();
@@ -4792,7 +4790,7 @@ mod safe_mode {
 				//  - liquidations disabled via safe mode,
 				//  - collection threshold low enough that any accrued interest gets collected,
 				//  - oracle price moved so that LTV exceeds the hard liquidation threshold (forces
-				//    `update_liquidation_status` down the `LiquidationsDisabled` path).
+				//    `apply_liquidation_status_change` down the `LiquidationsDisabled` path).
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
 					liquidations_enabled: false,
 					..PalletSafeMode::code_green()
@@ -4807,10 +4805,8 @@ mod safe_mode {
 
 				(pool_before, pending_network_fees_before, loan_account_before)
 			})
-			// Process up to the first interest payment block so that upkeep runs
-			// `derive_and_charge_interest` followed by
-			// `check_low_ltv_penalty_and_collect_interest` followed by
-			// `update_liquidation_status` (which errors).
+			// Process up to the first interest payment block. The liquidation transition
+			// will fail, but the preceding interest accounting must commit.
 			.then_process_blocks_until_block(
 				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
 			)
@@ -4825,23 +4821,57 @@ mod safe_mode {
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated { .. })
 				);
 
-				// The invariant: because the per-account closure returned `Err`, the
-				// upkeep tick for this borrower must be a no-op across all storage.
-				assert_eq!(
+				assert_ne!(
 					GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 					pool_before,
-					"pool accounting moved despite the loan-account mutations being rolled back",
+					"pool accounting did not receive the collected interest",
 				);
-				assert_eq!(
+				assert_ne!(
 					PendingNetworkFees::<Test>::get(LOAN_ASSET),
 					fees_before,
-					"network fees were collected without a matching borrower receivable",
+					"network fees did not receive the collected interest",
 				);
-				assert_eq!(
+				assert_ne!(
 					LoanAccounts::<Test>::get(BORROWER).unwrap(),
 					loan_account_before,
-					"loan account changed but upkeep was supposed to be a no-op",
+					"borrower debt did not reflect the collected interest",
 				);
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::InterestTaken { .. })
+				);
+			});
+	}
+
+	#[test]
+	fn upkeep_accrues_interest_when_oracle_prices_are_stale() {
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT)
+			.with_default_loan()
+			.then_execute_with(|_| {
+				let loan_account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+
+				// No fees have been accrued:
+				assert_eq!(
+					loan_account.loans.get(&LOAN_ID).unwrap().pending_interest,
+					InterestBreakdown::default()
+				);
+
+				MockPriceFeedApi::set_stale(LOAN_ASSET, true);
+				System::reset_events();
+			})
+			.then_process_blocks_until_block(
+				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+			)
+			.then_execute_with(|_| {
+				let loan_account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+
+				// Fees have been accrued (but not collected):
+				assert_ne!(
+					loan_account.loans.get(&LOAN_ID).unwrap().pending_interest,
+					InterestBreakdown::default()
+				);
+
 				assert_no_matching_event!(
 					Test,
 					RuntimeEvent::LendingPools(Event::<Test>::InterestTaken { .. })
@@ -5252,7 +5282,7 @@ fn can_remove_supply_with_stale_price_if_no_loans() {
 		MockPriceFeedApi::set_price_usd_fine(SUPPLY_ASSET, 1);
 		MockPriceFeedApi::set_stale(SUPPLY_ASSET, false);
 
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 		MockBalance::credit_account(&BORROWER, SUPPLY_ASSET, INIT_COLLATERAL * 2);
 
 		assert_ok!(LendingPools::new_lending_pool(SUPPLY_ASSET));
@@ -5286,7 +5316,7 @@ fn can_partially_remove_supply_with_stale_price_if_no_loans() {
 		MockPriceFeedApi::set_price_usd_fine(SUPPLY_ASSET, 1);
 		MockPriceFeedApi::set_stale(SUPPLY_ASSET, false);
 
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 		MockBalance::credit_account(&BORROWER, SUPPLY_ASSET, INIT_COLLATERAL * 2);
 
 		assert_ok!(LendingPools::new_lending_pool(SUPPLY_ASSET));
@@ -5330,7 +5360,7 @@ fn can_repay_but_not_expand_or_create_a_loan_with_stale_price() {
 		// doesn't interfere with things.
 		MockPriceFeedApi::set_stale(UNRELATED_COLLATERAL_ASSET, true);
 
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_1, INIT_COLLATERAL * 2);
 
 		// Create a loan while the price is fresh
@@ -5441,8 +5471,8 @@ mod rpcs {
 					INIT_COLLATERAL_2 + ORIGINATION_FEE_2,
 				);
 
-				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-				MockLpRegistration::register_refund_address(BORROWER_2, LOAN_CHAIN_2);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(BORROWER_2, LOAN_CHAIN_2);
 
 				assert_eq!(
 					create_loan_and_supply_collateral(
@@ -5644,7 +5674,7 @@ fn loan_minimum_is_enforced() {
 		});
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 		// Supply collateral into lending pool
 		if GeneralLendingPools::<Test>::get(COLLATERAL_ASSET).is_none() {
@@ -5862,7 +5892,7 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 		});
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 		// Create a loan, doesn't really matter what amount.
 		assert_eq!(
@@ -5954,7 +5984,7 @@ fn must_have_refund_address_for_loan_asset() {
 		);
 
 		// Set refund address and try again
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 		assert_eq!(LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None), Ok(LOAN_ID));
 	});
 }
@@ -6024,7 +6054,7 @@ fn same_asset_loan() {
 		.execute_with(|| {
 			MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, 1);
 			MockBalance::credit_account(&BORROWER, LOAN_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			// Should be able to create a loan where the loan asset is the same as the collateral
 			// asset
@@ -6157,7 +6187,7 @@ mod supply_as_collateral {
 			.then_execute_with(|_| {
 				// Setup another pool to which the borrower can supply funds.
 				assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
-				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 			})
 			.then_execute_with(|_| {
 				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
@@ -6312,7 +6342,7 @@ mod supply_as_collateral {
 			.then_execute_with(|_| {
 				// Setup another pool where the borrower can supply funds to.
 				assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
-				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 			})
 			.then_execute_with(|_| {
 				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
@@ -6338,7 +6368,10 @@ mod supply_as_collateral {
 				// Some of collateral gets borrowed (by another account BORROWER_2), making it
 				// unavailable:
 				MockBalance::credit_account(&BORROWER_2, COLLATERAL_ASSET_2, INIT_COLLATERAL);
-				MockLpRegistration::register_refund_address(BORROWER_2, ForeignChain::Ethereum);
+				MockRefundAddressRegistry::register_refund_address(
+					BORROWER_2,
+					ForeignChain::Ethereum,
+				);
 				MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET_2, SWAP_RATE);
 
 				assert_eq!(
@@ -6503,7 +6536,7 @@ mod supply_as_collateral {
 			.then_execute_with(|_| {
 				// Setup another pool to which the borrower can supply funds.
 				assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
-				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 			})
 			.then_execute_with(|_| {
 				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
@@ -6565,7 +6598,7 @@ mod supply_as_collateral {
 			.then_execute_with(|_| {
 				// Setup another pool where the borrower can supply funds to.
 				assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
-				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
 			})
 			.then_execute_with(|_| {
 				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
@@ -6691,7 +6724,10 @@ mod utilisation_cap {
 				assert_eq!(utilisation_before, Permill::zero());
 				assert!(utilisation_before <= utilisation_cap);
 
-				MockLpRegistration::register_refund_address(BORROWER_2, ForeignChain::Ethereum);
+				MockRefundAddressRegistry::register_refund_address(
+					BORROWER_2,
+					ForeignChain::Ethereum,
+				);
 				MockBalance::credit_account(&BORROWER_2, LOAN_ASSET, COLLATERAL_AMOUNT_2);
 
 				assert_ok!(LendingPools::add_lender_funds(
@@ -6801,8 +6837,8 @@ mod utilisation_cap {
 				assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
 					acc
 				));
-				MockLpRegistration::register_refund_address(*acc, ForeignChain::Ethereum);
-				MockLpRegistration::register_refund_address(*acc, ForeignChain::Bitcoin);
+				MockRefundAddressRegistry::register_refund_address(*acc, ForeignChain::Ethereum);
+				MockRefundAddressRegistry::register_refund_address(*acc, ForeignChain::Bitcoin);
 			}
 
 

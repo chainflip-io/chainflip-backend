@@ -19,7 +19,7 @@
 use super::*;
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_primitives::{AccountRole, Asset, FLIPPERINOS_PER_FLIP};
-use cf_traits::{AccountRoleRegistry, FeePayment};
+use cf_traits::{AccountRoleRegistry, FeePayment, RefundAddressRegistry};
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::OnNewAccount};
 use frame_system::RawOrigin;
@@ -110,7 +110,7 @@ mod benchmarks {
 		);
 
 		assert_eq!(
-			LiquidityRefundAddress::<T>::get(caller, ForeignChain::Ethereum),
+			T::RefundAddressRegistry::get_refund_address(&caller, ForeignChain::Ethereum),
 			Some(ForeignChainAddress::Eth([0x01; 20].into()))
 		);
 	}

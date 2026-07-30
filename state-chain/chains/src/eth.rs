@@ -176,7 +176,8 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 						assets::eth::Asset::Flip |
 						assets::eth::Asset::Usdc |
 						assets::eth::Asset::Usdt |
-						assets::eth::Asset::Wbtc => GAS_COST_PER_FETCH,
+						assets::eth::Asset::Wbtc |
+						assets::eth::Asset::Cbbtc => GAS_COST_PER_FETCH,
 					};
 				self.calculate_transaction_fee(gas_cost_per_fetch)
 			},
@@ -188,7 +189,8 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 						assets::eth::Asset::Flip |
 						assets::eth::Asset::Usdc |
 						assets::eth::Asset::Usdt |
-						assets::eth::Asset::Wbtc => GAS_COST_PER_TRANSFER_TOKEN,
+						assets::eth::Asset::Wbtc |
+						assets::eth::Asset::Cbbtc => GAS_COST_PER_TRANSFER_TOKEN,
 					};
 				self.calculate_transaction_fee(gas_cost_per_transfer)
 			},

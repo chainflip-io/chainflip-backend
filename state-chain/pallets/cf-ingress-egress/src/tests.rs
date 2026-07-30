@@ -581,7 +581,8 @@ fn addresses_are_getting_reused() {
 			channels
 		})
 		.then_execute_at_next_block(|channels| {
-			let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+			let recycle_block =
+				EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 			set_eth_processed_up_to(recycle_block);
 
 			channels[0].clone()
@@ -625,7 +626,7 @@ fn proof_address_pool_integrity() {
 		for broadcast_id in broadcast_ids {
 			EthereumIngressEgress::on_broadcast_success(broadcast_id, Default::default());
 		}
-		let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+		let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 		set_eth_processed_up_to(recycle_block);
 
 		EthereumIngressEgress::on_idle(1, Weight::MAX);
@@ -652,7 +653,7 @@ fn create_new_address_while_pool_is_empty() {
 		for broadcast_id in broadcast_ids {
 			EthereumIngressEgress::on_broadcast_success(broadcast_id, Default::default());
 		}
-		let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+		let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 		set_eth_processed_up_to(recycle_block);
 		EthereumIngressEgress::on_idle(1, Weight::MAX);
 
@@ -768,7 +769,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			)
 			.unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-			let recycles_at = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+			let recycles_at = EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 			(address, recycles_at)
 		})
 		.then_execute_at_next_block(|(address, recycles_at)| {
@@ -871,7 +872,8 @@ fn multi_use_deposit_address_different_blocks() {
 				MockBalance::get_balance(&ALICE, ETH.into()) > 0,
 				"LP account hasn't earned fees!"
 			);
-			let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+			let recycle_block =
+				EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 			set_eth_processed_up_to(recycle_block);
 
 			deposit_address
@@ -1302,7 +1304,8 @@ fn channel_reuse_with_different_assets() {
 			);
 		})
 		.then_execute_at_next_block(|(_, channel_id, _)| {
-			let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
+			let recycle_block =
+				EthereumIngressEgress::expiry_and_recycle_block_height().recycles_at;
 			set_eth_processed_up_to(recycle_block);
 			channel_id
 		})
@@ -1349,7 +1352,7 @@ fn ingress_finalisation_succeeds_after_channel_expired_but_not_recycled() {
 		request_address_and_deposit(ALICE, EthAsset::Eth);
 
 		// Because we're only *expiring* and not recycling, we should still be able to fetch.
-		let expiry_block = EthereumIngressEgress::expiry_and_recycle_block_height().1;
+		let expiry_block = EthereumIngressEgress::expiry_and_recycle_block_height().expires_at;
 		BlockHeightProvider::<MockEthereum>::set_block_height(expiry_block);
 
 		EthereumIngressEgress::on_idle(1, Weight::MAX);

@@ -101,9 +101,9 @@ use state_chain_runtime::{
 			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
 			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, IngressEvents,
 			LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-			NonceOrAccount, OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems,
-			RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty,
-			ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+			NonceOrAccount, OpenedDepositChannels, OperatorInfo, RewardDistributionEstimate,
+			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo,
+			RuntimeApiPenalty, ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
 			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
 			VaultAddresses, VaultSwapDetails,
 		},
@@ -1429,6 +1429,11 @@ pub trait CustomApi {
 		operator: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DelegationSnapshot<state_chain_runtime::AccountId, NumberOrHex>>>;
+	#[method(name = "reward_distribution_estimate")]
+	fn cf_reward_distribution_estimate(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RewardDistributionEstimate<NumberOrHex>>;
 	#[method(name = "encode_non_native_call")]
 	fn cf_encode_non_native_call(
 		&self,
@@ -2664,7 +2669,7 @@ where
 				minimum_deposit_amounts: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(0u128.into());
 					}
@@ -2673,7 +2678,7 @@ where
 				ingress_fees: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(None);
 					}
@@ -2682,7 +2687,7 @@ where
 				egress_fees: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(None);
 					}
@@ -2692,7 +2697,7 @@ where
 				egress_dust_limits: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(0u128.into());
 					}
@@ -2740,7 +2745,7 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
-						version < 19 && chain == ForeignChain::Bsc
+						version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc)
 					{
 						return Ok(None);
 					}
@@ -2756,7 +2761,7 @@ where
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
 				minimum_chunk_size: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
-					if version < 19 && chain == ForeignChain::Bsc {
+					if version < 19 && (chain == ForeignChain::Bsc || asset == Asset::Cbbtc) {
 						return Ok(0u128.into());
 					}
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
@@ -3421,6 +3426,31 @@ where
 		})
 	}
 
+	fn cf_reward_distribution_estimate(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RewardDistributionEstimate<NumberOrHex>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 20 {
+				Err(CfApiError::ErrorObject(call_error(
+					"Reward distribution estimates are not supported at this runtime api version",
+					CfErrorCode::RuntimeApiError,
+				)))
+			} else {
+				api.cf_reward_distribution_estimate(hash)
+					.map_err(CfApiError::from)?
+					.try_map_amounts(TryInto::try_into)
+					.map_err(|s| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InvalidParams.code(),
+							format!("Failed to convert call parameters: {s}."),
+							None::<()>,
+						))
+					})
+			}
+		})
+	}
+
 	fn cf_encode_non_native_call(
 		&self,
 		call: RpcBytes,
@@ -3715,10 +3745,12 @@ where
 		Asset::all()
 			.filter(|asset| {
 				if (version < 17 && ForeignChain::from(*asset) == ForeignChain::Tron) ||
-					(version < 19 && ForeignChain::from(*asset) == ForeignChain::Bsc)
+					(version < 19 &&
+						(ForeignChain::from(*asset) == ForeignChain::Bsc ||
+							*asset == Asset::Cbbtc))
 				{
-					// Tron support was added in version 17, Bsc support added in version 19
-					// so skip it for older versions.
+					// Tron support was added in version 17, Bsc and Cbbtc support added in
+					// version 19, so skip them for older versions.
 					false
 				} else {
 					true
