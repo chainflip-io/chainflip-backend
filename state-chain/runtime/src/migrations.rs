@@ -16,6 +16,7 @@
 
 //! Chainflip runtime storage migrations.
 
+pub mod broker_withdrawal_addresses_to_asset_balances;
 pub mod bsc_integration;
 pub mod housekeeping;
 pub mod refund_addresses_to_asset_balances;

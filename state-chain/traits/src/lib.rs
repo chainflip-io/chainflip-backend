@@ -1301,7 +1301,19 @@ pub trait WithdrawalAddressRestriction {
 		owner: &Self::AccountId,
 		dest: cf_chains::AccountOrAddress<&Self::AccountId, &cf_chains::ForeignChainAddress>,
 	) -> DispatchResult;
+
+	/// Permanently bind `owner` to `address`: from here on, Ethereum withdrawals are allowed only
+	/// to it, overriding the whitelist. Bindings are immutable, so this fails with
+	/// [`AlreadyBound`] rather than repointing an existing one.
+	fn bind_broker_withdrawal_address(
+		owner: &Self::AccountId,
+		address: cf_chains::evm::Address,
+	) -> Result<(), WithdrawalAddressAlreadyBound>;
 }
+
+/// Error returned when trying to set a bound withdrawal address when the binding already exists.
+#[derive(Debug, PartialEq, Eq)]
+pub struct WithdrawalAddressAlreadyBound;
 
 pub trait DerivedIngressSink<Account, DepositDetails> {
 	fn derive_deposit_details(account: Account) -> DepositDetails;
