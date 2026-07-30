@@ -23,7 +23,7 @@ use crate::{
 };
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, EpochInfo};
+use cf_traits::{elections::VoterContext, AccountRoleRegistry, EpochInfo};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -136,33 +136,58 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn vote(n: Linear<1, MAXIMUM_VOTES_PER_EXTRINSIC>) {
+	fn authorise_voter() {
+		let caller =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
+		T::EpochInfo::add_authority_info_for_epoch(
+			T::EpochInfo::epoch_index(),
+			Zero::zero(),
+			vec![caller.clone().into()],
+		);
+
+		#[block]
+		{
+			// The macro generates a struct named after this benchmark, shadowing an import of
+			// the function under test.
+			assert!(cf_traits::elections::authorise_voter::<T>(RawOrigin::Signed(caller).into())
+				.unwrap()
+				.is_some());
+		}
+	}
+
+	#[benchmark]
+	fn do_vote(n: Linear<1, MAXIMUM_VOTES_PER_EXTRINSIC>) {
 		let validator_id: T::ValidatorId = ready_validator_for_vote::<T, I>(1)[0].clone().into();
 
 		let election_identifiers = active_election_identifiers_for_vote::<T, I>(&validator_id, n);
+		let authority_votes = BoundedBTreeMap::try_from(
+			election_identifiers
+				.iter()
+				.copied()
+				.map(|election_identifier| {
+					(
+						election_identifier,
+						AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+							BenchmarkValue::benchmark_value(),
+						),
+					)
+				})
+				.collect::<BTreeMap<_, _>>(),
+		)
+		.unwrap();
 
-		#[extrinsic_call]
-		vote(
-			RawOrigin::Signed(validator_id.clone().into()),
-			Box::new(
-				BoundedBTreeMap::try_from(
-					election_identifiers
-						.iter()
-						.copied()
-						.take(n as usize)
-						.map(|election_identifier| {
-							(
-								election_identifier,
-								AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
-									BenchmarkValue::benchmark_value(),
-								),
-							)
-						})
-						.collect::<BTreeMap<_, _>>(),
-				)
-				.unwrap(),
-			),
-		);
+		let epoch_index = T::EpochInfo::epoch_index();
+		let context = VoterContext::<T> {
+			epoch_index,
+			authority_index: T::EpochInfo::authority_index(epoch_index, &validator_id).unwrap(),
+			authority: validator_id.clone(),
+			block_number: frame_system::Pallet::<T>::block_number(),
+		};
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::do_vote(&context, authority_votes));
+		}
 
 		let current_elections =
 			Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
@@ -684,7 +709,8 @@ mod benchmarks {
 		}
 
 		benchmark_tests! {
-			test_vote: _vote(MAXIMUM_VOTES_PER_EXTRINSIC),
+			test_authorise_voter: _authorise_voter(),
+			test_do_vote: _do_vote(MAXIMUM_VOTES_PER_EXTRINSIC),
 			test_stop_ignoring_my_votes: _stop_ignoring_my_votes(),
 			test_ignore_my_votes: _ignore_my_votes(),
 			test_recheck_contributed_to_consensuses: _recheck_contributed_to_consensuses(),

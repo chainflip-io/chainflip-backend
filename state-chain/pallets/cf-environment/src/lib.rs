@@ -52,6 +52,7 @@ use cf_primitives::{
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
+	elections::{authorise_voter, ElectionInstancesVoting},
 	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
 	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
@@ -147,6 +148,10 @@ pub mod pallet {
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
 
+		/// The `pallet-cf-elections` instances that a validator votes in, so that
+		/// [`Call::submit_elections_votes`] can carry votes for all of them at once.
+		type ElectionInstances: ElectionInstancesVoting<Self>;
+
 		/// The runtime's safe mode is stored in this pallet.
 		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
 
@@ -213,6 +218,8 @@ pub mod pallet {
 		InvalidNestedBatch,
 		/// Signer is unable to pay fee.
 		FailedToProcessFee,
+		/// The caller is not in the current authority set, so cannot vote in elections.
+		NotAnAuthority,
 	}
 
 	#[pallet::pallet]
@@ -484,6 +491,13 @@ pub mod pallet {
 		TronInitialized,
 		/// BSC Initialized: contract addresses have been set, first key activated
 		BscInitialized,
+		/// Votes submitted via [`Call::submit_elections_votes`] were rejected by one election
+		/// instance. The other instances in the same call are unaffected. `instance` identifies
+		/// which one, as defined by the runtime's `ElectionInstances`.
+		ElectionInstanceVotesRejected {
+			instance: u32,
+			error: DispatchError,
+		},
 	}
 
 	#[pallet::call]
@@ -821,6 +835,28 @@ pub mod pallet {
 			#[cfg(feature = "runtime-benchmarks")]
 			_params: crate::benchmarking_types::RealisticCallParams,
 		) -> DispatchResult {
+			Ok(())
+		}
+
+		/// Record a validator's election votes across every `pallet-cf-elections` instance in
+		/// one extrinsic.
+		#[pallet::call_index(14)]
+		#[pallet::weight((
+			T::ElectionInstances::authorise_voter_weight()
+				.saturating_add(T::ElectionInstances::vote_all_weight(votes)),
+			DispatchClass::Operational,
+		))]
+		pub fn submit_elections_votes(
+			origin: OriginFor<T>,
+			// Boxed to keep `RuntimeCall` small.
+			votes: Box<<T::ElectionInstances as ElectionInstancesVoting<T>>::Votes>,
+		) -> DispatchResult {
+			let context = authorise_voter::<T>(origin)?.ok_or(Error::<T>::NotAnAuthority)?;
+
+			for (instance, error) in T::ElectionInstances::vote_all(&context, *votes) {
+				Self::deposit_event(Event::<T>::ElectionInstanceVotesRejected { instance, error });
+			}
+
 			Ok(())
 		}
 

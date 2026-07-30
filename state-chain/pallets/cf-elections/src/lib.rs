@@ -1372,6 +1372,15 @@ pub mod pallet {
 	// ---------------------------------------------------------------------------------------- //
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		pub fn do_vote_weight(n: u32) -> Weight {
+			T::WeightInfo::do_vote(n)
+		}
+
+		/// Instance-agnostic, so a caller voting in several instances pays it once.
+		pub fn authorise_voter_weight() -> Weight {
+			T::WeightInfo::authorise_voter()
+		}
+
 		pub fn do_vote(
 			context: &VoterContext<T>,
 			authority_votes: AuthorityVotes<T, I>,
@@ -1501,7 +1510,11 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[pallet::call_index(0)]
-		#[pallet::weight((T::WeightInfo::vote(authority_votes.len() as u32), DispatchClass::Operational))]
+		#[pallet::weight((
+			T::WeightInfo::do_vote(authority_votes.len() as u32)
+				.saturating_add(T::WeightInfo::authorise_voter()),
+			DispatchClass::Operational,
+		))]
 		#[cf_runtime_utilities::instrument(pallet)]
 		pub fn vote(
 			origin: OriginFor<T>,
