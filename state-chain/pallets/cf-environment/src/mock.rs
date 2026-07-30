@@ -321,6 +321,7 @@ impl pallet_cf_environment::Config for Test {
 	type TransactionPayments = MockPayment<Self>;
 	type GetTransactionPayments = ();
 	type WeightInfo = ();
+	type ElectionInstances = ();
 }
 
 pub const STATE_CHAIN_GATEWAY_ADDRESS: evm::Address = H160([0u8; 20]);

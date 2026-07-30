@@ -1405,6 +1405,14 @@ pub mod pallet {
 	// ---------------------------------------------------------------------------------------- //
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/// The weight of recording `n` votes in this instance.
+		///
+		/// Lets a caller batching votes across instances total up the cost without needing this
+		/// pallet's [`WeightInfo`] in scope.
+		pub fn vote_weight(n: u32) -> Weight {
+			T::WeightInfo::vote(n)
+		}
+
 		/// Record `authority_votes` for this instance on behalf of a caller that
 		/// [`authorise_voter`] has already checked.
 		///

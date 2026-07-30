@@ -60,6 +60,7 @@ pub trait WeightInfo {
 	fn dispatch_solana_gov_call() -> Weight;
 	fn non_native_signed_call() -> Weight;
 	fn batch(c: u32, ) -> Weight;
+	fn submit_election_votes() -> Weight;
 	fn eip712_build_domain_data() -> Weight;
 	fn eip712_build_typed_data() -> Weight;
 	fn eip712_build_typed_data_simple() -> Weight;
@@ -275,6 +276,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(7_496_401, 0)
 			// Standard Error: 13_378
 			.saturating_add(Weight::from_parts(1_663_232, 0).saturating_mul(c.into()))
+	}
+	/// TODO: placeholder - regenerate from the `submit_election_votes` benchmark.
+	/// Covers only the shared authorisation; each instance's votes are charged on top
+	/// via `ElectionInstanceVoting::weight`.
+	fn submit_election_votes() -> Weight {
+		Weight::from_parts(25_000_000, 0)
+			.saturating_add(T::DbWeight::get().reads(3_u64))
 	}
 	fn eip712_build_domain_data() -> Weight {
 		// Proof Size summary in bytes:
@@ -562,6 +570,13 @@ impl WeightInfo for () {
 		Weight::from_parts(7_496_401, 0)
 			// Standard Error: 13_378
 			.saturating_add(Weight::from_parts(1_663_232, 0).saturating_mul(c.into()))
+	}
+	/// TODO: placeholder - regenerate from the `submit_election_votes` benchmark.
+	/// Covers only the shared authorisation; each instance's votes are charged on top
+	/// via `ElectionInstanceVoting::weight`.
+	fn submit_election_votes() -> Weight {
+		Weight::from_parts(25_000_000, 0)
+			.saturating_add(ParityDbWeight::get().reads(3_u64))
 	}
 	fn eip712_build_domain_data() -> Weight {
 		// Proof Size summary in bytes:

@@ -49,6 +49,7 @@ use cf_primitives::{
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
+	elections::{authorise_voter, ElectionInstanceVoting},
 	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
 	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
@@ -142,6 +143,10 @@ pub mod pallet {
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
 
+		/// The `pallet-cf-elections` instances that a validator votes in, so that
+		/// [`Call::submit_election_votes`] can carry votes for all of them at once.
+		type ElectionInstances: ElectionInstanceVoting<Self>;
+
 		/// The runtime's safe mode is stored in this pallet.
 		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
 
@@ -208,6 +213,8 @@ pub mod pallet {
 		InvalidNestedBatch,
 		/// Signer is unable to pay fee.
 		FailedToProcessFee,
+		/// The caller is not in the current authority set, so cannot vote in elections.
+		NotAnAuthority,
 	}
 
 	#[pallet::pallet]
@@ -448,6 +455,10 @@ pub mod pallet {
 		BatchCompleted,
 		/// Tron Initialized: contract addresses have been set, first key activated
 		TronInitialized,
+		/// Votes submitted via [`Call::submit_election_votes`] were rejected by one elections
+		/// instance. The other instances in the same call are unaffected. `instance` is the
+		/// index within `ElectionInstances`.
+		ElectionInstanceVotesRejected { instance: u32, error: DispatchError },
 	}
 
 	#[pallet::call]
@@ -785,6 +796,37 @@ pub mod pallet {
 			#[cfg(feature = "runtime-benchmarks")]
 			_params: crate::benchmarking_types::RealisticCallParams,
 		) -> DispatchResult {
+			Ok(())
+		}
+
+		/// Record a validator's election votes across every `pallet-cf-elections` instance in
+		/// one extrinsic.
+		///
+		/// A validator votes in most instances on most blocks. Submitting those separately pays
+		/// a full signed extrinsic's overhead - signature verification, nonce, fee, the base
+		/// extrinsic weight - once per instance, and repeats the same authority checks each
+		/// time. This does both once.
+		///
+		/// Instances are still independent: votes rejected by one are reported via
+		/// [`Event::ElectionInstanceVotesRejected`] and leave the others untouched, matching what
+		/// per-instance extrinsics give today.
+		#[pallet::call_index(13)]
+		#[pallet::weight((
+			T::WeightInfo::submit_election_votes()
+				.saturating_add(T::ElectionInstances::weight(votes)),
+			DispatchClass::Operational,
+		))]
+		pub fn submit_election_votes(
+			origin: OriginFor<T>,
+			// Boxed to keep `RuntimeCall` small.
+			votes: Box<<T::ElectionInstances as ElectionInstanceVoting<T>>::Votes>,
+		) -> DispatchResult {
+			let context = authorise_voter::<T>(origin)?.ok_or(Error::<T>::NotAnAuthority)?;
+
+			for (instance, error) in T::ElectionInstances::vote_all(&context, *votes) {
+				Self::deposit_event(Event::<T>::ElectionInstanceVotesRejected { instance, error });
+			}
+
 			Ok(())
 		}
 

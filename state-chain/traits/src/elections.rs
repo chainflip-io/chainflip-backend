@@ -18,14 +18,19 @@
 //!
 //! `pallet-cf-elections` is instanced once per chain, so a validator that votes in every instance
 //! separately re-does the same authorisation for each one, and pays a whole extrinsic's overhead
-//! (signature verification, nonce, fee) every time. The authorisation is the same for every
-//! instance, so it lives here - not in the elections pallet - ready for a runtime-level pallet to
-//! do it once for a batch of instances without depending on the elections pallet or naming one.
+//! (signature verification, nonce, fee) every time. These live here rather than in the elections
+//! pallet so that a runtime-level pallet can offer a single batched extrinsic without depending on
+//! the elections pallet or naming any instance.
 
 use crate::{AccountRoleRegistry, Chainflip, EpochInfo};
 use cf_primitives::{AuthorityCount, EpochIndex};
-use frame_support::pallet_prelude::DispatchError;
+use frame_support::{
+	pallet_prelude::{DispatchError, Member},
+	weights::Weight,
+	Parameter,
+};
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
+use sp_std::prelude::*;
 
 /// Everything recording a vote needs about the caller that does *not* depend on which elections
 /// instance is being voted in.
@@ -63,4 +68,39 @@ pub fn authorise_voter<T: Chainflip>(
 		// `frame_system`, without needing that trait in scope here.
 		block_number: frame_system::Pallet::<T>::block_number(),
 	}))
+}
+
+/// The set of `pallet-cf-elections` instances a validator votes in, as one unit.
+///
+/// Implemented by the runtime, which is the only place that knows every instance. Lets a
+/// runtime-level pallet expose one batched vote extrinsic without depending on the elections
+/// pallet.
+pub trait ElectionInstanceVoting<T: Chainflip> {
+	/// Votes for each instance, each optional so a caller can target any subset.
+	type Votes: Parameter + Member;
+
+	/// The weight of recording `votes`, summed over the instances they actually target.
+	fn weight(votes: &Self::Votes) -> Weight;
+
+	/// Record `votes` in every instance they target.
+	///
+	/// Instances are independent: one failing must neither abort the rest nor roll back their
+	/// storage, which is what a caller submitting a separate extrinsic per instance gets today.
+	/// Returns the failures - paired with the instance's index in `Votes` - for the caller to
+	/// report, rather than failing the whole call.
+	fn vote_all(context: &VoterContext<T>, votes: Self::Votes) -> Vec<(u32, DispatchError)>;
+}
+
+/// No elections instances to vote in - for mock runtimes that do not include the elections
+/// pallet. Accepts only the empty vote set.
+impl<T: Chainflip> ElectionInstanceVoting<T> for () {
+	type Votes = ();
+
+	fn weight(_votes: &Self::Votes) -> Weight {
+		Weight::zero()
+	}
+
+	fn vote_all(_context: &VoterContext<T>, _votes: Self::Votes) -> Vec<(u32, DispatchError)> {
+		Vec::new()
+	}
 }

@@ -52,6 +52,8 @@ use crate::{
 };
 #[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 use cf_amm::math::Price;
+use cf_traits::elections::{ElectionInstanceVoting, VoterContext};
+use frame_support::pallet_prelude::Weight;
 use cf_chains::{
 	address::{
 		decode_and_validate_address_for_asset, to_encoded_address, try_from_encoded_address,
@@ -1244,5 +1246,83 @@ pub struct ChainflipNetworkProvider;
 impl cf_traits::ChainflipNetworkInfo for ChainflipNetworkProvider {
 	fn chainflip_network() -> ChainflipNetwork {
 		Environment::chainflip_network()
+	}
+}
+
+/// Votes for every `pallet-cf-elections` instance, carried by a single
+/// `Environment::submit_election_votes` extrinsic.
+///
+/// Each field is optional so a validator can target any subset of instances - in practice it
+/// sends whichever ones produced votes this block. Adding a chain means adding a field here,
+/// which changes the call encoding and so requires an engine release, exactly as adding a chain
+/// does already.
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
+pub struct AllElectionInstanceVotes {
+	pub ethereum: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, EthereumInstance>>>,
+	pub bitcoin: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, BitcoinInstance>>>,
+	pub arbitrum: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, ArbitrumInstance>>>,
+	pub solana: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, SolanaInstance>>>,
+	pub tron: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, TronInstance>>>,
+	pub generic: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, ()>>>,
+}
+
+pub struct AllElectionInstances;
+
+impl ElectionInstanceVoting<Runtime> for AllElectionInstances {
+	type Votes = AllElectionInstanceVotes;
+
+	fn weight(votes: &Self::Votes) -> Weight {
+		macro_rules! instance_weight {
+			($field:ident, $instance:ty) => {
+				votes.$field.as_ref().map_or(Weight::zero(), |v| {
+					pallet_cf_elections::Pallet::<Runtime, $instance>::vote_weight(v.len() as u32)
+				})
+			};
+		}
+		instance_weight!(ethereum, EthereumInstance)
+			.saturating_add(instance_weight!(bitcoin, BitcoinInstance))
+			.saturating_add(instance_weight!(arbitrum, ArbitrumInstance))
+			.saturating_add(instance_weight!(solana, SolanaInstance))
+			.saturating_add(instance_weight!(tron, TronInstance))
+			.saturating_add(instance_weight!(generic, ()))
+	}
+
+	fn vote_all(
+		context: &VoterContext<Runtime>,
+		votes: Self::Votes,
+	) -> sp_std::vec::Vec<(u32, DispatchError)> {
+		let mut failures = sp_std::vec::Vec::new();
+
+		// Each instance gets its own storage layer, so one rejecting its votes neither aborts
+		// the others nor rolls back what they already wrote. `do_vote` is a plain function, so
+		// unlike a dispatchable it gets no such layer automatically.
+		macro_rules! vote_in {
+			($index:expr, $field:ident, $instance:ty) => {
+				if let Some(votes) = votes.$field {
+					if let Err(error) = frame_support::storage::with_storage_layer(|| {
+						pallet_cf_elections::Pallet::<Runtime, $instance>::do_vote(context, *votes)
+					}) {
+						failures.push(($index, error));
+					}
+				}
+			};
+		}
+		vote_in!(0, ethereum, EthereumInstance);
+		vote_in!(1, bitcoin, BitcoinInstance);
+		vote_in!(2, arbitrum, ArbitrumInstance);
+		vote_in!(3, solana, SolanaInstance);
+		vote_in!(4, tron, TronInstance);
+		vote_in!(5, generic, ());
+
+		failures
 	}
 }
