@@ -1114,3 +1114,166 @@ mod validate_unsigned_tests {
 		}
 	}
 }
+
+mod submit_election_votes {
+	use super::*;
+	use crate::{Call, Error};
+	use cf_primitives::AccountRole;
+	use cf_test_utilities::{assert_has_matching_event, assert_no_matching_event};
+	use cf_traits::{
+		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, EpochInfo,
+	};
+	use frame_support::{
+		assert_err, dispatch::GetDispatchInfo, pallet_prelude::DispatchResult,
+	};
+
+	const AUTHORITY: u64 = 7;
+	const NOT_AN_AUTHORITY: u64 = 8;
+
+	/// A registered validator that is in the current authority set, at a non-zero index so a
+	/// test can tell a real index apart from a default.
+	fn setup_authority() {
+		let epoch = MockEpochInfo::epoch_index();
+		MockEpochInfo::set_authorities(vec![99, AUTHORITY]);
+		// `authority_index` reads this map, and it is what `authorise_voter` checks; note
+		// `NOT_AN_AUTHORITY` is deliberately left out of it.
+		MockEpochInfo::set_authority_indices(epoch, vec![99, AUTHORITY]);
+		for id in [AUTHORITY, NOT_AN_AUTHORITY] {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_account_role(
+				&id,
+				AccountRole::Validator,
+			)
+			.unwrap();
+		}
+	}
+
+	fn submit(who: u64, votes: Vec<MockInstanceVotes>) -> DispatchResult {
+		Environment::submit_election_votes(RuntimeOrigin::signed(who), Box::new(votes))
+	}
+
+	#[test]
+	fn records_votes_in_every_instance() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			assert_ok!(submit(
+				AUTHORITY,
+				vec![
+					MockInstanceVotes::accept(3),
+					MockInstanceVotes::accept(1),
+					MockInstanceVotes::accept(5),
+				]
+			));
+
+			// Every instance reached, in order, each handed the caller's authority index - the
+			// context established once by `authorise_voter` rather than per instance.
+			assert_eq!(
+				MockElectionInstances::recorded_votes(),
+				vec![(0, 3, 1), (1, 1, 1), (2, 5, 1)],
+			);
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::Environment(Event::ElectionInstanceVotesRejected { .. })
+			);
+		});
+	}
+
+	#[test]
+	fn a_rejecting_instance_does_not_stop_the_others() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			// Instance 1 refuses; 0 and 2 must still be reached, and the call must succeed -
+			// this is what a validator gets today from separate per-instance extrinsics.
+			assert_ok!(submit(
+				AUTHORITY,
+				vec![
+					MockInstanceVotes::accept(2),
+					MockInstanceVotes::reject(4),
+					MockInstanceVotes::accept(6),
+				]
+			));
+
+			assert_eq!(
+				MockElectionInstances::recorded_votes(),
+				vec![(0, 2, 1), (1, 4, 1), (2, 6, 1)],
+			);
+			// Only the index is asserted: `DispatchError::Other`'s message is `#[codec(skip)]`,
+			// so the mock's error arrives here as `Other("")`. Real instances fail with `Module`
+			// errors, which do survive the event's encoding.
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Environment(Event::ElectionInstanceVotesRejected { instance: 1, .. })
+			);
+		});
+	}
+
+	#[test]
+	fn every_rejection_is_reported_with_its_own_index() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			assert_ok!(submit(
+				AUTHORITY,
+				vec![
+					MockInstanceVotes::reject(1),
+					MockInstanceVotes::accept(1),
+					MockInstanceVotes::reject(1),
+				]
+			));
+
+			assert_eq!(
+				System::events()
+					.into_iter()
+					.filter_map(|record| match record.event {
+						RuntimeEvent::Environment(Event::ElectionInstanceVotesRejected {
+							instance,
+							..
+						}) => Some(instance),
+						_ => None,
+					})
+					.collect::<Vec<_>>(),
+				vec![0, 2],
+			);
+		});
+	}
+
+	#[test]
+	fn non_authorities_cannot_vote() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			// Registered as a validator, but not in the current authority set.
+			assert_err!(
+				submit(NOT_AN_AUTHORITY, vec![MockInstanceVotes::accept(1)]),
+				Error::<Test>::NotAnAuthority
+			);
+			assert!(MockElectionInstances::recorded_votes().is_empty());
+		});
+	}
+
+	#[test]
+	fn non_validators_cannot_vote() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			assert!(submit(123, vec![MockInstanceVotes::accept(1)]).is_err());
+			assert!(MockElectionInstances::recorded_votes().is_empty());
+		});
+	}
+
+	#[test]
+	fn weight_scales_with_the_votes_carried() {
+		let weight_of = |votes: Vec<MockInstanceVotes>| {
+			Call::<Test>::submit_election_votes { votes: Box::new(votes) }
+				.get_dispatch_info()
+				.call_weight
+		};
+		let ref_time = |votes| weight_of(votes).ref_time();
+		assert!(ref_time(vec![MockInstanceVotes::accept(10)]) > ref_time(vec![]));
+		assert!(
+			ref_time(vec![MockInstanceVotes::accept(1), MockInstanceVotes::accept(1)]) >
+				ref_time(vec![MockInstanceVotes::accept(1)])
+		);
+	}
+}
