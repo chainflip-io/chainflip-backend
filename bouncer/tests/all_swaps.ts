@@ -191,6 +191,20 @@ function generateSwapPairs(
     return true;
   });
 
+  // Enforce the guarantee documented above: every asset is exercised at least once as a source and
+  // once as a destination. If the sampling logic ever regresses, fail loudly rather than silently
+  // dropping coverage.
+  const sourcedAssets = new Set(uniquePairs.map((pair) => pair.source.asset));
+  const destinedAssets = new Set(uniquePairs.map((pair) => pair.destination.asset));
+  const missingSources = allTestedAssets.filter((asset) => !sourcedAssets.has(asset));
+  const missingDestinations = allTestedAssets.filter((asset) => !destinedAssets.has(asset));
+  if (missingSources.length > 0 || missingDestinations.length > 0) {
+    throw new Error(
+      `generateSwapPairs coverage gap — never a source: [${missingSources.join(', ')}]; ` +
+        `never a destination: [${missingDestinations.join(', ')}]`,
+    );
+  }
+
   return uniquePairs;
 }
 
@@ -205,14 +219,24 @@ export function testAllSwaps(timeoutPerSwap: number, thoroughlyTestedAssets: Ass
   const allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
   let allSwapsCount = 0;
 
+  // The CCM `Btc` vault-swap -> `ArbEth` remap below can collide with a genuine `ArbEth` CCM vault
+  // swap, so guard against appending the same swap twice.
+  const seenSwaps = new Set<string>();
+
   function appendSwap(
     sourceAsset: Asset,
     destAsset: Asset,
     functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
-    allSwapsCount++;
     const swapType = functionCall === testSwap ? 'Swap' : 'VaultSwap';
+    const key = `${sourceAsset}-${destAsset}-${swapType}-${ccmSwap}`;
+    if (seenSwaps.has(key)) {
+      return;
+    }
+    seenSwaps.add(key);
+
+    allSwapsCount++;
     allSwaps.push({
       name: `Swap ${allSwapsCount}: ${sourceAsset} to ${destAsset} (${ccmSwap ? 'CCM ' : ''}${swapType})`,
       test: async (context) => {
