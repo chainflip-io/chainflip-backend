@@ -98,7 +98,7 @@ From `bouncer/`. **All `run_test.ts` invocations run at `BOUNCER_LOG_LEVEL=debug
 ./commands/run_test.ts ./tests/boost.ts
 
 # By swap number — re-run a single AllSwaps case
-./commands/run_test.ts 318
+./commands/run_test.ts 22
 
 # Trace-level stdout (bypasses run_test.ts)
 BOUNCER_LOG_LEVEL=trace pnpm vitest run -t "BoostingForAsset"

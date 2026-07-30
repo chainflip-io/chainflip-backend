@@ -13,10 +13,24 @@ import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
-function shuffle<T>(array: T[]): T[] {
-  const result = array;
+const GENERATE_SWAPS_SEED = 1;
+
+// A tiny seedable PRNG (values in [0, 1)) so the sampled swap set is reproducible for a given seed.
+// Distribution quality doesn't matter here — it only decides which swaps to sample.
+function seededRng(seed: number): () => number {
+  let n = seed;
+  return () => {
+    n += 1;
+    const x = Math.sin(n) * 10000;
+    return x - Math.floor(x);
+  };
+}
+
+// Returns a shuffled copy
+function shuffle<T>(array: T[], rng: () => number): T[] {
+  const result = [...array];
   for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result;
@@ -75,9 +89,23 @@ type SwapPair = {
   destination: Destination;
 };
 
-function generateSwapPairs(allTestedAssets: Asset[], testWithAllPossiblePartners: Asset[]) {
-  const sources: Source[] = [];
-  const destinations: Destination[] = [];
+/**
+ * Builds the set of swap pairs to test, sampling rather than enumerating the full asset matrix.
+ *
+ * `allTestedAssets` assets are guaranteed to appear at least once as a source and at least
+ * once as a destination.
+ *
+ * `testWithAllPossiblePartners` assets are additionally paired with every
+ * other asset in both directions, and via a vault swap wherever the source chain supports it.
+ *
+ */
+function generateSwapPairs(
+  allTestedAssets: Asset[],
+  testWithAllPossiblePartners: Asset[],
+  rng: () => number,
+) {
+  let sources: Source[] = [];
+  let destinations: Destination[] = [];
 
   for (const asset of testWithAllPossiblePartners) {
     if (!allTestedAssets.includes(asset)) {
@@ -99,18 +127,16 @@ function generateSwapPairs(allTestedAssets: Asset[], testWithAllPossiblePartners
 
   function randomSource(arg: { exclude?: Asset } = {}): Source {
     const available = allTestedAssets.filter((a) => a !== arg.exclude);
-    const asset = available[Math.floor(Math.random() * available.length)];
+    const asset = available[Math.floor(rng() * available.length)];
     const chain = chainFromAsset(asset);
     const trigger =
-      vaultSwapSupportedChains.includes(chain) && Math.random() > 0.5
-        ? 'VaultSwap'
-        : 'DepositChannel';
+      vaultSwapSupportedChains.includes(chain) && rng() > 0.5 ? 'VaultSwap' : 'DepositChannel';
     return { asset, trigger };
   }
 
   function randomDestination(arg: { exclude?: Asset } = {}): Destination {
     const available = allTestedAssets.filter((a) => a !== arg.exclude);
-    const asset = available[Math.floor(Math.random() * available.length)];
+    const asset = available[Math.floor(rng() * available.length)];
     return { asset };
   }
 
@@ -141,8 +167,8 @@ function generateSwapPairs(allTestedAssets: Asset[], testWithAllPossiblePartners
   }
 
   // append swaps with random partners by picking from randomly shuffled sources and destinations
-  shuffle(sources);
-  shuffle(destinations);
+  sources = shuffle(sources, rng);
+  destinations = shuffle(destinations, rng);
   while (sources.length > 0 || destinations.length > 0) {
     const source = sources.pop() || randomSource();
     const destination = destinations.pop() || randomDestination();
@@ -169,7 +195,8 @@ function generateSwapPairs(allTestedAssets: Asset[], testWithAllPossiblePartners
   return uniquePairs;
 }
 
-export function testAllSwaps(timeoutPerSwap: number) {
+// `thoroughlyTestedAssets` are tested against *every* other asset in both directions.
+export function testAllSwaps(timeoutPerSwap: number, thoroughlyTestedAssets: Asset[] = []) {
   const allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
   let allSwapsCount = 0;
 
@@ -190,21 +217,21 @@ export function testAllSwaps(timeoutPerSwap: number) {
     });
   }
 
-  // All assets that should be tested.
+  // All assets that should be tested. Filter out assets here if needed.
   const allTestedAssets = Object.values(Assets);
-  // These assets are tested against *every* possible asset
-  const testWithAllPossiblePartners = Object.values(Assets).filter(
-    (id) => chainFromAsset(id) === 'Bsc',
-  );
 
-  const pairs = generateSwapPairs(allTestedAssets, testWithAllPossiblePartners);
+  const pairs = generateSwapPairs(
+    allTestedAssets,
+    thoroughlyTestedAssets,
+    seededRng(GENERATE_SWAPS_SEED),
+  );
   for (const { source, destination } of pairs) {
     const testFunction = source.trigger === 'DepositChannel' ? testSwap : testVaultSwap;
     appendSwap(source.asset, destination.asset, testFunction, false);
 
     // also do ccm version of the same swap if destination supports it
     if (ccmSupportedChains.includes(chainFromAsset(destination.asset))) {
-      // bitcoin vault swaps don't support ccm, so we use use ArbEth instead
+      // bitcoin vault swaps don't support ccm, so we use ArbEth instead
       const sourceAsset =
         source.asset === 'Btc' && source.trigger === 'VaultSwap' ? 'ArbEth' : source.asset;
       appendSwap(sourceAsset, destination.asset, testFunction, true);
