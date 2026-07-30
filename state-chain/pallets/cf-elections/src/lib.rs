@@ -167,7 +167,10 @@ pub mod pallet {
 	#[cfg(feature = "runtime-benchmarks")]
 	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_primitives::{AuthorityCount, EpochIndex};
-	use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
+	use cf_traits::{
+		elections::{authorise_voter, VoterContext},
+		Chainflip, EpochInfo,
+	};
 
 	use crate::electoral_system::ConsensusStatus;
 	pub use access_impls::RunnerStorageAccess;
@@ -228,7 +231,9 @@ pub mod pallet {
 		BlockNumberFor<T>,
 	>;
 
-	type AuthorityVotes<T, I> = BoundedBTreeMap<
+	/// The votes one authority submits for a single elections instance. Public so that the
+	/// runtime can name it when batching votes for several instances into one extrinsic.
+	pub type AuthorityVotes<T, I> = BoundedBTreeMap<
 		ElectionIdentifierOf<<T as Config<I>>::ElectoralSystemRunner>,
 		AuthorityVoteOf<<T as Config<I>>::ElectoralSystemRunner>,
 		ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
@@ -1399,41 +1404,33 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		#[pallet::call_index(0)]
-		#[pallet::weight((T::WeightInfo::vote(authority_votes.len() as u32), DispatchClass::Operational))]
-		pub fn vote(
-			origin: OriginFor<T>,
-			// Box to avoid RuntimeCall size
-			authority_votes: Box<AuthorityVotes<T, I>>,
+		/// Record `authority_votes` for this instance on behalf of a caller that
+		/// [`authorise_voter`] has already checked.
+		///
+		/// Split out of the [`Call::vote`] extrinsic so a caller voting in several instances at
+		/// once establishes the [`VoterContext`] a single time. Only the checks that genuinely
+		/// vary per instance are left here.
+		pub fn do_vote(
+			context: &VoterContext<T>,
+			authority_votes: AuthorityVotes<T, I>,
 		) -> DispatchResult {
-			// Labels the span with this instance's name in the runtime (e.g. `EthereumElections`),
-			// so that spans from the different `cf-elections` instances can be told apart when
-			// profiling a block with the runtime's `runtime-tracing` feature. Without a label they
-			// are indistinguishable: the span FRAME emits per extrinsic and per hook is targeted at
-			// `module_path!()`, which is identical for every instance.
-			//
-			// `enter_span!` discards its argument - including the `name()` lookup - unless
-			// `sp-tracing` is built with `with-tracing` (wasm) or `std` (tests), so this compiles
-			// to nothing at all in a production runtime.
-			sp_tracing::enter_span!(sp_tracing::trace_span!(
-				"vote",
-				pallet = <Self as frame_support::traits::PalletInfoAccess>::name()
-			));
+			let VoterContext { epoch_index, authority, authority_index, block_number } = context;
+			let (epoch_index, authority_index, block_number) =
+				(*epoch_index, *authority_index, *block_number);
 
-			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
+			ensure!(
+				matches!(Status::<T, I>::get(), Some(ElectionPalletStatus::Running)),
+				Error::<T, I>::Paused
+			);
 
 			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
 			ensure!(
-				ContributingAuthorities::<T, I>::contains_key(&authority),
+				ContributingAuthorities::<T, I>::contains_key(authority),
 				Error::<T, I>::NotContributing
 			);
 
-			// Constant for the whole extrinsic, so read it once rather than for every vote.
-			let block_number = frame_system::Pallet::<T>::current_block_number();
-
-			for (election_identifier, authority_vote) in *authority_votes {
+			for (election_identifier, authority_vote) in authority_votes {
 				// if an identifier refers to a non existent election, skip this vote,
 				// but continue processing others.
 				let unique_monotonic_identifier = if let Ok(unique_monotonic_identifier) =
@@ -1473,7 +1470,7 @@ pub mod pallet {
 				Self::handle_corrupt_storage(Self::take_vote_and_then(
 					epoch_index,
 					unique_monotonic_identifier,
-					&authority,
+					authority,
 					authority_index,
 					true, // Ensured before the loop.
 					component_storage_kind,
@@ -1510,7 +1507,7 @@ pub mod pallet {
 							// Store individual component
 							IndividualComponents::<T, I>::set(
 								unique_monotonic_identifier,
-								authority.clone(),
+								authority,
 								Some((properties, individual_component)),
 							);
 						}
@@ -1537,6 +1534,25 @@ pub mod pallet {
 			}
 
 			Ok(())
+		}
+	}
+
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		#[pallet::call_index(0)]
+		#[pallet::weight((T::WeightInfo::vote(authority_votes.len() as u32), DispatchClass::Operational))]
+		pub fn vote(
+			origin: OriginFor<T>,
+			// Box to avoid RuntimeCall size
+			authority_votes: Box<AuthorityVotes<T, I>>,
+		) -> DispatchResult {
+			sp_tracing::enter_span!(sp_tracing::trace_span!(
+				"vote",
+				pallet = <Self as frame_support::traits::PalletInfoAccess>::name()
+			));
+
+			let context = authorise_voter::<T>(origin)?.ok_or(Error::<T, I>::Unauthorised)?;
+			Self::do_vote(&context, *authority_votes)
 		}
 
 		#[pallet::call_index(1)]
@@ -2280,15 +2296,13 @@ pub mod pallet {
 		pub(crate) fn ensure_can_vote(
 			origin: OriginFor<T>,
 		) -> Result<(EpochIndex, T::ValidatorId, AuthorityCount), DispatchError> {
-			let epoch_index = T::EpochInfo::epoch_index();
-			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?.into();
-			let authority_index = T::EpochInfo::authority_index(epoch_index, &validator_id);
-			ensure!(authority_index.is_some(), Error::<T, I>::Unauthorised);
+			let VoterContext { epoch_index, authority, authority_index, .. } =
+				authorise_voter::<T>(origin)?.ok_or(Error::<T, I>::Unauthorised)?;
 			ensure!(
 				matches!(Status::<T, I>::get(), Some(ElectionPalletStatus::Running)),
 				Error::<T, I>::Paused
 			);
-			Ok((epoch_index, validator_id, authority_index.unwrap()))
+			Ok((epoch_index, authority, authority_index))
 		}
 		fn ensure_governance(
 			origin: OriginFor<T>,
