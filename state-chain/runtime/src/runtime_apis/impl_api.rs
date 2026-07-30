@@ -2331,6 +2331,7 @@ mod witnessed_events {
 			ForeignChain::Ethereum => extract_ethereum_witnessed_events(),
 			ForeignChain::Arbitrum => extract_arbitrum_witnessed_events(),
 			ForeignChain::Tron => extract_tron_witnessed_events(),
+			ForeignChain::Bsc => extract_bsc_witnessed_events(),
 			_ => Err(DispatchErrorWithMessage::RawMessage(
 				b"Chain not supported for witnessed events".to_vec(),
 			)),
@@ -2433,6 +2434,24 @@ mod witnessed_events {
 		);
 
 		Ok(RawWitnessedEvents::Tron { deposits, vault_deposits, broadcasts })
+	}
+
+	fn extract_bsc_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		let state =
+			ElectoralUnsynchronisedState::<Runtime, BscInstance>::get().ok_or_else(|| {
+				DispatchErrorWithMessage::RawMessage(
+					b"Bsc electoral state not initialized".to_vec(),
+				)
+			})?;
+
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.3,
+			height: |h: &cf_chains::witness_period::BlockWitnessRange<Bsc>| *h.root(),
+		);
+
+		Ok(RawWitnessedEvents::Bsc { deposits, vault_deposits, broadcasts })
 	}
 
 	fn convert_deposit_witness<C: Chain>(
