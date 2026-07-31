@@ -620,7 +620,13 @@ impl Dispatchable for PolkadotRuntimeCall {
 #[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum SystemCall {}
 
-impl DepositDetailsToTransactionInId<PolkadotCrypto> for u32 {}
+impl DepositDetailsToTransactionInId<PolkadotCrypto> for TxId {
+	fn deposit_ids(&self) -> Option<Vec<<PolkadotCrypto as ChainCrypto>::TransactionInId>> {
+		Some(vec![self.clone()])
+	}
+}
+
+impl DepositDetailsToTransactionInId<PolkadotCrypto> for PolkadotExtrinsicIndex {}
 
 #[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]

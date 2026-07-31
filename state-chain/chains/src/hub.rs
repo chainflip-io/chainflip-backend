@@ -79,7 +79,7 @@ impl Chain for Assethub {
 	type ChainAccount = PolkadotAccountId;
 	type DepositFetchId = PolkadotChannelId;
 	type DepositChannelState = PolkadotChannelState;
-	type DepositDetails = PolkadotExtrinsicIndex;
+	type DepositDetails = TxId;
 	type Transaction = PolkadotTransactionData;
 	type TransactionMetadata = ();
 	type TransactionRef = PolkadotTransactionId;
