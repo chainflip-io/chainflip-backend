@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
+	elections::{
+		vote_batcher::VoteBatcher,
+		voter_api::{CompositeVoter, VoterApi},
+	},
 	evm::event::{Event, EvmEventSource},
 	tron::{
 		cached_rpc::{TronCachingClient, TronRetryRpcApiWithResult},
@@ -432,6 +435,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
 	state_chain_client: Arc<StateChainClient>,
+	vote_batcher: VoteBatcher,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -493,6 +497,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_batcher = vote_batcher.clone();
 			let deposit_channel_config = deposit_channel_config.clone();
 			let vault_deposit_config = vault_deposit_config.clone();
 			let key_manager_config = key_manager_config.clone();
@@ -520,6 +525,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Tron",
+							vote_batcher,
 						)
 						.continuously_vote()
 						.await;

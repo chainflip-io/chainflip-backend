@@ -335,13 +335,13 @@ impl MockInstanceVotes {
 	}
 }
 
-pub struct MockElectionInstances;
+pub struct MockElectionInstances<T>(PhantomData<T>);
 
 const RECORDED_VOTES: &[u8] = b"MockElectionInstances::RecordedVotes";
 
 pub const INSTANCE_REJECTED: DispatchError = DispatchError::Other("instance rejected the votes");
 
-impl MockElectionInstances {
+impl<T: cf_traits::Chainflip> MockElectionInstances<T> {
 	/// `(instance index, vote count, voter's authority index)` for every instance reached, in
 	/// the order reached.
 	pub fn recorded_votes() -> Vec<(u32, u32, AuthorityCount)> {
@@ -355,7 +355,7 @@ impl MockElectionInstances {
 	}
 }
 
-impl ElectionInstancesVoting<Test> for MockElectionInstances {
+impl<T: cf_traits::Chainflip> ElectionInstancesVoting<T> for MockElectionInstances<T> {
 	type Votes = Vec<MockInstanceVotes>;
 
 	// Fake units: one per vote recorded, plus one for the authorisation paid once per call.
@@ -367,7 +367,7 @@ impl ElectionInstancesVoting<Test> for MockElectionInstances {
 		Weight::from_parts(votes.iter().map(|v| v.count as u64).sum(), 0)
 	}
 
-	fn vote_all(context: &VoterContext<Test>, votes: Self::Votes) -> Vec<(u32, DispatchError)> {
+	fn vote_all(context: &VoterContext<T>, votes: Self::Votes) -> Vec<(u32, DispatchError)> {
 		votes
 			.into_iter()
 			.enumerate()
@@ -401,7 +401,7 @@ impl pallet_cf_environment::Config for Test {
 	type TransactionPayments = MockPayment<Self>;
 	type GetTransactionPayments = ();
 	type WeightInfo = ();
-	type ElectionInstances = MockElectionInstances;
+	type ElectionInstances = MockElectionInstances<Self>;
 }
 
 pub const STATE_CHAIN_GATEWAY_ADDRESS: evm::Address = H160([0u8; 20]);
@@ -503,7 +503,7 @@ pub mod benchmarks_mock {
 		type TransactionPayments = MockPayment<Self>;
 		type GetTransactionPayments = ();
 		type WeightInfo = ();
-		type ElectionInstances = ();
+		type ElectionInstances = MockElectionInstances<Self>;
 	}
 
 	pub struct MockWaivedFees;

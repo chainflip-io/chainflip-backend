@@ -111,7 +111,10 @@ use cf_traits::{
 	FeeMultiplierProvider, FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider,
 	OnBroadcastReady, OnDeposit, OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
-use frame_support::pallet_prelude::Weight;
+use frame_support::{
+	instances::{Instance1, Instance3, Instance4, Instance5, Instance6, Instance7, Instance8},
+	pallet_prelude::Weight,
+};
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
 pub use deregistration_hooks::RuntimeDeregistrationHooks;
@@ -1314,21 +1317,97 @@ impl cf_traits::ChainflipNetworkInfo for ChainflipNetworkProvider {
 /// Fields are ordered by pallet instance: the chain-agnostic `generic` instance first, then one
 /// field per chain in `ForeignChain` order. Adding a chain means appending a field here and a
 /// `vote_in_weight!` and `vote_in!` line below, keyed by its `ForeignChain` index.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-pub struct AllElectionInstanceVotes {
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub struct AllElectionInstancesVotes {
 	pub generic: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, ()>>>,
 	pub ethereum: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, EthereumInstance>>>,
 	pub bitcoin: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, BitcoinInstance>>>,
 	pub arbitrum: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, ArbitrumInstance>>>,
 	pub solana: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, SolanaInstance>>>,
+	pub assethub: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, AssethubInstance>>>,
 	pub tron: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, TronInstance>>>,
 	pub bsc: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, BscInstance>>>,
+}
+
+/// Implemented per elections instance so that a caller holding one instance's votes - the
+/// engine's per-instance voter - can package them for [`Call::submit_elections_votes`] knowing
+/// only its own instance.
+///
+/// Keyed on the instance marker rather than on the votes: `AuthorityVotes<Runtime, I>` is built
+/// from associated-type projections through `I`, and coherence does not normalise projections
+/// when checking impl overlap, so `From<AuthorityVotes<Runtime, I>>` impls are rejected as
+/// possibly-overlapping however concretely `I` is spelled. `Instance1` in an impl header has
+/// nothing to normalise.
+pub trait BatchedInstance: Sized + 'static
+where
+	Runtime: pallet_cf_elections::Config<Self>,
+{
+	/// This instance's votes, as a batch carrying only them.
+	fn votes(
+		votes: pallet_cf_elections::AuthorityVotes<Runtime, Self>,
+	) -> AllElectionInstancesVotes;
+}
+
+/// The one place the set of elections instances is enumerated: adding a chain means adding a
+/// field to [`AllElectionInstancesVotes`] and a line here.
+///
+/// Spelled with the concrete `InstanceN` types rather than the `EthereumInstance` aliases -
+/// those aliases are themselves projections (`<Ethereum as PalletInstanceAlias>::Instance`),
+/// which coherence cannot tell apart either.
+macro_rules! election_instances {
+	($( $field:ident => $instance:ty ),+ $(,)?) => {
+		$(
+			impl BatchedInstance for $instance {
+				fn votes(
+					votes: pallet_cf_elections::AuthorityVotes<Runtime, Self>,
+				) -> AllElectionInstancesVotes {
+					AllElectionInstancesVotes {
+						$field: Some(Box::new(votes)),
+						..Default::default()
+					}
+				}
+			}
+		)+
+
+		impl AllElectionInstancesVotes {
+			/// How many instances this batch carries votes for.
+			pub fn instances(&self) -> usize {
+				[$( self.$field.is_some() ),+].into_iter().filter(|carried| *carried).count()
+			}
+
+			/// Merge `other` in, or hand it straight back if any instance it carries already
+			/// has votes here - a batch has room for one set of votes per instance.
+			///
+			/// Handing `other` back rather than overwriting is what makes it impossible to
+			/// drop votes: a caller gathering several instances either merged them, or still
+			/// holds them and must put them in another batch.
+			pub fn try_merge(&mut self, other: Self) -> Result<(), Self> {
+				if true $( && !(self.$field.is_some() && other.$field.is_some()) )+ {
+					$( if other.$field.is_some() { self.$field = other.$field; } )+
+					Ok(())
+				} else {
+					Err(other)
+				}
+			}
+		}
+	};
+}
+
+election_instances! {
+	ethereum => Instance1,
+	bitcoin => Instance3,
+	arbitrum => Instance4,
+	solana => Instance5,
+	assethub => Instance6,
+	tron => Instance7,
+	bsc => Instance8,
+	generic => (),
 }
 
 pub struct AllElectionInstances;
 
 impl ElectionInstancesVoting<Runtime> for AllElectionInstances {
-	type Votes = AllElectionInstanceVotes;
+	type Votes = AllElectionInstancesVotes;
 
 	fn authorise_voter_weight() -> Weight {
 		// Instance-agnostic, so any instance's weights serve.
@@ -1348,6 +1427,7 @@ impl ElectionInstancesVoting<Runtime> for AllElectionInstances {
 			.saturating_add(vote_in_weight!(bitcoin, BitcoinInstance))
 			.saturating_add(vote_in_weight!(arbitrum, ArbitrumInstance))
 			.saturating_add(vote_in_weight!(solana, SolanaInstance))
+			.saturating_add(vote_in_weight!(assethub, AssethubInstance))
 			.saturating_add(vote_in_weight!(tron, TronInstance))
 			.saturating_add(vote_in_weight!(bsc, BscInstance))
 	}
@@ -1380,6 +1460,7 @@ impl ElectionInstancesVoting<Runtime> for AllElectionInstances {
 		vote_in!(ForeignChain::Bitcoin as u32, bitcoin, BitcoinInstance);
 		vote_in!(ForeignChain::Arbitrum as u32, arbitrum, ArbitrumInstance);
 		vote_in!(ForeignChain::Solana as u32, solana, SolanaInstance);
+		vote_in!(ForeignChain::Assethub as u32, assethub, AssethubInstance);
 		vote_in!(ForeignChain::Tron as u32, tron, TronInstance);
 		vote_in!(ForeignChain::Bsc as u32, bsc, BscInstance);
 
