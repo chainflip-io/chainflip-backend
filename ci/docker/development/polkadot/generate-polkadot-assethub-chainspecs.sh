@@ -1,5 +1,45 @@
 #!/bin/sh
 
+# Generates the Polkadot relay-chain and Asset Hub chainspecs used by localnet.
+#
+# Run this script from the Chainflip repository root. The version argument selects the output
+# directory, while POLKADOT_FELLOWS_RUNTIMES_DIR must point to a checkout of the matching Fellows
+# runtimes release. Docker and jq must be available.
+#
+# Example:
+#   POLKADOT_FELLOWS_RUNTIMES_DIR=../polkadot-fellows-runtimes \
+#     ./ci/docker/development/polkadot/generate-polkadot-assethub-chainspecs.sh v2.3.2
+#
+# The generated files are written to ci/docker/development/polkadot/<version>/:
+#
+#   - assethub-genesis-state.txt: generated from the assethub node, has to be embedded in the polkadot.* chainspecs.
+#   - assethub-genesis-wasm.txt: generated from the assethub node, has to be embedded in the polkadot.* chainspecs.
+#   - assethub.json: final (readable) assethub chainspec, includes configuration of local USDC and USDT genesis assets.
+#
+#   - polkadot-genesis-wasm.txt: generated from polkadot node, incuded in the polkadot.* chainspecs.
+#   - polkadot.json: (readable) polkadot chainspec, cannot be used as-is because of missing overrides.
+#   - polkadot.raw.json: final polkadot chainspec. Contains converted (to raw format) polkadot.json, and additional raw storage overrides.
+#
+# Generation proceeds as follows:
+#   1. Builds the chain-spec-generator with --features=fast-runtime (for short session durations on polkadot). 
+#   2. Generates assethub chainspec with chain-spec-generate, then patches additional config on top
+#      (USDC and USDT assets setup).
+#   3. Exports assethub genesis state and genesis wasm by starting up a temporary node with this chainspec.
+#      These have to be included in the polkadot chainspec.
+#   4. Generates polkadot chainspec, to get just the runtime WASM, and inserts it into an existing polkadot
+#      chainspec template (it probably has some configuration that we need).
+#   5. Converts the polkadot chainspec into "raw" format since that is required for storage overrides.
+#   6. This step enables 3s block times on assethub, which requires certain configurations on polkadot.
+#      AI generated: Injects two full-time core assignments for para 1000 and repairs the derived session-0
+#      parachain validator state. Registering Asset Hub adds the second scheduler core to the one
+#      seeded by polkadot.template.json; both resulting cores are assigned to Asset Hub. FRAME runs
+#      Session's genesis handler before Configuration, AuthorityDiscovery, and Session validators
+#      finish populating storage, so the generated session-0 groups, keys, and SessionInfo are
+#      otherwise stale. The SCALE values below are tied to this runtime version, and the jq guard
+#      deliberately fails generation if the expected source encoding changes.
+#
+# Note: steps 6 might be brittle and might require changes when upstream polkadot/assethub architecture changes.
+#
 export VERSION_TAG=$1
 
 export CURRENT_DIR="$(pwd)"
@@ -66,8 +106,8 @@ docker run --rm --platform linux/amd64 \
     --chain "/chainspec.json" \
     --raw > $POLKADOT_TEMP_RAW_CHAINSPEC
 
-# 6. Assign both relay cores to Asset Hub from block 1 and initialize the parachain
-# validator state for session 0.
+# 6. Enable 3s block times for Assethub:
+# Assign both relay cores to Asset Hub from block 1 and initialize the parachain validator state for session 0.
 # These are the SCALE-encoded ParaScheduler CoreDescriptors and CoreSchedules entries for
 # Coretime::assign_core(core, 1, [(Task(1000), 57600)], None).
 CORE_DESCRIPTORS_KEY="0x94eadf0156a8ad5156507773d0471e4a04e6ac775a3245623103ffec2cb2c92f"
