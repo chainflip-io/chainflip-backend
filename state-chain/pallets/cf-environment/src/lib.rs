@@ -458,7 +458,10 @@ pub mod pallet {
 		/// Votes submitted via [`Call::submit_election_votes`] were rejected by one elections
 		/// instance. The other instances in the same call are unaffected. `instance` is the
 		/// index within `ElectionInstances`.
-		ElectionInstanceVotesRejected { instance: u32, error: DispatchError },
+		ElectionInstanceVotesRejected {
+			instance: u32,
+			error: DispatchError,
+		},
 	}
 
 	#[pallet::call]
@@ -819,7 +822,7 @@ pub mod pallet {
 		pub fn submit_election_votes(
 			origin: OriginFor<T>,
 			// Boxed to keep `RuntimeCall` small.
-			votes: Box<<T::ElectionInstances as ElectionInstanceVoting<T>>::Votes>,
+			votes: Box<<T::ElectionInstances as ElectionInstanceVoting<T>>::VotesBatch>,
 		) -> DispatchResult {
 			let context = authorise_voter::<T>(origin)?.ok_or(Error::<T>::NotAnAuthority)?;
 

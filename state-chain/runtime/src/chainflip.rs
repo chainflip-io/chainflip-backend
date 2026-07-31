@@ -52,8 +52,6 @@ use crate::{
 };
 #[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 use cf_amm::math::Price;
-use cf_traits::elections::{ElectionInstanceVoting, VoterContext};
-use frame_support::pallet_prelude::Weight;
 use cf_chains::{
 	address::{
 		decode_and_validate_address_for_asset, to_encoded_address, try_from_encoded_address,
@@ -104,10 +102,15 @@ use cf_primitives::{
 	ChannelId, DcaParameters, ONE_AS_BASIS_POINTS,
 };
 use cf_traits::{
+	elections::{ElectionInstanceVoting, VoterContext},
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
 	Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	FeeMultiplierProvider, FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider,
 	OnBroadcastReady, OnDeposit, OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
+};
+use frame_support::{
+	instances::{Instance1, Instance3, Instance4, Instance5, Instance7},
+	pallet_prelude::Weight,
 };
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
@@ -1256,17 +1259,8 @@ impl cf_traits::ChainflipNetworkInfo for ChainflipNetworkProvider {
 /// sends whichever ones produced votes this block. Adding a chain means adding a field here,
 /// which changes the call encoding and so requires an engine release, exactly as adding a chain
 /// does already.
-#[derive(
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-)]
-pub struct AllElectionInstanceVotes {
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub struct ElectionInstancesVotesBatch {
 	pub ethereum: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, EthereumInstance>>>,
 	pub bitcoin: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, BitcoinInstance>>>,
 	pub arbitrum: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, ArbitrumInstance>>>,
@@ -1275,15 +1269,88 @@ pub struct AllElectionInstanceVotes {
 	pub generic: Option<Box<pallet_cf_elections::AuthorityVotes<Runtime, ()>>>,
 }
 
+/// Implemented per elections instance so that a caller holding one instance's votes - the
+/// engine's per-instance voter - can package them for [`Call::submit_election_votes`] knowing
+/// only its own instance.
+///
+/// Keyed on the instance marker rather than on the votes: `AuthorityVotes<Runtime, I>` is built
+/// from associated-type projections through `I`, and coherence does not normalise projections
+/// when checking impl overlap, so `From<AuthorityVotes<Runtime, I>>` impls are rejected as
+/// possibly-overlapping however concretely `I` is spelled. `Instance1` in an impl header has
+/// nothing to normalise.
+pub trait BatchedInstance: Sized + 'static
+where
+	Runtime: pallet_cf_elections::Config<Self>,
+{
+	/// This instance's votes, as a batch carrying only them.
+	fn votes(
+		votes: pallet_cf_elections::AuthorityVotes<Runtime, Self>,
+	) -> ElectionInstancesVotesBatch;
+}
+
+/// The one place the set of elections instances is enumerated: adding a chain means adding a
+/// field to [`ElectionInstancesVotesBatch`] and a line here.
+///
+/// Spelled with the concrete `InstanceN` types rather than the `EthereumInstance` aliases -
+/// those aliases are themselves projections (`<Ethereum as PalletInstanceAlias>::Instance`),
+/// which coherence cannot tell apart either.
+macro_rules! election_instances {
+	($( $field:ident => $instance:ty ),+ $(,)?) => {
+		$(
+			impl BatchedInstance for $instance {
+				fn votes(
+					votes: pallet_cf_elections::AuthorityVotes<Runtime, Self>,
+				) -> ElectionInstancesVotesBatch {
+					ElectionInstancesVotesBatch {
+						$field: Some(Box::new(votes)),
+						..Default::default()
+					}
+				}
+			}
+		)+
+
+		impl ElectionInstancesVotesBatch {
+			/// How many instances this batch carries votes for.
+			pub fn instances(&self) -> usize {
+				[$( self.$field.is_some() ),+].into_iter().filter(|carried| *carried).count()
+			}
+
+			/// Merge `other` in, or hand it straight back if any instance it carries already
+			/// has votes here - a batch has room for one set of votes per instance.
+			///
+			/// Handing `other` back rather than overwriting is what makes it impossible to
+			/// drop votes: a caller gathering several instances either merged them, or still
+			/// holds them and must put them in another batch.
+			pub fn try_merge(&mut self, other: Self) -> Result<(), Self> {
+				if true $( && !(self.$field.is_some() && other.$field.is_some()) )+ {
+					$( if other.$field.is_some() { self.$field = other.$field; } )+
+					Ok(())
+				} else {
+					Err(other)
+				}
+			}
+		}
+	};
+}
+
+election_instances! {
+	ethereum => Instance1,
+	bitcoin => Instance3,
+	arbitrum => Instance4,
+	solana => Instance5,
+	tron => Instance7,
+	generic => (),
+}
+
 pub struct AllElectionInstances;
 
 impl ElectionInstanceVoting<Runtime> for AllElectionInstances {
-	type Votes = AllElectionInstanceVotes;
+	type VotesBatch = ElectionInstancesVotesBatch;
 
-	fn weight(votes: &Self::Votes) -> Weight {
+	fn weight(votes_batch: &Self::VotesBatch) -> Weight {
 		macro_rules! instance_weight {
 			($field:ident, $instance:ty) => {
-				votes.$field.as_ref().map_or(Weight::zero(), |v| {
+				votes_batch.$field.as_ref().map_or(Weight::zero(), |v| {
 					pallet_cf_elections::Pallet::<Runtime, $instance>::vote_weight(v.len() as u32)
 				})
 			};
@@ -1298,7 +1365,7 @@ impl ElectionInstanceVoting<Runtime> for AllElectionInstances {
 
 	fn vote_all(
 		context: &VoterContext<Runtime>,
-		votes: Self::Votes,
+		votes_batch: Self::VotesBatch,
 	) -> sp_std::vec::Vec<(u32, DispatchError)> {
 		let mut failures = sp_std::vec::Vec::new();
 
@@ -1307,7 +1374,7 @@ impl ElectionInstanceVoting<Runtime> for AllElectionInstances {
 		// unlike a dispatchable it gets no such layer automatically.
 		macro_rules! vote_in {
 			($index:expr, $field:ident, $instance:ty) => {
-				if let Some(votes) = votes.$field {
+				if let Some(votes) = votes_batch.$field {
 					if let Err(error) = frame_support::storage::with_storage_layer(|| {
 						pallet_cf_elections::Pallet::<Runtime, $instance>::do_vote(context, *votes)
 					}) {

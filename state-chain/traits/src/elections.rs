@@ -77,10 +77,10 @@ pub fn authorise_voter<T: Chainflip>(
 /// pallet.
 pub trait ElectionInstanceVoting<T: Chainflip> {
 	/// Votes for each instance, each optional so a caller can target any subset.
-	type Votes: Parameter + Member;
+	type VotesBatch: Parameter + Member;
 
 	/// The weight of recording `votes`, summed over the instances they actually target.
-	fn weight(votes: &Self::Votes) -> Weight;
+	fn weight(votes: &Self::VotesBatch) -> Weight;
 
 	/// Record `votes` in every instance they target.
 	///
@@ -88,19 +88,19 @@ pub trait ElectionInstanceVoting<T: Chainflip> {
 	/// storage, which is what a caller submitting a separate extrinsic per instance gets today.
 	/// Returns the failures - paired with the instance's index in `Votes` - for the caller to
 	/// report, rather than failing the whole call.
-	fn vote_all(context: &VoterContext<T>, votes: Self::Votes) -> Vec<(u32, DispatchError)>;
+	fn vote_all(context: &VoterContext<T>, votes: Self::VotesBatch) -> Vec<(u32, DispatchError)>;
 }
 
 /// No elections instances to vote in - for mock runtimes that do not include the elections
 /// pallet. Accepts only the empty vote set.
 impl<T: Chainflip> ElectionInstanceVoting<T> for () {
-	type Votes = ();
+	type VotesBatch = ();
 
-	fn weight(_votes: &Self::Votes) -> Weight {
+	fn weight(_votes: &Self::VotesBatch) -> Weight {
 		Weight::zero()
 	}
 
-	fn vote_all(_context: &VoterContext<T>, _votes: Self::Votes) -> Vec<(u32, DispatchError)> {
+	fn vote_all(_context: &VoterContext<T>, _votes: Self::VotesBatch) -> Vec<(u32, DispatchError)> {
 		Vec::new()
 	}
 }
