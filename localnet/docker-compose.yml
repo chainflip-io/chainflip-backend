@@ -120,6 +120,7 @@ services:
       - --chain=/chainspecs/v2.3.2/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker1
+      - --public-addr=/dns4/polkadot1/tcp/30333
       - --rpc-cors=all
       - --rpc-external
       - --rpc-methods=unsafe
@@ -154,6 +155,7 @@ services:
       - --chain=/chainspecs/v2.3.2/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker2
+      - --public-addr=/dns4/polkadot2/tcp/30333
       - --rpc-cors=all
       - --rpc-external
       - --rpc-methods=unsafe
