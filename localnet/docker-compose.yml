@@ -175,7 +175,7 @@ services:
   assethub:
     container_name: assethub
     platform: linux/amd64
-    image: docker.io/parity/polkadot-parachain:unstable2604-rc5
+    image: docker.io/parity/polkadot-parachain:v1.24.0
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
