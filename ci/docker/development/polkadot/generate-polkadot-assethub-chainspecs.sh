@@ -3,6 +3,7 @@
 export VERSION_TAG=$1
 
 export CURRENT_DIR="$(pwd)"
+POLKADOT_IMAGE="docker.io/parity/polkadot:v1.24.0"
 POLKADOT_PARACHAIN_IMAGE="docker.io/parity/polkadot-parachain:unstable2604-rc5"
 
 # create folder for chainspecs
@@ -44,6 +45,7 @@ POLKADOT_CHAINSPEC="./ci/docker/development/polkadot/${VERSION_TAG}/polkadot.jso
 POLKADOT_GENESIS_WASM="./ci/docker/development/polkadot/${VERSION_TAG}/polkadot-genesis-wasm.txt"
 # 1. Temporaries
 POLKADOT_TEMP_CHAINSPEC="$(mktemp)"
+POLKADOT_TEMP_RAW_CHAINSPEC="$(mktemp)"
 # 2. Generate chainspec
 ${POLKADOT_FELLOWS_RUNTIMES_DIR}/target/release/chain-spec-generator polkadot-local > $POLKADOT_TEMP_CHAINSPEC
 # 3. Extract polkadot wasm
@@ -55,3 +57,29 @@ jq --rawfile polkadot_wasm $POLKADOT_GENESIS_WASM \
     '.genesis.runtimeGenesis.code = $polkadot_wasm |
      .genesis.runtimeGenesis.patch.paras.paras = [[1000, [$assethub_state, $assethub_wasm, true]]]' \
     $POLKADOT_CHAINSPEC_TEMPLATE > $POLKADOT_CHAINSPEC
+
+# 5. Convert the completed relay chainspec to raw storage.
+docker run --rm --platform linux/amd64 \
+    --volume "${CURRENT_DIR}/ci/docker/development/polkadot/${VERSION_TAG}:/chainspecs:ro" \
+    "$POLKADOT_IMAGE" export-chain-spec \
+    --chain "/chainspecs/polkadot.json" \
+    --raw > $POLKADOT_TEMP_RAW_CHAINSPEC
+
+# 6. Assign both relay cores to Asset Hub from block 1.
+# These are the SCALE-encoded ParaScheduler CoreDescriptors and CoreSchedules entries for
+# Coretime::assign_core(core, 1, [(Task(1000), 57600)], None).
+CORE_DESCRIPTORS_KEY="0x94eadf0156a8ad5156507773d0471e4a04e6ac775a3245623103ffec2cb2c92f"
+CORE_DESCRIPTORS="0x0800000000010100000001000000000100000001010000000100000000"
+CORE_0_SCHEDULE_KEY="0x94eadf0156a8ad5156507773d0471e4a4a4aebd4fb28ddd34de9226f0abce9049599a4a217cb299f0100000000000000"
+CORE_1_SCHEDULE_KEY="0x94eadf0156a8ad5156507773d0471e4a4a4aebd4fb28ddd34de9226f0abce9043ca6b51a1bc48e280100000001000000"
+CORE_SCHEDULE="0x0402e803000000e10000"
+
+jq --arg core_descriptors_key "$CORE_DESCRIPTORS_KEY" \
+    --arg core_descriptors "$CORE_DESCRIPTORS" \
+    --arg core_0_schedule_key "$CORE_0_SCHEDULE_KEY" \
+    --arg core_1_schedule_key "$CORE_1_SCHEDULE_KEY" \
+    --arg core_schedule "$CORE_SCHEDULE" \
+    '.genesis.raw.top[$core_descriptors_key] = $core_descriptors |
+     .genesis.raw.top[$core_0_schedule_key] = $core_schedule |
+     .genesis.raw.top[$core_1_schedule_key] = $core_schedule' \
+    $POLKADOT_TEMP_RAW_CHAINSPEC > $POLKADOT_CHAINSPEC
