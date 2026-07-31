@@ -34,7 +34,7 @@ impl<Id: Encode + Decode> MockDeregistrationCheck<Id> {
 		if should_fail {
 			<Self as MockPalletStorage>::put_storage(SHOULD_FAIL, account_id, ());
 		} else {
-			Self::take_storage::<_, Id>(SHOULD_FAIL, account_id);
+			Self::take_storage::<_, ()>(SHOULD_FAIL, account_id);
 		}
 	}
 	fn should_fail(account_id: &Id) -> bool {

@@ -388,9 +388,6 @@ fn account_registration_and_deregistration() {
 			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT)),
 		);
 
-		assert!(
-			MockRefundAddressRegistry::get_refund_address(&LP_ACCOUNT, ForeignChain::Ethereum).is_none()
-		);
 
 		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT)
 			.iter()

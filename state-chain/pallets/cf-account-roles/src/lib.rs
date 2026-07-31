@@ -30,7 +30,9 @@ use sp_std::boxed::Box;
 use cf_traits::Chainflip;
 
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, DeregistrationCheck, SpawnAccount, VanityName};
+use cf_traits::{
+	AccountRoleRegistry, DeregistrationCheck, RefundAddressRegistry, SpawnAccount, VanityName,
+};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	error::BadOrigin,
@@ -80,6 +82,10 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		type WeightInfo: WeightInfo;
+		/// Used to clean up a Liquidity Provider's refund addresses on deregistration.
+		type RefundAddressRegistry: RefundAddressRegistry<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -296,6 +302,17 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		});
 
 		Ok(())
+	}
+
+	/// Deregister a Liquidity Provider, clearing their refund addresses first.
+	///
+	/// Overrides the trait default so that this cleanup happens for every caller (e.g.
+	/// `cf-lp`'s `deregister_lp_account` extrinsic, or `cf-validator`'s auto-deregistration on
+	/// full undelegation) rather than being duplicated at each call site.
+	#[frame_support::transactional]
+	fn deregister_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
+		T::RefundAddressRegistry::clear_refund_addresses(account_id);
+		Self::deregister_account_role(account_id, AccountRole::LiquidityProvider)
 	}
 
 	fn set_vanity_name(

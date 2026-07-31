@@ -1455,7 +1455,9 @@ pub mod pallet {
 
 				// Mirrors the auto-registration in `delegate`. Best-effort: accounts that also
 				// hold other LP state (open orders, balances, etc.) fail the deregistration
-				// check and simply remain registered as a Liquidity Provider.
+				// check and simply remain registered as a Liquidity Provider. The
+				// `#[transactional]` override rolls back any partial cleanup on failure, so
+				// discarding the error here is safe.
 				let _ = T::AccountRoleRegistry::deregister_as_liquidity_provider(&delegator);
 			} else {
 				DelegationChoice::<T>::mutate(&delegator, |choice| {
