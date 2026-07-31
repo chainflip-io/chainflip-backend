@@ -21,8 +21,8 @@ use crate::{
 	submit_runtime_call::{
 		is_valid_signature, ChainflipExtrinsic, EthEncodingType, SolEncodingType,
 	},
-	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
-	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
+	BatchedCalls, BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress,
+	RuntimeSafeMode, SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
 use cf_chains::{
@@ -869,7 +869,7 @@ fn can_batch() {
 
 		let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
 		let calls = vec![remark_call.clone().into(), remark_call.clone().into()];
-		let bounded_vec_calls: BoundedVec<_, sp_core::ConstU32<10>> = calls.clone().try_into().unwrap();
+		let bounded_vec_calls: BatchedCalls<Test> = calls.clone().try_into().unwrap();
 
 		assert_noop!(
 			Environment::batch(RuntimeOrigin::none(), bounded_vec_calls.clone()),
@@ -905,7 +905,8 @@ fn can_batch() {
 		};
 		let mut new_calls = calls;
 		new_calls.push(failing_call.into());
-		let bounded_vec_calls: BoundedVec<_, sp_core::ConstU32<10>> = new_calls.try_into().expect("3 calls is within the bound of 10");
+		let bounded_vec_calls: BatchedCalls<Test> =
+			new_calls.try_into().expect("3 calls is within MAX_BATCHED_CALLS");
 
 		assert_noop!(
 			Environment::batch(RuntimeOrigin::none(), bounded_vec_calls.clone()),
@@ -1166,7 +1167,7 @@ mod submit_elections_votes {
 			// Every instance reached, in order, each handed the caller's authority index - the
 			// context established once by `authorise_voter` rather than per instance.
 			assert_eq!(
-				MockElectionInstances::recorded_votes(),
+				MockElectionInstances::<Test>::recorded_votes(),
 				vec![(0, 3, 1), (1, 1, 1), (2, 5, 1)],
 			);
 			assert_no_matching_event!(
@@ -1193,7 +1194,7 @@ mod submit_elections_votes {
 			));
 
 			assert_eq!(
-				MockElectionInstances::recorded_votes(),
+				MockElectionInstances::<Test>::recorded_votes(),
 				vec![(0, 2, 1), (1, 4, 1), (2, 6, 1)],
 			);
 			// Only the index is asserted: `DispatchError::Other`'s message is `#[codec(skip)]`,
@@ -1246,7 +1247,7 @@ mod submit_elections_votes {
 				submit(NOT_AN_AUTHORITY, vec![MockInstanceVotes::accept(1)]),
 				Error::<Test>::NotAnAuthority
 			);
-			assert!(MockElectionInstances::recorded_votes().is_empty());
+			assert!(MockElectionInstances::<Test>::recorded_votes().is_empty());
 		});
 	}
 
@@ -1256,7 +1257,7 @@ mod submit_elections_votes {
 			setup_authority();
 
 			assert!(submit(123, vec![MockInstanceVotes::accept(1)]).is_err());
-			assert!(MockElectionInstances::recorded_votes().is_empty());
+			assert!(MockElectionInstances::<Test>::recorded_votes().is_empty());
 		});
 	}
 

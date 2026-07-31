@@ -61,7 +61,10 @@ use state_chain_runtime::{
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
+	elections::{
+		vote_batcher::VoteBatcher,
+		voter_api::{CompositeVoter, VoterApi},
+	},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
 		event::EvmEventSource,
@@ -301,6 +304,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
+	vote_batcher: VoteBatcher,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -368,6 +372,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_batcher = vote_batcher.clone();
 			let vault_event_source = vault_event_source.clone();
 			let key_manager_event_source = key_manager_event_source.clone();
 			let supported_asset_address_and_event_type =
@@ -407,6 +412,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Arbitrum",
+							vote_batcher,
 						)
 						.continuously_vote()
 						.await;

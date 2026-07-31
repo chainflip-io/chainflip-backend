@@ -20,7 +20,10 @@ mod nonce_witnessing;
 mod sol_deposits;
 mod vault_swaps_witnessing;
 use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
+	elections::{
+		vote_batcher::VoteBatcher,
+		voter_api::{CompositeVoter, VoterApi},
+	},
 	sol::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
@@ -244,6 +247,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: SolRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
+	vote_batcher: VoteBatcher,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -260,6 +264,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_batcher = vote_batcher.clone();
 			async move {
 				task_scope::task_scope(|scope| {
 					async {
@@ -277,6 +282,7 @@ where
 							)),
 							None,
 							"Solana",
+							vote_batcher,
 						)
 						.continuously_vote()
 						.await;
