@@ -174,13 +174,11 @@ pub async fn process_egresses_in_block(
 
 	// all indices of all successful extrinsics. This includes both egresses and
 	// extrinsics that caused ProxyAdded events.
-	let extrinsic_indices = extrinsic_success_indices(&header.parsed_events);
+	let extrinsic_indices = extrinsic_success_indices(&header.events);
 
 	let extrinsics: Vec<Bytes> = hub_client.extrinsics(header.block_hash).await?;
 
-	for (extrinsic_index, tx_fee) in
-		transaction_fee_paids(&extrinsic_indices, &header.parsed_events)
-	{
+	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &header.events) {
 		let xt = extrinsics.get(extrinsic_index as usize).expect(
 			"We know this exists since we got
 	this index from the event, from the block we are querying.",
