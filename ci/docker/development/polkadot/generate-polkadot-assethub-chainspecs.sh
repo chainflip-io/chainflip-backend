@@ -7,8 +7,7 @@
 # runtimes release. Docker and jq must be available.
 #
 # Example:
-#   POLKADOT_FELLOWS_RUNTIMES_DIR=../polkadot-fellows-runtimes \
-#     ./ci/docker/development/polkadot/generate-polkadot-assethub-chainspecs.sh v2.3.2
+#   POLKADOT_FELLOWS_RUNTIMES_DIR=../polkadot-fellows-runtimes ./ci/docker/development/polkadot/generate-polkadot-assethub-chainspecs.sh v2.3.2
 #
 # The generated files are written to ci/docker/development/polkadot/<version>/:
 #
@@ -45,7 +44,7 @@ export VERSION_TAG=$1
 
 export CURRENT_DIR="$(pwd)"
 POLKADOT_IMAGE="docker.io/parity/polkadot:v1.24.0"
-POLKADOT_PARACHAIN_IMAGE="docker.io/parity/polkadot-parachain:unstable2604-rc5"
+POLKADOT_PARACHAIN_IMAGE="docker.io/parity/polkadot-parachain:v1.24.0"
 
 # create folder for chainspecs
 mkdir -p "./ci/docker/development/polkadot/${VERSION_TAG}"
