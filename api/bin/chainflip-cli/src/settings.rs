@@ -159,6 +159,12 @@ pub enum ValidatorSubcommands {
 	StartBidding,
 	/// Stop bidding, thereby stopping participation in auctions.
 	StopBidding,
+	/// Set the maximum bid used in future auctions. Omit the amount to bid the full balance (the
+	/// default).
+	SetMaxBid {
+		/// Maximum bid in FLIP. Up to 6 decimal places; additional precision is rounded.
+		max_bid: Option<f64>,
+	},
 	/// Accept an operator's claim to manage this validator.
 	AcceptOperator {
 		/// The operator account ID to accept
