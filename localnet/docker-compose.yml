@@ -117,7 +117,7 @@ services:
     command:
       - --alice
       - --blocks-pruning=archive
-      - --chain=/chainspecs/v2.3.2/polkadot.json
+      - --chain=/chainspecs/v2.3.2/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker1
       - --rpc-cors=all
@@ -151,7 +151,7 @@ services:
     command:
       - --bob
       - --blocks-pruning=archive
-      - --chain=/chainspecs/v2.3.2/polkadot.json
+      - --chain=/chainspecs/v2.3.2/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker2
       - --rpc-cors=all
@@ -200,7 +200,7 @@ services:
       - --pool-kbytes=250000
       - --node-key=808c85fab7ea8391de83fd0a16d069f9d5b43faa380886e439d76c4307d06039
       - --
-      - --chain=/chainspecs/v2.3.2/polkadot.json
+      - --chain=/chainspecs/v2.3.2/polkadot.raw.json
     ports:
       - 9955:9944
       - 40333:30333

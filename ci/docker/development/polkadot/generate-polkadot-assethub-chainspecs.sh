@@ -42,6 +42,7 @@ docker run --rm --platform linux/amd64 \
 # Polkadot:
 POLKADOT_CHAINSPEC_TEMPLATE="./ci/docker/development/polkadot/polkadot.template.json"
 POLKADOT_CHAINSPEC="./ci/docker/development/polkadot/${VERSION_TAG}/polkadot.json"
+POLKADOT_RAW_CHAINSPEC="./ci/docker/development/polkadot/${VERSION_TAG}/polkadot.raw.json"
 POLKADOT_GENESIS_WASM="./ci/docker/development/polkadot/${VERSION_TAG}/polkadot-genesis-wasm.txt"
 # 1. Temporaries
 POLKADOT_TEMP_CHAINSPEC="$(mktemp)"
@@ -60,9 +61,9 @@ jq --rawfile polkadot_wasm $POLKADOT_GENESIS_WASM \
 
 # 5. Convert the completed relay chainspec to raw storage.
 docker run --rm --platform linux/amd64 \
-    --volume "${CURRENT_DIR}/ci/docker/development/polkadot/${VERSION_TAG}:/chainspecs:ro" \
+    --volume "${CURRENT_DIR}/${POLKADOT_CHAINSPEC#./}:/chainspec.json:ro" \
     "$POLKADOT_IMAGE" export-chain-spec \
-    --chain "/chainspecs/polkadot.json" \
+    --chain "/chainspec.json" \
     --raw > $POLKADOT_TEMP_RAW_CHAINSPEC
 
 # 6. Assign both relay cores to Asset Hub from block 1.
@@ -82,4 +83,4 @@ jq --arg core_descriptors_key "$CORE_DESCRIPTORS_KEY" \
     '.genesis.raw.top[$core_descriptors_key] = $core_descriptors |
      .genesis.raw.top[$core_0_schedule_key] = $core_schedule |
      .genesis.raw.top[$core_1_schedule_key] = $core_schedule' \
-    $POLKADOT_TEMP_RAW_CHAINSPEC > $POLKADOT_CHAINSPEC
+    $POLKADOT_TEMP_RAW_CHAINSPEC > $POLKADOT_RAW_CHAINSPEC
