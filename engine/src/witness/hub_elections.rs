@@ -68,9 +68,9 @@ pub struct AssethubVoter {
 #[derive(Debug, Clone)]
 pub struct AssethubBlockHeader {
 	pub block_hash: sp_core::H256,
-	pub parent_block_hash: sp_core::H256,
+	pub parent_block_hash: Option<sp_core::H256>,
 	pub block_height: u32,
-	pub parsed_events: Vec<(Phase, EventWrapper)>,
+	pub events: Vec<(Phase, EventWrapper)>,
 }
 
 #[async_trait::async_trait]
@@ -165,14 +165,20 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 					return Err(anyhow::anyhow!("No events for block hash {block_hash}"));
 				};
 
-				let parsed_events =
+				let events =
 					events.iter().filter_map(crate::witness::hub::filter_map_events).collect();
+
+				// the genesis block (height 0) has 0x00...00 as parent hash. But this block hash
+				// doesn't really exist and can't be queried for with rpcs, so we explicitly set the
+				// parent hash of block 0 to `None`.
+				let parent_block_hash =
+					if finalized_block_height == 0 { None } else { Some(header.parent_hash) };
 
 				Ok(AssethubBlockHeader {
 					block_height: finalized_block_height,
 					block_hash,
-					parent_block_hash: header.parent_hash,
-					parsed_events,
+					parent_block_hash,
+					events,
 				})
 			},
 		))
@@ -236,10 +242,10 @@ impl WitnessClientForBlockData<AssethubChain, Vec<DepositWitness<Assethub>>> for
 
 			let deposit_witnesses = deposit_witnesses(
 				header.block_hash,
-				Some(header.parent_block_hash),
+				header.parent_block_hash,
 				&self.client,
 				addresses,
-				&header.parsed_events,
+				&header.events,
 			)
 			.await?;
 
@@ -315,7 +321,7 @@ impl VoterApi<AssethubFeeTracking> for AssethubVoter {
 
 		// extract tips
 		let mut tips = Vec::new();
-		for (phase, wrapped_event) in latest_block_header.parsed_events.iter() {
+		for (phase, wrapped_event) in latest_block_header.events.iter() {
 			if let Phase::ApplyExtrinsic(_) = phase {
 				if let EventWrapper::TransactionFeePaid { tip, .. } = wrapped_event {
 					tips.push(*tip);
