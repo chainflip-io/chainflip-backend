@@ -226,31 +226,25 @@ impl WitnessClientForBlockData<AssethubChain, Vec<DepositWitness<Assethub>>> for
 		deposit_channels: &Self::ElectionProperties,
 		block_headers: &Self::BlockQuery,
 	) -> Result<Vec<DepositWitness<Assethub>>> {
-		let results = future::join_all(block_headers.into_iter().map(|header| async move {
-			// compute deposit witneses
-			let addresses = deposit_channels
+		// sanity check the deposit channel data
+		let addresses = deposit_channels
+			.into_iter()
+			.map(|deposit_channel| {
+				assert!(
+					deposit_channel.asset == assets::hub::Asset::HubDot ||
+						deposit_channel.asset == assets::hub::Asset::HubUsdc ||
+						deposit_channel.asset == assets::hub::Asset::HubUsdt
+				);
+				deposit_channel.address
+			})
+			.collect();
+
+		// query deposits for all block headers in parallel
+		let results = future::join_all(
+			block_headers
 				.into_iter()
-				.map(|deposit_channel| {
-					assert!(
-						deposit_channel.asset == assets::hub::Asset::HubDot ||
-							deposit_channel.asset == assets::hub::Asset::HubUsdc ||
-							deposit_channel.asset == assets::hub::Asset::HubUsdt
-					);
-					deposit_channel.address
-				})
-				.collect();
-
-			let deposit_witnesses = deposit_witnesses(
-				header.block_hash,
-				header.parent_block_hash,
-				&self.client,
-				addresses,
-				&header.events,
-			)
-			.await?;
-
-			Ok(deposit_witnesses)
-		}))
+				.map(|header| deposit_witnesses(header, &self.client, &addresses)),
+		)
 		.await;
 
 		// This converts a vector of results into a result with a vector
