@@ -99,112 +99,84 @@ where
 	})
 }
 
-fn order_fills_for_pool<'a>(
+/// Limit order fills are reported by the pool as they happen, since a swap pays the proceeds out
+/// there and then rather than leaving them on the order to be collected.
+fn limit_order_fills_from_events(
+	events: &[pallet_cf_pools::Event<Runtime>],
+) -> impl Iterator<Item = OrderFilled> + '_ {
+	events.iter().filter_map(|event| match event {
+		pallet_cf_pools::Event::LimitOrderFilled {
+			lp,
+			base_asset,
+			quote_asset,
+			side,
+			id,
+			tick,
+			sold_amount,
+			bought_amount,
+			remaining_amount,
+		} => Some(OrderFilled::LimitOrder {
+			lp: lp.clone(),
+			base_asset: *base_asset,
+			quote_asset: *quote_asset,
+			side: *side,
+			id: (*id).into(),
+			tick: *tick,
+			sold: (*sold_amount).into(),
+			bought: (*bought_amount).into(),
+			fees: Default::default(),
+			remaining: (*remaining_amount).into(),
+		}),
+		_ => None,
+	})
+}
+
+fn range_order_fills_for_pool<'a>(
 	asset_pair: &'a AssetPair,
 	pool: &'a Pool<Runtime>,
 	previous_pool: &'a Pool<Runtime>,
 	updated_range_orders: &'a HashSet<(AccountId, AssetPair, OrderId)>,
-	updated_limit_orders: &'a HashSet<(AccountId, AssetPair, Side, OrderId)>,
 ) -> impl IntoIterator<Item = OrderFilled> + 'a {
-	[Side::Sell, Side::Buy]
-		.into_iter()
-		.flat_map(move |side| {
-			pool.pool_state.limit_orders(side).filter_map(
-				move |((lp, id), tick, collected, position_info)| {
-					let (sold, bought) = {
-						let option_previous_order_state = if updated_limit_orders.contains(&(
-							lp.clone(),
-							*asset_pair,
-							side,
-							id,
-						)) {
-							None
-						} else {
-							previous_pool.pool_state.limit_order(&(lp.clone(), id), side, tick).ok()
-						};
-
-						if let Some((previous_collected, _)) = option_previous_order_state {
-							(
-								collected
-									.sold_amount
-									.checked_sub(previous_collected.sold_amount)
-									.unwrap_or_else(|| {
-										log::info!(
-											"Ignored dust sold_amount underflow. Current: {}, Previous: {}",
-											collected.sold_amount,
-											previous_collected.sold_amount
-										);
-										0.into()
-									}),
-								collected.bought_amount - previous_collected.bought_amount,
-							)
-						} else {
-							(collected.sold_amount, collected.bought_amount)
-						}
-					};
-
-					if sold.is_zero() && bought.is_zero() {
+	pool.pool_state
+		.range_orders()
+		.filter_map(move |((lp, id), range, collected, position_info)| {
+			let fees = {
+				let option_previous_order_state =
+					if updated_range_orders.contains(&(lp.clone(), *asset_pair, id)) {
 						None
 					} else {
-						Some(OrderFilled::LimitOrder {
-							lp,
-							base_asset: asset_pair.base(),
-							quote_asset: asset_pair.quote(),
-							side,
-							id: id.into(),
-							tick,
-							sold,
-							bought,
-							fees: Default::default(),
-							remaining: position_info.amount,
-						})
-					}
-				},
-			)
-		})
-		.chain(pool.pool_state.range_orders().filter_map(
-			move |((lp, id), range, collected, position_info)| {
-				let fees = {
-					let option_previous_order_state =
-						if updated_range_orders.contains(&(lp.clone(), *asset_pair, id)) {
-							None
-						} else {
-							previous_pool
-								.pool_state
-								.range_order(&(lp.clone(), id), range.clone())
-								.ok()
-						};
+						previous_pool.pool_state.range_order(&(lp.clone(), id), range.clone()).ok()
+					};
 
-					if let Some((previous_collected, _)) = option_previous_order_state {
-						collected
-							.fees
-							.zip(previous_collected.fees)
-							.map(|(fees, previous_fees)| fees.overflowing_sub(previous_fees).0)
-					} else {
-						Default::default()
-					}
-				};
-
-				let fee_hundredth_pips = pool.pool_state.range_order_fee();
-
-				if fees == Default::default() {
-					None
+				if let Some((previous_collected, _)) = option_previous_order_state {
+					collected
+						.fees
+						.zip(previous_collected.fees)
+						.map(|(fees, previous_fees)| fees.overflowing_sub(previous_fees).0)
 				} else {
-					Some(OrderFilled::RangeOrder {
-						lp: lp.clone(),
-						base_asset: asset_pair.base(),
-						quote_asset: asset_pair.quote(),
-						id: id.into(),
-						bought_amounts: fees.map(|amount| {
-							input_amount_from_fee(amount, fee_hundredth_pips).unwrap_or_default()
-						}),
-						range: range.clone(),
-						fees: fees.map(|fees| fees),
-						liquidity: position_info.liquidity.into(),
-					})
+					Default::default()
 				}
-			},
-		))
+			};
+
+			let fee_hundredth_pips = pool.pool_state.range_order_fee();
+
+			if fees == Default::default() {
+				None
+			} else {
+				Some(OrderFilled::RangeOrder {
+					lp: lp.clone(),
+					base_asset: asset_pair.base(),
+					quote_asset: asset_pair.quote(),
+					id: id.into(),
+					bought_amounts: fees.map(|amount| {
+						input_amount_from_fee(amount, fee_hundredth_pips).unwrap_or_default()
+					}),
+					range: range.clone(),
+					fees: fees.map(|fees| fees),
+					liquidity: position_info.liquidity.into(),
+				})
+			}
+		})
 }
 
 pub fn order_fills_from_block_updates(
@@ -222,33 +194,22 @@ pub fn order_fills_from_block_updates(
 		})
 		.collect::<HashSet<_>>();
 
-	let updated_limit_orders = events
-		.iter()
-		.filter_map(|event| match event {
-			pallet_cf_pools::Event::LimitOrderUpdated {
-				lp,
-				base_asset,
-				quote_asset,
-				side,
-				id,
-				..
-			} => Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *side, *id)),
-			_ => None,
-		})
-		.collect::<HashSet<_>>();
-
-	let order_fills = pools
-		.iter()
-		.filter_map(|(asset_pair, pool)| Some((asset_pair, pool, previous_pools.get(asset_pair)?)))
-		.flat_map(|(asset_pair, pool, previous_pool)| {
-			order_fills_for_pool(
-				asset_pair,
-				pool,
-				previous_pool,
-				&updated_range_orders,
-				&updated_limit_orders,
-			)
-		})
+	let order_fills = limit_order_fills_from_events(&events)
+		.chain(
+			pools
+				.iter()
+				.filter_map(|(asset_pair, pool)| {
+					Some((asset_pair, pool, previous_pools.get(asset_pair)?))
+				})
+				.flat_map(|(asset_pair, pool, previous_pool)| {
+					range_order_fills_for_pool(
+						asset_pair,
+						pool,
+						previous_pool,
+						&updated_range_orders,
+					)
+				}),
+		)
 		.collect::<Vec<_>>();
 
 	OrderFills { fills: order_fills }
