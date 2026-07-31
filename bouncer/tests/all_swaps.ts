@@ -12,20 +12,18 @@ import {
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
 import { SwapContext } from 'shared/utils/swap_context';
+import { seededRng } from 'shared/utils/seeded_rng';
+import { globalLogger } from 'shared/utils/logger';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
-const GENERATE_SWAPS_SEED = 1;
-
-// A tiny seedable PRNG (values in [0, 1)) so the sampled swap set is reproducible for a given seed.
-// Distribution quality doesn't matter here — it only decides which swaps to sample.
-function seededRng(seed: number): () => number {
-  let n = seed;
-  return () => {
-    n += 1;
-    const x = Math.sin(n) * 10000;
-    return x - Math.floor(x);
-  };
-}
+// Seed for the sampled swap set. Picked at random each run so coverage rotates over time; the value
+// is logged when the test is built so a failing run is reproducible. Pin it via the ALL_SWAPS_SEED
+// env var — which `run_test.ts <swap_number> <seed>` sets for you.
+const seedOverride = process.env.ALL_SWAPS_SEED;
+const GENERATE_SWAPS_SEED =
+  seedOverride !== undefined && seedOverride !== ''
+    ? Number(seedOverride)
+    : Math.floor(Math.random() * 1_000_000);
 
 // Returns a shuffled copy
 function shuffle<T>(array: T[], rng: () => number): T[] {
@@ -196,8 +194,14 @@ function generateSwapPairs(
   return uniquePairs;
 }
 
-// `thoroughlyTestedAssets` are tested against *every* other asset in both directions.
+// `thoroughlyTestedAssets` is to help test 100% coverage of new assets when a new chain is added.
+// Add the new assets in fast_bouncer.ts during development, and then remove them after release to help keep the number of swaps down.
 export function testAllSwaps(timeoutPerSwap: number, thoroughlyTestedAssets: Asset[] = []) {
+  globalLogger.info(
+    `AllSwaps generated with seed ${GENERATE_SWAPS_SEED}. ` +
+      `To reproduce a specific swap: ./commands/run_test.ts <swap_number> ${GENERATE_SWAPS_SEED}`,
+  );
+
   const allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
   let allSwapsCount = 0;
 
