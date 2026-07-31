@@ -38,6 +38,7 @@ impl DeregistrationCheck for RuntimeDeregistrationCheck {
 				pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck::<Runtime>::check(
 					account_id,
 				)?;
+				pallet_cf_swapping::PendingSwapDeregistrationCheck::<Runtime>::check(account_id)?;
 				Ok(())
 			},
 			AccountRole::Broker => {
