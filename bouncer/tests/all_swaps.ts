@@ -9,6 +9,7 @@ import {
   vaultSwapSupportedChains,
   Asset,
 } from 'shared/utils';
+import { describe, expect, test } from 'vitest';
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
 import { SwapContext } from 'shared/utils/swap_context';
@@ -300,3 +301,106 @@ export async function testSwapsToAssethub(testContext: TestContext) {
     await testSwap(cf, 'ArbEth', destinationAsset, undefined, undefined, new SwapContext());
   }
 }
+
+// Unit tests to make sure that the coverage of the "AllSwaps" test is correct.
+describe('checkAllSwapsCoverage', () => {
+  const assets: Asset[] = ['Eth', 'Btc', 'Trx'];
+  const SEED = 1;
+  const swaps = generateSwapPairs(assets, [], seededRng(SEED));
+
+  const expectedSwaps = [
+    {
+      source: { asset: 'Eth', trigger: 'DepositChannel' },
+      destination: { asset: 'Btc' },
+      ccm: false,
+    },
+    {
+      source: { asset: 'Btc', trigger: 'DepositChannel' },
+      destination: { asset: 'Trx' },
+      ccm: true,
+    },
+    {
+      source: { asset: 'Trx', trigger: 'DepositChannel' },
+      destination: { asset: 'Eth' },
+      ccm: true,
+    },
+    { source: { asset: 'Eth', trigger: 'VaultSwap' }, destination: { asset: 'Btc' }, ccm: false },
+    {
+      source: { asset: 'Btc', trigger: 'DepositChannel' },
+      destination: { asset: 'Trx' },
+      ccm: false,
+    },
+    { source: { asset: 'Btc', trigger: 'VaultSwap' }, destination: { asset: 'Trx' }, ccm: false },
+    {
+      source: { asset: 'Eth', trigger: 'DepositChannel' },
+      destination: { asset: 'Trx' },
+      ccm: true,
+    },
+    { source: { asset: 'ArbEth', trigger: 'VaultSwap' }, destination: { asset: 'Trx' }, ccm: true },
+    {
+      source: { asset: 'Eth', trigger: 'DepositChannel' },
+      destination: { asset: 'Trx' },
+      ccm: false,
+    },
+    {
+      source: { asset: 'Trx', trigger: 'DepositChannel' },
+      destination: { asset: 'Eth' },
+      ccm: false,
+    },
+  ];
+
+  test('produces the expected deterministic swap list for the fixed seed', () => {
+    expect(swaps).toEqual(expectedSwaps);
+  });
+
+  test('exercises every asset as both a source and a destination', () => {
+    const sources = new Set(swaps.map((s) => s.source.asset));
+    const destinations = new Set(swaps.map((s) => s.destination.asset));
+    for (const asset of assets) {
+      expect(sources.has(asset)).toBe(true);
+      expect(destinations.has(asset)).toBe(true);
+    }
+  });
+
+  test('only emits CCM swaps to CCM-supported destination chains', () => {
+    for (const swap of swaps.filter((s) => s.ccm)) {
+      expect(ccmSupportedChains).toContain(chainFromAsset(swap.destination.asset));
+    }
+  });
+
+  test('emits a CCM counterpart for every swap to a CCM-supported destination', () => {
+    for (const swap of swaps.filter(
+      (s) => !s.ccm && ccmSupportedChains.includes(chainFromAsset(s.destination.asset)),
+    )) {
+      // Bitcoin vault swaps don't support CCM, so their CCM counterpart uses ArbEth as the source.
+      const expectedSource =
+        swap.source.asset === 'Btc' && swap.source.trigger === 'VaultSwap'
+          ? { asset: 'ArbEth', trigger: 'VaultSwap' }
+          : swap.source;
+      expect(swaps).toContainEqual({
+        source: expectedSource,
+        destination: swap.destination,
+        ccm: true,
+      });
+    }
+  });
+
+  test('only emits vault swaps from vault-supported source chains', () => {
+    for (const swap of swaps.filter((s) => s.source.trigger === 'VaultSwap')) {
+      expect(vaultSwapSupportedChains).toContain(chainFromAsset(swap.source.asset));
+    }
+  });
+
+  test('never emits a Bitcoin vault-swap CCM (those are remapped to ArbEth)', () => {
+    expect(
+      swaps.some((s) => s.ccm && s.source.asset === 'Btc' && s.source.trigger === 'VaultSwap'),
+    ).toBe(false);
+  });
+
+  test('contains no duplicate swaps', () => {
+    const keys = swaps.map(
+      (s) => `${s.source.asset}-${s.source.trigger}-${s.destination.asset}-${s.ccm}`,
+    );
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
