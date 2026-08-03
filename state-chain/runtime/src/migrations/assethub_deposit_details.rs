@@ -17,7 +17,7 @@
 use crate::*;
 use cf_chains::{
 	address::EncodedAddress, assets::hub::Asset as HubAsset, Assethub, CcmDepositMetadataChecked,
-	CcmDepositMetadataUnchecked, ChannelRefundParametersForChain, ForeignChainAddress,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain, ForeignChainAddress,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiary, ChannelId, DcaParameters,
@@ -80,7 +80,7 @@ pub type Migration = (
 	VersionedMigration<
 		OLD_STORAGE_VERSION,
 		NEW_STORAGE_VERSION,
-		AssethubDepositDetailsMigration,
+		MigrateAssethubToElections,
 		pallet_cf_ingress_egress::Pallet<Runtime, AssethubInstance>,
 		DbWeight,
 	>,
@@ -100,7 +100,7 @@ pub type Migration = (
 	>,
 );
 
-pub struct AssethubDepositDetailsMigration;
+pub struct MigrateAssethubToElections;
 
 mod old {
 	use cf_primitives::PolkadotBlockNumber;
@@ -257,9 +257,20 @@ fn migrate_vault_deposit_witness(
 	}
 }
 
-impl UncheckedOnRuntimeUpgrade for AssethubDepositDetailsMigration {
+impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("Migrating Assethub ingress-egress deposit details");
+
+		pallet_cf_chain_tracking::CurrentChainState::<Runtime, AssethubInstance>::mutate(
+			|maybe_chain_state| {
+				if let Some(chain_state) = maybe_chain_state {
+					chain_state.block_height =
+						Assethub::block_witness_root(chain_state.block_height);
+				} else {
+					log_or_panic!("Assethub current chain state must exist");
+				}
+			},
+		);
 
 		let pending_prewitnessed: Vec<_> = old::PendingPrewitnessedDeposits::drain().collect();
 		let pending_deposit_channels: Vec<_> =
@@ -318,8 +329,8 @@ impl UncheckedOnRuntimeUpgrade for AssethubDepositDetailsMigration {
 		}
 
 		DbWeight::get().reads_writes(
-			pending_count.saturating_add(2),
-			pending_count.saturating_mul(2).saturating_add(2),
+			pending_count.saturating_add(3),
+			pending_count.saturating_mul(2).saturating_add(3),
 		)
 	}
 
@@ -335,6 +346,7 @@ impl UncheckedOnRuntimeUpgrade for AssethubDepositDetailsMigration {
 		);
 
 		Ok((
+			pallet_cf_chain_tracking::CurrentChainState::<Runtime, AssethubInstance>::get(),
 			old::PendingPrewitnessedDeposits::iter().collect::<Vec<_>>(),
 			old::PendingDepositChannelDeposits::iter().collect::<Vec<_>>(),
 			old::PendingVaultDeposits::iter().collect::<Vec<_>>(),
@@ -344,12 +356,23 @@ impl UncheckedOnRuntimeUpgrade for AssethubDepositDetailsMigration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let (pending_prewitnessed, pending_deposit_channels, pending_vaults): (
+		let (old_chain_state, pending_prewitnessed, pending_deposit_channels, pending_vaults): (
+			Option<cf_chains::ChainState<Assethub>>,
 			Vec<(BlockNumber, Vec<old::PendingPrewitnessedDepositEntry>)>,
 			Vec<(BlockNumber, Vec<(old::DepositWitness, PolkadotBlockNumber)>)>,
 			Vec<(BlockNumber, Vec<(old::VaultDepositWitness, PolkadotBlockNumber)>)>,
 		) = Decode::decode(&mut state.as_slice())
 			.map_err(|_| DispatchError::Other("Failed to decode Assethub migration state"))?;
+
+		let mut expected_chain_state = old_chain_state
+			.ok_or(DispatchError::Other("Assethub current chain state must exist"))?;
+		expected_chain_state.block_height =
+			Assethub::block_witness_root(expected_chain_state.block_height);
+		frame_support::ensure!(
+			pallet_cf_chain_tracking::CurrentChainState::<Runtime, AssethubInstance>::get() ==
+				Some(expected_chain_state),
+			"Assethub chain state block height was not aligned correctly"
+		);
 
 		for (state_chain_block, entries) in pending_prewitnessed {
 			let expected = entries.into_iter().map(migrate_prewitnessed_entry).collect::<Vec<_>>();
