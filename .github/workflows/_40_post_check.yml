@@ -50,8 +50,10 @@ jobs:
     runs-on: namespace-profile-default-light
     timeout-minutes: 15
     outputs:
+      firewall-id: ${{ steps.provision.outputs.firewall-id }}
       runner-label: ${{ steps.provision.outputs.runner-label }}
       runner-name: ${{ steps.provision.outputs.runner-name }}
+      server-id: ${{ steps.provision.outputs.server-id }}
     steps:
       - name: Checkout chainflip-backend 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -344,8 +346,12 @@ jobs:
         env:
           CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
           CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+          FIREWALL_ID: ${{ needs.provision-bouncer-runner.outputs.firewall-id }}
           RUNNER_NAME: ${{ needs.provision-bouncer-runner.outputs.runner-name }}
-        run: ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy "$RUNNER_NAME"
+          SERVER_ID: ${{ needs.provision-bouncer-runner.outputs.server-id }}
+        run: |
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy \
+            "$RUNNER_NAME" "$SERVER_ID" "$FIREWALL_ID"
 
   chainspec-compatibility:
     runs-on: namespace-profile-default

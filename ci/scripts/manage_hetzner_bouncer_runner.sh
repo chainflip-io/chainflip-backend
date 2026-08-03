@@ -38,7 +38,7 @@ delete_hcloud_resource() {
     --request DELETE \
     --header "Authorization: Bearer $CF_HETZNER_API_TOKEN" \
     "$HCLOUD_API_URL/$resource/$resource_id")
-  if [[ "$status" != 204 && "$status" != 404 ]]; then
+  if [[ ! "$status" =~ ^2[0-9][0-9]$ && "$status" != 404 ]]; then
     echo "Failed to delete Hetzner $resource/$resource_id (HTTP $status)" >&2
     return 1
   fi
@@ -47,16 +47,50 @@ delete_hcloud_resource() {
 delete_github_runner() {
   local runner_name=$1
   local runners
+  local runner_id
+  local runner_is_busy
+  local status
 
-  runners=$(github_api \
-    "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runners?name=$runner_name&per_page=100")
+  # The teardown job can start before an ephemeral runner has finished reporting the
+  # previous job. Wait for automatic deregistration, or delete it once it is idle.
+  for _ in {1..30}; do
+    if ! runners=$(github_api \
+      "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runners?name=$runner_name&per_page=100"); then
+      sleep 2
+      continue
+    fi
 
-  while read -r runner_id; do
-    [[ -n "$runner_id" ]] || continue
-    github_api --request DELETE \
-      "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runners/$runner_id" >/dev/null
-  done < <(jq --raw-output --arg name "$runner_name" \
-    '.runners[] | select(.name == $name) | .id' <<<"$runners")
+    runner_id=$(jq --raw-output --arg name "$runner_name" \
+      '[.runners[] | select(.name == $name)][0].id // empty' <<<"$runners")
+    [[ -n "$runner_id" ]] || return 0
+
+    runner_is_busy=$(jq --raw-output --arg name "$runner_name" \
+      '[.runners[] | select(.name == $name)][0].busy // false' <<<"$runners")
+    if [[ "$runner_is_busy" == true ]]; then
+      sleep 2
+      continue
+    fi
+
+    status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+      --request DELETE \
+      --header "Accept: application/vnd.github+json" \
+      --header "Authorization: Bearer $CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN" \
+      --header "X-GitHub-Api-Version: 2022-11-28" \
+      "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runners/$runner_id")
+    case "$status" in
+      204 | 404) return 0 ;;
+      422)
+        sleep 2
+        ;;
+      *)
+        echo "Failed to delete GitHub runner $runner_name (HTTP $status)" >&2
+        return 1
+        ;;
+    esac
+  done
+
+  echo "Timed out waiting for GitHub runner $runner_name to become idle" >&2
+  return 1
 }
 
 wait_for_server_deletion() {
@@ -78,24 +112,48 @@ wait_for_server_deletion() {
 
 destroy_runner() {
   local runner_name=$1
+  local server_id=${2:-}
+  local firewall_id=${3:-}
   local response
+  local cleanup_status=0
 
-  response=$(hcloud_api "$HCLOUD_API_URL/servers?name=$runner_name")
-  while read -r server_id; do
-    [[ -n "$server_id" ]] || continue
-    delete_hcloud_resource servers "$server_id"
-    wait_for_server_deletion "$server_id"
-  done < <(jq --raw-output --arg name "$runner_name" \
-    '.servers[] | select(.name == $name) | .id' <<<"$response")
+  delete_github_runner "$runner_name" || cleanup_status=1
 
-  response=$(hcloud_api "$HCLOUD_API_URL/firewalls?name=$runner_name")
-  while read -r firewall_id; do
-    [[ -n "$firewall_id" ]] || continue
-    delete_hcloud_resource firewalls "$firewall_id"
-  done < <(jq --raw-output --arg name "$runner_name" \
-    '.firewalls[] | select(.name == $name) | .id' <<<"$response")
+  if [[ -n "$server_id" ]]; then
+    if delete_hcloud_resource servers "$server_id"; then
+      wait_for_server_deletion "$server_id" || cleanup_status=1
+    else
+      cleanup_status=1
+    fi
+  elif response=$(hcloud_api "$HCLOUD_API_URL/servers?name=$runner_name"); then
+    while read -r server_id; do
+      [[ -n "$server_id" ]] || continue
+      if delete_hcloud_resource servers "$server_id"; then
+        wait_for_server_deletion "$server_id" || cleanup_status=1
+      else
+        cleanup_status=1
+      fi
+    done < <(jq --raw-output --arg name "$runner_name" \
+      '.servers[] | select(.name == $name) | .id' <<<"$response")
+  else
+    echo "Failed to look up Hetzner server $runner_name" >&2
+    cleanup_status=1
+  fi
 
-  delete_github_runner "$runner_name"
+  if [[ -n "$firewall_id" ]]; then
+    delete_hcloud_resource firewalls "$firewall_id" || cleanup_status=1
+  elif response=$(hcloud_api "$HCLOUD_API_URL/firewalls?name=$runner_name"); then
+    while read -r firewall_id; do
+      [[ -n "$firewall_id" ]] || continue
+      delete_hcloud_resource firewalls "$firewall_id" || cleanup_status=1
+    done < <(jq --raw-output --arg name "$runner_name" \
+      '.firewalls[] | select(.name == $name) | .id' <<<"$response")
+  else
+    echo "Failed to look up Hetzner firewall $runner_name" >&2
+    cleanup_status=1
+  fi
+
+  return "$cleanup_status"
 }
 
 create_runner() {
@@ -147,6 +205,9 @@ create_runner() {
     '{name:$name,labels:$labels,rules:[]}' \
     | hcloud_api --request POST --data-binary @- "$HCLOUD_API_URL/firewalls")
   firewall_id=$(jq --exit-status --raw-output '.firewall.id' <<<"$response")
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    echo "firewall-id=$firewall_id" >>"$GITHUB_OUTPUT"
+  fi
 
   local startup_script
   local runner_environment
@@ -262,15 +323,18 @@ main() {
       create_runner "$2" "$3"
       ;;
     destroy)
-      [[ $# == 2 ]] || { echo "Usage: $0 destroy RUNNER_NAME" >&2; return 2; }
-      destroy_runner "$2"
+      [[ $# -ge 2 && $# -le 4 ]] || {
+        echo "Usage: $0 destroy RUNNER_NAME [SERVER_ID] [FIREWALL_ID]" >&2
+        return 2
+      }
+      destroy_runner "$2" "${3:-}" "${4:-}"
       ;;
     cleanup-stale)
       [[ $# -le 2 ]] || { echo "Usage: $0 cleanup-stale [MAX_AGE_SECONDS]" >&2; return 2; }
       cleanup_stale_runners "${2:-14400}"
       ;;
     *)
-      echo "Usage: $0 {create RUNNER_NAME RUNNER_LABEL|destroy RUNNER_NAME|cleanup-stale [MAX_AGE_SECONDS]}" >&2
+      echo "Usage: $0 {create RUNNER_NAME RUNNER_LABEL|destroy RUNNER_NAME [SERVER_ID] [FIREWALL_ID]|cleanup-stale [MAX_AGE_SECONDS]}" >&2
       return 2
       ;;
   esac
