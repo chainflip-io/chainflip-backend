@@ -37,7 +37,6 @@ permissions:
 
 jobs:
   provision-upgrade-runner:
-    if: inputs.run-job
     runs-on: namespace-profile-default-light
     timeout-minutes: 15
     outputs:
@@ -59,7 +58,6 @@ jobs:
           ./ci/scripts/manage_hetzner_bouncer_runner.sh create "$runner_name" "$runner_label"
 
   upgrade_test:
-    if: inputs.run-job
     needs: [provision-upgrade-runner]
     runs-on:
       [self-hosted, linux, x64, "${{ needs.provision-upgrade-runner.outputs.runner-label }}"]
@@ -481,8 +479,8 @@ jobs:
         env:
           CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
           CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
-          RUNNER_NAME: ${{ needs.provision-upgrade-runner.outputs.runner-name }}
-          SERVER_ID: ${{ needs.provision-upgrade-runner.outputs.server-id }}
+          CF_BOUNCER_RUNNER_NAME: ${{ needs.provision-upgrade-runner.outputs.runner-name }}
+          CF_BOUNCER_SERVER_ID: ${{ needs.provision-upgrade-runner.outputs.server-id }}
         run: |
           ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy \
-            "$RUNNER_NAME" "$SERVER_ID"
+            "$CF_BOUNCER_RUNNER_NAME" "$CF_BOUNCER_SERVER_ID"
