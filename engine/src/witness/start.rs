@@ -20,6 +20,7 @@ use crate::{
 	btc::cached_rpc::BtcCachingClient,
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
+	elections::vote_batcher::VoteBatcher,
 	evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
 	tron::{
@@ -84,22 +85,46 @@ where
 		}
 	};
 
-	let start_arb =
-		super::arb_elections::start(scope, arb_client.clone(), state_chain_client.clone());
+	// Shared by every elections instance, so that one extrinsic per block carries all of their
+	// votes instead of one extrinsic per instance.
+	let vote_batcher = VoteBatcher::start(scope, state_chain_client.clone());
 
-	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
+	let start_arb = super::arb_elections::start(
+		scope,
+		arb_client.clone(),
+		state_chain_client.clone(),
+		vote_batcher.clone(),
+	);
 
-	let start_btc = super::btc::start(scope, btc_client, state_chain_client.clone());
+	let start_sol =
+		super::sol::start(scope, sol_client, state_chain_client.clone(), vote_batcher.clone());
 
-	let start_eth =
-		super::eth_elections::start(scope, eth_client.clone(), state_chain_client.clone());
+	let start_btc =
+		super::btc::start(scope, btc_client, state_chain_client.clone(), vote_batcher.clone());
+
+	let start_eth = super::eth_elections::start(
+		scope,
+		eth_client.clone(),
+		state_chain_client.clone(),
+		vote_batcher.clone(),
+	);
 
 	super::hub::start(scope, hub_client, witness_call.clone(), state_chain_client.clone(), db);
 
-	let start_tron = super::tron_elections::start(scope, tron_client, state_chain_client.clone());
+	let start_tron = super::tron_elections::start(
+		scope,
+		tron_client,
+		state_chain_client.clone(),
+		vote_batcher.clone(),
+	);
 
-	let start_generic_elections =
-		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
+	let start_generic_elections = super::generic_elections::start(
+		scope,
+		arb_client,
+		eth_client,
+		state_chain_client,
+		vote_batcher,
+	);
 
 	try_join!(start_eth, start_arb, start_sol, start_btc, start_tron, start_generic_elections)?;
 
