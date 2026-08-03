@@ -129,12 +129,7 @@ impls! {
 
 	Hook<HookTypeFor<Self, BlockHeightChangeHook>> {
 		fn run(&mut self, block_height: AssethubWitnessBatchNumber) {
-			let highest_block = block_height.into_range_inclusive().end().clone();
-			let Some(block_height) = highest_block.try_into().ok() else {
-				log::error!("Failed to update Assethub chain height to {block_height:?}: does not fit into u32");
-				return;
-			};
-			if let Err(err) = AssethubChainTracking::inner_update_chain_height(block_height) {
+			if let Err(err) = AssethubChainTracking::inner_update_chain_height(*block_height.root()) {
 				log::error!("Failed to update Assethub chain height to {block_height:?}: {:?}", err);
 			}
 		}
