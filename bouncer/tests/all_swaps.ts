@@ -86,6 +86,7 @@ type Destination = {
 type SwapPair = {
   source: Source;
   destination: Destination;
+  ccm: boolean;
 };
 
 /**
@@ -97,6 +98,8 @@ type SwapPair = {
  * `testWithAllPossiblePartners` assets are additionally paired with every
  * other asset in both directions, and via a vault swap wherever the source chain supports it.
  *
+ * Each returned pair carries a `ccm` flag: pairs whose destination chain supports CCM are emitted
+ * both as a plain swap and as a CCM swap.
  */
 function generateSwapPairs(
   allTestedAssets: Asset[],
@@ -139,15 +142,14 @@ function generateSwapPairs(
     return { asset };
   }
 
-  // -----------------------------------
-  // the swap pairs that will be tested
   const pairs: SwapPair[] = [];
 
-  // append all pairs for assets that should be tested against all
+  // Append all pairs for assets that should be tested against all
   function pushSwap(trigger: 'DepositChannel' | 'VaultSwap', source: Asset, destination: Asset) {
     pairs.push({
       source: { asset: source, trigger },
       destination: { asset: destination },
+      ccm: false,
     });
   }
   for (const asset1 of testWithAllPossiblePartners) {
@@ -165,7 +167,7 @@ function generateSwapPairs(
     }
   }
 
-  // append swaps with random partners by picking from randomly shuffled sources and destinations
+  // Add non-ccm swaps. Each asset will be a source and destination.
   sources = shuffle(sources, rng);
   destinations = shuffle(destinations, rng);
   while (sources.length > 0 || destinations.length > 0) {
@@ -174,26 +176,46 @@ function generateSwapPairs(
 
     if (source.asset === destination.asset) {
       // push two swaps instead, each with a randomly generated different partner
-      const pair1 = { source, destination: randomDestination({ exclude: source.asset }) };
-      const pair2 = { source: randomSource({ exclude: destination.asset }), destination };
+      const pair1 = {
+        source,
+        destination: randomDestination({ exclude: source.asset }),
+        ccm: false,
+      };
+      const pair2 = {
+        source: randomSource({ exclude: destination.asset }),
+        destination,
+        ccm: false,
+      };
       pairs.push(pair1, pair2);
     } else {
-      pairs.push({ source, destination });
+      pairs.push({ source, destination, ccm: false });
     }
   }
 
-  // remove duplicates
+  // Add CCM swaps
+  const expandedPairs: SwapPair[] = [];
+  for (const { source, destination } of pairs) {
+    expandedPairs.push({ source, destination, ccm: false });
+    if (ccmSupportedChains.includes(chainFromAsset(destination.asset))) {
+      // bitcoin vault swaps don't support ccm, so we use ArbEth instead
+      const ccmSource: Source =
+        source.asset === 'Btc' && source.trigger === 'VaultSwap'
+          ? { asset: 'ArbEth', trigger: source.trigger }
+          : source;
+      expandedPairs.push({ source: ccmSource, destination, ccm: true });
+    }
+  }
+
+  // Deduplicate
   const seenPairs = new Set<string>();
-  const uniquePairs = pairs.filter((pair) => {
-    const key = `${pair.source.asset}-${pair.source.trigger}-${pair.destination.asset}`;
+  const uniquePairs = expandedPairs.filter((pair) => {
+    const key = `${pair.source.asset}-${pair.source.trigger}-${pair.destination.asset}-${pair.ccm}`;
     if (seenPairs.has(key)) return false;
     seenPairs.add(key);
     return true;
   });
 
-  // Enforce the guarantee documented above: every asset is exercised at least once as a source and
-  // once as a destination. If the sampling logic ever regresses, fail loudly rather than silently
-  // dropping coverage.
+  // Check asset coverage
   const sourcedAssets = new Set(uniquePairs.map((pair) => pair.source.asset));
   const destinedAssets = new Set(uniquePairs.map((pair) => pair.destination.asset));
   const missingSources = allTestedAssets.filter((asset) => !sourcedAssets.has(asset));
@@ -205,7 +227,8 @@ function generateSwapPairs(
     );
   }
 
-  return uniquePairs;
+  // Shuffle
+  return shuffle(uniquePairs, rng);
 }
 
 // `thoroughlyTestedAssets` is to help test 100% coverage of new assets when a new chain is added.
@@ -219,24 +242,14 @@ export function testAllSwaps(timeoutPerSwap: number, thoroughlyTestedAssets: Ass
   const allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
   let allSwapsCount = 0;
 
-  // The CCM `Btc` vault-swap -> `ArbEth` remap below can collide with a genuine `ArbEth` CCM vault
-  // swap, so guard against appending the same swap twice.
-  const seenSwaps = new Set<string>();
-
   function appendSwap(
     sourceAsset: Asset,
     destAsset: Asset,
     functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
-    const swapType = functionCall === testSwap ? 'Swap' : 'VaultSwap';
-    const key = `${sourceAsset}-${destAsset}-${swapType}-${ccmSwap}`;
-    if (seenSwaps.has(key)) {
-      return;
-    }
-    seenSwaps.add(key);
-
     allSwapsCount++;
+    const swapType = functionCall === testSwap ? 'Swap' : 'VaultSwap';
     allSwaps.push({
       name: `Swap ${allSwapsCount}: ${sourceAsset} to ${destAsset} (${ccmSwap ? 'CCM ' : ''}${swapType})`,
       test: async (context) => {
@@ -260,17 +273,9 @@ export function testAllSwaps(timeoutPerSwap: number, thoroughlyTestedAssets: Ass
     thoroughlyTestedAssets,
     seededRng(GENERATE_SWAPS_SEED),
   );
-  for (const { source, destination } of pairs) {
+  for (const { source, destination, ccm } of pairs) {
     const testFunction = source.trigger === 'DepositChannel' ? testSwap : testVaultSwap;
-    appendSwap(source.asset, destination.asset, testFunction, false);
-
-    // also do ccm version of the same swap if destination supports it
-    if (ccmSupportedChains.includes(chainFromAsset(destination.asset))) {
-      // bitcoin vault swaps don't support ccm, so we use ArbEth instead
-      const sourceAsset =
-        source.asset === 'Btc' && source.trigger === 'VaultSwap' ? 'ArbEth' : source.asset;
-      appendSwap(sourceAsset, destination.asset, testFunction, true);
-    }
+    appendSwap(source.asset, destination.asset, testFunction, ccm);
   }
 
   // Swaps from assethub paired with random chains.
