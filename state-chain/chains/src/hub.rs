@@ -56,13 +56,13 @@ pub const ASSETHUB_WITNESS_PERIOD: u32 = 3;
 
 impl ChainWitnessConfig for Assethub {
 	type ChainBlockNumber = PolkadotBlockNumber;
-	const WITNESS_PERIOD: Self::ChainBlockNumber = 3;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = ASSETHUB_WITNESS_PERIOD;
 }
 
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
 	const GAS_ASSET: Self::ChainAsset = assets::hub::Asset::HubDot;
-	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = ASSETHUB_WITNESS_PERIOD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = ONE_DOT;
 	const BURN_ADDRESS: Self::ChainAccount = PolkadotAccountId([0; 32]);
 	const IS_EVM_CHAIN: bool = false;
