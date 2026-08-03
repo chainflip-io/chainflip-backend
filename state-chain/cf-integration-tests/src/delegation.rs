@@ -35,7 +35,7 @@ use state_chain_runtime::{
 	System, Validator,
 };
 
-fn setup_delegation(
+pub(crate) fn setup_delegation(
 	testnet: &mut Network,
 	validator: AccountId,
 	operator: AccountId,

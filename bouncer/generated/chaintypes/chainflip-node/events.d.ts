@@ -405,6 +405,11 @@ export interface ChainEvents extends GenericChainEvents {
       'BondUpdated',
       { accountId: AccountId32; newBond: bigint }
     >;
+    FlipDistributed: GenericPalletEvent<
+      'Flip',
+      'FlipDistributed',
+      { amounts: Array<[AccountId32, bigint]> }
+    >;
 
     /**
      * Generic pallet event
@@ -784,6 +789,15 @@ export interface ChainEvents extends GenericChainEvents {
      * A previously non-bidding account has started bidding.
      **/
     StartedBidding: GenericPalletEvent<'Validator', 'StartedBidding', { accountId: AccountId32 }>;
+
+    /**
+     * A validator updated the maximum bid used for its next auction.
+     **/
+    ValidatorMaxBidUpdated: GenericPalletEvent<
+      'Validator',
+      'ValidatorMaxBidUpdated',
+      { validator: AccountId32; maxBid?: bigint | undefined }
+    >;
 
     /**
      * The rotation transaction(s) for the previous rotation are still pending to be
@@ -2707,6 +2721,24 @@ export interface ChainEvents extends GenericChainEvents {
         shortId: CfPrimitivesAffiliateShortId;
         affiliateAccountId: AccountId32;
       }
+    >;
+
+    /**
+     * FLIP was successfully scheduled for egress to the State Chain Gateway.
+     **/
+    SentFlipToGateway: GenericPalletEvent<
+      'Swapping',
+      'SentFlipToGateway',
+      { amount: bigint; egressId: [CfPrimitivesChainsForeignChain, bigint] }
+    >;
+
+    /**
+     * FLIP egress to the State Chain Gateway was skipped.
+     **/
+    FlipTransferToGatewaySkipped: GenericPalletEvent<
+      'Swapping',
+      'FlipTransferToGatewaySkipped',
+      { reason: DispatchError }
     >;
 
     /**

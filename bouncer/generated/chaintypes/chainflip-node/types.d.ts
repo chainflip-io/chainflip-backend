@@ -859,7 +859,8 @@ export type PalletCfFlipCallLike =
 
 export type PalletCfFlipPalletConfigUpdate =
   | { type: 'SetSlashingRate'; value: Permill }
-  | { type: 'SetFeeScalingRate'; value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig };
+  | { type: 'SetFeeScalingRate'; value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig }
+  | { type: 'SetFeeRewardsActivationEpoch'; value: number };
 
 export type PalletCfFlipOnChargeTransactionFeeScalingRateConfig =
   | { type: 'DelayedExponential'; value: { threshold: number; exponent: number } }
@@ -1333,6 +1334,16 @@ export type PalletCfValidatorCall =
    **/
   | { name: 'StopBidding' }
   /**
+   * Sets the maximum bid used for this validator in the next auction.
+   *
+   * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   * The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+   * at auction resolution, so a cap above the balance simply has no effect until funded.
+   * It must, however, be at least the minimum validator stake — a lower cap could never
+   * produce a winning bid.
+   **/
+  | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
+  /**
    * Executed by a operator to claim a validator. By calling this, the operator
    * signals his wish to manage the validator in his delegated staking pool. The validator
    * has to actively accept this invitation by calling the `accept_operator` extrinsic.
@@ -1467,6 +1478,16 @@ export type PalletCfValidatorCallLike =
    * bidding.
    **/
   | { name: 'StopBidding' }
+  /**
+   * Sets the maximum bid used for this validator in the next auction.
+   *
+   * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   * The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+   * at auction resolution, so a cap above the balance simply has no effect until funded.
+   * It must, however, be at least the minimum validator stake — a lower cap could never
+   * produce a winning bid.
+   **/
+  | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
   /**
    * Executed by a operator to claim a validator. By calling this, the operator
    * signals his wish to manage the validator in his delegated staking pool. The validator
@@ -12741,7 +12762,8 @@ export type PalletCfFlipEvent =
   | { name: 'AccountReaped'; data: { who: AccountId32; dustBurned: bigint } }
   | { name: 'PalletConfigUpdated'; data: { update: PalletCfFlipPalletConfigUpdate } }
   | { name: 'FlipMinted'; data: { to: AccountId32; amount: bigint } }
-  | { name: 'BondUpdated'; data: { accountId: AccountId32; newBond: bigint } };
+  | { name: 'BondUpdated'; data: { accountId: AccountId32; newBond: bigint } }
+  | { name: 'FlipDistributed'; data: { amounts: Array<[AccountId32, bigint]> } };
 
 export type PalletCfFlipImbalancesImbalanceSource =
   | { type: 'External' }
@@ -13035,6 +13057,13 @@ export type PalletCfValidatorEvent =
    * A previously non-bidding account has started bidding.
    **/
   | { name: 'StartedBidding'; data: { accountId: AccountId32 } }
+  /**
+   * A validator updated the maximum bid used for its next auction.
+   **/
+  | {
+      name: 'ValidatorMaxBidUpdated';
+      data: { validator: AccountId32; maxBid?: bigint | undefined };
+    }
   /**
    * The rotation transaction(s) for the previous rotation are still pending to be
    * successfully broadcast, therefore, cannot start a new epoch rotation.
@@ -14261,7 +14290,18 @@ export type PalletCfSwappingEvent =
         shortId: CfPrimitivesAffiliateShortId;
         affiliateAccountId: AccountId32;
       };
-    };
+    }
+  /**
+   * FLIP was successfully scheduled for egress to the State Chain Gateway.
+   **/
+  | {
+      name: 'SentFlipToGateway';
+      data: { amount: bigint; egressId: [CfPrimitivesChainsForeignChain, bigint] };
+    }
+  /**
+   * FLIP egress to the State Chain Gateway was skipped.
+   **/
+  | { name: 'FlipTransferToGatewaySkipped'; data: { reason: DispatchError } };
 
 export type CfChainsSwapOrigin =
   | {
@@ -17564,6 +17604,11 @@ export type PalletCfValidatorError =
    * Delegation amount must be at least as large as minimum funding amount.
    **/
   | 'DelegationAmountBelowMinimum'
+  /**
+   * A validator's max bid must be at least as large as the minimum validator stake,
+   * otherwise the validator could never bid enough to be a qualified bidder.
+   **/
+  | 'MaxBidBelowMinimumValidatorStake'
   /**
    * The caller's GRANDPA key does not match their session key registration.
    **/
@@ -21471,6 +21516,7 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo = {
   restrictedBalances: Array<[H160, bigint]>;
   estimatedRedeemableBalance: bigint;
   operator?: AccountId32 | undefined;
+  maxBid?: bigint | undefined;
 };
 
 export type PalletCfValidatorAuctionResolverAuctionOutcome = {
@@ -22192,6 +22238,28 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesRuntimeApiAccountInfo =
     }
   | { type: 'Validator'; value: StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo }
   | { type: 'Operator'; value: StateChainRuntimeRuntimeApisCustomApiTypesOperatorInfo };
+
+export type StateChainRuntimeRuntimeApisCustomApiTypesRewardDistributionEstimate = {
+  epochIndex: number;
+  currentBlock: number;
+  currentEpochStartedAt: number;
+  epochDuration: number;
+  bond: bigint;
+  authorityCount: number;
+  totalRewards: bigint;
+  perAuthorityShare: bigint;
+  rewardPool: Array<StateChainRuntimeRuntimeApisCustomApiTypesAccountReward>;
+};
+
+export type StateChainRuntimeRuntimeApisCustomApiTypesAccountReward = {
+  account: AccountId32;
+  bid: bigint;
+  bond: bigint;
+  reward: bigint;
+  role: CfPrimitivesAccountRole;
+  managedBy?: AccountId32 | undefined;
+  delegatedTo?: AccountId32 | undefined;
+};
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesNonceOrAccount =
   | { type: 'Nonce'; value: number }

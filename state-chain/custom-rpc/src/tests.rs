@@ -65,7 +65,7 @@ use cf_primitives::{
 
 use state_chain_runtime::{
 	runtime_apis::types::{
-		BrokerRejectionEventFor, ChannelActionType, EvmCallDetails, LendingPosition,
+		AccountReward, BrokerRejectionEventFor, ChannelActionType, EvmCallDetails, LendingPosition,
 		NetworkFeeDetails, OpenedDepositChannels,
 	},
 	Runtime,
@@ -1547,6 +1547,51 @@ fn operator_info() {
 			delegators: BTreeMap::from([(AccountId32::new([0x44; 32]), 1_500_000u128.into())]),
 			delegation_fee_bps: 2_000,
 		}),
+	};
+
+	insta::assert_snapshot!(serde_json::to_string_pretty(&value).unwrap());
+}
+
+#[test]
+fn reward_distribution_estimate() {
+	let value = RewardDistributionEstimate::<NumberOrHex> {
+		epoch_index: 123,
+		current_block: 1_000_500,
+		current_epoch_started_at: 1_000_000,
+		epoch_duration: 3_600,
+		bond: 5_000_000u128.into(),
+		authority_count: 3,
+		total_rewards: 900_000u128.into(),
+		per_authority_share: 300_000u128.into(),
+		reward_pool: vec![
+			AccountReward {
+				account: AccountId32::new([0x11; 32]),
+				bid: 0u128.into(),
+				bond: 0u128.into(),
+				reward: 300_000u128.into(),
+				role: AccountRole::Operator,
+				managed_by: None,
+				delegated_to: None,
+			},
+			AccountReward {
+				account: AccountId32::new([0x22; 32]),
+				bid: 5_000_000u128.into(),
+				bond: 5_000_000u128.into(),
+				reward: 250_000u128.into(),
+				role: AccountRole::Validator,
+				managed_by: Some(AccountId32::new([0x11; 32])),
+				delegated_to: Some(AccountId32::new([0x11; 32])),
+			},
+			AccountReward {
+				account: AccountId32::new([0x33; 32]),
+				bid: 1_000_000u128.into(),
+				bond: 1_000_000u128.into(),
+				reward: 50_000u128.into(),
+				role: AccountRole::Unregistered,
+				managed_by: None,
+				delegated_to: Some(AccountId32::new([0x11; 32])),
+			},
+		],
 	};
 
 	insta::assert_snapshot!(serde_json::to_string_pretty(&value).unwrap());
