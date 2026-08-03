@@ -36,8 +36,33 @@ permissions:
   contents: read
 
 jobs:
+  provision-upgrade-runner:
+    if: inputs.run-job
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 15
+    outputs:
+      runner-label: ${{ steps.provision.outputs.runner-label }}
+      runner-name: ${{ steps.provision.outputs.runner-name }}
+      server-id: ${{ steps.provision.outputs.server-id }}
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Provision ephemeral Hetzner runner ☁️
+        id: provision
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+        run: |
+          runner_name="bouncer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-upgrade-test"
+          runner_label="${runner_name}-cpx52"
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh create "$runner_name" "$runner_label"
+
   upgrade_test:
-    runs-on: hetzner
+    if: inputs.run-job
+    needs: [provision-upgrade-runner]
+    runs-on:
+      [self-hosted, linux, x64, "${{ needs.provision-upgrade-runner.outputs.runner-label }}"]
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 120
     steps:
@@ -442,3 +467,22 @@ jobs:
           ls -alR /tmp/chainflip
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
+
+  destroy-upgrade-runner:
+    if: ${{ always() && needs.provision-upgrade-runner.outputs.runner-name != '' }}
+    needs: [provision-upgrade-runner, upgrade_test]
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 10
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Destroy ephemeral Hetzner runner 🧹
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+          RUNNER_NAME: ${{ needs.provision-upgrade-runner.outputs.runner-name }}
+          SERVER_ID: ${{ needs.provision-upgrade-runner.outputs.server-id }}
+        run: |
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy \
+            "$RUNNER_NAME" "$SERVER_ID"
