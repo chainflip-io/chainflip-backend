@@ -25,7 +25,7 @@ frame-metadata = { workspace = true, default-features = true, features = [
 	"current",
 ] }
 frame-metadata-hash-extension = { workspace = true }
-subxt = { workspace = true, features = ["runtime-wasm-path"] }
+subxt = { workspace = true }
 
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true }
@@ -33,6 +33,8 @@ pallet-cf-pools = { workspace = true, default-features = true }
 cf-amm = { workspace = true, default-features = true }
 cf-traits = { workspace = true }
 
+[build-dependencies]
+state-chain-runtime = { workspace = true, default-features = true }
 
 [dev-dependencies]
 pallet-cf-funding = { workspace = true, default-features = true }
