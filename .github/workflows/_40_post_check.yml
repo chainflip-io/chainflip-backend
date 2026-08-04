@@ -46,11 +46,46 @@ permissions:
   contents: read
 
 jobs:
+  provision-bouncer-runner:
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 15
+    outputs:
+      runner-label: ${{ steps.provision.outputs.runner-label }}
+      runner-name: ${{ steps.provision.outputs.runner-name }}
+      server-id: ${{ steps.provision.outputs.server-id }}
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Provision ephemeral Hetzner runner ☁️
+        id: provision
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+          LOG_POSTFIX: ${{ inputs.log-postfix }}
+        run: |
+          suffix=$(tr --complement --delete '[:alnum:]-' <<<"$LOG_POSTFIX")
+          runner_name="bouncer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}${suffix}"
+          runner_label="${runner_name}-cpx52"
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh create "$runner_name" "$runner_label"
+
   bouncer:
-    runs-on: hetzner
+    needs: [provision-bouncer-runner]
+    # Run even when provisioning fails, so that this job always reports under the name
+    # required by branch protection. A skipped job counts as a passing required check,
+    # which would hide provisioning failures.
+    if: ${{ !cancelled() }}
+    # The ephemeral runner label is unique per run, so it identifies the runner on its own.
+    # Fall back to a hosted runner when there is none to target, otherwise the job waits
+    # on a label that matches nothing until it times out.
+    runs-on: ${{ needs.provision-bouncer-runner.result == 'success' && needs.provision-bouncer-runner.outputs.runner-label || 'namespace-profile-default-light' }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     continue-on-error: ${{ inputs.continue-on-bouncer-error }}
     steps:
+      - name: Fail if runner provisioning failed 🚨
+        if: ${{ needs.provision-bouncer-runner.result != 'success' }}
+        run: exit 1
+
       - name: Setup ngrok ✨
         if: inputs.ngrok
         run: |
@@ -244,6 +279,14 @@ jobs:
           path: |
             /tmp/chainflip/bouncer.log
 
+      - name: Upload runner diagnostics 💾
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        with:
+          name: runner-diagnostics${{ inputs.log-postfix }}
+          path: /opt/actions-runner/_diag/
+
       - name: Dump indexer database
         if: always()
         continue-on-error: true
@@ -298,6 +341,25 @@ jobs:
         continue-on-error: true
         run: |
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
+
+  destroy-bouncer-runner:
+    if: ${{ always() && needs.provision-bouncer-runner.outputs.runner-name != '' }}
+    needs: [provision-bouncer-runner, bouncer]
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 10
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Destroy ephemeral Hetzner runner 🧹
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+          CF_BOUNCER_RUNNER_NAME: ${{ needs.provision-bouncer-runner.outputs.runner-name }}
+          CF_BOUNCER_SERVER_ID: ${{ needs.provision-bouncer-runner.outputs.server-id }}
+        run: |
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy \
+            "$CF_BOUNCER_RUNNER_NAME" "$CF_BOUNCER_SERVER_ID"
 
   chainspec-compatibility:
     runs-on: namespace-profile-default
