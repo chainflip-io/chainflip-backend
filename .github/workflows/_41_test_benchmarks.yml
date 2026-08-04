@@ -33,10 +33,20 @@ jobs:
 
   test-benchmarks:
     needs: [provision-benchmarks-runner]
-    runs-on:
-      [self-hosted, linux, x64, "${{ needs.provision-benchmarks-runner.outputs.runner-label }}"]
+    # Run even when provisioning fails, so that a provisioning failure is reported by
+    # this job rather than hidden behind a skip. A skipped job counts as a passing
+    # required check, which would hide provisioning failures.
+    if: ${{ !cancelled() }}
+    # The ephemeral runner label is unique per run, so it identifies the runner on its own.
+    # Fall back to a hosted runner when there is none to target, otherwise the job waits
+    # on a label that matches nothing until it times out.
+    runs-on: ${{ needs.provision-benchmarks-runner.result == 'success' && needs.provision-benchmarks-runner.outputs.runner-label || 'namespace-profile-default-light' }}
     timeout-minutes: 60
     steps:
+      - name: Fail if runner provisioning failed 🚨
+        if: ${{ needs.provision-benchmarks-runner.result != 'success' }}
+        run: exit 1
+
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
