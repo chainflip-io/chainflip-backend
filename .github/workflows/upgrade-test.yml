@@ -31,11 +31,45 @@ permissions:
   contents: read
 
 jobs:
+  provision-upgrade-runner:
+    if: inputs.run-job
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 15
+    outputs:
+      runner-label: ${{ steps.provision.outputs.runner-label }}
+      runner-name: ${{ steps.provision.outputs.runner-name }}
+      server-id: ${{ steps.provision.outputs.server-id }}
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Provision ephemeral Hetzner runner ☁️
+        id: provision
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+        run: |
+          runner_name="bouncer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-upgrade-test"
+          runner_label="${runner_name}-cpx52"
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh create "$runner_name" "$runner_label"
+
   upgrade_test:
-    runs-on: hetzner
+    needs: [provision-upgrade-runner]
+    # Run even when provisioning is skipped (run-job: false) or fails, so that this
+    # job always reports under the name required by branch protection. A skipped job
+    # counts as a passing required check, which would hide provisioning failures.
+    if: ${{ !cancelled() }}
+    # The ephemeral runner label is unique per run, so it identifies the runner on its own.
+    # Fall back to a hosted runner when there is none to target, otherwise the job waits
+    # on a label that matches nothing until it times out.
+    runs-on: ${{ needs.provision-upgrade-runner.result == 'success' && needs.provision-upgrade-runner.outputs.runner-label || 'namespace-profile-default-light' }}
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 120
     steps:
+      - name: Fail if runner provisioning failed 🚨
+        if: ${{ inputs.run-job && needs.provision-upgrade-runner.result != 'success' }}
+        run: exit 1
+
       - name: Checkout chainflip-backend 🛒
         if: inputs.run-job
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -364,7 +398,7 @@ jobs:
           path: |
             /tmp/chainflip/snapshots/*.snap
       - name: Dump indexer database
-        if: always()
+        if: ${{ always() && inputs.run-job }}
         continue-on-error: true
         env:
           PGPASSWORD: postgres
@@ -372,7 +406,7 @@ jobs:
           pg_dump -h 127.0.0.1 -p 5432 -U postgres squid_archive > /tmp/chainflip/indexer-pgsql-dump
 
       - name: Upload indexer database
-        if: always()
+        if: ${{ always() && inputs.run-job }}
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -405,13 +439,21 @@ jobs:
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
 
-      - name: Notify on failed upgrade test 🚨
-        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
+  destroy-upgrade-runner:
+    if: ${{ always() && needs.provision-upgrade-runner.outputs.runner-name != '' }}
+    needs: [provision-upgrade-runner, upgrade_test]
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 10
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Destroy ephemeral Hetzner runner 🧹
         env:
-          DISCORD_USERNAME: "Upgrade Test"
-          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-        uses: Ilshidur/action-discord@0.3.2
-        with:
-          args: |
-            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, The Upgrade Test has not passed ❗️❗️❗️❗️
-            👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+          CF_BOUNCER_RUNNER_NAME: ${{ needs.provision-upgrade-runner.outputs.runner-name }}
+          CF_BOUNCER_SERVER_ID: ${{ needs.provision-upgrade-runner.outputs.server-id }}
+        run: |
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy \
+            "$CF_BOUNCER_RUNNER_NAME" "$CF_BOUNCER_SERVER_ID"
