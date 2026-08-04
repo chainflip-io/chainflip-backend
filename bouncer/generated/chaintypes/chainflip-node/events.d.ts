@@ -4947,7 +4947,7 @@ export interface ChainEvents extends GenericChainEvents {
         asset: CfPrimitivesChainsAssetsHubAsset;
         amount: bigint;
         blockHeight: number;
-        depositDetails: number;
+        depositDetails: CfPrimitivesTxId;
         ingressFee: bigint;
         maxBoostFeeBps: number;
         action: PalletCfIngressEgressDepositAction;
@@ -5058,7 +5058,7 @@ export interface ChainEvents extends GenericChainEvents {
          * (entries present only if that source contributed).
          **/
         amounts: Array<[CfTraitsLendingBoostSource, bigint]>;
-        depositDetails: number;
+        depositDetails: CfPrimitivesTxId;
         prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
         channelId?: bigint | undefined;
         blockHeight: number;
@@ -5103,12 +5103,12 @@ export interface ChainEvents extends GenericChainEvents {
     TransactionRejectedByBroker: GenericPalletEvent<
       'AssethubIngressEgress',
       'TransactionRejectedByBroker',
-      { broadcastId: number; txId: number }
+      { broadcastId: number; txId: CfPrimitivesTxId }
     >;
     TransactionRejectionFailed: GenericPalletEvent<
       'AssethubIngressEgress',
       'TransactionRejectionFailed',
-      { txId: number; reason: PalletCfIngressEgressRefundFailureReason }
+      { txId: CfPrimitivesTxId; reason: PalletCfIngressEgressRefundFailureReason }
     >;
     UnknownBroker: GenericPalletEvent<
       'AssethubIngressEgress',

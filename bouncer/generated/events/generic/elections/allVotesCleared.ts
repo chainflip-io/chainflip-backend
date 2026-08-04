@@ -1,4 +1,5 @@
 import { arbitrumElectionsAllVotesClearedEvent } from '../../arbitrumElections/allVotesCleared';
+import { assethubElectionsAllVotesClearedEvent } from '../../assethubElections/allVotesCleared';
 import { bitcoinElectionsAllVotesClearedEvent } from '../../bitcoinElections/allVotesCleared';
 import { bscElectionsAllVotesClearedEvent } from '../../bscElections/allVotesCleared';
 import { ethereumElectionsAllVotesClearedEvent } from '../../ethereumElections/allVotesCleared';
@@ -8,6 +9,7 @@ import { tronElectionsAllVotesClearedEvent } from '../../tronElections/allVotesC
 
 export const electionsAllVotesClearedEvent = {
   Arbitrum: arbitrumElectionsAllVotesClearedEvent,
+  Assethub: assethubElectionsAllVotesClearedEvent,
   Bitcoin: bitcoinElectionsAllVotesClearedEvent,
   Bsc: bscElectionsAllVotesClearedEvent,
   Ethereum: ethereumElectionsAllVotesClearedEvent,

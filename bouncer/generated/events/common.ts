@@ -1832,7 +1832,7 @@ export const palletCfAssethubIngressEgressDepositWitnessAssethub = z.object({
   depositAddress: hexString,
   asset: cfPrimitivesChainsAssetsHubAsset,
   amount: numberOrHex,
-  depositDetails: z.number(),
+  depositDetails: cfPrimitivesTxId,
 });
 
 export const cfAssethubChainCcmDepositMetadata = z.object({
@@ -1854,7 +1854,7 @@ export const palletCfAssethubIngressEgressVaultDepositWitnessAssethub = z.object
   depositAddress: hexString.nullish(),
   channelId: numberOrHex.nullish(),
   depositAmount: numberOrHex,
-  depositDetails: z.number(),
+  depositDetails: cfPrimitivesTxId,
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfAssethubChainCcmDepositMetadata.nullish(),
