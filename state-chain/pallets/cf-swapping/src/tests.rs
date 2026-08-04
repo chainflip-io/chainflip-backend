@@ -171,41 +171,6 @@ fn create_test_swap(
 	Swap::new(id.into(), id.into(), input_asset, output_asset, amount, None, execute_at)
 }
 
-fn insert_user_swap_request(
-	id: u64,
-	output_action: SwapOutputAction<u64>,
-	price_limits_and_expiry: Option<PriceLimitsAndExpiry<u64>>,
-) {
-	SwapRequests::<Test>::insert(
-		SwapRequestId::from(id),
-		SwapRequest {
-			id: id.into(),
-			input_asset: INPUT_ASSET,
-			output_asset: OUTPUT_ASSET,
-			state: SwapRequestState::UserSwap {
-				price_limits_and_expiry,
-				output_action,
-				dca_state: DcaState::new(INPUT_AMOUNT, None),
-				fees: Default::default(),
-			},
-		},
-	);
-}
-
-fn price_limits_with_refund(
-	refund_address: AccountOrAddress<u64, ForeignChainAddress>,
-) -> PriceLimitsAndExpiry<u64> {
-	PriceLimitsAndExpiry {
-		expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
-			retry_duration: 100,
-			refund_address,
-			refund_ccm_metadata: None,
-		},
-		min_price: Price::zero(),
-		max_oracle_price_slippage: None,
-	}
-}
-
 // Returns some test data
 fn generate_test_swaps() -> Vec<TestSwapParams> {
 	vec![
@@ -1565,49 +1530,93 @@ fn broker_deregistration_checks_private_channels() {
 	});
 }
 
-#[test]
-fn pending_swap_deregistration_check_blocks_account_directed_swaps() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT));
+mod deregistration_checks {
+	use super::*;
 
-		insert_user_swap_request(
-			1,
-			SwapOutputAction::Egress {
-				ccm_deposit_metadata: None,
-				output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+	fn insert_user_swap_request(
+		output_action: SwapOutputAction<u64>,
+		price_limits_and_expiry: Option<PriceLimitsAndExpiry<u64>>,
+	) {
+		SwapRequests::<Test>::insert(
+			SWAP_REQUEST_ID,
+			SwapRequest {
+				id: SWAP_REQUEST_ID,
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				state: SwapRequestState::UserSwap {
+					price_limits_and_expiry,
+					output_action,
+					dca_state: DcaState::new(INPUT_AMOUNT, None),
+					fees: Default::default(),
+				},
 			},
-			Some(price_limits_with_refund(AccountOrAddress::ExternalAddress(
-				(*EVM_OUTPUT_ADDRESS).clone(),
-			))),
 		);
-		assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT));
+	}
 
-		insert_user_swap_request(
-			2,
-			SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
-			None,
-		);
-		assert!(matches!(
-			PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
-			Err(Error::<Test>::PendingSwapRequest)
-		));
-		assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&BOB));
-		SwapRequests::<Test>::remove(SwapRequestId(2));
-		assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT));
-
-		insert_user_swap_request(
-			3,
-			SwapOutputAction::Egress {
-				ccm_deposit_metadata: None,
-				output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+	fn price_limits_with_refund(
+		refund_address: AccountOrAddress<u64, ForeignChainAddress>,
+	) -> PriceLimitsAndExpiry<u64> {
+		PriceLimitsAndExpiry {
+			expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+				retry_duration: 100,
+				refund_address,
+				refund_ccm_metadata: None,
 			},
-			Some(price_limits_with_refund(AccountOrAddress::InternalAccount(LP_ACCOUNT))),
-		);
-		assert!(matches!(
-			PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
-			Err(Error::<Test>::PendingSwapRequest)
-		));
-	});
+			min_price: Price::zero(),
+			max_oracle_price_slippage: None,
+		}
+	}
+
+	#[test]
+	fn unrelated_swap_does_not_block_deregistration() {
+		new_test_ext().execute_with(|| {
+			insert_user_swap_request(
+				SwapOutputAction::Egress {
+					ccm_deposit_metadata: None,
+					output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+				},
+				Some(price_limits_with_refund(AccountOrAddress::ExternalAddress(
+					(*EVM_OUTPUT_ADDRESS).clone(),
+				))),
+			);
+
+			assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT));
+		});
+	}
+
+	#[test]
+	fn swap_into_account_blocks_its_deregistration() {
+		new_test_ext().execute_with(|| {
+			insert_user_swap_request(
+				SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
+				None,
+			);
+
+			assert!(matches!(
+				PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
+				Err(Error::<Test>::PendingSwapRequest)
+			));
+			assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&BOB));
+		});
+	}
+
+	#[test]
+	fn swap_refund_to_account_blocks_its_deregistration() {
+		new_test_ext().execute_with(|| {
+			insert_user_swap_request(
+				SwapOutputAction::Egress {
+					ccm_deposit_metadata: None,
+					output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+				},
+				Some(price_limits_with_refund(AccountOrAddress::InternalAccount(LP_ACCOUNT))),
+			);
+
+			assert!(matches!(
+				PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
+				Err(Error::<Test>::PendingSwapRequest)
+			));
+		});
+	}
 }
 
 #[test]
