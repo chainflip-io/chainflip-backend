@@ -83,6 +83,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0119: DoS vector in hickory-proto which is used by libp2p. Dependency of substrate, related to DNS resolution. Low risk.
 # - RUSTSEC-2026-0173: proc-macro-error2 unmaintained. Build-time proc-macro helper, transitive dependency of `subxt-macro`. Not a runtime security concern.
 # - RUSTSEC-2026-0186: Unsound pointer arithmetic in memmap2. Transitive dependency of parity-db - out of our control.
+# - RUSTSEC-2026-0222: Wasmtime type-index mixup between multiple engines. Low severity embedder-API-misuse issue; we only execute the trusted runtime wasm and don't control the wasmtime version (pinned by polkadot-sdk). Dependency of substrate.
 
 #
 cf-audit = '''
@@ -133,6 +134,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0119
 	--ignore RUSTSEC-2026-0173
 	--ignore RUSTSEC-2026-0186
+	--ignore RUSTSEC-2026-0222
 '''
 
 [build]
