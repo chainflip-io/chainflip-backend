@@ -18494,11 +18494,6 @@ export type PalletCfSwappingError =
    **/
   | 'BrokerAlreadyBound'
   /**
-   * The broker tried to withdraw to an address which is not the address the broker is bound
-   * to.
-   **/
-  | 'BrokerBoundWithdrawalAddressRestrictionViolated'
-  /**
    * A zero default slippage protection will result in most swaps failing. Set to `None` to
    * reset to the permissive default (100bps).
    **/
@@ -21516,6 +21511,7 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo = {
   restrictedBalances: Array<[H160, bigint]>;
   estimatedRedeemableBalance: bigint;
   operator?: AccountId32 | undefined;
+  bid: bigint;
   maxBid?: bigint | undefined;
 };
 
