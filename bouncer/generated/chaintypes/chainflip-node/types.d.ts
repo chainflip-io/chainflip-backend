@@ -8064,7 +8064,7 @@ export type PalletCfIngressEgressDepositWitnessAssethub = {
   depositAddress: CfChainsDotPolkadotAccountId;
   asset: CfPrimitivesChainsAssetsHubAsset;
   amount: bigint;
-  depositDetails: number;
+  depositDetails: CfPrimitivesTxId;
 };
 
 export type PalletCfIngressEgressPalletConfigUpdateAssethub =
@@ -8087,7 +8087,7 @@ export type PalletCfIngressEgressVaultDepositWitnessAssethub = {
   depositAddress?: CfChainsDotPolkadotAccountId | undefined;
   channelId?: bigint | undefined;
   depositAmount: bigint;
-  depositDetails: number;
+  depositDetails: CfPrimitivesTxId;
   outputAsset: CfPrimitivesChainsAssetsAnyAsset;
   destinationAddress: CfChainsAddressEncodedAddress;
   depositMetadata?: CfChainsCcmDepositMetadata | undefined;
@@ -12956,7 +12956,9 @@ export type CfPrimitivesBlockWitnesserEventTransactionConfirmationAssethub =
   | { type: 'PreWitness'; value: PalletCfBroadcastTransactionConfirmationAssethub }
   | { type: 'Witness'; value: PalletCfBroadcastTransactionConfirmationAssethub };
 
-export type StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes = 'DepositChannels';
+export type StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes =
+  | { type: 'DepositChannels'; value: Array<CfChainsDepositChannelDepositChannelAssethub> }
+  | { type: 'Egresses'; value: Array<CfChainsDotPolkadotSignature> };
 
 export type SpRuntimeMultiSignature =
   | { type: 'Ed25519'; value: FixedBytes<64> }
@@ -16586,7 +16588,7 @@ export type PalletCfIngressEgressEvent006 =
         asset: CfPrimitivesChainsAssetsHubAsset;
         amount: bigint;
         blockHeight: number;
-        depositDetails: number;
+        depositDetails: CfPrimitivesTxId;
         ingressFee: bigint;
         maxBoostFeeBps: number;
         action: PalletCfIngressEgressDepositAction;
@@ -16665,7 +16667,7 @@ export type PalletCfIngressEgressEvent006 =
          * (entries present only if that source contributed).
          **/
         amounts: Array<[CfTraitsLendingBoostSource, bigint]>;
-        depositDetails: number;
+        depositDetails: CfPrimitivesTxId;
         prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId;
         channelId?: bigint | undefined;
         blockHeight: number;
@@ -16703,10 +16705,10 @@ export type PalletCfIngressEgressEvent006 =
       name: 'TransactionRejectionRequestExpired';
       data: { accountId: AccountId32; txId: CfPrimitivesTxId };
     }
-  | { name: 'TransactionRejectedByBroker'; data: { broadcastId: number; txId: number } }
+  | { name: 'TransactionRejectedByBroker'; data: { broadcastId: number; txId: CfPrimitivesTxId } }
   | {
       name: 'TransactionRejectionFailed';
-      data: { txId: number; reason: PalletCfIngressEgressRefundFailureReason };
+      data: { txId: CfPrimitivesTxId; reason: PalletCfIngressEgressRefundFailureReason };
     }
   | { name: 'UnknownBroker'; data: { brokerId: AccountId32 } }
   | {
@@ -20658,7 +20660,7 @@ export type PalletCfIngressEgressTransactionRejectionDetailsAssethub = {
   refundAddress: CfChainsAddressForeignChainAddress;
   asset: CfPrimitivesChainsAssetsHubAsset;
   amount: bigint;
-  depositDetails: number;
+  depositDetails: CfPrimitivesTxId;
   refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
 };
 
@@ -20675,7 +20677,7 @@ export type PalletCfIngressEgressPendingPrewitnessedDeposit006 = {
   blockHeight: number;
   amount: bigint;
   asset: CfPrimitivesChainsAssetsHubAsset;
-  depositDetails: number;
+  depositDetails: CfPrimitivesTxId;
   depositAddress?: CfChainsDotPolkadotAccountId | undefined;
   action: PalletCfIngressEgressChannelAction004;
   boostFee: number;
