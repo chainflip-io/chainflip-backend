@@ -71,11 +71,21 @@ jobs:
 
   bouncer:
     needs: [provision-bouncer-runner]
-    runs-on:
-      [self-hosted, linux, x64, "${{ needs.provision-bouncer-runner.outputs.runner-label }}"]
+    # Run even when provisioning fails, so that this job always reports under the name
+    # required by branch protection. A skipped job counts as a passing required check,
+    # which would hide provisioning failures.
+    if: ${{ !cancelled() }}
+    # The ephemeral runner label is unique per run, so it identifies the runner on its own.
+    # Fall back to a hosted runner when there is none to target, otherwise the job waits
+    # on a label that matches nothing until it times out.
+    runs-on: ${{ needs.provision-bouncer-runner.result == 'success' && needs.provision-bouncer-runner.outputs.runner-label || 'namespace-profile-default-light' }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     continue-on-error: ${{ inputs.continue-on-bouncer-error }}
     steps:
+      - name: Fail if runner provisioning failed 🚨
+        if: ${{ needs.provision-bouncer-runner.result != 'success' }}
+        run: exit 1
+
       - name: Setup ngrok ✨
         if: inputs.ngrok
         run: |
