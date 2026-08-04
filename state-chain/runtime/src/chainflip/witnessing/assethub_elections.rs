@@ -401,12 +401,6 @@ pub fn initial_state() -> InitialStateOf<Runtime, AssethubInstance> {
 	}
 }
 
-impl_pallet_safe_mode! {
-	AssethubElectionsSafeMode;
-
-	key_manager_witnessing,
-}
-
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(
@@ -417,7 +411,7 @@ pub enum ElectionTypes {
 
 pub struct ElectoralSystemConfiguration;
 impl pallet_cf_elections::ElectoralSystemConfiguration for ElectoralSystemConfiguration {
-	type SafeMode = AssethubElectionsSafeMode;
+	type SafeMode = ();
 
 	type ElectoralEvents = AssethubElectoralEvents;
 

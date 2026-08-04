@@ -61,7 +61,6 @@ impl_runtime_safe_mode! {
 	arbitrum_elections: crate::chainflip::witnessing::arbitrum_elections::ArbitrumElectionsSafeMode,
 	tron_elections: crate::chainflip::witnessing::tron_elections::TronElectionsSafeMode,
 	bsc_elections: crate::chainflip::witnessing::bsc_elections::BscElectionsSafeMode,
-	assethub_elections: crate::chainflip::witnessing::assethub_elections::AssethubElectionsSafeMode,
 }
 
 /// Contains permissions for different Runtime calls.

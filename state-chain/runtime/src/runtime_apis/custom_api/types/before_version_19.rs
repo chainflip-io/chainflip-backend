@@ -518,8 +518,6 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 			tron_elections:old.tron_elections,
 			bsc_elections:
 				<crate::chainflip::witnessing::bsc_elections::BscElectionsSafeMode as SafeMode>::code_green(),
-    		assethub_elections:
-				<crate::chainflip::witnessing::assethub_elections::AssethubElectionsSafeMode as SafeMode>::code_green(),
 		}
 	}
 }
