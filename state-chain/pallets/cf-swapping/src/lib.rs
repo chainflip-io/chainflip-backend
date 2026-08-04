@@ -1419,6 +1419,7 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
+			T::WithdrawalRestriction::clear_pending_withdrawal_changes(&account_id);
 
 			for affiliate_account_id in AffiliateAccountDetails::<T>::iter_key_prefix(&account_id) {
 				frame_system::Provider::<T>::killed(&affiliate_account_id).unwrap_or_else(|e| {

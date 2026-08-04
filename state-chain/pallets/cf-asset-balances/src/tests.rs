@@ -504,14 +504,18 @@ pub mod balance_api {
 
 mod withdrawal_whitelist {
 	use super::*;
-	use crate::{Error, MaxPendingWhitelistUpdates, MaxWhitelistTimelock, WhitelistChange};
+	use crate::{
+		Error, MaxPendingWhitelistUpdates, MaxWhitelistTimelock, PendingChanges, WhitelistChange,
+		WithdrawalWhitelistDeregistrationCheck,
+	};
 	use cf_chains::{
 		address::{AddressConverter, EncodedAddress},
 		AccountOrAddress,
 	};
 	use cf_traits::{
 		mocks::{address_converter::MockAddressConverter, time_source},
-		RefundAddressRegistry, WithdrawalAddressAlreadyBound, WithdrawalAddressRestriction,
+		DeregistrationCheck, RefundAddressRegistry, WithdrawalAddressAlreadyBound,
+		WithdrawalAddressRestriction,
 	};
 	use core::time::Duration;
 	use frame_support::{
@@ -598,6 +602,63 @@ mod withdrawal_whitelist {
 			// Removing the last entry leaves nothing configured => unrestricted again.
 			remove(&who, ETH_ADDR_1);
 			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
+		});
+	}
+
+	#[test]
+	fn deregistration_requires_whitelist_to_be_disabled() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			assert_ok!(WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who));
+
+			// Even an empty whitelist is active while its timelock is set.
+			set_timelock(&who, 1000);
+			assert!(matches!(
+				WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who),
+				Err(Error::<Test>::WithdrawalWhitelistNotCleared)
+			));
+
+			allow(&who, ETH_ADDR_1);
+			advance_clock(1001);
+			apply_pending();
+
+			// Clearing the entries and disabling the timelock are both delayed.
+			remove(&who, ETH_ADDR_1);
+			set_timelock(&who, 0);
+			assert!(matches!(
+				WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who),
+				Err(Error::<Test>::WithdrawalWhitelistNotCleared)
+			));
+
+			advance_clock(1001);
+			apply_pending();
+			assert_ok!(WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who));
+		});
+	}
+
+	#[test]
+	fn deregistration_cleanup_discards_delayed_changes() {
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			set_timelock(&who, 1000);
+			set_timelock(&who, 0); // Applies at t+1000.
+
+			advance_clock(500);
+			allow(&who, ETH_ADDR_1); // Applies at t+1500.
+			Pallet::<Test>::register_liquidity_refund_address(&who, ETH_ADDR_2);
+
+			advance_clock(501);
+			apply_pending();
+			assert_ok!(WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who));
+			assert!(!PendingChanges::<Test>::get().is_empty());
+
+			Pallet::<Test>::clear_pending_withdrawal_changes(&who);
+			assert!(PendingChanges::<Test>::get().is_empty());
+
+			advance_clock(500);
+			apply_pending();
+			assert_ok!(WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who));
+			assert!(Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum).is_none());
 		});
 	}
 

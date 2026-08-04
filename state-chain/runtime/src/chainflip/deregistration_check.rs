@@ -34,6 +34,9 @@ impl DeregistrationCheck for RuntimeDeregistrationCheck {
 				pallet_cf_asset_balances::FreeBalancesDeregistrationCheck::<Runtime>::check(
 					account_id,
 				)?;
+				pallet_cf_asset_balances::WithdrawalWhitelistDeregistrationCheck::<Runtime>::check(
+					account_id,
+				)?;
 				pallet_cf_lending_pools::PoolsDeregistrationCheck::<Runtime>::check(account_id)?;
 				pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck::<Runtime>::check(
 					account_id,
@@ -43,6 +46,9 @@ impl DeregistrationCheck for RuntimeDeregistrationCheck {
 			},
 			AccountRole::Broker => {
 				pallet_cf_asset_balances::FreeBalancesDeregistrationCheck::<Runtime>::check(
+					account_id,
+				)?;
+				pallet_cf_asset_balances::WithdrawalWhitelistDeregistrationCheck::<Runtime>::check(
 					account_id,
 				)?;
 				pallet_cf_swapping::BrokerDeregistrationCheck::<Runtime>::check(account_id)?;

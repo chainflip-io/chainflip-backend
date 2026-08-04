@@ -164,6 +164,8 @@ pub mod pallet {
 		TooManyPendingUpdates,
 		/// No liquidity refund address is registered for the account on the relevant chain.
 		NoLiquidityRefundAddressRegistered,
+		/// The account's withdrawal whitelist must be disabled before deregistration.
+		WithdrawalWhitelistNotCleared,
 	}
 
 	#[pallet::event]
@@ -783,6 +785,10 @@ impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
 			},
 		})
 	}
+
+	fn clear_pending_withdrawal_changes(owner: &Self::AccountId) {
+		Self::discard_pending_matching(owner, |_| true);
+	}
 }
 
 impl<T: Config> RefundAddressRegistry for Pallet<T> {
@@ -985,6 +991,22 @@ impl<T: Config> DeregistrationCheck for FreeBalancesDeregistrationCheck<T> {
 		ensure!(
 			FreeBalances::<T>::iter_prefix(account_id).all(|(_, amount)| amount.is_zero()),
 			Error::<T>::FundsRemaining
+		);
+
+		Ok(())
+	}
+}
+
+pub struct WithdrawalWhitelistDeregistrationCheck<T: Config>(PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for WithdrawalWhitelistDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		ensure!(
+			!WithdrawalWhitelists::<T>::contains_key(account_id),
+			Error::<T>::WithdrawalWhitelistNotCleared
 		);
 
 		Ok(())
