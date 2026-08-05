@@ -387,7 +387,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, AssethubInstance> {
 				safety_margin: 0,
 				safety_buffer: ASSETHUB_MAINNET_SAFETY_BUFFER,
 			},
-			Default::default(),
+			10, // open fee election every 10 SC blocks
 			(),
 		),
 		settings: (
