@@ -179,10 +179,7 @@
           "nonAuthorityKeys": []
         },
         "staking": {
-          "devStakers": [
-            2000,
-            25000
-          ],
+          "devStakers": null,
           "validatorCount": 600
         },
         "assets": {

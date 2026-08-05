@@ -188,7 +188,7 @@ services:
       - --collator
       - --authoring=slot-based
       - --blocks-pruning=archive
-      - --chain=/chainspecs/v2.3.2/assethub.json
+      - --chain=/chainspecs/v2.3.2/assethub.raw.json
       - --force-authoring
       - --name=AssetHubDocker
       - --rpc-cors=all

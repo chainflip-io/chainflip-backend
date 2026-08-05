@@ -13,17 +13,18 @@
 #
 #   - assethub-genesis-state.txt: generated from the assethub node, has to be embedded in the polkadot.* chainspecs.
 #   - assethub-genesis-wasm.txt: generated from the assethub node, has to be embedded in the polkadot.* chainspecs.
-#   - assethub.json: final (readable) assethub chainspec, includes configuration of local USDC and USDT genesis assets.
+#   - assethub.json: readable assethub chainspec, includes configuration of local USDC and USDT genesis assets.
+#   - assethub.raw.json: final assethub chainspec
 #
 #   - polkadot-genesis-wasm.txt: generated from polkadot node, incuded in the polkadot.* chainspecs.
-#   - polkadot.json: (readable) polkadot chainspec, cannot be used as-is because of missing overrides.
+#   - polkadot.json: readable polkadot chainspec, cannot be used as-is because of missing overrides.
 #   - polkadot.raw.json: final polkadot chainspec. Contains converted (to raw format) polkadot.json, and additional raw storage overrides.
 #
 # Generation proceeds as follows:
 #   1. Builds the chain-spec-generator with --features=fast-runtime (for short session durations on polkadot). 
 #   2. Generates assethub chainspec with chain-spec-generate, then patches additional config on top
 #      (USDC and USDT assets setup).
-#   3. Exports assethub genesis state and genesis wasm by starting up a temporary node with this chainspec.
+#   3. Converts the assethub chainspec to raw storage, then exports its genesis state and genesis wasm.
 #      These have to be included in the polkadot chainspec.
 #   4. Generates polkadot chainspec, to get just the runtime WASM, and inserts it into an existing polkadot
 #      chainspec template (it probably has some configuration that we need).
@@ -60,6 +61,7 @@ cd ${CURRENT_DIR}
 # 0. Files:
 ASSETHUB_CHAINSPEC_PATCH="./ci/docker/development/polkadot/assethub.patch.json"
 ASSETHUB_CHAINSPEC="./ci/docker/development/polkadot/${VERSION_TAG}/assethub.json"
+ASSETHUB_RAW_CHAINSPEC="./ci/docker/development/polkadot/${VERSION_TAG}/assethub.raw.json"
 # 1. Temporaries
 ASSETHUB_TEMP_GENESIS_STATE="$(mktemp)"
 ASSETHUB_TEMP_GENESIS_WASM="$(mktemp)"
@@ -68,14 +70,20 @@ ASSETHUB_TEMP_CHAINSPEC="$(mktemp)"
 ${POLKADOT_FELLOWS_RUNTIMES_DIR}/target/release/chain-spec-generator asset-hub-polkadot-local > $ASSETHUB_TEMP_CHAINSPEC
 # 3. Combine generated chainspec with patch (this adds Usdt and Usdc as assets to the assethub genesis state)
 jq -s '.[0] * .[1]' $ASSETHUB_TEMP_CHAINSPEC $ASSETHUB_CHAINSPEC_PATCH > $ASSETHUB_CHAINSPEC
-# 3. Extract the genesis-state
+# 3. Convert the completed Asset Hub chainspec to raw storage.
+docker run --rm --platform linux/amd64 \
+    --volume "${CURRENT_DIR}/${ASSETHUB_CHAINSPEC#./}:/chainspec.json:ro" \
+    "$POLKADOT_PARACHAIN_IMAGE" export-chain-spec \
+    --chain "/chainspec.json" \
+    --raw > $ASSETHUB_RAW_CHAINSPEC
+# 4. Extract the genesis-state
 docker run --rm --platform linux/amd64 \
     --volume "${CURRENT_DIR}/ci/docker/development/polkadot/${VERSION_TAG}:/chainspecs:ro" \
-    "$POLKADOT_PARACHAIN_IMAGE" export-genesis-state --chain /chainspecs/assethub.json > $ASSETHUB_TEMP_GENESIS_STATE
-# 4. Extract the genesis-wasm
+    "$POLKADOT_PARACHAIN_IMAGE" export-genesis-state --chain /chainspecs/assethub.raw.json > $ASSETHUB_TEMP_GENESIS_STATE
+# 5. Extract the genesis-wasm
 docker run --rm --platform linux/amd64 \
     --volume "${CURRENT_DIR}/ci/docker/development/polkadot/${VERSION_TAG}:/chainspecs:ro" \
-    "$POLKADOT_PARACHAIN_IMAGE" export-genesis-wasm --chain /chainspecs/assethub.json > $ASSETHUB_TEMP_GENESIS_WASM
+    "$POLKADOT_PARACHAIN_IMAGE" export-genesis-wasm --chain /chainspecs/assethub.raw.json > $ASSETHUB_TEMP_GENESIS_WASM
 
 #################################
 # Polkadot:
