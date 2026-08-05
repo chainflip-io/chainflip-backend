@@ -161,25 +161,34 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 				let Some(header) = self.client.header(block_hash).await? else {
 					return Err(anyhow::anyhow!("No header for block hash {block_hash}"));
 				};
-				let Some(events) = self.client.events(block_hash, header.parent_hash).await? else {
-					return Err(anyhow::anyhow!("No events for block hash {block_hash}"));
-				};
 
-				let events =
-					events.iter().filter_map(crate::witness::hub::filter_map_events).collect();
+				if finalized_block_height == 0 {
+					// the genesis block (height 0) has 0x00...00 as parent hash. But this block
+					// hash doesn't really exist and can't be queried for with rpcs, so we
+					// explicitly set the parent hash of block 0 to `None`. We also can't do event
+					// extraction for block 0 since that requires a valid parent hash
+					Ok(AssethubBlockHeader {
+						block_height: finalized_block_height,
+						block_hash,
+						parent_block_hash: None,
+						events: vec![],
+					})
+				} else {
+					let Some(events) = self.client.events(block_hash, header.parent_hash).await?
+					else {
+						return Err(anyhow::anyhow!("No events for block hash {block_hash}"));
+					};
 
-				// the genesis block (height 0) has 0x00...00 as parent hash. But this block hash
-				// doesn't really exist and can't be queried for with rpcs, so we explicitly set the
-				// parent hash of block 0 to `None`.
-				let parent_block_hash =
-					if finalized_block_height == 0 { None } else { Some(header.parent_hash) };
+					let events =
+						events.iter().filter_map(crate::witness::hub::filter_map_events).collect();
 
-				Ok(AssethubBlockHeader {
-					block_height: finalized_block_height,
-					block_hash,
-					parent_block_hash,
-					events,
-				})
+					Ok(AssethubBlockHeader {
+						block_height: finalized_block_height,
+						block_hash,
+						parent_block_hash: Some(header.parent_hash),
+						events,
+					})
+				}
 			},
 		))
 		.await;
