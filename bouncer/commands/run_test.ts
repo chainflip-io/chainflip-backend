@@ -11,10 +11,11 @@
 // To run a test file (resolves the test name from the file's exported function):
 //   ./commands/run_test.ts ./tests/boost.ts
 //
-// To run a single swap test by number:
-//   ./commands/run_test.ts 287
-//   This is the equivalent of running:
-// `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run tests/fast_bouncer.test.ts -t "Swap 287:"`
+// To run a single swap test by number (the generation seed is required):
+//   ./commands/run_test.ts 287 42
+//   AllSwaps picks a random seed each run and logs it, so a swap number only identifies a specific
+//   swap for a given seed — pass the seed logged by the run you want to reproduce. Equivalent to:
+// `ALL_SWAPS_SEED=42 BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run tests/fast_bouncer.test.ts -t "Swap 287:"`
 
 import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
@@ -24,7 +25,7 @@ const arg = process.argv[2];
 if (!arg) {
   console.error('Usage: ./commands/run_test.ts <test_name>');
   console.error('       ./commands/run_test.ts ./tests/<test_file>');
-  console.error('       ./commands/run_test.ts <swap_number>');
+  console.error('       ./commands/run_test.ts <swap_number> <seed>');
   process.exit(1);
 }
 
@@ -41,12 +42,26 @@ function runByTestName(testName: string): never {
   process.exit(0);
 }
 
-// If a swap number is given, run just that single swap test directly.
+// If a swap number is given, run just that single swap test directly. The AllSwaps generation seed
+// is required: a swap number only identifies a specific swap for a given seed, so reproducing one
+// needs the seed logged by that run.
 if (/^\d+$/.test(arg)) {
+  const seedArg = process.argv[3];
+  if (seedArg === undefined) {
+    console.error(`A seed is required to run a single swap: ./commands/run_test.ts ${arg} <seed>`);
+    console.error(
+      'The swap number only maps to a specific swap for a given seed. Use the seed logged by the run you want to reproduce (the "AllSwaps generated with seed …" line).',
+    );
+    process.exit(1);
+  }
+  if (!/^\d+$/.test(seedArg)) {
+    console.error(`Seed must be an integer, got "${seedArg}"`);
+    process.exit(1);
+  }
   const testFilter = `Swap ${arg}:`;
   try {
     execSync(
-      `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run tests/fast_bouncer.test.ts -t "${testFilter}"`,
+      `ALL_SWAPS_SEED=${seedArg} BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run tests/fast_bouncer.test.ts -t "${testFilter}"`,
       { stdio: 'inherit' },
     );
   } catch (err) {
