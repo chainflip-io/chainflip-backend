@@ -2328,7 +2328,9 @@ mod witnessed_events {
 	use super::*;
 	use crate::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
 	use cf_chains::{
-		instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
+		instances::{
+			ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, TronInstance,
+		},
 		TransactionInId,
 	};
 	use pallet_cf_elections::ElectoralUnsynchronisedState;
@@ -2343,6 +2345,7 @@ mod witnessed_events {
 			ForeignChain::Arbitrum => extract_arbitrum_witnessed_events(),
 			ForeignChain::Tron => extract_tron_witnessed_events(),
 			ForeignChain::Bsc => extract_bsc_witnessed_events(),
+			ForeignChain::Assethub => extract_assethub_witnessed_events(),
 			_ => Err(DispatchErrorWithMessage::RawMessage(
 				b"Chain not supported for witnessed events".to_vec(),
 			)),
@@ -2463,6 +2466,26 @@ mod witnessed_events {
 		);
 
 		Ok(RawWitnessedEvents::Bsc { deposits, vault_deposits, broadcasts })
+	}
+
+	fn extract_assethub_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		let state =
+			ElectoralUnsynchronisedState::<Runtime, AssethubInstance>::get().ok_or_else(|| {
+				DispatchErrorWithMessage::RawMessage(
+					b"Assethub electoral state not initialized".to_vec(),
+				)
+			})?;
+
+		let deposits =
+			extract_block_data!(&state.1, |h: &cf_chains::witness_period::BlockWitnessRange<
+				Assethub,
+			>| u64::from(*h.root()));
+		let broadcasts =
+			extract_block_data!(&state.2, |h: &cf_chains::witness_period::BlockWitnessRange<
+				Assethub,
+			>| u64::from(*h.root()));
+
+		Ok(RawWitnessedEvents::Assethub { deposits, broadcasts })
 	}
 
 	fn convert_deposit_witness<C: Chain>(
@@ -2658,6 +2681,28 @@ mod witnessed_events {
 						TransactionInId::Bsc,
 						DepositDetails::Bsc,
 					),
+				})
+			},
+			ForeignChain::Assethub => {
+				let state = ElectoralUnsynchronisedState::<Runtime, AssethubInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Assethub electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(
+					&state.1,
+					|h: &cf_chains::witness_period::BlockWitnessRange<Assethub>| u64::from(
+						*h.root()
+					)
+				);
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Assethub,
+						Environment::network_environment(),
+					),
+					vault_deposits: Vec::new(),
 				})
 			},
 			_ => Err(DispatchErrorWithMessage::RawMessage(

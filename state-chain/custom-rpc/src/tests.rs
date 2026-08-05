@@ -53,7 +53,7 @@ use cf_chains::{
 		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
 		SolPubkey, VaultSwapOrDepositChannelId,
 	},
-	Arbitrum, Bitcoin, CcmAdditionalData, CcmChannelMetadataChecked, Ethereum,
+	Arbitrum, Assethub, Bitcoin, CcmAdditionalData, CcmChannelMetadataChecked, Ethereum,
 	EvmVaultSwapExtraParameters, ForeignChainAddress, Solana,
 };
 
@@ -888,6 +888,14 @@ fn witnessed_events_serialization() {
 
 	let converted_deposit =
 		convert_deposit_witness::<Ethereum>(&deposit_witness, 1, NetworkEnvironment::Mainnet);
+	let deposit_witness2: DepositWitness<Assethub> = DepositWitness {
+		deposit_address: PolkadotAccountId([0x33; 32]),
+		asset: cf_chains::assets::hub::Asset::HubDot,
+		amount: 200u128,
+		deposit_details: cf_primitives::TxId { block_number: 42, extrinsic_index: 7 },
+	};
+	let converted_deposit2 =
+		convert_deposit_witness::<Assethub>(&deposit_witness2, 2, NetworkEnvironment::Mainnet);
 
 	// Create the raw VaultDepositWitness and convert it to test the serialization
 	let vault_deposit_witness: VaultDepositWitness<Runtime, EthereumInstance> =
@@ -947,7 +955,7 @@ fn witnessed_events_serialization() {
 	// (convert_bitcoin_broadcast, convert_evm_broadcast) depend on runtime storage lookups
 	// for broadcast_id which cannot be easily mocked in unit tests.
 	let response = RpcWitnessedEventsResponse {
-		deposits: vec![converted_deposit],
+		deposits: vec![converted_deposit, converted_deposit2],
 		broadcasts: vec![BroadcastWitnessInfo {
 			broadcast_chain_block_height: 2,
 			broadcast_id: 7,
