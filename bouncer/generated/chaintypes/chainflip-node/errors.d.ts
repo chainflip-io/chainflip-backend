@@ -1390,12 +1390,6 @@ export interface ChainErrors extends GenericChainErrors {
     BrokerAlreadyBound: GenericPalletError;
 
     /**
-     * The broker tried to withdraw to an address which is not the address the broker is bound
-     * to.
-     **/
-    BrokerBoundWithdrawalAddressRestrictionViolated: GenericPalletError;
-
-    /**
      * A zero default slippage protection will result in most swaps failing. Set to `None` to
      * reset to the permissive default (100bps).
      **/
