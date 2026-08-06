@@ -2,7 +2,7 @@ name: Cleanup stale Hetzner bouncer runners
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "17 */6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -20,4 +20,4 @@ jobs:
         env:
           CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
           CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
-        run: ./ci/scripts/manage_hetzner_bouncer_runner.sh cleanup-stale 14400
+        run: ./ci/scripts/manage_hetzner_bouncer_runner.sh cleanup-stale 10800
