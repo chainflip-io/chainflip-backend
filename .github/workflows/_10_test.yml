@@ -14,11 +14,6 @@ jobs:
     runs-on: namespace-profile-${{ inputs.ci-runner }}
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06"
-      volumes:
-        - /cache:/cache
-      options: --cap-add=SYS_ADMIN
-      env:
-        NSC_CACHE_PATH: "/cache"
     strategy:
       matrix:
         cargo-profile:
@@ -31,12 +26,6 @@ jobs:
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands
       - name: Configure Git 🛠️
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-
-      - name: Set up Rust cache 🦀💰
-        if: contains(inputs.ci-runner, 'no-cache') == false
-        uses: namespacelabs/nscloud-cache-action@v1
-        with:
-          cache: rust
 
       - name: Install unzip
         run: apt-get update && apt-get install -y unzip
