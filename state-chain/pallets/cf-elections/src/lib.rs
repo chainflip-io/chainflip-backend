@@ -878,11 +878,12 @@ pub mod pallet {
 						// One dispatch context read for the whole election, rather than a storage
 						// lookup per authority. See `ContributingAuthoritiesMask`; absent means
 						// "not published", not "nobody is contributing".
-						let contributing_mask = frame_support::dispatch_context::with_context::<
-							ContributingAuthoritiesMask<T, I>,
-							_,
-						>(|cached| cached.get().map(|cached| cached.mask.clone()))
-						.flatten();
+						let contributing_mask =
+							frame_support::dispatch_context::with_context::<
+								ContributingAuthoritiesMask<T, I>,
+								_,
+							>(|cached| cached.get().map(|cached| cached.mask.clone()))
+							.flatten();
 
 						// The mask is positional, so it lines up only while it describes the same
 						// authority set we are about to iterate over.
@@ -1759,10 +1760,10 @@ pub mod pallet {
 					ElectionPalletStatus::Running => {
 						frame_support::dispatch_context::run_in_context(|| {
 							// Publish who is contributing, so that the consensus checks below don't
-							// each work it out again. The cleanup further down is the only thing that
-							// writes to `ContributingAuthorities` during the hook, and it only removes
-							// authorities that have left the current authority set, so it cannot
-							// invalidate this.
+							// each work it out again. The cleanup further down is the only thing
+							// that writes to `ContributingAuthorities` during the hook, and
+							// it only removes authorities that have left the current
+							// authority set, so it cannot invalidate this.
 							frame_support::dispatch_context::with_context::<
 								ContributingAuthoritiesMask<T, I>,
 								_,
@@ -1777,8 +1778,8 @@ pub mod pallet {
 							});
 
 							let _ = Self::with_election_identifiers(|election_identifiers| {
-								if Into::<sp_core::U256>::into(block_number) % BLOCKS_BETWEEN_CLEANUP ==
-									sp_core::U256::zero()
+								if Into::<sp_core::U256>::into(block_number) %
+									BLOCKS_BETWEEN_CLEANUP == sp_core::U256::zero()
 								{
 									let minimum_election_identifiers = election_identifiers
 										.iter()
@@ -1802,8 +1803,8 @@ pub mod pallet {
 									}
 
 									let current_authorities = T::EpochInfo::current_authorities();
-									for validator in
-										ContributingAuthorities::<T, I>::iter_keys().collect::<Vec<_>>()
+									for validator in ContributingAuthorities::<T, I>::iter_keys()
+										.collect::<Vec<_>>()
 									{
 										if !current_authorities.contains(&validator) {
 											ContributingAuthorities::<T, I>::remove(validator);
