@@ -356,6 +356,7 @@ impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		#[expect(clippy::type_complexity)]
 		let (old_chain_state, pending_prewitnessed, pending_deposit_channels, pending_vaults): (
 			Option<cf_chains::ChainState<Assethub>>,
 			Vec<(BlockNumber, Vec<old::PendingPrewitnessedDepositEntry>)>,

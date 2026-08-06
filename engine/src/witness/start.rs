@@ -18,8 +18,7 @@ use std::sync::Arc;
 
 use crate::{
 	btc::cached_rpc::BtcCachingClient,
-	db::PersistentKeyDB,
-	dot::{cached_rpc::DotCachingClient, retry_rpc::DotRetryRpcClient},
+	dot::cached_rpc::DotCachingClient,
 	evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
 	tron::{

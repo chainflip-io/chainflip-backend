@@ -20,15 +20,13 @@ use crate::{
 };
 use cf_chains::{
 	dot::PolkadotSignature,
-	hub::{AssethubTrackedData, ASSETHUB_WITNESS_PERIOD},
+	hub::AssethubTrackedData,
 	instances::AssethubInstance,
 	witness_period::{BlockWitnessRange, SaturatingStep},
-	Assethub, Chain, DepositChannel,
+	Assethub, DepositChannel,
 };
-use cf_primitives::{AccountId, ChannelId, PolkadotBlockNumber};
-use cf_runtime_utilities::log_or_panic;
-use cf_traits::{impl_pallet_safe_mode, Chainflip, Hook, Validate};
-use cf_utilities::{cargo_fmt_ignore, define_empty_struct, derive_common_traits, impls};
+use cf_traits::{Chainflip, Hook};
+use cf_utilities::{define_empty_struct, impls};
 use codec::DecodeWithMemTracking;
 use core::ops::RangeInclusive;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -43,10 +41,7 @@ use pallet_cf_elections::{
 			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
 		block_witnesser::{
-			instance::{
-				BlockWitnesserInstance, GenericBlockWitnesser, JustWitnessAtSafetyMargin,
-				PrewitnessImmediatelyAndWitnessAtSafetyMargin,
-			},
+			instance::{BlockWitnesserInstance, GenericBlockWitnesser, JustWitnessAtSafetyMargin},
 			state_machine::{BWElectionType, BWTypes, BlockWitnesserSettings, HookTypeFor},
 		},
 		composite::{
@@ -62,7 +57,7 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
+use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
 use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
@@ -354,7 +349,7 @@ impl
 					.block_height
 					// We subtract the safety buffer so we don't ask for liveness for blocks that
 					// could be reorged out.
-					.saturating_sub(ASSETHUB_MAINNET_SAFETY_BUFFER.into())
+					.saturating_sub(ASSETHUB_MAINNET_SAFETY_BUFFER)
 					.into(),
 				crate::Validator::current_epoch(),
 			),

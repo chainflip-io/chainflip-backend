@@ -20,7 +20,6 @@ use cf_chains::dot::{
 	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotSignature,
 	PolkadotTransactionId,
 };
-use cf_primitives::PolkadotBlockNumber;
 use pallet_cf_broadcast::TransactionConfirmation;
 use state_chain_runtime::{AssethubInstance, Runtime};
 use subxt::{
@@ -34,14 +33,9 @@ use tracing::error;
 
 use std::collections::BTreeSet;
 
-use futures::FutureExt;
-
 use crate::{
-	dot::{cached_rpc::DotRetryRpcApiWithResult, retry_rpc::DotRetryRpcApi, PolkadotHash},
-	witness::hub_elections::AssethubBlockHeader,
+	dot::cached_rpc::DotRetryRpcApiWithResult, witness::hub_elections::AssethubBlockHeader,
 };
-
-use super::common::{chain_source::Header, epoch_source::Vault};
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
 // subxt metadata --version=14 --pallets Proxy,Balances,TransactionPayment,System,Assets --url
@@ -165,7 +159,7 @@ fn extract_state_chain_signer_and_signature(
 
 pub async fn process_egresses_in_block(
 	hub_client: &impl DotRetryRpcApiWithResult,
-	pending_tx_signatures: &Vec<PolkadotSignature>,
+	pending_tx_signatures: &[PolkadotSignature],
 	header: &AssethubBlockHeader,
 ) -> anyhow::Result<Vec<TransactionConfirmation<Runtime, AssethubInstance>>> {
 	let mut transaction_confirmations = Vec::new();
@@ -254,16 +248,6 @@ pub mod test {
 			.into_iter()
 			.map(|(xt_index, event)| (Phase::ApplyExtrinsic(xt_index), event))
 			.collect()
-	}
-
-	fn mock_proxy_added(
-		delegator: &PolkadotAccountId,
-		delegatee: &PolkadotAccountId,
-	) -> EventWrapper {
-		EventWrapper::ProxyAdded {
-			delegator: delegator.aliased_ref().to_owned().into(),
-			delegatee: delegatee.aliased_ref().to_owned().into(),
-		}
 	}
 
 	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
