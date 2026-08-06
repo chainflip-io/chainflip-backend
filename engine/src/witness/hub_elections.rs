@@ -94,9 +94,9 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 			))
 		} else {
 			Ok(Header {
-				block_height: height.clone(),
+				block_height: height,
 				// assethub blocks are identified by block height (i.e BlockWitnessRange)
-				hash: height.clone(),
+				hash: height,
 				// this means the parent "hash" is just the previous witness range
 				parent_hash: height.saturating_backward(1),
 			})
@@ -203,7 +203,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 		&self,
 		height: AssethubWitnessBatchNumber,
 	) -> Result<(Self::BlockQuery, AssethubWitnessBatchNumber)> {
-		Ok((self.block_query_from_height(height.clone()).await?, height))
+		Ok((self.block_query_from_height(height).await?, height))
 	}
 }
 
@@ -236,8 +236,8 @@ impl WitnessClientForBlockData<AssethubChain, Vec<DepositWitness<Assethub>>> for
 		block_headers: &Self::BlockQuery,
 	) -> Result<Vec<DepositWitness<Assethub>>> {
 		// sanity check the deposit channel data
-		let addresses = deposit_channels
-			.into_iter()
+		let addresses: Vec<_> = deposit_channels
+			.iter()
 			.map(|deposit_channel| {
 				assert!(
 					deposit_channel.asset == assets::hub::Asset::HubDot ||
@@ -251,7 +251,7 @@ impl WitnessClientForBlockData<AssethubChain, Vec<DepositWitness<Assethub>>> for
 		// query deposits for all block headers in parallel
 		let results = future::join_all(
 			block_headers
-				.into_iter()
+				.iter()
 				.map(|header| deposit_witnesses(header, &self.client, &addresses)),
 		)
 		.await;
@@ -286,7 +286,7 @@ impl
 		pending_tx_signatures: &Self::ElectionProperties,
 		block_headers: &Self::BlockQuery,
 	) -> Result<Vec<TransactionConfirmation<Runtime, AssethubInstance>>> {
-		let results = future::join_all(block_headers.into_iter().map(|header| async move {
+		let results = future::join_all(block_headers.iter().map(|header| async move {
 			process_egresses_in_block(&self.client, pending_tx_signatures, header).await
 		}))
 		.await;

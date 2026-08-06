@@ -28,9 +28,9 @@ use dot::{
 	fee_constants, polkadot_sdk_types, EncodedPolkadotPayload, GenericUncheckedExtrinsic,
 	PolkadotAccountId, PolkadotAccountIdLookup, PolkadotBalance, PolkadotCallHash,
 	PolkadotChannelId, PolkadotChannelState, PolkadotCheckMortality, PolkadotCheckNonce,
-	PolkadotExtrinsicIndex, PolkadotHash, PolkadotIndex, PolkadotProxyType, PolkadotPublicKey,
-	PolkadotReplayProtection, PolkadotSignature, PolkadotSpecVersion, PolkadotTransactionData,
-	PolkadotTransactionId, PolkadotTransactionVersion, ResetProxyAccountNonce, RuntimeVersion,
+	PolkadotHash, PolkadotIndex, PolkadotProxyType, PolkadotPublicKey, PolkadotReplayProtection,
+	PolkadotSignature, PolkadotSpecVersion, PolkadotTransactionData, PolkadotTransactionId,
+	PolkadotTransactionVersion, ResetProxyAccountNonce, RuntimeVersion,
 };
 
 pub use cf_primitives::chains::Assethub;

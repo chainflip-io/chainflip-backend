@@ -14,50 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::super::common::chunked_chain_source::chunked_by_vault::{
-	builder::ChunkedByVaultBuilder, ChunkedByVault,
-};
 use crate::{
-	dot::{
-		cached_rpc::DotRetryRpcApiWithResult,
-		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
-		PolkadotHash,
-	},
-	witness::{
-		common::{
-			chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
-			RuntimeCallHasChain, RuntimeHasChain,
-		},
-		hub::EventWrapper,
-		hub_elections::AssethubBlockHeader,
-	},
+	dot::{cached_rpc::DotRetryRpcApiWithResult, PolkadotHash},
+	witness::{hub::EventWrapper, hub_elections::AssethubBlockHeader},
 };
 use cf_chains::{assets::hub::Asset as HubAsset, dot::PolkadotAccountId, Assethub};
-use cf_primitives::{
-	EpochIndex, PolkadotBlockNumber, TxId, ASSETHUB_USDC_ASSET_ID, ASSETHUB_USDT_ASSET_ID,
-};
-use futures_core::Future;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use cf_primitives::{TxId, ASSETHUB_USDC_ASSET_ID, ASSETHUB_USDT_ASSET_ID};
+use pallet_cf_ingress_egress::DepositWitness;
 use sp_runtime::traits::Saturating;
-use state_chain_runtime::AssethubInstance;
 use std::collections::BTreeMap;
 use subxt::events::Phase;
-
-pub(crate) fn address_and_details_to_addresses(
-	address_and_details: Vec<DepositChannelDetails<state_chain_runtime::Runtime, AssethubInstance>>,
-) -> Vec<PolkadotAccountId> {
-	address_and_details
-		.into_iter()
-		.map(|deposit_channel_details| {
-			assert!(
-				deposit_channel_details.deposit_channel.asset == HubAsset::HubDot ||
-					deposit_channel_details.deposit_channel.asset == HubAsset::HubUsdc ||
-					deposit_channel_details.deposit_channel.asset == HubAsset::HubUsdt
-			);
-			deposit_channel_details.deposit_channel.address
-		})
-		.collect()
-}
 
 /// The liquid budget for one (address, asset) over this block:
 ///
@@ -127,7 +93,7 @@ pub(crate) async fn deposit_witnesses<Client: DotRetryRpcApiWithResult + Send + 
 		events,
 	}: &AssethubBlockHeader,
 	hub_client: &Client,
-	monitored_addresses: &Vec<PolkadotAccountId>,
+	monitored_addresses: &[PolkadotAccountId],
 ) -> anyhow::Result<Vec<DepositWitness<Assethub>>> {
 	// Sum incoming (with earliest extrinsic index) and outgoing per (address, asset).
 	let mut incoming: BTreeMap<(PolkadotAccountId, HubAsset), (u128, u32)> = BTreeMap::default();
@@ -159,8 +125,8 @@ pub(crate) async fn deposit_witnesses<Client: DotRetryRpcApiWithResult + Send + 
 			hub_client,
 			deposit_address,
 			asset,
-			block_hash.clone(),
-			parent_block_hash.clone(),
+			*block_hash,
+			*parent_block_hash,
 			outgoing,
 		)
 		.await?;
@@ -188,7 +154,7 @@ pub(crate) async fn deposit_witnesses<Client: DotRetryRpcApiWithResult + Send + 
 #[cfg(test)]
 mod test {
 	use cf_chains::dot::PolkadotBalance;
-	use cf_primitives::ASSETHUB_USDC_ASSET_ID;
+	use cf_primitives::{PolkadotBlockNumber, ASSETHUB_USDC_ASSET_ID};
 
 	use crate::{
 		dot::retry_rpc::mocks::MockDotRpcClientWithResult,
@@ -349,7 +315,7 @@ mod test {
 		let deposit_witnesses = deposit_witnesses(
 			&header,
 			&hub_client,
-			&vec![transfer_1_deposit_address, transfer_2_deposit_address],
+			&[transfer_1_deposit_address, transfer_2_deposit_address],
 		)
 		.await
 		.unwrap();
@@ -413,8 +379,7 @@ mod test {
 		)]);
 		let header = block_header(block_hash, Some(parent_hash), events);
 
-		let witnesses =
-			deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+		let witnesses = deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 
 		// The clamped deposit is zero, so no witness is emitted (a warning is logged).
 		assert!(witnesses.is_empty());
@@ -483,8 +448,7 @@ mod test {
 		]);
 		let header = block_header(block_hash, Some(parent_hash), events);
 
-		let witnesses =
-			deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+		let witnesses = deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 
 		assert_eq!(
 			witnesses,
@@ -553,7 +517,7 @@ mod test {
 		] {
 			let header = block_header(block_hash, Some(parent_hash), events);
 			let witnesses =
-				deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+				deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 			assert_eq!(
 				witnesses,
 				vec![DepositWitness {
@@ -607,8 +571,7 @@ mod test {
 		]);
 		let header = block_header(block_hash, Some(parent_hash), events);
 
-		let witnesses =
-			deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+		let witnesses = deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 
 		// Aggregated incoming = SMALL_VESTED + LARGE_LEGIT, clamped to the liquid
 		// budget = LARGE_LEGIT. The legit amount is fully credited, but attributed to
@@ -656,8 +619,7 @@ mod test {
 		)]);
 		let header = block_header(block_hash, Some(parent_hash), events);
 
-		let witnesses =
-			deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+		let witnesses = deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 
 		assert_eq!(witnesses.len(), 1);
 		assert_eq!(witnesses[0].amount, TRANSFER_AMOUNT);
@@ -693,8 +655,7 @@ mod test {
 		)]);
 		let header = block_header(block_hash, None, events);
 
-		let witnesses =
-			deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+		let witnesses = deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 
 		assert_eq!(witnesses.len(), 1);
 		assert_eq!(witnesses[0].amount, TRANSFER_AMOUNT);
@@ -750,8 +711,7 @@ mod test {
 		]);
 		let header = block_header(block_hash, Some(parent_hash), events);
 
-		let witnesses =
-			deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+		let witnesses = deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 
 		assert_eq!(
 			witnesses,
@@ -800,8 +760,7 @@ mod test {
 		]);
 		let header = block_header(block_hash, Some(parent_hash), events);
 
-		let witnesses =
-			deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+		let witnesses = deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 
 		assert_eq!(witnesses.len(), 1);
 		assert_eq!(witnesses[0].amount, DEPOSIT_AMOUNT);
@@ -836,8 +795,7 @@ mod test {
 		]);
 		let header = block_header(block_hash, Some(parent_hash), events);
 
-		let witnesses =
-			deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+		let witnesses = deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 
 		assert_eq!(witnesses.len(), 1);
 		assert_eq!(witnesses[0].amount, DEPOSIT_AMOUNT);
@@ -885,8 +843,7 @@ mod test {
 		]);
 		let header = block_header(block_hash, Some(parent_hash), events);
 
-		let witnesses =
-			deposit_witnesses(&header, &hub_client, &vec![deposit_address]).await.unwrap();
+		let witnesses = deposit_witnesses(&header, &hub_client, &[deposit_address]).await.unwrap();
 
 		// The USDC event clamps to zero (its liquid delta is zero and the DOT outgoing
 		// must not bleed across asset budgets), so no witness is emitted.

@@ -245,7 +245,6 @@ impl DotRetryRpcApiWithResult for DotCachingClient {
 		self.liquid_account_balance
 			.get_or_fetch(
 				Box::pin(move |client| {
-					let account_id = account_id.clone();
 					Box::pin(async move {
 						DotRetryRpcApiWithResult::liquid_account_balance(
 							&client, account_id, asset, block_hash,
