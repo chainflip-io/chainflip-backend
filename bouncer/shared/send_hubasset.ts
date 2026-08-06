@@ -10,6 +10,45 @@ import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import { getAssethubApi } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
 
+let nextAliceNonce: number | undefined;
+
+async function allocateAliceNonce(): Promise<number> {
+  const alice = await aliceKeyringPair();
+  await using assethub = await getAssethubApi();
+  return assethubSigningMutex.runExclusive(async () => {
+    if (nextAliceNonce === undefined) {
+      nextAliceNonce = (await assethub.rpc.system.accountNextIndex(alice.address)).toNumber();
+    }
+    return nextAliceNonce++;
+  });
+}
+
+const MAX_ATTEMPTS = 5;
+// Each retry re-signs the same transfer with a higher tip. sr25519 signatures are
+// non-deterministic, so a resubmission is a *replacement* of the (possibly still pooled) previous
+// attempt and needs strictly higher priority to be accepted; without the tip bump a retry against
+// a still-pooled attempt is rejected with "1014: Priority is too low". The amounts are negligible
+// (10000 planck = 1e-6 DOT).
+const TIP_STEP = 10_000;
+
+// A permanently failed transfer would leave a nonce gap that strands every higher-nonce transfer
+// still waiting to finalize, so before giving up we try to fill the gap with a no-op remark. It
+// out-tips all transfer attempts, so it can replace one that is stuck-but-still-pooled; if the
+// original transfer wins the race and lands anyway, that's also fine.
+async function fillNonceGap(logger: Logger, nonce: number) {
+  try {
+    const alice = await aliceKeyringPair();
+    await using assethub = await getAssethubApi();
+    await assethubSigningMutex.runExclusive(async () => {
+      await assethub.tx.system
+        .remark('bouncer nonce gap fill')
+        .signAndSend(alice, { nonce, tip: MAX_ATTEMPTS * TIP_STEP });
+    });
+  } catch (e) {
+    logger.warn(`Failed to fill assethub nonce gap at ${nonce}: ${e}`);
+  }
+}
+
 export async function sendHubAsset(
   logger: Logger,
   asset: Asset,
@@ -20,21 +59,16 @@ export async function sendHubAsset(
   const alice = await aliceKeyringPair();
   await using assethub = await getAssethubApi();
 
-  // Pin the nonce for the lifetime of this transfer. It is fetched lazily under the signing mutex on
-  // the first attempt and then reused by every retry. Fetching a fresh nonce per retry is what
-  // caused double-deposits when a retracted tx got re-included on a later block.
-  let nonce: number | undefined;
+  // The nonce is pinned for the lifetime of this transfer and reused by every retry. Retrying
+  // with a fresh nonce is what caused double-deposits in the past, when a retracted tx got
+  // re-included on a later block alongside its replacement.
+  const nonce = await allocateAliceNonce();
 
   const runSignAndSubmit = async (
+    tip: number,
     resolve: (txHash: string) => void,
     reject: (error: Error) => void,
   ) => {
-    // Fetched under assethubSigningMutex so concurrent senders can't grab the same nonce before
-    // this tx enters the pool.
-    if (nonce === undefined) {
-      nonce = (await assethub.rpc.system.accountNextIndex(alice.address)).toNumber();
-    }
-
     let transferFunction;
     if (asset === 'HubDot') {
       transferFunction = assethub.tx.balances.transferKeepAlive(address, parseInt(planckAmount));
@@ -48,7 +82,7 @@ export async function sendHubAsset(
       throw new Error(`Unsupported hub asset type: ${asset}`);
     }
 
-    const unsubscribe = await transferFunction.signAndSend(alice, { nonce }, (result) => {
+    const unsubscribe = await transferFunction.signAndSend(alice, { nonce, tip }, (result) => {
       if (result.dispatchError !== undefined) {
         if (result.dispatchError.isModule) {
           const decoded = assethub.registry.findMetaError(result.dispatchError.asModule);
@@ -77,17 +111,20 @@ export async function sendHubAsset(
     });
   };
 
-  for (let retryCount = 0; retryCount < 3; retryCount++) {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
       return await new Promise<string>((resolve, reject) => {
-        assethubSigningMutex.runExclusive(() => runSignAndSubmit(resolve, reject)).catch(reject);
+        assethubSigningMutex
+          .runExclusive(() => runSignAndSubmit(attempt * TIP_STEP, resolve, reject))
+          .catch(reject);
       });
     } catch (e) {
-      logger.warn(`Error sending asset ${asset} to ${address}: ${e}`);
-      if (retryCount >= 2) {
+      logger.warn(`Error sending asset ${asset} to ${address} (nonce ${nonce}): ${e}`);
+      if (attempt >= MAX_ATTEMPTS - 1) {
+        await fillNonceGap(logger, nonce);
         throw e;
       }
-      await sleep(1000); // wait before retrying
+      await sleep(2000); // wait before retrying
     }
   }
 
