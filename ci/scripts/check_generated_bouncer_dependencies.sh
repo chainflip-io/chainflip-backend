@@ -2,7 +2,12 @@
 
 set -euo pipefail
 
-./chainflip-node --dev &
+mkdir -p /tmp/chainflip
+
+CHAIN=dev \
+KEYS_DIR=./localnet/init/keys \
+LOCALNET_INIT_DIR=localnet/init \
+./localnet/init/scripts/start-node.sh "$PWD" bashful 30333 9944 1-node
 
 # Wait for node to start
 echo -e "🚀 Starting chainflip-node..."
