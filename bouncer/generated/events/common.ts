@@ -95,7 +95,14 @@ export const accountId = z
   ])
   .transform((value) => ss58.encode({ data: value, ss58Format: 2112 }) as `cF${string}`);
 
-export const cfPrimitivesChainsAssetsEthAsset = simpleEnum(['Eth', 'Flip', 'Usdc', 'Usdt', 'Wbtc']);
+export const cfPrimitivesChainsAssetsEthAsset = simpleEnum([
+  'Eth',
+  'Flip',
+  'Usdc',
+  'Usdt',
+  'Wbtc',
+  'Cbbtc',
+]);
 
 export const cfPrimitivesChainsAssetsArbAsset = simpleEnum(['ArbEth', 'ArbUsdc', 'ArbUsdt']);
 
@@ -154,6 +161,7 @@ export const cfPrimitivesChainsAssetsAnyAsset = simpleEnum([
   'TrxUsdt',
   'Bnb',
   'BscUsdt',
+  'Cbbtc',
 ]);
 
 export const cfTraitsSafeModeSafeModeSet = z.discriminatedUnion('__kind', [
@@ -379,6 +387,7 @@ export const palletCfFlipPalletConfigUpdate = z.discriminatedUnion('__kind', [
     __kind: z.literal('SetFeeScalingRate'),
     value: palletCfFlipOnChargeTransactionFeeScalingRateConfig,
   }),
+  z.object({ __kind: z.literal('SetFeeRewardsActivationEpoch'), value: z.number() }),
 ]);
 
 export const cfPrimitivesChainsForeignChain = simpleEnum([
@@ -797,10 +806,13 @@ export const cfChainsAddressForeignChainAddress = z.discriminatedUnion('__kind',
   z.object({ __kind: z.literal('Bsc'), value: hexString }),
 ]);
 
-export const cfChainsRefundParametersAccountOrAddress = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('InternalAccount'), value: accountId }),
-  z.object({ __kind: z.literal('ExternalAddress'), value: cfChainsAddressForeignChainAddress }),
-]);
+export const cfChainsRefundParametersAccountOrAddressForeignChainAddress = z.discriminatedUnion(
+  '__kind',
+  [
+    z.object({ __kind: z.literal('InternalAccount'), value: accountId }),
+    z.object({ __kind: z.literal('ExternalAddress'), value: cfChainsAddressForeignChainAddress }),
+  ],
+);
 
 export const cfChainsCcmDepositMetadataForeignChainAddress = z.object({
   channelMetadata: cfChainsCcmChannelMetadataDecodedCcmAdditionalData,
@@ -813,7 +825,7 @@ export const cfTraitsSwappingExpiryBehaviour = z.discriminatedUnion('__kind', [
   z.object({
     __kind: z.literal('RefundIfExpires'),
     retryDuration: z.number(),
-    refundAddress: cfChainsRefundParametersAccountOrAddress,
+    refundAddress: cfChainsRefundParametersAccountOrAddressForeignChainAddress,
     refundCcmMetadata: cfChainsCcmDepositMetadataForeignChainAddress.nullish(),
   }),
 ]);
@@ -1741,11 +1753,28 @@ export const cfChainsChainStateSolana = z.object({
   trackedData: cfChainsSolSolTrackedData,
 });
 
-export const palletCfAssetBalancesPalletConfigUpdate = z.object({
-  __kind: z.literal('RefundFeeMultiple'),
-  chain: cfPrimitivesChainsForeignChain,
-  multiple: z.number().nullish(),
-});
+export const palletCfAssetBalancesPalletConfigUpdate = z.discriminatedUnion('__kind', [
+  z.object({
+    __kind: z.literal('RefundFeeMultiple'),
+    chain: cfPrimitivesChainsForeignChain,
+    multiple: z.number().nullish(),
+  }),
+  z.object({ __kind: z.literal('MaxWhitelistTimelock'), seconds: numberOrHex }),
+  z.object({ __kind: z.literal('MaxPendingWhitelistUpdates'), count: z.number() }),
+  z.object({ __kind: z.literal('MaxWhitelistEntries'), count: z.number() }),
+]);
+
+export const palletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress =
+  z.discriminatedUnion('__kind', [
+    z.object({
+      __kind: z.literal('Allow'),
+      value: cfChainsRefundParametersAccountOrAddressForeignChainAddress,
+    }),
+    z.object({
+      __kind: z.literal('Remove'),
+      value: cfChainsRefundParametersAccountOrAddressForeignChainAddress,
+    }),
+  ]);
 
 export const cfChainsHubAssethubTrackedData = z.object({
   medianTip: numberOrHex,

@@ -16,7 +16,7 @@
 
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
-	LiquidityProviderSubcommands, ValidatorSubcommands,
+	LiquidityProviderSubcommands, ValidatorSubcommands, WhitelistSubcommands,
 };
 use anyhow::{Context, Result};
 use api::{
@@ -28,7 +28,7 @@ use cf_chains::evm::Address as EthereumAddress;
 use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
-	lp::LiquidityDepositChannelDetails,
+	lp::{LiquidityDepositChannelDetails, WhitelistChangeRpc, WhitelistDestinationRpc},
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
 	rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome},
 	Asset, BrokerApi,
@@ -122,6 +122,34 @@ async fn run_cli() -> Result<()> {
 							api.lp_api().register_liquidity_refund_address(chain, address).await?;
 						println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
 					},
+					LiquidityProviderSubcommands::SetWhitelistTimelock { duration_secs } => {
+						let tx_hash = api.lp_api().set_whitelist_timelock(duration_secs).await?;
+						println!("Whitelist timelock set. Tx hash: {tx_hash}");
+					},
+					LiquidityProviderSubcommands::UpdateWhitelist(subcommand) => {
+						let change = match subcommand {
+							WhitelistSubcommands::AllowAddress { chain, address } =>
+								WhitelistChangeRpc::Allow(WhitelistDestinationRpc::ExternalAddress {
+									chain,
+									address,
+								}),
+							WhitelistSubcommands::RemoveAddress { chain, address } =>
+								WhitelistChangeRpc::Remove(WhitelistDestinationRpc::ExternalAddress {
+									chain,
+									address,
+								}),
+							WhitelistSubcommands::AllowAccount { account } =>
+								WhitelistChangeRpc::Allow(WhitelistDestinationRpc::InternalAccount(
+									account,
+								)),
+							WhitelistSubcommands::RemoveAccount { account } =>
+								WhitelistChangeRpc::Remove(WhitelistDestinationRpc::InternalAccount(
+									account,
+								)),
+						};
+						let tx_hash = api.lp_api().update_whitelist(change).await?;
+						println!("Withdrawal whitelist updated. Tx hash: {tx_hash}");
+					},
 					LiquidityProviderSubcommands::RegisterAccount => {
 						api.lp_api().register_account().await?;
 						println!("Liquidity provider account successfully registered.");
@@ -147,6 +175,17 @@ async fn run_cli() -> Result<()> {
 					ValidatorSubcommands::StartBidding => {
 						let tx_hash = api.validator_api().start_bidding().await?;
 						println!("Account started bidding at tx {tx_hash:#x}.");
+					},
+					ValidatorSubcommands::SetMaxBid { max_bid } => {
+						let tx_hash = api
+							.validator_api()
+							.set_max_bid(max_bid.map(flip_to_flipperinos))
+							.await?;
+						match max_bid {
+							Some(max_bid) =>
+								println!("Maximum bid set to {max_bid} FLIP at tx {tx_hash:#x}."),
+							None => println!("Maximum bid reset at tx {tx_hash:#x}."),
+						}
 					},
 					ValidatorSubcommands::AcceptOperator { operator_id } => {
 						let operator_account = AccountId32::from_str(&operator_id)
@@ -227,17 +266,17 @@ async fn run_cli() -> Result<()> {
 
 /// Turns the amount of FLIP into a RedemptionAmount in Flipperinos.
 fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
-	// Using a set number of decimal places of accuracy to avoid floating point rounding errors
-	const MAX_DECIMAL_PLACES: u32 = 6;
 	match amount {
-		Some(amount_float) => {
-			let atomic_amount = ((round_f64(amount_float, MAX_DECIMAL_PLACES) *
-				10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
-				10_u128.pow(Asset::Flip.decimals() - MAX_DECIMAL_PLACES);
-			RedemptionAmount::Exact(atomic_amount)
-		},
+		Some(amount) => RedemptionAmount::Exact(flip_to_flipperinos(amount)),
 		None => RedemptionAmount::Max,
 	}
+}
+
+fn flip_to_flipperinos(amount: f64) -> u128 {
+	// Using a set number of decimal places of accuracy to avoid floating point rounding errors
+	const MAX_DECIMAL_PLACES: u32 = 6;
+	((round_f64(amount, MAX_DECIMAL_PLACES) * 10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
+		10_u128.pow(Asset::Flip.decimals() - MAX_DECIMAL_PLACES)
 }
 
 /// Turns an amount in Flipperinos back into a string representing

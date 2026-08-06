@@ -18,7 +18,11 @@
 
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_primitives::FlipBalance;
-use cf_traits::{impl_mock_chainflip, mocks::waived_fees::WaivedFeesMock, Funding};
+use cf_traits::{
+	impl_mock_chainflip,
+	mocks::{rewards_distribution::MockRewardsDistribution, waived_fees::WaivedFeesMock},
+	Funding,
+};
 use frame_support::{
 	derive_impl, parameter_types,
 	traits::{ConstU128, ConstU8, HandleLifetime},
@@ -62,6 +66,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock<Self>;
+	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type RuntimeHoldReason = ();
 	type CallIndexer = ();
 }

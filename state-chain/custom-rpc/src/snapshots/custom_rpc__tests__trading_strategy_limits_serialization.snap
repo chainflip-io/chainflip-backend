@@ -1,6 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
-assertion_line: 1213
 expression: val
 ---
 {
@@ -10,7 +9,8 @@ expression: val
       "FLIP": 123456,
       "USDC": 123456,
       "USDT": 123456,
-      "WBTC": 123456
+      "WBTC": 123456,
+      "CBBTC": 123456
     },
     "Polkadot": {
       "DOT": 123456
@@ -48,7 +48,8 @@ expression: val
       "FLIP": 654321,
       "USDC": 654321,
       "USDT": 654321,
-      "WBTC": 654321
+      "WBTC": 654321,
+      "CBBTC": 654321
     },
     "Polkadot": {
       "DOT": 654321

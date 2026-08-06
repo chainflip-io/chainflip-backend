@@ -15,10 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	mock::*, AggStats, DeltaStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats,
-	Pallet, PalletSafeMode, StatsLastUpdatedAt, StatsUpdateCursor, WindowedEma,
-	ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS,
-	EMA_PRUNE_THRESHOLD_USD, STATS_UPDATE_INTERVAL_IN_BLOCKS,
+	mock::*, AggStats, DeltaStats, Error, Event, LpAggStats, LpDeltaStats, Pallet, PalletSafeMode,
+	StatsLastUpdatedAt, StatsUpdateCursor, WindowedEma, ALPHA_HALF_LIFE_1_DAY,
+	ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS, EMA_PRUNE_THRESHOLD_USD,
+	STATS_UPDATE_INTERVAL_IN_BLOCKS,
 };
 use std::collections::BTreeMap;
 
@@ -27,10 +27,14 @@ use cf_primitives::{Asset, AssetAmount, ForeignChain, SwapRequestId, SECONDS_PER
 
 use cf_test_utilities::assert_events_match;
 use cf_traits::{
-	mocks::swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
+	mocks::{
+		balance_api::MockRefundAddressRegistry,
+		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
+	},
 	AccountRoleRegistry, BalanceApi, Chainflip,
 	ExpiryBehaviour::RefundIfExpires,
-	LpStatsApi, PriceLimitsAndExpiry, SafeMode, SetSafeMode, SwapOutputAction, SwapRequestType,
+	LpStatsApi, PriceLimitsAndExpiry, RefundAddressRegistry, SafeMode, SetSafeMode,
+	SwapOutputAction, SwapRequestType,
 };
 use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
 use sp_runtime::FixedU128;
@@ -203,7 +207,8 @@ fn can_register_and_deregister_liquidity_refund_address() {
 	new_test_ext().execute_with(|| {
 		let encoded_address = EncodedAddress::Eth([0x01; 20]);
 		let decoded_address = ForeignChainAddress::Eth([0x01; 20].into());
-		assert!(LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Ethereum).is_none());
+		assert!(MockRefundAddressRegistry::get_refund_address(&LP_ACCOUNT, ForeignChain::Ethereum)
+			.is_none());
 
 		// Can register EWA
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
@@ -211,12 +216,14 @@ fn can_register_and_deregister_liquidity_refund_address() {
 			encoded_address
 		));
 		assert_eq!(
-			LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Ethereum),
+			MockRefundAddressRegistry::get_refund_address(&LP_ACCOUNT, ForeignChain::Ethereum),
 			Some(decoded_address.clone())
 		);
 		// Other chain should be unaffected.
-		assert!(LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Polkadot).is_none());
-		assert!(LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Bitcoin).is_none());
+		assert!(MockRefundAddressRegistry::get_refund_address(&LP_ACCOUNT, ForeignChain::Polkadot)
+			.is_none());
+		assert!(MockRefundAddressRegistry::get_refund_address(&LP_ACCOUNT, ForeignChain::Bitcoin)
+			.is_none());
 
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
 			Event::<Test>::LiquidityRefundAddressRegistered {
@@ -235,7 +242,7 @@ fn can_register_and_deregister_liquidity_refund_address() {
 			encoded_address,
 		));
 		assert_eq!(
-			LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Ethereum),
+			MockRefundAddressRegistry::get_refund_address(&LP_ACCOUNT, ForeignChain::Ethereum),
 			Some(decoded_address.clone()),
 		);
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
@@ -379,7 +386,7 @@ fn account_registration_and_deregistration() {
 		);
 
 		assert!(
-			LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Ethereum).is_none()
+			MockRefundAddressRegistry::get_refund_address(&LP_ACCOUNT, ForeignChain::Ethereum).is_none()
 		);
 
 		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT)
@@ -988,4 +995,85 @@ fn test_purge_balances() {
 			.iter()
 			.all(|(_, amount)| *amount == 0));
 	});
+}
+
+mod withdrawal_restriction {
+	use super::*;
+	use cf_chains::AccountOrAddress;
+	use cf_traits::mocks::withdrawal_address_restriction::MockWithdrawalAddressRestriction;
+	use sp_runtime::DispatchError;
+
+	fn not_allowed() -> DispatchError {
+		DispatchError::Other("MockWithdrawalAddressRestriction: destination not allowed")
+	}
+
+	#[test]
+	fn external_withdrawal_is_gated_by_the_whitelist() {
+		new_test_ext().execute_with(|| {
+			let allowed = [0xaa; 20];
+			let disallowed = [0xbb; 20];
+
+			MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, 1_000);
+			MockWithdrawalAddressRestriction::restrict_to(
+				&LP_ACCOUNT,
+				vec![AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(allowed.into()))],
+			);
+
+			// A different address is blocked...
+			assert_noop!(
+				LiquidityProvider::withdraw_asset(
+					RuntimeOrigin::signed(LP_ACCOUNT),
+					100,
+					Asset::Eth,
+					EncodedAddress::Eth(disallowed),
+				),
+				not_allowed()
+			);
+			// ...the whitelisted one succeeds.
+			assert_ok!(LiquidityProvider::withdraw_asset(
+				RuntimeOrigin::signed(LP_ACCOUNT),
+				100,
+				Asset::Eth,
+				EncodedAddress::Eth(allowed),
+			));
+		});
+	}
+
+	#[test]
+	fn internal_transfer_is_gated_by_the_whitelist() {
+		new_test_ext().execute_with(|| {
+			MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, 1_000);
+			assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+				RuntimeOrigin::signed(LP_ACCOUNT_2),
+				EncodedAddress::Eth(Default::default()),
+			));
+
+			// Restrict to some other account: transferring to LP_ACCOUNT_2 is blocked.
+			MockWithdrawalAddressRestriction::restrict_to(
+				&LP_ACCOUNT,
+				vec![AccountOrAddress::InternalAccount(NON_LP_ACCOUNT)],
+			);
+			assert_noop!(
+				LiquidityProvider::transfer_asset(
+					RuntimeOrigin::signed(LP_ACCOUNT),
+					100,
+					Asset::Eth,
+					LP_ACCOUNT_2,
+				),
+				not_allowed()
+			);
+
+			// Allow LP_ACCOUNT_2: the transfer succeeds.
+			MockWithdrawalAddressRestriction::restrict_to(
+				&LP_ACCOUNT,
+				vec![AccountOrAddress::InternalAccount(LP_ACCOUNT_2)],
+			);
+			assert_ok!(LiquidityProvider::transfer_asset(
+				RuntimeOrigin::signed(LP_ACCOUNT),
+				100,
+				Asset::Eth,
+				LP_ACCOUNT_2,
+			));
+		});
+	}
 }

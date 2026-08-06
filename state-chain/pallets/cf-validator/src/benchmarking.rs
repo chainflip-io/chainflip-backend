@@ -435,6 +435,20 @@ mod benchmarks {
 
 		assert!(Pallet::<T>::is_bidding(&caller));
 	}
+
+	#[benchmark]
+	fn set_validator_max_bid() {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		frame_system::Pallet::<T>::inc_providers(&caller);
+		assert_ok!(T::AccountRoleRegistry::register_as_validator(&caller));
+		fund_account::<T>(&caller, 100_000u128);
+
+		#[extrinsic_call]
+		set_validator_max_bid(RawOrigin::Signed(caller.clone()), Some(50_000u128.into()));
+
+		assert_eq!(ValidatorMaxBid::<T>::get(caller), Some(50_000u128.into()));
+	}
 	// NOTE: Test suite not included due to missing Funding and Reputation pallet in `mock::Test`.
 
 	#[benchmark]

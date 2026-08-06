@@ -69,6 +69,7 @@ pub mod threshold_signer;
 pub mod time_source;
 pub mod tracked_data_provider;
 pub mod waived_fees;
+pub mod withdrawal_address_restriction;
 
 #[macro_export]
 macro_rules! impl_mock_chainflip {

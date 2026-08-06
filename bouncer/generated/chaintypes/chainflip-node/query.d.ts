@@ -102,7 +102,6 @@ import type {
   PalletCfSwappingAffiliateDetails,
   PalletCfSwappingFeeRateAndMinimum,
   CfAmmCommonAssetPair,
-  CfChainsAddressForeignChainAddress,
   PalletCfLpDeltaStats,
   PalletCfLpAggStats,
   PalletCfIngressEgressDepositChannelDetailsEthereum,
@@ -192,6 +191,9 @@ import type {
   PalletCfElectionsElectionPalletStatus,
   CfChainsChainStateSolana,
   PalletCfAssetBalancesExternalOwner,
+  PalletCfAssetBalancesWhitelistWithdrawalWhitelist,
+  PalletCfAssetBalancesWhitelistPendingChange,
+  CfChainsAddressForeignChainAddress,
   CfChainsChainStateAssethub,
   PalletCfVaultsVaultActivationStatus005,
   PalletCfBroadcastBroadcastDataAssethub,
@@ -900,6 +902,20 @@ export interface ChainStorage extends GenericChainStorage {
     feeScalingRate: GenericStorageQuery<() => PalletCfFlipOnChargeTransactionFeeScalingRateConfig>;
 
     /**
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    flipToDistribute: GenericStorageQuery<() => bigint>;
+
+    /**
+     * The epoch from which flip 2.1 activates.
+     * Defaults to u32::MAX (effectively disabled) until set via governance.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    feeRewardsActivationEpoch: GenericStorageQuery<() => number>;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
@@ -1340,11 +1356,22 @@ export interface ChainStorage extends GenericChainStorage {
     minimumOperatorFee: GenericStorageQuery<() => number>;
 
     /**
-     * Store the list of accounts that are active bidders.
+     * Store the list of validator accounts that are active bidders.
      *
      * @param {Callback<Array<AccountId32>> =} callback
      **/
     activeBidder: GenericStorageQuery<() => Array<AccountId32>>;
+
+    /**
+     * A validator's optional cap for its own auction bid.
+     *
+     * When no cap is stored, the validator bids its full funding balance. The stored cap is not
+     * bounded by the account's balance, which can fall below it at any time (e.g. via slashing).
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<bigint | undefined> =} callback
+     **/
+    validatorMaxBid: GenericStorageQuery<(arg: AccountId32Like) => bigint | undefined, AccountId32>;
 
     /**
      * Maps an operator account to it's exceptions. An exception is a delegator that is excluded
@@ -3051,7 +3078,7 @@ export interface ChainStorage extends GenericChainStorage {
     flipToBeSentToGateway: GenericStorageQuery<() => bigint>;
 
     /**
-     * Interval at which we buy FLIP in order to burn it.
+     * Interval at which we buy FLIP from swap fees in order to distribute as rewards.
      *
      * @param {Callback<number> =} callback
      **/
@@ -3221,19 +3248,6 @@ export interface ChainStorage extends GenericChainStorage {
    **/
   liquidityProvider: {
     /**
-     * Stores the registered emergency withdrawal address for an Account
-     *
-     * @param {[AccountId32Like, CfPrimitivesChainsForeignChain]} arg
-     * @param {Callback<CfChainsAddressForeignChainAddress | undefined> =} callback
-     **/
-    liquidityRefundAddress: GenericStorageQuery<
-      (
-        arg: [AccountId32Like, CfPrimitivesChainsForeignChain],
-      ) => CfChainsAddressForeignChainAddress | undefined,
-      [AccountId32, CfPrimitivesChainsForeignChain]
-    >;
-
-    /**
      * Last block number when stats were updated
      *
      * @param {Callback<number> =} callback
@@ -3256,11 +3270,23 @@ export interface ChainStorage extends GenericChainStorage {
     /**
      * Stores exponential moving average stats for liquidity providers per asset
      *
-     * @param {Callback<Array<[AccountId32, Array<[CfPrimitivesChainsAssetsAnyAsset, PalletCfLpAggStats]>]>> =} callback
+     * @param {[AccountId32Like, CfPrimitivesChainsAssetsAnyAsset]} arg
+     * @param {Callback<PalletCfLpAggStats | undefined> =} callback
      **/
     lpAggStats: GenericStorageQuery<
-      () => Array<[AccountId32, Array<[CfPrimitivesChainsAssetsAnyAsset, PalletCfLpAggStats]>]>
+      (arg: [AccountId32Like, CfPrimitivesChainsAssetsAnyAsset]) => PalletCfLpAggStats | undefined,
+      [AccountId32, CfPrimitivesChainsAssetsAnyAsset]
     >;
+
+    /**
+     * Resumable raw-storage-key cursor for the periodic `LpAggStats` decay/prune pass. `Some`
+     * while a pass is in progress (potentially spanning many blocks); `None` when idle, in which
+     * case `on_idle` waits for `STATS_UPDATE_INTERVAL_IN_BLOCKS` to elapse before starting a new
+     * one.
+     *
+     * @param {Callback<Bytes | undefined> =} callback
+     **/
+    statsUpdateCursor: GenericStorageQuery<() => Bytes | undefined>;
 
     /**
      * Generic pallet storage query
@@ -3475,6 +3501,19 @@ export interface ChainStorage extends GenericChainStorage {
     boostedVaultTransactions: GenericStorageQuery<
       (arg: H256) => PalletCfIngressEgressBoostStatus,
       H256
+    >;
+
+    /**
+     * Timeout blocks (in external chain's block height) of boosted vault transactions awaiting
+     * full witnessing. Additionally stores the boosted asset required to finalise the boost.
+     *
+     * Unlike deposit channels, vault swaps have no channel to recycle, so this is what guarantees
+     * that a lost boosted deposit is correctly accounted for.
+     *
+     * @param {Callback<Array<[H256, [bigint, CfPrimitivesChainsAssetsEthAsset]]>> =} callback
+     **/
+    boostedVaultTransactionTimeout: GenericStorageQuery<
+      () => Array<[H256, [bigint, CfPrimitivesChainsAssetsEthAsset]]>
     >;
 
     /**
@@ -3777,6 +3816,19 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * Timeout blocks (in external chain's block height) of boosted vault transactions awaiting
+     * full witnessing. Additionally stores the boosted asset required to finalise the boost.
+     *
+     * Unlike deposit channels, vault swaps have no channel to recycle, so this is what guarantees
+     * that a lost boosted deposit is correctly accounted for.
+     *
+     * @param {Callback<Array<[CfPrimitivesTxId, [number, CfPrimitivesChainsAssetsDotAsset]]>> =} callback
+     **/
+    boostedVaultTransactionTimeout: GenericStorageQuery<
+      () => Array<[CfPrimitivesTxId, [number, CfPrimitivesChainsAssetsDotAsset]]>
+    >;
+
+    /**
      *
      * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry002>> =} callback
@@ -4071,6 +4123,19 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * Timeout blocks (in external chain's block height) of boosted vault transactions awaiting
+     * full witnessing. Additionally stores the boosted asset required to finalise the boost.
+     *
+     * Unlike deposit channels, vault swaps have no channel to recycle, so this is what guarantees
+     * that a lost boosted deposit is correctly accounted for.
+     *
+     * @param {Callback<Array<[H256, [bigint, CfPrimitivesChainsAssetsBtcAsset]]>> =} callback
+     **/
+    boostedVaultTransactionTimeout: GenericStorageQuery<
+      () => Array<[H256, [bigint, CfPrimitivesChainsAssetsBtcAsset]]>
+    >;
+
+    /**
      *
      * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry003>> =} callback
@@ -4206,6 +4271,18 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     limitOrderAutoSweepingThresholds: GenericStorageQuery<
       () => Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]>
+    >;
+
+    /**
+     * Minimum amount of the sold asset that a limit order may hold. Set per asset by
+     * governance. A value of `0` disables the check for that asset.
+     *
+     * @param {CfPrimitivesChainsAssetsAnyAsset} arg
+     * @param {Callback<bigint> =} callback
+     **/
+    minimumLimitOrderAmount: GenericStorageQuery<
+      (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint,
+      CfPrimitivesChainsAssetsAnyAsset
     >;
 
     /**
@@ -4651,6 +4728,19 @@ export interface ChainStorage extends GenericChainStorage {
     boostedVaultTransactions: GenericStorageQuery<
       (arg: H256) => PalletCfIngressEgressBoostStatus,
       H256
+    >;
+
+    /**
+     * Timeout blocks (in external chain's block height) of boosted vault transactions awaiting
+     * full witnessing. Additionally stores the boosted asset required to finalise the boost.
+     *
+     * Unlike deposit channels, vault swaps have no channel to recycle, so this is what guarantees
+     * that a lost boosted deposit is correctly accounted for.
+     *
+     * @param {Callback<Array<[H256, [bigint, CfPrimitivesChainsAssetsArbAsset]]>> =} callback
+     **/
+    boostedVaultTransactionTimeout: GenericStorageQuery<
+      () => Array<[H256, [bigint, CfPrimitivesChainsAssetsArbAsset]]>
     >;
 
     /**
@@ -5299,6 +5389,19 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * Timeout blocks (in external chain's block height) of boosted vault transactions awaiting
+     * full witnessing. Additionally stores the boosted asset required to finalise the boost.
+     *
+     * Unlike deposit channels, vault swaps have no channel to recycle, so this is what guarantees
+     * that a lost boosted deposit is correctly accounted for.
+     *
+     * @param {Callback<Array<[[SolPrimAddress, bigint], [bigint, CfPrimitivesChainsAssetsSolAsset]]>> =} callback
+     **/
+    boostedVaultTransactionTimeout: GenericStorageQuery<
+      () => Array<[[SolPrimAddress, bigint], [bigint, CfPrimitivesChainsAssetsSolAsset]]>
+    >;
+
+    /**
      *
      * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry005>> =} callback
@@ -5683,6 +5786,73 @@ export interface ChainStorage extends GenericChainStorage {
     refundFeeMultiple: GenericStorageQuery<
       (arg: CfPrimitivesChainsForeignChain) => number,
       CfPrimitivesChainsForeignChain
+    >;
+
+    /**
+     * Per-account withdrawal whitelist: the *active* external/internal whitelists and the
+     * timelock. Timelocked changes live in [`PendingChanges`] until they are applied, so this
+     * always reflects current truth.
+     *
+     * `None` = unrestricted (nothing configured); a stored whitelist = enforcement on. A
+     * default-valued whitelist is never stored (see [`Pallet::mutate_whitelist`]).
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<PalletCfAssetBalancesWhitelistWithdrawalWhitelist | undefined> =} callback
+     **/
+    withdrawalWhitelists: GenericStorageQuery<
+      (arg: AccountId32Like) => PalletCfAssetBalancesWhitelistWithdrawalWhitelist | undefined,
+      AccountId32
+    >;
+
+    /**
+     * Timelocked changes awaiting activation, keyed by activation time (same-time changes keep
+     * submission order). A single value, so `on_idle` can tell whether anything is due with one
+     * read. Bounded per account: at most [`MaxPendingWhitelistUpdates`] whitelist changes, one
+     * timelock change, and one refund address change per chain can be in flight at a time.
+     *
+     * @param {Callback<Array<[bigint, Array<[AccountId32, PalletCfAssetBalancesWhitelistPendingChange]>]>> =} callback
+     **/
+    pendingChanges: GenericStorageQuery<
+      () => Array<[bigint, Array<[AccountId32, PalletCfAssetBalancesWhitelistPendingChange]>]>
+    >;
+
+    /**
+     * Maximum whitelist timelock duration (seconds). Governance-updatable via
+     * [`PalletConfigUpdate::MaxWhitelistTimelock`]. Defaults to 10 days.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    maxWhitelistTimelock: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Maximum number of pending whitelist updates per account. Governance-updatable via
+     * [`PalletConfigUpdate::MaxPendingWhitelistUpdates`]. Defaults to 16.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    maxPendingWhitelistUpdates: GenericStorageQuery<() => number>;
+
+    /**
+     * Maximum number of active whitelist entries per account (external addresses across all chains
+     * plus internal accounts).
+     *
+     * @param {Callback<number> =} callback
+     **/
+    maxWhitelistEntries: GenericStorageQuery<() => number>;
+
+    /**
+     * The refund address registered by an account for each chain. A registered refund address is
+     * a trusted destination, so it is implicitly allowed by the withdrawal whitelist (see
+     * [`Pallet::ensure_withdrawal_allowed_to`]).
+     *
+     * @param {[AccountId32Like, CfPrimitivesChainsForeignChain]} arg
+     * @param {Callback<CfChainsAddressForeignChainAddress | undefined> =} callback
+     **/
+    refundAddresses: GenericStorageQuery<
+      (
+        arg: [AccountId32Like, CfPrimitivesChainsForeignChain],
+      ) => CfChainsAddressForeignChainAddress | undefined,
+      [AccountId32, CfPrimitivesChainsForeignChain]
     >;
 
     /**
@@ -6113,6 +6283,19 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * Timeout blocks (in external chain's block height) of boosted vault transactions awaiting
+     * full witnessing. Additionally stores the boosted asset required to finalise the boost.
+     *
+     * Unlike deposit channels, vault swaps have no channel to recycle, so this is what guarantees
+     * that a lost boosted deposit is correctly accounted for.
+     *
+     * @param {Callback<Array<[CfPrimitivesTxId, [number, CfPrimitivesChainsAssetsHubAsset]]>> =} callback
+     **/
+    boostedVaultTransactionTimeout: GenericStorageQuery<
+      () => Array<[CfPrimitivesTxId, [number, CfPrimitivesChainsAssetsHubAsset]]>
+    >;
+
+    /**
      *
      * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry006>> =} callback
@@ -6241,6 +6424,16 @@ export interface ChainStorage extends GenericChainStorage {
     minimumAddedFundsToStrategy: GenericStorageQuery<
       () => Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]>
     >;
+
+    /**
+     * Cursor into `Strategies` for incremental `on_idle` processing: the raw storage
+     * key of the last strategy processed, or `None` to (re)start from the beginning.
+     * Bounds the per-block scan and ensures every strategy is eventually processed,
+     * rather than always the first `max_strategies` (no starvation of the tail).
+     *
+     * @param {Callback<Bytes | undefined> =} callback
+     **/
+    nextStrategyCursor: GenericStorageQuery<() => Bytes | undefined>;
 
     /**
      * Generic pallet storage query
@@ -7736,6 +7929,19 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * Timeout blocks (in external chain's block height) of boosted vault transactions awaiting
+     * full witnessing. Additionally stores the boosted asset required to finalise the boost.
+     *
+     * Unlike deposit channels, vault swaps have no channel to recycle, so this is what guarantees
+     * that a lost boosted deposit is correctly accounted for.
+     *
+     * @param {Callback<Array<[H256, [bigint, CfPrimitivesChainsAssetsTronAsset]]>> =} callback
+     **/
+    boostedVaultTransactionTimeout: GenericStorageQuery<
+      () => Array<[H256, [bigint, CfPrimitivesChainsAssetsTronAsset]]>
+    >;
+
+    /**
      *
      * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry007>> =} callback
@@ -8455,6 +8661,19 @@ export interface ChainStorage extends GenericChainStorage {
     boostedVaultTransactions: GenericStorageQuery<
       (arg: H256) => PalletCfIngressEgressBoostStatus,
       H256
+    >;
+
+    /**
+     * Timeout blocks (in external chain's block height) of boosted vault transactions awaiting
+     * full witnessing. Additionally stores the boosted asset required to finalise the boost.
+     *
+     * Unlike deposit channels, vault swaps have no channel to recycle, so this is what guarantees
+     * that a lost boosted deposit is correctly accounted for.
+     *
+     * @param {Callback<Array<[H256, [bigint, CfPrimitivesChainsAssetsBscAsset]]>> =} callback
+     **/
+    boostedVaultTransactionTimeout: GenericStorageQuery<
+      () => Array<[H256, [bigint, CfPrimitivesChainsAssetsBscAsset]]>
     >;
 
     /**

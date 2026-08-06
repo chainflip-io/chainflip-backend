@@ -81,7 +81,7 @@ pub trait LpDepositHandler {
 }
 
 /// API for interacting with the liquidity provider pallet.
-pub trait LpRegistration {
+pub trait RefundAddressRegistry {
 	type AccountId;
 
 	/// Register a refund address for an given account.
@@ -89,6 +89,15 @@ pub trait LpRegistration {
 		who: &Self::AccountId,
 		address: cf_chains::ForeignChainAddress,
 	);
+
+	/// The account's registered refund address for the given chain, if any.
+	fn get_refund_address(
+		who: &Self::AccountId,
+		chain: cf_chains::ForeignChain,
+	) -> Option<cf_chains::ForeignChainAddress>;
+
+	/// Remove all of the account's registered refund addresses (e.g. on deregistration).
+	fn clear_refund_addresses(who: &Self::AccountId);
 
 	/// Ensure that the given account has a refund address set for the given asset.
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult;

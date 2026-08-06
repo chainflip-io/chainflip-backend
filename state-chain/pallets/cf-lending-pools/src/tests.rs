@@ -1618,7 +1618,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 	use cf_traits::{
 		mocks::{
 			account_role_registry::MockAccountRoleRegistry,
-			balance_api::{MockBalance, MockLpRegistration},
+			balance_api::{MockBalance, MockRefundAddressRegistry},
 		},
 		AccountRoleRegistry,
 	};
@@ -1678,7 +1678,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 		const BTC_COLLATERAL: AssetAmount = PRINCIPAL * 4 / (3 * BTC_PRICE);
 		const USER_LOAN_ID: LoanId = LoanId(1);
 		MockBalance::credit_account(&LP, Asset::Btc, BTC_COLLATERAL);
-		MockLpRegistration::register_refund_address(LP, ForeignChain::Ethereum);
+		MockRefundAddressRegistry::register_refund_address(LP, ForeignChain::Ethereum);
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
 			&BROKER.account,
 		));

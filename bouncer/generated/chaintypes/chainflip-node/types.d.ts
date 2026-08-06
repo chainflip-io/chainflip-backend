@@ -673,6 +673,7 @@ export type CfPrimitivesChainsAssetsAnyAsset =
   | 'Usdc'
   | 'Usdt'
   | 'Wbtc'
+  | 'Cbbtc'
   | 'Dot'
   | 'Btc'
   | 'ArbEth'
@@ -858,7 +859,8 @@ export type PalletCfFlipCallLike =
 
 export type PalletCfFlipPalletConfigUpdate =
   | { type: 'SetSlashingRate'; value: Permill }
-  | { type: 'SetFeeScalingRate'; value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig };
+  | { type: 'SetFeeScalingRate'; value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig }
+  | { type: 'SetFeeRewardsActivationEpoch'; value: number };
 
 export type PalletCfFlipOnChargeTransactionFeeScalingRateConfig =
   | { type: 'DelayedExponential'; value: { threshold: number; exponent: number } }
@@ -1080,7 +1082,7 @@ export type PalletCfFundingEthereumDeposit =
     }
   | { type: 'NoDeposit' };
 
-export type CfPrimitivesChainsAssetsEthAsset = 'Eth' | 'Flip' | 'Usdc' | 'Usdt' | 'Wbtc';
+export type CfPrimitivesChainsAssetsEthAsset = 'Eth' | 'Flip' | 'Usdc' | 'Usdt' | 'Wbtc' | 'Cbbtc';
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -1332,6 +1334,16 @@ export type PalletCfValidatorCall =
    **/
   | { name: 'StopBidding' }
   /**
+   * Sets the maximum bid used for this validator in the next auction.
+   *
+   * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   * The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+   * at auction resolution, so a cap above the balance simply has no effect until funded.
+   * It must, however, be at least the minimum validator stake — a lower cap could never
+   * produce a winning bid.
+   **/
+  | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
+  /**
    * Executed by a operator to claim a validator. By calling this, the operator
    * signals his wish to manage the validator in his delegated staking pool. The validator
    * has to actively accept this invitation by calling the `accept_operator` extrinsic.
@@ -1466,6 +1478,16 @@ export type PalletCfValidatorCallLike =
    * bidding.
    **/
   | { name: 'StopBidding' }
+  /**
+   * Sets the maximum bid used for this validator in the next auction.
+   *
+   * Passing `None` removes the cap, causing the validator to bid its full funding balance.
+   * The cap need not be backed by the current balance; the bid is `min(max_bid, balance)`
+   * at auction resolution, so a cap above the balance simply has no effect until funded.
+   * It must, however, be at least the minimum validator stake — a lower cap could never
+   * produce a winning bid.
+   **/
+  | { name: 'SetValidatorMaxBid'; params: { maxBid?: bigint | undefined } }
   /**
    * Executed by a operator to claim a validator. By calling this, the operator
    * signals his wish to manage the validator in his delegated staking pool. The validator
@@ -4797,10 +4819,15 @@ export type PalletCfPoolsCloseOrder =
       };
     };
 
-export type PalletCfPoolsPalletConfigUpdate = {
-  type: 'LimitOrderAutoSweepingThreshold';
-  value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
-};
+export type PalletCfPoolsPalletConfigUpdate =
+  | {
+      type: 'LimitOrderAutoSweepingThreshold';
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
+    }
+  | {
+      type: 'SetMinimumLimitOrderAmount';
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
+    };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -6107,20 +6134,56 @@ export type CfChainsSolSolTrackedData = { priorityFee: bigint };
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
  **/
-export type PalletCfAssetBalancesCall = {
-  name: 'UpdatePalletConfig';
-  params: { update: PalletCfAssetBalancesPalletConfigUpdate };
-};
+export type PalletCfAssetBalancesCall =
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfAssetBalancesPalletConfigUpdate } }
+  /**
+   * Add or remove a destination from the caller's withdrawal whitelist. The change is
+   * scheduled and takes effect after the caller's timelock elapses (at the end of the
+   * current block when no timelock is set).
+   **/
+  | { name: 'UpdateWhitelist'; params: { change: PalletCfAssetBalancesWhitelistWhitelistChange } }
+  /**
+   * Set the caller's whitelist timelock. Like any other change, the update is delayed by
+   * the current timelock, so a stolen key can't instantly remove the protection. Since a
+   * new timelock change replaces a pending one, the owner can still *cancel* a pending
+   * malicious change at any time by scheduling their own — the recovery lever against a
+   * stolen key.
+   **/
+  | { name: 'SetWhitelistTimelock'; params: { duration: bigint } };
 
-export type PalletCfAssetBalancesCallLike = {
-  name: 'UpdatePalletConfig';
-  params: { update: PalletCfAssetBalancesPalletConfigUpdate };
-};
+export type PalletCfAssetBalancesCallLike =
+  | { name: 'UpdatePalletConfig'; params: { update: PalletCfAssetBalancesPalletConfigUpdate } }
+  /**
+   * Add or remove a destination from the caller's withdrawal whitelist. The change is
+   * scheduled and takes effect after the caller's timelock elapses (at the end of the
+   * current block when no timelock is set).
+   **/
+  | { name: 'UpdateWhitelist'; params: { change: PalletCfAssetBalancesWhitelistWhitelistChange } }
+  /**
+   * Set the caller's whitelist timelock. Like any other change, the update is delayed by
+   * the current timelock, so a stolen key can't instantly remove the protection. Since a
+   * new timelock change replaces a pending one, the owner can still *cancel* a pending
+   * malicious change at any time by scheduling their own — the recovery lever against a
+   * stolen key.
+   **/
+  | { name: 'SetWhitelistTimelock'; params: { duration: bigint } };
 
-export type PalletCfAssetBalancesPalletConfigUpdate = {
-  type: 'RefundFeeMultiple';
-  value: { chain: CfPrimitivesChainsForeignChain; multiple?: number | undefined };
-};
+export type PalletCfAssetBalancesPalletConfigUpdate =
+  | {
+      type: 'RefundFeeMultiple';
+      value: { chain: CfPrimitivesChainsForeignChain; multiple?: number | undefined };
+    }
+  | { type: 'MaxWhitelistTimelock'; value: { seconds: bigint } }
+  | { type: 'MaxPendingWhitelistUpdates'; value: { count: number } }
+  | { type: 'MaxWhitelistEntries'; value: { count: number } };
+
+export type PalletCfAssetBalancesWhitelistWhitelistChange =
+  | { type: 'Allow'; value: CfChainsRefundParametersAccountOrAddress }
+  | { type: 'Remove'; value: CfChainsRefundParametersAccountOrAddress };
+
+export type CfChainsRefundParametersAccountOrAddress =
+  | { type: 'InternalAccount'; value: AccountId32 }
+  | { type: 'ExternalAddress'; value: CfChainsAddressEncodedAddress };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -12699,7 +12762,8 @@ export type PalletCfFlipEvent =
   | { name: 'AccountReaped'; data: { who: AccountId32; dustBurned: bigint } }
   | { name: 'PalletConfigUpdated'; data: { update: PalletCfFlipPalletConfigUpdate } }
   | { name: 'FlipMinted'; data: { to: AccountId32; amount: bigint } }
-  | { name: 'BondUpdated'; data: { accountId: AccountId32; newBond: bigint } };
+  | { name: 'BondUpdated'; data: { accountId: AccountId32; newBond: bigint } }
+  | { name: 'FlipDistributed'; data: { amounts: Array<[AccountId32, bigint]> } };
 
 export type PalletCfFlipImbalancesImbalanceSource =
   | { type: 'External' }
@@ -12993,6 +13057,13 @@ export type PalletCfValidatorEvent =
    * A previously non-bidding account has started bidding.
    **/
   | { name: 'StartedBidding'; data: { accountId: AccountId32 } }
+  /**
+   * A validator updated the maximum bid used for its next auction.
+   **/
+  | {
+      name: 'ValidatorMaxBidUpdated';
+      data: { validator: AccountId32; maxBid?: bigint | undefined };
+    }
   /**
    * The rotation transaction(s) for the previous rotation are still pending to be
    * successfully broadcast, therefore, cannot start a new epoch rotation.
@@ -14219,7 +14290,18 @@ export type PalletCfSwappingEvent =
         shortId: CfPrimitivesAffiliateShortId;
         affiliateAccountId: AccountId32;
       };
-    };
+    }
+  /**
+   * FLIP was successfully scheduled for egress to the State Chain Gateway.
+   **/
+  | {
+      name: 'SentFlipToGateway';
+      data: { amount: bigint; egressId: [CfPrimitivesChainsForeignChain, bigint] };
+    }
+  /**
+   * FLIP egress to the State Chain Gateway was skipped.
+   **/
+  | { name: 'FlipTransferToGatewaySkipped'; data: { reason: DispatchError } };
 
 export type CfChainsSwapOrigin =
   | {
@@ -14317,12 +14399,12 @@ export type CfTraitsSwappingExpiryBehaviour =
       type: 'RefundIfExpires';
       value: {
         retryDuration: number;
-        refundAddress: CfChainsRefundParametersAccountOrAddress;
+        refundAddress: CfChainsRefundParametersAccountOrAddressForeignChainAddress;
         refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
       };
     };
 
-export type CfChainsRefundParametersAccountOrAddress =
+export type CfChainsRefundParametersAccountOrAddressForeignChainAddress =
   | { type: 'InternalAccount'; value: AccountId32 }
   | { type: 'ExternalAddress'; value: CfChainsAddressForeignChainAddress };
 
@@ -15866,7 +15948,40 @@ export type PalletCfAssetBalancesEvent =
         newBalance: bigint;
       };
     }
-  | { name: 'PalletConfigUpdated'; data: { update: PalletCfAssetBalancesPalletConfigUpdate } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfAssetBalancesPalletConfigUpdate } }
+  /**
+   * A whitelist change was accepted.
+   **/
+  | {
+      name: 'WhitelistUpdateScheduled';
+      data: {
+        accountId: AccountId32;
+        change: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress;
+        applyAt: bigint;
+      };
+    }
+  /**
+   * A whitelist change was not applied because the account's whitelist is already at
+   * [`MaxWhitelistEntries`].
+   **/
+  | {
+      name: 'WhitelistUpdateDropped';
+      data: {
+        accountId: AccountId32;
+        change: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress;
+      };
+    }
+  /**
+   * An account's whitelist timelock was updated.
+   **/
+  | {
+      name: 'WhitelistTimelockUpdated';
+      data: { accountId: AccountId32; duration: bigint; effectiveAt: bigint };
+    };
+
+export type PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress =
+  | { type: 'Allow'; value: CfChainsRefundParametersAccountOrAddressForeignChainAddress }
+  | { type: 'Remove'; value: CfChainsRefundParametersAccountOrAddressForeignChainAddress };
 
 /**
  * The `Event` enum of this pallet
@@ -17489,6 +17604,11 @@ export type PalletCfValidatorError =
    * Delegation amount must be at least as large as minimum funding amount.
    **/
   | 'DelegationAmountBelowMinimum'
+  /**
+   * A validator's max bid must be at least as large as the minimum validator stake,
+   * otherwise the validator could never bid enough to be a qualified bidder.
+   **/
+  | 'MaxBidBelowMinimumValidatorStake'
   /**
    * The caller's GRANDPA key does not match their session key registration.
    **/
@@ -19248,7 +19368,11 @@ export type PalletCfPoolsError =
   /**
    * The account still has open orders.
    **/
-  | 'OpenOrdersRemaining';
+  | 'OpenOrdersRemaining'
+  /**
+   * The resulting limit order amount is below the configured per-asset minimum.
+   **/
+  | 'BelowMinimumOrderAmount';
 
 export type CfeEventsCfeEvent =
   | { type: 'EvmThresholdSignatureRequest'; value: CfeEventsThresholdSignatureRequest }
@@ -19895,6 +20019,17 @@ export type PalletCfAssetBalancesExternalOwner =
   | { type: 'AggKey' }
   | { type: 'Account'; value: CfChainsAddressForeignChainAddress };
 
+export type PalletCfAssetBalancesWhitelistWithdrawalWhitelist = {
+  external: Array<[CfPrimitivesChainsForeignChain, Array<CfChainsAddressForeignChainAddress>]>;
+  internal: Array<AccountId32>;
+  timelock: bigint;
+};
+
+export type PalletCfAssetBalancesWhitelistPendingChange =
+  | { type: 'Whitelist'; value: PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress }
+  | { type: 'Timelock'; value: bigint }
+  | { type: 'RefundAddress'; value: CfChainsAddressForeignChainAddress };
+
 /**
  * The `Error` enum of this pallet.
  **/
@@ -19918,7 +20053,27 @@ export type PalletCfAssetBalancesError =
   /**
    * The account still has free balance.
    **/
-  | 'FundsRemaining';
+  | 'FundsRemaining'
+  /**
+   * The withdrawal destination is not on the account's withdrawal whitelist.
+   **/
+  | 'DestinationNotAllowed'
+  /**
+   * The provided address could not be decoded.
+   **/
+  | 'InvalidEncodedAddress'
+  /**
+   * The requested timelock exceeds the configured maximum.
+   **/
+  | 'TimelockExceedsMaximum'
+  /**
+   * The account has too many pending whitelist updates.
+   **/
+  | 'TooManyPendingUpdates'
+  /**
+   * No liquidity refund address is registered for the account on the relevant chain.
+   **/
+  | 'NoLiquidityRefundAddressRegistered';
 
 export type PalletCfVaultsVaultActivationStatus005 =
   | { type: 'AwaitingActivation'; value: { newPublicKey: CfChainsDotPolkadotAccountId } }
@@ -21361,6 +21516,7 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo = {
   restrictedBalances: Array<[H160, bigint]>;
   estimatedRedeemableBalance: bigint;
   operator?: AccountId32 | undefined;
+  maxBid?: bigint | undefined;
 };
 
 export type PalletCfValidatorAuctionResolverAuctionOutcome = {
@@ -21553,6 +21709,7 @@ export type CfPrimitivesChainsAssetsEthAssetMap = {
   usdc: bigint;
   usdt: bigint;
   wbtc: bigint;
+  cbbtc: bigint;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMap = { dot: bigint };
@@ -21594,6 +21751,7 @@ export type CfPrimitivesChainsAssetsEthAssetMap002 = {
   usdc: Array<StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderBoostPoolInfo>;
   usdt: Array<StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderBoostPoolInfo>;
   wbtc: Array<StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderBoostPoolInfo>;
+  cbbtc: Array<StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderBoostPoolInfo>;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMap002 = {
@@ -21878,6 +22036,7 @@ export type CfPrimitivesChainsAssetsEthAssetMapOption = {
   usdc?: bigint | undefined;
   usdt?: bigint | undefined;
   wbtc?: bigint | undefined;
+  cbbtc?: bigint | undefined;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMapOption = { dot?: bigint | undefined };
@@ -21939,6 +22098,7 @@ export type CfPrimitivesChainsAssetsEthAssetMapPermill = {
   usdc: Permill;
   usdt: Permill;
   wbtc: Permill;
+  cbbtc: Permill;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMapPermill = { dot: Permill };
@@ -22079,6 +22239,28 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesRuntimeApiAccountInfo =
   | { type: 'Validator'; value: StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo }
   | { type: 'Operator'; value: StateChainRuntimeRuntimeApisCustomApiTypesOperatorInfo };
 
+export type StateChainRuntimeRuntimeApisCustomApiTypesRewardDistributionEstimate = {
+  epochIndex: number;
+  currentBlock: number;
+  currentEpochStartedAt: number;
+  epochDuration: number;
+  bond: bigint;
+  authorityCount: number;
+  totalRewards: bigint;
+  perAuthorityShare: bigint;
+  rewardPool: Array<StateChainRuntimeRuntimeApisCustomApiTypesAccountReward>;
+};
+
+export type StateChainRuntimeRuntimeApisCustomApiTypesAccountReward = {
+  account: AccountId32;
+  bid: bigint;
+  bond: bigint;
+  reward: bigint;
+  role: CfPrimitivesAccountRole;
+  managedBy?: AccountId32 | undefined;
+  delegatedTo?: AccountId32 | undefined;
+};
+
 export type StateChainRuntimeRuntimeApisCustomApiTypesNonceOrAccount =
   | { type: 'Nonce'; value: number }
   | { type: 'Account'; value: AccountId32 };
@@ -22137,6 +22319,7 @@ export type CfPrimitivesChainsAssetsEthAssetMap005 = {
   usdc?: number | undefined;
   usdt?: number | undefined;
   wbtc?: number | undefined;
+  cbbtc?: number | undefined;
 };
 
 export type CfPrimitivesChainsAssetsDotAssetMap005 = { dot?: number | undefined };

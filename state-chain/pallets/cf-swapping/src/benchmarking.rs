@@ -382,10 +382,13 @@ mod benchmarks {
 		#[extrinsic_call]
 		bind_broker_fee_withdrawal_address(RawOrigin::Signed(caller.clone()), address);
 
-		assert_eq!(
-			BoundBrokerWithdrawalAddress::<T>::get(&caller),
-			Some(address),
-			"Broker withdrawal address should be bound"
+		// The binding is observable only through its immutability: a second bind must fail.
+		assert_err!(
+			Pallet::<T>::bind_broker_fee_withdrawal_address(
+				RawOrigin::Signed(caller).into(),
+				[0xcd; 20].into(),
+			),
+			Error::<T>::BrokerAlreadyBound
 		);
 	}
 

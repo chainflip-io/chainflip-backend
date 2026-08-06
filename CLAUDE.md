@@ -74,6 +74,11 @@ Runtime panics must be avoided at all costs. A panic in the runtime hooks halts 
 - Use `#[transactional]` on extrinsics and pallet hooks that modify multiple storage items, so that storage changes are rolled back on error.
 - Defensive coding: prefer `.saturating_add()`, `.saturating_sub()`, `.checked_div()`, `ensure!()`, and `ok_or()` patterns in all runtime paths.
 
+## Account Lifecycle
+
+When a pallet adds per-account storage (maps keyed by `AccountId`, or per-account entries in a shared structure), it must also clean that storage up when the account is deregistered.
+Wire the cleanup into the runtime's `frame_system` `OnKilledAccount` handler.
+
 ## Testing Strategy
 
 ### Unit Tests (pallet-level)
