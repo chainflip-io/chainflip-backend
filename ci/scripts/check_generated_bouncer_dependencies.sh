@@ -16,13 +16,13 @@ echo -e "Generating event schemas..."
 cd bouncer && ./commands/generate_event_schemas.ts
 cd ..
 
-# Check whether a event subdirectory is dirty
+# Check whether the event subdirectory is dirty
 EVENTS_DIR="bouncer/generated/events"
 
 if [[ -n "$(git status --porcelain -- "$EVENTS_DIR")" ]]; then
   echo "ERROR: Event schemas in '$EVENTS_DIR' are not up to date! Please run ./commands/generate_event_schemas.ts to regenerate schemas and commit them."
   echo ""
-  echo "The following schema changes have not been comitted:"
+  echo "The following schema changes have not been committed:"
   echo ""
   git status -- "$EVENTS_DIR"
   exit 1
@@ -36,13 +36,13 @@ echo -e "Generating chaintypes (dedot)..."
 cd bouncer && ./commands/generate_chaintypes.ts
 cd ..
 
-# Check whether a event subdirectory is dirty
+# Check whether the chaintypes subdirectory is dirty
 CHAINTYPES_DIR="bouncer/generated/chaintypes"
 
 if [[ -n "$(git status --porcelain -- "$CHAINTYPES_DIR")" ]]; then
-  echo "ERROR: Event schemas in '$CHAINTYPES_DIR' are not up to date! Please run ./commands/generate_chaintypes.ts to regenerate dedot chaintypes and commit them."
+  echo "ERROR: Chaintypes in '$CHAINTYPES_DIR' are not up to date! Please run ./commands/generate_chaintypes.ts to regenerate dedot chaintypes and commit them."
   echo ""
-  echo "The following chaintype changes have not been comitted:"
+  echo "The following chaintype changes have not been committed:"
   echo ""
   git status -- "$CHAINTYPES_DIR"
   exit 1
