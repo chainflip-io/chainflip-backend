@@ -337,7 +337,10 @@ impl VoterApi<AssethubFeeTracking> for AssethubVoter {
 				tips.sort();
 				tips.get(tips.len().saturating_sub(1) / 2).cloned().unwrap_or_default()
 			},
-			runtime_version: self.client.runtime_version(None).await?,
+			runtime_version: self
+				.client
+				.runtime_version(Some(latest_block_header.block_hash))
+				.await?,
 		}))
 	}
 }
