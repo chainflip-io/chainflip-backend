@@ -195,11 +195,17 @@ where
 						for (election_identifier, _) in votes.iter() {
 							self.log(Level::DEBUG, &format!("Submitting vote for election: '{:?}'", election_identifier));
 						}
-						// Handed to the batcher rather than submitted here, so that one extrinsic
-						// carries this block's votes for every elections instance.
-						self.vote_batcher.send(self.voter_name, Instance::votes(
-							BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/),
-						));
+						let votes = BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/);
+
+						if self.vote_batcher.batching_enabled() {
+							self.vote_batcher.send(self.voter_name, Instance::votes(votes));
+						} else {
+							self.state_chain_client.submit_signed_extrinsic(
+								pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::vote {
+									authority_votes: Box::new(votes),
+								},
+							).await;
+						}
 					}
 				}).await;
 			},

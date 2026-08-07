@@ -101,6 +101,17 @@ export interface ChainErrors extends GenericChainErrors {
     FailedToProcessFee: GenericPalletError;
 
     /**
+     * The caller is not in the current authority set, so cannot vote in elections.
+     **/
+    NotAnAuthority: GenericPalletError;
+
+    /**
+     * Vote batching is disabled; vote through the per-instance
+     * `pallet_cf_elections::Call::vote` extrinsic instead.
+     **/
+    VoteBatchingDisabled: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;

@@ -699,6 +699,10 @@ fn ensure_governance_origin_checks() {
 			sp_runtime::traits::BadOrigin,
 		);
 		assert_noop!(
+			Environment::update_pallet_config(non_gov_origin.clone(), Default::default()),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
 			Environment::force_recover_sol_nonce(non_gov_origin, Default::default(), None),
 			sp_runtime::traits::BadOrigin,
 		);
@@ -1258,6 +1262,46 @@ mod submit_elections_votes {
 
 			assert!(submit(123, vec![MockInstanceVotes::accept(1)]).is_err());
 			assert!(MockElectionInstances::<Test>::recorded_votes().is_empty());
+		});
+	}
+
+	#[test]
+	fn the_switch_closes_the_batched_path() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			assert_ok!(Environment::update_pallet_config(
+				OriginTrait::root(),
+				vec![crate::PalletConfigUpdate::ElectionVoteBatching { disabled: true }]
+					.try_into()
+					.unwrap(),
+			));
+
+			// The flip is in the event stream, so an operator can see when it happened without
+			// decoding the governance proposal that carried it.
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Environment(Event::PalletConfigUpdated {
+					update: crate::PalletConfigUpdate::ElectionVoteBatching { disabled: true },
+				})
+			);
+
+			// Rejected before reaching any instance: an engine that has not yet seen the switch
+			// must not be able to keep using the batched path.
+			assert_err!(
+				submit(AUTHORITY, vec![MockInstanceVotes::accept(1)]),
+				Error::<Test>::VoteBatchingDisabled
+			);
+			assert!(MockElectionInstances::<Test>::recorded_votes().is_empty());
+
+			assert_ok!(Environment::update_pallet_config(
+				OriginTrait::root(),
+				vec![crate::PalletConfigUpdate::ElectionVoteBatching { disabled: false }]
+					.try_into()
+					.unwrap(),
+			));
+			assert_ok!(submit(AUTHORITY, vec![MockInstanceVotes::accept(1)]));
+			assert_eq!(MockElectionInstances::<Test>::recorded_votes(), vec![(0, 1, 1)]);
 		});
 	}
 

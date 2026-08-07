@@ -64,7 +64,7 @@ use frame_support::{
 	traits::{IsSubType, StorageVersion, UnfilteredDispatchable},
 	unsigned::{TransactionValidity, ValidateUnsigned},
 };
-use frame_system::pallet_prelude::*;
+use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
 pub use pallet::*;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
@@ -110,6 +110,15 @@ pub enum SafeModeUpdate<T: Config> {
 	CodeGreen,
 	/// Schrödinger, meet Cat. It's complicated.
 	CodeAmber(T::RuntimeSafeMode),
+}
+
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
+pub enum PalletConfigUpdate {
+	/// Stop validators batching their election votes into one extrinsic, or let them resume.
+	/// See [`ElectionVoteBatchingDisabled`].
+	ElectionVoteBatching { disabled: bool },
 }
 
 #[frame_support::pallet]
@@ -220,6 +229,9 @@ pub mod pallet {
 		FailedToProcessFee,
 		/// The caller is not in the current authority set, so cannot vote in elections.
 		NotAnAuthority,
+		/// Vote batching is disabled; vote through the per-instance
+		/// `pallet_cf_elections::Call::vote` extrinsic instead.
+		VoteBatchingDisabled,
 	}
 
 	#[pallet::pallet]
@@ -434,6 +446,10 @@ pub mod pallet {
 	/// Current Chainflip's network name
 	pub type ChainflipNetworkName<T> = StorageValue<_, ChainflipNetwork, ValueQuery>;
 
+	#[pallet::storage]
+	/// Whether validators should stop batching their all election instances votes or not
+	pub type ElectionVoteBatchingDisabled<T> = StorageValue<_, bool, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -497,6 +513,10 @@ pub mod pallet {
 		ElectionInstanceVotesRejected {
 			instance: u32,
 			error: DispatchError,
+		},
+		/// A configuration item for this pallet was updated by governance.
+		PalletConfigUpdated {
+			update: PalletConfigUpdate,
 		},
 	}
 
@@ -838,28 +858,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Record a validator's election votes across every `pallet-cf-elections` instance in
-		/// one extrinsic.
-		#[pallet::call_index(14)]
-		#[pallet::weight((
-			T::ElectionInstances::authorise_voter_weight()
-				.saturating_add(T::ElectionInstances::vote_all_weight(votes)),
-			DispatchClass::Operational,
-		))]
-		pub fn submit_elections_votes(
-			origin: OriginFor<T>,
-			// Boxed to keep `RuntimeCall` small.
-			votes: Box<<T::ElectionInstances as ElectionInstancesVoting<T>>::Votes>,
-		) -> DispatchResult {
-			let context = authorise_voter::<T>(origin)?.ok_or(Error::<T>::NotAnAuthority)?;
-
-			for (instance, error) in T::ElectionInstances::vote_all(&context, *votes) {
-				Self::deposit_event(Event::<T>::ElectionInstanceVotesRejected { instance, error });
-			}
-
-			Ok(())
-		}
-
 		/// Manually witnesses the current Tron block number to complete the pending vault
 		/// rotation.
 		#[pallet::call_index(12)]
@@ -898,6 +896,53 @@ pub mod pallet {
 			T::BscVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::BscInitialized);
+
+			Ok(())
+		}
+
+		/// Record a validator's election votes across every `pallet-cf-elections` instance in
+		/// one extrinsic.
+		#[pallet::call_index(14)]
+		#[pallet::weight((
+			T::ElectionInstances::authorise_voter_weight()
+				.saturating_add(T::ElectionInstances::vote_all_weight(votes)),
+			DispatchClass::Operational,
+		))]
+		pub fn submit_elections_votes(
+			origin: OriginFor<T>,
+			// Boxed to keep `RuntimeCall` small.
+			votes: Box<<T::ElectionInstances as ElectionInstancesVoting<T>>::Votes>,
+		) -> DispatchResult {
+			ensure!(!ElectionVoteBatchingDisabled::<T>::get(), Error::<T>::VoteBatchingDisabled);
+
+			let context = authorise_voter::<T>(origin)?.ok_or(Error::<T>::NotAnAuthority)?;
+
+			for (instance, error) in T::ElectionInstances::vote_all(&context, *votes) {
+				Self::deposit_event(Event::<T>::ElectionInstanceVotesRejected { instance, error });
+			}
+
+			Ok(())
+		}
+
+		/// Apply a list of configuration updates to the pallet.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(15)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<100>>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			for update in updates {
+				match update {
+					PalletConfigUpdate::ElectionVoteBatching { disabled } => {
+						ElectionVoteBatchingDisabled::<T>::set(disabled);
+					},
+				}
+				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
+			}
 
 			Ok(())
 		}
