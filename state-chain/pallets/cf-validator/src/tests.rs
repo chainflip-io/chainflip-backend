@@ -2200,6 +2200,11 @@ mod delegation {
 			MockFlip::credit_funds(&ALICE, BID);
 			assert_noop!(
 				ValidatorPallet::undelegate(OriginTrait::signed(ALICE), DelegationAmount::Max),
+				BadOrigin
+			);
+			assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(&ALICE));
+			assert_noop!(
+				ValidatorPallet::undelegate(OriginTrait::signed(ALICE), DelegationAmount::Max),
 				Error::<Test>::AccountIsNotDelegating
 			);
 			assert_ok!(ValidatorPallet::register_as_operator(
