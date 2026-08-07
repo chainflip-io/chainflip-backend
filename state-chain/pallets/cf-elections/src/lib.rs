@@ -2074,9 +2074,6 @@ pub mod pallet {
 			unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,
-			// Whether `authority` is in `ContributingAuthorities`. An argument rather than a
-			// storage read because `vote` has already established it, and would otherwise
-			// re-read it for every vote in the extrinsic.
 			is_contributing_authority: bool,
 			f: F,
 		) -> Result<R, CorruptStorageError> {
