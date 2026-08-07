@@ -488,8 +488,6 @@ pub mod pallet {
 		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 
-			T::RefundAddressRegistry::clear_refund_addresses(&account_id);
-
 			T::AccountRoleRegistry::deregister_as_liquidity_provider(&account_id)?;
 
 			Ok(())

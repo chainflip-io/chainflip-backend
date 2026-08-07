@@ -604,7 +604,7 @@ mod benchmarks {
 	fn undelegate() {
 		let accounts = <T as Chainflip>::AccountRoleRegistry::generate_whitelisted_callers(vec![
 			AccountRole::Operator,
-			AccountRole::Unregistered,
+			AccountRole::LiquidityProvider,
 		])
 		.unwrap();
 		let (operator, delegator) = (accounts[0].clone(), accounts[1].clone());
