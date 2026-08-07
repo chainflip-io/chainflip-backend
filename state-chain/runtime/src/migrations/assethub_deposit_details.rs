@@ -21,11 +21,12 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiary, ChannelId, DcaParameters,
-	PolkadotBlockNumber, TxId,
+	EpochIndex, PolkadotBlockNumber, TxId,
 };
 use cf_runtime_utilities::{log_or_panic, NoopRuntimeUpgrade};
+use codec::{DecodeAll, Encode};
 use frame_support::{
-	migrations::VersionedMigration, pallet_prelude::ValueQuery, storage_alias,
+	migrations::VersionedMigration, pallet_prelude::ValueQuery, storage::unhashed, storage_alias,
 	traits::UncheckedOnRuntimeUpgrade, weights::Weight, Twox64Concat,
 };
 use pallet_cf_ingress_egress::{
@@ -34,7 +35,7 @@ use pallet_cf_ingress_egress::{
 };
 
 #[cfg(feature = "try-runtime")]
-use codec::{Decode, Encode};
+use codec::Decode;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
@@ -135,6 +136,23 @@ mod old {
 		pub amount: u128,
 		pub deposit_details: u32,
 	}
+
+	#[derive(Debug, Encode, Decode)]
+	pub enum RuntimeCall {
+		#[codec(index = 51)]
+		AssethubIngressEgress(AssethubIngressEgressCall),
+	}
+
+	#[derive(Debug, Encode, Decode)]
+	pub enum AssethubIngressEgressCall {
+		#[codec(index = 2)]
+		ProcessDeposits {
+			deposit_witnesses: Vec<DepositWitness>,
+			block_height: PolkadotBlockNumber,
+		},
+	}
+
+	pub type WitnessedCall = (EpochIndex, RuntimeCall, pallet_cf_witnesser::CallHash);
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct VaultDepositWitness {
@@ -257,15 +275,52 @@ fn migrate_vault_deposit_witness(
 	}
 }
 
+fn clear_deferred_witness_calls() -> bool {
+	let storage_key =
+		pallet_cf_witnesser::WitnessedCallsScheduledForDispatch::<Runtime>::hashed_key();
+	let Some(encoded_calls) = unhashed::get_raw(&storage_key) else {
+		log::info!(
+			"No WitnessedCallsScheduledForDispatch have to be cleared for the Assethub migration",
+		);
+		return false
+	};
+
+	log::warn!(
+		"Clearing WitnessedCallsScheduledForDispatch during Assethub migration. Raw SCALE storage: 0x{}",
+		hex::encode(&encoded_calls)
+	);
+
+	match Vec::<old::WitnessedCall>::decode_all(&mut encoded_calls.as_slice()) {
+		Ok(calls) => {
+			for call in calls {
+				log::warn!(
+					"Clearing deferred Assethub witness call. SCALE: 0x{}, decoded: {:?}",
+					hex::encode(call.encode()),
+					call
+				);
+			}
+		},
+		Err(error) => log::warn!(
+			"Unable to decode WitnessedCallsScheduledForDispatch as legacy Assethub process_deposits calls: {:?}",
+			error
+		),
+	}
+
+	unhashed::kill(&storage_key);
+	true
+}
+
 impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("Migrating Assethub ingress-egress deposit details");
+		let cleared_deferred_witness_calls = clear_deferred_witness_calls() as u64;
 
 		pallet_cf_chain_tracking::CurrentChainState::<Runtime, AssethubInstance>::mutate(
 			|maybe_chain_state| {
 				if let Some(chain_state) = maybe_chain_state {
 					chain_state.block_height =
 						Assethub::block_witness_root(chain_state.block_height);
+					log::info!("Set assethub block height to {}", chain_state.block_height);
 				} else {
 					log_or_panic!("Assethub current chain state must exist");
 				}
@@ -282,6 +337,7 @@ impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 			.saturating_add(pending_deposit_channels.len())
 			.saturating_add(pending_vaults.len()) as u64;
 
+		log::info!("Migrating {} PendingPrewitnessedDeposits", pending_prewitnessed.len());
 		for (state_chain_block, entries) in pending_prewitnessed {
 			pallet_cf_ingress_egress::PendingPrewitnessedDeposits::<
 				Runtime,
@@ -292,6 +348,7 @@ impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 			);
 		}
 
+		log::info!("Migrating {} PendingDepositChannelDeposits", pending_deposit_channels.len());
 		for (state_chain_block, entries) in pending_deposit_channels {
 			pallet_cf_ingress_egress::PendingDepositChannelDeposits::<
 				Runtime,
@@ -307,6 +364,7 @@ impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 			);
 		}
 
+		log::info!("Migrating {} PendingVaultDeposits", pending_vaults.len());
 		for (state_chain_block, entries) in pending_vaults {
 			pallet_cf_ingress_egress::PendingVaultDeposits::<Runtime, AssethubInstance>::insert(
 				state_chain_block,
@@ -328,9 +386,14 @@ impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 			log_or_panic!("Assethub failed transaction rejections must be empty");
 		}
 
+		log::info!("Cleared out ScheduledTransactionsForRejection and FailedRejections.");
+
 		DbWeight::get().reads_writes(
-			pending_count.saturating_add(3),
-			pending_count.saturating_mul(2).saturating_add(3),
+			pending_count.saturating_add(4),
+			pending_count
+				.saturating_mul(2)
+				.saturating_add(3)
+				.saturating_add(cleared_deferred_witness_calls),
 		)
 	}
 
@@ -430,7 +493,47 @@ impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 				.is_empty(),
 			"Assethub failed transaction rejections must remain empty"
 		);
+		frame_support::ensure!(
+			unhashed::get_raw(
+				&pallet_cf_witnesser::WitnessedCallsScheduledForDispatch::<Runtime>::hashed_key()
+			)
+			.is_none(),
+			"Deferred legacy witness calls were not cleared"
+		);
 
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn clears_deferred_legacy_assethub_witness_calls() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let storage_key =
+				pallet_cf_witnesser::WitnessedCallsScheduledForDispatch::<Runtime>::hashed_key();
+			let calls = vec![(
+				7,
+				old::RuntimeCall::AssethubIngressEgress(
+					old::AssethubIngressEgressCall::ProcessDeposits {
+						deposit_witnesses: vec![old::DepositWitness {
+							deposit_address: cf_chains::dot::PolkadotAccountId([1; 32]),
+							asset: HubAsset::HubDot,
+							amount: 42,
+							deposit_details: 3,
+						}],
+						block_height: 10,
+					},
+				),
+				pallet_cf_witnesser::CallHash([2; 32]),
+			)];
+			unhashed::put_raw(&storage_key, &calls.encode());
+
+			assert!(clear_deferred_witness_calls());
+			assert!(unhashed::get_raw(&storage_key).is_none());
+			assert!(!clear_deferred_witness_calls());
+		});
 	}
 }
