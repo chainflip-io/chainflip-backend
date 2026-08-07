@@ -20,7 +20,7 @@ use frame_support::{
 	Parameter,
 };
 
-use super::{AuthorityVote, VoteComponents, VoteStorage};
+use super::{AuthorityVote, ComponentStorageKind, VoteComponents, VoteStorage};
 
 use crate::{CorruptStorageError, SharedDataHash};
 
@@ -56,6 +56,9 @@ impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for MonotonicChan
 			bitmap_component: Some(partial_vote.value),
 			individual_component: Some(((), partial_vote.block)),
 		})
+	}
+	fn component_storage_kind(_partial_vote: &Self::PartialVote) -> ComponentStorageKind {
+		ComponentStorageKind::Both
 	}
 	fn components_into_authority_vote<
 		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
