@@ -1322,10 +1322,7 @@ pub mod pallet {
 				AccountRole::Unregistered =>
 					T::AccountRoleRegistry::register_as_liquidity_provider(&delegator)?,
 				AccountRole::LiquidityProvider => {},
-				other => {
-					log::error!("DEBUG role was: {:?}", other);
-					return Err(Error::<T>::NotLiquidityProvider.into())
-				},
+				_ => return Err(Error::<T>::NotLiquidityProvider.into()),
 			}
 
 			ensure!(
@@ -1407,20 +1404,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			decrease: DelegationAmount<T::Amount>,
 		) -> DispatchResult {
-			let delegator = ensure_signed(origin)?;
+			let delegator = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			let (current_operator, current_max_bid) =
 				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
-
-			// An account with an entry in `DelegationChoice` can only have got there via
-			// `delegate`, which requires (and enforces) the Liquidity Provider role.
-			ensure!(
-				T::AccountRoleRegistry::has_account_role(
-					&delegator,
-					AccountRole::LiquidityProvider
-				),
-				Error::<T>::NotLiquidityProvider
-			);
 
 			let new_max_bid = match decrease {
 				DelegationAmount::Some(decr) => {
@@ -1455,9 +1442,7 @@ pub mod pallet {
 
 				// Mirrors the auto-registration in `delegate`. Best-effort: accounts that also
 				// hold other LP state (open orders, balances, etc.) fail the deregistration
-				// check and simply remain registered as a Liquidity Provider. The
-				// `#[transactional]` override rolls back any partial cleanup on failure, so
-				// discarding the error here is safe.
+				// check and simply remain registered as a Liquidity Provider.
 				let _ = T::AccountRoleRegistry::deregister_as_liquidity_provider(&delegator);
 			} else {
 				DelegationChoice::<T>::mutate(&delegator, |choice| {

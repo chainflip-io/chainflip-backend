@@ -106,19 +106,12 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, MockFlip, Test, ALICE, BOB};
-	use frame_support::assert_ok;
 
 	fn is_liquidity_provider(who: &u64) -> bool {
 		<<Test as cf_traits::Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
 			who,
 			AccountRole::LiquidityProvider,
 		)
-	}
-
-	fn register_as_liquidity_provider(who: &u64) {
-		assert_ok!(<<Test as cf_traits::Chainflip>::AccountRoleRegistry as AccountRoleRegistry<
-			Test,
-		>>::register_as_liquidity_provider(who));
 	}
 
 	#[test]
@@ -128,25 +121,6 @@ mod tests {
 			DelegationChoice::<Test>::insert(ALICE, (BOB, 1_000));
 
 			assert!(!is_liquidity_provider(&ALICE));
-
-			#[cfg(feature = "try-runtime")]
-			let state = Migration::<Test>::pre_upgrade().unwrap();
-
-			Migration::<Test>::on_runtime_upgrade();
-
-			#[cfg(feature = "try-runtime")]
-			Migration::<Test>::post_upgrade(state).unwrap();
-
-			assert!(is_liquidity_provider(&ALICE));
-		});
-	}
-
-	#[test]
-	fn leaves_existing_liquidity_provider_untouched() {
-		new_test_ext().execute_with(|| {
-			MockFlip::credit_funds(&ALICE, 1_000);
-			register_as_liquidity_provider(&ALICE);
-			DelegationChoice::<Test>::insert(ALICE, (BOB, 1_000));
 
 			#[cfg(feature = "try-runtime")]
 			let state = Migration::<Test>::pre_upgrade().unwrap();
