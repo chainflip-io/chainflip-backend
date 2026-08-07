@@ -701,6 +701,11 @@ pub mod pallet {
 	pub type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
 
+	struct ContributingAuthoritiesMask<T, I> {
+		mask: Vec<bool>,
+		_phantom: core::marker::PhantomData<(T, I)>,
+	}
+
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
 	/// this is None, the pallet is considered uninitialized.
 	#[pallet::storage]
@@ -870,10 +875,31 @@ pub mod pallet {
 
 						let mut shared_data_cache = BTreeMap::new();
 
+						// One dispatch context read for the whole election, rather than a storage
+						// lookup per authority. See `ContributingAuthoritiesMask`; absent means
+						// "not published", not "nobody is contributing".
+						let contributing_mask =
+							frame_support::dispatch_context::with_context::<
+								ContributingAuthoritiesMask<T, I>,
+								_,
+							>(|cached| cached.get().map(|cached| cached.mask.clone()))
+							.flatten();
+
+						// The mask is positional, so it lines up only while it describes the same
+						// authority set we are about to iterate over.
+						debug_assert!(
+							contributing_mask
+								.as_ref()
+								.is_none_or(|mask| mask.len() == current_authorities_count as usize),
+							"ContributingAuthoritiesMask does not match the current authority set",
+						);
+
 						let votes = current_authorities
 							.into_iter()
-							.map(|validator_id| {
+							.enumerate()
+							.map(|(authority_index, validator_id)| {
 								(
+									authority_index,
 									VoteComponents {
 										bitmap_component: bitmap_components
 											.get(&validator_id)
@@ -884,8 +910,13 @@ pub mod pallet {
 									validator_id,
 								)
 							})
-							.map(|(vote_components, validator_id)| {
-								if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
+							.map(|(authority_index, vote_components, validator_id)| {
+								if contributing_mask
+									.as_ref()
+									.and_then(|mask| mask.get(authority_index).copied())
+									.unwrap_or_else(|| {
+										ContributingAuthorities::<T, I>::contains_key(&validator_id)
+									}) {
 									match <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as
 								VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash|
 							{
@@ -1727,44 +1758,64 @@ pub mod pallet {
 							Self::deposit_event(Event::<T, I>::CorruptStorage);
 						},
 					ElectionPalletStatus::Running => {
-						let _ = Self::with_election_identifiers(|election_identifiers| {
-							if Into::<sp_core::U256>::into(block_number) % BLOCKS_BETWEEN_CLEANUP ==
-								sp_core::U256::zero()
-							{
-								let minimum_election_identifiers = election_identifiers
-									.iter()
-									.copied()
-									.map(|election_identifier| {
-										*election_identifier.unique_monotonic()
-									})
-									.min()
-									.unwrap_or_default();
-								let mut settings_boundaries =
-									ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
-								settings_boundaries.sort();
-								for setting_boundary in &settings_boundaries
-										[..settings_boundaries[..]
-											.partition_point(|&setting_boundary| {
-												setting_boundary <= minimum_election_identifiers
-											})
-											.saturating_sub(1) /*Keep the latest settings lower than the minimum election identifier, i.e. the settings referenced by the election with the minimum election identifier*/]
-								{
-									ElectoralSettings::<T, I>::remove(setting_boundary);
-								}
+						frame_support::dispatch_context::run_in_context(|| {
+							// Publish who is contributing, so that the consensus checks below don't
+							// each work it out again. The cleanup further down is the only thing
+							// that writes to `ContributingAuthorities` during the hook, and
+							// it only removes authorities that have left the current
+							// authority set, so it cannot invalidate this.
+							frame_support::dispatch_context::with_context::<
+								ContributingAuthoritiesMask<T, I>,
+								_,
+							>(|cached| {
+								cached.set(ContributingAuthoritiesMask {
+									mask: T::EpochInfo::current_authorities()
+										.iter()
+										.map(ContributingAuthorities::<T, I>::contains_key)
+										.collect(),
+									_phantom: Default::default(),
+								})
+							});
 
-								let current_authorities = T::EpochInfo::current_authorities();
-								for validator in
-									ContributingAuthorities::<T, I>::iter_keys().collect::<Vec<_>>()
+							let _ = Self::with_election_identifiers(|election_identifiers| {
+								if Into::<sp_core::U256>::into(block_number) %
+									BLOCKS_BETWEEN_CLEANUP == sp_core::U256::zero()
 								{
-									if !current_authorities.contains(&validator) {
-										ContributingAuthorities::<T, I>::remove(validator);
+									let minimum_election_identifiers = election_identifiers
+										.iter()
+										.copied()
+										.map(|election_identifier| {
+											*election_identifier.unique_monotonic()
+										})
+										.min()
+										.unwrap_or_default();
+									let mut settings_boundaries =
+										ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
+									settings_boundaries.sort();
+									for setting_boundary in &settings_boundaries
+											[..settings_boundaries[..]
+												.partition_point(|&setting_boundary| {
+													setting_boundary <= minimum_election_identifiers
+												})
+												.saturating_sub(1) /*Keep the latest settings lower than the minimum election identifier, i.e. the settings referenced by the election with the minimum election identifier*/]
+									{
+										ElectoralSettings::<T, I>::remove(setting_boundary);
+									}
+
+									let current_authorities = T::EpochInfo::current_authorities();
+									for validator in ContributingAuthorities::<T, I>::iter_keys()
+										.collect::<Vec<_>>()
+									{
+										if !current_authorities.contains(&validator) {
+											ContributingAuthorities::<T, I>::remove(validator);
+										}
 									}
 								}
-							}
 
-							T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
+								T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
 
-							Ok(())
+								Ok(())
+							});
 						});
 					},
 				}
