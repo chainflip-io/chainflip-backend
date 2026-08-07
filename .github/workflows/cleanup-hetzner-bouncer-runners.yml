@@ -1,0 +1,23 @@
+name: Cleanup stale Hetzner bouncer runners
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 10
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Delete stale runners 🧹
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+        run: ./ci/scripts/manage_hetzner_bouncer_runner.sh cleanup-stale 10800

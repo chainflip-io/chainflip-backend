@@ -96,6 +96,9 @@ jobs:
   test-benchmarks:
     needs: [build-benchmarks]
     uses: ./.github/workflows/_41_test_benchmarks.yml
+    secrets:
+      CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+      CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
   upgrade-check:
     needs: [build-try-runtime]
     uses: ./.github/workflows/upgrade-test.yml

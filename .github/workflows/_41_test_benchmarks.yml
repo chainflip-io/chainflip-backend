@@ -1,14 +1,52 @@
 on:
   workflow_call:
+    secrets:
+      CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN:
+        required: true
+      CF_HETZNER_API_TOKEN:
+        required: true
 
 env:
   FORCE_COLOR: 1
 
 jobs:
+  provision-benchmarks-runner:
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 15
+    outputs:
+      runner-label: ${{ steps.provision.outputs.runner-label }}
+      runner-name: ${{ steps.provision.outputs.runner-name }}
+      server-id: ${{ steps.provision.outputs.server-id }}
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Provision ephemeral Hetzner runner ☁️
+        id: provision
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+        run: |
+          runner_name="bouncer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-benchmarks"
+          runner_label="${runner_name}-cpx52"
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh create "$runner_name" "$runner_label"
+
   test-benchmarks:
-    runs-on: hetzner
+    needs: [provision-benchmarks-runner]
+    # Run even when provisioning fails, so that a provisioning failure is reported by
+    # this job rather than hidden behind a skip. A skipped job counts as a passing
+    # required check, which would hide provisioning failures.
+    if: ${{ !cancelled() }}
+    # The ephemeral runner label is unique per run, so it identifies the runner on its own.
+    # Fall back to a hosted runner when there is none to target, otherwise the job waits
+    # on a label that matches nothing until it times out.
+    runs-on: ${{ needs.provision-benchmarks-runner.result == 'success' && needs.provision-benchmarks-runner.outputs.runner-label || 'namespace-profile-default-light' }}
     timeout-minutes: 60
     steps:
+      - name: Fail if runner provisioning failed 🚨
+        if: ${{ needs.provision-benchmarks-runner.result != 'success' }}
+        run: exit 1
+
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
@@ -24,3 +62,22 @@ jobs:
           --binary ./chainflip-node
           --steps 2
           --repetitions 1
+
+  destroy-benchmarks-runner:
+    if: ${{ always() && needs.provision-benchmarks-runner.outputs.runner-name != '' }}
+    needs: [provision-benchmarks-runner, test-benchmarks]
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 10
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Destroy ephemeral Hetzner runner 🧹
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+          CF_BOUNCER_RUNNER_NAME: ${{ needs.provision-benchmarks-runner.outputs.runner-name }}
+          CF_BOUNCER_SERVER_ID: ${{ needs.provision-benchmarks-runner.outputs.server-id }}
+        run: |
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy \
+            "$CF_BOUNCER_RUNNER_NAME" "$CF_BOUNCER_SERVER_ID"
