@@ -263,9 +263,6 @@ export const stateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMod
   keyManagerWitnessing: z.boolean(),
 });
 
-export const stateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectionsSafeMode =
-  z.object({ keyManagerWitnessing: z.boolean() });
-
 export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
   emissions: palletCfEmissionsPalletSafeMode,
   funding: palletCfFundingPalletSafeMode,
@@ -303,7 +300,6 @@ export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
   arbitrumElections: stateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumElectionsSafeMode,
   tronElections: stateChainRuntimeChainflipWitnessingTronElectionsTronElectionsSafeMode,
   bscElections: stateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMode,
-  assethubElections: stateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectionsSafeMode,
 });
 
 export const palletCfEnvironmentSafeModeUpdate = z.discriminatedUnion('__kind', [
