@@ -1,7 +1,7 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
-import { runWithTimeout } from 'shared/utils';
+import { runWithTimeout, sleep } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
 import { AsyncQueue } from 'shared/utils/async_queue';
 import { appendFileSync } from 'node:fs';
@@ -33,7 +33,15 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
         cache.set(cacheKey, disposablePromise);
       }
 
-      const disposable = await disposablePromise;
+      let disposable: T;
+      try {
+        disposable = await disposablePromise;
+      } catch (error) {
+        if (cache.get(cacheKey) === disposablePromise) {
+          cache.delete(cacheKey);
+        }
+        throw error;
+      }
 
       connections += 1;
 
@@ -70,41 +78,102 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
 
 export type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
 
+const substrateTypes = {
+  EncodedAddress: {
+    _enum: {
+      Eth: '[u8; 20]',
+      Arb: '[u8; 20]',
+      Dot: '[u8; 32]',
+      Btc: 'Vec<u8>',
+    },
+  },
+  EthEncodingType: {
+    _enum: ['PersonalSign', 'Eip712'],
+  },
+  SolEncodingType: {
+    _enum: ['Domain'],
+  },
+  EncodingType: {
+    _enum: {
+      Eth: 'EthEncodingType',
+      Sol: 'SolEncodingType',
+    },
+  },
+  SignatureData: {
+    _enum: {
+      Solana: '(SolSignature, SolAddress, SolEncodingType)',
+      Ethereum: '(EthereumSignature, EthereumAddress, EthEncodingType)',
+    },
+  },
+};
+
+const connectSubstrateApiWithRetry = async (
+  endpoint: string,
+  retryOptions: {
+    attemptTimeoutSeconds: number;
+    retryIntervalMs: number;
+    timeoutMs: number;
+  },
+): Promise<ApiPromise> => {
+  const startedAt = Date.now();
+  let attempt = 0;
+  let lastLogAt = 0;
+
+  for (;;) {
+    attempt += 1;
+    const provider = new WsProvider(endpoint, false);
+
+    try {
+      const apiPromise = ApiPromise.create({
+        provider,
+        noInitWarn: true,
+        throwOnConnect: true,
+        types: substrateTypes,
+      });
+
+      await provider.connect();
+      return await runWithTimeout(
+        apiPromise,
+        retryOptions.attemptTimeoutSeconds,
+        undefined,
+        `Initializing Substrate API at ${endpoint}`,
+      );
+    } catch (error) {
+      await provider.disconnect().catch(() => null);
+
+      const failedAt = Date.now();
+      const totalElapsedMs = failedAt - startedAt;
+      if (totalElapsedMs >= retryOptions.timeoutMs) {
+        throw new Error(
+          `Failed to initialize Substrate API at ${endpoint} after ${attempt} attempts`,
+          { cause: error },
+        );
+      }
+
+      if (attempt === 1 || failedAt - lastLogAt >= 30_000) {
+        const errorMessage =
+          typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message)
+            : String(error);
+        console.warn(
+          `Waiting for Substrate API at ${endpoint} (${attempt} attempts, ${Math.round(totalElapsedMs / 1_000)}s): ${errorMessage}`,
+        );
+        lastLogAt = failedAt;
+      }
+
+      await sleep(retryOptions.retryIntervalMs);
+    }
+  }
+};
+
 // It is important to cache WS connections because nodes seem to have a
 // limit on how many can be opened at the same time (from the same IP presumably)
 const getCachedSubstrateApi = (endpoint: string) =>
   getCachedDisposable(async (): Promise<DisposableApiPromise> => {
-    const apiPromise = await ApiPromise.create({
-      provider: new WsProvider(endpoint),
-      noInitWarn: true,
-      types: {
-        EncodedAddress: {
-          _enum: {
-            Eth: '[u8; 20]',
-            Arb: '[u8; 20]',
-            Dot: '[u8; 32]',
-            Btc: 'Vec<u8>',
-          },
-        },
-        EthEncodingType: {
-          _enum: ['PersonalSign', 'Eip712'],
-        },
-        SolEncodingType: {
-          _enum: ['Domain'],
-        },
-        EncodingType: {
-          _enum: {
-            Eth: 'EthEncodingType',
-            Sol: 'SolEncodingType',
-          },
-        },
-        SignatureData: {
-          _enum: {
-            Solana: '(SolSignature, SolAddress, SolEncodingType)',
-            Ethereum: '(EthereumSignature, EthereumAddress, EthEncodingType)',
-          },
-        },
-      },
+    const apiPromise = await connectSubstrateApiWithRetry(endpoint, {
+      attemptTimeoutSeconds: 60,
+      retryIntervalMs: 2_500,
+      timeoutMs: 5 * 60_000,
     });
 
     // HACK: Force the API to use Extrinsic v4.

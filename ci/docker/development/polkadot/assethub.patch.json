@@ -1,0 +1,53 @@
+{
+    "genesis": {
+        "runtimeGenesis": {
+            "patch": {
+                "session": {
+                    "keys": [
+                        [
+                            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+                            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+                            {
+                                "aura": "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+                            }
+                        ]
+                    ],
+                    "nonAuthorityKeys": []
+                },
+                "staking": {
+                    "devStakers": null
+                },
+                "assets": {
+                    "accounts": [
+                        [
+                            1337,
+                            "15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
+                            1000000000000
+                        ],
+                        [
+                            1984,
+                            "15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
+                            1000000000000
+                        ]
+                    ],
+                    "assets": [
+                        [
+                            1337,
+                            "15gBWkDE9vhLsikuCBidxxrVchu3smt628GTxHdtrysCYRYf",
+                            true,
+                            10000
+                        ],
+                        [
+                            1984,
+                            "15gBWkDE9vhLsikuCBidxxrVchu3smt628GTxHdtrysCYRYf",
+                            true,
+                            10000
+                        ]
+                    ],
+                    "metadata": [],
+                    "nextAssetId": null
+                }
+            }
+        }
+    }
+}
