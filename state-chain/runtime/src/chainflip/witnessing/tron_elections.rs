@@ -158,14 +158,24 @@ impl BlockWitnesserInstance for TronDepositChannelWitnessing {
 		.deposit_channel_witnessing_enabled
 	}
 
-	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
-		TronIngressEgress::active_deposit_channels_at(
-			height.saturating_forward(TRON_MAINNET_SAFETY_BUFFER as usize),
-			height,
-		)
-		.into_iter()
-		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
-		.collect()
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
+		// One pass over the deposit channels for the whole batch, rather than one per height.
+		let channels = TronIngressEgress::all_deposit_channels();
+		block_heights
+			.iter()
+			.map(|height| {
+				TronIngressEgress::filter_active_deposit_channels(
+					&channels,
+					height.saturating_forward(TRON_MAINNET_SAFETY_BUFFER as usize),
+					*height,
+				)
+				.into_iter()
+				.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
+				.collect()
+			})
+			.collect()
 	}
 
 	fn processed_up_to(up_to: ChainBlockNumberOf<Self::Chain>) {
@@ -198,8 +208,11 @@ impl BlockWitnesserInstance for TronVaultDepositWitnessing {
 		.vault_deposit_witnessing_enabled
 	}
 
-	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// Vault address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
@@ -230,8 +243,11 @@ impl BlockWitnesserInstance for TronKeyManagerWitnessing {
 		.key_manager_witnessing
 	}
 
-	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// KeyManager address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
@@ -308,51 +324,66 @@ impl
 			});
 		}
 
-		let chain_progress = TronBlockHeightWitnesserES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				TronBlockHeightWitnesserES,
-				RunnerStorageAccess<Runtime, TronInstance>,
-			>,
-		>(block_height_witnesser_identifiers, &Vec::from([()]))?;
+		let chain_progress = {
+			sp_tracing::enter_span!(sp_tracing::trace_span!("TronBlockHeightWitnesserES"));
+			TronBlockHeightWitnesserES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					TronBlockHeightWitnesserES,
+					RunnerStorageAccess<Runtime, TronInstance>,
+				>,
+			>(block_height_witnesser_identifiers, &Vec::from([()]))?
+		};
 
-		TronDepositChannelWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				TronDepositChannelWitnessingES,
-				RunnerStorageAccess<Runtime, TronInstance>,
-			>,
-		>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("TronDepositChannelWitnessingES"));
+			TronDepositChannelWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					TronDepositChannelWitnessingES,
+					RunnerStorageAccess<Runtime, TronInstance>,
+				>,
+			>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		}
 
-		TronVaultDepositWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				TronVaultDepositWitnessingES,
-				RunnerStorageAccess<Runtime, TronInstance>,
-			>,
-		>(vault_deposits_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("TronVaultDepositWitnessingES"));
+			TronVaultDepositWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					TronVaultDepositWitnessingES,
+					RunnerStorageAccess<Runtime, TronInstance>,
+				>,
+			>(vault_deposits_identifiers, &chain_progress.clone())?;
+		}
 
-		TronKeyManagerWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				TronKeyManagerWitnessingES,
-				RunnerStorageAccess<Runtime, TronInstance>,
-			>,
-		>(key_manager_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("TronKeyManagerWitnessingES"));
+			TronKeyManagerWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					TronKeyManagerWitnessingES,
+					RunnerStorageAccess<Runtime, TronInstance>,
+				>,
+			>(key_manager_identifiers, &chain_progress.clone())?;
+		}
 
-		TronLiveness::on_finalize::<
-			DerivedElectoralAccess<_, TronLiveness, RunnerStorageAccess<Runtime, TronInstance>>,
-		>(
-			liveness_identifiers,
-			&(
-				current_sc_block_number,
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, TronInstance>::get()
-					.unwrap()
-					.block_height
-					.saturating_sub(TRON_MAINNET_SAFETY_BUFFER.into()),
-				crate::Validator::current_epoch(),
-			),
-		)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("TronLiveness"));
+			TronLiveness::on_finalize::<
+				DerivedElectoralAccess<_, TronLiveness, RunnerStorageAccess<Runtime, TronInstance>>,
+			>(
+				liveness_identifiers,
+				&(
+					current_sc_block_number,
+					pallet_cf_chain_tracking::CurrentChainState::<Runtime, TronInstance>::get()
+						.unwrap()
+						.block_height
+						.saturating_sub(TRON_MAINNET_SAFETY_BUFFER.into()),
+					crate::Validator::current_epoch(),
+				),
+			)?;
+		}
 
 		Ok(())
 	}

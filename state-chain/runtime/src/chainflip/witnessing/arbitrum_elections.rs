@@ -154,17 +154,25 @@ impl BlockWitnesserInstance for ArbitrumDepositChannelWitnessing {
 		.deposit_channel_witnessing_enabled
 	}
 
-	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
-		let height = height.root();
-		ArbitrumIngressEgress::active_deposit_channels_at(
-			// we advance by SAFETY_BUFFER before checking opened_at
-			height.saturating_forward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize),
-			// we don't advance for expiry
-			*height,
-		)
-		.into_iter()
-		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
-		.collect()
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
+		// One pass over the deposit channels for the whole batch, rather than one per height.
+		let channels = ArbitrumIngressEgress::all_deposit_channels();
+		block_heights
+			.iter()
+			.map(|height| {
+				let height = height.root();
+				ArbitrumIngressEgress::filter_active_deposit_channels(
+					&channels,
+					height.saturating_forward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize),
+					*height,
+				)
+				.into_iter()
+				.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
+				.collect()
+			})
+			.collect()
 	}
 
 	fn processed_up_to(up_to: ChainBlockNumberOf<Self::Chain>) {
@@ -201,9 +209,10 @@ impl BlockWitnesserInstance for ArbitrumVaultDepositWitnessing {
 	}
 
 	fn election_properties(
-		_block_height: pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<Self::Chain>,
-	) {
+		block_heights: &[pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// Vault address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(
@@ -236,8 +245,11 @@ impl BlockWitnesserInstance for ArbitrumKeyManagerWitnessing {
 		.key_manager_witnessing
 	}
 
-	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// KeyManager address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
@@ -336,65 +348,83 @@ impl
 			});
 		}
 
-		let chain_progress = ArbitrumBlockHeightWitnesserES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumBlockHeightWitnesserES,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(block_height_witnesser_identifiers, &Vec::from([()]))?;
+		let chain_progress = {
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumBlockHeightWitnesserES"));
+			ArbitrumBlockHeightWitnesserES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumBlockHeightWitnesserES,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(block_height_witnesser_identifiers, &Vec::from([()]))?
+		};
 
-		ArbitrumDepositChannelWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumDepositChannelWitnessingES,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumDepositChannelWitnessingES"));
+			ArbitrumDepositChannelWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumDepositChannelWitnessingES,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		}
 
-		ArbitrumVaultDepositWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumVaultDepositWitnessingES,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(vault_deposits_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumVaultDepositWitnessingES"));
+			ArbitrumVaultDepositWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumVaultDepositWitnessingES,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(vault_deposits_identifiers, &chain_progress.clone())?;
+		}
 
-		ArbitrumKeyManagerWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumKeyManagerWitnessingES,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(key_manager_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumKeyManagerWitnessingES"));
+			ArbitrumKeyManagerWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumKeyManagerWitnessingES,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(key_manager_identifiers, &chain_progress.clone())?;
+		}
 
-		ArbitrumFeeTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumFeeTracking,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(fee_identifiers, &current_sc_block_number)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumFeeTracking"));
+			ArbitrumFeeTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumFeeTracking,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(fee_identifiers, &current_sc_block_number)?;
+		}
 
-		ArbitrumLiveness::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				ArbitrumLiveness,
-				RunnerStorageAccess<Runtime, ArbitrumInstance>,
-			>,
-		>(
-			liveness_identifiers,
-			&(
-				crate::System::block_number(),
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get()
-					.unwrap()
-					.block_height
-					// We subtract the safety buffer so we don't ask for liveness for blocks that
-					// could be reorged out.
-					.saturating_sub(ARBITRUM_MAINNET_SAFETY_BUFFER.into()),
-				crate::Validator::current_epoch(),
-			),
-		)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("ArbitrumLiveness"));
+			ArbitrumLiveness::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					ArbitrumLiveness,
+					RunnerStorageAccess<Runtime, ArbitrumInstance>,
+				>,
+			>(
+				liveness_identifiers,
+				&(
+					crate::System::block_number(),
+					pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get()
+						.unwrap()
+						.block_height
+						// We subtract the safety buffer so we don't ask for liveness for
+						// blocks that could be reorged out.
+						.saturating_sub(ARBITRUM_MAINNET_SAFETY_BUFFER.into()),
+					crate::Validator::current_epoch(),
+				),
+			)?;
+		}
 
 		Ok(())
 	}

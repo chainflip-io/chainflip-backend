@@ -190,7 +190,7 @@ pub mod pallet {
 		fmt::Debug,
 		vec::Vec,
 	};
-	use vote_storage::{AuthorityVote, VoteComponents, VoteStorage};
+	use vote_storage::{AuthorityVote, ComponentStorageKind, VoteComponents, VoteStorage};
 
 	pub const MAXIMUM_VOTES_PER_EXTRINSIC: u32 = 16;
 	const BLOCKS_BETWEEN_CLEANUP: u64 = 128;
@@ -701,6 +701,11 @@ pub mod pallet {
 	pub type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
 
+	struct ContributingAuthoritiesMask<T, I> {
+		mask: Vec<bool>,
+		_phantom: core::marker::PhantomData<(T, I)>,
+	}
+
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
 	/// this is None, the pallet is considered uninitialized.
 	#[pallet::storage]
@@ -860,6 +865,7 @@ pub mod pallet {
 						let bitmap_components = ElectionBitmapComponents::<T, I>::with(
 							epoch_index,
 							*unique_monotonic_identifier,
+							ComponentStorageKind::Both,
 							|election_bitmap_components| {
 								election_bitmap_components.get_all(&current_authorities)
 							},
@@ -868,10 +874,33 @@ pub mod pallet {
 							IndividualComponents::<T, I>::iter_prefix(unique_monotonic_identifier)
 								.collect::<BTreeMap<_, _>>();
 
+						let mut shared_data_cache = BTreeMap::new();
+
+						// One dispatch context read for the whole election, rather than a storage
+						// lookup per authority. See `ContributingAuthoritiesMask`; absent means
+						// "not published", not "nobody is contributing".
+						let contributing_mask =
+							frame_support::dispatch_context::with_context::<
+								ContributingAuthoritiesMask<T, I>,
+								_,
+							>(|cached| cached.get().map(|cached| cached.mask.clone()))
+							.flatten();
+
+						// The mask is positional, so it lines up only while it describes the same
+						// authority set we are about to iterate over.
+						debug_assert!(
+							contributing_mask
+								.as_ref()
+								.is_none_or(|mask| mask.len() == current_authorities_count as usize),
+							"ContributingAuthoritiesMask does not match the current authority set",
+						);
+
 						let votes = current_authorities
 							.into_iter()
-							.map(|validator_id| {
+							.enumerate()
+							.map(|(authority_index, validator_id)| {
 								(
+									authority_index,
 									VoteComponents {
 										bitmap_component: bitmap_components
 											.get(&validator_id)
@@ -882,15 +911,23 @@ pub mod pallet {
 									validator_id,
 								)
 							})
-							.map(|(vote_components, validator_id)| {
-								if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
+							.map(|(authority_index, vote_components, validator_id)| {
+								if contributing_mask
+									.as_ref()
+									.and_then(|mask| mask.get(authority_index).copied())
+									.unwrap_or_else(|| {
+										ContributingAuthorities::<T, I>::contains_key(&validator_id)
+									}) {
 									match <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as
 								VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash|
 							{
 								 	// We don't bother to check if the reference has expired, as if we have the
 									// data we may as well use it, even if it was provided after the shared data
 									// reference expired (But before the reference was cleaned up `on_finalize`).
-									Ok(SharedData::<T, I>::get(shared_data_hash))
+									Ok(shared_data_cache
+										.entry(shared_data_hash)
+										.or_insert_with(|| SharedData::<T, I>::get(shared_data_hash))
+										.clone())
 								}) {
 									// Only a full vote can count towards consensus.
 									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))),
@@ -1036,7 +1073,7 @@ pub mod pallet {
 		};
 		use crate::{
 			electoral_system::{BitmapComponentOf, ElectoralSystemTypes},
-			vote_storage::VoteStorage,
+			vote_storage::{ComponentStorageKind, VoteStorage},
 		};
 		use bitvec::prelude::*;
 		use cf_primitives::{AuthorityCount, EpochIndex};
@@ -1067,8 +1104,30 @@ pub mod pallet {
 			>(
 				current_epoch: EpochIndex,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
+				component_storage_kind: ComponentStorageKind,
 				f: F,
 			) -> Result<R, CorruptStorageError> {
+				// An election whose vote storage has no bitmap component never populates
+				// `BitmapComponents`, so there is nothing to load and nothing to store. Skipping
+				// both saves a read and - since `ALWAYS_STORE_AFTER_CLOSURE` would otherwise
+				// `kill` a key that was never set - a write, for every vote on such an
+				// election.
+				if !component_storage_kind.has_bitmap() {
+					let mut this = Self {
+						epoch: current_epoch,
+						bitmaps: Default::default(),
+						_phantom: Default::default(),
+					};
+					let r = f(&mut this)?;
+					// Callers promised there would be no bitmap component. Dropping one silently
+					// would lose a vote, so treat the inconsistency as corrupt storage.
+					return if this.bitmaps.is_empty() {
+						Ok(r)
+					} else {
+						Err(CorruptStorageError::new())
+					};
+				}
+
 				let (updated, mut this) =
 					if let Some(mut this) =
 						BitmapComponents::<T, I>::get(unique_monotonic_identifier)
@@ -1187,11 +1246,13 @@ pub mod pallet {
 			pub(crate) fn with<R, F: for<'a> FnOnce(&'a Self) -> Result<R, CorruptStorageError>>(
 				current_epoch: EpochIndex,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
+				component_storage_kind: ComponentStorageKind,
 				f: F,
 			) -> Result<R, CorruptStorageError> {
 				Self::inner_with::<false, _, _>(
 					current_epoch,
 					unique_monotonic_identifier,
+					component_storage_kind,
 					|this| f(&*this),
 				)
 			}
@@ -1202,9 +1263,15 @@ pub mod pallet {
 			>(
 				current_epoch: EpochIndex,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
+				component_storage_kind: ComponentStorageKind,
 				f: F,
 			) -> Result<R, CorruptStorageError> {
-				Self::inner_with::<true, _, _>(current_epoch, unique_monotonic_identifier, f)
+				Self::inner_with::<true, _, _>(
+					current_epoch,
+					unique_monotonic_identifier,
+					component_storage_kind,
+					f,
+				)
 			}
 
 			pub(super) fn add(
@@ -1341,6 +1408,20 @@ pub mod pallet {
 			// Box to avoid RuntimeCall size
 			authority_votes: Box<AuthorityVotes<T, I>>,
 		) -> DispatchResult {
+			// Labels the span with this instance's name in the runtime (e.g. `EthereumElections`),
+			// so that spans from the different `cf-elections` instances can be told apart when
+			// profiling a block with the runtime's `runtime-tracing` feature. Without a label they
+			// are indistinguishable: the span FRAME emits per extrinsic and per hook is targeted at
+			// `module_path!()`, which is identical for every instance.
+			//
+			// `enter_span!` discards its argument - including the `name()` lookup - unless
+			// `sp-tracing` is built with `with-tracing` (wasm) or `std` (tests), so this compiles
+			// to nothing at all in a production runtime.
+			sp_tracing::enter_span!(sp_tracing::trace_span!(
+				"vote",
+				pallet = <Self as frame_support::traits::PalletInfoAccess>::name()
+			));
+
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
 			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
@@ -1348,6 +1429,9 @@ pub mod pallet {
 				ContributingAuthorities::<T, I>::contains_key(&authority),
 				Error::<T, I>::NotContributing
 			);
+
+			// Constant for the whole extrinsic, so read it once rather than for every vote.
+			let block_number = frame_system::Pallet::<T>::current_block_number();
 
 			for (election_identifier, authority_vote) in *authority_votes {
 				// if an identifier refers to a non existent election, skip this vote,
@@ -1381,11 +1465,18 @@ pub mod pallet {
 					continue;
 				}
 
+				let component_storage_kind =
+					VoteStorageOf::<T::ElectoralSystemRunner>::component_storage_kind(
+						&partial_vote,
+					);
+
 				Self::handle_corrupt_storage(Self::take_vote_and_then(
 					epoch_index,
 					unique_monotonic_identifier,
 					&authority,
 					authority_index,
+					true, // Ensured before the loop.
+					component_storage_kind,
 					|option_existing_vote, election_bitmap_components| {
 						let components = <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::partial_vote_into_components(
 							<T::ElectoralSystemRunner as ElectoralSystemRunner>::generate_vote_properties(
@@ -1396,7 +1487,9 @@ pub mod pallet {
 							partial_vote
 						)?;
 
-						let block_number = frame_system::Pallet::<T>::current_block_number();
+						// The reads above were skipped on the strength of this value.
+						component_storage_kind.ensure_matches(&components)?;
+
 						if let Some(bitmap_component) = components.bitmap_component {
 							// Store bitmap component and update shared data reference counts
 							election_bitmap_components.add(
@@ -1496,6 +1589,8 @@ pub mod pallet {
 				unique_monotonic_identifier,
 				&authority,
 				authority_index,
+				ContributingAuthorities::<T, I>::contains_key(&authority),
+				ComponentStorageKind::Both, // Make no assumptions about what is stored.
 				|_, _| Ok(()),
 			))?;
 			Ok(())
@@ -1711,6 +1806,13 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
+			// See the note on the `vote` extrinsic: labels this span with the instance name, and
+			// compiles to nothing unless the runtime is built with `runtime-tracing`.
+			sp_tracing::enter_span!(sp_tracing::trace_span!(
+				"on_finalize",
+				pallet = <Self as frame_support::traits::PalletInfoAccess>::name()
+			));
+
 			if let Some(status) = Status::<T, I>::get() {
 				match status {
 					ElectionPalletStatus::Paused { detected_corrupt_storage } =>
@@ -1718,44 +1820,64 @@ pub mod pallet {
 							Self::deposit_event(Event::<T, I>::CorruptStorage);
 						},
 					ElectionPalletStatus::Running => {
-						let _ = Self::with_election_identifiers(|election_identifiers| {
-							if Into::<sp_core::U256>::into(block_number) % BLOCKS_BETWEEN_CLEANUP ==
-								sp_core::U256::zero()
-							{
-								let minimum_election_identifiers = election_identifiers
-									.iter()
-									.copied()
-									.map(|election_identifier| {
-										*election_identifier.unique_monotonic()
-									})
-									.min()
-									.unwrap_or_default();
-								let mut settings_boundaries =
-									ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
-								settings_boundaries.sort();
-								for setting_boundary in &settings_boundaries
-										[..settings_boundaries[..]
-											.partition_point(|&setting_boundary| {
-												setting_boundary <= minimum_election_identifiers
-											})
-											.saturating_sub(1) /*Keep the latest settings lower than the minimum election identifier, i.e. the settings referenced by the election with the minimum election identifier*/]
-								{
-									ElectoralSettings::<T, I>::remove(setting_boundary);
-								}
+						frame_support::dispatch_context::run_in_context(|| {
+							// Publish who is contributing, so that the consensus checks below don't
+							// each work it out again. The cleanup further down is the only thing
+							// that writes to `ContributingAuthorities` during the hook, and
+							// it only removes authorities that have left the current
+							// authority set, so it cannot invalidate this.
+							frame_support::dispatch_context::with_context::<
+								ContributingAuthoritiesMask<T, I>,
+								_,
+							>(|cached| {
+								cached.set(ContributingAuthoritiesMask {
+									mask: T::EpochInfo::current_authorities()
+										.iter()
+										.map(ContributingAuthorities::<T, I>::contains_key)
+										.collect(),
+									_phantom: Default::default(),
+								})
+							});
 
-								let current_authorities = T::EpochInfo::current_authorities();
-								for validator in
-									ContributingAuthorities::<T, I>::iter_keys().collect::<Vec<_>>()
+							let _ = Self::with_election_identifiers(|election_identifiers| {
+								if Into::<sp_core::U256>::into(block_number) %
+									BLOCKS_BETWEEN_CLEANUP == sp_core::U256::zero()
 								{
-									if !current_authorities.contains(&validator) {
-										ContributingAuthorities::<T, I>::remove(validator);
+									let minimum_election_identifiers = election_identifiers
+										.iter()
+										.copied()
+										.map(|election_identifier| {
+											*election_identifier.unique_monotonic()
+										})
+										.min()
+										.unwrap_or_default();
+									let mut settings_boundaries =
+										ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
+									settings_boundaries.sort();
+									for setting_boundary in &settings_boundaries
+											[..settings_boundaries[..]
+												.partition_point(|&setting_boundary| {
+													setting_boundary <= minimum_election_identifiers
+												})
+												.saturating_sub(1) /*Keep the latest settings lower than the minimum election identifier, i.e. the settings referenced by the election with the minimum election identifier*/]
+									{
+										ElectoralSettings::<T, I>::remove(setting_boundary);
+									}
+
+									let current_authorities = T::EpochInfo::current_authorities();
+									for validator in ContributingAuthorities::<T, I>::iter_keys()
+										.collect::<Vec<_>>()
+									{
+										if !current_authorities.contains(&validator) {
+											ContributingAuthorities::<T, I>::remove(validator);
+										}
 									}
 								}
-							}
 
-							T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
+								T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
 
-							Ok(())
+								Ok(())
+							});
 						});
 					},
 				}
@@ -2065,14 +2187,22 @@ pub mod pallet {
 			unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,
+			is_contributing_authority: bool,
+			component_storage_kind: ComponentStorageKind,
 			f: F,
 		) -> Result<R, CorruptStorageError> {
 			ElectionBitmapComponents::<T, I>::with_mut(
 				epoch_index,
 				unique_monotonic_identifier,
+				component_storage_kind,
 				|election_bitmap_components| {
-					let individual_component =
-						IndividualComponents::<T, I>::take(unique_monotonic_identifier, authority);
+					// An election's vote storage is fixed for its lifetime, so when it has no
+					// individual component there is nothing stored here to take.
+					let individual_component = if component_storage_kind.has_individual() {
+						IndividualComponents::<T, I>::take(unique_monotonic_identifier, authority)
+					} else {
+						None
+					};
 
 					let r = f(
 						<<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::components_into_authority_vote(
@@ -2094,7 +2224,9 @@ pub mod pallet {
 						);
 					}
 
-					if ContributingAuthorities::<T, I>::contains_key(authority) {
+					// Invalidate any cached consensus, since the votes have changed. Only a
+					// contributing authority's vote counts towards consensus.
+					if is_contributing_authority {
 						ElectionConsensusHistoryUpToDate::<T, I>::remove(
 							unique_monotonic_identifier,
 						);
@@ -2124,6 +2256,7 @@ pub mod pallet {
 					bitmap_component: ElectionBitmapComponents::<T, I>::with(
 						epoch_index,
 						unique_monotonic_identifier,
+						ComponentStorageKind::Both,
 						|election_bitmap_components| {
 							election_bitmap_components.get(authority_index)
 						},

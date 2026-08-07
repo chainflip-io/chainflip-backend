@@ -134,6 +134,147 @@ To build chainspec files for different networks, use the `build-chainspec.sh` sc
 
 The script will create both the regular and raw chainspec files in the `state-chain/node/chainspecs/` directory.
 
+### Profiling runtime execution
+
+The `runtime-tracing` feature enables `sp_tracing` span instrumentation
+(`on_initialize`/`on_finalize`/extrinsic dispatch) in the wasm runtime, so you can measure
+per-pallet and per-extrinsic execution time while replaying real blocks. It must never be
+enabled for a production build.
+
+Build the instrumented runtime, then point the node at the resulting blob — a replayed block
+executes the runtime from chain state, so the locally built wasm is otherwise ignored:
+
+```bash
+cargo build --release -p chainflip-node --features runtime-tracing
+
+# Must list 4 imports. If empty, the feature did not reach the wasm build.
+strings -a target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
+  | grep -o 'ext_wasm_tracing_[a-z_0-9]*' | sort -u
+
+mkdir -p ~/runtime-overrides
+cp target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm \
+   ~/runtime-overrides/
+
+./target/release/chainflip-node benchmark block \
+  --chain state-chain/node/chainspecs/berghain.chainspec.raw.json \
+  --base-path <path-to-chaindata> \
+  --wasm-runtime-overrides ~/runtime-overrides \
+  --from <block> --to <block> --wasm-execution=compiled \
+  --tracing-targets="wasm_tracing=trace,pallet_cf_elections=off" > trace.log 2>&1
+```
+
+Each captured span is logged as one line, tagged `wasm=true`:
+
+```text
+TRACE main sc_tracing: pallet_cf_elections::pallet: on_initialize, time: 667, id: 29, ...
+```
+
+Use `pallet=off` instead of `pallet_cf_elections=off` to profile every pallet at once.
+
+Things that fail silently, and how to tell:
+
+- **The override is ignored unless its `spec_name` *and* `spec_version` match the on-chain
+  runtime at that block.** A `spec_name` mismatch logs a warning, but a `spec_version` mismatch
+  logs nothing at all. Look for `INFO wasm_overrides: Found wasm override. version=...` at
+  startup, and temporarily set `spec_version` to the on-chain value if it differs. Keep only one
+  `.wasm` in the override directory — two blobs with the same `spec_version` is an error.
+- **Wasm spans reach the host under the `wasm_tracing` target**, not the pallet's own target
+  (the real target travels as a span field). So `wasm_tracing=trace` is what the log filter must
+  enable. Naming a pallet at `=trace` instead only unmutes its `log::debug!` calls — thousands of
+  lines of noise — because `--tracing-targets` is merged into the same filter that drives stderr
+  output. `=off` mutes those events while still capturing that pallet's spans, since the span
+  filter treats an unparseable level as `trace`.
+- **Without the instrumentation compiled in**, spans silently degrade to plain log lines with no
+  timing, e.g. `INFO frame_executive: apply_extrinsic; ext=...`. If you see those instead of
+  `sc_tracing:` lines, the runtime being executed is not instrumented.
+
+#### Visualising the log
+
+`state-chain/scripts/spans-to-profile.py` turns a log into a flamegraph, either way round:
+
+```bash
+# Prints the tables below and writes spans.json
+./state-chain/scripts/spans-to-profile.py trace.log
+
+# Interactive flamegraph in the Firefox Profiler UI (cargo install samply)
+samply load spans.json
+
+# Standalone SVG (cargo install inferno)
+./state-chain/scripts/spans-to-profile.py --folded trace.log trace.folded
+inferno-flamegraph trace.folded > flame.svg
+```
+
+The report covers where the block spent its time, every pallet's `on_initialize` and
+`on_finalize`, each elections instance broken down into its electoral systems, and the extrinsic
+dispatches per instance — whatever the log contains, so sections with no matching spans are
+skipped. For example:
+
+```text
+┌──────────┬─────────────┬────────────┬──────────────┬─────────────────────────────────────────┐
+│ instance │ on_finalize │ in systems │ unattributed │ biggest systems (ms)                    │
+├──────────┼─────────────┼────────────┼──────────────┼─────────────────────────────────────────┤
+│ Ethereum │       29.11 │      28.95 │         0.16 │ DepositChannelWitnessing 15.26, FeeT... │
+│ Tron     │       24.43 │      24.28 │         0.15 │ DepositChannelWitnessing 11.85, Vaul... │
+└──────────┴─────────────┴────────────┴──────────────┴─────────────────────────────────────────┘
+```
+
+`--no-tables` writes only the profile.
+
+**Blocks and repeats are worked out from the log.** Nothing needs passing on the command line.
+`benchmark block` replays each block `--repeat` times (10 by default) and accepts a block range;
+the `Block N with … tx used …` line it logs once a block's repeats are done terminates that
+block's spans and supplies its extrinsic count and weight, and the executions within a block are
+its root frames. The report opens with what it found:
+
+```text
+┌──────────┬────────────┬────────┬────────────┬──────────┬────────┬──────────────────┬──────────────────┐
+│ block    │ extrinsics │ weight │ executions │ averaged │  spans │ ms per execution │ benchmark avg ms │
+├──────────┼────────────┼────────┼────────────┼──────────┼────────┼──────────────────┼──────────────────┤
+│ 14066340 │        998 │ 87.87% │         10 │        9 │ 28,400 │           373.70 │           701.21 │
+└──────────┴────────────┴────────┴────────────┴──────────┴────────┴──────────────────┴──────────────────┘
+```
+
+Every figure is a mean per execution, and the **first execution of each block is excluded** from
+it — wasmtime compiles the runtime inside that pass, which is why `benchmark block`'s own average
+(701.21 ms above, and over 2 s for a `--repeat 1` run) sits so far above the spans. Excluding it,
+the two agree closely: on a second pass 362.66 ms measured against 360.51 ms of spans.
+
+Each block gets its own root frame in the profile, named `block <n>`, so a range never averages
+unrelated blocks together; `--block N` reports on one of them alone. When the filter captures no
+frame enclosing a whole execution (anything excluding `frame_executive`), there is no execution
+boundary to find — the table says so and pools the passes instead.
+
+Heavy capture inflates absolute times regardless: a log with tens of thousands of spans, each
+crossing the wasm boundary and writing a line, took one block from 453 ms to 770 ms. Proportions
+stay trustworthy; absolute milliseconds do not.
+
+Wasm spans reach the host as explicit roots (`parent_id: None`), so the script rebuilds the tree
+from span ids — which increase on entry — against the log's exit order, and merges identical sibling
+frames as any flamegraph does. Sample weights are the real span durations
+(`weightType: tracing-ms`), so every figure in the profiler is measured milliseconds rather than a
+sample count. The Firefox Profiler front-end is Mozilla-hosted but fetches from samply's
+`127.0.0.1` server and parses in the browser — nothing leaves the machine unless you press Upload.
+
+`samply record` measures something different and cannot replace this. It samples native stacks, and
+wasmtime emits no symbols for the runtime's code on macOS (jitdump is Linux-only), so the fraction
+of samples that *is* pallet code stays nameless — around 10% in a measured run, with half the
+samples in the node's own native host code. It answers the complementary question (how much of a
+hook is storage, hashing and allocation) at the cost of inflating what it measures: one block went
+from 453 ms to roughly 705 ms at the default 1 kHz.
+
+#### Telling pallet instances apart
+
+FRAME's hook and dispatch spans are targeted at `module_path!()`, which is identical for every
+instance of an instanced pallet — six `cf-elections` instances produce six indistinguishable
+`pallet_cf_elections::pallet: on_finalize` lines. Two ways to resolve them:
+
+- `cf-elections` labels its own spans with the instance's runtime name, which shows up as
+  `params=" { pallet: EthereumElections }"`. Copy that `sp_tracing::enter_span!` into any other
+  pallet that needs it; it compiles to nothing without `runtime-tracing`.
+- Otherwise attribute by position: hooks run in `PalletExecutionOrder` order
+  (`state-chain/runtime/src/lib.rs`), so the k-th span of a given pallet within a block belongs to
+  its k-th instance. This does not work for extrinsic dispatches, which interleave.
+
 ## Localnet
 
 You can run a local single-node testnet (Localnet), in Docker. This will allow you to quickly iterate on a particular

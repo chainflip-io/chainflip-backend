@@ -114,6 +114,9 @@ try-runtime = [
 	"cf-chains/try-runtime",
 	"pallet-staking/try-runtime",
 ]
+# Builds the runtime wasm with sp_tracing span instrumentation enabled, for
+# profiling with `try-runtime execute-block`. See state-chain/runtime/Cargo.toml.
+runtime-tracing = ["state-chain-runtime/runtime-tracing"]
 
 [package.metadata.deb]
 depends = "$auto, systemd"

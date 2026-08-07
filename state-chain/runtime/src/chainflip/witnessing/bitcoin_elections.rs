@@ -152,16 +152,24 @@ impl BlockWitnesserInstance for BitcoinDepositChannelWitnessing {
 		.deposit_channel_witnessing_enabled
 	}
 
-	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
-		BitcoinIngressEgress::active_deposit_channels_at(
-			// we advance by SAFETY_BUFFER before checking opened_at
-			height.saturating_forward(BITCOIN_MAINNET_SAFETY_BUFFER as usize),
-			// we don't advance for expiry
-			height,
-		)
-		.into_iter()
-		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
-		.collect()
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
+		// One pass over the deposit channels for the whole batch, rather than one per height.
+		let channels = BitcoinIngressEgress::all_deposit_channels();
+		block_heights
+			.iter()
+			.map(|height| {
+				BitcoinIngressEgress::filter_active_deposit_channels(
+					&channels,
+					height.saturating_forward(BITCOIN_MAINNET_SAFETY_BUFFER as usize),
+					*height,
+				)
+				.into_iter()
+				.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
+				.collect()
+			})
+			.collect()
 	}
 
 	fn processed_up_to(up_to: ChainBlockNumberOf<Self::Chain>) {
@@ -237,10 +245,15 @@ impl BlockWitnesserInstance for BitcoinVaultDepositWitnessing {
 	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, BitcoinInstance>;
 	type WitnessRules = PrewitnessImmediatelyAndWitnessAtSafetyMargin<Self::BlockEntry>;
 
-	fn election_properties(_height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// WARNING: If a private broker channel is closed by the broker while safe mode is
 		// activated, we will miss vault deposits to that channel that happened during safe mode.
-		pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::iter()
+		//
+		// The result doesn't depend on the height, so derive the addresses once for the whole
+		// batch rather than once per open election.
+		let properties = pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::iter()
 			.flat_map(|(broker_id, channel_id)| {
 				derive_current_and_previous_epoch_private_btc_vaults(channel_id)
 					.map_err(|err| {
@@ -251,7 +264,9 @@ impl BlockWitnesserInstance for BitcoinVaultDepositWitnessing {
 					.flatten()
 					.map(move |address| (address, broker_id.clone(), channel_id))
 			})
-			.collect::<Vec<_>>()
+			.collect::<Vec<_>>();
+
+		block_heights.iter().map(|_| properties.clone()).collect()
 	}
 
 	fn is_enabled() -> bool {
@@ -291,11 +306,15 @@ impl BlockWitnesserInstance for BitcoinEgressWitnessing {
 	}
 
 	fn election_properties(
-		_block_height: ChainBlockNumberOf<Self::Chain>,
-	) -> Self::ElectionProperties {
-		TransactionOutIdToBroadcastId::<Runtime, BitcoinInstance>::iter()
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
+		// The result doesn't depend on the height, so iterate the broadcast lookup once for the
+		// whole batch rather than once per open election.
+		let properties = TransactionOutIdToBroadcastId::<Runtime, BitcoinInstance>::iter()
 			.map(|(tx_id, _)| tx_id)
-			.collect::<Vec<_>>()
+			.collect::<Vec<_>>();
+
+		block_heights.iter().map(|_| properties.clone()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
@@ -402,65 +421,83 @@ impl
 			});
 		}
 
-		let chain_progress = BitcoinBlockHeightWitnesserES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinBlockHeightWitnesserES,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(block_height_witnesser_identifiers, &Vec::from([()]))?;
+		let chain_progress = {
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinBlockHeightWitnesserES"));
+			BitcoinBlockHeightWitnesserES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinBlockHeightWitnesserES,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(block_height_witnesser_identifiers, &Vec::from([()]))?
+		};
 
-		BitcoinDepositChannelWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinDepositChannelWitnessingES,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinDepositChannelWitnessingES"));
+			BitcoinDepositChannelWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinDepositChannelWitnessingES,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(deposit_channel_witnessing_identifiers.clone(), &chain_progress.clone())?;
+		}
 
-		BitcoinVaultDepositWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinVaultDepositWitnessingES,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(vault_deposits_identifiers.clone(), &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinVaultDepositWitnessingES"));
+			BitcoinVaultDepositWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinVaultDepositWitnessingES,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(vault_deposits_identifiers.clone(), &chain_progress.clone())?;
+		}
 
-		BitcoinEgressWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinEgressWitnessingES,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(egress_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinEgressWitnessingES"));
+			BitcoinEgressWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinEgressWitnessingES,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(egress_identifiers, &chain_progress.clone())?;
+		}
 
-		BitcoinFeeTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinFeeTracking,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(fee_identifiers, &current_sc_block_number)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinFeeTracking"));
+			BitcoinFeeTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinFeeTracking,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(fee_identifiers, &current_sc_block_number)?;
+		}
 
-		BitcoinLiveness::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinLiveness,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(
-			liveness_identifiers,
-			&(
-				crate::System::block_number(),
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get()
-					.unwrap()
-					.block_height
-					// We subtract the safety buffer so we don't ask for liveness for blocks that
-					// could be reorged out.
-					.saturating_sub(BITCOIN_MAINNET_SAFETY_BUFFER.into()),
-				crate::Validator::current_epoch(),
-			),
-		)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("BitcoinLiveness"));
+			BitcoinLiveness::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinLiveness,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(
+				liveness_identifiers,
+				&(
+					crate::System::block_number(),
+					pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get()
+						.unwrap()
+						.block_height
+						// We subtract the safety buffer so we don't ask for liveness for
+						// blocks that could be reorged out.
+						.saturating_sub(BITCOIN_MAINNET_SAFETY_BUFFER.into()),
+					crate::Validator::current_epoch(),
+				),
+			)?;
+		}
 
 		Ok(())
 	}

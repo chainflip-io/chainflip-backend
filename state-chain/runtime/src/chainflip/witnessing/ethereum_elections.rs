@@ -149,16 +149,24 @@ impl BlockWitnesserInstance for EthereumDepositChannelWitnessing {
 		.deposit_channel_witnessing_enabled
 	}
 
-	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
-		EthereumIngressEgress::active_deposit_channels_at(
-			// we advance by SAFETY_BUFFER before checking opened_at
-			height.saturating_forward(ETHEREUM_MAINNET_SAFETY_BUFFER as usize),
-			// we don't advance for expiry
-			height,
-		)
-		.into_iter()
-		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
-		.collect()
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
+		// One pass over the deposit channels for the whole batch, rather than one per height.
+		let channels = EthereumIngressEgress::all_deposit_channels();
+		block_heights
+			.iter()
+			.map(|height| {
+				EthereumIngressEgress::filter_active_deposit_channels(
+					&channels,
+					height.saturating_forward(ETHEREUM_MAINNET_SAFETY_BUFFER as usize),
+					*height,
+				)
+				.into_iter()
+				.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
+				.collect()
+			})
+			.collect()
 	}
 
 	fn processed_up_to(up_to: ChainBlockNumberOf<Self::Chain>) {
@@ -197,8 +205,11 @@ impl BlockWitnesserInstance for EthereumVaultDepositWitnessing {
 		.vault_deposit_witnessing_enabled
 	}
 
-	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// Vault address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
@@ -232,8 +243,11 @@ impl BlockWitnesserInstance for EthereumStateChainGatewayWitnessing {
 		.state_chain_gateway_witnessing
 	}
 
-	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// StateChainGateway address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
@@ -332,8 +346,11 @@ impl BlockWitnesserInstance for EthereumKeyManagerWitnessing {
 		.key_manager_witnessing
 	}
 
-	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// KeyManager address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
@@ -366,8 +383,11 @@ impl BlockWitnesserInstance for EthereumScUtilsWitnessing {
 		.sc_utils_witnessing
 	}
 
-	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// ScUtils address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
@@ -523,81 +543,107 @@ impl
 			});
 		}
 
-		let chain_progress = EthereumBlockHeightWitnesserES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumBlockHeightWitnesserES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(block_height_witnesser_identifiers, &Vec::from([()]))?;
+		let chain_progress = {
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumBlockHeightWitnesserES"));
+			EthereumBlockHeightWitnesserES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumBlockHeightWitnesserES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(block_height_witnesser_identifiers, &Vec::from([()]))?
+		};
 
-		EthereumDepositChannelWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumDepositChannelWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumDepositChannelWitnessingES"));
+			EthereumDepositChannelWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumDepositChannelWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
+		}
 
-		EthereumVaultDepositWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumVaultDepositWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(vault_deposits_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumVaultDepositWitnessingES"));
+			EthereumVaultDepositWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumVaultDepositWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(vault_deposits_identifiers, &chain_progress.clone())?;
+		}
 
-		EthereumKeyManagerWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumKeyManagerWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(key_manager_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumKeyManagerWitnessingES"));
+			EthereumKeyManagerWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumKeyManagerWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(key_manager_identifiers, &chain_progress.clone())?;
+		}
 
-		EthereumFeeTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumFeeTracking,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(fee_identifiers, &current_sc_block_number)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumFeeTracking"));
+			EthereumFeeTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumFeeTracking,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(fee_identifiers, &current_sc_block_number)?;
+		}
 
-		EthereumLiveness::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumLiveness,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(
-			liveness_identifiers,
-			&(
-				crate::System::block_number(),
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get()
-					.unwrap()
-					.block_height
-					// We subtract the safety buffer so we don't ask for liveness for blocks that
-					// could be reorged out.
-					.saturating_sub(ETHEREUM_MAINNET_SAFETY_BUFFER.into()),
-				crate::Validator::current_epoch(),
-			),
-		)?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumLiveness"));
+			EthereumLiveness::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumLiveness,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(
+				liveness_identifiers,
+				&(
+					crate::System::block_number(),
+					pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get()
+						.unwrap()
+						.block_height
+						// We subtract the safety buffer so we don't ask for liveness for
+						// blocks that could be reorged out.
+						.saturating_sub(ETHEREUM_MAINNET_SAFETY_BUFFER.into()),
+					crate::Validator::current_epoch(),
+				),
+			)?;
+		}
 
-		EthereumStateChainGatewayWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumStateChainGatewayWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(state_chain_gateway_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!(
+				"EthereumStateChainGatewayWitnessingES"
+			));
+			EthereumStateChainGatewayWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumStateChainGatewayWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(state_chain_gateway_identifiers, &chain_progress.clone())?;
+		}
 
-		EthereumScUtilsWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumScUtilsWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(sc_utils_identifiers, &chain_progress.clone())?;
+		{
+			sp_tracing::enter_span!(sp_tracing::trace_span!("EthereumScUtilsWitnessingES"));
+			EthereumScUtilsWitnessingES::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					EthereumScUtilsWitnessingES,
+					RunnerStorageAccess<Runtime, EthereumInstance>,
+				>,
+			>(sc_utils_identifiers, &chain_progress.clone())?;
+		}
 
 		Ok(())
 	}
