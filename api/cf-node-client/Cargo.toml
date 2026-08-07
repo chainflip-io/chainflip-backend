@@ -34,7 +34,9 @@ cf-amm = { workspace = true, default-features = true }
 cf-traits = { workspace = true }
 
 [build-dependencies]
-state-chain-runtime = { workspace = true, default-features = true }
+state-chain-runtime = { workspace = true, default-features = true, features = [
+	"skip-wasm-build",
+] }
 
 [dev-dependencies]
 pallet-cf-funding = { workspace = true, default-features = true }
