@@ -1,6 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
-assertion_line: 846
 expression: response
 ---
 {
@@ -17,6 +16,19 @@ expression: response
         "tx_hashes": [
           "0x2222222222222222222222222222222222222222222222222222222222222222"
         ]
+      }
+    },
+    {
+      "deposit_chain_block_height": 2,
+      "deposit_address": "0x3333333333333333333333333333333333333333333333333333333333333333",
+      "amount": "0xc8",
+      "asset": {
+        "chain": "Assethub",
+        "asset": "DOT"
+      },
+      "deposit_details": {
+        "block_number": 42,
+        "extrinsic_index": 7
       }
     }
   ],

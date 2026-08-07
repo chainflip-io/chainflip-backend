@@ -551,7 +551,7 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 			tron_elections:
 				<crate::chainflip::witnessing::tron_elections::TronElectionsSafeMode as SafeMode>::code_green(),
 			bsc_elections:
-			<crate::chainflip::witnessing::bsc_elections::BscElectionsSafeMode as SafeMode>::code_green(),
+				<crate::chainflip::witnessing::bsc_elections::BscElectionsSafeMode as SafeMode>::code_green(),
 		}
 	}
 }

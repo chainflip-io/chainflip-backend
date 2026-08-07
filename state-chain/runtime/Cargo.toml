@@ -273,6 +273,7 @@ try-runtime = [
 	"pallet-authorship/try-runtime",
 	"sp-runtime/try-runtime",
 ]
+skip-wasm-build = []
 metadata-hash = ["substrate-wasm-builder/metadata-hash"]
 mocks = ["cf-chains/mocks", "cf-traits/mocks"]
 runtime-integration-tests = [

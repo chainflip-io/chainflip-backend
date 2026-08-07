@@ -47,7 +47,8 @@ use sp_core::{
 use state_chain_runtime::{
 	chainflip::{
 		witnessing::{
-			arbitrum_elections, bitcoin_elections, bsc_elections, ethereum_elections,
+			arbitrum_elections, assethub_elections, bitcoin_elections, bsc_elections,
+			ethereum_elections,
 			generic_elections::{self, ChainlinkOraclePriceSettings},
 			solana_elections, tron_elections,
 		},
@@ -59,9 +60,9 @@ use state_chain_runtime::{
 		BLOCKS_PER_MINUTE_TRON,
 	},
 	opaque::SessionKeys,
-	AccountId, ArbitrumElectionsConfig, BitcoinElectionsConfig, BlockNumber, BscElectionsConfig,
-	EthereumElectionsConfig, FlipBalance, GenericElectionsConfig, SetSizeParameters, Signature,
-	SolanaElectionsConfig, TronElectionsConfig, WASM_BINARY,
+	AccountId, ArbitrumElectionsConfig, AssethubElectionsConfig, BitcoinElectionsConfig,
+	BlockNumber, BscElectionsConfig, EthereumElectionsConfig, FlipBalance, GenericElectionsConfig,
+	SetSizeParameters, Signature, SolanaElectionsConfig, TronElectionsConfig, WASM_BINARY,
 };
 
 use cf_utilities::clean_hex_address;
@@ -581,6 +582,9 @@ pub fn inner_cf_development_chain_spec(
 			},
 			TronElectionsConfig { option_initial_state: Some(tron_elections::initial_state()) },
 			BscElectionsConfig { option_initial_state: Some(bsc_elections::initial_state()) },
+			AssethubElectionsConfig {
+				option_initial_state: Some(assethub_elections::initial_state()),
+			},
 		))
 		.build())
 }
@@ -817,6 +821,9 @@ macro_rules! network_spec {
 						BscElectionsConfig {
 							option_initial_state: Some(bsc_elections::initial_state()),
 						},
+						AssethubElectionsConfig {
+							option_initial_state: Some(assethub_elections::initial_state()),
+						},
 					))
 					.build())
 			}
@@ -879,6 +886,7 @@ fn testnet_genesis(
 	arbitrum_elections: state_chain_runtime::ArbitrumElectionsConfig,
 	tron_elections: state_chain_runtime::TronElectionsConfig,
 	bsc_elections: state_chain_runtime::BscElectionsConfig,
+	assethub_elections: state_chain_runtime::AssethubElectionsConfig,
 ) -> serde_json::Value {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -1188,6 +1196,8 @@ fn testnet_genesis(
 		tron_elections,
 
 		bsc_elections,
+
+		assethub_elections,
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.

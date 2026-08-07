@@ -28,9 +28,9 @@ use dot::{
 	fee_constants, polkadot_sdk_types, EncodedPolkadotPayload, GenericUncheckedExtrinsic,
 	PolkadotAccountId, PolkadotAccountIdLookup, PolkadotBalance, PolkadotCallHash,
 	PolkadotChannelId, PolkadotChannelState, PolkadotCheckMortality, PolkadotCheckNonce,
-	PolkadotExtrinsicIndex, PolkadotHash, PolkadotIndex, PolkadotProxyType, PolkadotPublicKey,
-	PolkadotReplayProtection, PolkadotSignature, PolkadotSpecVersion, PolkadotTransactionData,
-	PolkadotTransactionId, PolkadotTransactionVersion, ResetProxyAccountNonce, RuntimeVersion,
+	PolkadotHash, PolkadotIndex, PolkadotProxyType, PolkadotPublicKey, PolkadotReplayProtection,
+	PolkadotSignature, PolkadotSpecVersion, PolkadotTransactionData, PolkadotTransactionId,
+	PolkadotTransactionVersion, ResetProxyAccountNonce, RuntimeVersion,
 };
 
 pub use cf_primitives::chains::Assethub;
@@ -52,10 +52,17 @@ use sp_runtime::{
 pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 4_000_000u128; //4 usd
 pub const ONE_DOT: PolkadotBalance = 10_000_000_000u128;
 
+pub const ASSETHUB_WITNESS_PERIOD: u32 = 3;
+
+impl ChainWitnessConfig for Assethub {
+	type ChainBlockNumber = PolkadotBlockNumber;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = ASSETHUB_WITNESS_PERIOD;
+}
+
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
 	const GAS_ASSET: Self::ChainAsset = assets::hub::Asset::HubDot;
-	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = ASSETHUB_WITNESS_PERIOD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = ONE_DOT;
 	const BURN_ADDRESS: Self::ChainAccount = PolkadotAccountId([0; 32]);
 	const IS_EVM_CHAIN: bool = false;
@@ -72,7 +79,7 @@ impl Chain for Assethub {
 	type ChainAccount = PolkadotAccountId;
 	type DepositFetchId = PolkadotChannelId;
 	type DepositChannelState = PolkadotChannelState;
-	type DepositDetails = PolkadotExtrinsicIndex;
+	type DepositDetails = TxId;
 	type Transaction = PolkadotTransactionData;
 	type TransactionMetadata = ();
 	type TransactionRef = PolkadotTransactionId;
@@ -320,6 +327,8 @@ impl AssethubExtrinsicBuilder {
 	Debug,
 	PartialEq,
 	Eq,
+	PartialOrd,
+	Ord,
 	Serialize,
 	Deserialize,
 )]

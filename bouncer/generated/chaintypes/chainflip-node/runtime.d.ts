@@ -930,6 +930,25 @@ export interface RuntimeApis extends GenericRuntimeApis {
     >;
 
     /**
+     *
+     * @callname: ElectoralRuntimeApi_cf_assethub_electoral_data
+     * @param {AccountId32Like} account_id
+     **/
+    cfAssethubElectoralData: GenericRuntimeApiMethod<
+      (accountId: AccountId32Like) => Promise<Bytes>
+    >;
+
+    /**
+     *
+     * @callname: ElectoralRuntimeApi_cf_assethub_filter_votes
+     * @param {AccountId32Like} account_id
+     * @param {BytesLike} proposed_votes
+     **/
+    cfAssethubFilterVotes: GenericRuntimeApiMethod<
+      (accountId: AccountId32Like, proposedVotes: BytesLike) => Promise<Bytes>
+    >;
+
+    /**
      * Generic runtime api call
      **/
     [method: string]: GenericRuntimeApiMethod;

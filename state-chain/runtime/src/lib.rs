@@ -273,6 +273,9 @@ mod runtime {
 	pub type BscIngressEgress = pallet_cf_ingress_egress<Instance8>;
 	#[runtime::pallet_index(67)]
 	pub type BscElections = pallet_cf_elections<Instance8>;
+
+	#[runtime::pallet_index(68)]
+	pub type AssethubElections = pallet_cf_elections<Instance6>;
 }
 
 /// The address format for describing accounts.
@@ -369,6 +372,7 @@ pub type PalletExecutionOrder = (
 	BitcoinElections,
 	EthereumElections,
 	ArbitrumElections,
+	AssethubElections,
 	TronElections,
 	BscElections,
 	// Vaults
@@ -489,6 +493,7 @@ pub type PalletMigrations = (
 	pallet_cf_asset_balances::migrations::PalletMigration<Runtime>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	pallet_cf_elections::migrations::PalletMigration<Runtime, AssethubInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, ()>,
 );
@@ -537,6 +542,8 @@ macro_rules! instanced_migrations {
 // Add version-specific migrations here.
 pub type MigrationsForV2_3 = (
 	migrations::safe_mode::SafeModeMigration,
+	migrations::assethub_deposit_details::Migration,
+	migrations::assethub_elections::AssethubElectionsInit,
 	migrations::bsc_integration::BscElectionsInit,
 	migrations::bsc_integration::BscIngressEgressInit,
 	migrations::bsc_integration::BscChainstate,
