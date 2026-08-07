@@ -619,7 +619,6 @@ export type StateChainRuntimeSafeModeInnerRuntimeSafeMode = {
   arbitrumElections: StateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumElectionsSafeMode;
   tronElections: StateChainRuntimeChainflipWitnessingTronElectionsTronElectionsSafeMode;
   bscElections: StateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMode;
-  assethubElections: StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectionsSafeMode;
 };
 
 export type PalletCfEmissionsPalletSafeMode = { emissionsSyncEnabled: boolean };
@@ -771,10 +770,6 @@ export type StateChainRuntimeChainflipWitnessingTronElectionsTronElectionsSafeMo
 };
 
 export type StateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMode = {
-  keyManagerWitnessing: boolean;
-};
-
-export type StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectionsSafeMode = {
   keyManagerWitnessing: boolean;
 };
 
@@ -23021,6 +23016,13 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesRawWitnessedEvents =
           [bigint, StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventBsc]
         >;
       };
+    }
+  | {
+      type: 'Assethub';
+      value: {
+        deposits: Array<[bigint, PalletCfIngressEgressDepositWitnessAssethub]>;
+        broadcasts: Array<[bigint, PalletCfBroadcastTransactionConfirmationAssethub]>;
+      };
     };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesIngressEvents = {
@@ -23041,7 +23043,8 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesDepositDetails =
   | { type: 'Ethereum'; value: CfChainsEvmDepositDetails }
   | { type: 'Arbitrum'; value: CfChainsEvmDepositDetails }
   | { type: 'Tron'; value: CfChainsEvmDepositDetails }
-  | { type: 'Bsc'; value: CfChainsEvmDepositDetails };
+  | { type: 'Bsc'; value: CfChainsEvmDepositDetails }
+  | { type: 'Assethub'; value: CfPrimitivesTxId };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesVaultDepositWitnessInfo = {
   txId: CfChainsTransactionInId;
