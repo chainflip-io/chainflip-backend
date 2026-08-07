@@ -179,8 +179,12 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 						return Err(anyhow::anyhow!("No events for block hash {block_hash}"));
 					};
 
-					let events =
-						events.iter().filter_map(crate::witness::hub::filter_map_events).collect();
+					// if one entry of the events iterator results in an error, we error
+					// on the whole batch
+					let events = events
+						.iter()
+						.filter_map(crate::witness::hub::filter_map_events)
+						.collect::<Result<Vec<_>>>()?;
 
 					Ok(AssethubBlockHeader {
 						block_height: finalized_block_height,

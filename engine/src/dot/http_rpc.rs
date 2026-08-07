@@ -154,6 +154,9 @@ pub struct DotRpcClientBuilder {
 pub struct DotRpcClient {
 	online_client: OnlineClient<PolkadotConfig>,
 	rpc_methods: LegacyRpcMethods<PolkadotConfig>,
+	// OnlineClient clones share mutable metadata, so we need this lock to ensure
+	// that a metadata update and event reads don't interfere with each other between tasks.
+	events_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl DotRpcClientBuilder {
@@ -247,7 +250,11 @@ impl DotRpcClientBuilder {
 			}
 		};
 
-		DotRpcClient { online_client, rpc_methods: LegacyRpcMethods::new(rpc_client) }
+		DotRpcClient {
+			online_client,
+			rpc_methods: LegacyRpcMethods::new(rpc_client),
+			events_lock: Arc::new(tokio::sync::Mutex::new(())),
+		}
 	}
 }
 
@@ -299,6 +306,8 @@ impl DotRpcApi for DotRpcClient {
 		block_hash: PolkadotHash,
 		parent_hash: PolkadotHash,
 	) -> Result<Option<Events<PolkadotConfig>>> {
+		let _events_guard = self.events_lock.lock().await;
+
 		// We need to get the runtime version at the previous block instead the desired block
 		// because the events in the block are encoded using the previous block's runtime version,
 		// not the desired block's runtime version. This is caused by the `state_getRuntimeVersion`

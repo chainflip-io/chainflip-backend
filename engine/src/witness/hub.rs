@@ -29,8 +29,6 @@ use subxt::{
 	utils::{AccountId32, MultiAddress, MultiSignature},
 };
 
-use tracing::error;
-
 use std::collections::BTreeSet;
 
 use crate::{
@@ -79,7 +77,7 @@ use assethub::{
 
 pub fn filter_map_events(
 	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::Error>,
-) -> Option<(Phase, EventWrapper)> {
+) -> Option<anyhow::Result<(Phase, EventWrapper)>> {
 	match res_event_details {
 		Ok(event_details) => match (event_details.pallet_name(), event_details.variant_name()) {
 			(ProxyAdded::PALLET, ProxyAdded::EVENT) => {
@@ -109,11 +107,8 @@ pub fn filter_map_events(
 			},
 			_ => None,
 		}
-		.map(|event| (event_details.phase(), event)),
-		Err(err) => {
-			error!("Error while parsing event: {:?}", err);
-			None
-		},
+		.map(|event| Ok((event_details.phase(), event))),
+		Err(err) => Some(Err(anyhow::anyhow!("Error while parsing event: {:?}", err))),
 	}
 }
 
