@@ -9,7 +9,7 @@ import type {
 } from 'dedot/types';
 import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
 import type { ChainSubmittableExtrinsic } from 'generated/chaintypes/chainflip-node/tx';
-import { bigintReplacer, cfMutex, sleep } from 'shared/utils';
+import { bigintReplacer, cfMutex, lowercaseFirstLetter, sleep } from 'shared/utils';
 
 /** A fully-typed dedot client for the Chainflip state chain. */
 export type ChainflipClient = DedotClient<ChainflipNodeApi>;
@@ -44,10 +44,9 @@ export function moduleErrorMeta(
   if (err.type === 'Module') {
     const meta = client.registry.findErrorMeta(err);
     if (meta) {
-      // Lower-case the first char to match dedot's `client.errors` keys (the `DispatchErrorMatch`
-      // pallet names) and the historical `pallet.Error` message format.
-      const pallet = meta.pallet.charAt(0).toLowerCase() + meta.pallet.slice(1);
-      return { pallet, name: meta.name, docs: meta.docs };
+      // Match dedot's `client.errors` keys (the `DispatchErrorMatch` pallet names) and the
+      // historical `pallet.Error` message format.
+      return { pallet: lowercaseFirstLetter(meta.pallet), name: meta.name, docs: meta.docs };
     }
   }
   return undefined;
