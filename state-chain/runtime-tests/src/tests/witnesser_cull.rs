@@ -44,10 +44,11 @@ impl RuntimeTest for Test {
 			println!("\n=== Witnesser cull probe @ {:?} ===", block_hash);
 			println!("  current_epoch:  {}", current);
 			println!("  EpochsToCull:   {:?}", to_cull);
+			println!("\n  per-epoch entry counts (the next epoch to cull is EpochsToCull.last()):");
 			println!(
-				"\n  per-epoch entry counts (the next epoch to cull is EpochsToCull.last()):"
+				"  {:<8} {:>10} {:>16} {:>12}",
+				"epoch", "votes", "call_hash_exec", "extra_data"
 			);
-			println!("  {:<8} {:>10} {:>16} {:>12}", "epoch", "votes", "call_hash_exec", "extra_data");
 
 			// Count entries per recent epoch. iter_prefix walks only that epoch's sub-map.
 			for epoch in current.saturating_sub(12)..=current {
@@ -58,7 +59,12 @@ impl RuntimeTest for Test {
 				let mark = if to_cull.contains(&epoch) { " <- queued to cull" } else { "" };
 				println!(
 					"  {:<8} {:>10} {:>16} {:>12}   ({:?}){}",
-					epoch, votes, call_hash, extra, t.elapsed(), mark,
+					epoch,
+					votes,
+					call_hash,
+					extra,
+					t.elapsed(),
+					mark,
 				);
 			}
 		});
@@ -90,9 +96,9 @@ impl RuntimeTest for CullCost {
 			EpochsToCull::<Runtime>::put(vec![epoch]);
 
 			// on_idle is handed a full block's ref-time (2s) as leftover budget — the worst case.
-			// With the per-block cull cap in place, a single on_idle should now clear only a bounded
-			// slice and leave the epoch queued (contrast: without the cap it cleared the whole
-			// ~230k-item epoch in this one call, a ~295ms spike).
+			// With the per-block cull cap in place, a single on_idle should now clear only a
+			// bounded slice and leave the epoch queued (contrast: without the cap it cleared the
+			// whole ~230k-item epoch in this one call, a ~295ms spike).
 			let budget = Weight::from_parts(2_000_000_000_000, u64::MAX);
 
 			let t = Instant::now();
@@ -102,8 +108,15 @@ impl RuntimeTest for CullCost {
 
 			println!("  single on_idle with the per-block cull cap:");
 			println!("    wall clock (cold):     {:?}", elapsed);
-			println!("    weight self-charged:   {:.1} ms-equiv ref-time", used.ref_time() as f64 / 1e9);
-			println!("    votes deleted:         {} of {}", votes_before - votes_after, votes_before);
+			println!(
+				"    weight self-charged:   {:.1} ms-equiv ref-time",
+				used.ref_time() as f64 / 1e9
+			);
+			println!(
+				"    votes deleted:         {} of {}",
+				votes_before - votes_after,
+				votes_before
+			);
 			println!("    epoch fully culled:    {}", EpochsToCull::<Runtime>::get().is_empty());
 			println!(
 				"    -> bounded per block; the epoch stays queued and drains over ~{} blocks.",
