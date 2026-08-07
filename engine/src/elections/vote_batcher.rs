@@ -24,10 +24,18 @@
 //! milliseconds of each other and are cheap to gather.
 
 use cf_primitives::MILLISECONDS_PER_BLOCK;
-use cf_utilities::task_scope::Scope;
-use engine_sc_client::extrinsic_api::signed::SignedExtrinsicApi;
+use cf_utilities::{task_scope::Scope, UnendingStream};
+use engine_sc_client::{
+	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+};
 use state_chain_runtime::{chainflip::AllElectionInstancesVotes, Runtime};
-use std::{sync::Arc, time::Duration};
+use std::{
+	sync::{
+		atomic::{AtomicBool, Ordering},
+		Arc,
+	},
+	time::Duration,
+};
 use tokio::sync::mpsc;
 
 /// Hard cap on how long a batch is held after its first votes arrive.
@@ -56,20 +64,44 @@ const CHANNEL_CAPACITY: usize = 64;
 #[derive(Clone)]
 pub struct VoteBatcher {
 	votes_sender: mpsc::Sender<AllElectionInstancesVotes>,
+	batching_enabled: Arc<AtomicBool>,
 }
 
 impl VoteBatcher {
 	/// Spawn the batching task and return a handle to it.
-	pub fn start<StateChainClient: SignedExtrinsicApi + Send + Sync + 'static>(
+	pub fn start<
+		StateChainClient: SignedExtrinsicApi + StorageApi + ChainApi + Send + Sync + 'static,
+	>(
 		scope: &Scope<'_, anyhow::Error>,
 		state_chain_client: Arc<StateChainClient>,
 	) -> Self {
 		let (votes, receiver) = mpsc::channel(CHANNEL_CAPACITY);
+		let batching_enabled = Arc::new(AtomicBool::new(true));
+
+		scope.spawn({
+			let state_chain_client = state_chain_client.clone();
+			let batching_enabled = batching_enabled.clone();
+			async move {
+				watch_election_vote_batching_disabled(state_chain_client, batching_enabled).await;
+				Ok(())
+			}
+		});
 		scope.spawn(async move {
 			run(receiver, state_chain_client).await;
 			Ok(())
 		});
-		Self { votes_sender: votes }
+
+		Self { votes_sender: votes, batching_enabled }
+	}
+
+	/// Whether votes should be batched, as of the last block the watcher saw.
+	///
+	/// Callers that get `false` must submit through the per-instance
+	/// `pallet_cf_elections::Call::vote` extrinsic instead. Falling back to a batch carrying a
+	/// single instance would not do: the point of the switch is to leave the batched dispatch
+	/// path entirely, which is what makes it useful if that path is the thing at fault.
+	pub fn batching_enabled(&self) -> bool {
+		self.batching_enabled.load(Ordering::Relaxed)
 	}
 
 	/// Hand one instance's votes to the batcher. `instance` names it, for logging only.
@@ -135,6 +167,53 @@ impl PendingBatches {
 		self.hard_cap = None;
 		self.deadline = None;
 		core::mem::take(&mut self.batches)
+	}
+}
+
+/// Track `Environment::ElectionVoteBatchingDisabled` so the voters can see governance turning
+/// batching off without a restart.
+///
+/// Follows unfinalized blocks rather than finalized ones: this is a switch that exists to be
+/// reached for in a hurry, and a reorg flipping it back costs at most a block of votes going out
+/// in the other shape, which both paths accept.
+async fn watch_election_vote_batching_disabled<
+	StateChainClient: StorageApi + ChainApi + Send + Sync + 'static,
+>(
+	state_chain_client: Arc<StateChainClient>,
+	batching_enabled: Arc<AtomicBool>,
+) {
+	let mut block_stream = state_chain_client.unfinalized_block_stream().await;
+
+	loop {
+		let block = block_stream.next_or_pending().await;
+
+		match state_chain_client
+			.storage_value::<pallet_cf_environment::ElectionVoteBatchingDisabled<Runtime>>(
+				block.hash,
+			)
+			.await
+		{
+			Ok(disabled) => {
+				let enabled = !disabled;
+				// Only report transitions - this runs every block and is otherwise silent.
+				if batching_enabled.swap(enabled, Ordering::Relaxed) != enabled {
+					tracing::info!(
+						"Election vote batching {} by governance at block {}",
+						if enabled { "enabled" } else { "disabled" },
+						block.number,
+					);
+				}
+			},
+			Err(error) => {
+				// Leave the flag as it was: a failed read says nothing about what governance
+				// wants, and guessing either way is worse than carrying on.
+				tracing::warn!(
+					"Could not read the vote batching switch at block {}, leaving batching {}: {error}",
+					block.number,
+					if batching_enabled.load(Ordering::Relaxed) { "enabled" } else { "disabled" },
+				);
+			},
+		}
 	}
 }
 

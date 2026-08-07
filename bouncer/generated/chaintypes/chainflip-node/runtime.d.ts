@@ -98,7 +98,7 @@ import type {
   CfPrimitivesBeneficiary,
   CfChainsVaultSwapInput,
   StateChainRuntimeRuntimeApisCustomApiTypesVaultSwapDetailsStr,
-  CfChainsRefundParametersChannelRefundParameters,
+  CfChainsRefundParametersChannelRefundParametersEncodedAddress,
   StateChainRuntimeRuntimeApisCustomApiTypesChainAccounts,
   StateChainRuntimeRuntimeApisCustomApiTypesTransactionScreeningEvents,
   PalletCfSwappingAffiliateDetails,
@@ -1661,7 +1661,7 @@ export interface RuntimeApis extends GenericRuntimeApis {
      * @param {CfPrimitivesChainsAssetsAnyAsset} source_asset
      * @param {CfChainsAddressEncodedAddress} destination_address
      * @param {CfPrimitivesChainsAssetsAnyAsset} destination_asset
-     * @param {CfChainsRefundParametersChannelRefundParameters} refund_parameters
+     * @param {CfChainsRefundParametersChannelRefundParametersEncodedAddress} refund_parameters
      * @param {CfPrimitivesDcaParameters | undefined} dca_parameters
      * @param {number} boost_fee
      * @param {number} broker_commission
@@ -1674,7 +1674,7 @@ export interface RuntimeApis extends GenericRuntimeApis {
         sourceAsset: CfPrimitivesChainsAssetsAnyAsset,
         destinationAddress: CfChainsAddressEncodedAddress,
         destinationAsset: CfPrimitivesChainsAssetsAnyAsset,
-        refundParameters: CfChainsRefundParametersChannelRefundParameters,
+        refundParameters: CfChainsRefundParametersChannelRefundParametersEncodedAddress,
         dcaParameters: CfPrimitivesDcaParameters | undefined,
         boostFee: number,
         brokerCommission: number,
