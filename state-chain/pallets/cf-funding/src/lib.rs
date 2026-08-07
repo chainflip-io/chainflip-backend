@@ -45,7 +45,7 @@ use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
 	sp_runtime::{
-		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
+		traits::{One, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
 	storage::TransactionOutcome,
@@ -216,12 +216,9 @@ impl<T: Config> Redemption<T> {
 			RedemptionAmount::Exact(amount) => (amount.saturating_add(applied_fee), amount),
 		};
 
-		debug_assert_eq!(
-			debit_amount.checked_sub(&redeem_amount),
-			Some(applied_fee),
-			"Debit amount must equal redeem amount plus redemption fee",
-		);
-
+		// no point executing a redemption if the liquid balance is lower than the redemption fee so
+		// there are not enough funds to pay the fee and that the redeem amount turns out to be 0.
+		ensure!(redeem_amount > Zero::zero(), Error::<T>::InsufficientBalance);
 		ensure!(debit_amount <= account_balance, Error::<T>::InsufficientBalance);
 		let remaining_balance = account_balance.saturating_sub(debit_amount);
 		ensure!(remaining_balance >= bond, Error::<T>::BondViolation);
@@ -530,9 +527,6 @@ pub mod pallet {
 		/// The Withdrawal Tax has been updated.
 		RedemptionTaxAmountUpdated { amount: T::Amount },
 
-		/// The redemption amount was zero, so no redemption was made. The tax was still levied.
-		RedemptionAmountZero { account_id: AccountId<T> },
-
 		/// An account has been bound to an address.
 		BoundRedeemAddress { account_id: AccountId<T>, address: EthereumAddress },
 
@@ -696,38 +690,33 @@ pub mod pallet {
 			redemption.update_restricted_balances(None)?;
 
 			// Update the account balance.
-			if redeem_amount > Zero::zero() {
-				T::Flip::try_initiate_redemption(&account_id, redeem_amount)?;
+			T::Flip::try_initiate_redemption(&account_id, redeem_amount)?;
 
-				// Send the transaction.
-				let contract_expiry =
-					T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
-				let call = T::RegisterRedemption::new_unsigned(
-					<T as Config>::FunderId::from_ref(&account_id).as_ref(),
-					redeem_amount.unique_saturated_into(),
-					address.as_fixed_bytes(),
-					contract_expiry,
-					executor,
-				);
+			// Send the transaction.
+			let contract_expiry = T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
+			let call = T::RegisterRedemption::new_unsigned(
+				<T as Config>::FunderId::from_ref(&account_id).as_ref(),
+				redeem_amount.unique_saturated_into(),
+				address.as_fixed_bytes(),
+				contract_expiry,
+				executor,
+			);
 
-				PendingRedemptions::<T>::insert(
-					&account_id,
-					PendingRedemptionInfo {
-						total: redeem_amount,
-						restricted: restricted_redeem_amount,
-						redeem_address: address,
-					},
-				);
+			PendingRedemptions::<T>::insert(
+				&account_id,
+				PendingRedemptionInfo {
+					total: redeem_amount,
+					restricted: restricted_redeem_amount,
+					redeem_address: address,
+				},
+			);
 
-				Self::deposit_event(Event::RedemptionRequested {
-					account_id,
-					amount: redeem_amount,
-					broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
-					expiry_time: contract_expiry,
-				});
-			} else {
-				Self::deposit_event(Event::RedemptionAmountZero { account_id })
-			}
+			Self::deposit_event(Event::RedemptionRequested {
+				account_id,
+				amount: redeem_amount,
+				broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
+				expiry_time: contract_expiry,
+			});
 
 			Ok(())
 		}

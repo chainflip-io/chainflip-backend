@@ -554,15 +554,6 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The redemption amount was zero, so no redemption was made. The tax was still levied.
-     **/
-    RedemptionAmountZero: GenericPalletEvent<
-      'Funding',
-      'RedemptionAmountZero',
-      { accountId: AccountId32 }
-    >;
-
-    /**
      * An account has been bound to an address.
      **/
     BoundRedeemAddress: GenericPalletEvent<

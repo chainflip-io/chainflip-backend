@@ -842,7 +842,13 @@ impl_runtime_apis! {
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
 			let is_bidding = Validator::is_bidding(account_id);
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
-			let apy_bp = calculate_account_apy(account_id);
+			// Once FLIP 2.1 is active, we dont return apy anymore. We move to cf_reward_distribution_estimate
+			// for estimating rewards which can be used to calculate apy.
+			let apy_bp = if Flip::is_flip_2_1_activated() {
+				None
+			} else {
+				calculate_account_apy(account_id)
+			};
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);

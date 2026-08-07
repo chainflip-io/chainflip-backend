@@ -1494,7 +1494,7 @@ fn bond_should_count_toward_restricted_balance() {
 }
 
 #[test]
-fn skip_redemption_of_zero_flip() {
+fn redemption_of_zero_flip_is_rejected() {
 	new_test_ext().execute_with(|| {
 		Funding::fund_account(
 			ALICE,
@@ -1504,18 +1504,15 @@ fn skip_redemption_of_zero_flip() {
 				funder: Default::default(),
 			},
 		);
-		assert_ok!(Funding::redeem(
-			RuntimeOrigin::signed(ALICE),
-			RedemptionAmount::Exact(0),
-			Default::default(),
-			Default::default()
-		));
-		assert_event_sequence! {
-			Test,
-			_,
-			RuntimeEvent::Funding(Event::Funded {..}),
-			RuntimeEvent::Funding(Event::RedemptionAmountZero {..}),
-		};
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Exact(0),
+				Default::default(),
+				Default::default()
+			),
+			Error::<Test>::InsufficientBalance
+		);
 	});
 }
 

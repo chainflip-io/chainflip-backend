@@ -12859,10 +12859,6 @@ export type PalletCfFundingEvent =
    **/
   | { name: 'RedemptionTaxAmountUpdated'; data: { amount: bigint } }
   /**
-   * The redemption amount was zero, so no redemption was made. The tax was still levied.
-   **/
-  | { name: 'RedemptionAmountZero'; data: { accountId: AccountId32 } }
-  /**
    * An account has been bound to an address.
    **/
   | { name: 'BoundRedeemAddress'; data: { accountId: AccountId32; address: H160 } }
