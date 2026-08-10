@@ -82,6 +82,57 @@ impl<T: BWTypes> HookType for HookTypeFor<T, ElectionPropertiesHook> {
 	type Output = Vec<T::ElectionProperties>;
 }
 
+/// Nominally the function type is:
+/// ```ignore
+/// rules(age_range: Range<u32>, block_data: T::BlockData, safety_margin: u32)
+/// ```
+/// Computes the list of events that are caused by `block_data` aging from
+/// `age_range.start` to `age_range.end` (exclusive).
+///
+/// Requirements:
+///  - should only be called for consecutive age ranges. No ages should be skipped, and none should
+///    be overlapping.
+///  - safety_margin should be the same between calls.
+///
+/// Guarantees:
+///  - the concatenation of output events only depends on the total range covered.
+///  - in particular, if age_range is empty, the output MUST be an empty vector
+///
+/// ### Examples (Requirements):
+/// Let `d: T::BlockData`. Then the following sequence of calls is VALID:
+/// ```ignore
+/// rules(0..3, d, 4)
+/// rules(3..4, d, 4)
+/// rules(4..9, d, 4)
+/// ```
+///
+/// The following sequence is NOT VALID because the input ranges are overlapping
+/// ```ignore
+/// rules(0..3, d, 4)
+/// rules(2..5, d, 4) // overlap on age 2
+/// ```
+///
+/// The following sequence is NOT VALID because the safety margin changed
+/// ```ignore
+/// rules(0..3, d, 4)
+/// rules(3..5, d, 1) // calling with a different safety margin
+/// ```
+///
+/// ### Examples (Guarantees):
+/// The output should only depend on the union of all ages that `rules()` was called with,
+/// in particular the following examples hold:
+///
+/// Let `<>` denote the concatenation of vectors, then
+/// ```ignore
+/// rules(0..2, d, 4) <> rules(2..2, d, 4) <> rules(2..5, d, 4) == rules(0..5, d, 4)
+/// ```
+/// That is, since the 3 calls on the LHS cover 0..5, it's the same as calling rules once for the
+/// whole range.
+///
+/// This in particular also means that an empty range should always return an empty vector:
+/// ```ignore
+/// rules(2..2, d, 4) == []
+/// ```
 pub struct RulesHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
 	type Input = (Range<u32>, T::BlockData, u32);
