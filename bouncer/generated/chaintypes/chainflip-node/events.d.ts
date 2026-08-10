@@ -26,7 +26,6 @@ import type {
   PalletCfEnvironmentPalletConfigUpdate,
   PalletCfFlipImbalancesImbalanceSource,
   PalletCfFlipPalletConfigUpdate,
-  CfPrimitivesChainsForeignChain,
   CfTraitsFundingSource,
   StateChainRuntimeChainflipEthereumScCallsEthereumSCApi,
   SpRuntimeDispatchErrorWithPostInfo,
@@ -42,6 +41,7 @@ import type {
   SpConsensusGrandpaAppPublic,
   PalletCfGovernanceGovernanceCouncil,
   PalletCfTokenholderGovernanceProposal,
+  CfPrimitivesChainsForeignChain,
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
   CfChainsChainState,
@@ -432,56 +432,6 @@ export interface ChainEvents extends GenericChainEvents {
       'FlipDistributed',
       { amounts: Array<[AccountId32, bigint]> }
     >;
-
-    /**
-     * Generic pallet event
-     **/
-    [prop: string]: GenericPalletEvent;
-  };
-  /**
-   * Pallet `Emissions`'s events
-   **/
-  emissions: {
-    /**
-     * Supply Update has been Broadcasted [block_number]
-     **/
-    SupplyUpdateBroadcastRequested: GenericPalletEvent<
-      'Emissions',
-      'SupplyUpdateBroadcastRequested',
-      number
-    >;
-
-    /**
-     * Current authority inflation emission has been updated \[new\]
-     **/
-    CurrentAuthorityInflationEmissionsUpdated: GenericPalletEvent<
-      'Emissions',
-      'CurrentAuthorityInflationEmissionsUpdated',
-      number
-    >;
-
-    /**
-     * SupplyUpdateInterval has been updated [block_number]
-     **/
-    SupplyUpdateIntervalUpdated: GenericPalletEvent<
-      'Emissions',
-      'SupplyUpdateIntervalUpdated',
-      number
-    >;
-
-    /**
-     * The Flip that was bought using the network fee has been burned.
-     **/
-    NetworkFeeBurned: GenericPalletEvent<
-      'Emissions',
-      'NetworkFeeBurned',
-      { amount: bigint; egressId: [CfPrimitivesChainsForeignChain, bigint] }
-    >;
-
-    /**
-     * The Flip burn was skipped.
-     **/
-    FlipBurnSkipped: GenericPalletEvent<'Emissions', 'FlipBurnSkipped', { reason: DispatchError }>;
 
     /**
      * Generic pallet event

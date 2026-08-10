@@ -106,8 +106,6 @@ export const cfPrimitivesChainsAssetsEthAsset = simpleEnum([
 
 export const cfPrimitivesChainsAssetsArbAsset = simpleEnum(['ArbEth', 'ArbUsdc', 'ArbUsdt']);
 
-export const palletCfEmissionsPalletSafeMode = z.object({ emissionsSyncEnabled: z.boolean() });
-
 export const palletCfFundingPalletSafeMode = z.object({ redeemEnabled: z.boolean() });
 
 export const palletCfSwappingPalletSafeMode = z.object({
@@ -265,7 +263,6 @@ export const stateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMod
 });
 
 export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
-  emissions: palletCfEmissionsPalletSafeMode,
   funding: palletCfFundingPalletSafeMode,
   swapping: palletCfSwappingPalletSafeMode,
   liquidityProvider: palletCfLpPalletSafeMode,
@@ -409,7 +406,6 @@ export const palletCfFlipPalletConfigUpdate = z.discriminatedUnion('__kind', [
     __kind: z.literal('SetFeeScalingRate'),
     value: palletCfFlipOnChargeTransactionFeeScalingRateConfig,
   }),
-  z.object({ __kind: z.literal('SetFeeRewardsActivationEpoch'), value: z.number() }),
 ]);
 
 export const cfTraitsFundingSource = z.discriminatedUnion('__kind', [
