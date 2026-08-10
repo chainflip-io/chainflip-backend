@@ -692,43 +692,6 @@ impl<T: Config> DeregistrationHooks for Bonder<T> {
 	}
 }
 
-impl<T: Config> Issuance for Pallet<T> {
-	type AccountId = T::AccountId;
-	type Balance = T::Balance;
-
-	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance) {
-		Pallet::<T>::settle(beneficiary, Pallet::<T>::mint(amount).into());
-		Pallet::<T>::deposit_event(Event::FlipMinted { to: beneficiary.clone(), amount });
-	}
-
-	fn total_issuance() -> Self::Balance {
-		Pallet::<T>::total_issuance()
-	}
-
-	fn burn_offchain(amount: Self::Balance) {
-		let _remainder = Pallet::<T>::burn(amount).offset(Pallet::<T>::bridge_in(amount));
-	}
-}
-
-pub struct FlipIssuance<T>(PhantomData<T>);
-
-impl<T: Config> Issuance for FlipIssuance<T> {
-	type AccountId = <Pallet<T> as Issuance>::AccountId;
-	type Balance = <Pallet<T> as Issuance>::Balance;
-
-	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance) {
-		<Pallet<T> as Issuance>::mint(beneficiary, amount);
-	}
-
-	fn total_issuance() -> Self::Balance {
-		<Pallet<T> as Issuance>::total_issuance()
-	}
-
-	fn burn_offchain(amount: Self::Balance) {
-		<Pallet<T> as Issuance>::burn_offchain(amount);
-	}
-}
-
 impl<T: Config> AccountInfo for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
