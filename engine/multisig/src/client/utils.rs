@@ -41,12 +41,12 @@ where
 
 /// The threshold that determines the number of parties that we must exceed
 /// in order to agree on the outcome of some broadcast.
+///
+/// This is the same 2/3 threshold used everywhere else in the protocol, which means
+/// dictating the outcome of broadcast verification requires as many colluding parties
+/// as producing a signature does.
 pub fn threshold_for_broadcast_verification(total_parties: usize) -> usize {
-	// We require (one more than) half of participants to agree in order to
-	// maximise the number of colluding parties required to do harm. Note that
-	// if we used the usual 2/3 threshold, it would only take 1/3 of colluding
-	// participants to result in slashing of honest participants.
-	total_parties / 2
+	cf_utilities::threshold_from_share_count(total_parties as u32) as usize
 }
 
 #[test]
@@ -54,9 +54,9 @@ fn test_threshold_for_broadcast_verification() {
 	assert_eq!(threshold_for_broadcast_verification(1), 0);
 	assert_eq!(threshold_for_broadcast_verification(2), 1);
 	assert_eq!(threshold_for_broadcast_verification(3), 1);
-	assert_eq!(threshold_for_broadcast_verification(99), 49);
-	assert_eq!(threshold_for_broadcast_verification(100), 50);
-	assert_eq!(threshold_for_broadcast_verification(150), 75);
+	assert_eq!(threshold_for_broadcast_verification(99), 65);
+	assert_eq!(threshold_for_broadcast_verification(100), 66);
+	assert_eq!(threshold_for_broadcast_verification(150), 99);
 }
 
 /// Mappings from signer_idx to Validator Id and back

@@ -93,10 +93,18 @@ where
 	&received_idxs == expected_idxs
 }
 
-// This might result in an error if we don't get ~1/2 of parties agreeing on the same value.
-// If we don't, this means that either (a) the broadcaster did an inconsistent broadcast,
-// (b) that the broadcaster failed to deliver the message to large enough number of parties,
-// or (c) that ~1/2 of parties colluded to slash the broadcasting party.
+/// Decide, for each party, what they are deemed to have broadcast, using a 2/3 quorum over
+/// what the *reporters* claim (see `threshold_for_broadcast_verification`).
+///
+/// The distinction that matters is between the two ways a party can fail to reach quorum:
+///
+///   - a quorum agrees the party sent *nothing* - attributable, and reported;
+///   - no quorum forms either way - the stage fails, but nobody is reported.
+///
+/// The second case must never produce blame. Claims of non-receipt are unfalsifiable, so a
+/// colluding minority large enough to deny quorum could otherwise manufacture agreement that
+/// honest parties failed to broadcast, and blame is what gets nodes banned from the retried
+/// ceremony.
 fn verify_broadcasts<T>(
 	verification_messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<T>>>,
 ) -> Result<BTreeMap<AuthorityCount, T>, (BTreeSet<AuthorityCount>, BroadcastFailureReason)>
@@ -142,43 +150,40 @@ where
 	// and delaying deserialization when we receive these over p2p would would make
 	// our code more complicated than necessary.
 
-	// Assume Some(x) are all the same (there is no inconsistency), do we have enough non-None
-	// messages for all parties? yes: if we end up failing anyway, then it must be due to
-	// inconsistency no: due to "too few messages"
-	let insufficient_messages = participating_idxs.iter().any(|idx| {
-		// Check if we have enough delivered messages for each idx to reach the threshold + 1
-		verification_messages.iter().filter(|(_, m)| m.data[idx].is_some()).count() <= threshold
-	});
-
 	let mut agreed_on_values = BTreeMap::<AuthorityCount, T>::new();
 
 	let mut reported_parties = BTreeSet::new();
 
-	// Check that the values are agreed on by the threshold majority.
-	// A party is reported if we can't agree on the value they broadcast
-	// or if the agreed upon value is `None` (i.e. they didn't broadcast)
+	// Set if some party's value reached no quorum either way. The stage still fails, but
+	// unlike `reported_parties` this is not attributable to anyone.
+	let mut unresolved = false;
+
 	for idx in &participating_idxs {
 		let message_iter = verification_messages.values().map(|m| m.data[idx].clone());
-		if let Some(Some(data)) = find_frequent_element(message_iter, threshold) {
-			agreed_on_values.insert(*idx, data);
-		} else {
-			reported_parties.insert(*idx);
+		match find_frequent_element(message_iter, threshold) {
+			Some(Some(data)) => {
+				agreed_on_values.insert(*idx, data);
+			},
+			Some(None) => {
+				reported_parties.insert(*idx);
+			},
+			None => {
+				unresolved = true;
+			},
 		}
 	}
 
-	if reported_parties.is_empty() {
-		Ok(agreed_on_values)
+	if !reported_parties.is_empty() {
+		// A quorum agrees these parties broadcast nothing, so the failure is attributable
+		// to them. Any unresolved values are reported through this same error; naming only
+		// the attributable parties is what keeps the blame set defensible.
+		Err((reported_parties, BroadcastFailureReason::InsufficientMessages))
+	} else if unresolved {
+		// Deliberately reporting nobody: we can see the ceremony cannot proceed, but not
+		// who is at fault, and an honest node must never emit blame it cannot substantiate.
+		Err((BTreeSet::new(), BroadcastFailureReason::Inconsistency))
 	} else {
-		Err((
-			reported_parties,
-			if insufficient_messages {
-				BroadcastFailureReason::InsufficientMessages
-			} else {
-				// If the failure was not due to "InsufficientMessages",
-				// then it must be caused by (or at least partially caused by) inconsistency.
-				BroadcastFailureReason::Inconsistency
-			},
-		))
+		Ok(agreed_on_values)
 	}
 }
 
@@ -249,11 +254,72 @@ mod tests {
 		check_broadcast_verification(all_messages, Ok(vec![(1, 1), (2, 1), (3, 1), (4, 1)]));
 	}
 
+	/// Agreeing on a value requires a 2/3 quorum. 1/2 is not sufficient (requires 5 participants
+	/// to differentiate the two cases).
+	#[test]
+	fn bare_majority_cannot_dictate_values() {
+		// Reporters 1-3 are a coalition claiming everyone broadcast 2; reporters 4 and 5
+		// honestly report what was really sent.
+		let all_messages = to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(2), Some(2), Some(2), Some(2), Some(2)])),
+			(2, Some(vec![Some(2), Some(2), Some(2), Some(2), Some(2)])),
+			(3, Some(vec![Some(2), Some(2), Some(2), Some(2), Some(2)])),
+			(4, Some(vec![Some(1), Some(1), Some(1), Some(1), Some(1)])),
+			(5, Some(vec![Some(1), Some(1), Some(1), Some(1), Some(1)])),
+		]);
+
+		// Neither value reaches the quorum, so nothing is substituted - and the coalition
+		// cannot convert the failure into evictions, because nobody is reported.
+		check_broadcast_verification(
+			all_messages,
+			Err((BTreeSet::new(), BroadcastFailureReason::Inconsistency)),
+		);
+	}
+
+	/// A quorum agreeing a party broadcast *nothing* is attributable, and is the only
+	/// way a party gets reported by this function.
+	#[test]
+	fn quorum_on_non_receipt_is_attributable() {
+		// Nobody received anything from party 2, and all four reporters say so.
+		let all_messages = to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(1), None, Some(1), Some(1)])),
+			(2, Some(vec![Some(1), None, Some(1), Some(1)])),
+			(3, Some(vec![Some(1), None, Some(1), Some(1)])),
+			(4, Some(vec![Some(1), None, Some(1), Some(1)])),
+		]);
+
+		check_broadcast_verification(
+			all_messages,
+			Err(([2].into_iter().collect(), BroadcastFailureReason::InsufficientMessages)),
+		);
+	}
+
+	/// A colluding minority claiming non-receipt must not be able to get an honest party
+	/// blamed. Denying quorum is within their power; *affirming* non-receipt is not.
+	#[test]
+	fn minority_claiming_non_receipt_blames_nobody() {
+		// Parties 3 and 4 falsely claim they received nothing from party 1. That is enough
+		// to deny party 1's value a quorum, but not enough to affirm non-receipt.
+		let all_messages = to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+			(2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+			(3, Some(vec![None, Some(1), Some(1), Some(1)])),
+			(4, Some(vec![None, Some(1), Some(1), Some(1)])),
+		]);
+
+		// The ceremony cannot proceed, but nobody is punished for it.
+		check_broadcast_verification(
+			all_messages,
+			Err((BTreeSet::new(), BroadcastFailureReason::Inconsistency)),
+		);
+	}
+
 	#[test]
 	fn fail_from_inconsistent_broadcast() {
-		// We can't achieve consensus on values from parties
-		// 2 and 4 (indexes in inner vectors), which we assume
-		// is due to them sending messages inconsistently
+		// We can't achieve consensus on values from parties 2 and 4 (indexes in inner
+		// vectors), which we assume is due to them sending messages inconsistently.
+		// Equivocation is not attributable without authenticated messages, so the ceremony
+		// fails reporting nobody.
 
 		let all_messages = to_broadcast_verification_messages(vec![
 			(1_u32, Some(vec![Some(1), None, Some(1), Some(2)])),
@@ -262,17 +328,19 @@ mod tests {
 			(4, Some(vec![Some(1), Some(1), Some(1), Some(2)])),
 		]);
 
-		// Expect parties 2 and 4 to be reported
+		// The stage fails, but no parties are reported.
 		check_broadcast_verification(
 			all_messages,
-			Err(([2, 4].iter().copied().collect(), BroadcastFailureReason::Inconsistency)),
+			Err((BTreeSet::new(), BroadcastFailureReason::Inconsistency)),
 		);
 	}
 
 	#[test]
 	fn fail_from_missing_messages() {
-		// We can't achieve consensus on values from 2
-		// because 4 is missing all messages and 3 is missing one message from 2
+		// We can't achieve consensus on values from 2 because 4 is missing all messages
+		// and 3 is missing one message from 2. Two of four parties are faulty here, which
+		// is beyond what a 2/3 quorum tolerates (f <= (n-1)/3, i.e. 1 at n = 4), so the
+		// non-receipt cannot be affirmed either and nobody is reported.
 
 		let all_messages = to_broadcast_verification_messages(vec![
 			(1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
@@ -281,10 +349,9 @@ mod tests {
 			(4, None),
 		]);
 
-		// Expect party 2 to be reported
 		check_broadcast_verification(
 			all_messages,
-			Err(([2].iter().copied().collect(), BroadcastFailureReason::InsufficientMessages)),
+			Err((BTreeSet::new(), BroadcastFailureReason::Inconsistency)),
 		);
 	}
 

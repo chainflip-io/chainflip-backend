@@ -14,10 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	client::{helpers::ACCOUNT_IDS, keygen::generate_key_data},
-	eth::EvmCryptoScheme,
-};
+use crate::{client::keygen::generate_key_data, eth::EvmCryptoScheme};
+
+use cf_primitives::AccountId;
 
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::BTreeSet;
@@ -65,10 +64,12 @@ fn ensure_keygen_result_info_serialization_is_consistent() {
 		104, 75, 53, 122, 4, 0, 0, 0, 2, 0, 0, 0,
 	];
 
+	let account_ids: Vec<AccountId> = (1..=4).map(|i| AccountId::new([i; 32])).collect();
+
 	let keygen_result_info =
-		generate_key_data::<EvmCryptoScheme>(BTreeSet::from_iter(ACCOUNT_IDS.clone()), &mut rng)
+		generate_key_data::<EvmCryptoScheme>(BTreeSet::from_iter(account_ids.clone()), &mut rng)
 			.1
-			.get(&ACCOUNT_IDS[0])
+			.get(&account_ids[0])
 			.expect("should get keygen for an account")
 			.to_owned();
 

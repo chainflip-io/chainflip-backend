@@ -48,8 +48,11 @@ type ChainPoint<Chain> = <<Chain as ChainSigning>::CryptoScheme as CryptoScheme>
 mod broadcast_commitments_stage {
 	use super::*;
 
+	/// An inconsistent broadcast aborts the ceremony without reporting anyone: the evidence
+	/// is indistinguishable from reporters lying about an honest party, so blaming on it
+	/// would hand a colluding minority a way to evict honest nodes.
 	#[tokio::test]
-	async fn should_report_on_inconsistent_broadcast() {
+	async fn should_abort_on_inconsistent_broadcast() {
 		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 		let mut messages = signing_ceremony.request().await;
@@ -63,7 +66,7 @@ mod broadcast_commitments_stage {
 		let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
 		signing_ceremony.distribute_messages(messages).await;
 		signing_ceremony.complete_with_error(
-			&[bad_account_id],
+			&[],
 			SigningFailureReason::BroadcastFailure(
 				BroadcastFailureReason::Inconsistency,
 				SigningStageName::VerifyCommitmentsBroadcast2,
@@ -97,8 +100,9 @@ mod local_signatures_stage {
 
 	use super::*;
 
+	/// As in `broadcast_commitments_stage`: aborts, but reports nobody.
 	#[tokio::test]
-	async fn should_report_on_inconsistent_broadcast() {
+	async fn should_abort_on_inconsistent_broadcast() {
 		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 		let messages = signing_ceremony.request().await;
@@ -114,7 +118,7 @@ mod local_signatures_stage {
 		let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
 		signing_ceremony.distribute_messages(messages).await;
 		signing_ceremony.complete_with_error(
-			&[bad_account_id],
+			&[],
 			SigningFailureReason::BroadcastFailure(
 				BroadcastFailureReason::Inconsistency,
 				SigningStageName::VerifyLocalSigsBroadcastStage4,
