@@ -366,23 +366,6 @@ pub trait AccountInfo {
 	fn liquid_funds(account_id: &Self::AccountId) -> Self::Amount;
 }
 
-/// Trait for managing token issuance.
-pub trait Issuance {
-	type AccountId;
-	type Balance;
-
-	/// Mint new funds.
-	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance);
-
-	/// Returns the total issuance.
-	fn total_issuance() -> Self::Balance;
-
-	/// Burn some funds that are off-chain (eg. in the StateChainGateway contract).
-	///
-	/// Use with care.
-	fn burn_offchain(amount: Self::Balance);
-}
-
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	type Balance;
