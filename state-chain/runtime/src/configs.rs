@@ -742,7 +742,7 @@ impl pallet_timestamp::Config for Runtime {
 
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
-	type EventHandler = Emissions;
+	type EventHandler = ();
 }
 
 impl pallet_cf_flip::Config for Runtime {
@@ -803,21 +803,6 @@ impl pallet_cf_governance::Config for Runtime {
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 	type CompatibleCfeVersions = Environment;
 	type AuthoritiesCfeVersions = Validator;
-}
-
-impl pallet_cf_emissions::Config for Runtime {
-	type HostChain = Ethereum;
-	type FlipBalance = FlipBalance;
-	type ApiCall = eth::api::EthereumApi<EvmEnvironment>;
-	type Broadcaster = EthereumBroadcaster;
-	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type RewardsDistribution = DelegatedRewardsDistribution<Runtime>;
-	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
-	type EthEnvironment = EvmEnvironment;
-	type FlipToBurnOrMove = Swapping;
-	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
-	type SafeMode = RuntimeSafeMode;
-	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {

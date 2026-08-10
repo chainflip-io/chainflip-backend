@@ -26,16 +26,14 @@ impl<T> MockPallet for MockFeePayment<T> {
 	const PREFIX: &'static [u8] = b"MockFeePayment";
 }
 
-const FLIP_2_1_ACTIVATED: &[u8] = b"FLIP_2_1_ACTIVATED";
-
-impl<T> MockFeePayment<T> {
-	pub fn set_flip_2_1_activated(activated: bool) {
-		Self::put_value(FLIP_2_1_ACTIVATED, activated);
-	}
-}
-
 pub const ERROR_INSUFFICIENT_LIQUIDITY: DispatchError =
 	DispatchError::Other("Insufficient liquidity");
+
+const OFFCHAIN_FLIP_TO_BE_DISTRIBUTED: &[u8] = b"OFFCHAIN_FLIP_TO_BE_DISTRIBUTED";
+
+impl<T> MockPallet for MockFeePayment<T> {
+	const PREFIX: &'static [u8] = b"MockFeePayment";
+}
 
 impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayment<T> {
 	type AccountId = T::AccountId;
@@ -47,21 +45,22 @@ impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayme
 			.ok_or(ERROR_INSUFFICIENT_LIQUIDITY)
 	}
 
-	fn add_to_offchain_flip_to_be_distributed(_amount: i128) {}
+	fn add_to_offchain_flip_to_be_distributed(amount: i128) {
+		Self::mutate_value(OFFCHAIN_FLIP_TO_BE_DISTRIBUTED, |value: &mut Option<i128>| {
+			*value = Some(value.unwrap_or_default() + amount);
+		});
+	}
 
 	fn burn_or_reserve_offchain(_amount: Self::Amount) {}
-
-	fn is_flip_2_1_activated() -> bool {
-		Self::get_value(FLIP_2_1_ACTIVATED).unwrap_or(false)
-	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
 		MockFundingInfo::<T>::credit_funds(account_id, amount);
 	}
+}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_flip_2_1() {
-		Self::set_flip_2_1_activated(true);
+impl<T> MockFeePayment<T> {
+	pub fn get_offchain_flip_to_be_distributed() -> i128 {
+		Self::get_value(OFFCHAIN_FLIP_TO_BE_DISTRIBUTED).unwrap_or_default()
 	}
 }

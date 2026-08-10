@@ -3,9 +3,6 @@ source: state-chain/custom-rpc/src/tests.rs
 expression: val
 ---
 {
-  "emissions": {
-    "emissions_sync_enabled": true
-  },
   "funding": {
     "redeem_enabled": true
   },

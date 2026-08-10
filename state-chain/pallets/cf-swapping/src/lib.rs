@@ -722,10 +722,6 @@ pub mod pallet {
 	#[pallet::getter(fn maximum_swap_amount)]
 	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
 
-	/// FLIP ready to be burned.
-	#[pallet::storage]
-	pub type FlipToBurn<T: Config> = StorageValue<_, i128, ValueQuery>;
-
 	/// FLIP ready to be sent to gateway.
 	#[pallet::storage]
 	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
@@ -2652,15 +2648,9 @@ pub mod pallet {
 												.saturating_sub(output_amount)
 												.try_into()
 												.unwrap_or(i128::MAX);
-											if T::FeePayment::is_flip_2_1_activated() {
-												T::FeePayment::add_to_offchain_flip_to_be_distributed(
-													-deficit,
-												);
-											} else {
-												FlipToBurn::<T>::mutate(|total| {
-													total.saturating_reduce(deficit);
-												});
-											}
+											T::FeePayment::add_to_offchain_flip_to_be_distributed(
+												-deficit,
+											);
 										} else {
 											T::FundAccount::fund_account(
 												account_id.clone(),
@@ -2683,17 +2673,9 @@ pub mod pallet {
 					},
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
-						if T::FeePayment::is_flip_2_1_activated() {
-							T::FeePayment::add_to_offchain_flip_to_be_distributed(
-								output_amount.try_into().unwrap_or(i128::MAX),
-							);
-						} else {
-							FlipToBurn::<T>::mutate(|total| {
-								total.saturating_accrue(
-									output_amount.try_into().unwrap_or(i128::MAX),
-								);
-							});
-						}
+						T::FeePayment::add_to_offchain_flip_to_be_distributed(
+							output_amount.try_into().unwrap_or(i128::MAX),
+						);
 					} else {
 						log_or_panic!(
 							"NetworkFee burning should not be in asset: {:?}",
@@ -3582,15 +3564,6 @@ impl<T: Config> DeregistrationHooks for PendingSwapDeregistrationCheck<T> {
 		);
 
 		Ok(())
-	}
-}
-
-impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
-	fn take_flip_to_burn() -> i128 {
-		FlipToBurn::<T>::take()
-	}
-	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
-		FlipToBeSentToGateway::<T>::take()
 	}
 }
 

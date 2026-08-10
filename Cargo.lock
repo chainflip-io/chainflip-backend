@@ -1691,7 +1691,6 @@ dependencies = [
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
  "pallet-cf-elections",
- "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-funding",
@@ -9025,31 +9024,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-emissions"
-version = "0.1.0"
-dependencies = [
- "cf-chains",
- "cf-primitives",
- "cf-runtime-utilities",
- "cf-test-utilities",
- "cf-traits",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "log",
- "pallet-authorship",
- "pallet-cf-flip",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-arithmetic",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-cf-environment"
 version = "0.1.0"
 dependencies = [
@@ -14762,7 +14736,6 @@ dependencies = [
  "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
  "pallet-cf-elections",
- "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-funding",
