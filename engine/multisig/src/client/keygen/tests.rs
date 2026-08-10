@@ -243,11 +243,16 @@ async fn should_report_on_incomplete_blame_response() {
 	);
 }
 
-// If one of more parties (are thought to) broadcast data inconsistently,
-// the ceremony should be aborted and all faulty parties should be reported.
-// Fail on `verify_broadcasts` during `VerifyCommitmentsBroadcast2`
+// If one or more parties (are thought to) broadcast data inconsistently, the ceremony is
+// aborted - but nobody is reported.
+//
+// The evidence for "C equivocated" is identical to the evidence for "the reporters lied
+// about C", and this stage cannot tell them apart: entries in a verification message are
+// attributed to a sender but not authenticated by them.
+//
+// Fail on `verify_broadcasts` during `VerifyCommitmentsBroadcast4`
 #[tokio::test]
-async fn should_report_on_inconsistent_broadcast_coeff_comm() {
+async fn should_abort_on_inconsistent_broadcast_coeff_comm() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -268,7 +273,7 @@ async fn should_report_on_inconsistent_broadcast_coeff_comm() {
 	let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony.complete_with_error(
-		std::slice::from_ref(bad_account_id),
+		&[],
 		KeygenFailureReason::BroadcastFailure(
 			BroadcastFailureReason::Inconsistency,
 			KeygenStageName::VerifyCommitmentsBroadcast4,
@@ -277,7 +282,7 @@ async fn should_report_on_inconsistent_broadcast_coeff_comm() {
 }
 
 #[tokio::test]
-async fn should_report_on_inconsistent_broadcast_hash_comm() {
+async fn should_abort_on_inconsistent_broadcast_hash_comm() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let mut messages = ceremony.request().await;
@@ -295,7 +300,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm() {
 
 	ceremony.distribute_messages(messages).await;
 	ceremony.complete_with_error(
-		std::slice::from_ref(bad_account_id),
+		&[],
 		KeygenFailureReason::BroadcastFailure(
 			BroadcastFailureReason::Inconsistency,
 			KeygenStageName::VerifyHashCommitmentsBroadcast2,
@@ -339,7 +344,7 @@ async fn should_report_on_invalid_hash_comm() {
 }
 
 #[tokio::test]
-async fn should_report_on_inconsistent_broadcast_complaints() {
+async fn should_abort_on_inconsistent_broadcast_complaints() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -368,7 +373,7 @@ async fn should_report_on_inconsistent_broadcast_complaints() {
 	let messages = ceremony.run_stage::<keygen::VerifyComplaints7, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony.complete_with_error(
-		std::slice::from_ref(bad_account_id),
+		&[],
 		KeygenFailureReason::BroadcastFailure(
 			BroadcastFailureReason::Inconsistency,
 			KeygenStageName::VerifyComplaintsBroadcastStage7,
@@ -377,7 +382,7 @@ async fn should_report_on_inconsistent_broadcast_complaints() {
 }
 
 #[tokio::test]
-async fn should_report_on_inconsistent_broadcast_blame_responses() {
+async fn should_abort_on_inconsistent_broadcast_blame_responses() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let party_idx_mapping =
@@ -407,8 +412,6 @@ async fn should_report_on_inconsistent_broadcast_blame_responses() {
 	let mut messages =
 		run_stages!(ceremony, messages, Complaints6, VerifyComplaints7, BlameResponse8);
 
-	let [bad_account_id] = &ceremony.select_account_ids();
-
 	// Make one of the nodes send 2 different blame responses evenly to the others
 	// Note: the bad node must send different blame response to more than 1/3 of the participants
 	let secret_share = SecretShare5::create_random(&mut ceremony.rng);
@@ -425,7 +428,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses() {
 	let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony.complete_with_error(
-		std::slice::from_ref(bad_account_id),
+		&[],
 		KeygenFailureReason::BroadcastFailure(
 			BroadcastFailureReason::Inconsistency,
 			KeygenStageName::VerifyBlameResponsesBroadcastStage9,
