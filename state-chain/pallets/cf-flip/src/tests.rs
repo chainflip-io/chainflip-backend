@@ -17,12 +17,9 @@
 #![cfg(test)]
 
 use super::*;
-use crate::{
-	mock::*, Account, Bonder, Error, FlipIssuance, OffchainFunds, Reserve, SlashingRate,
-	TotalIssuance,
-};
+use crate::{mock::*, Account, Bonder, Error, OffchainFunds, Reserve, SlashingRate, TotalIssuance};
 use cf_primitives::FlipBalance;
-use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
+use cf_traits::{AccountInfo, Bonding, Funding, Slashing};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},
@@ -164,9 +161,7 @@ impl FlipOperation {
 				{
 					return false
 				}
-				if FlipIssuance::<Test>::total_issuance() !=
-					previous_issuance.saturating_sub(*amount)
-				{
+				if Flip::total_issuance() != previous_issuance.saturating_sub(*amount) {
 					return false
 				}
 			},
@@ -483,9 +478,9 @@ mod test_issuance {
 	#[test]
 	fn account_deletion_reserves_dust_for_distribution() {
 		new_test_ext().execute_with(|| {
-			let issuance_before = FlipIssuance::<Test>::total_issuance();
+			let issuance_before = Flip::total_issuance();
 			frame_system::Provider::<Test>::killed(&BOB).unwrap();
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), issuance_before);
+			assert_eq!(Flip::total_issuance(), issuance_before);
 			assert_eq!(Flip::total_balance_of(&BOB), 0);
 			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 50);
 			assert!(check_balance_integrity());
@@ -564,7 +559,7 @@ mod test_tx_payments {
 			// Fee is in escrow.
 			assert_eq!(escrow.as_ref().map(|(fee, _)| fee.peek()), Some(FEE));
 			// Issuance unchanged.
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
+			assert_eq!(Flip::total_issuance(), 1000);
 
 			FlipTransactionPayment::<Test>::correct_and_deposit_fee(
 				&ALICE,
@@ -580,7 +575,7 @@ mod test_tx_payments {
 			// Alice paid the fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 99);
 			// Fee is reserved for distribution rather than burned.
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
+			assert_eq!(Flip::total_issuance(), 1000);
 			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), FEE);
 		});
 	}
@@ -604,7 +599,7 @@ mod test_tx_payments {
 			// Alice paid no fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 100);
 			// Nothing was burned.
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
+			assert_eq!(Flip::total_issuance(), 1000);
 		});
 	}
 
@@ -627,7 +622,7 @@ mod test_tx_payments {
 			// Fee is in escrow.
 			assert_eq!(escrow.as_ref().map(|(fee, _)| fee.peek()), Some(PRE_FEE));
 			// Issuance unchanged.
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
+			assert_eq!(Flip::total_issuance(), 1000);
 
 			FlipTransactionPayment::<Test>::correct_and_deposit_fee(
 				&ALICE,
@@ -643,7 +638,7 @@ mod test_tx_payments {
 			// Alice paid the adjusted fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 100 - POST_FEE);
 			// The fee is reserved for distribution rather than burned.
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
+			assert_eq!(Flip::total_issuance(), 1000);
 			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), POST_FEE);
 		});
 	}
