@@ -815,53 +815,6 @@ export interface ChainTx<
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
   };
   /**
-   * Pallet `Emissions`'s transaction calls
-   **/
-  emissions: {
-    /**
-     * Updates the emission rate to Validators.
-     *
-     * Can only be called by the root origin.
-     *
-     * @param {number} inflation
-     **/
-    updateCurrentAuthorityEmissionInflation: GenericTxCall<
-      (inflation: number) => ChainSubmittableExtrinsic<
-        {
-          pallet: 'Emissions';
-          palletCall: {
-            name: 'UpdateCurrentAuthorityEmissionInflation';
-            params: { inflation: number };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     * Updates the Supply Update interval.
-     *
-     * @param {number} value
-     **/
-    updateSupplyUpdateInterval: GenericTxCall<
-      (value: number) => ChainSubmittableExtrinsic<
-        {
-          pallet: 'Emissions';
-          palletCall: {
-            name: 'UpdateSupplyUpdateInterval';
-            params: { value: number };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     * Generic pallet tx call
-     **/
-    [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
-  };
-  /**
    * Pallet `Funding`'s transaction calls
    **/
   funding: {
