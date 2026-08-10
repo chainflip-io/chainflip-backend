@@ -478,13 +478,16 @@ fn test_try_debit_from_liquid_funds() {
 #[cfg(test)]
 mod test_issuance {
 	use super::*;
+	use crate::ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID;
 
 	#[test]
-	fn account_deletion_burns_balance() {
+	fn account_deletion_reserves_dust_for_distribution() {
 		new_test_ext().execute_with(|| {
+			let issuance_before = FlipIssuance::<Test>::total_issuance();
 			frame_system::Provider::<Test>::killed(&BOB).unwrap();
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 950);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), issuance_before);
 			assert_eq!(Flip::total_balance_of(&BOB), 0);
+			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 50);
 			assert!(check_balance_integrity());
 		});
 	}
@@ -492,7 +495,7 @@ mod test_issuance {
 
 #[cfg(test)]
 mod test_tx_payments {
-	use crate::FlipTransactionPayment;
+	use crate::{FlipTransactionPayment, ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID};
 	use frame_support::{dispatch::GetDispatchInfo, pallet_prelude::InvalidTransaction};
 	use pallet_transaction_payment::OnChargeTransaction;
 
@@ -576,8 +579,9 @@ mod test_tx_payments {
 			assert!(check_balance_integrity());
 			// Alice paid the fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 99);
-			// Fee was burned.
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 999);
+			// Fee is reserved for distribution rather than burned.
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
+			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), FEE);
 		});
 	}
 
@@ -638,8 +642,9 @@ mod test_tx_payments {
 			assert!(check_balance_integrity());
 			// Alice paid the adjusted fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 100 - POST_FEE);
-			// The fee was burned.
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000 - POST_FEE);
+			// The fee is reserved for distribution rather than burned.
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
+			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), POST_FEE);
 		});
 	}
 }
@@ -723,16 +728,12 @@ mod transfer {
 #[cfg(test)]
 mod test_flip_reward_distribution {
 	use super::*;
-	use crate::{
-		FeeRewardsActivationEpoch, FlipToDistribute, ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
-	};
+	use crate::{FlipToDistribute, ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID};
 	use cf_traits::{mocks::rewards_distribution::MockRewardsDistribution, FeePayment};
 
 	#[test]
 	fn distributes_offchain_and_onchain_rewards_evenly() {
 		new_test_ext().execute_with(|| {
-			FeeRewardsActivationEpoch::<Test>::set(0);
-
 			Flip::add_to_offchain_flip_to_be_distributed(300i128);
 			<Flip as FeePayment>::burn_or_reserve_offchain(300u128);
 
@@ -756,8 +757,6 @@ mod test_flip_reward_distribution {
 	#[test]
 	fn remainder_stays_in_reserve_not_awarded_to_winner() {
 		new_test_ext().execute_with(|| {
-			FeeRewardsActivationEpoch::<Test>::set(0);
-
 			// 1 offchain bridged in + 201 onchain = 202 total; 202 / 3 = 67 each, 1 stays in
 			// reserve
 			Flip::add_to_offchain_flip_to_be_distributed(1i128);
@@ -781,8 +780,6 @@ mod test_flip_reward_distribution {
 	#[test]
 	fn negative_offchain_balance_is_not_distributed() {
 		new_test_ext().execute_with(|| {
-			FeeRewardsActivationEpoch::<Test>::set(0);
-
 			// Negative FlipToDistribute should be left intact; only onchain rewards are distributed
 			Flip::add_to_offchain_flip_to_be_distributed(-100i128);
 			<Flip as FeePayment>::burn_or_reserve_offchain(300u128);
@@ -806,8 +803,6 @@ mod test_flip_reward_distribution {
 	#[test]
 	fn zero_onchain_reserve_only_distributes_offchain() {
 		new_test_ext().execute_with(|| {
-			FeeRewardsActivationEpoch::<Test>::set(0);
-
 			Flip::add_to_offchain_flip_to_be_distributed(300i128);
 			// Reserve not set → defaults to 0
 
@@ -826,33 +821,12 @@ mod test_flip_reward_distribution {
 	}
 
 	#[test]
-	fn reward_accrual_gated_by_activation_epoch() {
+	fn fees_reserved_via_burn_or_reserve_offchain_are_distributed() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 300;
 
-			// Pre-activation (default FeeRewardsActivationEpoch is u32::MAX): fees are burned
-			// rather than reserved for distribution.
-			assert!(!Flip::is_flip_2_1_activated());
-
-			let issuance_before = TotalIssuance::<Test>::get();
-			let offchain_before = OffchainFunds::<Test>::get();
-			<Flip as FeePayment>::burn_or_reserve_offchain(AMOUNT);
-
-			assert_eq!(TotalIssuance::<Test>::get(), issuance_before - AMOUNT);
-			assert_eq!(OffchainFunds::<Test>::get(), offchain_before - AMOUNT);
-			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 0);
-
-			MockRewardsDistribution::<Test>::set_beneficiaries(0, vec![ALICE, BOB, CHARLIE]);
-			let bridged = Flip::trigger_flip_reward_distribution(0);
-			assert_eq!(bridged, 0);
-			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 0);
-
-			// Advance to the configured activation epoch.
-			MockEpochInfo::set_epoch(1);
-			FeeRewardsActivationEpoch::<Test>::set(1);
-			assert!(Flip::is_flip_2_1_activated());
-
-			// Post-activation: fees are reserved for distribution instead of burned.
+			// Off-chain fees bridged in via `burn_or_reserve_offchain` are reserved for
+			// distribution rather than burned.
 			let issuance_before = TotalIssuance::<Test>::get();
 			let offchain_before = OffchainFunds::<Test>::get();
 			<Flip as FeePayment>::burn_or_reserve_offchain(AMOUNT);
@@ -883,8 +857,6 @@ mod test_flip_reward_distribution {
 		new_test_ext()
 			.execute_with(|| -> TestResult {
 				const COUNT: u128 = 3; // ALICE, BOB, CHARLIE
-
-				FeeRewardsActivationEpoch::<Test>::set(0);
 
 				// Top up OffchainFunds to cover both the onchain_reserve bridge-in below and the
 				// flip_to_distribute bridge-in inside trigger_flip_reward_distribution

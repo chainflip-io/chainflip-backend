@@ -24,7 +24,8 @@ use cf_primitives::{chains::assets::btc, AuthorityCount, BroadcastId};
 use cf_traits::{Broadcaster, EpochInfo};
 use pallet_cf_broadcast::{AwaitingBroadcast, DelayedBroadcastRetryQueue, PendingBroadcasts};
 use state_chain_runtime::{
-	BitcoinBroadcaster, BitcoinInstance, BitcoinThresholdSigner, Environment, Runtime, Validator,
+	chainflip::EvmEnvironment, BitcoinBroadcaster, BitcoinInstance, BitcoinThresholdSigner,
+	Environment, Runtime, Validator,
 };
 
 #[test]
@@ -135,7 +136,8 @@ fn bitcoin_broadcast_delay_works() {
 #[test]
 fn refresh_replay_protection() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
-		let mut api_call = <<Runtime as pallet_cf_emissions::Config>::ApiCall as UpdateFlipSupply<_>>::new_unsigned(1_000_000, 1);
+		let mut api_call =
+			<EthereumApi<EvmEnvironment> as UpdateFlipSupply<_>>::new_unsigned(1_000_000, 1);
 
 		let old_replay_protection = match &api_call {
 			EthereumApi::UpdateFlipSupply(call) => call.replay_protection(),
