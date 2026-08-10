@@ -693,16 +693,17 @@ pub fn analyse(
 	report
 }
 
-/// Print a short summary and write the full report next to the snapshots.
+/// Print a short summary and write the full report in this crate's directory.
 pub fn run(
 	block_hash: state_chain_runtime::Hash,
 	pairs: &Pairs,
 	trie_nodes: &TrieNodes,
 ) -> anyhow::Result<()> {
 	let report = analyse(block_hash, pairs, trie_nodes);
-	let path = format!("storage-report-{block_hash:?}.md");
+	let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+		.join(format!("storage-report-{block_hash:?}.md"));
 	std::fs::write(&path, &report)?;
-	println!("Storage report written to {path}");
+	println!("Storage report written to {}", path.display());
 	// Echo the header + per-pallet table so the terminal is useful on its own.
 	for line in report.lines().take_while(|l| !l.starts_with("## Well-known")) {
 		println!("{line}");
