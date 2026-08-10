@@ -33,14 +33,16 @@ use cf_chains::{
 	},
 	Arbitrum, Assethub, Bitcoin, Chain, ChainEnvironment, Polkadot, Solana, Tron,
 };
-use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
+use cf_primitives::{AuthorityCount, BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
+	elections::{ElectionInstanceVoting, VoterContext},
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	mocks::key_provider::MockKeyProvider,
+	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{
 	derive_impl,
-	pallet_prelude::{InvalidTransaction, TransactionValidityError, ValidTransaction},
+	pallet_prelude::{InvalidTransaction, TransactionValidityError, ValidTransaction, Weight},
 	parameter_types, DebugNoBound, DefaultNoBound,
 };
 use sp_core::{H160, H256};
@@ -302,6 +304,69 @@ where
 	}
 }
 
+/// Stand-in for the runtime's set of `pallet-cf-elections` instances: one entry per instance,
+/// in order.
+///
+/// Every instance the pallet reaches records itself, so a test can tell "the pallet never got
+/// this far" apart from "it got here and the instance refused". `reject` makes an instance
+/// report a failure.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub struct MockInstanceVotes {
+	pub count: u32,
+	pub reject: bool,
+}
+
+impl MockInstanceVotes {
+	pub fn accept(count: u32) -> Self {
+		Self { count, reject: false }
+	}
+
+	pub fn reject(count: u32) -> Self {
+		Self { count, reject: true }
+	}
+}
+
+pub struct MockElectionInstances<T>(PhantomData<T>);
+
+const RECORDED_VOTES: &[u8] = b"MockElectionInstances::RecordedVotes";
+
+pub const INSTANCE_REJECTED: DispatchError = DispatchError::Other("instance rejected the votes");
+
+impl<T: cf_traits::Chainflip> MockElectionInstances<T> {
+	/// `(instance index, vote count, voter's authority index)` for every instance reached, in
+	/// the order reached.
+	pub fn recorded_votes() -> Vec<(u32, u32, AuthorityCount)> {
+		frame_support::storage::unhashed::get(RECORDED_VOTES).unwrap_or_default()
+	}
+
+	fn record(index: u32, count: u32, authority_index: AuthorityCount) {
+		let mut recorded = Self::recorded_votes();
+		recorded.push((index, count, authority_index));
+		frame_support::storage::unhashed::put(RECORDED_VOTES, &recorded);
+	}
+}
+
+impl<T: cf_traits::Chainflip> ElectionInstanceVoting<T> for MockElectionInstances<T> {
+	type VotesBatch = Vec<MockInstanceVotes>;
+
+	fn weight(votes: &Self::VotesBatch) -> Weight {
+		Weight::from_parts(votes.iter().map(|v| v.count as u64).sum(), 0)
+	}
+
+	fn vote_all(context: &VoterContext<T>, votes: Self::VotesBatch) -> Vec<(u32, DispatchError)> {
+		votes
+			.into_iter()
+			.enumerate()
+			.filter_map(|(index, instance)| {
+				let index = index as u32;
+				// Recorded before the outcome is decided, so a rejecting instance still shows up.
+				Self::record(index, instance.count, context.authority_index);
+				instance.reject.then_some((index, INSTANCE_REJECTED))
+			})
+			.collect()
+	}
+}
+
 impl pallet_cf_environment::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
@@ -321,6 +386,7 @@ impl pallet_cf_environment::Config for Test {
 	type TransactionPayments = MockPayment<Self>;
 	type GetTransactionPayments = ();
 	type WeightInfo = ();
+	type ElectionInstances = MockElectionInstances<Self>;
 }
 
 pub const STATE_CHAIN_GATEWAY_ADDRESS: evm::Address = H160([0u8; 20]);
@@ -420,6 +486,7 @@ pub mod benchmarks_mock {
 		type TransactionPayments = MockPayment<Self>;
 		type GetTransactionPayments = ();
 		type WeightInfo = ();
+		type ElectionInstances = MockElectionInstances<Self>;
 	}
 
 	pub struct MockWaivedFees;

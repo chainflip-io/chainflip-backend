@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
+	elections::{
+		vote_batcher::VoteBatcher,
+		voter_api::{CompositeVoter, VoterApi},
+	},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
 		event::{Event, EvmEventSource},
@@ -491,6 +494,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
+	vote_batcher: VoteBatcher,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -582,6 +586,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_batcher = vote_batcher.clone();
 			let vault_event_source = vault_event_source.clone();
 			let key_manager_event_source = key_manager_event_source.clone();
 			let sc_gateway_event_source = sc_gateway_event_source.clone();
@@ -636,6 +641,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Ethereum",
+							vote_batcher,
 						)
 						.continuously_vote()
 						.await;
