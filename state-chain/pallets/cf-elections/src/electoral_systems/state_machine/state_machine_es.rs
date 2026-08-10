@@ -205,13 +205,16 @@ impl<ES: StatemachineElectoralSystemTypes> ElectoralSystem for StatemachineElect
 
 		// step for each election that reached consensus
 		log::debug!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
-		for election_identifier in &election_identifiers {
-			let election_access = ElectoralAccess::election_mut(*election_identifier);
+		let mut identifiers_and_properties = Vec::with_capacity(election_identifiers.len());
+		for election_identifier in election_identifiers {
+			let election_access = ElectoralAccess::election_mut(election_identifier);
+			let properties = election_access.properties()?;
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
 			if let Some(input) = election_access.check_consensus()?.has_consensus() {
 				log::debug!("ESSM: stepping with input {input:?}");
-				step(Either::Right((election_access.properties()?, input)))?;
+				step(Either::Right((properties.clone(), input)))?;
 			}
+			identifiers_and_properties.push((election_identifier, properties));
 		}
 
 		// gather the queries after all state transitions
@@ -223,9 +226,8 @@ impl<ES: StatemachineElectoralSystemTypes> ElectoralSystem for StatemachineElect
 		// (thus cannot be part of the loop above) since we first want to
 		// apply *all* state transitions to determine which elections should
 		// be kept open.
-		for election_identifier in election_identifiers {
+		for (election_identifier, properties) in identifiers_and_properties {
 			let election = ElectoralAccess::election_mut(election_identifier);
-			let properties: <ES::Statemachine as AbstractApi>::Query = election.properties()?;
 			if !queries.contains(&properties) {
 				election.delete();
 			} else {
