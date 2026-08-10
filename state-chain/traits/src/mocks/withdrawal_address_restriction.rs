@@ -109,4 +109,6 @@ impl<AccountId: Encode + Decode + Ord + Clone> WithdrawalAddressRestriction
 		Self::put_storage(BOUND, owner, address);
 		Ok(())
 	}
+
+	fn clear_pending_withdrawal_changes(_owner: &Self::AccountId) {}
 }
