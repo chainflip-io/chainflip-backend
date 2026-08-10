@@ -300,7 +300,7 @@ services:
     command: -c /tron/config/config-peer.conf -d /tron/output-directory
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-e0e1c8d3c899cdbf2b51a6756368c57234c6babf}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-c029cab6544918921da045e74938b656ecded332}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
