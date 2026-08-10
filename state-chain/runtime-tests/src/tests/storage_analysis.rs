@@ -600,9 +600,16 @@ pub fn analyse(
 	let mut unattributed = (0usize, 0usize);
 	for (k, (v, _)) in trie_nodes.iter() {
 		let size = k.len() + v.len();
-		let name = (k.len() >= 32)
+let hash_len = std::mem::size_of::<state_chain_runtime::Hash>();
+		let path_len = k.len().saturating_sub(hash_len);
+		let name = (path_len >= 32)
 			.then(|| declared.get(&k[..32]).map(|i| i.pallet.clone()))
-			.flatten();
+			.flatten()
+			.or_else(|| {
+				(path_len >= 16)
+					.then(|| pallet_prefixes.get(&k[..16]).cloned())
+					.flatten()
+			});
 		match name {
 			Some(pallet) => {
 				let e = trie_by_pallet.entry(pallet).or_default();
