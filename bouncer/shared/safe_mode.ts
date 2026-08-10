@@ -29,7 +29,6 @@ interface TranslatedOptions {
 
 export async function setSafeModeToAmber(options: string[]) {
   const translatedOptions: TranslatedOptions = {
-    emissions: {},
     funding: {},
     swapping: {},
     liquidityProvider: {},

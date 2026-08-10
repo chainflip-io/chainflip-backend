@@ -238,7 +238,6 @@ impl From<validator_info_before_v7::ValidatorInfo> for ValidatorInfo {
 			is_online: old.is_online,
 			is_bidding: old.is_bidding,
 			bound_redeem_address: old.bound_redeem_address,
-			apy_bp: old.apy_bp,
 			restricted_balances: old.restricted_balances,
 			estimated_redeemable_balance: old.estimated_redeemable_balance,
 			operator: None,
@@ -262,7 +261,6 @@ pub struct ValidatorInfo {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EvmAddress>,
-	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 	pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
 	pub operator: Option<AccountId32>,
@@ -384,8 +382,8 @@ impl<A> AccountReward<A> {
 
 /// A structured, per-epoch projection of FLIP 2.1 reward distribution: the current on-chain
 /// reward state and every operator/validator/delegator's cumulative cut so far this epoch.
-/// `reward_pool` is empty (and `total_rewards`/`per_authority_share` are zero) if FLIP 2.1's
-/// fee-reward distribution has not yet been activated for the current epoch.
+/// `reward_pool` is empty (and `total_rewards`/`per_authority_share` are zero) if there are no
+/// current authorities.
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct RewardDistributionEstimate<Amount> {
 	pub epoch_index: EpochIndex,
@@ -462,6 +460,7 @@ pub mod before_version_15;
 pub mod before_version_16;
 pub mod before_version_17;
 pub mod before_version_19;
+pub mod before_version_21;
 pub mod before_version_3;
 pub mod before_version_9;
 

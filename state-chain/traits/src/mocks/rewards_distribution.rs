@@ -28,23 +28,6 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 	type Balance = T::Amount;
 	type AccountId = T::AccountId;
 
-	fn distribute(
-		_epoch_index: EpochIndex,
-		amount: Self::Balance,
-		beneficiary: &Self::AccountId,
-		mut settle: impl FnMut(&Self::AccountId, Self::Balance),
-	) {
-		<Self as MockPalletStorage>::mutate_storage(
-			b"REWARDS",
-			beneficiary,
-			|balance: &mut Option<Self::Balance>| {
-				let current_balance = balance.unwrap_or_default();
-				*balance = Some(current_balance + amount);
-			},
-		);
-		settle(beneficiary, amount);
-	}
-
 	fn distribute_all(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
@@ -58,7 +41,15 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 		}
 		let per_beneficiary_amount = total_amount / (beneficiaries.len() as u32).into();
 		for beneficiary in &beneficiaries {
-			Self::distribute(epoch_index, per_beneficiary_amount, beneficiary, &mut settle);
+			<Self as MockPalletStorage>::mutate_storage(
+				b"REWARDS",
+				beneficiary,
+				|balance: &mut Option<Self::Balance>| {
+					let current_balance = balance.unwrap_or_default();
+					*balance = Some(current_balance + per_beneficiary_amount);
+				},
+			);
+			settle(beneficiary, per_beneficiary_amount);
 		}
 	}
 }

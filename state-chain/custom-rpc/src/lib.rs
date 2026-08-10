@@ -285,7 +285,6 @@ pub enum RpcAccountInfo {
 		is_qualified: bool,
 		is_online: bool,
 		is_bidding: bool,
-		apy_bp: Option<u32>,
 		bid: U256,
 		max_bid: Option<U256>,
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -363,7 +362,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 				is_online,
 				is_bidding,
 				bound_redeem_address,
-				apy_bp,
+				apy_bp: _,
 				restricted_balances,
 				estimated_redeemable_balance,
 			} => Self {
@@ -385,7 +384,6 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					is_qualified,
 					is_online,
 					is_bidding,
-					apy_bp,
 					bid: flip_balance.into(),
 					max_bid: None,
 					operator: None,
@@ -529,7 +527,6 @@ pub struct RpcAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EvmAddress>,
-	pub apy_bp: Option<u32>,
 	pub restricted_balances: BTreeMap<EvmAddress, u128>,
 	pub estimated_redeemable_balance: NumberOrHex,
 }
@@ -2200,7 +2197,6 @@ where
 										is_qualified,
 										is_online,
 										is_bidding,
-										apy_bp,
 										bid,
 										max_bid,
 										operator,
@@ -2215,7 +2211,6 @@ where
 										is_qualified,
 										is_online,
 										is_bidding,
-										apy_bp,
 										bid: bid.into(),
 										max_bid: max_bid.map(Into::into),
 										operator,
@@ -2481,7 +2476,6 @@ where
 								is_qualified,
 								is_online,
 								is_bidding,
-								apy_bp,
 								max_bid,
 								bid,
 								operator,
@@ -2489,6 +2483,9 @@ where
 							} = if api_version < 19 {
 								#[expect(deprecated)]
 								api.cf_validator_info_before_version_19(hash, &account_id)?.into()
+							} else if api_version < 21 {
+								#[expect(deprecated)]
+								api.cf_validator_info_before_version_21(hash, &account_id)?.into()
 							} else {
 								api.cf_validator_info(hash, &account_id)?
 							};
@@ -2501,7 +2498,6 @@ where
 								is_qualified,
 								is_online,
 								is_bidding,
-								apy_bp,
 								max_bid: max_bid.map(Into::into),
 								bid: bid.into(),
 								operator,
@@ -2540,7 +2536,6 @@ where
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
-			apy_bp: account_info.apy_bp,
 			restricted_balances: account_info.restricted_balances,
 			estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 		})

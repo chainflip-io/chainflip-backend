@@ -3882,8 +3882,7 @@ mod delegation_splitting {
 
 #[test]
 fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
-	use crate::delegation::DelegatedRewardsDistribution;
-	use cf_traits::RewardsDistribution;
+	use crate::delegation::distribute;
 
 	new_test_ext().execute_with(|| {
 		const VALIDATOR: u64 = 100;
@@ -3928,12 +3927,7 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		.register_for_epoch::<Test>(EPOCH);
 
 		// Distribute rewards to the validator.
-		DelegatedRewardsDistribution::<Test>::distribute(
-			EPOCH,
-			REWARD_AMOUNT,
-			&VALIDATOR,
-			TestMintTracker::add_minted,
-		);
+		distribute::<Test>(EPOCH, &VALIDATOR, REWARD_AMOUNT, TestMintTracker::add_minted);
 
 		// Check minted amounts
 		let minted = TestMintTracker::get_minted();
@@ -3959,7 +3953,7 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 
 #[test]
 fn distribute_all_matches_looped_distribute() {
-	use crate::delegation::DelegatedRewardsDistribution;
+	use crate::delegation::{distribute, DelegatedRewardsDistribution};
 	use cf_traits::RewardsDistribution;
 
 	new_test_ext().execute_with(|| {
@@ -4012,17 +4006,9 @@ fn distribute_all_matches_looped_distribute() {
 		// into a single map.
 		let mut looped = BTreeMap::new();
 		for beneficiary in &beneficiaries {
-			DelegatedRewardsDistribution::<Test>::distribute(
-				EPOCH,
-				PER_BENEFICIARY_AMOUNT,
-				beneficiary,
-				|account, amount| {
-					looped
-						.entry(*account)
-						.and_modify(|a: &mut u128| *a += amount)
-						.or_insert(amount);
-				},
-			);
+			distribute::<Test>(EPOCH, beneficiary, PER_BENEFICIARY_AMOUNT, |account, amount| {
+				looped.entry(*account).and_modify(|a: &mut u128| *a += amount).or_insert(amount);
+			});
 		}
 
 		let mut batched = BTreeMap::new();

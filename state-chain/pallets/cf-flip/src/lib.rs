@@ -22,6 +22,7 @@ mod mock;
 mod tests;
 
 mod benchmarking;
+pub mod migrations;
 
 mod imbalances;
 mod on_charge_transaction;
@@ -35,8 +36,8 @@ pub use weights::WeightInfo;
 
 use cf_primitives::EpochIndex;
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationHooks, EpochInfo, FeePayment, FundingInfo, Issuance,
-	RewardsDistribution, Slashing,
+	AccountInfo, Bonding, DeregistrationCheck, DeregistrationHooks, EpochInfo, FeePayment,
+	FundingInfo, Issuance, RewardsDistribution, Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
@@ -76,8 +77,6 @@ pub enum PalletConfigUpdate {
 	SetSlashingRate(Permill),
 	// Set fee scaling rate for any calls that are scaled.
 	SetFeeScalingRate(FeeScalingRateConfig),
-	// Set the epoch from which flip 2.1 activates.
-	SetFeeRewardsActivationEpoch(EpochIndex),
 }
 
 #[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -101,6 +100,9 @@ impl<T: Config> MaxEncodedLen for OpaqueCallIndex<T> {
 pub mod pallet {
 	use super::*;
 	use cf_traits::{Chainflip, WaivedFees};
+
+	pub const STORAGE_VERSION_U16: u16 = 1;
+	pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
@@ -143,6 +145,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	/// Funds belonging to on-chain accounts.
@@ -186,12 +189,6 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type FlipToDistribute<T: Config> = StorageValue<_, i128, ValueQuery>;
-
-	/// The epoch from which flip 2.1 activates.
-	/// Defaults to u32::MAX (effectively disabled) until set via governance.
-	#[pallet::storage]
-	pub type FeeRewardsActivationEpoch<T: Config> =
-		StorageValue<_, EpochIndex, ValueQuery, ConstU32<{ u32::MAX }>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub fn deposit_event)]
@@ -274,9 +271,6 @@ pub mod pallet {
 					// i.e. there are 9 decimal places.
 					PalletConfigUpdate::SetFeeScalingRate(fee_scaling_rate) => {
 						FeeScalingRate::<T>::set(fee_scaling_rate);
-					},
-					PalletConfigUpdate::SetFeeRewardsActivationEpoch(epoch) => {
-						FeeRewardsActivationEpoch::<T>::set(epoch);
 					},
 				};
 				Self::deposit_event(Event::PalletConfigUpdated { update });
@@ -612,20 +606,9 @@ impl<T: Config> Pallet<T> {
 			.saturating_add(Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID).into())
 	}
 
-	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
-	/// rather than burned.
-	pub fn is_flip_2_1_activated() -> bool {
-		T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get()
-	}
-
-	/// Burns `amount`, unless FLIP 2.1 is active, in which case `amount` is deposited into the
-	/// reserve to be distributed to authorities as fee rewards instead.
+	/// Deposits `amount` into the reserve to be distributed to authorities as fee rewards.
 	fn burn_or_deposit_to_reserve(amount: T::Balance) -> Deficit<T> {
-		if Self::is_flip_2_1_activated() {
-			Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
-		} else {
-			Self::burn(amount)
-		}
+		Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
 	}
 }
 
@@ -678,15 +661,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 	}
 
 	fn burn_or_reserve_offchain(amount: Self::Amount) {
-		if Pallet::<T>::is_flip_2_1_activated() {
-			Pallet::<T>::bridge_in_to_distribution_reserve(amount);
-		} else {
-			<Pallet<T> as Issuance>::burn_offchain(amount);
-		}
-	}
-
-	fn is_flip_2_1_activated() -> bool {
-		Pallet::<T>::is_flip_2_1_activated()
+		Pallet::<T>::bridge_in_to_distribution_reserve(amount);
 	}
 }
 
@@ -733,10 +708,6 @@ impl<T: Config> Issuance for Pallet<T> {
 	fn burn_offchain(amount: Self::Balance) {
 		let _remainder = Pallet::<T>::burn(amount).offset(Pallet::<T>::bridge_in(amount));
 	}
-
-	fn is_flip_2_1_activated() -> bool {
-		Pallet::<T>::is_flip_2_1_activated()
-	}
 }
 
 pub struct FlipIssuance<T>(PhantomData<T>);
@@ -755,10 +726,6 @@ impl<T: Config> Issuance for FlipIssuance<T> {
 
 	fn burn_offchain(amount: Self::Balance) {
 		<Pallet<T> as Issuance>::burn_offchain(amount);
-	}
-
-	fn is_flip_2_1_activated() -> bool {
-		<Pallet<T> as Issuance>::is_flip_2_1_activated()
 	}
 }
 

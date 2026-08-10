@@ -22,4 +22,5 @@ pub mod broker_withdrawal_addresses_to_asset_balances;
 pub mod bsc_integration;
 pub mod housekeeping;
 pub mod refund_addresses_to_asset_balances;
+pub mod remove_emissions_storage;
 pub mod safe_mode;

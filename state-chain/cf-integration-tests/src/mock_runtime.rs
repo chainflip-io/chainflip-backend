@@ -57,8 +57,6 @@ use state_chain_runtime::{
 	SolanaElectionsConfig, TronChainTrackingConfig, TronElectionsConfig, ValidatorConfig,
 };
 
-pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
-pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
 pub const ACCRUAL_RATIO: (i32, u32) = (1, 1);
@@ -235,11 +233,6 @@ impl ExtBuilder {
 				chain_initialized: true,
 			},
 
-			emissions: EmissionsConfig {
-				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-				supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
-				..Default::default()
-			},
 			account_roles: AccountRolesConfig {
 				initial_account_roles: self
 					.genesis_accounts
