@@ -475,29 +475,6 @@ impl ChainflipNetwork {
 	}
 }
 
-#[test]
-fn is_more_recent_semver() {
-	fn ver(major: u8, minor: u8, patch: u8) -> SemVer {
-		SemVer { major, minor, patch }
-	}
-
-	fn ensure_left_is_more_recent(left: SemVer, right: SemVer) {
-		assert!(left.is_more_recent_than(right));
-		// Additionally check that the inverse is false:
-		assert!(!right.is_more_recent_than(left));
-	}
-
-	assert!(!ver(0, 1, 0).is_more_recent_than(ver(0, 1, 0)));
-
-	ensure_left_is_more_recent(ver(0, 0, 2), ver(0, 0, 1));
-	ensure_left_is_more_recent(ver(0, 1, 0), ver(0, 0, 2));
-	ensure_left_is_more_recent(ver(0, 1, 1), ver(0, 1, 0));
-	ensure_left_is_more_recent(ver(0, 1, 2), ver(0, 1, 1));
-	ensure_left_is_more_recent(ver(0, 2, 0), ver(0, 1, 0));
-	ensure_left_is_more_recent(ver(1, 0, 0), ver(0, 2, 2));
-	ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
-}
-
 pub const MAX_AFFILIATES: u32 = 5;
 // Beneficiaries can be 1 element larger since they include the primary broker:
 pub const MAX_BENEFICIARIES: u32 = MAX_AFFILIATES + 1;
@@ -574,12 +551,28 @@ pub struct DcaParameters {
 
 pub type ShortId = u8;
 
+/// Converts an `amount` expressed in the fine units of `from` into the fine units of `to`,
+/// preserving its nominal value. Rounds down, and saturates rather than overflowing.
+pub fn rescale_fine_amount(amount: AssetAmount, from: Asset, to: Asset) -> AssetAmount {
+	let (from, to) = (from.decimals(), to.decimals());
+	if to >= from {
+		amount.saturating_mul(10u128.checked_pow(to - from).unwrap_or(u128::MAX))
+	} else {
+		amount
+			.checked_div(10u128.checked_pow(from - to).unwrap_or(u128::MAX))
+			.unwrap_or_default()
+	}
+}
+
+/// A default amount for every USD stablecoin, from an amount `N` expressed in the fine units of
+/// [`STABLE_ASSET`]. Each entry is rescaled to that asset's own decimals so that they all represent
+/// the same nominal USD amount.
 pub struct StablecoinDefaults<const N: u128>();
 impl<const N: u128> Get<BTreeMap<Asset, AssetAmount>> for StablecoinDefaults<N> {
 	fn get() -> BTreeMap<Asset, AssetAmount> {
 		Asset::all()
 			.filter(|asset| asset.is_usd_stablecoin())
-			.map(|asset| (asset, N))
+			.map(|asset| (asset, rescale_fine_amount(N, STABLE_ASSET, asset)))
 			.collect()
 	}
 }
@@ -694,4 +687,62 @@ pub enum WitnessingTaskName {
 	Oracle,
 	Tron,
 	Bsc,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn is_more_recent_semver() {
+		fn ver(major: u8, minor: u8, patch: u8) -> SemVer {
+			SemVer { major, minor, patch }
+		}
+
+		fn ensure_left_is_more_recent(left: SemVer, right: SemVer) {
+			assert!(left.is_more_recent_than(right));
+			// Additionally check that the inverse is false:
+			assert!(!right.is_more_recent_than(left));
+		}
+
+		assert!(!ver(0, 1, 0).is_more_recent_than(ver(0, 1, 0)));
+
+		ensure_left_is_more_recent(ver(0, 0, 2), ver(0, 0, 1));
+		ensure_left_is_more_recent(ver(0, 1, 0), ver(0, 0, 2));
+		ensure_left_is_more_recent(ver(0, 1, 1), ver(0, 1, 0));
+		ensure_left_is_more_recent(ver(0, 1, 2), ver(0, 1, 1));
+		ensure_left_is_more_recent(ver(0, 2, 0), ver(0, 1, 0));
+		ensure_left_is_more_recent(ver(1, 0, 0), ver(0, 2, 2));
+		ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
+	}
+
+	#[test]
+	fn stablecoin_defaults_are_scaled_to_each_asset_decimals() {
+		// $1,000, in the fine units of the stable asset.
+		const ONE_THOUSAND_USD: AssetAmount = 1_000_000_000;
+
+		let defaults = StablecoinDefaults::<ONE_THOUSAND_USD>::get();
+
+		// All stablecoins are covered, and nothing else.
+		assert!(defaults.keys().all(|asset| asset.is_usd_stablecoin()));
+		assert_eq!(defaults.len(), Asset::all().filter(Asset::is_usd_stablecoin).count());
+
+		// Same decimals as the stable asset: the amount is used as is.
+		assert_eq!(Asset::Usdt.decimals(), STABLE_ASSET.decimals());
+		assert_eq!(defaults[&Asset::Usdt], ONE_THOUSAND_USD);
+
+		// More decimals: the amount is scaled up so it is still worth $1,000.
+		assert_eq!(Asset::BscUsdt.decimals(), STABLE_ASSET.decimals() + 12);
+		assert_eq!(defaults[&Asset::BscUsdt], ONE_THOUSAND_USD * 10u128.pow(12));
+	}
+
+	#[test]
+	fn rescaling_fine_amounts_saturates_and_rounds_down() {
+		// Rounding down can take a small amount all the way to zero.
+		assert_eq!(rescale_fine_amount(10u128.pow(12), Asset::BscUsdt, STABLE_ASSET), 1);
+		assert_eq!(rescale_fine_amount(10u128.pow(12) - 1, Asset::BscUsdt, STABLE_ASSET), 0);
+
+		// Scaling up saturates rather than overflowing.
+		assert_eq!(rescale_fine_amount(u128::MAX, STABLE_ASSET, Asset::BscUsdt), u128::MAX);
+	}
 }
