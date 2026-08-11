@@ -32,29 +32,26 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for BscAssetsMigration<T>
 			vault_address,
 			address_checker_address,
 		) = match cf_runtime_utilities::genesis_hashes::genesis_hash::<T>() {
-			// TODO: Replace with actual mainnet addresses
 			cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 				cf_chains::bsc::CHAIN_ID_MAINNET,
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
+				EvmAddress::from(hex_literal::hex!("55d398326f99059fF775485246999027B3197955")),
+				EvmAddress::from(hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275")),
+				EvmAddress::from(hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920")),
+				EvmAddress::from(hex_literal::hex!("c1B12993f760B654897F0257573202fba13D5481")),
 			),
-			// TODO: Replace with actual PERSEVERANCE addresses
 			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 				cf_chains::bsc::CHAIN_ID_TESTNET,
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
+				EvmAddress::from(hex_literal::hex!("337610d27c682E347C9cD60BD4b3b107C9d34dDd")),
+				EvmAddress::from(hex_literal::hex!("77864880BA7D2F8A95d540D85233A250EcfafDc0")),
+				EvmAddress::from(hex_literal::hex!("98b9829Cc96e910B1253163E708e4cBF3F5BE277")),
+				EvmAddress::from(hex_literal::hex!("0fDA3D36ce05531F1cb14E519672dd52C314Fd28")),
 			),
-			// TODO: Replace with actual SISYPHOS addresses
 			cf_runtime_utilities::genesis_hashes::SISYPHOS => (
 				cf_chains::bsc::CHAIN_ID_TESTNET,
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
-				EvmAddress::default(),
+				EvmAddress::from(hex_literal::hex!("337610d27c682E347C9cD60BD4b3b107C9d34dDd")),
+				EvmAddress::from(hex_literal::hex!("cA2Fc8ABb5ACEc1CA19c684BdF2959B32e83bacF")),
+				EvmAddress::from(hex_literal::hex!("3362FD7D8264387Ac7D686084CBB774bB09732DF")),
+				EvmAddress::from(hex_literal::hex!("6b5A4f429aAA2E049919b69D95f2A26bef01912C")),
 			),
 			_ => (
 				343u64, // localnet Bsc Chain ID
@@ -83,38 +80,73 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for BscAssetsMigration<T>
 				assert_eq!(BscChainId::<T>::get(), cf_chains::bsc::CHAIN_ID_MAINNET);
 				assert_eq!(
 					BscSupportedAssets::<T>::get(BscAsset::BscUsdt),
-					Some(EvmAddress::default()) // TODO: update when real address is known
+					Some(EvmAddress::from(hex_literal::hex!(
+						"55d398326f99059fF775485246999027B3197955"
+					)))
 				);
-				// TODO: update when real addresses are known
-				assert_eq!(BscKeyManagerAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscVaultAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscAddressCheckerAddress::<T>::get(), EvmAddress::default());
+				assert_eq!(
+					BscKeyManagerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275"))
+				);
+				assert_eq!(
+					BscVaultAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"))
+				);
+				assert_eq!(
+					BscAddressCheckerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("c1B12993f760B654897F0257573202fba13D5481"))
+				);
 			},
 			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => {
 				assert_eq!(BscChainId::<T>::get(), cf_chains::bsc::CHAIN_ID_TESTNET);
 				assert_eq!(
 					BscSupportedAssets::<T>::get(BscAsset::BscUsdt),
-					Some(EvmAddress::default()) // TODO: update when real address is known
+					Some(EvmAddress::from(hex_literal::hex!(
+						"337610d27c682E347C9cD60BD4b3b107C9d34dDd"
+					)))
 				);
-				// TODO: update when real addresses are known
-				assert_eq!(BscKeyManagerAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscVaultAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscAddressCheckerAddress::<T>::get(), EvmAddress::default());
+				assert_eq!(
+					BscKeyManagerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("77864880BA7D2F8A95d540D85233A250EcfafDc0"))
+				);
+				assert_eq!(
+					BscVaultAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("98b9829Cc96e910B1253163E708e4cBF3F5BE277"))
+				);
+				assert_eq!(
+					BscAddressCheckerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("0fDA3D36ce05531F1cb14E519672dd52C314Fd28"))
+				);
 			},
 			cf_runtime_utilities::genesis_hashes::SISYPHOS => {
 				assert_eq!(BscChainId::<T>::get(), cf_chains::bsc::CHAIN_ID_TESTNET);
 				assert_eq!(
 					BscSupportedAssets::<T>::get(BscAsset::BscUsdt),
-					Some(EvmAddress::default()) // TODO: update when real address is known
+					Some(EvmAddress::from(hex_literal::hex!(
+						"337610d27c682E347C9cD60BD4b3b107C9d34dDd"
+					)))
 				);
-				// TODO: update when real addresses are known
-				assert_eq!(BscKeyManagerAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscVaultAddress::<T>::get(), EvmAddress::default());
-				assert_eq!(BscAddressCheckerAddress::<T>::get(), EvmAddress::default());
+				assert_eq!(
+					BscKeyManagerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("cA2Fc8ABb5ACEc1CA19c684BdF2959B32e83bacF"))
+				);
+				assert_eq!(
+					BscVaultAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("3362FD7D8264387Ac7D686084CBB774bB09732DF"))
+				);
+				assert_eq!(
+					BscAddressCheckerAddress::<T>::get(),
+					EvmAddress::from(hex_literal::hex!("6b5A4f429aAA2E049919b69D95f2A26bef01912C"))
+				);
 			},
 			_ => {
 				assert_eq!(BscChainId::<T>::get(), 343);
-				assert!(BscSupportedAssets::<T>::get(BscAsset::BscUsdt).is_some());
+				assert_eq!(
+					BscSupportedAssets::<T>::get(BscAsset::BscUsdt),
+					Some(EvmAddress::from(hex_literal::hex!(
+						"Dc64a140Aa3E981100a9becA4E685f962f0cF6C9"
+					)))
+				);
 				assert_eq!(
 					BscKeyManagerAddress::<T>::get(),
 					EvmAddress::from(hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"))

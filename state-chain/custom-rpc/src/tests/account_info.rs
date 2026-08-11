@@ -31,6 +31,7 @@ fn test_no_account_serialization() {
 					usdc: 1000000u128.into(), // 1 USDC
 					usdt: 0u128.into(),
 					wbtc: 100000000u128.into(),
+					cbbtc: 100000000u128.into(),
 				},
 				btc: btc::AssetMap { btc: 100000000u128.into() }, // 1 BTC
 				dot: dot::AssetMap { dot: 10000000000u128.into() }, // 1 DOT
@@ -69,6 +70,7 @@ fn test_broker_serialization() {
 			usdc: 500000u128.into(),              // 0.5 USDC
 			usdt: 300000u128.into(),              // 0.3 USDT
 			wbtc: 5000000u128.into(),             // 0.05 BTC
+			cbbtc: 5000000u128.into(),            // 0.05 BTC
 		},
 		btc: btc::AssetMap { btc: 5000000u128.into() }, // 0.05 BTC
 		dot: dot::AssetMap { dot: 5000000000u128.into() }, // 0.5 DOT
@@ -172,8 +174,9 @@ fn test_lp_serialization() {
 			eth: 1000000000000000000u128.into(), // 1 ETH
 			flip: u64::MAX.into(),
 			usdc: (u64::MAX / 2 - 1).into(),
-			usdt: 250000u128.into(),   // 0.25 USDT
-			wbtc: 25000000u128.into(), // 0.25 BTC
+			usdt: 250000u128.into(),    // 0.25 USDT
+			wbtc: 25000000u128.into(),  // 0.25 BTC
+			cbbtc: 25000000u128.into(), // 0.25 BTC
 		},
 		btc: btc::AssetMap { btc: 25000000u128.into() }, // 0.25 BTC
 		dot: dot::AssetMap { dot: 15000000000u128.into() }, // 1.5 DOT
@@ -214,9 +217,10 @@ fn test_lp_serialization() {
 		eth: eth::AssetMap {
 			eth: u128::MAX.into(),
 			flip: (u128::MAX / 2).into(),
-			usdc: 10000000u128.into(),  // 10 USDC
-			usdt: 5000000u128.into(),   // 5 USDT
-			wbtc: 500000000u128.into(), // 5 BTC
+			usdc: 10000000u128.into(),   // 10 USDC
+			usdt: 5000000u128.into(),    // 5 USDT
+			wbtc: 500000000u128.into(),  // 5 BTC
+			cbbtc: 500000000u128.into(), // 5 BTC
 		},
 		btc: btc::AssetMap { btc: 500000000u128.into() }, // 5 BTC
 		dot: dot::AssetMap { dot: 100000000000u128.into() }, // 10 DOT
@@ -274,9 +278,10 @@ fn test_validator_serialization() {
 				eth: eth::AssetMap {
 					eth: 3000000000000000000u128.into(), // 3 ETH
 					flip: 0u128.into(),
-					usdc: 2500000u128.into(),  // 2.5 USDC
-					usdt: 1500000u128.into(),  // 1.5 USDT
-					wbtc: 75000000u128.into(), // 0.75 BTC
+					usdc: 2500000u128.into(),   // 2.5 USDC
+					usdt: 1500000u128.into(),   // 1.5 USDT
+					wbtc: 75000000u128.into(),  // 0.75 BTC
+					cbbtc: 75000000u128.into(), // 0.75 BTC
 				},
 				btc: btc::AssetMap { btc: 75000000u128.into() }, // 0.75 BTC
 				dot: dot::AssetMap { dot: 25000000000u128.into() }, // 2.5 DOT
@@ -325,8 +330,44 @@ fn test_validator_serialization() {
 			is_qualified: true,
 			apy_bp: Some(375u32), // 3.75% APY
 			operator: Some(AccountId32::new([0x77; 32])),
+			bid: U256::from(121),
+			max_bid: Some(U256::from(123)),
 		},
 	};
 
 	insta::assert_snapshot!(serde_json::to_string_pretty(&wrapper).unwrap());
+}
+
+#[test]
+fn test_all_account_infos_serialization() {
+	let account_infos = vec![RpcAccountInfoWrapper {
+		common_items: RpcAccountInfoCommonItems {
+			account_id: Some(AccountId32::new([0x42; 32])),
+			vanity_name: b"VALIDATOR".to_vec(),
+			flip_balance: (FLIPPERINOS_PER_FLIP * 50).into(),
+			asset_balances: Default::default(),
+			bond: (FLIPPERINOS_PER_FLIP * 100).into(),
+			estimated_redeemable_balance: (FLIPPERINOS_PER_FLIP * 25).into(),
+			bound_redeem_address: None,
+			restricted_balances: BTreeMap::new(),
+			current_delegation_status: None,
+			upcoming_delegation_status: None,
+		},
+		role_specific: RpcAccountInfo::Validator {
+			last_heartbeat: 150_000,
+			reputation_points: 850,
+			keyholder_epochs: vec![100, 123, 124, 125],
+			is_current_authority: true,
+			is_bidding: false,
+			is_current_backup: false,
+			is_online: true,
+			is_qualified: true,
+			apy_bp: Some(375),
+			bid: U256::from(121),
+			max_bid: Some(U256::from(123)),
+			operator: Some(AccountId32::new([0x77; 32])),
+		},
+	}];
+
+	insta::assert_snapshot!(serde_json::to_string_pretty(&account_infos).unwrap());
 }

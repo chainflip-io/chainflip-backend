@@ -35,6 +35,7 @@ use cf_primitives::{
 };
 use common::SHARED_DATA_REFERENCE_LIFETIME;
 use pallet_cf_elections::generic_tools::{ArrayContainer, ArrayToVector};
+use pallet_cf_swapping::FeeRateAndMinimum;
 pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -116,6 +117,7 @@ pub struct StateChainEnvironment {
 	eth_usdc_address: [u8; 20],
 	eth_usdt_address: [u8; 20],
 	eth_wbtc_address: [u8; 20],
+	eth_cbbtc_address: [u8; 20],
 	state_chain_gateway_address: [u8; 20],
 	eth_key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
@@ -191,6 +193,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, ETH_USDC_ADDRESS, eth_usdc_address);
 	from_env_var!(clean_hex_address, ETH_USDT_ADDRESS, eth_usdt_address);
 	from_env_var!(clean_hex_address, ETH_WBTC_ADDRESS, eth_wbtc_address);
+	from_env_var!(clean_hex_address, ETH_CBBTC_ADDRESS, eth_cbbtc_address);
 	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
 	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, eth_key_manager_address);
 	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
@@ -304,6 +307,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		eth_usdc_address,
 		eth_usdt_address,
 		eth_wbtc_address,
+		eth_cbbtc_address,
 		state_chain_gateway_address,
 		eth_key_manager_address,
 		eth_vault_address,
@@ -400,6 +404,7 @@ pub fn inner_cf_development_chain_spec(
 		eth_usdc_address,
 		eth_usdt_address,
 		eth_wbtc_address,
+		eth_cbbtc_address,
 		state_chain_gateway_address,
 		eth_key_manager_address,
 		eth_vault_address,
@@ -465,6 +470,7 @@ pub fn inner_cf_development_chain_spec(
 				eth_usdc_address: eth_usdc_address.into(),
 				eth_usdt_address: eth_usdt_address.into(),
 				eth_wbtc_address: eth_wbtc_address.into(),
+				eth_cbbtc_address: eth_cbbtc_address.into(),
 				state_chain_gateway_address: state_chain_gateway_address.into(),
 				eth_key_manager_address: eth_key_manager_address.into(),
 				eth_vault_address: eth_vault_address.into(),
@@ -599,6 +605,7 @@ macro_rules! network_spec {
 					eth_usdc_address,
 					eth_usdt_address,
 					eth_wbtc_address,
+					eth_cbbtc_address,
 					state_chain_gateway_address,
 					eth_key_manager_address,
 					eth_vault_address,
@@ -694,6 +701,7 @@ macro_rules! network_spec {
 							eth_usdc_address: eth_usdc_address.into(),
 							eth_usdt_address: eth_usdt_address.into(),
 							eth_wbtc_address: eth_wbtc_address.into(),
+							eth_cbbtc_address: eth_cbbtc_address.into(),
 							state_chain_gateway_address: state_chain_gateway_address.into(),
 							eth_key_manager_address: eth_key_manager_address.into(),
 							eth_vault_address: eth_vault_address.into(),
@@ -1183,7 +1191,13 @@ fn testnet_genesis(
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
-		swapping: Default::default(),
+		swapping: state_chain_runtime::SwappingConfig {
+			flip_buy_interval: 3,
+			network_fee: FeeRateAndMinimum {
+				rate: Permill::from_rational(1u32, 1000u32),
+				minimum: 100_000u128,
+			},
+		},
 		bitcoin_vault: Default::default(),
 		polkadot_vault: Default::default(),
 		system: Default::default(),

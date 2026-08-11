@@ -17,7 +17,8 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
     case 'Flip':
     case 'Usdc':
     case 'Usdt':
-    case 'Wbtc': {
+    case 'Wbtc':
+    case 'Cbbtc': {
       const contractAddress = getContractAddress('Ethereum', asset);
       result = await getErc20Balance('Ethereum', address, contractAddress);
       break;

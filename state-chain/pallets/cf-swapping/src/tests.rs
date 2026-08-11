@@ -1530,6 +1530,95 @@ fn broker_deregistration_checks_private_channels() {
 	});
 }
 
+mod deregistration_checks {
+	use super::*;
+
+	fn insert_user_swap_request(
+		output_action: SwapOutputAction<u64>,
+		price_limits_and_expiry: Option<PriceLimitsAndExpiry<u64>>,
+	) {
+		SwapRequests::<Test>::insert(
+			SWAP_REQUEST_ID,
+			SwapRequest {
+				id: SWAP_REQUEST_ID,
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				state: SwapRequestState::UserSwap {
+					price_limits_and_expiry,
+					output_action,
+					dca_state: DcaState::new(INPUT_AMOUNT, None),
+					fees: Default::default(),
+				},
+			},
+		);
+	}
+
+	fn price_limits_with_refund(
+		refund_address: AccountOrAddress<u64, ForeignChainAddress>,
+	) -> PriceLimitsAndExpiry<u64> {
+		PriceLimitsAndExpiry {
+			expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+				retry_duration: 100,
+				refund_address,
+				refund_ccm_metadata: None,
+			},
+			min_price: Price::zero(),
+			max_oracle_price_slippage: None,
+		}
+	}
+
+	#[test]
+	fn unrelated_swap_does_not_block_deregistration() {
+		new_test_ext().execute_with(|| {
+			insert_user_swap_request(
+				SwapOutputAction::Egress {
+					ccm_deposit_metadata: None,
+					output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+				},
+				Some(price_limits_with_refund(AccountOrAddress::ExternalAddress(
+					(*EVM_OUTPUT_ADDRESS).clone(),
+				))),
+			);
+
+			assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT));
+		});
+	}
+
+	#[test]
+	fn swap_into_account_blocks_its_deregistration() {
+		new_test_ext().execute_with(|| {
+			insert_user_swap_request(
+				SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
+				None,
+			);
+
+			assert!(matches!(
+				PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
+				Err(Error::<Test>::PendingSwapRequest)
+			));
+			assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&BOB));
+		});
+	}
+
+	#[test]
+	fn swap_refund_to_account_blocks_its_deregistration() {
+		new_test_ext().execute_with(|| {
+			insert_user_swap_request(
+				SwapOutputAction::Egress {
+					ccm_deposit_metadata: None,
+					output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+				},
+				Some(price_limits_with_refund(AccountOrAddress::InternalAccount(LP_ACCOUNT))),
+			);
+
+			assert!(matches!(
+				PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
+				Err(Error::<Test>::PendingSwapRequest)
+			));
+		});
+	}
+}
+
 #[test]
 fn can_handle_input_and_output_being_the_same_asset() {
 	const ASSET: Asset = Asset::Eth;
@@ -2751,6 +2840,7 @@ mod lending_liquidation_swaps {
 
 mod bound_broker_withdrawal {
 	use super::*;
+	use cf_traits::mocks::withdrawal_address_restriction::MockWithdrawalAddressRestriction;
 
 	#[test]
 	fn can_bind_withdrawal_address() {
@@ -2762,7 +2852,7 @@ mod bound_broker_withdrawal {
 				address
 			));
 
-			assert_eq!(BoundBrokerWithdrawalAddress::<Test>::get(BROKER), Some(address));
+			assert_eq!(MockWithdrawalAddressRestriction::bound_address(&BROKER), Some(address));
 
 			System::assert_has_event(RuntimeEvent::Swapping(
 				Event::<Test>::BoundBrokerWithdrawalAddress { broker: BROKER, address },
@@ -2776,76 +2866,6 @@ mod bound_broker_withdrawal {
 				),
 				Error::<Test>::BrokerAlreadyBound
 			);
-		});
-	}
-
-	#[test]
-	fn enforce_withdrawal_address_restriction_for_usdc() {
-		new_test_ext().execute_with(|| {
-			let bound_addr: EthereumAddress = [0xaa; 20].into();
-			let other_addr: EthereumAddress = [0xbb; 20].into();
-
-			assert_ok!(Swapping::bind_broker_fee_withdrawal_address(
-				OriginTrait::signed(BROKER),
-				bound_addr
-			));
-
-			// Fund broker
-			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Usdc, 1000);
-			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 1000);
-
-			// Withdraw to different address fails
-			assert_noop!(
-				Swapping::withdraw(
-					OriginTrait::signed(BROKER),
-					Asset::Usdc,
-					EncodedAddress::Eth(other_addr.into()),
-				),
-				Error::<Test>::BrokerBoundWithdrawalAddressRestrictionViolated
-			);
-			assert_noop!(
-				Swapping::withdraw(
-					OriginTrait::signed(BROKER),
-					Asset::Eth,
-					EncodedAddress::Eth(other_addr.into()),
-				),
-				Error::<Test>::BrokerBoundWithdrawalAddressRestrictionViolated
-			);
-
-			// Withdraw to bound address succeeds
-			assert_ok!(Swapping::withdraw(
-				OriginTrait::signed(BROKER),
-				Asset::Usdc,
-				EncodedAddress::Eth(bound_addr.into()),
-			));
-			assert_ok!(Swapping::withdraw(
-				OriginTrait::signed(BROKER),
-				Asset::Eth,
-				EncodedAddress::Eth(bound_addr.into()),
-			));
-		});
-	}
-
-	#[test]
-	fn no_restriction_for_other_chains() {
-		new_test_ext().execute_with(|| {
-			let bound_addr: EthereumAddress = [0xaa; 20].into();
-
-			assert_ok!(Swapping::bind_broker_fee_withdrawal_address(
-				OriginTrait::signed(BROKER),
-				bound_addr
-			));
-
-			// Fund broker with SOL
-			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Sol, 1000);
-
-			// Withdraw BTC to different address succeeds (restriction only applies to Ethereum
-			// withdrawals)
-			assert_ok!(Swapping::withdraw(
-				OriginTrait::signed(BROKER),
-				Asset::Sol,
-				EncodedAddress::Sol([0xbb; 32]),
-			));
 		});
 	}
 }
@@ -2863,7 +2883,7 @@ mod withdrawal_restriction {
 	}
 
 	#[test]
-	fn broker_withdraw_is_gated_by_the_whitelist() {
+	fn broker_withdraw_is_gated_by_withdrawal_restrictions() {
 		new_test_ext().execute_with(|| {
 			let allowed: EthereumAddress = [0xaa; 20].into();
 			let disallowed: EthereumAddress = [0xbb; 20].into();

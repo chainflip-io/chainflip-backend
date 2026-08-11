@@ -378,6 +378,7 @@ cf_test_utilities::impl_test_helpers! {
 			eth_usdc_address: [0x2; 20].into(),
 			eth_usdt_address: [0x2; 20].into(),
 			eth_wbtc_address: [0x2; 20].into(),
+			eth_cbbtc_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
 			assethub_genesis_hash: H256([0u8; 32]),
@@ -390,7 +391,7 @@ cf_test_utilities::impl_test_helpers! {
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarks_mock {
-	use cf_traits::WaivedFees;
+	use cf_traits::{mocks::rewards_distribution::MockRewardsDistribution, WaivedFees};
 	use sp_core::ConstU64;
 
 	use super::*;
@@ -447,6 +448,7 @@ pub mod benchmarks_mock {
 		type BlocksPerDay = ConstU64<14400>;
 		type WeightInfo = ();
 		type WaivedFees = MockWaivedFees;
+		type RewardsDistribution = MockRewardsDistribution<Self>;
 		type RuntimeHoldReason = ();
 		type CallIndexer = ();
 	}

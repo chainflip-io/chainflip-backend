@@ -88,6 +88,7 @@ fn test_lp_serialization() {
 					usdc: (u64::MAX / 2 - 1).into(),
 					usdt: 0u32.into(),
 					wbtc: 0u32.into(),
+					cbbtc: 0u32.into(),
 				},
 				btc: btc::AssetMap { btc: 0u32.into() },
 				dot: dot::AssetMap { dot: 0u32.into() },

@@ -531,6 +531,12 @@ export interface ChainErrors extends GenericChainErrors {
     DelegationAmountBelowMinimum: GenericPalletError;
 
     /**
+     * A validator's max bid must be at least as large as the minimum validator stake,
+     * otherwise the validator could never bid enough to be a qualified bidder.
+     **/
+    MaxBidBelowMinimumValidatorStake: GenericPalletError;
+
+    /**
      * The caller's GRANDPA key does not match their session key registration.
      **/
     GrandpaKeyOwnershipMismatch: GenericPalletError;
@@ -1382,12 +1388,6 @@ export interface ChainErrors extends GenericChainErrors {
      * The broker is already bound to a withdrawal address.
      **/
     BrokerAlreadyBound: GenericPalletError;
-
-    /**
-     * The broker tried to withdraw to an address which is not the address the broker is bound
-     * to.
-     **/
-    BrokerBoundWithdrawalAddressRestrictionViolated: GenericPalletError;
 
     /**
      * A zero default slippage protection will result in most swaps failing. Set to `None` to

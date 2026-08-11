@@ -58,6 +58,23 @@ type SupportedAssets = {
   randomAsset: () => AssetAndChain;
 };
 
+// Chains and assets introduced in the current release, and therefore unknown to the runtime
+// on the other side of an upgrade boundary: calling pool RPCs with them would fail there.
+// Set by the upgrade-test workflow; unset outside upgrade tests.
+// Formats: NEW_RELEASED_CHAINS="Bsc,Tron", NEW_RELEASED_ASSETS="Ethereum:CBBTC".
+function parseEnvList(envVar: string | undefined): string[] {
+  return (envVar ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+const newlyReleasedChains = parseEnvList(process.env.NEW_RELEASED_CHAINS);
+const newlyReleasedAssets = parseEnvList(process.env.NEW_RELEASED_ASSETS).map((pair) => {
+  const [chain, asset] = pair.split(':');
+  return { chain, asset };
+});
+
 async function getRuntimeSupportedAssets(): Promise<SupportedAssets> {
   await using chainflipApi = await getChainflipApi();
   // Here we use cf_swapping_environment and parse the result instead of cf_supported_assets, because
@@ -72,12 +89,9 @@ async function getRuntimeSupportedAssets(): Promise<SupportedAssets> {
   const assets = all.filter(
     (a) =>
       !(a.chain === 'Ethereum' && a.asset === 'USDC') &&
-      a.chain !== 'Assethub' &&
       a.chain !== 'Polkadot' &&
-      // Exclude Bsc at upgrade boundaries: the old runtime doesn't have Bsc
-      // as a valid Asset variant, so calling pool RPCs with Bsc panics it.
-      // TODO: Remove after Bsc is released.
-      a.chain !== 'Bsc',
+      !newlyReleasedChains.includes(a.chain) &&
+      !newlyReleasedAssets.some((n) => n.chain === a.chain && n.asset === a.asset),
   );
   return {
     baseAsset: { chain: 'Ethereum', asset: 'USDC' },

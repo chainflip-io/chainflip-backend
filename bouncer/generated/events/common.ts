@@ -95,7 +95,14 @@ export const accountId = z
   ])
   .transform((value) => ss58.encode({ data: value, ss58Format: 2112 }) as `cF${string}`);
 
-export const cfPrimitivesChainsAssetsEthAsset = simpleEnum(['Eth', 'Flip', 'Usdc', 'Usdt', 'Wbtc']);
+export const cfPrimitivesChainsAssetsEthAsset = simpleEnum([
+  'Eth',
+  'Flip',
+  'Usdc',
+  'Usdt',
+  'Wbtc',
+  'Cbbtc',
+]);
 
 export const cfPrimitivesChainsAssetsArbAsset = simpleEnum(['ArbEth', 'ArbUsdc', 'ArbUsdt']);
 
@@ -154,6 +161,7 @@ export const cfPrimitivesChainsAssetsAnyAsset = simpleEnum([
   'TrxUsdt',
   'Bnb',
   'BscUsdt',
+  'Cbbtc',
 ]);
 
 export const cfTraitsSafeModeSafeModeSet = z.discriminatedUnion('__kind', [
@@ -379,6 +387,7 @@ export const palletCfFlipPalletConfigUpdate = z.discriminatedUnion('__kind', [
     __kind: z.literal('SetFeeScalingRate'),
     value: palletCfFlipOnChargeTransactionFeeScalingRateConfig,
   }),
+  z.object({ __kind: z.literal('SetFeeRewardsActivationEpoch'), value: z.number() }),
 ]);
 
 export const cfPrimitivesChainsForeignChain = simpleEnum([

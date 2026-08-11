@@ -97,14 +97,16 @@ From `bouncer/`. **All `run_test.ts` invocations run at `BOUNCER_LOG_LEVEL=debug
 # By test file, auto-resolves the name from the exported function
 ./commands/run_test.ts ./tests/boost.ts
 
-# By swap number — re-run a single AllSwaps case
-./commands/run_test.ts 318
+# By swap number + seed — reproduce the exact swap from a specific run (seed is required)
+./commands/run_test.ts 22 314159
 
 # Trace-level stdout (bypasses run_test.ts)
 BOUNCER_LOG_LEVEL=trace pnpm vitest run -t "BoostingForAsset"
 ```
 
-`run_test.ts` runs takes one positional arg — a test name, a `./tests/...ts` path, or an integer — and forwards to `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run …`. It does **not** accept `-t` or any other flags. Use bare `pnpm vitest run -t "..."` only when you need a flag combination `run_test.ts` doesn't cover.
+`run_test.ts` takes one positional arg — a test name, a `./tests/...ts` path, or an integer swap number **followed by a required seed** — and forwards to `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run …`. It does **not** accept `-t` or any other flags. Use bare `pnpm vitest run -t "..."` only when you need a flag combination `run_test.ts` doesn't cover.
+
+**AllSwaps seed:** the AllSwaps set is sampled with a seed that is **random each run** (so coverage rotates over time) and logged at generation, e.g. `AllSwaps generated with seed 314159. To reproduce a specific swap: ./commands/run_test.ts <swap_number> 314159`. A swap number therefore only identifies a specific swap **for that seed**, so `run_test.ts <swap_number> <seed>` **requires** the seed (it sets `ALL_SWAPS_SEED`) — running a swap number without one errors out. Grab the seed from the `AllSwaps generated with seed …` line in the run you're reproducing. Pin the seed via `ALL_SWAPS_SEED` for the bare-vitest form.
 
 ### Finding a test name
 
@@ -185,7 +187,7 @@ You'll get something like:
  FAIL  tests/fast_bouncer.test.ts > ConcurrentTests > AllSwaps > Swap 318: Sol to SolUsdt (CCM VaultSwap)
 ```
 
-That's enough to report the result without re-reading the full log. To re-run a single failed `AllSwaps` case, use `./commands/run_test.ts <swap_number>` (see "A single test" above).
+That's enough to report the result without re-reading the full log. To re-run a single failed `AllSwaps` case, use `./commands/run_test.ts <swap_number> <seed>` — grab the seed from the `AllSwaps generated with seed …` line in the same run's log, since the swap number only maps to that swap for that seed (see "A single test" above).
 
 ## 5. Regenerating event schemas
 
@@ -303,7 +305,7 @@ pnpm eslint:check          # Lint (use eslint:fix for auto-fix)
 | Command                     | Purpose                                                | Section   |
 | --------------------------- | ------------------------------------------------------ | --------- |
 | `check_localnet_state.ts`   | Report localnet `State` (DOWN/STALE/UNREADY/READY)     | §1        |
-| `run_test.ts`               | Run a single test by name, file, or swap number        | §4        |
+| `run_test.ts`               | Run a single test by name, file, or swap number (+seed) | §4        |
 | `generate_event_schemas.ts` | Regenerate the zod event schemas from runtime metadata | §5        |
 | `perform_swap.ts`           | Run one real end-to-end swap                           | see below |
 | `live/submit_live_swap.ts`  | Run one real swap on a **live** network (Perseverance) | §9        |

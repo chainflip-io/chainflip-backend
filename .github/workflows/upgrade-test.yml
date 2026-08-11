@@ -25,17 +25,56 @@ env:
   SOLANA_VERSION: v2.1.13
   NODE_COUNT: "1-node"
   CHAIN: "dev"
+  # Chains and assets introduced in the current release, consumed by bouncer/tests/rpc_tests.ts
+  # to skip unknown assets to the old runtime at upgrade boundaries.
+  # TODO: set to "" after 2.3 release
+  NEW_RELEASED_CHAINS: "Bsc"
+  NEW_RELEASED_ASSETS: "Ethereum:CBBTC"
 
 permissions:
   packages: read
   contents: read
 
 jobs:
+  provision-upgrade-runner:
+    if: inputs.run-job
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 15
+    outputs:
+      runner-label: ${{ steps.provision.outputs.runner-label }}
+      runner-name: ${{ steps.provision.outputs.runner-name }}
+      server-id: ${{ steps.provision.outputs.server-id }}
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Provision ephemeral Hetzner runner ☁️
+        id: provision
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+        run: |
+          runner_name="bouncer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-upgrade-test"
+          runner_label="${runner_name}-cpx52"
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh create "$runner_name" "$runner_label"
+
   upgrade_test:
-    runs-on: hetzner
+    needs: [provision-upgrade-runner]
+    # Run even when provisioning is skipped (run-job: false) or fails, so that this
+    # job always reports under the name required by branch protection. A skipped job
+    # counts as a passing required check, which would hide provisioning failures.
+    if: ${{ !cancelled() }}
+    # The ephemeral runner label is unique per run, so it identifies the runner on its own.
+    # Fall back to a hosted runner when there is none to target, otherwise the job waits
+    # on a label that matches nothing until it times out.
+    runs-on: ${{ needs.provision-upgrade-runner.result == 'success' && needs.provision-upgrade-runner.outputs.runner-label || 'namespace-profile-default-light' }}
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 120
     steps:
+      - name: Fail if runner provisioning failed 🚨
+        if: ${{ inputs.run-job && needs.provision-upgrade-runner.result != 'success' }}
+        run: exit 1
+
       - name: Checkout chainflip-backend 🛒
         if: inputs.run-job
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -183,6 +222,13 @@ jobs:
           # Use the new solana start script (with current ledger size limit) for the pre-upgrade localnet.
           git show ${{ github.sha }}:localnet/init/scripts/start-solana.sh > localnet/init/scripts/start-solana.sh
 
+          # Remove after 2.3 release
+          # The old localnet's EVM images (v1.4.1) don't have the cbBTC token contract deployed,
+          # but the cbBTC runtime migration registers its address at upgrade. Start the
+          # pre-upgrade localnet with the new EVM images instead. The old runtime ignores the
+          # extra token, and all pre-existing contract addresses are unchanged.
+          sed -i 's|\(ghcr.io/chainflip-io/chainflip-eth-contracts/[^:]*:\)v[^ ]*|\1v1.5.1-rc2-${NODE_COUNT}|g' localnet/docker-compose.yml
+
           ./localnet/manage.sh
           git reset --hard
 
@@ -219,9 +265,10 @@ jobs:
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
           # Remove after 2.3 release.
-          # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc is the
-          # unreleased chain now, so retarget the filter to exclude Bsc assets instead.
-          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc'/" bouncer/tests/rpc_tests.ts
+          # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc and
+          # Ethereum cbBTC are the unreleased assets now, so retarget the filter to exclude
+          # them instead.
+          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" bouncer/tests/rpc_tests.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
@@ -269,6 +316,9 @@ jobs:
           # TODO: This is a temporary workaround to setup BSC.
           # To remove after BSC is released.
           ./commands/setup_new_bsc_chain.ts
+          # TODO: This is a temporary workaround to setup the new cbBTC asset.
+          # To remove after 2.3 release.
+          ./commands/setup_new_cbbtc_asset.ts
           ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗
@@ -386,7 +436,7 @@ jobs:
           path: |
             /tmp/chainflip/snapshots/*.snap
       - name: Dump indexer database
-        if: always()
+        if: ${{ always() && inputs.run-job }}
         continue-on-error: true
         env:
           PGPASSWORD: postgres
@@ -394,7 +444,7 @@ jobs:
           pg_dump -h 127.0.0.1 -p 5432 -U postgres squid_archive > /tmp/chainflip/indexer-pgsql-dump
 
       - name: Upload indexer database
-        if: always()
+        if: ${{ always() && inputs.run-job }}
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -426,3 +476,22 @@ jobs:
           ls -alR /tmp/chainflip
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
+
+  destroy-upgrade-runner:
+    if: ${{ always() && needs.provision-upgrade-runner.outputs.runner-name != '' }}
+    needs: [provision-upgrade-runner, upgrade_test]
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 10
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Destroy ephemeral Hetzner runner 🧹
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+          CF_BOUNCER_RUNNER_NAME: ${{ needs.provision-upgrade-runner.outputs.runner-name }}
+          CF_BOUNCER_SERVER_ID: ${{ needs.provision-upgrade-runner.outputs.server-id }}
+        run: |
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy \
+            "$CF_BOUNCER_RUNNER_NAME" "$CF_BOUNCER_SERVER_ID"

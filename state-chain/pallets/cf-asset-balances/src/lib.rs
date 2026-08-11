@@ -27,7 +27,7 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
 	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
-	ScheduledEgressDetails, WithdrawalAddressRestriction,
+	ScheduledEgressDetails, WithdrawalAddressAlreadyBound, WithdrawalAddressRestriction,
 };
 use cf_utilities::derive_common_traits;
 use frame_support::{
@@ -56,7 +56,7 @@ pub use weights::WeightInfo;
 pub mod whitelist;
 use whitelist::*;
 
-pub const STORAGE_VERSION_U16: u16 = 2;
+pub const STORAGE_VERSION_U16: u16 = 3;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -164,6 +164,8 @@ pub mod pallet {
 		TooManyPendingUpdates,
 		/// No liquidity refund address is registered for the account on the relevant chain.
 		NoLiquidityRefundAddressRegistered,
+		/// The account's withdrawal whitelist must be disabled before deregistration.
+		WithdrawalWhitelistNotCleared,
 	}
 
 	#[pallet::event]
@@ -304,6 +306,12 @@ pub mod pallet {
 		ForeignChain,
 		ForeignChainAddress,
 	>;
+
+	/// Ethereum withdrawal addresses permanently bound by brokers.
+	#[pallet::storage]
+	#[pallet::getter(fn bound_broker_withdrawal_address)]
+	pub type BoundBrokerWithdrawalAddress<T: Config> =
+		StorageMap<_, Identity, T::AccountId, cf_chains::evm::Address, OptionQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -741,6 +749,17 @@ impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
 			AccountOrAddress::ExternalAddress(address) => Some(*address),
 			AccountOrAddress::InternalAccount(_) => None,
 		};
+
+		// Broker restrictions are stronger and override whitelist restrictions
+		if BoundBrokerWithdrawalAddress::<T>::get(owner).is_some_and(|bound_address| {
+			external.is_some_and(|address| {
+				address.chain() == ForeignChain::Ethereum &&
+					*address != ForeignChainAddress::Eth(bound_address)
+			})
+		}) {
+			return Err(Error::<T>::DestinationNotAllowed.into());
+		}
+
 		// No stored whitelist = unrestricted.
 		let allowed = WithdrawalWhitelists::<T>::get(owner)
 			.is_none_or(|whitelist| whitelist.is_allowed(dest)) ||
@@ -752,6 +771,23 @@ impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
 			});
 		ensure!(allowed, Error::<T>::DestinationNotAllowed);
 		Ok(())
+	}
+
+	fn bind_broker_withdrawal_address(
+		owner: &Self::AccountId,
+		address: cf_chains::evm::Address,
+	) -> Result<(), WithdrawalAddressAlreadyBound> {
+		BoundBrokerWithdrawalAddress::<T>::try_mutate(owner, |bound| match bound {
+			Some(_) => Err(WithdrawalAddressAlreadyBound),
+			None => {
+				*bound = Some(address);
+				Ok(())
+			},
+		})
+	}
+
+	fn clear_pending_withdrawal_changes(owner: &Self::AccountId) {
+		Self::discard_pending_matching(owner, |_| true);
 	}
 }
 
@@ -961,6 +997,22 @@ impl<T: Config> DeregistrationCheck for FreeBalancesDeregistrationCheck<T> {
 	}
 }
 
+pub struct WithdrawalWhitelistDeregistrationCheck<T: Config>(PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for WithdrawalWhitelistDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		ensure!(
+			!WithdrawalWhitelists::<T>::contains_key(account_id),
+			Error::<T>::WithdrawalWhitelistNotCleared
+		);
+
+		Ok(())
+	}
+}
+
 pub struct DeleteAccount<T: Config>(PhantomData<T>);
 
 impl<T: Config> OnKilledAccount<T::AccountId> for DeleteAccount<T> {
@@ -968,6 +1020,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeleteAccount<T> {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
 		let _ = RefundAddresses::<T>::clear_prefix(who, u32::MAX, None);
 		WithdrawalWhitelists::<T>::remove(who);
+		BoundBrokerWithdrawalAddress::<T>::remove(who);
 		Pallet::<T>::discard_pending_matching(who, |_| true);
 	}
 }

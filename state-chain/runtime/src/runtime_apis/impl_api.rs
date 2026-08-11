@@ -866,6 +866,8 @@ impl_runtime_apis! {
 				restricted_balances,
 				estimated_redeemable_balance,
 				operator: pallet_cf_validator::OperatorChoice::<Runtime>::get(account_id),
+				max_bid: pallet_cf_validator::ValidatorMaxBid::<Runtime>::get(account_id),
+				bid: pallet_cf_validator::Pallet::<Runtime>::validator_bid(account_id),
 			}
 		}
 
@@ -894,6 +896,129 @@ impl_runtime_apis! {
 					Validator::current_epoch(),
 					account_id,
 				),
+			}
+		}
+
+		/// Projects each operator/validator/delegator's cumulative FLIP 2.1 fee-reward cut for the
+		/// in-progress epoch, as if the currently accumulated reserve were distributed right now.
+		/// Returns an empty reward pool (and zeroed pool amounts) if FLIP 2.1's fee-reward
+		/// distribution has not yet been activated for the current epoch.
+		fn cf_reward_distribution_estimate() -> RewardDistributionEstimate<FlipBalance> {
+			let epoch_index = Validator::current_epoch();
+			let current_block = System::block_number();
+			let current_epoch_started_at = Validator::current_epoch_started_at();
+			let epoch_duration = Validator::epoch_duration();
+			let bond = Validator::bond();
+			let authorities = pallet_cf_validator::CurrentAuthorities::<Runtime>::get();
+			let authority_count = authorities.len() as u32;
+
+			let is_active = epoch_index >= pallet_cf_flip::FeeRewardsActivationEpoch::<Runtime>::get();
+
+			let (total_rewards, per_authority_share, reward_pool) =
+				if is_active && authority_count > 0 {
+					let total_rewards = Flip::pending_rewards();
+					let per_authority_share = total_rewards / authority_count as FlipBalance;
+
+					let role_of = |account: &AccountId| {
+						pallet_cf_account_roles::AccountRoles::<Runtime>::get(account)
+							.unwrap_or_default()
+					};
+
+					let mut reward_pool: Vec<AccountReward<FlipBalance>> = Vec::new();
+
+					// Mirrors `DelegatedRewardsDistribution::distribute_all`: snapshot validators
+					// are drained out of `authority_set` as we go, leaving only independent
+					// authorities, which get their full share directly after the loop below.
+					let mut authorities_to_reward: BTreeSet<&AccountId> = authorities.iter().collect();
+
+					for (operator, snapshot) in
+						pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix(epoch_index)
+					{
+						// Snapshots of operators whose pooled stake didn't clear the bond are
+						// still registered but hold a non-authority validator - they earn nothing.
+						let num_authority_nodes = snapshot
+							.validators
+							.keys()
+							.filter(|v| authorities_to_reward.remove(*v))
+							.count() as u32;
+						if num_authority_nodes == 0 {
+							continue;
+						}
+
+						let total = per_authority_share.saturating_mul(num_authority_nodes as FlipBalance);
+						let rewards: BTreeMap<AccountId, FlipBalance> = snapshot
+							.distribute(total, bond)
+							.map(|(account, amount)| (account.clone(), amount))
+							.collect();
+						let reward_of =
+							|account: &AccountId| rewards.get(account).copied().unwrap_or_default();
+
+						reward_pool.push(AccountReward {
+							account: operator.clone(),
+							bid: 0,
+							bond: 0,
+							reward: reward_of(&operator),
+							role: AccountRole::Operator,
+							managed_by: None,
+							delegated_to: None,
+						});
+
+						for (account, bid) in &snapshot.validators {
+							reward_pool.push(AccountReward {
+								account: account.clone(),
+								bid: *bid,
+								bond: Flip::bond(account),
+								reward: reward_of(account),
+								role: AccountRole::Validator,
+								managed_by: Some(operator.clone()),
+								delegated_to: None,
+							});
+						}
+
+						for (account, bid) in &snapshot.delegators {
+							let role = role_of(account);
+							reward_pool.push(AccountReward {
+								account: account.clone(),
+								bid: *bid,
+								bond: Flip::bond(account),
+								reward: reward_of(account),
+								role,
+								// `Validator`-role accounts can't hold a `DelegationChoice`
+								// (`delegate` rejects Validator/Operator callers), so a Validator
+								// here can only be demoted from this same operator's own set.
+								managed_by: (role == AccountRole::Validator).then(|| operator.clone()),
+								delegated_to: Some(operator.clone()),
+							});
+						}
+					}
+
+					for authority in authorities_to_reward {
+						reward_pool.push(AccountReward {
+							account: authority.clone(),
+							bid: Flip::balance(authority),
+							bond: Flip::bond(authority),
+							reward: per_authority_share,
+							role: AccountRole::Validator,
+							managed_by: None,
+							delegated_to: None,
+						});
+					}
+
+					(total_rewards, per_authority_share, reward_pool)
+				} else {
+					(0, 0, Vec::new())
+				};
+
+			RewardDistributionEstimate {
+				epoch_index,
+				current_block,
+				current_epoch_started_at,
+				epoch_duration,
+				bond,
+				authority_count,
+				total_rewards,
+				per_authority_share,
+				reward_pool,
 			}
 		}
 
@@ -1284,7 +1409,8 @@ impl_runtime_apis! {
 					.map(|channel| derive_btc_vault_deposit_addresses(channel).current),
 				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
 				bond: account_info.bond(),
-				bound_fee_withdrawal_address: Swapping::bound_broker_withdrawal_address(account_id),
+				bound_fee_withdrawal_address:
+					AssetBalances::bound_broker_withdrawal_address(account_id),
 			}
 		}
 
@@ -2208,6 +2334,7 @@ mod witnessed_events {
 			ForeignChain::Ethereum => extract_ethereum_witnessed_events(),
 			ForeignChain::Arbitrum => extract_arbitrum_witnessed_events(),
 			ForeignChain::Tron => extract_tron_witnessed_events(),
+			ForeignChain::Bsc => extract_bsc_witnessed_events(),
 			_ => Err(DispatchErrorWithMessage::RawMessage(
 				b"Chain not supported for witnessed events".to_vec(),
 			)),
@@ -2310,6 +2437,24 @@ mod witnessed_events {
 		);
 
 		Ok(RawWitnessedEvents::Tron { deposits, vault_deposits, broadcasts })
+	}
+
+	fn extract_bsc_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		let state =
+			ElectoralUnsynchronisedState::<Runtime, BscInstance>::get().ok_or_else(|| {
+				DispatchErrorWithMessage::RawMessage(
+					b"Bsc electoral state not initialized".to_vec(),
+				)
+			})?;
+
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.3,
+			height: |h: &cf_chains::witness_period::BlockWitnessRange<Bsc>| *h.root(),
+		);
+
+		Ok(RawWitnessedEvents::Bsc { deposits, vault_deposits, broadcasts })
 	}
 
 	fn convert_deposit_witness<C: Chain>(

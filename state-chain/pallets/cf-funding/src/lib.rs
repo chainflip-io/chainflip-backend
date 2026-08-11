@@ -259,9 +259,9 @@ impl<T: Config> Redemption<T> {
 		self.redeem_amount.saturating_add(self.redemption_fee)
 	}
 
-	pub fn burn_fee(&self) -> Result<(), Error<T>> {
+	pub fn take_fee(&self) -> Result<(), Error<T>> {
 		ensure!(
-			T::Flip::try_burn_fee(&self.account_id, self.redemption_fee).is_ok(),
+			T::Flip::try_take_fee(&self.account_id, self.redemption_fee).is_ok(),
 			Error::<T>::InsufficientBalance
 		);
 		Ok(())
@@ -692,7 +692,7 @@ pub mod pallet {
 				redemption.total_debit_amount(),
 			)?;
 
-			redemption.burn_fee()?;
+			redemption.take_fee()?;
 			redemption.update_restricted_balances(None)?;
 
 			// Update the account balance.
@@ -879,7 +879,7 @@ pub mod pallet {
 
 			let redemption =
 				Redemption::<T>::for_rebalance(&source_account_id, amount, redemption_address)?;
-			redemption.burn_fee()?;
+			redemption.take_fee()?;
 			redemption.update_restricted_balances(Some(&recipient_account_id))?;
 
 			T::Flip::try_transfer(
@@ -923,7 +923,7 @@ pub mod pallet {
 						amount < MinimumFunding::<T>::get().into()
 					{
 						// Insufficient funds to create an account.
-						T::Flip::burn_offchain(amount.into());
+						T::Flip::burn_or_reserve_offchain(amount.into());
 						Self::deposit_event(Event::FailedFundingAttempt {
 							account_id: caller_account_id,
 							withdrawal_address: caller,

@@ -1,13 +1,5 @@
 [toolchain]
 channel = "nightly-2026-01-06"
-components = [
-	"cargo",
-	"clippy",
-	"rust-analyzer",
-	"rust-src",
-	"rust-std",
-	"rustc",
-	"rustfmt",
-]
+components = ["cargo", "clippy", "rust-analyzer", "rust-src", "rust-std", "rustc", "rustfmt"]
 targets = ["wasm32v1-none"]
 profile = "minimal"

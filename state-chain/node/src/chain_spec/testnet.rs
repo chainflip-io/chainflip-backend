@@ -55,6 +55,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_usdc_address: hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"),
 	eth_usdt_address: hex_literal::hex!("0DCd1Bf9A1b36cE34237eEaFef220932846BCD82"),
 	eth_wbtc_address: hex_literal::hex!("67d269191c92Caf3cD7723F116c85e6E9bf55933"),
+	eth_cbbtc_address: hex_literal::hex!("E6E340D132b5f46d1e472DebcD681B2aBc16e57E"),
 	eth_sc_utils_address: hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d"),
 
 	arb_key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
@@ -88,12 +89,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
-		"570085b3449b7d267277c3055b6197d59bfdf9c0ce74d31f2286e0f685c31872"
+		"723c008de50df551a4ce2821a963771a435b4c2bfd94ec6d79106e0312e9ab24"
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	hub_genesis_hash: H256(hex_literal::hex!(
-		"fb173ab171945afba89bc3f964560ce7d870c99ff385c1678622907b523db172"
+		"6de43603803173794592d7c35cfe5ac68a3908a6f5afa86b015917e72a875aaf"
 	)),
 	hub_vault_account_id: None,
 	hub_runtime_version: RuntimeVersion { spec_version: 1003004, transaction_version: 15 },

@@ -117,6 +117,10 @@ expression: val
       {
         "chain": "Bsc",
         "asset": "USDT"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "CBBTC"
       }
     ],
     "add_lender_funds": [
@@ -199,6 +203,10 @@ expression: val
       {
         "chain": "Bsc",
         "asset": "USDT"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "CBBTC"
       }
     ],
     "withdraw_lender_funds": [
@@ -281,6 +289,10 @@ expression: val
       {
         "chain": "Bsc",
         "asset": "USDT"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "CBBTC"
       }
     ],
     "liquidations_enabled": true
