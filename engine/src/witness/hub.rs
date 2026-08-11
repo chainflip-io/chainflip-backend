@@ -157,6 +157,11 @@ pub async fn process_egresses_in_block(
 	pending_tx_signatures: &[PolkadotSignature],
 	header: &AssethubBlockHeader,
 ) -> anyhow::Result<Vec<TransactionConfirmation<Runtime, AssethubInstance>>> {
+	// exit early if we don't have any egresses to witness
+	if pending_tx_signatures.is_empty() {
+		return Ok(Vec::new());
+	}
+
 	let mut transaction_confirmations = Vec::new();
 
 	let monitored_egress_ids: BTreeSet<_> = pending_tx_signatures.iter().cloned().collect();
