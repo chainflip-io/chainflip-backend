@@ -187,6 +187,69 @@ pub mod hook_test_utils {
 		}
 	}
 
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+	)]
+	#[cfg_attr(feature = "test", derive(Arbitrary))]
+	/// The batch counterpart to `ConstantHook`: returns the stored value once per input element.
+	///
+	/// `ConstantHook` returns a single value however many inputs it is given, which for a hook
+	/// whose output has to be parallel to its input would be a length mismatch. Use this for
+	/// those hooks instead.
+	///
+	/// Unlike `ConstantHook` this is parameterised by the item rather than the `HookType`, since
+	/// the value it stores is one element of the output rather than the whole of `T::Output`.
+	pub struct ConstantBatchHook<Item> {
+		pub state: Item,
+	}
+
+	impls! {
+		for ConstantBatchHook<Item> where
+		(
+			Item,
+		):
+
+		{
+			pub fn new(b: Item) -> Self {
+				Self { state: b }
+			}
+		}
+
+		Validate {
+			type Error = ();
+
+			fn is_valid(&self) -> Result<(), ()> {
+				Ok(())
+			}
+		}
+
+		Default where (Item: Default) {
+			fn default() -> Self {
+				Self::new(Default::default())
+			}
+		}
+	}
+
+	impl<In, Item: Clone, T: HookType<Input = Vec<In>, Output = Vec<Item>>> Hook<T>
+		for ConstantBatchHook<Item>
+	{
+		fn run(&mut self, input: Vec<In>) -> Vec<Item> {
+			input.iter().map(|_| self.state.clone()).collect()
+		}
+	}
+
 	/// Hook to use for when we want to not do anything, for example
 	/// useful for "disabling" debug hooks in production.
 	/// It is marked as `inline` so shouldn't have any runtime cost.
