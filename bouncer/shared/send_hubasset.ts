@@ -7,8 +7,10 @@ import {
   Asset,
 } from 'shared/utils';
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
-import { getAssethubApi } from 'shared/utils/substrate';
+import { DisposableApiPromise, getAssethubApi } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
+import { SubmittableExtrinsic } from '@polkadot/api/types';
+import { ISubmittableResult } from '@polkadot/types/types';
 
 let nextAliceNonce: number | undefined;
 
@@ -49,15 +51,15 @@ async function fillNonceGap(logger: Logger, nonce: number) {
   }
 }
 
-export async function sendHubAsset(
+// the signer is always `//Alice`
+export async function submitHubExtrinsic(
   logger: Logger,
-  asset: Asset,
-  address: string,
-  amount: string,
-): Promise<string> {
-  const planckAmount = amountToFineAmount(amount, assetDecimals(asset));
+  extrinsic: (api: DisposableApiPromise) => SubmittableExtrinsic<'promise', ISubmittableResult>,
+  extrinsicName: string,
+  expectedEvent?: { pallet: string; name: string },
+): Promise<{ txHash: string; eventData?: unknown }> {
   const alice = await aliceKeyringPair();
-  await using assethub = await getAssethubApi();
+  await using assethubApi = await getAssethubApi();
 
   // The nonce is pinned for the lifetime of this transfer and reused by every retry. Retrying
   // with a fresh nonce is what caused double-deposits in the past, when a retracted tx got
@@ -66,60 +68,65 @@ export async function sendHubAsset(
 
   const runSignAndSubmit = async (
     tip: number,
-    resolve: (txHash: string) => void,
+    resolve: (result: { txHash: string; eventData?: unknown }) => void,
     reject: (error: Error) => void,
   ) => {
-    let transferFunction;
-    if (asset === 'HubDot') {
-      transferFunction = assethub.tx.balances.transferKeepAlive(address, parseInt(planckAmount));
-    } else if (asset === 'HubUsdc' || asset === 'HubUsdt') {
-      transferFunction = assethub.tx.assets.transferKeepAlive(
-        getHubAssetId(asset),
-        address,
-        parseInt(planckAmount),
-      );
-    } else {
-      throw new Error(`Unsupported hub asset type: ${asset}`);
-    }
-
-    const unsubscribe = await transferFunction.signAndSend(alice, { nonce, tip }, (result) => {
-      if (result.dispatchError !== undefined) {
-        if (result.dispatchError.isModule) {
-          const decoded = assethub.registry.findMetaError(result.dispatchError.asModule);
-          const { docs, name, section } = decoded;
-          unsubscribe();
-          reject(new Error(`${section}.${name}: ${docs.join(' ')}`));
-        } else {
-          unsubscribe();
-          reject(new Error('Error: ' + result.dispatchError.toString()));
+    const unsubscribe = await extrinsic(assethubApi).signAndSend(
+      alice,
+      { nonce, tip },
+      (result) => {
+        if (result.dispatchError !== undefined) {
+          if (result.dispatchError.isModule) {
+            const decoded = assethubApi.registry.findMetaError(result.dispatchError.asModule);
+            const { docs, name, section } = decoded;
+            unsubscribe();
+            reject(new Error(`${section}.${name}: ${docs.join(' ')}`));
+          } else {
+            unsubscribe();
+            reject(new Error('Error: ' + result.dispatchError.toString()));
+          }
         }
-      }
-      if (result.status.isFinalized) {
-        unsubscribe();
-        resolve(result.status.hash.toString());
-      }
-      if (result.status.isInvalid) {
-        unsubscribe();
-        reject(new Error('Transaction is invalid'));
-      }
-      // Only give up (and resubmit, with the pinned nonce) on terminal states where the tx
-      // definitely won't be applied. `isRetracted` is deliberately NOT terminal.
-      if (result.status.isDropped || result.status.isUsurped) {
-        unsubscribe();
-        reject(new Error(`Transaction was ${result.status.type.toLowerCase()}`));
-      }
-    });
+        if (result.status.isFinalized) {
+          unsubscribe();
+
+          if (expectedEvent) {
+            const eventData = result.findRecord(expectedEvent.pallet, expectedEvent.name);
+            if (eventData === undefined) {
+              reject(
+                new Error(
+                  `Error: extrinsic submitted succesfully, but expected event ${expectedEvent.pallet}.${expectedEvent.name} was not emitted.`,
+                ),
+              );
+              return;
+            }
+            resolve({ txHash: result.status.hash.toString(), eventData: eventData.event.data });
+          } else {
+            resolve({ txHash: result.status.hash.toString() });
+          }
+        }
+        if (result.status.isInvalid) {
+          unsubscribe();
+          reject(new Error('Transaction is invalid'));
+        }
+        // Only give up (and resubmit, with the pinned nonce) on terminal states where the tx
+        // definitely won't be applied. `isRetracted` is deliberately NOT terminal.
+        if (result.status.isDropped || result.status.isUsurped) {
+          unsubscribe();
+          reject(new Error(`Transaction was ${result.status.type.toLowerCase()}`));
+        }
+      },
+    );
   };
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      return await new Promise<string>((resolve, reject) => {
+      return await new Promise<{ txHash: string; eventData?: unknown }>((resolve, reject) => {
         assethubSigningMutex
           .runExclusive(() => runSignAndSubmit(attempt * TIP_STEP, resolve, reject))
           .catch(reject);
       });
     } catch (e) {
-      logger.warn(`Error sending asset ${asset} to ${address} (nonce ${nonce}): ${e}`);
+      logger.warn(`Error submitting extrinsic ${extrinsicName} (nonce ${nonce}): ${e}`);
       if (attempt >= MAX_ATTEMPTS - 1) {
         await fillNonceGap(logger, nonce);
         throw e;
@@ -128,5 +135,35 @@ export async function sendHubAsset(
     }
   }
 
-  return '';
+  // this case is impossible as we throw above
+  return {
+    txHash: '',
+  };
+}
+
+export async function sendHubAsset(
+  logger: Logger,
+  asset: Asset,
+  address: string,
+  amount: string,
+): Promise<string> {
+  const planckAmount = parseInt(amountToFineAmount(amount, assetDecimals(asset)));
+
+  let result;
+  if (asset === 'HubDot') {
+    result = await submitHubExtrinsic(
+      logger,
+      (api) => api.tx.balances.transferKeepAlive(address, planckAmount),
+      `balances.transferKeepAlive(${address}, ${planckAmount})`,
+    );
+  } else if (asset === 'HubUsdc' || asset === 'HubUsdt') {
+    result = await submitHubExtrinsic(
+      logger,
+      (api) => api.tx.assets.transferKeepAlive(getHubAssetId(asset), address, planckAmount),
+      `transferKeepAlive(${asset}, ${address}, ${planckAmount})`,
+    );
+  } else {
+    throw new Error(`Unsupported hub asset type: ${asset}`);
+  }
+  return result.txHash;
 }
