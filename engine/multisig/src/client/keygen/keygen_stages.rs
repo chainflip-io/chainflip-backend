@@ -574,12 +574,9 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		let mut bad_parties = BTreeSet::new();
 		let verified_shares = if should_process_shares {
 			// Index at which we should evaluate sharing polynomial
-			let evaluation_index = if let Some(context) = resharing_context {
-				let own_id = common.validator_mapping.get_id(common.own_idx);
-				context.future_index_mapping.get_idx(own_id).unwrap()
-			} else {
-				common.own_idx
-			};
+			let evaluation_index =
+				share_evaluation_index(common, resharing_context.as_ref(), common.own_idx)
+					.expect("future index must exist for a receiving participant");
 
 			incoming_shares
 				.into_iter()
@@ -713,7 +710,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		let verified_complaints = match verify_broadcasts_non_blocking(messages).await {
+		let mut verified_complaints = match verify_broadcasts_non_blocking(messages).await {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
@@ -721,6 +718,30 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
 				),
 		};
+
+		// During handover, ignore complaints from non-receiving participants.
+		// Only receivers process incoming shares, so a non-receiver has nothing
+		// to legitimately complain about. Acting on such a (necessarily
+		// dishonest) complaint would force the blamed party to reveal a share at
+		// the complainer's index in Stage 8, which then fails verification in
+		// Stage 9 and wrongly attributes the (possibly honest) blamed party.
+		if let Some(context) = self.keygen_common.resharing_context.as_ref() {
+			verified_complaints.retain(|idx_from, _| {
+				let is_receiver = context.receiving_participants.contains(idx_from);
+				if !is_receiver {
+					warn!(
+						from_id = self
+							.keygen_common
+							.common
+							.validator_mapping
+							.get_id(*idx_from)
+							.to_string(),
+						"Ignoring complaint from a non-receiving participant",
+					);
+				}
+				is_receiver
+			});
+		}
 
 		if verified_complaints.iter().all(|(_idx, c)| c.0.is_empty()) {
 			// if all complaints are empty, we can finalize the ceremony
@@ -777,6 +798,28 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		} else {
 			StageResult::Error(idxs_to_report, KeygenFailureReason::InvalidComplaint)
 		}
+	}
+}
+
+/// The index at which a receiver's share is evaluated.
+///
+/// During key handover a party's index in the current ceremony (its position in
+/// the sorted sharing ∪ receiving union) may differ from its index in the new key,
+/// and shares are evaluated at the latter (its `future_index`). For ordinary
+/// keygen the two domains coincide, so the current index is returned unchanged.
+/// Returns `None` when `current_idx` has no future index, i.e. it is not a
+/// receiver in the new key.
+fn share_evaluation_index<Crypto: CryptoScheme>(
+	common: &CeremonyCommon,
+	resharing_context: Option<&ResharingContext<Crypto>>,
+	current_idx: AuthorityCount,
+) -> Option<AuthorityCount> {
+	match resharing_context {
+		Some(context) => {
+			let id = common.validator_mapping.get_id(current_idx);
+			context.future_index_mapping.get_idx(id)
+		},
+		None => Some(current_idx),
 	}
 }
 
@@ -936,6 +979,7 @@ impl<Crypto: CryptoScheme> VerifyBlameResponsesBroadcastStage9<Crypto> {
 		blame_responses: BTreeMap<AuthorityCount, BlameResponse8<Crypto::Point>>,
 	) -> Result<BTreeMap<AuthorityCount, ShamirShare<Crypto::Point>>, BTreeSet<AuthorityCount>> {
 		let common = &self.keygen_common.common;
+		let resharing_context = self.keygen_common.resharing_context.as_ref();
 		let (shares_for_us, bad_parties): (Vec<_>, BTreeSet<_>) = blame_responses
 			.iter()
 			.map(|(sender_idx, response)| {
@@ -949,7 +993,9 @@ impl<Crypto: CryptoScheme> VerifyBlameResponsesBroadcastStage9<Crypto> {
 				}
 
 				if !response.0.iter().all(|(dest_idx, share)| {
-					verify_share(share, &self.commitments[sender_idx], *dest_idx)
+					share_evaluation_index(common, resharing_context, *dest_idx).is_some_and(
+						|eval_idx| verify_share(share, &self.commitments[sender_idx], eval_idx),
+					)
 				}) {
 					warn!(
 						from_id = common.validator_mapping.get_id(*sender_idx).to_string(),
