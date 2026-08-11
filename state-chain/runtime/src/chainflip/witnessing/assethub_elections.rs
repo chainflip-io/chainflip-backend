@@ -164,17 +164,25 @@ impl BlockWitnesserInstance for AssethubDepositChannelWitnessing {
 		.deposit_channel_witnessing_enabled
 	}
 
-	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
-		let height = height.root();
-		AssethubIngressEgress::active_deposit_channels_at(
-			// we advance by SAFETY_BUFFER before checking opened_at
-			height.saturating_forward(ASSETHUB_MAINNET_SAFETY_BUFFER as usize),
-			// we don't advance for expiry
-			*height,
-		)
-		.into_iter()
-		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
-		.collect()
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
+		// One pass over the deposit channels for the whole batch, rather than one per height.
+		let channels = AssethubIngressEgress::all_deposit_channels();
+		block_heights
+			.iter()
+			.map(|height| {
+				let height = height.root();
+				AssethubIngressEgress::filter_active_deposit_channels(
+					&channels,
+					height.saturating_forward(ASSETHUB_MAINNET_SAFETY_BUFFER as usize),
+					*height,
+				)
+				.into_iter()
+				.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
+				.collect()
+			})
+			.collect()
 	}
 
 	fn processed_up_to(up_to: ChainBlockNumberOf<Self::Chain>) {
@@ -211,11 +219,15 @@ impl BlockWitnesserInstance for AssethubEgressWitnessing {
 	}
 
 	fn election_properties(
-		_block_height: ChainBlockNumberOf<Self::Chain>,
-	) -> Self::ElectionProperties {
-		TransactionOutIdToBroadcastId::<Runtime, AssethubInstance>::iter()
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
+		// The result doesn't depend on the height, so iterate the broadcast lookup once for the
+		// whole batch rather than once per open election.
+		let properties = TransactionOutIdToBroadcastId::<Runtime, AssethubInstance>::iter()
 			.map(|(tx_id, _)| tx_id)
-			.collect::<Vec<_>>()
+			.collect::<Vec<_>>();
+
+		block_heights.iter().map(|_| properties.clone()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
