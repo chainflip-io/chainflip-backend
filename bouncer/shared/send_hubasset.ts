@@ -155,7 +155,7 @@ export async function sendHubAsset(
     result = await submitHubExtrinsic(
       logger,
       (api) => api.tx.assets.transferKeepAlive(getHubAssetId(asset), address, planckAmount),
-      `transferKeepAlive(${asset}, ${address}, ${planckAmount})`,
+      `assets.transferKeepAlive(${asset}, ${address}, ${planckAmount})`,
     );
   } else {
     throw new Error(`Unsupported hub asset type: ${asset}`);
