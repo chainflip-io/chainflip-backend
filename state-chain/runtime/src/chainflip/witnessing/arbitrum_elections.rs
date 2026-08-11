@@ -339,12 +339,12 @@ impl
 			>,
 			Vec<
 				ElectionIdentifier<
-					<ArbitrumLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<ArbitrumFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
 				ElectionIdentifier<
-					<ArbitrumFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<ArbitrumLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 		),

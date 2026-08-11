@@ -286,12 +286,12 @@ impl
 			>,
 			Vec<
 				ElectionIdentifier<
-					<AssethubLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<AssethubFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
 				ElectionIdentifier<
-					<AssethubFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<AssethubLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 		),
