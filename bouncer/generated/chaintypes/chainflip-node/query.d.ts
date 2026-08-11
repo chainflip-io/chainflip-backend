@@ -3218,17 +3218,6 @@ export interface ChainStorage extends GenericChainStorage {
     vaultSwapMinimumBrokerFee: GenericStorageQuery<(arg: AccountId32Like) => number, AccountId32>;
 
     /**
-     * Map of bound addresses for accounts.
-     *
-     * @param {AccountId32Like} arg
-     * @param {Callback<H160 | undefined> =} callback
-     **/
-    boundBrokerWithdrawalAddress: GenericStorageQuery<
-      (arg: AccountId32Like) => H160 | undefined,
-      AccountId32
-    >;
-
-    /**
      *
      * @param {CfAmmCommonAssetPair} arg
      * @param {Callback<number> =} callback
@@ -5853,6 +5842,17 @@ export interface ChainStorage extends GenericChainStorage {
         arg: [AccountId32Like, CfPrimitivesChainsForeignChain],
       ) => CfChainsAddressForeignChainAddress | undefined,
       [AccountId32, CfPrimitivesChainsForeignChain]
+    >;
+
+    /**
+     * Ethereum withdrawal addresses permanently bound by brokers.
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<H160 | undefined> =} callback
+     **/
+    boundBrokerWithdrawalAddress: GenericStorageQuery<
+      (arg: AccountId32Like) => H160 | undefined,
+      AccountId32
     >;
 
     /**

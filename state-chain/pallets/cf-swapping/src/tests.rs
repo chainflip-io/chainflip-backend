@@ -1530,6 +1530,95 @@ fn broker_deregistration_checks_private_channels() {
 	});
 }
 
+mod deregistration_checks {
+	use super::*;
+
+	fn insert_user_swap_request(
+		output_action: SwapOutputAction<u64>,
+		price_limits_and_expiry: Option<PriceLimitsAndExpiry<u64>>,
+	) {
+		SwapRequests::<Test>::insert(
+			SWAP_REQUEST_ID,
+			SwapRequest {
+				id: SWAP_REQUEST_ID,
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				state: SwapRequestState::UserSwap {
+					price_limits_and_expiry,
+					output_action,
+					dca_state: DcaState::new(INPUT_AMOUNT, None),
+					fees: Default::default(),
+				},
+			},
+		);
+	}
+
+	fn price_limits_with_refund(
+		refund_address: AccountOrAddress<u64, ForeignChainAddress>,
+	) -> PriceLimitsAndExpiry<u64> {
+		PriceLimitsAndExpiry {
+			expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+				retry_duration: 100,
+				refund_address,
+				refund_ccm_metadata: None,
+			},
+			min_price: Price::zero(),
+			max_oracle_price_slippage: None,
+		}
+	}
+
+	#[test]
+	fn unrelated_swap_does_not_block_deregistration() {
+		new_test_ext().execute_with(|| {
+			insert_user_swap_request(
+				SwapOutputAction::Egress {
+					ccm_deposit_metadata: None,
+					output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+				},
+				Some(price_limits_with_refund(AccountOrAddress::ExternalAddress(
+					(*EVM_OUTPUT_ADDRESS).clone(),
+				))),
+			);
+
+			assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT));
+		});
+	}
+
+	#[test]
+	fn swap_into_account_blocks_its_deregistration() {
+		new_test_ext().execute_with(|| {
+			insert_user_swap_request(
+				SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
+				None,
+			);
+
+			assert!(matches!(
+				PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
+				Err(Error::<Test>::PendingSwapRequest)
+			));
+			assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&BOB));
+		});
+	}
+
+	#[test]
+	fn swap_refund_to_account_blocks_its_deregistration() {
+		new_test_ext().execute_with(|| {
+			insert_user_swap_request(
+				SwapOutputAction::Egress {
+					ccm_deposit_metadata: None,
+					output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+				},
+				Some(price_limits_with_refund(AccountOrAddress::InternalAccount(LP_ACCOUNT))),
+			);
+
+			assert!(matches!(
+				PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
+				Err(Error::<Test>::PendingSwapRequest)
+			));
+		});
+	}
+}
+
 #[test]
 fn can_handle_input_and_output_being_the_same_asset() {
 	const ASSET: Asset = Asset::Eth;

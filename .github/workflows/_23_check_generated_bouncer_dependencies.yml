@@ -1,4 +1,4 @@
-name: Ensure event schemas are up to date
+name: Ensure generated bouncer dependencies are up to date
 
 on:
   workflow_call:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  check-event-schemas:
+  check-generated-bouncer-dependencies:
     runs-on: namespace-profile-default
     steps:
       - name: Checkout chainflip-backend 🛒
@@ -44,4 +44,4 @@ jobs:
 
       - name: Run Test 🧪
         shell: bash
-        run: ./ci/scripts/check_event_schemas.sh
+        run: ./ci/scripts/check_generated_bouncer_dependencies.sh
