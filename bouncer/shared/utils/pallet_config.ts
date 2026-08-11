@@ -6,7 +6,7 @@
 //   - 'single' -> takes a single `PalletConfigUpdate`     (e.g. validator, *Broadcaster, *ThresholdSigner)
 // Callers must pass the argument with the matching shape.
 
-import type { ChainflipClient } from 'shared/utils/dedot';
+import { findPallet, type ChainflipClient, type PalletInfo } from 'shared/utils/dedot';
 import { lowercaseFirstLetter } from 'shared/utils';
 
 // The runtime call that carries config updates, as it appears (snake_case) in metadata.
@@ -18,7 +18,6 @@ export type TypeDef = PortableType['typeDef'];
 type EnumDef = Extract<TypeDef, { type: 'Enum' }>;
 export type EnumMember = EnumDef['value']['members'][number];
 export type Field = EnumMember['fields'][number];
-export type PalletInfo = ChainflipClient['metadata']['latest']['pallets'][number];
 
 export type ConfigArity = 'single' | 'array';
 
@@ -81,9 +80,7 @@ export function resolveConfigCallByTxPallet(
   txPallet: string,
 ): ConfigCallInfo {
   const { registry } = client;
-  const pallet = client.metadata.latest.pallets.find(
-    (p) => lowercaseFirstLetter(p.name) === txPallet,
-  );
+  const pallet = findPallet(client, txPallet);
   const info = pallet && resolveConfigCall(registry, pallet);
   if (info) {
     return info;

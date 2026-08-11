@@ -1,7 +1,6 @@
 import { getChainflipApi } from 'shared/utils/substrate';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
-import type { ChainflipClient } from 'shared/utils/dedot';
-import { lowercaseFirstLetter } from 'shared/utils';
+import { hasPallet } from 'shared/utils/dedot';
 
 export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
   await cf.submitGovernance({
@@ -13,12 +12,6 @@ export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
         },
       ]),
   });
-}
-
-// dedot's query proxy throws on an unknown pallet, so check the metadata before touching one (these
-// election pallets aren't present on every runtime).
-function hasPallet(client: ChainflipClient, txPallet: string): boolean {
-  return client.metadata.latest.pallets.some((p) => lowercaseFirstLetter(p.name) === txPallet);
 }
 
 export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> {

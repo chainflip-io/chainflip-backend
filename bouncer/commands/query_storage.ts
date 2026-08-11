@@ -39,7 +39,7 @@
 import { DedotClient, WsProvider as DedotWsProvider } from 'dedot';
 import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
 import { getChainflipApi, type DisposableChainflipClient } from 'shared/utils/substrate';
-import type { ChainflipClient } from 'shared/utils/dedot';
+import { findPallet, type ChainflipClient } from 'shared/utils/dedot';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import {
@@ -94,11 +94,6 @@ function palletsWithStorage(client: ChainflipClient): string[] {
     .filter((p) => p.storage && p.storage.entries.length > 0)
     .map((p) => lowercaseFirstLetter(p.name))
     .sort();
-}
-
-// The pallet metadata whose dedot key (camelCased name) is `txPallet`, or undefined.
-function findPallet(client: ChainflipClient, txPallet: string) {
-  return client.metadata.latest.pallets.find((p) => lowercaseFirstLetter(p.name) === txPallet);
 }
 
 // Number of keys an entry takes: 0 for a plain `StorageValue`, 1 for a `StorageMap`, n for an

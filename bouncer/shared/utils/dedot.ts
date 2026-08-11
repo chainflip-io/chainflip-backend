@@ -15,6 +15,42 @@ import { bigintReplacer, cfMutex, lowercaseFirstLetter, sleep } from 'shared/uti
 export type ChainflipClient = DedotClient<ChainflipNodeApi>;
 
 /**
+ * Every pallet in the generated chaintypes, as a literal union of camelCase dedot keys (cf.
+ * {@link StrictChainTx}). Taken across all five namespaces because a pallet with no calls is absent
+ * from `tx`, one with no storage from `query`, and so on.
+ */
+export type PalletName = string &
+  (
+    | keyof RemoveIndex<ChainflipNodeApi['query']>
+    | keyof RemoveIndex<ChainflipNodeApi['tx']>
+    | keyof RemoveIndex<ChainflipNodeApi['events']>
+    | keyof RemoveIndex<ChainflipNodeApi['errors']>
+    | keyof RemoveIndex<ChainflipNodeApi['consts']>
+  );
+
+/** A pallet's entry in the runtime metadata. */
+export type PalletInfo = ChainflipClient['metadata']['latest']['pallets'][number];
+
+/**
+ * The connected runtime's metadata for `txPallet` (a camelCase dedot key), or undefined if it has
+ * no such pallet. Takes a bare `string` for names that arrive at runtime (CLI args); prefer
+ * {@link hasPallet} for hardcoded ones, which are checked at compile time.
+ */
+export function findPallet(client: ChainflipClient, txPallet: string): PalletInfo | undefined {
+  return client.metadata.latest.pallets.find((p) => lowercaseFirstLetter(p.name) === txPallet);
+}
+
+/**
+ * True if the connected runtime has `txPallet`. dedot's query/tx proxies throw on an unknown
+ * pallet, so check before touching one that isn't on every runtime (e.g. the election pallets).
+ * Typing `txPallet` as {@link PalletName} means a typo is a compile error rather than a silent
+ * "pallet absent".
+ */
+export function hasPallet(client: ChainflipClient, txPallet: PalletName): boolean {
+  return findPallet(client, txPallet) !== undefined;
+}
+
+/**
  * Common supertype for any `client.tx.<pallet>.<call>(...)` extrinsic. The per-call return type is
  * invariant in its metadata, so the base `IRuntimeTxCall` makes them all assignable here.
  */
