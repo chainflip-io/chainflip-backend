@@ -71,51 +71,46 @@ export async function submitHubExtrinsic(
     resolve: (result: { txHash: string; eventData?: unknown }) => void,
     reject: (error: Error) => void,
   ) => {
-    const unsubscribe = await extrinsic(assethubApi).signAndSend(
-      alice,
-      { nonce, tip },
-      (result) => {
-        if (result.dispatchError !== undefined) {
-          if (result.dispatchError.isModule) {
-            const decoded = assethubApi.registry.findMetaError(result.dispatchError.asModule);
-            const { docs, name, section } = decoded;
-            unsubscribe();
-            reject(new Error(`${section}.${name}: ${docs.join(' ')}`));
-          } else {
-            unsubscribe();
-            reject(new Error('Error: ' + result.dispatchError.toString()));
-          }
-        }
-        if (result.status.isFinalized) {
+    const tx = extrinsic(assethubApi);
+    const txHash = tx.hash.toString();
+    const unsubscribe = await tx.signAndSend(alice, { nonce, tip }, (result) => {
+      if (result.dispatchError !== undefined) {
+        if (result.dispatchError.isModule) {
+          const decoded = assethubApi.registry.findMetaError(result.dispatchError.asModule);
+          const { docs, name, section } = decoded;
           unsubscribe();
+          reject(new Error(`${section}.${name}: ${docs.join(' ')}`));
+        } else {
+          unsubscribe();
+          reject(new Error('Error: ' + result.dispatchError.toString()));
+        }
+      }
+      if (result.status.isFinalized) {
+        unsubscribe();
 
-          if (expectedEvent) {
-            const eventData = result.findRecord(expectedEvent.pallet, expectedEvent.name);
-            if (eventData === undefined) {
-              reject(
-                new Error(
-                  `Error: extrinsic submitted succesfully, but expected event ${expectedEvent.pallet}.${expectedEvent.name} was not emitted.`,
-                ),
-              );
-              return;
-            }
-            resolve({ txHash: result.status.hash.toString(), eventData: eventData.event.data });
-          } else {
-            resolve({ txHash: result.status.hash.toString() });
+        if (expectedEvent) {
+          const eventData = result.findRecord(expectedEvent.pallet, expectedEvent.name);
+          if (eventData === undefined) {
+            logger.warn(
+              `Error: extrinsic ${extrinsicName} submitted successfully, but expected event ${expectedEvent.pallet}.${expectedEvent.name} was not emitted.`,
+            );
           }
+          resolve({ txHash, eventData: eventData?.event.data });
+        } else {
+          resolve({ txHash });
         }
-        if (result.status.isInvalid) {
-          unsubscribe();
-          reject(new Error('Transaction is invalid'));
-        }
-        // Only give up (and resubmit, with the pinned nonce) on terminal states where the tx
-        // definitely won't be applied. `isRetracted` is deliberately NOT terminal.
-        if (result.status.isDropped || result.status.isUsurped) {
-          unsubscribe();
-          reject(new Error(`Transaction was ${result.status.type.toLowerCase()}`));
-        }
-      },
-    );
+      }
+      if (result.status.isInvalid) {
+        unsubscribe();
+        reject(new Error('Transaction is invalid'));
+      }
+      // Only give up (and resubmit, with the pinned nonce) on terminal states where the tx
+      // definitely won't be applied. `isRetracted` is deliberately NOT terminal.
+      if (result.status.isDropped || result.status.isUsurped || result.status.isFinalityTimeout) {
+        unsubscribe();
+        reject(new Error(`Transaction was ${result.status.type.toLowerCase()}`));
+      }
+    });
   };
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
