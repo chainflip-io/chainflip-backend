@@ -1510,4 +1510,136 @@ mod key_handover {
 	async fn handover_should_report_on_empty_coeff_comm() {
 		key_handover_with_wrong_commitment_length_is_attributed(0).await;
 	}
+
+	/// Makes sure that stage 9 uses the correct index when verifying blame response
+	/// (regression test for PRO-3040).
+	#[tokio::test]
+	async fn handover_stage9_rejects_index_confused_blame_response() {
+		// Setup:
+		// 1. Sharing and receiving sets are distinct enough so that some sharing party
+		// is not in the receiving set (requires 1/3 of nodes to be new).
+		// 2. Some of these old-only parties appear before the receivers in the sharer + receiver
+		// union, which results in index mismatch between current and future sets.
+		// 3. Some party sends an invalid secret share in stage 5 and does the same in stage 7.
+		// causing blame response to be evaluated at stage 9.
+		// The test is to make sure that evaluation at stage 9 is performed at correct indices.
+
+		//   union (current):     1 2 3 4 5 6
+		//   receivers (future):      3→1 4→2 5→3 6→4
+		let original_set = to_account_id_set([1, 2, 7]);
+		let sharing_subset = to_account_id_set([1, 2]);
+		let receiving_set = to_account_id_set([3, 4, 5, 6]);
+
+		// Malicious dealer (a sharer).
+		let dealer = AccountId::new([1; 32]);
+		// Honest victim: current index 3, future index 1.
+		let victim = AccountId::new([3; 32]);
+		// The receiver whose future index (3) equals the victim's current index
+		// (3): the dealer's honest Stage-5 share for this node is f(3), which is
+		// valid at the victim's current index but wrong at its future index.
+		// Correct code should reject the donor's share (buggy code may accept this
+		// if the share is evaluated using the current rather than future indices).
+		let donor = AccountId::new([5; 32]);
+
+		let all_participants: BTreeSet<_> = sharing_subset.union(&receiving_set).cloned().collect();
+		let victim_current_idx =
+			PartyIdxMapping::from_participants(all_participants).get_idx(&victim).unwrap();
+
+		let (mut ceremony, _initial_key, _) = prepare_handover_test(
+			original_set,
+			sharing_subset,
+			receiving_set,
+			HandoverTestOptions::default(),
+		)
+		.await;
+
+		let messages = ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
+		let mut messages = run_stages!(
+			ceremony,
+			messages,
+			keygen::HashComm1,
+			VerifyHashComm2,
+			CoeffComm3,
+			VerifyCoeffComm4,
+			SecretShare5
+		);
+
+		// f(3): the dealer's honest share for `donor`, reused as the poison.
+		let poison = messages[&dealer][&donor].clone();
+		// Stage 5: send the victim f(3) in place of its correct share f(1).
+		*messages.get_mut(&dealer).unwrap().get_mut(&victim).unwrap() = poison.clone();
+
+		// The victim rejects f(3) (checked at future index 1) and complains.
+		let messages = run_stages!(ceremony, messages, Complaints6, VerifyComplaints7);
+		let mut messages = ceremony.run_stage::<BlameResponse8, _, _>(messages).await;
+
+		// Stage 8: the dealer repeats f(3) in its blame response.
+		for message in messages.get_mut(&dealer).unwrap().values_mut() {
+			message.0.insert(victim_current_idx, poison.clone());
+		}
+
+		// A correct Stage 9 verifies at the future index and should blame the dealer.
+		let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
+		ceremony.distribute_messages(messages).await;
+
+		// The malicious dealer must be attributed, not the honest victim.
+		ceremony.complete_with_error(&[dealer], KeygenFailureReason::InvalidBlameResponse);
+	}
+
+	/// A complaint from a non-receiving participant (an old-only sharer, which
+	/// receives no shares and so has nothing to legitimately complain about) must
+	/// be ignored in Stage 7. Otherwise the blamed party would try to reveal a
+	/// share keyed by the non-receiver's index in Stage 8 — an index absent from
+	/// its outgoing shares (which cover receivers only) — and the ceremony would
+	/// fail on a purely bogus complaint. With the complaint dropped there is no real dispute, so
+	/// the handover finalizes normally.
+	#[tokio::test]
+	async fn handover_ignores_complaint_from_non_receiver() {
+		// {1,2} reshare to {3,4,5,6}; {1,2} are sharers but NOT receivers.
+		let original_set = to_account_id_set([1, 2, 7]);
+		let sharing_subset = to_account_id_set([1, 2]);
+		let receiving_set = to_account_id_set([3, 4, 5, 6]);
+
+		// A non-receiving sharer raises a bogus complaint against an honest dealer.
+		let non_receiver = AccountId::new([1; 32]);
+		let blamed_dealer = AccountId::new([2; 32]);
+
+		let all_participants: BTreeSet<_> = sharing_subset.union(&receiving_set).cloned().collect();
+		let blamed_dealer_idx = PartyIdxMapping::from_participants(all_participants)
+			.get_idx(&blamed_dealer)
+			.unwrap();
+
+		let (mut ceremony, initial_key, _) = prepare_handover_test(
+			original_set,
+			sharing_subset,
+			receiving_set,
+			HandoverTestOptions::default(),
+		)
+		.await;
+
+		let messages = ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
+		let mut messages = run_stages!(
+			ceremony,
+			messages,
+			keygen::HashComm1,
+			VerifyHashComm2,
+			CoeffComm3,
+			VerifyCoeffComm4,
+			SecretShare5,
+			Complaints6
+		);
+
+		// The non-receiver broadcasts a complaint against the honest dealer.
+		for message in messages.get_mut(&non_receiver).unwrap().values_mut() {
+			*message = Complaints6(BTreeSet::from([blamed_dealer_idx]));
+		}
+
+		// After distributing the complaint verification, Stage 7 drops the bogus
+		// complaint and (no real complaints remaining) finalizes the handover.
+		let messages = ceremony.run_stage::<VerifyComplaints7, _, _>(messages).await;
+		ceremony.distribute_messages(messages).await;
+
+		let (new_key, _new_shares) = ceremony.complete();
+		assert_eq!(new_key, initial_key);
+	}
 }
