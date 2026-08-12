@@ -400,7 +400,6 @@ export interface ChainEvents extends GenericChainEvents {
       'PalletConfigUpdated',
       { update: PalletCfFlipPalletConfigUpdate }
     >;
-    FlipMinted: GenericPalletEvent<'Flip', 'FlipMinted', { to: AccountId32; amount: bigint }>;
     BondUpdated: GenericPalletEvent<
       'Flip',
       'BondUpdated',
