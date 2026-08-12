@@ -23,7 +23,7 @@ use crate::{self as Flip, Config, ReserveId};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	sp_runtime::{
-		traits::{CheckedAdd, CheckedSub, Saturating, Zero},
+		traits::{CheckedAdd, Saturating, Zero},
 		RuntimeDebug,
 	},
 	traits::{tokens::imbalance::TryMerge, Imbalance, SameOrOther, TryDrop},
@@ -83,25 +83,6 @@ impl<T: Config> Surplus<T> {
 	/// Create a new surplus.
 	fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
 		Surplus { amount, source }
-	}
-
-	/// Funds surplus from minting new funds. This surplus needs to be allocated somewhere or the
-	/// mint will be [reverted](RevertImbalance).
-	pub(super) fn from_mint(amount: T::Balance) -> Self {
-		Self::new(
-			if amount.is_zero() {
-				Zero::zero()
-			} else {
-				Flip::TotalIssuance::<T>::mutate(|total| match total.checked_add(&amount) {
-					Some(new_total) => {
-						*total = new_total;
-						amount
-					},
-					None => Zero::zero(),
-				})
-			},
-			ImbalanceSource::Emissions,
-		)
 	}
 
 	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has
@@ -206,21 +187,6 @@ impl<T: Config> Deficit<T> {
 	/// Create a new deficit from a balance.
 	fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
 		Deficit { amount, source }
-	}
-
-	/// Burn funds, creating a corresponding deficit. The deficit needs to be applied somewhere or
-	/// the burn will be [reverted](RevertImbalance).
-	pub(super) fn from_burn(mut amount: T::Balance) -> Self {
-		if amount.is_zero() {
-			return Self::new(Zero::zero(), ImbalanceSource::Emissions)
-		}
-		Flip::TotalIssuance::<T>::mutate(|issued| {
-			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
-				amount = *issued;
-				Zero::zero()
-			});
-		});
-		Self::new(amount, ImbalanceSource::Emissions)
 	}
 
 	/// Credit funds to an account.
