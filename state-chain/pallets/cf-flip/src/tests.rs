@@ -587,7 +587,7 @@ mod test_flip_reward_distribution {
 	fn distributes_offchain_and_onchain_rewards_evenly() {
 		new_test_ext().execute_with(|| {
 			Flip::add_to_offchain_flip_to_be_distributed(300i128);
-			<Flip as FeePayment>::burn_or_reserve_offchain(300u128);
+			<Flip as FeePayment>::bridge_in_to_onchain_reserve(300u128);
 
 			MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
 			let bridged = Flip::trigger_flip_reward_distribution(1);
@@ -612,7 +612,7 @@ mod test_flip_reward_distribution {
 			// 1 offchain bridged in + 201 onchain = 202 total; 202 / 3 = 67 each, 1 stays in
 			// reserve
 			Flip::add_to_offchain_flip_to_be_distributed(1i128);
-			<Flip as FeePayment>::burn_or_reserve_offchain(201u128);
+			<Flip as FeePayment>::bridge_in_to_onchain_reserve(201u128);
 
 			MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
 			let bridged = Flip::trigger_flip_reward_distribution(1);
@@ -634,7 +634,7 @@ mod test_flip_reward_distribution {
 		new_test_ext().execute_with(|| {
 			// Negative FlipToDistribute should be left intact; only onchain rewards are distributed
 			Flip::add_to_offchain_flip_to_be_distributed(-100i128);
-			<Flip as FeePayment>::burn_or_reserve_offchain(300u128);
+			<Flip as FeePayment>::bridge_in_to_onchain_reserve(300u128);
 
 			MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
 			let bridged = Flip::trigger_flip_reward_distribution(1);
@@ -673,15 +673,15 @@ mod test_flip_reward_distribution {
 	}
 
 	#[test]
-	fn fees_reserved_via_burn_or_reserve_offchain_are_distributed() {
+	fn fees_reserved_via_bridge_in_to_onchain_reserve_are_distributed() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 300;
 
-			// Off-chain fees bridged in via `burn_or_reserve_offchain` are reserved for
+			// Off-chain fees bridged in via `bridge_in_to_onchain_reserve` are reserved for
 			// distribution rather than burned.
 			let issuance_before = TotalIssuance::<Test>::get();
 			let offchain_before = OffchainFunds::<Test>::get();
-			<Flip as FeePayment>::burn_or_reserve_offchain(AMOUNT);
+			<Flip as FeePayment>::bridge_in_to_onchain_reserve(AMOUNT);
 
 			assert_eq!(TotalIssuance::<Test>::get(), issuance_before);
 			assert_eq!(OffchainFunds::<Test>::get(), offchain_before - AMOUNT);
@@ -716,7 +716,7 @@ mod test_flip_reward_distribution {
 				OffchainFunds::<Test>::mutate(|funds| *funds += top_up);
 
 				Flip::add_to_offchain_flip_to_be_distributed(flip_to_distribute);
-				<Flip as FeePayment>::burn_or_reserve_offchain(onchain_reserve);
+				<Flip as FeePayment>::bridge_in_to_onchain_reserve(onchain_reserve);
 
 				let expected_bridged: u128 =
 					if flip_to_distribute > 0 { flip_to_distribute as u128 } else { 0 };

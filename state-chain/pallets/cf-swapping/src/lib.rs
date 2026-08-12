@@ -2643,7 +2643,8 @@ pub mod pallet {
 									if request.output_asset == Asset::Flip {
 										if output_amount < *flip_to_subtract_from_swap_output {
 											// In the rare event that this occurs we will track the
-											// deficit and offset it against the next burn
+											// deficit and offset it against the accumulated fees
+											// pot
 											let deficit: i128 = flip_to_subtract_from_swap_output
 												.saturating_sub(output_amount)
 												.try_into()

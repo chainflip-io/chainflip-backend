@@ -732,7 +732,7 @@ pub trait MissedAuthorshipSlots {
 	fn missed_slots() -> sp_std::ops::Range<u64>;
 }
 
-/// Allows accounts to pay for things by burning fees.
+/// Handles fee taking actions
 pub trait FeePayment {
 	type Amount;
 	type AccountId;
@@ -742,13 +742,7 @@ pub trait FeePayment {
 		unimplemented!()
 	}
 
-	/// Helper function to activate FLIP 2.1 from the current epoch.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_flip_2_1() {
-		unimplemented!()
-	}
-
-	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
+	/// Takes fee equivalent to the amount, if the account has enough. Otherwise fails.
 	fn try_take_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 
 	/// Accumulate FLIP to be distributed off-chain (e.g. via the StateChainGateway).
@@ -756,7 +750,7 @@ pub trait FeePayment {
 
 	/// Bridges `amount` of off-chain funds (eg. in the StateChainGateway contract) in and
 	/// reserves it for distribution to authorities as fee rewards.
-	fn burn_or_reserve_offchain(amount: Self::Amount);
+	fn bridge_in_to_onchain_reserve(amount: Self::Amount);
 }
 
 /// Provides information about on-chain funds.
