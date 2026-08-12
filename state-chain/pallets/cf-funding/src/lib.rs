@@ -926,7 +926,7 @@ pub mod pallet {
 						amount < MinimumFunding::<T>::get().into()
 					{
 						// Insufficient funds to create an account.
-						T::Flip::burn_or_reserve_offchain(amount.into());
+						T::Flip::bridge_in_to_onchain_reserve(amount.into());
 						Self::deposit_event(Event::FailedFundingAttempt {
 							account_id: caller_account_id,
 							withdrawal_address: caller,

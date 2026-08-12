@@ -650,7 +650,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 		FlipToDistribute::<T>::mutate(|flip| flip.saturating_accrue(amount));
 	}
 
-	fn burn_or_reserve_offchain(amount: Self::Amount) {
+	fn bridge_in_to_onchain_reserve(amount: Self::Amount) {
 		Pallet::<T>::bridge_in_to_distribution_reserve(amount);
 	}
 }
