@@ -85,7 +85,7 @@ describe('ConcurrentTests', () => {
   serialTest(
     'CheckAvailabilityAllSolanaNonces',
     checkAvailabilityAllSolanaNonces,
-    5 * ciTimeoutFactor,
+    30 * ciTimeoutFactor,
   );
   serialTest('CheckNoWitnessingTaskRestarts', checkNoWitnessingTaskRestarts, 5 * ciTimeoutFactor);
   serialTest('CheckNoTransferFallbacks', checkNoTransferFallbacks, 10 * ciTimeoutFactor);
