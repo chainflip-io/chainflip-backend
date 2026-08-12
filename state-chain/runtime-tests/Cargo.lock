@@ -7226,6 +7226,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cf-primitives",
+ "dirs",
  "frame-remote-externalities",
  "frame-support",
  "hex",
