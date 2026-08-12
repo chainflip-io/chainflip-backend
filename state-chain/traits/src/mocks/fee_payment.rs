@@ -51,7 +51,7 @@ impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayme
 		});
 	}
 
-	fn burn_or_reserve_offchain(_amount: Self::Amount) {}
+	fn bridge_in_to_onchain_reserve(_amount: Self::Amount) {}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
