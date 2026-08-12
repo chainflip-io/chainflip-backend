@@ -314,7 +314,7 @@ pub mod pallet {
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
-		StablecoinDefaults<1_000_000_000>, // $1,000 USD
+		StablecoinDefaults<1_000>, // $1,000 USD
 	>;
 
 	/// Stores minimum amount per asset necessary to deploy a strategy if only one of the
@@ -327,7 +327,7 @@ pub mod pallet {
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
-		StablecoinDefaults<20_000_000_000>, // $20,000 USD
+		StablecoinDefaults<20_000>, // $20,000 USD
 	>;
 
 	/// Stores the minimum amount per asset that can be added to an existing strategy.
@@ -337,7 +337,7 @@ pub mod pallet {
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
-		StablecoinDefaults<10_000_000>, // $10 USD
+		StablecoinDefaults<10>, // $10 USD
 	>;
 
 	/// Cursor into `Strategies` for incremental `on_idle` processing: the raw storage

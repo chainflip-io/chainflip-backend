@@ -551,28 +551,15 @@ pub struct DcaParameters {
 
 pub type ShortId = u8;
 
-/// Converts an `amount` expressed in the fine units of `from` into the fine units of `to`,
-/// preserving its nominal value. Rounds down, and saturates rather than overflowing.
-pub fn rescale_fine_amount(amount: AssetAmount, from: Asset, to: Asset) -> AssetAmount {
-	let (from, to) = (from.decimals(), to.decimals());
-	if to >= from {
-		amount.saturating_mul(10u128.checked_pow(to - from).unwrap_or(u128::MAX))
-	} else {
-		amount
-			.checked_div(10u128.checked_pow(from - to).unwrap_or(u128::MAX))
-			.unwrap_or_default()
-	}
-}
-
-/// A default amount for every USD stablecoin, from an amount `N` expressed in the fine units of
-/// [`STABLE_ASSET`]. Each entry is rescaled to that asset's own decimals so that they all represent
-/// the same nominal USD amount.
+/// A default amount for every USD stablecoin, from a whole number of dollars `N`. Each entry is
+/// expressed in the fine units of its own asset, so that they all represent the same nominal USD
+/// amount.
 pub struct StablecoinDefaults<const N: u128>();
 impl<const N: u128> Get<BTreeMap<Asset, AssetAmount>> for StablecoinDefaults<N> {
 	fn get() -> BTreeMap<Asset, AssetAmount> {
 		Asset::all()
 			.filter(|asset| asset.is_usd_stablecoin())
-			.map(|asset| (asset, rescale_fine_amount(N, STABLE_ASSET, asset)))
+			.map(|asset| (asset, N.saturating_mul(10u128.saturating_pow(asset.decimals()))))
 			.collect()
 	}
 }
@@ -718,31 +705,16 @@ mod tests {
 
 	#[test]
 	fn stablecoin_defaults_are_scaled_to_each_asset_decimals() {
-		// $1,000, in the fine units of the stable asset.
-		const ONE_THOUSAND_USD: AssetAmount = 1_000_000_000;
-
-		let defaults = StablecoinDefaults::<ONE_THOUSAND_USD>::get();
+		let defaults = StablecoinDefaults::<1_000>::get();
 
 		// All stablecoins are covered, and nothing else.
 		assert!(defaults.keys().all(|asset| asset.is_usd_stablecoin()));
 		assert_eq!(defaults.len(), Asset::all().filter(Asset::is_usd_stablecoin).count());
 
-		// Same decimals as the stable asset: the amount is used as is.
-		assert_eq!(Asset::Usdt.decimals(), STABLE_ASSET.decimals());
-		assert_eq!(defaults[&Asset::Usdt], ONE_THOUSAND_USD);
+		assert_eq!(Asset::Usdt.decimals(), 6);
+		assert_eq!(defaults[&Asset::Usdt], 1_000_000_000);
 
-		// More decimals: the amount is scaled up so it is still worth $1,000.
-		assert_eq!(Asset::BscUsdt.decimals(), STABLE_ASSET.decimals() + 12);
-		assert_eq!(defaults[&Asset::BscUsdt], ONE_THOUSAND_USD * 10u128.pow(12));
-	}
-
-	#[test]
-	fn rescaling_fine_amounts_saturates_and_rounds_down() {
-		// Rounding down can take a small amount all the way to zero.
-		assert_eq!(rescale_fine_amount(10u128.pow(12), Asset::BscUsdt, STABLE_ASSET), 1);
-		assert_eq!(rescale_fine_amount(10u128.pow(12) - 1, Asset::BscUsdt, STABLE_ASSET), 0);
-
-		// Scaling up saturates rather than overflowing.
-		assert_eq!(rescale_fine_amount(u128::MAX, STABLE_ASSET, Asset::BscUsdt), u128::MAX);
+		assert_eq!(Asset::BscUsdt.decimals(), 18);
+		assert_eq!(defaults[&Asset::BscUsdt], 1_000_000_000_000_000_000_000);
 	}
 }
