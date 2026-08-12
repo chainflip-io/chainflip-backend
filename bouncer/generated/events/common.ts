@@ -367,7 +367,6 @@ export const palletCfFlipImbalancesInternalSource = z.discriminatedUnion('__kind
 export const palletCfFlipImbalancesImbalanceSource = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('External') }),
   z.object({ __kind: z.literal('Internal'), value: palletCfFlipImbalancesInternalSource }),
-  z.object({ __kind: z.literal('Emissions') }),
 ]);
 
 export const palletCfFlipOnChargeTransactionFeeScalingRateConfig = z.discriminatedUnion('__kind', [
