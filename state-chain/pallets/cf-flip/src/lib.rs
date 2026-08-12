@@ -209,10 +209,6 @@ pub mod pallet {
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
 		},
-		FlipMinted {
-			to: T::AccountId,
-			amount: T::Balance,
-		},
 		BondUpdated {
 			account_id: T::AccountId,
 			new_bond: T::Balance,
