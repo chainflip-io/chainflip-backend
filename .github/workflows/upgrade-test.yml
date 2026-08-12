@@ -269,6 +269,8 @@ jobs:
           # Ethereum cbBTC are the unreleased assets now, so retarget the filter to exclude
           # them instead.
           sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" bouncer/tests/rpc_tests.ts
+          # Apply the current Solana nonce timeout to the pre-upgrade bouncer checkout.
+          sed -i "/'CheckAvailabilityAllSolanaNonces'/,/^  );$/ s/5 \* ciTimeoutFactor/30 * ciTimeoutFactor/" bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
