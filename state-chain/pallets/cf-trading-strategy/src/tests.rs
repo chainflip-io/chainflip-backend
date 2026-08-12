@@ -781,8 +781,8 @@ fn strategy_deployment_validation() {
 				Error::<Test>::InvalidAssetsForStrategy
 			);
 
-			// InventoryBased treats the two assets as 1:1, so the base asset must have the same
-			// number of decimals as the stable (quote) asset.
+			// InventoryBased values one unit of each asset equally, so the base asset must be a
+			// stablecoin.
 			assert_err!(
 				TradingStrategyPallet::deploy_strategy(
 					RuntimeOrigin::signed(LP),
@@ -1479,6 +1479,144 @@ mod inventory_based_strategy {
 				);
 			});
 	}
+
+	#[test]
+	fn base_asset_with_different_decimals() {
+		const BSC_USDT: Asset = Asset::BscUsdt; // Has 18 decimals, compared to USDC's 6 decimals.
+		const MIN_BUY_TICK: Tick = -10;
+		const MAX_BUY_TICK: Tick = 0;
+		const MIN_SELL_TICK: Tick = 0;
+		const MAX_SELL_TICK: Tick = 10;
+		const AVERAGE_BUY_TICK: Tick = -5;
+		const AVERAGE_SELL_TICK: Tick = 5;
+
+		const ONE_BSC_USDT: AssetAmount = 10u128.pow(18);
+		const ONE_USDC: AssetAmount = 10u128.pow(6);
+
+		// 100 units of each asset, i.e. equal value at the assumed 1:1 rate.
+		const BSC_USDT_AMOUNT: AssetAmount = 100 * ONE_BSC_USDT;
+		const USDC_AMOUNT: AssetAmount = 100 * ONE_USDC;
+
+		// Every configured tick is shifted by the tick at which the two starting balances are
+		// worth the same, i.e. the price at which the assets trade 1:1.
+		let decimals_tick =
+			cf_amm_math::Price::from_amounts(USDC_AMOUNT.into(), BSC_USDT_AMOUNT.into())
+				.unwrap()
+				.into_nearest_tick()
+				.unwrap();
+		assert_eq!(
+			equivalent_value_price(BSC_USDT, QUOTE_ASSET)
+				.unwrap()
+				.into_nearest_tick()
+				.unwrap(),
+			decimals_tick
+		);
+
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				let thresholds = BTreeMap::from_iter([(BSC_USDT, 0), (QUOTE_ASSET, 0)]);
+				MinimumDeploymentAmountForStrategy::<Test>::set(thresholds.clone());
+				MinimumAddedFundsToStrategy::<Test>::set(thresholds.clone());
+				LimitOrderUpdateThresholds::<Test>::set(thresholds);
+
+				let initial_amounts: BTreeMap<_, _> =
+					[(BSC_USDT, BSC_USDT_AMOUNT), (QUOTE_ASSET, USDC_AMOUNT)].into();
+				for (asset, amount) in initial_amounts.clone() {
+					MockRefundAddressRegistry::register_refund_address(LP, asset.into());
+					MockBalance::credit_account(&LP, asset, amount);
+				}
+
+				assert_ok!(TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					TradingStrategy::InventoryBased {
+						base_asset: BSC_USDT,
+						min_buy_tick: MIN_BUY_TICK,
+						max_buy_tick: MAX_BUY_TICK,
+						min_sell_tick: MIN_SELL_TICK,
+						max_sell_tick: MAX_SELL_TICK,
+					},
+					initial_amounts,
+				));
+
+				let (_, strategy_id, _) = Strategies::<Test>::iter().next().unwrap();
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// The two sides hold equal value, so each gets a single order at the average tick
+				// of its range, shifted by the decimals offset, holding that side's full balance.
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						MockLimitOrder {
+							base_asset: BSC_USDT,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: decimals_tick + AVERAGE_BUY_TICK,
+							amount: USDC_AMOUNT,
+						},
+						MockLimitOrder {
+							base_asset: BSC_USDT,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: decimals_tick + AVERAGE_SELL_TICK,
+							amount: BSC_USDT_AMOUNT,
+						},
+					]
+				);
+
+				// Double the BscUsdt balance, unbalancing the inventory 2:1 in its favour.
+				MockBalance::credit_account(&strategy_id, BSC_USDT, BSC_USDT_AMOUNT);
+
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// Valued in Usdc: 100 on the buy side, 200 on the sell side, so half of the 300
+				// total is 150. The sell side keeps 150 at its average tick and pushes the
+				// remaining 50 to a tick 2/3 of the way across its range (its share of the total);
+				// the buy side, being the smaller one, moves its whole balance to a single tick 1/3
+				// of the way across its own range.
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						MockLimitOrder {
+							base_asset: BSC_USDT,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: decimals_tick + MIN_BUY_TICK + 3,
+							amount: USDC_AMOUNT,
+						},
+						MockLimitOrder {
+							base_asset: BSC_USDT,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: decimals_tick + MAX_SELL_TICK - 7,
+							// Orders are sized in Usdc and converted back to BscUsdt at the same
+							// 10^12 scale, so 50 Usdc of value is exactly 50 BscUsdt.
+							amount: 50 * ONE_BSC_USDT,
+						},
+						MockLimitOrder {
+							base_asset: BSC_USDT,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: decimals_tick + AVERAGE_SELL_TICK,
+							// The last order on the side absorbs the remainder, so the two sell
+							// orders together deploy the full balance with no dust left over.
+							amount: 2 * BSC_USDT_AMOUNT - 50 * ONE_BSC_USDT,
+						},
+					]
+				);
+			});
+	}
 }
 
 mod oracle_strategy {
@@ -1499,7 +1637,8 @@ mod oracle_strategy {
 		const AVERAGE_SELL_OFFSET_TICK: Tick = 8;
 
 		let new_oracle_price = Price::from_usd_cents(BASE_ASSET, 101);
-		const NEW_ORACLE_TICK: Tick = 99;
+		// A 1% price increase sits at tick 99.51, which rounds to 100.
+		const NEW_ORACLE_TICK: Tick = 100;
 		const EXPECTED_NEW_BUY_TICK: Tick = AVERAGE_BUY_OFFSET_TICK + NEW_ORACLE_TICK;
 		const EXPECTED_NEW_SELL_TICK: Tick = AVERAGE_SELL_OFFSET_TICK + NEW_ORACLE_TICK;
 
@@ -1778,14 +1917,15 @@ mod oracle_strategy {
 		// $20/BTC and $2/USDC => relative price of 0.1 (BTC in terms of USDC)
 		let btc_price = Price::from_usd(BTC, 20);
 		let usdc_price = Price::from_usd(USDC, 2);
-		let oracle_tick = btc_price.divide_by(usdc_price).unwrap().into_tick().unwrap();
+		let oracle_tick = btc_price.divide_by(usdc_price).unwrap().into_nearest_tick().unwrap();
 
 		const BTC_AMOUNT: AssetAmount = 1_000_000_000; // 10 BTC with 8 decimals
 		const USDC_AMOUNT: AssetAmount = 100_000_000; // 100 USDC with 6 decimals
 
 		// $20.20/BTC: 1% price increase
 		let new_btc_price = Price::from_usd_cents(BTC, 20_20);
-		let new_oracle_tick = new_btc_price.divide_by(usdc_price).unwrap().into_tick().unwrap();
+		let new_oracle_tick =
+			new_btc_price.divide_by(usdc_price).unwrap().into_nearest_tick().unwrap();
 
 		new_test_ext()
 			.then_execute_at_next_block(|_| {
