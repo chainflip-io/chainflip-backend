@@ -33,11 +33,6 @@ pub mod storage_analysis;
 pub mod swap_rate;
 pub mod witnesser_cull;
 
-/// Set to skip the runtime tests and only produce the storage report.
-fn storage_analysis_only() -> bool {
-	std::env::var("STORAGE_ANALYSIS_ONLY").is_ok_and(|v| v != "0")
-}
-
 pub fn run_all(mut ext: RemoteExternalities<StateChainBlock>) -> anyhow::Result<()> {
 	let block_hash = ext.header.hash();
 	let state_version = ext.state_version;
@@ -61,7 +56,9 @@ pub fn run_all(mut ext: RemoteExternalities<StateChainBlock>) -> anyhow::Result<
 
 	storage_analysis::run(block_hash, &pairs, &raw_storage)?;
 
-	if storage_analysis_only() {
+	// If the STORAGE_ANALYSIS_ONLY environment variable is set to a non-zero value, we skip running
+	// the tests.
+	if std::env::var("STORAGE_ANALYSIS_ONLY").is_ok_and(|v| v != "0") {
 		return Ok(())
 	}
 
