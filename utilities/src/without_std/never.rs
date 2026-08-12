@@ -51,7 +51,7 @@ impl HasTypeIntrospection for Never {
 	}
 }
 
-#[cfg(any(test, all(feature = "proptest", feature = "std")))]
+#[cfg(all(feature = "proptest", feature = "std"))]
 impl proptest::arbitrary::Arbitrary for Never {
 	type Parameters = ();
 	type Strategy = proptest::strategy::BoxedStrategy<Self>;
