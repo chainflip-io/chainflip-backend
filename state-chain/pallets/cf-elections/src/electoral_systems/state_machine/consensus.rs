@@ -34,6 +34,77 @@ pub trait ConsensusMechanism: Default {
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result;
 	fn insert_vote(&mut self, vote: Self::Vote);
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result>;
+
+	/// Required for `check_consensus_is_always_supported_by_success_threshold_votes`.
+	#[cfg(test)]
+	fn is_supported_by_vote(consensus: &Self::Result, vote: &Self::Vote) -> bool;
+
+	/// Required for `check_consensus_is_always_supported_by_success_threshold_votes`.
+	#[cfg(test)]
+	fn get_success_threshold(settings: &Self::Settings) -> &SuccessThreshold;
+
+	/// This is a generic test method for testing a consensus mechanism. It verifies
+	/// that consensus is always supported by at least `success_threshold` number of
+	/// votes.
+	/// It requires the methods `is_supported_by_vote` and `get_success_threshold` to
+	/// be implemented correctly.
+	#[cfg(test)]
+	fn check_consensus_is_always_supported_by_success_threshold_votes(
+		path: &'static str,
+		vote_count: usize,
+		settings: impl proptest::prelude::Strategy<Value = Self::Settings>,
+		all_vote_parameters: <Self::Vote as proptest::arbitrary::Arbitrary>::Parameters,
+	) where
+		Self::Vote: proptest::prelude::Arbitrary + PartialEq + Clone,
+		Self::Result: PartialEq + sp_std::fmt::Debug,
+		Self::Settings: sp_std::fmt::Debug,
+	{
+		use proptest::{
+			arbitrary::Arbitrary,
+			test_runner::{Config, FileFailurePersistence, TestRunner},
+		};
+
+		let mut runner = TestRunner::new(Config {
+			source_file: Some(path),
+			failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
+				"proptest-regressions",
+			))),
+			cases: 20000,
+			..Default::default()
+		});
+
+		// generate a set of `votes`
+		let votes = proptest::collection::vec(
+			Self::Vote::arbitrary_with(all_vote_parameters),
+			vote_count..(vote_count + 1),
+		);
+
+		runner
+			.run(&(votes, settings), |(votes, settings)| {
+				let mut c = Self::default();
+
+				// compute consensus of `votes`
+				for vote in &votes {
+					c.insert_vote(vote.clone());
+				}
+				let consensus = c.check_consensus(&settings);
+
+				if let Some(consensus) = consensus {
+					// count how many votes support the consensus and make sure its above the
+					// success threshold
+					let supported_by: u32 = votes
+						.iter()
+						.map(|vote| Self::is_supported_by_vote(&consensus, vote) as u32)
+						.sum();
+					assert!(
+						supported_by >= Self::get_success_threshold(&settings).success_threshold
+					);
+				}
+
+				Ok(())
+			})
+			.unwrap();
+	}
 }
 
 //-----------------------------------------------
@@ -45,6 +116,7 @@ pub struct SupermajorityConsensus<Vote: PartialEq> {
 	votes: BTreeMap<Vote, u32>,
 }
 
+#[cfg_attr(test, derive(sp_std::fmt::Debug, proptest_derive::Arbitrary))]
 pub struct SuccessThreshold {
 	pub success_threshold: u32,
 }
@@ -76,6 +148,16 @@ impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensu
 
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
 		vote.clone()
+	}
+
+	#[cfg(test)]
+	fn is_supported_by_vote(consensus: &Self::Result, vote: &Self::Vote) -> bool {
+		consensus == vote
+	}
+
+	#[cfg(test)]
+	fn get_success_threshold(settings: &Self::Settings) -> &SuccessThreshold {
+		settings
 	}
 }
 
@@ -142,6 +224,16 @@ impl<Stage: ConsensusMechanism, Priority: Ord + Copy> ConsensusMechanism
 
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
 		Stage::vote_as_consensus(&vote.vote)
+	}
+
+	#[cfg(test)]
+	fn is_supported_by_vote(consensus: &Self::Result, vote: &Self::Vote) -> bool {
+		Stage::is_supported_by_vote(consensus, &vote.vote)
+	}
+
+	#[cfg(test)]
+	fn get_success_threshold(settings: &Self::Settings) -> &SuccessThreshold {
+		Stage::get_success_threshold(settings)
 	}
 }
 

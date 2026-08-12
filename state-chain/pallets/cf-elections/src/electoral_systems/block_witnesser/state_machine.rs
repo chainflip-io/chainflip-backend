@@ -251,6 +251,7 @@ defx! {
 derive_common_traits!(
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(C::NAME)]
+	#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 	pub enum EngineElectionType<C: ChainTypes> {
 		ByHash(C::ChainBlockHash),
 		BlockHeight { submit_hash: bool },

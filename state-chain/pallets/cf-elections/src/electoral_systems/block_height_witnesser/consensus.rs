@@ -84,4 +84,50 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
 		vote.clone()
 	}
+
+	#[cfg(test)]
+	fn is_supported_by_vote(consensus: &Self::Result, vote: &Self::Vote) -> bool {
+		consensus.get_headers().iter().all(|header| vote.get_headers().contains(header))
+	}
+
+	#[cfg(test)]
+	fn get_success_threshold(settings: &Self::Settings) -> &SuccessThreshold {
+		&settings.0
+	}
+}
+
+#[test]
+fn test_bhw_consensus() {
+	use proptest::{
+		prelude::Arbitrary,
+		strategy::{LazyJust, Strategy},
+	};
+
+	type Types = crate::electoral_systems::state_machine::core::TypesFor<(u8, bool, Vec<()>)>;
+
+	BlockHeightWitnesserConsensus::<Types>::check_consensus_is_always_supported_by_success_threshold_votes(
+		file!(),
+		3,
+		LazyJust::new(|| {
+			(
+				SuccessThreshold { success_threshold: 3 },
+				HeightWitnesserProperties { witness_from_index: 0 },
+			)
+		}),
+		(0, 10),
+	);
+
+	BlockHeightWitnesserConsensus::<
+		crate::electoral_systems::state_machine::core::TypesFor<(u8, bool, ())>,
+	>::check_consensus_is_always_supported_by_success_threshold_votes(
+		file!(),
+		3,
+		u8::arbitrary().prop_map(|witness_from_index| {
+			(
+				SuccessThreshold { success_threshold: 3 },
+				HeightWitnesserProperties { witness_from_index },
+			)
+		}),
+		(0, 10),
+	);
 }
