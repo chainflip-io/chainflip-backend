@@ -298,6 +298,18 @@ jobs:
           ./commands/submit_runtime_upgrade.ts \
             --runtime ./../upgrade-to-runtime/state_chain_runtime.compact.compressed.wasm \
             --try_runtime
+
+          # TODO: Remove after 2.3. Old engines cannot read the oversized runtime-upgrade block.
+          pkill -x engine-runner || true
+          while pgrep -x engine-runner > /dev/null; do sleep 1; done
+          INIT_RUN=false \
+            LOG_SUFFIX=-runtime-upgrade-restart \
+            SELECTED_NODES=bashful \
+            LOCALNET_INIT_DIR=./../localnet/init \
+            BINARY_ROOT_PATH=./../upgrade-to-bins \
+            ./../localnet/init/scripts/start-all-engines.sh
+          sleep 7
+
           ./commands/start_dm_localnet_apis.ts \
             --bins ./../upgrade-to-bins \
             --localnet_init ./../localnet/init
