@@ -49,8 +49,6 @@ pub enum ImbalanceSource<AccountId> {
 	External,
 	/// Internal, aka. on-chain.
 	Internal(InternalSource<AccountId>),
-	/// Emissions, aka. a mint or burn.
-	Emissions,
 }
 
 impl<AccountId> ImbalanceSource<AccountId> {
@@ -273,7 +271,7 @@ impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 	type Opposite = Deficit<T>;
 
 	fn zero() -> Self {
-		Self { amount: Zero::zero(), source: ImbalanceSource::Emissions }
+		Self { amount: Zero::zero(), source: ImbalanceSource::External }
 	}
 	fn drop_zero(self) -> result::Result<(), Self> {
 		if self.amount.is_zero() {
@@ -345,7 +343,7 @@ impl<T: Config> Imbalance<T::Balance> for Deficit<T> {
 	type Opposite = Surplus<T>;
 
 	fn zero() -> Self {
-		Self { amount: Zero::zero(), source: ImbalanceSource::Emissions }
+		Self { amount: Zero::zero(), source: ImbalanceSource::External }
 	}
 	fn drop_zero(self) -> result::Result<(), Self> {
 		if self.amount.is_zero() {
@@ -423,11 +421,6 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 					*total = total.saturating_add(self.amount)
 				});
 			},
-			ImbalanceSource::Emissions => {
-				// This means some Flip were minted without allocating them somewhere. We revert by
-				// burning them again.
-				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_sub(self.amount))
-			},
 			ImbalanceSource::Internal(internal) => {
 				match internal {
 					InternalSource::Account(account_id) => {
@@ -465,11 +458,6 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 				Flip::OffchainFunds::<T>::mutate(|total| {
 					*total = total.saturating_sub(self.amount)
 				});
-			},
-			ImbalanceSource::Emissions => {
-				// This means some funds were burned without specifying the source. If this happens,
-				// we add this back on to the total issuance again.
-				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_add(self.amount))
 			},
 			ImbalanceSource::Internal(internal) => {
 				match internal {
