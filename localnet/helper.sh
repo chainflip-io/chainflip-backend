@@ -17,6 +17,25 @@ function check_endpoint_health() {
   fi
 }
 
+# Kills every process whose executable name (the basename of argv[0]) exactly
+# matches one of the given names.
+#
+# Matching against the full command line instead (`ps -ef | grep chainflip`) is
+# far too broad: it also hits unrelated processes that merely mention the name in
+# an argument or path, so anything run from a directory called `chainflip` — a
+# build, an editor, another checkout — gets killed along with the localnet.
+function kill_by_binary_name() {
+  local pids
+  pids=$(ps -eo pid=,args= | awk -v names=" $* " '{
+    n = split($2, path, "/")
+    if (index(names, " " path[n] " ")) print $1
+  }')
+
+  if [[ -n "$pids" ]]; then
+    kill -9 $pids 2>/dev/null || true
+  fi
+}
+
 function create_webstack_databases() {
   local databases=("swap" "chainstate" "processor" "liquidity_provision" "reporting")
   local compose="$DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p chainflip-localnet"
