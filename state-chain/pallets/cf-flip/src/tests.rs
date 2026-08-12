@@ -32,72 +32,6 @@ use std::mem;
 impl FlipOperation {
 	pub fn execute(&self) -> bool {
 		match self {
-			// Mint to external
-			FlipOperation::MintExternal(amount_1, amount_2) => {
-				let previous_issuance = TotalIssuance::<Test>::get();
-				let previous_offchain_funds = OffchainFunds::<Test>::get();
-				mem::drop(Flip::mint(*amount_1).offset(Flip::bridge_out(*amount_1)));
-				let intermediate_issuance = TotalIssuance::<Test>::get();
-				let intermediate_offchain_funds = OffchainFunds::<Test>::get();
-				if intermediate_issuance !=
-					(previous_issuance.checked_add(*amount_1).unwrap_or(previous_issuance)) ||
-					intermediate_offchain_funds !=
-						previous_offchain_funds + (intermediate_issuance - previous_issuance)
-				{
-					return false
-				}
-				mem::drop(Flip::bridge_out(*amount_2).offset(Flip::mint(*amount_2)));
-				let final_offchain_funds = OffchainFunds::<Test>::get();
-				let final_issuance = TotalIssuance::<Test>::get();
-				if final_issuance !=
-					(intermediate_issuance
-						.checked_add(*amount_2)
-						.unwrap_or(intermediate_issuance)) ||
-					final_offchain_funds !=
-						intermediate_offchain_funds + (final_issuance - intermediate_issuance)
-				{
-					return false
-				}
-			},
-			// Burn from external
-			FlipOperation::BurnExternal(amount_1, amount_2) => {
-				let previous_offchain_funds = OffchainFunds::<Test>::get();
-				let previous_issuance = TotalIssuance::<Test>::get();
-				mem::drop(Flip::burn(*amount_1).offset(Flip::bridge_in(*amount_1)));
-				let intermediate_offchain_funds = OffchainFunds::<Test>::get();
-				let intermediate_issuance = TotalIssuance::<Test>::get();
-				if intermediate_issuance !=
-					(previous_issuance - (previous_offchain_funds - intermediate_offchain_funds)) ||
-					intermediate_offchain_funds !=
-						previous_offchain_funds.saturating_sub(*amount_1)
-				{
-					return false
-				}
-				mem::drop(Flip::bridge_in(*amount_2).offset(Flip::burn(*amount_2)));
-				let final_offchain_funds = OffchainFunds::<Test>::get();
-				let final_issuance = TotalIssuance::<Test>::get();
-				if final_issuance !=
-					(intermediate_issuance -
-						(intermediate_offchain_funds - final_offchain_funds)) ||
-					final_offchain_funds != intermediate_offchain_funds.saturating_sub(*amount_2)
-				{
-					return false
-				}
-			},
-			FlipOperation::BurnReverts(amount) => {
-				let previous_issuance = TotalIssuance::<Test>::get();
-				mem::drop(Flip::burn(*amount));
-				if TotalIssuance::<Test>::get() != previous_issuance {
-					return false
-				}
-			},
-			FlipOperation::MintReverts(amount) => {
-				let previous_issuance = TotalIssuance::<Test>::get();
-				mem::drop(Flip::mint(*amount));
-				if TotalIssuance::<Test>::get() != previous_issuance {
-					return false
-				}
-			},
 			FlipOperation::CreditReverts(amount) => {
 				let previous_balance = Flip::total_balance_of(&CHARLIE);
 				mem::drop(Flip::credit(&CHARLIE, *amount));
@@ -123,76 +57,6 @@ impl FlipOperation {
 				let previous_offchain_funds = OffchainFunds::<Test>::get();
 				mem::drop(Flip::bridge_out(*amount));
 				if OffchainFunds::<Test>::get() != previous_offchain_funds {
-					return false
-				}
-			},
-			// Mint To Reserve
-			FlipOperation::MintToReserve(amount) => {
-				const TEST_RESERVE: ReserveId = *b"TEST";
-				let previous_issuance = TotalIssuance::<Test>::get();
-				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
-
-				let mint = Flip::mint(*amount);
-				let deposit = Flip::deposit_reserves(TEST_RESERVE, *amount);
-				mem::drop(mint.offset(deposit));
-
-				let new_issuance = TotalIssuance::<Test>::get();
-				let new_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
-				if new_issuance !=
-					previous_issuance.checked_add(*amount).unwrap_or(previous_issuance)
-				{
-					return false
-				}
-				if new_reserve != previous_reserve + (new_issuance - previous_issuance) {
-					return false
-				}
-			},
-			// Burn From Reserve
-			FlipOperation::BurnFromReserve(amount) => {
-				const TEST_RESERVE: ReserveId = *b"TEST";
-				let previous_issuance = TotalIssuance::<Test>::get();
-				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
-
-				let burn = Flip::burn(*amount);
-				let withdrawal = Flip::withdraw_reserves(TEST_RESERVE, *amount);
-				let _result = burn.offset(withdrawal);
-
-				if Flip::reserved_balance(TEST_RESERVE) != previous_reserve.saturating_sub(*amount)
-				{
-					return false
-				}
-				if Flip::total_issuance() != previous_issuance.saturating_sub(*amount) {
-					return false
-				}
-			},
-			// Burn From Account
-			FlipOperation::BurnFromAccount(account_id, amount) => {
-				let previous_balance = Flip::total_balance_of(account_id);
-				let previous_issuance = TotalIssuance::<Test>::get();
-				Flip::settle(account_id, Flip::burn(*amount).into());
-				let new_balance = Flip::total_balance_of(account_id);
-				if new_balance != previous_balance.saturating_sub(*amount) {
-					return false
-				}
-				if TotalIssuance::<Test>::get() !=
-					previous_issuance - (previous_balance - new_balance)
-				{
-					return false
-				}
-			},
-			// Mint To Account
-			FlipOperation::MintToAccount(account_id, amount) => {
-				let previous_balance = Flip::total_balance_of(account_id);
-				let previous_issuance = TotalIssuance::<Test>::get();
-				Flip::settle(account_id, Flip::mint(*amount).into());
-				if TotalIssuance::<Test>::get() !=
-					previous_issuance.checked_add(*amount).unwrap_or(previous_issuance)
-				{
-					return false
-				}
-				if Flip::total_balance_of(account_id) !=
-					previous_balance + (TotalIssuance::<Test>::get() - previous_issuance)
-				{
 					return false
 				}
 			},
@@ -286,8 +150,9 @@ impl FlipOperation {
 					.expect("Pending Redemption should exist");
 			},
 			FlipOperation::SlashAccount(account_id, slashing_rate, bond, mint, blocks) => {
-				// Mint some Flip for testing - 100 is not enough and unrealistic for this use case
-				Flip::settle(account_id, Flip::mint(*mint).into());
+				// Fund the account for testing - 100 is not enough and unrealistic for this use
+				// case
+				<Flip as Funding>::credit_funds(account_id, *mint);
 				let initial_balance: u128 = Flip::total_balance_of(account_id);
 				Bonder::<Test>::update_bond(account_id, *bond);
 
@@ -369,35 +234,27 @@ impl FlipOperation {
 
 impl Arbitrary for FlipOperation {
 	fn arbitrary(g: &mut Gen) -> FlipOperation {
-		let operation_choice = u128::arbitrary(g) % 17;
+		let operation_choice = u128::arbitrary(g) % 9;
 		match operation_choice {
-			0 => FlipOperation::MintExternal(u128::arbitrary(g), u128::arbitrary(g)),
-			1 => FlipOperation::BurnExternal(u128::arbitrary(g), u128::arbitrary(g)),
-			2 => FlipOperation::BurnReverts(u128::arbitrary(g)),
-			3 => FlipOperation::MintReverts(u128::arbitrary(g)),
-			4 => FlipOperation::CreditReverts(u128::arbitrary(g)),
-			5 => FlipOperation::DebitReverts(u128::arbitrary(g)),
-			6 => FlipOperation::BridgeInReverts(u128::arbitrary(g)),
-			7 => FlipOperation::BridgeOutReverts(u128::arbitrary(g)),
-			8 => FlipOperation::MintToReserve(u128::arbitrary(g)),
-			9 => FlipOperation::BurnFromReserve(u128::arbitrary(g)),
-			10 => FlipOperation::BurnFromAccount(random_account(g), u128::arbitrary(g)),
-			11 => FlipOperation::MintToAccount(random_account(g), u128::arbitrary(g)),
-			12 => FlipOperation::ExternalTransferOut(random_account(g), u128::arbitrary(g)),
-			13 => FlipOperation::ExternalTransferIn(random_account(g), u128::arbitrary(g)),
-			14 => FlipOperation::UpdateBalanceAndBond(
+			0 => FlipOperation::CreditReverts(u128::arbitrary(g)),
+			1 => FlipOperation::DebitReverts(u128::arbitrary(g)),
+			2 => FlipOperation::BridgeInReverts(u128::arbitrary(g)),
+			3 => FlipOperation::BridgeOutReverts(u128::arbitrary(g)),
+			4 => FlipOperation::ExternalTransferOut(random_account(g), u128::arbitrary(g)),
+			5 => FlipOperation::ExternalTransferIn(random_account(g), u128::arbitrary(g)),
+			6 => FlipOperation::UpdateBalanceAndBond(
 				random_account(g),
 				u128::arbitrary(g),
 				u128::arbitrary(g),
 			),
-			15 => FlipOperation::SlashAccount(
+			7 => FlipOperation::SlashAccount(
 				random_account(g),
 				Permill::from_rational(u32::arbitrary(g), u32::MAX),
 				Bond::arbitrary(g),
 				Mint::arbitrary(g),
 				(u16::arbitrary(g) as u32).into(), // random number of blocks up to u16::MAX
 			),
-			16 => FlipOperation::AccountToAccount(
+			8 => FlipOperation::AccountToAccount(
 				random_account(g),
 				random_account(g),
 				u128::arbitrary(g),
@@ -461,10 +318,10 @@ fn test_try_debit_from_liquid_funds() {
 		Bonder::<Test>::update_bond(&ALICE, 50);
 		// Try to debit more than liquid funds available in the account
 		assert!(Flip::try_debit_from_liquid_funds(&ALICE, 60).is_none());
-		// Try to debit less and burn the fee
+		// Try to debit less and take the fee
 		Flip::try_debit_from_liquid_funds(&ALICE, 10)
 			.expect("Debit of funds failed!")
-			.offset(Flip::burn(10));
+			.offset(Flip::bridge_out(10));
 		// Expect the account balance to be reduced
 		assert_eq!(Flip::total_balance_of(&ALICE), 90);
 	});
@@ -856,7 +713,7 @@ mod test_flip_reward_distribution {
 				// Top up OffchainFunds to cover both the onchain_reserve bridge-in below and the
 				// flip_to_distribute bridge-in inside trigger_flip_reward_distribution
 				let top_up = u64::MAX as u128 + i64::MAX as u128;
-				let _ = Flip::mint(top_up).offset(Flip::bridge_out(top_up));
+				OffchainFunds::<Test>::mutate(|funds| *funds += top_up);
 
 				Flip::add_to_offchain_flip_to_be_distributed(flip_to_distribute);
 				<Flip as FeePayment>::burn_or_reserve_offchain(onchain_reserve);

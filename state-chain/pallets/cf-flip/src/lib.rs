@@ -459,16 +459,6 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Decreases total issuance and returns a corresponding imbalance that must be reconciled.
-	fn burn(amount: T::Balance) -> Deficit<T> {
-		Deficit::from_burn(amount)
-	}
-
-	/// Increases total issuance and returns a corresponding imbalance that must be reconciled.
-	fn mint(amount: T::Balance) -> Surplus<T> {
-		Surplus::from_mint(amount)
-	}
-
 	/// Create some funds that have been added to the chain from outside.
 	fn bridge_in(amount: T::Balance) -> Surplus<T> {
 		Surplus::from_offchain(amount)
@@ -636,7 +626,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 			frame_system::Provider::<T>::created(account_id)
 				.expect("Cannot fail (see implementation).");
 		}
-		Pallet::<T>::settle(account_id, Pallet::<T>::mint(amount).into());
+		<Pallet<T> as cf_traits::Funding>::credit_funds(account_id, amount);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
