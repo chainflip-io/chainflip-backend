@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 use super::{primitives::NonemptyContinuousHeaders, BHWTypes, HeightWitnesserProperties};
 use crate::electoral_systems::state_machine::consensus::{
@@ -48,8 +48,12 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 			let mut consensus: SupermajorityConsensus<_> = Default::default();
 
 			for vote in &self.votes {
-				for header in &vote.get_headers() {
-					consensus.insert_vote(header.clone());
+				// we have to make sure that a single voter can't submit the same header multiple
+				// times (and thus effectively gets multiple votes), so we reduce to just the
+				// unique headers submitted
+				let unique_headers = vote.get_headers().into_iter().collect::<BTreeSet<_>>();
+				for header in unique_headers {
+					consensus.insert_vote(header);
 				}
 			}
 
