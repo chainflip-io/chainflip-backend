@@ -89,6 +89,24 @@ fn block_height_witnesser_first_consensus() {
 	)
 }
 
+#[test]
+fn one_startup_vote_cannot_reach_consensus_by_repeating_a_header() {
+	let repeated_header = Header { block_height: u64::MAX, hash: 1234, parent_hash: 1234 };
+	let vote = NonemptyContinuousHeaders::try_new(
+		[repeated_header.clone(), repeated_header.clone(), repeated_header].into(),
+	)
+	.unwrap();
+	let mut bh_consensus: BlockHeightWitnesserConsensus<BHTypes> = Default::default();
+
+	bh_consensus.insert_vote(vote);
+
+	assert_eq!(
+		bh_consensus
+			.check_consensus(&(SuccessThreshold { success_threshold: 3 }, BHW_PROPERTIES_STARTUP)),
+		None
+	);
+}
+
 /// In case we are running the consensus will return the longest sub-chain of continuous blocks
 /// The sub-chain in order to be valid needs to start from the correct `witness_from_index` and have
 /// all the correct hashes matching (`parent_hash` matching previous block hash)
