@@ -106,7 +106,7 @@ services:
   polkadot1:
     container_name: polkadot1
     platform: linux/amd64
-    image: docker.io/parity/polkadot:v1.18.7
+    image: docker.io/parity/polkadot:v1.24.0
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -117,9 +117,10 @@ services:
     command:
       - --alice
       - --blocks-pruning=archive
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/v2.3.2/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker1
+      - --public-addr=/dns4/polkadot1/tcp/30333
       - --rpc-cors=all
       - --rpc-external
       - --rpc-methods=unsafe
@@ -140,7 +141,7 @@ services:
   polkadot2:
     container_name: polkadot2
     platform: linux/amd64
-    image: docker.io/parity/polkadot:v1.18.7
+    image: docker.io/parity/polkadot:v1.24.0
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -151,9 +152,10 @@ services:
     command:
       - --bob
       - --blocks-pruning=archive
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/v2.3.2/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker2
+      - --public-addr=/dns4/polkadot2/tcp/30333
       - --rpc-cors=all
       - --rpc-external
       - --rpc-methods=unsafe
@@ -173,7 +175,7 @@ services:
   assethub:
     container_name: assethub
     platform: linux/amd64
-    image: docker.io/parity/polkadot-parachain:v1.18.7
+    image: docker.io/parity/polkadot-parachain:v1.24.0
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -184,8 +186,9 @@ services:
     command:
       - --alice
       - --collator
+      - --authoring=slot-based
       - --blocks-pruning=archive
-      - --chain=/chainspecs/assethub.raw.json
+      - --chain=/chainspecs/v2.3.2/assethub.raw.json
       - --force-authoring
       - --name=AssetHubDocker
       - --rpc-cors=all
@@ -199,7 +202,7 @@ services:
       - --pool-kbytes=250000
       - --node-key=808c85fab7ea8391de83fd0a16d069f9d5b43faa380886e439d76c4307d06039
       - --
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/v2.3.2/polkadot.raw.json
     ports:
       - 9955:9944
       - 40333:30333
@@ -276,7 +279,7 @@ services:
     command: -c /tron/config/config-peer.conf -d /tron/output-directory
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-e0e1c8d3c899cdbf2b51a6756368c57234c6babf}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-c029cab6544918921da045e74938b656ecded332}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped

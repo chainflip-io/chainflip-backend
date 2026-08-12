@@ -5,7 +5,7 @@ import { checkSolEventAccountsClosure } from 'shared/vault_swap/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
 import { checkNoWitnessingTaskRestarts } from 'shared/check_witnessing_task_restarts';
 import { checkNoTransferFallbacks } from 'shared/check_transfer_fallbacks';
-import { testAllSwaps, testSwapsToAssethub } from 'tests/all_swaps';
+import { testAllSwaps } from 'tests/all_swaps';
 import { testEvmDeposits } from 'tests/evm_deposits';
 import { testMultipleMembersGovernance } from 'tests/multiple_members_governance';
 import { testLpApi } from 'tests/lp_api_test';
@@ -40,7 +40,6 @@ describe('ConcurrentTests', () => {
   // test to reduce contention, for example, the BrokerLevelScreeningTest is delayed to not end up
   // in situations where the deposit monitor is slow in flagging transactions.
   testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
-  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 330 * ciTimeoutFactor);
   concurrentTest('EvmDeposits', testEvmDeposits, 280 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
   concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);

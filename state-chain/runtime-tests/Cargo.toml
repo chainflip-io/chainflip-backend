@@ -3,6 +3,10 @@ name = "runtime-tests"
 version = "0.1.0"
 edition = "2021"
 
+# This crate is in the workspace `exclude` list, to keep its heavy dependency tree out of the
+# workspace build. That also means it cannot use `workspace = true`: the git tags below must be
+# kept in sync with the workspace root by hand, or the crate stops compiling.
+
 [dependencies]
 # Local dependencies
 state-chain-runtime = { path = "../runtime", features = ["std"] }
@@ -11,19 +15,20 @@ pallet-cf-validator = { path = "../pallets/cf-validator", features = ["std"] }
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser", features = ["std"] }
 
 # Polkadot SDK dependencies
-frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
-sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
-sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
-sc-executor-common = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7" }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7" }
+sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7" }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7" }
+sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7" }
+sc-executor-common = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7" }
 codec = { version = "3.7.4", package = "parity-scale-codec", features = [
     "std",
 ] }
 
 tokio = { version = "1.38.0", features = ["full"] }
 anyhow = "1.0.86"
+dirs = "5.0.1"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 log = "0.4.21"
 hex = "0.4.3"

@@ -34,7 +34,7 @@ use subxt::{
 		},
 		rpc::{RawRpcFuture, RawRpcSubscription, RawValue, RpcClient, RpcClientT},
 	},
-	error::BlockError,
+	error::{BlockError, RpcError},
 	events::{Events, EventsClient},
 	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
@@ -54,6 +54,12 @@ use crate::{
 use super::rpc::DotRpcApi;
 
 use crate::dot::PolkadotHash;
+
+// Substrate transaction pool rejection codes (see substrate's `sc-rpc-api` author errors) that
+// mean the pool already knows the submitted transaction.
+const POOL_TEMPORARILY_BANNED: i32 = 1012;
+const POOL_ALREADY_IMPORTED: i32 = 1013;
+const POOL_TOO_LOW_PRIORITY: i32 = 1014;
 
 #[derive(Clone)]
 pub struct PolkadotHttpClient(HttpClient);
@@ -332,19 +338,21 @@ impl DotRpcApi for DotRpcClient {
 		})?)
 	}
 
-	/// Submits a raw encoded extrinsic to the chain and waits for it to be finalized.
-	/// Note that this works only with websocket client. Calling this on http client will panic.
+	/// Submits a raw encoded extrinsic, returning its hash once it is accepted into the
+	/// transaction pool.
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		let success = subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
+		let tx = subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
 			self.online_client.clone(),
 			encoded_bytes,
-		)
-		.submit_and_watch()
-		.await?
-		.wait_for_finalized_success()
-		.await?;
-
-		Ok(success.extrinsic_hash())
+		);
+		match tx.submit().await {
+			// Check if the pool already knows this transaction and treat it as a success.
+			Err(subxt::Error::Rpc(RpcError::ClientError(subxt_rpcs::Error::User(user_error))))
+				if [POOL_TEMPORARILY_BANNED, POOL_ALREADY_IMPORTED, POOL_TOO_LOW_PRIORITY]
+					.contains(&user_error.code) =>
+				Ok(tx.hash()),
+			result => Ok(result?),
+		}
 	}
 
 	async fn liquid_account_balance(
