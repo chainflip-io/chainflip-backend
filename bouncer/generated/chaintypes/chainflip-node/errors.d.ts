@@ -1401,6 +1401,11 @@ export interface ChainErrors extends GenericChainErrors {
     PoolDoesNotExist: GenericPalletError;
 
     /**
+     * The account has a pending swap request.
+     **/
+    PendingSwapRequest: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -2353,6 +2358,11 @@ export interface ChainErrors extends GenericChainErrors {
      * No liquidity refund address is registered for the account on the relevant chain.
      **/
     NoLiquidityRefundAddressRegistered: GenericPalletError;
+
+    /**
+     * The account's withdrawal whitelist must be disabled before deregistration.
+     **/
+    WithdrawalWhitelistNotCleared: GenericPalletError;
 
     /**
      * Generic pallet error

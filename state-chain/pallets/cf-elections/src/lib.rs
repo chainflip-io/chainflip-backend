@@ -868,6 +868,8 @@ pub mod pallet {
 							IndividualComponents::<T, I>::iter_prefix(unique_monotonic_identifier)
 								.collect::<BTreeMap<_, _>>();
 
+						let mut shared_data_cache = BTreeMap::new();
+
 						let votes = current_authorities
 							.into_iter()
 							.map(|validator_id| {
@@ -890,7 +892,10 @@ pub mod pallet {
 								 	// We don't bother to check if the reference has expired, as if we have the
 									// data we may as well use it, even if it was provided after the shared data
 									// reference expired (But before the reference was cleaned up `on_finalize`).
-									Ok(SharedData::<T, I>::get(shared_data_hash))
+									Ok(shared_data_cache
+										.entry(shared_data_hash)
+										.or_insert_with(|| SharedData::<T, I>::get(shared_data_hash))
+										.clone())
 								}) {
 									// Only a full vote can count towards consensus.
 									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))),
@@ -1349,6 +1354,9 @@ pub mod pallet {
 				Error::<T, I>::NotContributing
 			);
 
+			// Constant for the whole extrinsic, so read it once rather than for every vote.
+			let block_number = frame_system::Pallet::<T>::current_block_number();
+
 			for (election_identifier, authority_vote) in *authority_votes {
 				// if an identifier refers to a non existent election, skip this vote,
 				// but continue processing others.
@@ -1386,6 +1394,7 @@ pub mod pallet {
 					unique_monotonic_identifier,
 					&authority,
 					authority_index,
+					true, // Ensured before the loop.
 					|option_existing_vote, election_bitmap_components| {
 						let components = <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::partial_vote_into_components(
 							<T::ElectoralSystemRunner as ElectoralSystemRunner>::generate_vote_properties(
@@ -1396,7 +1405,6 @@ pub mod pallet {
 							partial_vote
 						)?;
 
-						let block_number = frame_system::Pallet::<T>::current_block_number();
 						if let Some(bitmap_component) = components.bitmap_component {
 							// Store bitmap component and update shared data reference counts
 							election_bitmap_components.add(
@@ -1496,6 +1504,7 @@ pub mod pallet {
 				unique_monotonic_identifier,
 				&authority,
 				authority_index,
+				ContributingAuthorities::<T, I>::contains_key(&authority),
 				|_, _| Ok(()),
 			))?;
 			Ok(())
@@ -2065,6 +2074,7 @@ pub mod pallet {
 			unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,
+			is_contributing_authority: bool,
 			f: F,
 		) -> Result<R, CorruptStorageError> {
 			ElectionBitmapComponents::<T, I>::with_mut(
@@ -2094,7 +2104,9 @@ pub mod pallet {
 						);
 					}
 
-					if ContributingAuthorities::<T, I>::contains_key(authority) {
+					// Invalidate any cached consensus, since the votes have changed. Only a
+					// contributing authority's vote counts towards consensus.
+					if is_contributing_authority {
 						ElectionConsensusHistoryUpToDate::<T, I>::remove(
 							unique_monotonic_identifier,
 						);

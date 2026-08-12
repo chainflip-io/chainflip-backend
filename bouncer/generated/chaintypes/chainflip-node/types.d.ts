@@ -18501,7 +18501,11 @@ export type PalletCfSwappingError =
   /**
    * The specified pool does not exist.
    **/
-  | 'PoolDoesNotExist';
+  | 'PoolDoesNotExist'
+  /**
+   * The account has a pending swap request.
+   **/
+  | 'PendingSwapRequest';
 
 export type PalletCfLpDeltaStats = { limitOrdersSwapUsdVolume: FixedU128 };
 
@@ -20068,7 +20072,11 @@ export type PalletCfAssetBalancesError =
   /**
    * No liquidity refund address is registered for the account on the relevant chain.
    **/
-  | 'NoLiquidityRefundAddressRegistered';
+  | 'NoLiquidityRefundAddressRegistered'
+  /**
+   * The account's withdrawal whitelist must be disabled before deregistration.
+   **/
+  | 'WithdrawalWhitelistNotCleared';
 
 export type PalletCfVaultsVaultActivationStatus005 =
   | { type: 'AwaitingActivation'; value: { newPublicKey: CfChainsDotPolkadotAccountId } }
