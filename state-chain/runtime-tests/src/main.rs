@@ -26,7 +26,15 @@ mod tests;
 
 type StateChainBlock = state_chain_runtime::Block;
 
-const HELP: &str = "\
+fn help() -> String {
+	// Resolved rather than created: printing the help shouldn't leave a directory behind.
+	let snapshot_dir = snapshot_dir().map_or_else(
+		|_| format!("<none: no cache directory found, set {SNAPSHOT_DIR_VAR}>"),
+		|dir| dir.display().to_string(),
+	);
+
+	format!(
+		"\
 Runs the state chain runtime tests against real chain state, either fetched from a network
 or loaded from a local snapshot.
 
@@ -54,13 +62,13 @@ TARGET (one or more):
     <path>.snap                 a snapshot file at an explicit path, always read offline
 
     Fetched state is cached by block hash, so a block that has been run before is re-used
-    offline instead of being fetched again. The cache lives outside the repository (it
-    survives `git clean` and is shared between checkouts); its location is logged on
-    startup.
+    offline instead of being fetched again. The cache lives outside the repository, so it
+    survives `git clean` and is shared between checkouts:
+
+        {snapshot_dir}
 
 ENVIRONMENT:
-    CF_RUNTIME_TESTS_SNAPSHOT_DIR   where to cache snapshots
-                                    (default: <user cache dir>/chainflip/runtime-tests)
+    CF_RUNTIME_TESTS_SNAPSHOT_DIR   where to cache snapshots (see above)
     STORAGE_ANALYSIS_ONLY=1     run the storage analysis only, skipping the tests
     RUST_LOG=debug              log level (default: info)
 
@@ -71,7 +79,9 @@ EXAMPLES:
 
 A storage report is written to `state-chain/runtime-tests/storage-report-<hash>.md` for
 every block that is processed.\
-";
+"
+	)
+}
 
 #[derive(Debug, Clone)]
 pub enum Network {
@@ -154,12 +164,12 @@ impl FromStr for Target {
 /// Overrides where snapshots are cached.
 const SNAPSHOT_DIR_VAR: &str = "CF_RUNTIME_TESTS_SNAPSHOT_DIR";
 
-/// Where fetched chain state is cached, created on demand.
+/// Where fetched chain state is cached.
 ///
 /// Deliberately outside the repository: snapshots are large, are keyed by an immutable block
 /// hash, and so are worth sharing between checkouts rather than losing to a `git clean`.
 fn snapshot_dir() -> anyhow::Result<PathBuf> {
-	let dir = match std::env::var_os(SNAPSHOT_DIR_VAR) {
+	Ok(match std::env::var_os(SNAPSHOT_DIR_VAR) {
 		Some(dir) => PathBuf::from(dir),
 		None => dirs::cache_dir()
 			.ok_or_else(|| {
@@ -167,7 +177,12 @@ fn snapshot_dir() -> anyhow::Result<PathBuf> {
 			})?
 			.join("chainflip")
 			.join("runtime-tests"),
-	};
+	})
+}
+
+/// [`snapshot_dir`], created if it doesn't exist yet.
+fn create_snapshot_dir() -> anyhow::Result<PathBuf> {
+	let dir = snapshot_dir()?;
 
 	std::fs::create_dir_all(&dir)
 		.map_err(|e| anyhow!("Unable to create snapshot directory {}: {e}", dir.display()))?;
@@ -180,12 +195,12 @@ async fn main() -> anyhow::Result<()> {
 	let args: Vec<String> = std::env::args().skip(1).collect();
 
 	if args.iter().any(|arg| matches!(arg.as_str(), "help" | "--help" | "-h")) {
-		println!("{HELP}");
+		println!("{}", help());
 		return Ok(())
 	}
 
 	let Some((first, rest)) = args.split_first() else {
-		eprintln!("{HELP}");
+		eprintln!("{}", help());
 		anyhow::bail!("No arguments provided.");
 	};
 
@@ -211,7 +226,7 @@ async fn main() -> anyhow::Result<()> {
 		.collect::<anyhow::Result<Vec<_>>>()?;
 
 	if targets.is_empty() {
-		eprintln!("{HELP}");
+		eprintln!("{}", help());
 		anyhow::bail!("No targets provided. Provide one or more snapshots, hashes or `latest`.");
 	}
 
@@ -230,7 +245,7 @@ async fn main() -> anyhow::Result<()> {
 	}
 
 	let network = network.map(Network::url);
-	let snapshot_dir = snapshot_dir()?;
+	let snapshot_dir = create_snapshot_dir()?;
 	log::info!("Caching snapshots in {}", snapshot_dir.display());
 
 	let modes: Vec<_> = targets
