@@ -28,6 +28,8 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
 	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
 	ScheduledEgressDetails, WithdrawalAddressAlreadyBound, WithdrawalAddressRestriction,
+	DeregistrationHooks, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
+	ScheduledEgressDetails, WithdrawalAddressRestriction,
 };
 use cf_utilities::derive_common_traits;
 use frame_support::{
@@ -983,7 +985,7 @@ where
 
 pub struct FreeBalancesDeregistrationCheck<T: Config>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for FreeBalancesDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for FreeBalancesDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

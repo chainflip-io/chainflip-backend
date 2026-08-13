@@ -44,7 +44,7 @@ use cf_primitives::{
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AccountRoleRegistry,
 	AsyncResult, AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip,
-	DeregistrationCheck, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo,
+	DeregistrationHooks, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo,
 	HistoricalEpoch, KeyRotator, MissedAuthorshipSlots, QualifyNode, RedemptionCheck,
 	ReputationResetter, SetSafeMode, VanityName,
 };
@@ -2552,7 +2552,7 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 
 pub struct ValidatorDeregistrationCheck<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for ValidatorDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for ValidatorDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
@@ -2578,7 +2578,7 @@ impl<T: Config> DeregistrationCheck for ValidatorDeregistrationCheck<T> {
 
 pub struct DelegatorDeregistrationCheck<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for DelegatorDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for DelegatorDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

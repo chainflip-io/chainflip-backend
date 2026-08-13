@@ -61,7 +61,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
-	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, PoolApi, PriceFeedApi,
+	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationHooks, PoolApi, PriceFeedApi,
 	RefundAddressRegistry, SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
@@ -996,7 +996,7 @@ impl<T: Config> Pallet<T> {
 
 pub struct PoolsDeregistrationCheck<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for PoolsDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for PoolsDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

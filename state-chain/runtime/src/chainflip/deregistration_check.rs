@@ -16,13 +16,13 @@
 
 use crate::{AccountId, AccountRoles, Runtime};
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, DeregistrationCheck};
+use cf_traits::{AccountRoleRegistry, DeregistrationHooks, RefundAddressRegistry};
 use frame_support::sp_runtime::DispatchError;
 use pallet_cf_flip::Bonder;
 
 pub struct RuntimeDeregistrationCheck;
 
-impl DeregistrationCheck for RuntimeDeregistrationCheck {
+impl DeregistrationHooks for RuntimeDeregistrationCheck {
 	type AccountId = AccountId;
 	type Error = DispatchError;
 
@@ -61,6 +61,12 @@ impl DeregistrationCheck for RuntimeDeregistrationCheck {
 				Bonder::<Runtime>::check(account_id)?;
 				Ok(())
 			},
+		}
+	}
+
+	fn on_deregistered(account_id: &Self::AccountId) {
+		if AccountRoles::account_role(account_id) == AccountRole::LiquidityProvider {
+			pallet_cf_asset_balances::Pallet::<Runtime>::clear_refund_addresses(account_id);
 		}
 	}
 }

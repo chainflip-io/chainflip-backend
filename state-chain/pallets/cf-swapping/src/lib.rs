@@ -43,6 +43,10 @@ use cf_traits::{
 	LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
 	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 	WithdrawalAddressRestriction,
+	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationHooks, ExpiryBehaviour,
+	FeePayment, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
+	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -3538,7 +3542,7 @@ pub mod pallet {
 
 pub struct BrokerDeregistrationCheck<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for BrokerDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for BrokerDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

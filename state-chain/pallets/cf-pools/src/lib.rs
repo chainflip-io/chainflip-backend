@@ -27,7 +27,7 @@ use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationHooks,
 	LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
 use cf_utilities::select::Select;
@@ -2577,7 +2577,7 @@ impl<T: Config> Pallet<T> {
 
 pub struct OpenOrdersDeregistrationCheck<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for OpenOrdersDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for OpenOrdersDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

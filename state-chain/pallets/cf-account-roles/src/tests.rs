@@ -17,10 +17,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, *};
-use cf_primitives::ForeignChain;
-use cf_traits::mocks::{
-	balance_api::MockRefundAddressRegistry, deregistration_check::MockDeregistrationCheck,
-};
+use cf_traits::mocks::deregistration_check::MockDeregistrationCheck;
 use frame_support::{assert_noop, assert_ok, traits::HandleLifetime};
 use frame_system::Provider;
 
@@ -208,34 +205,25 @@ fn deregistration_checks() {
 }
 
 #[test]
-fn deregister_as_liquidity_provider_clears_refund_addresses() {
+fn on_deregistered_hook_runs_only_when_check_passes() {
 	new_test_ext().execute_with(|| {
 		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
 		AccountRolesPallet::register_account_role(&ALICE, AccountRole::LiquidityProvider).unwrap();
 
-		MockRefundAddressRegistry::register_refund_address(ALICE, ForeignChain::Ethereum);
-		assert!(
-			MockRefundAddressRegistry::get_refund_address(&ALICE, ForeignChain::Ethereum).is_some()
-		);
-
-		// A failed deregistration must roll back the refund-address clear too - otherwise an
-		// account that fails the check would lose its refund address while remaining a registered
-		// Liquidity Provider.
+		// A failed check must prevent the on_deregistered hook from running at all - otherwise an
+		// account that fails the check would still have its state cleaned up while remaining a
+		// registered Liquidity Provider.
 		MockDeregistrationCheck::set_should_fail(&ALICE, true);
 		assert!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_as_liquidity_provider(&ALICE)
 			.is_err());
-		assert!(
-			MockRefundAddressRegistry::get_refund_address(&ALICE, ForeignChain::Ethereum).is_some()
-		);
+		assert!(!MockDeregistrationCheck::was_deregistered(&ALICE));
 
 		MockDeregistrationCheck::set_should_fail(&ALICE, false);
 		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_as_liquidity_provider(
 			&ALICE
 		));
 
-		assert!(
-			MockRefundAddressRegistry::get_refund_address(&ALICE, ForeignChain::Ethereum).is_none()
-		);
+		assert!(MockDeregistrationCheck::was_deregistered(&ALICE));
 	});
 }
 

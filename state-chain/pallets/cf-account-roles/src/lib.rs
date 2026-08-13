@@ -30,9 +30,7 @@ use sp_std::boxed::Box;
 use cf_traits::Chainflip;
 
 use cf_primitives::AccountRole;
-use cf_traits::{
-	AccountRoleRegistry, DeregistrationCheck, RefundAddressRegistry, SpawnAccount, VanityName,
-};
+use cf_traits::{AccountRoleRegistry, DeregistrationHooks, SpawnAccount, VanityName};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	error::BadOrigin,
@@ -54,7 +52,7 @@ pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::DeregistrationCheck;
+	use cf_traits::DeregistrationHooks;
 	use frame_support::{
 		dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
 		pallet_prelude::*,
@@ -65,7 +63,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + cf_traits::Chainflip {
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
-		type DeregistrationCheck: DeregistrationCheck<
+		type DeregistrationHooks: DeregistrationHooks<
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		type RuntimeCall: Parameter
@@ -82,10 +80,6 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		type WeightInfo: WeightInfo;
-		/// Used to clean up a Liquidity Provider's refund addresses on deregistration.
-		type RefundAddressRegistry: RefundAddressRegistry<
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
 	}
 
 	#[pallet::pallet]
@@ -288,7 +282,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
-		T::DeregistrationCheck::check(account_id).map_err(Into::into)?;
+		T::DeregistrationHooks::check(account_id).map_err(Into::into)?;
 		AccountRoles::<T>::try_mutate(account_id, |role| {
 			role.replace(AccountRole::Unregistered)
 				.filter(|r| *r == account_role)
@@ -296,23 +290,14 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		})?;
 		<frame_system::Pallet<T>>::dec_consumers(account_id);
 
+		T::DeregistrationHooks::on_deregistered(account_id);
+
 		Self::deposit_event(Event::AccountRoleDeregistered {
 			account_id: account_id.clone(),
 			role: account_role,
 		});
 
 		Ok(())
-	}
-
-	/// Deregister a Liquidity Provider, clearing their refund addresses first.
-	///
-	/// Overrides the trait default so that this cleanup happens for every caller (e.g.
-	/// `cf-lp`'s `deregister_lp_account` extrinsic, or `cf-validator`'s auto-deregistration on
-	/// full undelegation) rather than being duplicated at each call site.
-	#[frame_support::transactional]
-	fn deregister_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
-		T::RefundAddressRegistry::clear_refund_addresses(account_id);
-		Self::deregister_account_role(account_id, AccountRole::LiquidityProvider)
 	}
 
 	fn set_vanity_name(

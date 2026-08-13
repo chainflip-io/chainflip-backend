@@ -964,17 +964,23 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	}
 }
 
-pub trait DeregistrationCheck {
+pub trait DeregistrationHooks {
 	type AccountId;
 	type Error: Into<DispatchError>;
+
+	/// Checks for deregistration eligibility
 	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error>;
+
+	/// Called on successful deregistration to possibly cleanup other state associated to the
+	/// deregistered account
+	fn on_deregistered(_account_id: &Self::AccountId) {}
 }
 
 impl<
-		A: DeregistrationCheck,
-		B: DeregistrationCheck<AccountId = A::AccountId>,
-		C: DeregistrationCheck<AccountId = A::AccountId>,
-	> DeregistrationCheck for (A, B, C)
+		A: DeregistrationHooks,
+		B: DeregistrationHooks<AccountId = A::AccountId>,
+		C: DeregistrationHooks<AccountId = A::AccountId>,
+	> DeregistrationHooks for (A, B, C)
 {
 	type AccountId = A::AccountId;
 	type Error = DispatchError;
@@ -984,6 +990,12 @@ impl<
 			.map_err(Into::into)
 			.and_then(|()| B::check(account_id).map_err(Into::into))
 			.and_then(|()| C::check(account_id).map_err(Into::into))
+	}
+
+	fn on_deregistered(account_id: &Self::AccountId) {
+		A::on_deregistered(account_id);
+		B::on_deregistered(account_id);
+		C::on_deregistered(account_id);
 	}
 }
 

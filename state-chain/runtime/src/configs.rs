@@ -608,10 +608,9 @@ impl pallet_cf_lp::Config for Runtime {
 
 impl pallet_cf_account_roles::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type DeregistrationCheck = chainflip::RuntimeDeregistrationCheck;
+	type DeregistrationHooks = chainflip::RuntimeDeregistrationCheck;
 	type RuntimeCall = RuntimeCall;
 	type SpawnAccount = Funding;
-	type RefundAddressRegistry = AssetBalances;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;

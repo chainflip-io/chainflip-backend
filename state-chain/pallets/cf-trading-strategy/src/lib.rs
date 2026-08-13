@@ -35,7 +35,7 @@ use cf_amm_math::{Amount, Price};
 use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationHooks,
 	IncreaseOrDecrease, PoolApi, PriceFeedApi, RefundAddressRegistry, Side,
 };
 
@@ -1278,7 +1278,7 @@ fn average_tick(tick_1: Tick, tick_2: Tick, round_up: bool) -> Tick {
 
 pub struct TradingStrategyDeregistrationCheck<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for TradingStrategyDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for TradingStrategyDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 	fn check(account_id: &T::AccountId) -> Result<(), Self::Error> {

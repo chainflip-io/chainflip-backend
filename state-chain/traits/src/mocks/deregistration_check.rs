@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::DeregistrationCheck;
+use crate::DeregistrationHooks;
 use codec::{Decode, Encode};
 use sp_std::marker::PhantomData;
 
@@ -28,6 +28,7 @@ impl<Id> MockPallet for MockDeregistrationCheck<Id> {
 }
 
 const SHOULD_FAIL: &[u8] = b"SHOULD_FAIL";
+const ON_DEREGISTERED_CALLED: &[u8] = b"ON_DEREGISTERED_CALLED";
 
 impl<Id: Encode + Decode> MockDeregistrationCheck<Id> {
 	pub fn set_should_fail(account_id: &Id, should_fail: bool) {
@@ -40,9 +41,13 @@ impl<Id: Encode + Decode> MockDeregistrationCheck<Id> {
 	fn should_fail(account_id: &Id) -> bool {
 		<Self as MockPalletStorage>::get_storage::<_, ()>(SHOULD_FAIL, account_id).is_some()
 	}
+	pub fn was_deregistered(account_id: &Id) -> bool {
+		<Self as MockPalletStorage>::get_storage::<_, ()>(ON_DEREGISTERED_CALLED, account_id)
+			.is_some()
+	}
 }
 
-impl<Id: Encode + Decode> DeregistrationCheck for MockDeregistrationCheck<Id> {
+impl<Id: Encode + Decode> DeregistrationHooks for MockDeregistrationCheck<Id> {
 	type AccountId = Id;
 	type Error = &'static str;
 
@@ -52,5 +57,9 @@ impl<Id: Encode + Decode> DeregistrationCheck for MockDeregistrationCheck<Id> {
 		} else {
 			Ok(())
 		}
+	}
+
+	fn on_deregistered(account_id: &Self::AccountId) {
+		<Self as MockPalletStorage>::put_storage(ON_DEREGISTERED_CALLED, account_id, ());
 	}
 }

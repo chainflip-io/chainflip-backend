@@ -35,7 +35,7 @@ pub use weights::WeightInfo;
 
 use cf_primitives::EpochIndex;
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationCheck, EpochInfo, FeePayment, FundingInfo, Issuance,
+	AccountInfo, Bonding, DeregistrationHooks, EpochInfo, FeePayment, FundingInfo, Issuance,
 	RewardsDistribution, Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
@@ -704,7 +704,7 @@ impl<T: Config> Bonding for Bonder<T> {
 	}
 }
 
-impl<T: Config> DeregistrationCheck for Bonder<T> {
+impl<T: Config> DeregistrationHooks for Bonder<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
