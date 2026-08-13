@@ -101,7 +101,7 @@ export async function createAssetHubVault(logger: Logger): Promise<AddressOrPair
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       vaultAddress: (result.eventData! as any)[0] as AddressOrPair,
     })),
-    90,
+    240,
     logger,
     'Creating Assethub vault',
   );
