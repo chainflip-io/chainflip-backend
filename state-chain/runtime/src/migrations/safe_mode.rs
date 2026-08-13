@@ -14,9 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use codec::DecodeAll;
+use frame_support::{storage::unhashed, traits::OnRuntimeUpgrade, weights::Weight};
 
-use crate::Runtime;
+use crate::{safe_mode::RuntimeSafeMode, Runtime};
 
 pub struct SafeModeMigration;
 
@@ -24,6 +25,13 @@ use crate::runtime_apis::custom_api::types::before_version_19::RuntimeSafeMode a
 
 impl OnRuntimeUpgrade for SafeModeMigration {
 	fn on_runtime_upgrade() -> Weight {
+		let storage_key = pallet_cf_environment::RuntimeSafeMode::<Runtime>::hashed_key();
+		if unhashed::get_raw(&storage_key)
+			.is_some_and(|encoded| RuntimeSafeMode::decode_all(&mut encoded.as_slice()).is_ok())
+		{
+			return Weight::zero()
+		}
+
 		let _ = pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
 			|maybe_old: Option<OldRuntimeSafeMode>| maybe_old.map(Into::into),
 		)

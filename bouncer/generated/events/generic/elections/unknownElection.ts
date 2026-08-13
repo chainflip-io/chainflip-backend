@@ -1,4 +1,5 @@
 import { arbitrumElectionsUnknownElectionEvent } from '../../arbitrumElections/unknownElection';
+import { assethubElectionsUnknownElectionEvent } from '../../assethubElections/unknownElection';
 import { bitcoinElectionsUnknownElectionEvent } from '../../bitcoinElections/unknownElection';
 import { bscElectionsUnknownElectionEvent } from '../../bscElections/unknownElection';
 import { ethereumElectionsUnknownElectionEvent } from '../../ethereumElections/unknownElection';
@@ -8,6 +9,7 @@ import { tronElectionsUnknownElectionEvent } from '../../tronElections/unknownEl
 
 export const electionsUnknownElectionEvent = {
   Arbitrum: arbitrumElectionsUnknownElectionEvent,
+  Assethub: assethubElectionsUnknownElectionEvent,
   Bitcoin: bitcoinElectionsUnknownElectionEvent,
   Bsc: bscElectionsUnknownElectionEvent,
   Ethereum: ethereumElectionsUnknownElectionEvent,

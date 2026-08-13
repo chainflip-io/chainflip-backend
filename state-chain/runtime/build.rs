@@ -17,6 +17,9 @@
 fn main() {
 	#[cfg(feature = "std")]
 	{
+		#[cfg(feature = "skip-wasm-build")]
+		std::env::set_var("SKIP_WASM_BUILD", "1");
+
 		let builder = substrate_wasm_builder::WasmBuilder::new()
 			.with_current_project()
 			.export_heap_base()

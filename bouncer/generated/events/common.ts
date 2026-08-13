@@ -1828,7 +1828,7 @@ export const palletCfAssethubIngressEgressDepositWitnessAssethub = z.object({
   depositAddress: hexString,
   asset: cfPrimitivesChainsAssetsHubAsset,
   amount: numberOrHex,
-  depositDetails: z.number(),
+  depositDetails: cfPrimitivesTxId,
 });
 
 export const cfAssethubChainCcmDepositMetadata = z.object({
@@ -1850,7 +1850,7 @@ export const palletCfAssethubIngressEgressVaultDepositWitnessAssethub = z.object
   depositAddress: hexString.nullish(),
   channelId: numberOrHex.nullish(),
   depositAmount: numberOrHex,
-  depositDetails: z.number(),
+  depositDetails: cfPrimitivesTxId,
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfAssethubChainCcmDepositMetadata.nullish(),
@@ -2416,3 +2416,14 @@ export const stateChainRuntimeChainflipWitnessingBscElectionsBscElectoralEvents 
     end: cfChainsWitnessPeriodBlockWitnessRangeBsc,
   }),
 });
+
+export const cfChainsWitnessPeriodBlockWitnessRangeAssethub = z.object({ root: z.number() });
+
+export const stateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectoralEvents =
+  z.object({
+    __kind: z.literal('ReorgDetected'),
+    reorgedBlocks: z.object({
+      start: cfChainsWitnessPeriodBlockWitnessRangeAssethub,
+      end: cfChainsWitnessPeriodBlockWitnessRangeAssethub,
+    }),
+  });
