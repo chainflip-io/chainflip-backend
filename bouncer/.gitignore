@@ -2,3 +2,6 @@
 tmp
 /generated/prisma
 node_modules
+
+# Written by pnpm when build scripts are approved locally
+pnpm-workspace.yaml
