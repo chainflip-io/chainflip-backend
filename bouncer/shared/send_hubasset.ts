@@ -26,6 +26,11 @@ async function allocateAliceNonce(): Promise<number> {
 }
 
 const MAX_ATTEMPTS = 5;
+// The fork-aware tx pool can strand a watched transaction indefinitely on a healthy, authoring
+// chain (observed in CI: a tx sat outside any block for 90s, then went Invalid, while its tip-bumped
+// resubmission was included within a second). So don't watch a submission forever: if it hasn't
+// reached a block by this deadline, give up on it and resubmit.
+const INCLUSION_TIMEOUT_MS = 30_000;
 // Each retry re-signs the same transfer with a higher tip. sr25519 signatures are
 // non-deterministic, so a resubmission is a *replacement* of the (possibly still pooled) previous
 // attempt and needs strictly higher priority to be accepted; without the tip bump a retry against
@@ -73,8 +78,14 @@ export async function submitHubExtrinsic(
   ) => {
     const tx = extrinsic(assethubApi);
     const txHash = tx.hash.toString();
+    let done = false;
+    let seenInBlock = false;
     const unsubscribe = await tx.signAndSend(alice, { nonce, tip }, (result) => {
+      if (result.status.isInBlock || result.status.isFinalized) {
+        seenInBlock = true;
+      }
       if (result.dispatchError !== undefined) {
+        done = true;
         if (result.dispatchError.isModule) {
           const decoded = assethubApi.registry.findMetaError(result.dispatchError.asModule);
           const { docs, name, section } = decoded;
@@ -86,6 +97,7 @@ export async function submitHubExtrinsic(
         }
       }
       if (result.status.isFinalized) {
+        done = true;
         unsubscribe();
 
         if (expectedEvent) {
@@ -101,16 +113,29 @@ export async function submitHubExtrinsic(
         }
       }
       if (result.status.isInvalid) {
+        done = true;
         unsubscribe();
         reject(new Error('Transaction is invalid'));
       }
       // Only give up (and resubmit, with the pinned nonce) on terminal states where the tx
       // definitely won't be applied. `isRetracted` is deliberately NOT terminal.
       if (result.status.isDropped || result.status.isUsurped || result.status.isFinalityTimeout) {
+        done = true;
         unsubscribe();
         reject(new Error(`Transaction was ${result.status.type.toLowerCase()}`));
       }
     });
+    setTimeout(() => {
+      if (!done && !seenInBlock) {
+        done = true;
+        unsubscribe();
+        reject(
+          new Error(
+            `Transaction not included within ${INCLUSION_TIMEOUT_MS / 1000}s of submission`,
+          ),
+        );
+      }
+    }, INCLUSION_TIMEOUT_MS);
   };
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {

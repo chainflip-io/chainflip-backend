@@ -91,6 +91,7 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
 export async function createAssetHubVault(logger: Logger): Promise<AddressOrPair> {
   // Step a
   logger.info('Requesting Assethub Vault creation');
+  // The timeout must accommodate submitHubExtrinsic's full retry ladder
   const { vaultAddress: hubVaultAddress } = await runWithTimeout(
     submitHubExtrinsic(
       logger,
@@ -101,7 +102,7 @@ export async function createAssetHubVault(logger: Logger): Promise<AddressOrPair
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       vaultAddress: (result.eventData! as any)[0] as AddressOrPair,
     })),
-    90,
+    240,
     logger,
     'Creating Assethub vault',
   );
