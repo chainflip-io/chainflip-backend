@@ -45,7 +45,7 @@ use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
 	sp_runtime::{
-		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
+		traits::{One, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
 	storage::TransactionOutcome,
