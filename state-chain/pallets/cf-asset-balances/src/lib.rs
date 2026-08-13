@@ -1020,7 +1020,7 @@ pub struct DeleteAccount<T: Config>(PhantomData<T>);
 impl<T: Config> OnKilledAccount<T::AccountId> for DeleteAccount<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
-		let _ = RefundAddresses::<T>::clear_prefix(who, u32::MAX, None);
+		Pallet::<T>::clear_refund_addresses(who);
 		WithdrawalWhitelists::<T>::remove(who);
 		BoundBrokerWithdrawalAddress::<T>::remove(who);
 		Pallet::<T>::discard_pending_matching(who, |_| true);
