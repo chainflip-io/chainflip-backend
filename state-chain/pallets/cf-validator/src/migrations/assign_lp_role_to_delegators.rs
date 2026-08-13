@@ -62,7 +62,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				// case where you could have operator or validator role after delegating. Its not
 				// immediately clear if we should convert it to LP here. We should log it at least,
 				// to surface these cases
-				other => cf_runtime_utilities::log_or_panic!(
+				other => log::warn!(
 					"Delegator {:?} has incompatible role {:?}; expected Unregistered or LiquidityProvider",
 					delegator,
 					other
