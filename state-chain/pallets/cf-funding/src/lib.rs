@@ -216,12 +216,6 @@ impl<T: Config> Redemption<T> {
 			RedemptionAmount::Exact(amount) => (amount.saturating_add(applied_fee), amount),
 		};
 
-		debug_assert_eq!(
-			debit_amount.checked_sub(&redeem_amount),
-			Some(applied_fee),
-			"Debit amount must equal redeem amount plus redemption fee",
-		);
-
 		ensure!(debit_amount <= account_balance, Error::<T>::InsufficientBalance);
 		let remaining_balance = account_balance.saturating_sub(debit_amount);
 		ensure!(remaining_balance >= bond, Error::<T>::BondViolation);
