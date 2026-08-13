@@ -33,7 +33,9 @@ CHAINSPEC_PATH="./state-chain/node/chainspecs/${NETWORK}.chainspec.raw.json"
 
 function cleanup {
   echo "🧹 Cleaning up..."
-  for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
+  if [[ -n "$NODE_PID" ]]; then
+    kill -9 "$NODE_PID" 2>/dev/null || true
+  fi
   echo "🪵 Printing Node logs ..."
   cat /tmp/chainflip-node.log
   rm -rf $CHAINDATA_PATH
@@ -71,6 +73,7 @@ rm -rf $CHAINDATA_PATH/*
 $BINARY_ROOT_PATH/chainflip-node \
     --chain=$CHAINSPEC_PATH \
     --base-path=$CHAINDATA_PATH --sync=$SYNC_MODE &> /tmp/chainflip-node.log &
+NODE_PID=$!
 # Wait for node to start
 echo -e "${CYAN}🚀 Starting chainflip-node...${NC}"
 sleep 10
