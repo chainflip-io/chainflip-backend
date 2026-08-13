@@ -919,8 +919,10 @@ mod test {
 			);
 		}
 
-		// The ratio between assets with a 12 decimal difference, as used to price stablecoin pairs.
-		// Truncating lands 10 ticks (~1 bps) below the true price.
+		// For the price of assets with a 12 decimal difference (Usdc and BscUsdt), the true tick is
+		// fractional, and flooring lands almost a full tick (~1 bps) below it.
+		// Price = floor(10^6 * 2^128 / 10^18)
+		// tick  = ln(Price / 2^128) / ln(1.0001) = -276324.0264396...
 		let price =
 			Price::from_amounts(U256::from(10u128.pow(6)), U256::from(10u128.pow(18))).unwrap();
 		assert_eq!(price.into_tick(), Some(-276325));
