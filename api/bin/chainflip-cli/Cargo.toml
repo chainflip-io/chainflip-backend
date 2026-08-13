@@ -30,5 +30,8 @@ cf-chains = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

@@ -36,7 +36,12 @@ use chainflip_api::{
 use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
-use std::{io::Write, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+	io::Write,
+	path::{Path, PathBuf},
+	str::FromStr,
+	sync::Arc,
+};
 
 mod settings;
 
@@ -577,6 +582,21 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 
 	let keys = Keys::new(seed_phrase)?;
 
+	// Save the keys before displaying them: if we can't write them, the user is better off never
+	// seeing them at all, rather than mistaking them for the keys their node will actually use.
+	let key_dir = path
+		.map(|path| {
+			write_secret_keys(
+				&path,
+				&[
+					("node_key", &keys.node_key.secret_key),
+					("signing_key", &keys.signing_key.secret_key),
+					("ethereum_key", &keys.ethereum_key.secret_key),
+				],
+			)
+		})
+		.transpose()?;
+
 	if json {
 		println!("{}", serde_json::to_string_pretty(&keys)?);
 	} else {
@@ -587,30 +607,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 		eprintln!("{}", DISCLAIMER);
 	}
 
-	if let Some(path) = path {
-		if !path.try_exists().context("Could not determine if the directory path exists.")? {
-			std::fs::create_dir_all(&path).context("Unable to create keys directory.")?;
-		}
-		let path = path.canonicalize().context("Unable to resolve path to keys directory.")?;
-
-		for (name, key) in [
-			("node_key", hex::encode(keys.node_key.secret_key)),
-			("signing_key", hex::encode(keys.signing_key.secret_key)),
-			("ethereum_key", hex::encode(keys.ethereum_key.secret_key)),
-		] {
-			let filename = [name, "_file"].concat();
-			write!(
-				std::fs::OpenOptions::new()
-					.write(true)
-					.create_new(true)
-					.open(path.join(&filename))
-					.context(format!("Could not open file {filename}."))?,
-				"{}",
-				key
-			)
-			.context("Error while writing to file.")?;
-		}
-
+	if let Some(path) = key_dir {
 		eprintln!();
 		eprintln!(" 💾 Saved all secret keys to '{}'.", path.display());
 	} else {
@@ -622,6 +619,85 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	}
 
 	Ok(())
+}
+
+/// Writes each secret key to `<dir>/<name>_file` as hex, creating `dir` if it doesn't exist yet.
+/// Returns the canonical path to `dir`.
+///
+/// Either all keys are written or none are: any file created before an error occurs is removed
+/// again, so that a failed invocation neither leaves behind keys the user never got to see nor
+/// blocks a subsequent retry.
+fn write_secret_keys(dir: &Path, keys: &[(&str, &[u8])]) -> Result<PathBuf> {
+	if !dir.try_exists().context("Could not determine if the directory path exists.")? {
+		std::fs::create_dir_all(dir).context("Unable to create keys directory.")?;
+	}
+	let dir = dir.canonicalize().context("Unable to resolve path to keys directory.")?;
+
+	let mut written = Vec::with_capacity(keys.len());
+	let result = keys.iter().try_for_each(|&(name, secret_key)| {
+		let filename = [name, "_file"].concat();
+		let file_path = dir.join(&filename);
+		write!(
+			std::fs::OpenOptions::new()
+				.write(true)
+				.create_new(true)
+				.open(&file_path)
+				.context(format!("Could not open file {filename}."))?,
+			"{}",
+			hex::encode(secret_key)
+		)
+		.context("Error while writing to file.")?;
+		written.push(file_path);
+		Ok(())
+	});
+
+	if let Err(e) = result {
+		for file_path in written {
+			let _ = std::fs::remove_file(file_path);
+		}
+		return Err(e)
+	}
+
+	Ok(dir)
+}
+
+#[cfg(test)]
+const TEST_KEYS: [(&str, &[u8]); 3] =
+	[("node_key", &[0x01, 0x23]), ("signing_key", &[0x45, 0x67]), ("ethereum_key", &[0x89, 0xab])];
+
+#[test]
+fn test_write_secret_keys() {
+	let temp_dir = tempfile::tempdir().unwrap();
+	// The keys directory doesn't have to exist yet.
+	let keys_dir = temp_dir.path().join("keys");
+
+	let written_dir = write_secret_keys(&keys_dir, &TEST_KEYS).unwrap();
+
+	assert_eq!(written_dir, keys_dir.canonicalize().unwrap());
+	for (name, expected) in
+		[("node_key", "0123"), ("signing_key", "4567"), ("ethereum_key", "89ab")]
+	{
+		assert_eq!(
+			std::fs::read_to_string(written_dir.join([name, "_file"].concat())).unwrap(),
+			expected
+		);
+	}
+}
+
+#[test]
+fn test_write_secret_keys_removes_partially_written_keys() {
+	let temp_dir = tempfile::tempdir().unwrap();
+	let keys_dir = temp_dir.path();
+
+	// A pre-existing key file makes the write fail part-way through: `node_key_file` has already
+	// been written at that point.
+	std::fs::write(keys_dir.join("signing_key_file"), "pre-existing").unwrap();
+
+	assert!(write_secret_keys(keys_dir, &TEST_KEYS).is_err());
+
+	assert!(!keys_dir.join("node_key_file").exists());
+	assert!(!keys_dir.join("ethereum_key_file").exists());
+	assert_eq!(std::fs::read_to_string(keys_dir.join("signing_key_file")).unwrap(), "pre-existing");
 }
 
 #[test]

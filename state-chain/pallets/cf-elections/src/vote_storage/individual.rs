@@ -23,7 +23,7 @@ mod tests;
 
 use frame_support::{pallet_prelude::Member, Parameter};
 
-use super::{AuthorityVote, VoteComponents, VoteStorage};
+use super::{AuthorityVote, ComponentStorageKind, VoteComponents, VoteStorage};
 
 use crate::{CorruptStorageError, SharedDataHash};
 
@@ -54,6 +54,9 @@ impl<P: Parameter + Member, T: IndividualVoteStorage> VoteStorage for Individual
 			bitmap_component: None,
 			individual_component: Some((properties, partial_vote)),
 		})
+	}
+	fn component_storage_kind(_partial_vote: &Self::PartialVote) -> ComponentStorageKind {
+		ComponentStorageKind::IndividualOnly
 	}
 	fn components_into_authority_vote<
 		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,

@@ -75,7 +75,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   // If no liquidity refund address is registered, then do that now
   await registerLiquidityRefundAddressForChain(cf, chainFromAsset(ccy), false);
 
-  cf.info(`Opening new liquidity deposit channel for ${lp.address}`);
+  cf.info(`Opening new ${ccy} liquidity deposit channel for ${lp.address}`);
 
   const depositAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, 0),
@@ -85,7 +85,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   });
   const ingressAddress = depositAddressReadyEvent.depositAddress.address;
 
-  cf.info(`Initiating transfer to ${ingressAddress}`);
+  cf.info(`Initiating transfer of ${ccy} to ${ingressAddress}`);
 
   const txHash = await runWithTimeout(
     send(cf.logger, ccy, ingressAddress, String(amount)),
@@ -103,7 +103,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
           return true;
         }
         cf.info(
-          `Received amount ${event.amountCredited} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))} for asset ${ccy}.`,
+          `Received amount ${event.amountCredited} ${ccy} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))} for asset ${ccy}.`,
         );
         return false;
       }
@@ -111,6 +111,6 @@ export async function depositLiquidity<A extends WithLpAccount>(
     }),
   );
 
-  cf.info(`Liquidity deposited to ${ingressAddress}`);
+  cf.info(`Liquidity deposited to ${ingressAddress} (${givenAmount} ${ccy})`);
   return txHash;
 }

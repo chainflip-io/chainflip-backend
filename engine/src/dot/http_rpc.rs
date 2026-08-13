@@ -34,7 +34,7 @@ use subxt::{
 		},
 		rpc::{RawRpcFuture, RawRpcSubscription, RawValue, RpcClient, RpcClientT},
 	},
-	error::BlockError,
+	error::{BlockError, RpcError},
 	events::{Events, EventsClient},
 	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
@@ -48,12 +48,19 @@ use tracing::{error, warn};
 
 use crate::{
 	constants::RPC_RETRY_CONNECTION_INTERVAL,
+	dot::PolkadotHeader,
 	witness::hub::assethub::{self, runtime_types::pallet_assets::types::AccountStatus},
 };
 
 use super::rpc::DotRpcApi;
 
 use crate::dot::PolkadotHash;
+
+// Substrate transaction pool rejection codes (see substrate's `sc-rpc-api` author errors) that
+// mean the pool already knows the submitted transaction.
+const POOL_TEMPORARILY_BANNED: i32 = 1012;
+const POOL_ALREADY_IMPORTED: i32 = 1013;
+const POOL_TOO_LOW_PRIORITY: i32 = 1014;
 
 #[derive(Clone)]
 pub struct PolkadotHttpClient(HttpClient);
@@ -147,6 +154,9 @@ pub struct DotRpcClientBuilder {
 pub struct DotRpcClient {
 	online_client: OnlineClient<PolkadotConfig>,
 	rpc_methods: LegacyRpcMethods<PolkadotConfig>,
+	// OnlineClient clones share mutable metadata, so we need this lock to ensure
+	// that a metadata update and event reads don't interfere with each other between tasks.
+	events_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl DotRpcClientBuilder {
@@ -240,7 +250,11 @@ impl DotRpcClientBuilder {
 			}
 		};
 
-		DotRpcClient { online_client, rpc_methods: LegacyRpcMethods::new(rpc_client) }
+		DotRpcClient {
+			online_client,
+			rpc_methods: LegacyRpcMethods::new(rpc_client),
+			events_lock: Arc::new(tokio::sync::Mutex::new(())),
+		}
 	}
 }
 
@@ -261,6 +275,14 @@ impl DotRpcClient {
 impl DotRpcApi for DotRpcClient {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>> {
 		Ok(self.rpc_methods.chain_get_block_hash(Some(block_number.into())).await?)
+	}
+
+	async fn finalized_head(&self) -> Result<PolkadotHash> {
+		Ok(self.rpc_methods.chain_get_finalized_head().await?)
+	}
+
+	async fn header(&self, block_hash: PolkadotHash) -> Result<Option<PolkadotHeader>> {
+		Ok(self.rpc_methods.chain_get_header(Some(block_hash)).await?)
 	}
 
 	async fn block(
@@ -284,6 +306,8 @@ impl DotRpcApi for DotRpcClient {
 		block_hash: PolkadotHash,
 		parent_hash: PolkadotHash,
 	) -> Result<Option<Events<PolkadotConfig>>> {
+		let _events_guard = self.events_lock.lock().await;
+
 		// We need to get the runtime version at the previous block instead the desired block
 		// because the events in the block are encoded using the previous block's runtime version,
 		// not the desired block's runtime version. This is caused by the `state_getRuntimeVersion`
@@ -332,19 +356,21 @@ impl DotRpcApi for DotRpcClient {
 		})?)
 	}
 
-	/// Submits a raw encoded extrinsic to the chain and waits for it to be finalized.
-	/// Note that this works only with websocket client. Calling this on http client will panic.
+	/// Submits a raw encoded extrinsic, returning its hash once it is accepted into the
+	/// transaction pool.
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		let success = subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
+		let tx = subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
 			self.online_client.clone(),
 			encoded_bytes,
-		)
-		.submit_and_watch()
-		.await?
-		.wait_for_finalized_success()
-		.await?;
-
-		Ok(success.extrinsic_hash())
+		);
+		match tx.submit().await {
+			// Check if the pool already knows this transaction and treat it as a success.
+			Err(subxt::Error::Rpc(RpcError::ClientError(subxt_rpcs::Error::User(user_error))))
+				if [POOL_TEMPORARILY_BANNED, POOL_ALREADY_IMPORTED, POOL_TOO_LOW_PRIORITY]
+					.contains(&user_error.code) =>
+				Ok(tx.hash()),
+			result => Ok(result?),
+		}
 	}
 
 	async fn liquid_account_balance(

@@ -30,8 +30,8 @@ type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EvmInstance, PolkadotCryptoInstance, Runtime, RuntimeCall,
-	SolanaInstance,
+	AccountId, AssethubInstance, BitcoinInstance, EvmInstance, PolkadotCryptoInstance, Runtime,
+	RuntimeCall, SolanaInstance,
 };
 use std::{
 	collections::BTreeSet,
@@ -44,8 +44,9 @@ use std::{
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::{
-	btc::rpc::BtcRpcApi, dot::retry_rpc::DotRetryRpcApi, evm::retry_rpc::EvmRetrySigningRpcApi,
-	sol::retry_rpc::SolRetryRpcApi, tron::retry_rpc::TronRetrySigningRpcApi,
+	btc::rpc::BtcRpcApi, dot::retry_rpc::DotRetrySigningRpcApi,
+	evm::retry_rpc::EvmRetrySigningRpcApi, sol::retry_rpc::SolRetryRpcApi,
+	tron::retry_rpc::TronRetrySigningRpcApi,
 };
 use cf_utilities::task_scope::{task_scope, Scope};
 use engine_sc_client::{
@@ -261,7 +262,7 @@ pub async fn start<
 where
 	BlockStream: StreamApi<FINALIZED>,
 	EvmRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
-	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
+	DotRpc: DotRetrySigningRpcApi + Send + Sync + Clone + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + Clone + 'static,
 	SolRpc: SolRetryRpcApi + Send + Sync + 'static,
 	TronRpc: TronRetrySigningRpcApi + Send + Sync + Clone + 'static,
@@ -641,6 +642,30 @@ where
                                             let hub_rpc = hub_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
+                                                // Assethub proxy account nonces are allocated in broadcast-id order, so our
+                                                // transaction cannot execute until every lower-nonce transaction is in the pool:
+                                                // a missing one would park ours in the future queue until the broadcast times
+                                                // out. (Re)submit still-pending lower-id broadcasts first, in order.
+                                                for awaiting_broadcast_id in state_chain_client
+                                                    .storage_value::<pallet_cf_broadcast::PendingBroadcasts<Runtime, AssethubInstance>>(current_block.hash)
+                                                    .await?
+                                                    .into_iter()
+                                                    .filter(|b_id| *b_id < broadcast_id)
+                                                    .sorted() {
+                                                        if let Some(awaiting_broadcast_data) = state_chain_client
+                                                            .storage_map_entry::<pallet_cf_broadcast::AwaitingBroadcast<Runtime, AssethubInstance>>(current_block.hash, &awaiting_broadcast_id)
+                                                            .await? {
+                                                                match hub_rpc.submit_raw_encoded_extrinsic(awaiting_broadcast_data.transaction_payload.encoded_extrinsic).await {
+                                                                    Ok(tx_hash) => info!("Assethub PendingBroadcast {awaiting_broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                                    Err(error) => {
+                                                                        // Just log: this backfill is best-effort (the tx is usually
+                                                                        // already in the pool) and not our broadcast to report on.
+                                                                        warn!("Error on Assethub PendingBroadcast {awaiting_broadcast_id:?}: {error:?}");
+                                                                    }
+                                                                }
+                                                            }
+                                                    }
+
                                                 match hub_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
                                                     Ok(tx_hash) => info!("Assethub TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {

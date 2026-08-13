@@ -475,29 +475,6 @@ impl ChainflipNetwork {
 	}
 }
 
-#[test]
-fn is_more_recent_semver() {
-	fn ver(major: u8, minor: u8, patch: u8) -> SemVer {
-		SemVer { major, minor, patch }
-	}
-
-	fn ensure_left_is_more_recent(left: SemVer, right: SemVer) {
-		assert!(left.is_more_recent_than(right));
-		// Additionally check that the inverse is false:
-		assert!(!right.is_more_recent_than(left));
-	}
-
-	assert!(!ver(0, 1, 0).is_more_recent_than(ver(0, 1, 0)));
-
-	ensure_left_is_more_recent(ver(0, 0, 2), ver(0, 0, 1));
-	ensure_left_is_more_recent(ver(0, 1, 0), ver(0, 0, 2));
-	ensure_left_is_more_recent(ver(0, 1, 1), ver(0, 1, 0));
-	ensure_left_is_more_recent(ver(0, 1, 2), ver(0, 1, 1));
-	ensure_left_is_more_recent(ver(0, 2, 0), ver(0, 1, 0));
-	ensure_left_is_more_recent(ver(1, 0, 0), ver(0, 2, 2));
-	ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
-}
-
 pub const MAX_AFFILIATES: u32 = 5;
 // Beneficiaries can be 1 element larger since they include the primary broker:
 pub const MAX_BENEFICIARIES: u32 = MAX_AFFILIATES + 1;
@@ -574,12 +551,15 @@ pub struct DcaParameters {
 
 pub type ShortId = u8;
 
+/// A default amount for every USD stablecoin, from a whole number of dollars `N`. Each entry is
+/// expressed in the fine units of its own asset, so that they all represent the same nominal USD
+/// amount.
 pub struct StablecoinDefaults<const N: u128>();
 impl<const N: u128> Get<BTreeMap<Asset, AssetAmount>> for StablecoinDefaults<N> {
 	fn get() -> BTreeMap<Asset, AssetAmount> {
 		Asset::all()
 			.filter(|asset| asset.is_usd_stablecoin())
-			.map(|asset| (asset, N))
+			.map(|asset| (asset, N.saturating_mul(10u128.saturating_pow(asset.decimals()))))
 			.collect()
 	}
 }
@@ -694,4 +674,47 @@ pub enum WitnessingTaskName {
 	Oracle,
 	Tron,
 	Bsc,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn is_more_recent_semver() {
+		fn ver(major: u8, minor: u8, patch: u8) -> SemVer {
+			SemVer { major, minor, patch }
+		}
+
+		fn ensure_left_is_more_recent(left: SemVer, right: SemVer) {
+			assert!(left.is_more_recent_than(right));
+			// Additionally check that the inverse is false:
+			assert!(!right.is_more_recent_than(left));
+		}
+
+		assert!(!ver(0, 1, 0).is_more_recent_than(ver(0, 1, 0)));
+
+		ensure_left_is_more_recent(ver(0, 0, 2), ver(0, 0, 1));
+		ensure_left_is_more_recent(ver(0, 1, 0), ver(0, 0, 2));
+		ensure_left_is_more_recent(ver(0, 1, 1), ver(0, 1, 0));
+		ensure_left_is_more_recent(ver(0, 1, 2), ver(0, 1, 1));
+		ensure_left_is_more_recent(ver(0, 2, 0), ver(0, 1, 0));
+		ensure_left_is_more_recent(ver(1, 0, 0), ver(0, 2, 2));
+		ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
+	}
+
+	#[test]
+	fn stablecoin_defaults_are_scaled_to_each_asset_decimals() {
+		let defaults = StablecoinDefaults::<1_000>::get();
+
+		// All stablecoins are covered, and nothing else.
+		assert!(defaults.keys().all(|asset| asset.is_usd_stablecoin()));
+		assert_eq!(defaults.len(), Asset::all().filter(Asset::is_usd_stablecoin).count());
+
+		assert_eq!(Asset::Usdt.decimals(), 6);
+		assert_eq!(defaults[&Asset::Usdt], 1_000_000_000);
+
+		assert_eq!(Asset::BscUsdt.decimals(), 18);
+		assert_eq!(defaults[&Asset::BscUsdt], 1_000_000_000_000_000_000_000);
+	}
 }

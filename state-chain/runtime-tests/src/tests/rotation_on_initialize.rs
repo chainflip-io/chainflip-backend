@@ -81,7 +81,9 @@ impl RuntimeTest for Test {
 					);
 				},
 				Err(_) => {
-					println!("\n  Validator::on_initialize PANICKED against real state (see stderr).");
+					println!(
+						"\n  Validator::on_initialize PANICKED against real state (see stderr)."
+					);
 				},
 			}
 		});

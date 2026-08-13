@@ -78,8 +78,6 @@ jobs:
           - chainflip-node
           - chainflip-engine
           - chainflip-cli
-          - chainflip-broker-api
-          - chainflip-lp-api
           - generate-genesis-keys
           - chainflip-engine-databases
         docker-repo:
@@ -162,8 +160,6 @@ jobs:
           - chainflip-node
           - chainflip-engine
           - chainflip-cli
-          - chainflip-broker-api
-          - chainflip-lp-api
         docker-repo:
           - chainfliplabs
     runs-on: namespace-profile-default

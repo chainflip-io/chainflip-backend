@@ -39,9 +39,10 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
 	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
-	FeePayment, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
-	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
+	FeePayment, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi,
+	LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	WithdrawalAddressRestriction,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -502,6 +503,35 @@ struct SwapRequest<T: Config> {
 	input_asset: Asset,
 	output_asset: Asset,
 	state: SwapRequestState<T>,
+}
+
+impl<T: Config> SwapRequest<T> {
+	fn references_account(&self, account_id: &T::AccountId) -> bool {
+		match &self.state {
+			SwapRequestState::UserSwap { price_limits_and_expiry, output_action, .. } =>
+				(match output_action {
+					SwapOutputAction::CreditOnChain { account_id: output_account } |
+					SwapOutputAction::CreditFlipAndTransferToGateway {
+						account_id: output_account,
+						..
+					} => output_account == account_id,
+					SwapOutputAction::CreditLendingPool { swap_type } => match swap_type {
+						LendingSwapType::Liquidation { borrower_id, .. } =>
+							borrower_id == account_id,
+					},
+					SwapOutputAction::Egress { .. } => false,
+				}) || price_limits_and_expiry.as_ref().is_some_and(|params| {
+					matches!(
+						&params.expiry_behaviour,
+						ExpiryBehaviour::RefundIfExpires {
+							refund_address: AccountOrAddress::InternalAccount(refund_account),
+							..
+						} if refund_account == account_id
+					)
+				}),
+			SwapRequestState::NetworkFee | SwapRequestState::IngressEgressFee => false,
+		}
+	}
 }
 
 #[derive(
@@ -1092,6 +1122,8 @@ pub mod pallet {
 		ZeroDefaultSlippageNotAllowed,
 		/// The specified pool does not exist.
 		PoolDoesNotExist,
+		/// The account has a pending swap request.
+		PendingSwapRequest,
 	}
 
 	#[pallet::genesis_config]
@@ -1387,6 +1419,7 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
+			T::WithdrawalRestriction::clear_pending_withdrawal_changes(&account_id);
 
 			for affiliate_account_id in AffiliateAccountDetails::<T>::iter_key_prefix(&account_id) {
 				frame_system::Provider::<T>::killed(&affiliate_account_id).unwrap_or_else(|e| {
@@ -3519,6 +3552,22 @@ impl<T: Config> DeregistrationCheck for BrokerDeregistrationCheck<T> {
 				T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc).is_zero()
 			}),
 			Error::<T>::AffiliateEarnedFeesNotWithdrawn
+		);
+
+		Ok(())
+	}
+}
+
+pub struct PendingSwapDeregistrationCheck<T>(PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for PendingSwapDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		ensure!(
+			SwapRequests::<T>::iter_values().all(|request| !request.references_account(account_id)),
+			Error::<T>::PendingSwapRequest
 		);
 
 		Ok(())

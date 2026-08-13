@@ -8,6 +8,7 @@ New or removed pallets:
   AssetBalances: added
   AssethubBroadcaster: added
   AssethubChainTracking: added
+  AssethubElections: added
   AssethubIngressEgress: added
   AssethubVault: added
   BitcoinBroadcaster: added

@@ -45,34 +45,7 @@ import { validatorRotationPhaseUpdatedEvent } from 'generated/events/validator/r
 import { validatorRotationAbortedEvent } from 'generated/events/validator/rotationAborted';
 import { environmentBitcoinBlockNumberSetForVaultEvent } from 'generated/events/environment/bitcoinBlockNumberSetForVault';
 import { environmentSolanaInitializedEvent } from 'generated/events/environment/solanaInitialized';
-
-export async function createPolkadotVault(api: DisposableApiPromise) {
-  const { promise, resolve } = deferredPromise<{
-    vaultAddress: AddressOrPair;
-    vaultExtrinsicIndex: number;
-  }>();
-
-  const alice = await aliceKeyringPair();
-  const nonce = await api.rpc.system.accountNextIndex(alice.address);
-  const unsubscribe = await api.tx.proxy
-    .createPure(api.createType('ProxyType', 'Any'), 0, 0)
-    .signAndSend(alice, { nonce }, (result) => {
-      if (result.isError) {
-        handleSubstrateError(api)(result);
-      }
-      if (result.isFinalized) {
-        // TODO: figure out type inference so we don't have to coerce using `any`
-        const pureCreated = result.findRecord('proxy', 'PureCreated')!;
-        resolve({
-          vaultAddress: pureCreated.event.data[0] as AddressOrPair,
-          vaultExtrinsicIndex: result.txIndex!,
-        });
-        unsubscribe();
-      }
-    });
-
-  return promise;
-}
+import { submitHubExtrinsic } from 'shared/send_hubasset';
 
 async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, key: AddressOrPair) {
   const { promise, resolve } = deferredPromise<void>();
@@ -115,15 +88,20 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
   await promise;
 }
 
-async function createAssetHubVault(
-  logger: Logger,
-  assethubApi: DisposableApiPromise,
-): Promise<AddressOrPair> {
+export async function createAssetHubVault(logger: Logger): Promise<AddressOrPair> {
   // Step a
   logger.info('Requesting Assethub Vault creation');
   const { vaultAddress: hubVaultAddress } = await runWithTimeout(
-    createPolkadotVault(assethubApi),
-    90,
+    submitHubExtrinsic(
+      logger,
+      (api) => api.tx.proxy.createPure(api.createType('ProxyType', 'Any'), 0, 0),
+      'proxy.createPure',
+      { pallet: 'proxy', name: 'PureCreated' },
+    ).then((result) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      vaultAddress: (result.eventData! as any)[0] as AddressOrPair,
+    })),
+    240,
     logger,
     'Creating Assethub vault',
   );
@@ -170,7 +148,7 @@ async function main(): Promise<void> {
       `Initial setup_vaults forced rotation was ABORTED. Cannot continue with the test, please check the node logs for possible reasons.`,
     );
   }
-  const assetHubVaultCreateHandle = createAssetHubVault(cf.logger, assethub);
+  const assetHubVaultCreateHandle = createAssetHubVault(cf.logger);
 
   // Step 3
   cf.info('Waiting for new keys');
