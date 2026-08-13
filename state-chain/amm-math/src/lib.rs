@@ -534,6 +534,28 @@ impl Price {
 		self.try_into_sqrt_price().map(SqrtPrice::to_tick)
 	}
 
+	/// Converts a `price` to the closest valid tick, instead of the greatest tick at or below the
+	/// price. Use this where truncating would bias a result in one direction, since ticks are a
+	/// coarse (1 bps) grid. Will return `None` if the price is too high or low to be represented by
+	/// a valid tick i.e. one inside MIN_TICK..=MAX_TICK.
+	///
+	/// This function never panics.
+	pub fn into_nearest_tick(self) -> Option<Tick> {
+		let tick_below = self.into_tick()?;
+		let tick_above = tick_below + 1;
+		let Some(price_above) = Price::from_tick(tick_above) else {
+			return Some(tick_below);
+		};
+		// `into_tick` rounds down, so `price_below <= self < price_above`, but compare with
+		// `abs_diff` regardless to stay panic-free if that ever fails to hold exactly.
+		let price_below = Price::from_tick(tick_below)?;
+		Some(if self.0.abs_diff(price_below.0) <= self.0.abs_diff(price_above.0) {
+			tick_below
+		} else {
+			tick_above
+		})
+	}
+
 	pub fn try_into_sqrt_price(self) -> Option<SqrtPrice> {
 		SqrtPrice::try_from(self).ok()
 	}
@@ -871,5 +893,49 @@ mod test {
 		assert_eq!(*price_2.hundredth_bps_difference_from(&ref_price).unwrap(), 500 * 100);
 		assert!(*price_2_1.hundredth_bps_difference_from(&ref_price).unwrap() > 500 * 100);
 		assert_eq!(ref_price.hundredth_bps_difference_from(&Price::from_raw(U256::zero())), None);
+	}
+
+	#[test]
+	fn test_into_nearest_tick() {
+		// Very low ticks are excluded: down there `Price`'s fixed point representation is too
+		// coarse to even distinguish adjacent ticks.
+		for tick in [-276324, -100, 0, 1, 100, 500000, MAX_TICK - 1] {
+			let price = Price::from_tick(tick).unwrap();
+			assert_eq!(price.into_nearest_tick(), Some(tick), "{tick}");
+
+			// A price a quarter of the way into the tick rounds back down to it, one three quarters
+			// of the way in rounds up to the next.
+			let next_price = Price::from_tick(tick + 1).unwrap();
+			let tick_width = next_price.as_raw() - price.as_raw();
+			assert_eq!(
+				Price::from_raw(price.as_raw() + tick_width / 4).into_nearest_tick(),
+				Some(tick),
+				"{tick}"
+			);
+			assert_eq!(
+				Price::from_raw(next_price.as_raw() - tick_width / 4).into_nearest_tick(),
+				Some(tick + 1),
+				"{tick}"
+			);
+		}
+
+		// For the price of assets with a 12 decimal difference (Usdc and BscUsdt), the true tick is
+		// fractional, and flooring lands almost a full tick (~1 bps) below it.
+		// Price = floor(10^6 * 2^128 / 10^18)
+		// tick  = ln(Price / 2^128) / ln(1.0001) = -276324.0264396...
+		let price =
+			Price::from_amounts(U256::from(10u128.pow(6)), U256::from(10u128.pow(18))).unwrap();
+		assert_eq!(price.into_tick(), Some(-276325));
+		assert_eq!(price.into_nearest_tick(), Some(-276324));
+
+		// Equal decimals price exactly at tick zero, so rounding is a no-op.
+		let one =
+			Price::from_amounts(U256::from(10u128.pow(6)), U256::from(10u128.pow(6))).unwrap();
+		assert_eq!(one.into_tick(), Some(0));
+		assert_eq!(one.into_nearest_tick(), Some(0));
+
+		// Out of bounds price will return none
+		assert_eq!(Price::from_raw(U256::MAX).into_nearest_tick(), None);
+		assert_eq!(Price::from_raw(U256::zero()).into_nearest_tick(), None);
 	}
 }

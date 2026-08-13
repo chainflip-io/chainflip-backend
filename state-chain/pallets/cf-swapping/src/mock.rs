@@ -19,14 +19,12 @@ use core::cell::RefCell;
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount, ChainflipNetwork, ChannelId, STABLE_ASSET};
-#[cfg(feature = "runtime-benchmarks")]
-use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
-		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
+		fee_payment::MockFeePayment, ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		lending_pools::MockLendingSystemApi, minimum_funding::MockMinimumFundingProvider,
 		pool_price_api::MockPoolPriceApi, price_feed_api::MockPriceFeedApi,
 		withdrawal_address_restriction::MockWithdrawalAddressRestriction,
