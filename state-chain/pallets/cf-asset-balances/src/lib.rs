@@ -26,10 +26,8 @@ use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
-	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
-	ScheduledEgressDetails, WithdrawalAddressAlreadyBound, WithdrawalAddressRestriction,
 	DeregistrationHooks, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
-	ScheduledEgressDetails, WithdrawalAddressRestriction,
+	ScheduledEgressDetails, WithdrawalAddressAlreadyBound, WithdrawalAddressRestriction,
 };
 use cf_utilities::derive_common_traits;
 use frame_support::{
@@ -1001,7 +999,7 @@ impl<T: Config> DeregistrationHooks for FreeBalancesDeregistrationCheck<T> {
 
 pub struct WithdrawalWhitelistDeregistrationCheck<T: Config>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for WithdrawalWhitelistDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for WithdrawalWhitelistDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

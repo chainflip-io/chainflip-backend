@@ -514,7 +514,7 @@ mod withdrawal_whitelist {
 	};
 	use cf_traits::{
 		mocks::{address_converter::MockAddressConverter, time_source},
-		DeregistrationCheck, RefundAddressRegistry, WithdrawalAddressAlreadyBound,
+		DeregistrationHooks, RefundAddressRegistry, WithdrawalAddressAlreadyBound,
 		WithdrawalAddressRestriction,
 	};
 	use core::time::Duration;
