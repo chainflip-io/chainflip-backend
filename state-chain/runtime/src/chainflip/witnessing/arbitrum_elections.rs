@@ -169,17 +169,25 @@ impl BlockWitnesserInstance for ArbitrumDepositChannelWitnessing {
 		.deposit_channel_witnessing_enabled
 	}
 
-	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
-		let height = height.root();
-		ArbitrumIngressEgress::active_deposit_channels_at(
-			// we advance by SAFETY_BUFFER before checking opened_at
-			height.saturating_forward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize),
-			// we don't advance for expiry
-			*height,
-		)
-		.into_iter()
-		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
-		.collect()
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
+		// One pass over the deposit channels for the whole batch, rather than one per height.
+		let channels = ArbitrumIngressEgress::all_deposit_channels();
+		block_heights
+			.iter()
+			.map(|height| {
+				let height = height.root();
+				ArbitrumIngressEgress::filter_active_deposit_channels(
+					&channels,
+					height.saturating_forward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize),
+					*height,
+				)
+				.into_iter()
+				.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
+				.collect()
+			})
+			.collect()
 	}
 
 	fn processed_up_to(up_to: ChainBlockNumberOf<Self::Chain>) {
@@ -216,9 +224,10 @@ impl BlockWitnesserInstance for ArbitrumVaultDepositWitnessing {
 	}
 
 	fn election_properties(
-		_block_height: pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<Self::Chain>,
-	) {
+		block_heights: &[pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// Vault address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(
@@ -251,8 +260,11 @@ impl BlockWitnesserInstance for ArbitrumKeyManagerWitnessing {
 		.key_manager_witnessing
 	}
 
-	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+	fn election_properties(
+		block_heights: &[ChainBlockNumberOf<Self::Chain>],
+	) -> Vec<Self::ElectionProperties> {
 		// KeyManager address doesn't change, it is read by the engine on startup
+		block_heights.iter().map(|_| ()).collect()
 	}
 
 	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
@@ -327,12 +339,12 @@ impl
 			>,
 			Vec<
 				ElectionIdentifier<
-					<ArbitrumLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<ArbitrumFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
 				ElectionIdentifier<
-					<ArbitrumFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<ArbitrumLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 		),

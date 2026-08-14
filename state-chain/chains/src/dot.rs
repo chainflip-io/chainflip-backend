@@ -171,6 +171,8 @@ pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 	Clone,
 	PartialEq,
 	Eq,
+	PartialOrd,
+	Ord,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
@@ -422,6 +424,8 @@ pub type ResetProxyAccountNonce = bool;
 	Debug,
 	PartialEq,
 	Eq,
+	Serialize,
+	Deserialize,
 	Default,
 )]
 pub struct PolkadotChannelState;
@@ -616,7 +620,13 @@ impl Dispatchable for PolkadotRuntimeCall {
 #[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum SystemCall {}
 
-impl DepositDetailsToTransactionInId<PolkadotCrypto> for u32 {}
+impl DepositDetailsToTransactionInId<PolkadotCrypto> for TxId {
+	fn deposit_ids(&self) -> Option<Vec<<PolkadotCrypto as ChainCrypto>::TransactionInId>> {
+		Some(vec![self.clone()])
+	}
+}
+
+impl DepositDetailsToTransactionInId<PolkadotCrypto> for PolkadotExtrinsicIndex {}
 
 #[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]

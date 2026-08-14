@@ -44,9 +44,8 @@ impl RuntimeTest for Test {
 		println!("Native result: {:?}", native_result);
 
 		// --- WASM execution (uses the on-chain :code blob) ---
-		let wasm_code = ext.execute_with(|| {
-			sp_io::storage::get(b":code").expect(":code not found in state")
-		});
+		let wasm_code =
+			ext.execute_with(|| sp_io::storage::get(b":code").expect(":code not found in state"));
 		println!("WASM blob size: {} bytes", wasm_code.len());
 
 		let runtime_blob =

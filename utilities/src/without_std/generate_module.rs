@@ -79,8 +79,8 @@ macro_rules! generate_module {
                         #[scale_info(skip_type_params(Ty))]
                         #[derive(cf_proc_macros::HasTypeIntrospection)]
                         #[derive(cf_proc_macros::IntroElim)]
-                        #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(cf_proc_macros::ArbitraryWithBounds))]
-                        #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), arbitrary(bound(Ty: 'static, $( $($T: 'static,)+ )? $( Ty::$field: sp_std::fmt::Debug + proptest::arbitrary::Arbitrary + 'static ),* )))]
+                        #[cfg_attr(all(feature = "proptest", feature = "std"), derive(cf_proc_macros::ArbitraryWithBounds))]
+                        #[cfg_attr(all(feature = "proptest", feature = "std"), arbitrary(bound(Ty: 'static, $( $($T: 'static,)+ )? $( Ty::$field: sp_std::fmt::Debug + proptest::arbitrary::Arbitrary + 'static ),* )))]
 
                         pub struct Struct {
                             $(
@@ -500,7 +500,7 @@ macro_rules! generate_module {
                             //
                             // This trait has to be implemented manually because the standard derive doesn't properly deal with variants that
                             // cannot be instantiated (e.g. because they contain `!`, the "Never" type).
-                            #[cfg(any(test, all(feature = "proptest", feature = "std")))]
+                            #[cfg(all(feature = "proptest", feature = "std"))]
                             impl proptest::arbitrary::Arbitrary for Enum
                             where
                                 Ty: 'static,

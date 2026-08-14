@@ -17,11 +17,13 @@
 use bitcoin::{hashes::Hash as BtcHash, Txid};
 use cf_chains::{
 	address::{AddressString, EncodedAddress},
+	dot::{PolkadotSignature, PolkadotTransactionId},
 	evm::SchnorrVerificationComponents,
-	instances::BitcoinInstance,
-	Chain, ChainCrypto, ChannelRefundParametersUnchecked, IntoTransactionInIdForAnyChain, Tron,
+	instances::{AssethubInstance, BitcoinInstance},
+	Assethub, Chain, ChainCrypto, ChannelRefundParametersUnchecked, IntoTransactionInIdForAnyChain,
+	Tron,
 };
-use cf_primitives::{BasisPoints, DcaParameters, NetworkEnvironment};
+use cf_primitives::{BasisPoints, DcaParameters, NetworkEnvironment, TxId};
 use cf_traits::ChainflipWithTargetChain;
 use cf_utilities::rpc::NumberOrHex;
 use pallet_cf_broadcast::{TransactionConfirmation, TransactionOutIdToBroadcastId};
@@ -41,6 +43,7 @@ use state_chain_runtime::{
 pub enum RpcTransactionRef {
 	Bitcoin { hash: Txid },
 	Evm { hash: cf_chains::evm::H256 },
+	Assethub { block_number: u32, extrinsic_index: u32 },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -48,6 +51,7 @@ pub enum RpcTransactionRef {
 pub enum RpcTransactionId {
 	Bitcoin { hash: Txid },
 	Evm { signature: cf_chains::evm::SchnorrVerificationComponents },
+	Assethub { signature: PolkadotSignature },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -55,6 +59,7 @@ pub enum RpcTransactionId {
 pub enum DepositDetails {
 	Bitcoin { tx_id: Txid, vout: u32 },
 	Evm { tx_hashes: Vec<cf_chains::evm::H256> },
+	Assethub { block_number: u32, extrinsic_index: u32 },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -227,6 +232,23 @@ where
 	}
 }
 
+fn convert_assethub_broadcast(
+	tx_confirmation: TransactionConfirmation<Runtime, AssethubInstance>,
+	height: u64,
+) -> Option<BroadcastWitnessInfo> {
+	let (broadcast_id, _) = TransactionOutIdToBroadcastId::<Runtime, AssethubInstance>::get(
+		tx_confirmation.tx_out_id.clone(),
+	)?;
+	let PolkadotTransactionId { block_number, extrinsic_index } = tx_confirmation.transaction_ref;
+
+	Some(BroadcastWitnessInfo {
+		broadcast_chain_block_height: height,
+		broadcast_id,
+		tx_out_id: RpcTransactionId::Assethub { signature: tx_confirmation.tx_out_id },
+		tx_ref: RpcTransactionRef::Assethub { block_number, extrinsic_index },
+	})
+}
+
 fn extract_vault_deposit_from_event<T, I>(
 	event: &EvmVaultContractEvent<T, I>,
 ) -> Option<VaultDepositWitness<T, I>>
@@ -257,6 +279,15 @@ impl IntoRpcDepositDetails for cf_chains::btc::Utxo {
 impl IntoRpcDepositDetails for cf_chains::evm::DepositDetails {
 	fn into_rpc_deposit_details(self) -> Option<DepositDetails> {
 		self.tx_hashes.map(|tx_hashes| DepositDetails::Evm { tx_hashes })
+	}
+}
+
+impl IntoRpcDepositDetails for TxId {
+	fn into_rpc_deposit_details(self) -> Option<DepositDetails> {
+		Some(DepositDetails::Assethub {
+			block_number: self.block_number,
+			extrinsic_index: self.extrinsic_index,
+		})
 	}
 }
 
@@ -414,6 +445,23 @@ pub(crate) fn convert_raw_witnessed_events(
 				broadcasts: broadcasts_vec,
 				vault_deposits: converted_vault_deposits,
 			}
+		},
+		state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents::Assethub {
+			deposits,
+			broadcasts,
+		} => {
+			let deposits = deposits
+				.into_iter()
+				.map(|(height, witness)| {
+					convert_deposit_witness::<Assethub>(&witness, height, network)
+				})
+				.collect();
+			let broadcasts = broadcasts
+				.into_iter()
+				.filter_map(|(height, tx)| convert_assethub_broadcast(tx, height))
+				.collect();
+
+			RpcWitnessedEventsResponse { deposits, broadcasts, vault_deposits: Vec::new() }
 		},
 	}
 }

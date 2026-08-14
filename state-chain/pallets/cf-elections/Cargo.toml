@@ -55,7 +55,7 @@ cf-primitives = { workspace = true, features = ["proptest"] }
 cf-chains = { workspace = true, features = ["test", "mocks"] }
 cf-traits = { workspace = true, features = ["test", "mocks"] }
 rand = { workspace = true, features = ["std"] }
-proptest = { workspace = true }
+proptest = { workspace = true, features = ["std"] }
 proptest-derive = { workspace = true }
 
 [features]

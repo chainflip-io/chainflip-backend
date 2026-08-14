@@ -221,32 +221,34 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		safety_buffer: usize,
 	) {
 		//--------- calculate new events ---------
-		let new_events: Vec<_> = self
-			.blocks_data
-			.iter_mut()
-			.flat_map(|(block_height, block_info)| {
-				let new_next_age_to_process = ChainBlockNumberOf::<T::Chain>::steps_between(
-					block_height,
-					&seen_heights_below,
-				)
-				.0;
-				let age_range: Range<u32> =
-					(block_info.next_age_to_process)..new_next_age_to_process as u32;
+		let mut new_events = Vec::new();
+		for (block_height, block_info) in self.blocks_data.iter_mut() {
+			let new_next_age_to_process =
+				ChainBlockNumberOf::<T::Chain>::steps_between(block_height, &seen_heights_below).0;
+			let age_range: Range<u32> =
+				(block_info.next_age_to_process)..new_next_age_to_process as u32;
 
-				block_info.next_age_to_process = new_next_age_to_process as u32;
+			block_info.next_age_to_process = new_next_age_to_process as u32;
 
-				self.debug_events.run(BlockProcessorEvent::ProcessingBlockForAges {
-					height: *block_height,
-					ages: age_range.clone(),
-				});
+			// Nothing has aged, so the rules would produce nothing: skip before cloning the block
+			// data for them. Common, since this runs once per state machine step.
+			if age_range.is_empty() {
+				continue;
+			}
 
+			self.debug_events.run(BlockProcessorEvent::ProcessingBlockForAges {
+				height: *block_height,
+				ages: age_range.clone(),
+			});
+
+			new_events.extend(
 				self.rules
 					.run((age_range, block_info.block_data.clone(), block_info.safety_margin))
 					.into_iter()
 					.filter(|event| !self.processed_events.contains_key(event))
-					.map(|event| (*block_height, event))
-			})
-			.collect();
+					.map(|event| (*block_height, event)),
+			);
+		}
 
 		//--------- execute new events ---------
 		self.execute.run(new_events);

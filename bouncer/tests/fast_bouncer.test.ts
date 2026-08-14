@@ -2,10 +2,10 @@ import { describe } from 'vitest';
 import { testBoostingSwap } from 'tests/boost';
 import { testVaultSwap } from 'tests/vault_swap_tests';
 import { checkSolEventAccountsClosure } from 'shared/vault_swap/sol_vault_swap';
-import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
+import { checkAvailabilityAllSolanaNonces, solanaNoncesPollBudgetSeconds } from 'shared/utils';
 import { checkNoWitnessingTaskRestarts } from 'shared/check_witnessing_task_restarts';
 import { checkNoTransferFallbacks } from 'shared/check_transfer_fallbacks';
-import { testAllSwaps, testSwapsToAssethub } from 'tests/all_swaps';
+import { testAllSwaps } from 'tests/all_swaps';
 import { testEvmDeposits } from 'tests/evm_deposits';
 import { testMultipleMembersGovernance } from 'tests/multiple_members_governance';
 import { testLpApi } from 'tests/lp_api_test';
@@ -40,7 +40,6 @@ describe('ConcurrentTests', () => {
   // test to reduce contention, for example, the BrokerLevelScreeningTest is delayed to not end up
   // in situations where the deposit monitor is slow in flagging transactions.
   testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
-  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 330 * ciTimeoutFactor);
   concurrentTest('EvmDeposits', testEvmDeposits, 280 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
   concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);
@@ -83,10 +82,12 @@ describe('ConcurrentTests', () => {
 
   // Post test checks
   serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 5 * ciTimeoutFactor);
+  // Not scaled by `ciTimeoutFactor`: the test just polls for a fixed wall-clock budget, so the
+  // timeout only needs headroom over that budget for the initial connection and final query.
   serialTest(
     'CheckAvailabilityAllSolanaNonces',
     checkAvailabilityAllSolanaNonces,
-    5 * ciTimeoutFactor,
+    solanaNoncesPollBudgetSeconds + 30,
   );
   serialTest('CheckNoWitnessingTaskRestarts', checkNoWitnessingTaskRestarts, 5 * ciTimeoutFactor);
   serialTest('CheckNoTransferFallbacks', checkNoTransferFallbacks, 10 * ciTimeoutFactor);

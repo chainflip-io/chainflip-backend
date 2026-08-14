@@ -1401,6 +1401,11 @@ export interface ChainErrors extends GenericChainErrors {
     PoolDoesNotExist: GenericPalletError;
 
     /**
+     * The account has a pending swap request.
+     **/
+    PendingSwapRequest: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -2355,6 +2360,11 @@ export interface ChainErrors extends GenericChainErrors {
     NoLiquidityRefundAddressRegistered: GenericPalletError;
 
     /**
+     * The account's withdrawal whitelist must be disabled before deregistration.
+     **/
+    WithdrawalWhitelistNotCleared: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -3142,6 +3152,27 @@ export interface ChainErrors extends GenericChainErrors {
    * Pallet `BscElections`'s errors
    **/
   bscElections: {
+    Uninitialized: GenericPalletError;
+    AlreadyInitialized: GenericPalletError;
+    UnknownElection: GenericPalletError;
+    Unauthorised: GenericPalletError;
+    Paused: GenericPalletError;
+    NotPaused: GenericPalletError;
+    UnreferencedSharedData: GenericPalletError;
+    CorruptStorage: GenericPalletError;
+    VotesNotCleared: GenericPalletError;
+    NotContributing: GenericPalletError;
+    NoVotesSpecified: GenericPalletError;
+
+    /**
+     * Generic pallet error
+     **/
+    [error: string]: GenericPalletError;
+  };
+  /**
+   * Pallet `AssethubElections`'s errors
+   **/
+  assethubElections: {
     Uninitialized: GenericPalletError;
     AlreadyInitialized: GenericPalletError;
     UnknownElection: GenericPalletError;

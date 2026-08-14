@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   cfChainsDepositOriginType,
   cfPrimitivesChainsAssetsHubAsset,
+  cfPrimitivesTxId,
   hexString,
   numberOrHex,
   palletCfAssethubIngressEgressDepositAction,
@@ -13,7 +14,7 @@ export const assethubIngressEgressDepositFinalised = z.object({
   asset: cfPrimitivesChainsAssetsHubAsset,
   amount: numberOrHex,
   blockHeight: z.number(),
-  depositDetails: z.number(),
+  depositDetails: cfPrimitivesTxId,
   ingressFee: numberOrHex,
   maxBoostFeeBps: z.number(),
   action: palletCfAssethubIngressEgressDepositAction,

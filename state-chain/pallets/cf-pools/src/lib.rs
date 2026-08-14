@@ -430,7 +430,7 @@ pub mod pallet {
 	/// swept
 	#[pallet::storage]
 	pub(super) type LimitOrderAutoSweepingThresholds<T: Config> =
-		StorageValue<_, SweepingThresholds, ValueQuery, StablecoinDefaults<1_000_000_000>>; // $1000 USD
+		StorageValue<_, SweepingThresholds, ValueQuery, StablecoinDefaults<1_000>>; // $1000 USD
 
 	/// Minimum amount of the sold asset that a limit order may hold. Set per asset by
 	/// governance. A value of `0` disables the check for that asset.

@@ -322,6 +322,15 @@ import type {
   CfChainsBscBscTrackedData,
   PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesBsc,
   PalletCfElectionsConsensusHistory007,
+  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+  PalletCfElectionsBitmapComponentsElectionBitmapComponentsAssethub,
+  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeIndividualComponentAssethubTrackedData,
+  PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserAssethub,
+  PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubDepositChannel,
+  PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubEgress,
+  CfChainsHubAssethubTrackedData,
+  PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionPropertiesHeightWitnesserPropertiesAssethub,
+  PalletCfElectionsConsensusHistory008,
 } from './types.js';
 
 export interface ChainStorage extends GenericChainStorage {
@@ -8951,6 +8960,243 @@ export interface ChainStorage extends GenericChainStorage {
       (
         arg: PalletCfElectionsUniqueMonotonicIdentifier,
       ) => PalletCfElectionsConsensusHistory007 | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * Stores the elections whose consensus doesn't need to be rechecked, and the epoch when they
+     * were last checked.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<number | undefined> =} callback
+     **/
+    electionConsensusHistoryUpToDate: GenericStorageQuery<
+      (arg: PalletCfElectionsUniqueMonotonicIdentifier) => number | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
+     * is included is controlled solely by them. This serves as a method for validators to quickly
+     * remove all their votes from consensus, without having to know which votes should be removed
+     * and without deleting votes that are still valid. This storage item is not consistent with
+     * the current authority set, and so it may include authorities that are not in the current
+     * authority set or exclude authorities that are in the current authority set.
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    contributingAuthorities: GenericStorageQuery<
+      (arg: AccountId32Like) => [] | undefined,
+      AccountId32
+    >;
+
+    /**
+     * Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
+     * this is None, the pallet is considered uninitialized.
+     *
+     * @param {Callback<PalletCfElectionsElectionPalletStatus | undefined> =} callback
+     **/
+    status: GenericStorageQuery<() => PalletCfElectionsElectionPalletStatus | undefined>;
+
+    /**
+     * Generic pallet storage query
+     **/
+    [storage: string]: GenericStorageQuery;
+  };
+  /**
+   * Pallet `AssethubElections`'s storage queries
+   **/
+  assethubElections: {
+    /**
+     * Stores the number of blocks after a piece of shared data is first referenced without being
+     * "provided" before expiring. Expiring will cause all votes that include references to be
+     * invalidated. This should be set as low as possible, I'd suggest using 8 blocks, which
+     * equates to 48 seconds.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    sharedDataReferenceLifetime: GenericStorageQuery<() => number>;
+
+    /**
+     * Stores the number of references to a shared vote. We also store the block number at which
+     * the first reference to a given SharedDataHash was added. If the associated SharedData has
+     * not been added, as this block number becomes older the probability a validator will submit
+     * the associated SharedData increases. After a number of blocks without the SharedData being
+     * added the reference will be removed which will invalidate any votes that reference it,
+     * forcing validators who referenced it to re-vote.
+     *
+     * @param {[PalletCfElectionsSharedDataHash, PalletCfElectionsUniqueMonotonicIdentifier]} arg
+     * @param {Callback<PalletCfElectionsReferenceDetails | undefined> =} callback
+     **/
+    sharedDataReferenceCount: GenericStorageQuery<
+      (
+        arg: [PalletCfElectionsSharedDataHash, PalletCfElectionsUniqueMonotonicIdentifier],
+      ) => PalletCfElectionsReferenceDetails | undefined,
+      [PalletCfElectionsSharedDataHash, PalletCfElectionsUniqueMonotonicIdentifier]
+    >;
+
+    /**
+     * Stores the *shared* parts of validator votes. Any duplicates will only be stored once,
+     * thereby decreasing the storage costs of validator votes as generally most validator's votes
+     * will be duplicates. A validator can choose to only provide the hashes of these pieces of
+     * data instead of the full data, any validator who has the associated data will randomly
+     * choose to submit it, where the probability increases over time.
+     *
+     * @param {PalletCfElectionsSharedDataHash} arg
+     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub | undefined> =} callback
+     **/
+    sharedData: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsSharedDataHash,
+      ) =>
+        | PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub
+        | undefined,
+      PalletCfElectionsSharedDataHash
+    >;
+
+    /**
+     * A mapping from election id and validator id to shared vote hash that uses bitmaps to
+     * decrease space requirements assuming most validators submit the same hashes.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<PalletCfElectionsBitmapComponentsElectionBitmapComponentsAssethub | undefined> =} callback
+     **/
+    bitmapComponents: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsUniqueMonotonicIdentifier,
+      ) => PalletCfElectionsBitmapComponentsElectionBitmapComponentsAssethub | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * A mapping from election id and validator id to individual vote components.
+     *
+     * @param {[PalletCfElectionsUniqueMonotonicIdentifier, AccountId32Like]} arg
+     * @param {Callback<[PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVoteProperties, PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeIndividualComponentAssethubTrackedData] | undefined> =} callback
+     **/
+    individualComponents: GenericStorageQuery<
+      (
+        arg: [PalletCfElectionsUniqueMonotonicIdentifier, AccountId32Like],
+      ) =>
+        | [
+            PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVoteProperties,
+            PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeIndividualComponentAssethubTrackedData,
+          ]
+        | undefined,
+      [PalletCfElectionsUniqueMonotonicIdentifier, AccountId32]
+    >;
+
+    /**
+     * Stores the next valid election identifier.
+     *
+     * @param {Callback<PalletCfElectionsUniqueMonotonicIdentifier> =} callback
+     **/
+    nextElectionIdentifier: GenericStorageQuery<() => PalletCfElectionsUniqueMonotonicIdentifier>;
+
+    /**
+     * Stores governance-controlled settings regarding the electoral system. These settings can be
+     * changed by governance at anytime.
+     *
+     * @param {Callback<[PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, number, []] | undefined> =} callback
+     **/
+    electoralUnsynchronisedSettings: GenericStorageQuery<
+      () =>
+        | [
+            PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+            number,
+            [],
+          ]
+        | undefined
+    >;
+
+    /**
+     * Stores persistent state the electoral system needs.
+     *
+     * @param {Callback<[PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserAssethub, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubDepositChannel, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubEgress, [CfChainsHubAssethubTrackedData, number], []] | undefined> =} callback
+     **/
+    electoralUnsynchronisedState: GenericStorageQuery<
+      () =>
+        | [
+            PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserAssethub,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubDepositChannel,
+            PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserStateAssethubEgress,
+            [CfChainsHubAssethubTrackedData, number],
+            [],
+          ]
+        | undefined
+    >;
+
+    /**
+     * Stores persistent state the electoral system needs.
+     *
+     * @param {PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectoralUnsynchronisedStateMapKey} arg
+     * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectoralUnsynchronisedStateMapValue | undefined> =} callback
+     **/
+    electoralUnsynchronisedStateMap: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectoralUnsynchronisedStateMapKey,
+      ) =>
+        | PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectoralUnsynchronisedStateMapValue
+        | undefined,
+      PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectoralUnsynchronisedStateMapKey
+    >;
+
+    /**
+     * Stores governance-controlled settings regarding the elections. These settings can be changed
+     * at anytime, but that change will only affect newly created elections.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<[[], [], [], [], number] | undefined> =} callback
+     **/
+    electoralSettings: GenericStorageQuery<
+      (arg: PalletCfElectionsUniqueMonotonicIdentifier) => [[], [], [], [], number] | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * Stores the properties of each election. These settings are fixed and are set on creation of
+     * the election by the electoral system.
+     *
+     * @param {PalletCfElectionsElectionIdentifier005} arg
+     * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionPropertiesHeightWitnesserPropertiesAssethub | undefined> =} callback
+     **/
+    electionProperties: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsElectionIdentifier005,
+      ) =>
+        | PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionPropertiesHeightWitnesserPropertiesAssethub
+        | undefined,
+      PalletCfElectionsElectionIdentifier005
+    >;
+
+    /**
+     * Stores mutable per-election state that the electoral system needs.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionState | undefined> =} callback
+     **/
+    electionState: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsUniqueMonotonicIdentifier,
+      ) => PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionState | undefined,
+      PalletCfElectionsUniqueMonotonicIdentifier
+    >;
+
+    /**
+     * Stores the most recent consensus, i.e. the most recent result of
+     * `ElectoralSystemRunner::check_consensus` that returned `Some(...)`, and whether it is
+     * `current` / has not been `lost` since.
+     *
+     * @param {PalletCfElectionsUniqueMonotonicIdentifier} arg
+     * @param {Callback<PalletCfElectionsConsensusHistory008 | undefined> =} callback
+     **/
+    electionConsensusHistory: GenericStorageQuery<
+      (
+        arg: PalletCfElectionsUniqueMonotonicIdentifier,
+      ) => PalletCfElectionsConsensusHistory008 | undefined,
       PalletCfElectionsUniqueMonotonicIdentifier
     >;
 

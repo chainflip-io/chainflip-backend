@@ -13,26 +13,22 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use std::{env, fs, path::Path};
+use std::{env, fs, path::PathBuf};
 
 fn main() {
-	let out_dir = env::var_os("OUT_DIR").unwrap();
-	let wasm_path = Path::new(&out_dir)
-		.parent()
-		.unwrap()
-		.parent()
-		.unwrap()
-		.parent()
-		.unwrap() // target/debug or target/release
-		.join("wbuild/state-chain-runtime/state_chain_runtime.wasm");
+	let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+	let metadata_path = out_dir.join("state_chain_metadata.scale");
+	let metadata = state_chain_runtime::Runtime::metadata_at_version(15)
+		.expect("Metadata V15 should be supported by the runtime");
+	fs::write(&metadata_path, metadata.as_slice()).expect("Couldn't write runtime metadata");
 
 	// Write out the expression to generate the subxt macro to a file. Since we must pass
-	// a string literal to the subxt macro `runtime_path` arg, we need to write it out here and
-	// include it verbatim instead.
+	// a string literal to the subxt macro `runtime_metadata_path` arg, we need to write it out here
+	// and include it verbatim instead.
 	let cf_static_runtime_content = format!(
 		r#"
 		#[subxt::subxt(
-			runtime_path = "{}",
+			runtime_metadata_path = "{}",
 			substitute_type(
 				path = "primitive_types::U256",
 				with = "::subxt::utils::Static<sp_core::U256>"
@@ -60,9 +56,9 @@ fn main() {
 		)]
 		pub mod cf_static_runtime {{}}
 	"#,
-		wasm_path.to_str().expect("Path to wasm should be stringifiable")
+		metadata_path.to_str().expect("Path to metadata should be stringifiable")
 	);
-	let cf_static_runtime_path = Path::new(&out_dir).join("cf_static_runtime.rs");
+	let cf_static_runtime_path = out_dir.join("cf_static_runtime.rs");
 	fs::write(cf_static_runtime_path, cf_static_runtime_content)
 		.expect("Couldn't write cf_static_runtime.rs");
 

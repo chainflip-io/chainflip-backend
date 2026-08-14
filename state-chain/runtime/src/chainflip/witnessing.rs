@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 pub mod arbitrum_elections;
+pub mod assethub_elections;
 pub mod bitcoin_elections;
 pub mod bsc_elections;
 pub mod ethereum_elections;

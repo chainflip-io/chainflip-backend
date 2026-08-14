@@ -111,7 +111,7 @@ pub enum BoostStatus<ChainAmount, BlockNumber> {
 	EqNoBound,
 )]
 #[scale_info(skip_type_params(T, I))]
-enum BoostStatusLookup<T: Config<I>, I: 'static> {
+pub enum BoostStatusLookup<T: Config<I>, I: 'static> {
 	Vault { tx_id: TransactionInIdFor<T, I> },
 	Channel { deposit_address: TargetChainAccount<T, I> },
 }
@@ -147,25 +147,25 @@ impl<T: Config<I>, I: 'static> BoostStatusLookup<T, I> {
 	Clone, RuntimeDebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq,
 )]
 #[scale_info(skip_type_params(T, I))]
-struct PendingPrewitnessedDepositEntry<T: Config<I>, I: 'static> {
-	boost_status_lookup: BoostStatusLookup<T, I>,
-	deposit: PendingPrewitnessedDeposit<T, I>,
+pub struct PendingPrewitnessedDepositEntry<T: Config<I>, I: 'static> {
+	pub boost_status_lookup: BoostStatusLookup<T, I>,
+	pub deposit: PendingPrewitnessedDeposit<T, I>,
 }
 
 #[derive(
 	Clone, RuntimeDebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq,
 )]
 #[scale_info(skip_type_params(T, I))]
-struct PendingPrewitnessedDeposit<T: Config<I>, I: 'static> {
-	block_height: TargetChainBlockNumber<T, I>,
-	amount: TargetChainAmount<T, I>,
-	asset: TargetChainAsset<T, I>,
-	deposit_details: <T::TargetChain as Chain>::DepositDetails,
-	deposit_address: Option<TargetChainAccount<T, I>>,
-	action: ChannelActionForDeposit<T::AccountId, TargetChainAccount<T, I>>,
-	boost_fee: u16,
-	channel_id: Option<u64>,
-	origin: DepositOrigin<T, I>,
+pub struct PendingPrewitnessedDeposit<T: Config<I>, I: 'static> {
+	pub block_height: TargetChainBlockNumber<T, I>,
+	pub amount: TargetChainAmount<T, I>,
+	pub asset: TargetChainAsset<T, I>,
+	pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
+	pub deposit_address: Option<TargetChainAccount<T, I>>,
+	pub action: ChannelActionForDeposit<T::AccountId, TargetChainAccount<T, I>>,
+	pub boost_fee: u16,
+	pub channel_id: Option<u64>,
+	pub origin: DepositOrigin<T, I>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
@@ -251,7 +251,7 @@ mod deposit_origin {
 		CloneNoBound, DebugNoBound, Encode, Decode, DecodeWithMemTracking, PartialEq, Eq, TypeInfo,
 	)]
 	#[scale_info(skip_type_params(T, I))]
-	pub(super) enum DepositOrigin<T: Config<I>, I: 'static> {
+	pub enum DepositOrigin<T: Config<I>, I: 'static> {
 		DepositChannel {
 			deposit_address: TargetChainAccount<T, I>,
 			channel_id: ChannelId,
@@ -325,7 +325,7 @@ mod deposit_origin {
 	}
 }
 
-use deposit_origin::DepositOrigin;
+pub use deposit_origin::DepositOrigin;
 
 /// Holds information about a transaction that is marked for rejection.
 #[derive(
@@ -379,7 +379,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const STORAGE_VERSION_U16: u16 = 30;
+pub const STORAGE_VERSION_U16: u16 = 31;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 impl_pallet_safe_mode! {
@@ -1026,7 +1026,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	pub(super) type PendingPrewitnessedDeposits<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type PendingPrewitnessedDeposits<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		BlockNumberFor<T>,
@@ -1272,8 +1272,9 @@ pub mod pallet {
 				ForeignChain::Bitcoin |
 				ForeignChain::Ethereum |
 				ForeignChain::Tron |
-				ForeignChain::Bsc => ProcessedUpTo::<T, I>::get(),
-				ForeignChain::Assethub | ForeignChain::Polkadot | ForeignChain::Solana =>
+				ForeignChain::Bsc |
+				ForeignChain::Assethub => ProcessedUpTo::<T, I>::get(),
+				ForeignChain::Polkadot | ForeignChain::Solana =>
 					T::ChainTracking::get_block_height(),
 			};
 
@@ -3721,19 +3722,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 	}
 
-	// TODO: Write test
+	/// Every deposit channel currently in the lookup, active or not.
+	///
+	/// Pair this with `filter_active_deposit_channels` to get the active set at a height. They are
+	/// split so that the block witnessers, which need the active set at every open election's
+	/// height on every block, can pay for the storage iteration once per block rather than once
+	/// per election.
+	pub fn all_deposit_channels() -> Vec<DepositChannelDetails<T, I>> {
+		DepositChannelLookup::<T, I>::iter_values().collect()
+	}
 
-	// This should only be used if we're using ProcessedUpTo to track the block height.
-	pub fn active_deposit_channels_at(
+	/// The subset of `channels` that is active at the given height.
+	///
+	/// This should only be used if we're using ProcessedUpTo to track the block height.
+	pub fn filter_active_deposit_channels(
+		channels: &[DepositChannelDetails<T, I>],
 		opened_at_or_before: TargetChainBlockNumber<T, I>,
 		expires_after: TargetChainBlockNumber<T, I>,
 	) -> Vec<DepositChannelDetails<T, I>> {
 		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(opened_at_or_before));
 
-		DepositChannelLookup::<T, I>::iter_values()
+		channels
+			.iter()
 			.filter(|details| {
 				details.opened_at <= opened_at_or_before && details.expires_at >= expires_after
 			})
+			.cloned()
 			.collect()
 	}
 }

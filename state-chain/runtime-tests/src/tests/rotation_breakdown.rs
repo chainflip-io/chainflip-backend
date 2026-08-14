@@ -44,8 +44,17 @@ fn rotation_context() -> Option<u32> {
 	let duration = Validator::epoch_duration();
 	let trigger = started.saturating_add(duration);
 	let phase = Validator::current_rotation_phase();
-	println!("  epoch {} started at {}, duration {} -> trigger block {}", Validator::current_epoch(), started, duration, trigger);
-	println!("  rotation phase: {}", if matches!(phase, pallet_cf_validator::RotationPhase::Idle) { "Idle" } else { "NOT Idle" });
+	println!(
+		"  epoch {} started at {}, duration {} -> trigger block {}",
+		Validator::current_epoch(),
+		started,
+		duration,
+		trigger
+	);
+	println!(
+		"  rotation phase: {}",
+		if matches!(phase, pallet_cf_validator::RotationPhase::Idle) { "Idle" } else { "NOT Idle" }
+	);
 	if matches!(phase, pallet_cf_validator::RotationPhase::Idle) {
 		Some(trigger)
 	} else {

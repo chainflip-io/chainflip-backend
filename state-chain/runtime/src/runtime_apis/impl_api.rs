@@ -689,6 +689,14 @@ impl_runtime_apis! {
 		fn cf_bsc_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			BscElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
+
+		fn cf_assethub_electoral_data(account_id: AccountId) -> Vec<u8> {
+			AssethubElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_assethub_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			AssethubElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
 	}
 
 	// -- Custom API --
@@ -842,7 +850,13 @@ impl_runtime_apis! {
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
 			let is_bidding = Validator::is_bidding(account_id);
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
-			let apy_bp = calculate_account_apy(account_id);
+			// Once FLIP 2.1 is active, we dont return apy anymore. We move to cf_reward_distribution_estimate
+			// for estimating rewards which can be used to calculate apy.
+			let apy_bp = if Flip::is_flip_2_1_activated() {
+				None
+			} else {
+				calculate_account_apy(account_id)
+			};
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
@@ -2320,7 +2334,9 @@ mod witnessed_events {
 	use super::*;
 	use crate::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
 	use cf_chains::{
-		instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
+		instances::{
+			ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, TronInstance,
+		},
 		TransactionInId,
 	};
 	use pallet_cf_elections::ElectoralUnsynchronisedState;
@@ -2335,6 +2351,7 @@ mod witnessed_events {
 			ForeignChain::Arbitrum => extract_arbitrum_witnessed_events(),
 			ForeignChain::Tron => extract_tron_witnessed_events(),
 			ForeignChain::Bsc => extract_bsc_witnessed_events(),
+			ForeignChain::Assethub => extract_assethub_witnessed_events(),
 			_ => Err(DispatchErrorWithMessage::RawMessage(
 				b"Chain not supported for witnessed events".to_vec(),
 			)),
@@ -2455,6 +2472,26 @@ mod witnessed_events {
 		);
 
 		Ok(RawWitnessedEvents::Bsc { deposits, vault_deposits, broadcasts })
+	}
+
+	fn extract_assethub_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		let state =
+			ElectoralUnsynchronisedState::<Runtime, AssethubInstance>::get().ok_or_else(|| {
+				DispatchErrorWithMessage::RawMessage(
+					b"Assethub electoral state not initialized".to_vec(),
+				)
+			})?;
+
+		let deposits =
+			extract_block_data!(&state.1, |h: &cf_chains::witness_period::BlockWitnessRange<
+				Assethub,
+			>| u64::from(*h.root()));
+		let broadcasts =
+			extract_block_data!(&state.2, |h: &cf_chains::witness_period::BlockWitnessRange<
+				Assethub,
+			>| u64::from(*h.root()));
+
+		Ok(RawWitnessedEvents::Assethub { deposits, broadcasts })
 	}
 
 	fn convert_deposit_witness<C: Chain>(
@@ -2650,6 +2687,28 @@ mod witnessed_events {
 						TransactionInId::Bsc,
 						DepositDetails::Bsc,
 					),
+				})
+			},
+			ForeignChain::Assethub => {
+				let state = ElectoralUnsynchronisedState::<Runtime, AssethubInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Assethub electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(
+					&state.1,
+					|h: &cf_chains::witness_period::BlockWitnessRange<Assethub>| u64::from(
+						*h.root()
+					)
+				);
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Assethub,
+						Environment::network_environment(),
+					),
+					vault_deposits: Vec::new(),
 				})
 			},
 			_ => Err(DispatchErrorWithMessage::RawMessage(

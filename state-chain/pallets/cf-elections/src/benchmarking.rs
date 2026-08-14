@@ -18,7 +18,7 @@ use crate::{
 	bitmap_components::ElectionBitmapComponents,
 	electoral_system::{AuthorityVoteOf, IndividualComponentOf, VotePropertiesOf},
 	electoral_system_runner::RunnerStorageAccessTrait,
-	vote_storage::VoteStorage,
+	vote_storage::{ComponentStorageKind, VoteStorage},
 	*,
 };
 use cf_chains::benchmarking_value::BenchmarkValue;
@@ -563,6 +563,7 @@ mod benchmarks {
 			ElectionBitmapComponents::<T, I>::with(
 				epoch,
 				UniqueMonotonicIdentifier::from(i as u64),
+				ComponentStorageKind::Both,
 				|_a| Ok(i),
 			)
 			.unwrap();

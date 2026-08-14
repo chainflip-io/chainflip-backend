@@ -148,10 +148,18 @@ fn spawn_latest_finalized_block_head_watcher<
 pub type DefaultRpcClient = base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>;
 pub(crate) type RpcResult<T> = Result<T, ClientError>;
 
+// The default max response size of jsonrpsee clients is ~10MB, which is
+// less then the size of an SC block containing a runtime upgrade (when transferred in ascii-hex
+// encoded format, which is ~2x the number of bytes in scale format). For context,
+// after implementing assethub elections, the size of the compressed runtime wasm grew to 5,428,476
+// bytes, meaning that it's wire encoding went over 10MB.
+const MAX_RPC_RESPONSE_SIZE: u32 = 32 * 1024 * 1024;
+
 impl DefaultRpcClient {
 	pub async fn connect(ws_endpoint: &str) -> Result<Self> {
 		Ok(BaseRpcClient::new(
 			jsonrpsee::ws_client::WsClientBuilder::default()
+				.max_response_size(MAX_RPC_RESPONSE_SIZE)
 				.build(ws_endpoint)
 				.await
 				.with_context(|| {
@@ -1295,6 +1303,18 @@ mod tests {
 	use state_chain_runtime::Header;
 
 	use super::{base_rpc_api::MockBaseRpcApi, *};
+
+	#[test]
+	fn rpc_response_limit_accommodates_maximum_block_length() {
+		const {
+			// In case of runtime upgrades, the engine has to be able to read a block that
+			// contains the full, ascii-hex-encoded runtime. The ascii-hex-encoding is ~2x
+			// the number of bytes in the scale-encoding of such a runtime-upgrade-block.
+			// This check verifies that the MAX_BLOCK_LENGTH fits comfortably into the rpc
+			// response size setting.
+			assert!(MAX_RPC_RESPONSE_SIZE >= state_chain_runtime::MAX_BLOCK_LENGTH * 3);
+		}
+	}
 
 	struct TestChain {
 		hashes: Vec<H256>,

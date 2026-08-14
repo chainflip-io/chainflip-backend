@@ -14,17 +14,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-mod hub_chain_tracking;
-mod hub_deposits;
-mod hub_source;
+pub mod hub_deposits;
 
 use cf_chains::dot::{
 	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotSignature,
 	PolkadotTransactionId,
 };
-use cf_primitives::{EpochIndex, PolkadotBlockNumber};
-use futures_core::Future;
-use state_chain_runtime::AssethubInstance;
+use pallet_cf_broadcast::TransactionConfirmation;
+use state_chain_runtime::{AssethubInstance, Runtime};
 use subxt::{
 	backend::legacy::rpc_methods::Bytes,
 	config::PolkadotConfig,
@@ -32,30 +29,10 @@ use subxt::{
 	utils::{AccountId32, MultiAddress, MultiSignature},
 };
 
-use tracing::error;
-
-use std::{collections::BTreeSet, sync::Arc};
-
-use cf_utilities::task_scope::Scope;
-use futures::FutureExt;
+use std::collections::BTreeSet;
 
 use crate::{
-	db::PersistentKeyDB,
-	dot::{
-		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
-		PolkadotHash,
-	},
-	witness::common::chain_source::extension::ChainSourceExt,
-};
-use engine_sc_client::{
-	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-	STATE_CHAIN_CONNECTION,
-};
-pub use hub_source::{HubFinalisedSource, HubUnfinalisedSource};
-
-use super::common::{
-	chain_source::Header,
-	epoch_source::{EpochSource, Vault},
+	dot::cached_rpc::DotRetryRpcApiWithResult, witness::hub_elections::AssethubBlockHeader,
 };
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
@@ -100,7 +77,7 @@ use assethub::{
 
 pub fn filter_map_events(
 	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::Error>,
-) -> Option<(Phase, EventWrapper)> {
+) -> Option<anyhow::Result<(Phase, EventWrapper)>> {
 	match res_event_details {
 		Ok(event_details) => match (event_details.pallet_name(), event_details.variant_name()) {
 			(ProxyAdded::PALLET, ProxyAdded::EVENT) => {
@@ -130,25 +107,14 @@ pub fn filter_map_events(
 			},
 			_ => None,
 		}
-		.map(|event| (event_details.phase(), event)),
-		Err(err) => {
-			error!("Error while parsing event: {:?}", err);
-			None
-		},
+		.map(|event| Ok((event_details.phase(), event))),
+		Err(err) => Some(Err(anyhow::anyhow!("Error while parsing event: {:?}", err))),
 	}
 }
 
-pub async fn proxy_added_witnessing(
-	epoch: Vault<cf_chains::Assethub, PolkadotAccountId, ()>,
-	header: Header<PolkadotBlockNumber, PolkadotHash, Vec<(Phase, EventWrapper)>>,
-) -> (Vec<(Phase, EventWrapper)>, BTreeSet<u32>) {
-	let events = header.data;
-	let proxy_added_broadcasts = proxy_addeds(header.index, &events, &epoch.info.0);
-
-	(events, proxy_added_broadcasts)
-}
-
-fn extract_state_chain_signature(raw_extrinsic: &[u8]) -> Option<PolkadotSignature> {
+fn extract_state_chain_signer_and_signature(
+	raw_extrinsic: &[u8],
+) -> Option<(PolkadotAccountId, PolkadotSignature)> {
 	const LEGACY_EXTRINSIC_FORMAT_VERSION: u8 = 4;
 	const VERSION_MASK: u8 = 0b0011_1111;
 	const TYPE_MASK: u8 = 0b1100_0000;
@@ -166,14 +132,19 @@ fn extract_state_chain_signature(raw_extrinsic: &[u8]) -> Option<PolkadotSignatu
 
 	match (version, xt_type) {
 		(LEGACY_EXTRINSIC_FORMAT_VERSION, SIGNED_EXTRINSIC) => {
-			let _address = MultiAddress::<AccountId32, u32>::decode(&mut input).ok()?;
+			let signer = match MultiAddress::<AccountId32, u32>::decode(&mut input).ok()? {
+				MultiAddress::Id(account_id) => PolkadotAccountId(account_id.0),
+				MultiAddress::Address32(account_id_bytes) => PolkadotAccountId(account_id_bytes),
+				MultiAddress::Index(_) | MultiAddress::Raw(_) | MultiAddress::Address20(_) =>
+					return None,
+			};
 			let signature = MultiSignature::decode(&mut input).ok()?;
 
 			// we only use the Sr25519 for threshold signatures, so we only look out for them
 			match signature {
 				MultiSignature::Ed25519(_) => None,
 				MultiSignature::Sr25519(polkadot_signature) =>
-					Some(PolkadotSignature::from_aliased(polkadot_signature)),
+					Some((signer, PolkadotSignature::from_aliased(polkadot_signature))),
 				MultiSignature::Ecdsa(_) => None,
 			}
 		},
@@ -181,199 +152,62 @@ fn extract_state_chain_signature(raw_extrinsic: &[u8]) -> Option<PolkadotSignatu
 	}
 }
 
-#[expect(clippy::type_complexity)]
-pub async fn process_egress<ProcessCall, ProcessingFut>(
-	epoch: Vault<cf_chains::Assethub, PolkadotAccountId, ()>,
-	header: Header<
-		PolkadotBlockNumber,
-		PolkadotHash,
-		(
-			(Vec<(Phase, EventWrapper)>, BTreeSet<u32>),
-			Vec<(PolkadotSignature, PolkadotBlockNumber)>,
-		),
-	>,
-	process_call: ProcessCall,
-	hub_client: DotRetryRpcClient,
-) where
-	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	ProcessingFut: Future<Output = ()> + Send + 'static,
-{
-	let ((events, mut extrinsic_indices), monitored_egress_data) = header.data;
+pub async fn process_egresses_in_block(
+	hub_client: &impl DotRetryRpcApiWithResult,
+	pending_tx_signatures: &[PolkadotSignature],
+	header: &AssethubBlockHeader,
+) -> anyhow::Result<Vec<TransactionConfirmation<Runtime, AssethubInstance>>> {
+	// exit early if we don't have any egresses to witness
+	if pending_tx_signatures.is_empty() {
+		return Ok(Vec::new());
+	}
 
-	let monitored_egress_ids = monitored_egress_data
-		.into_iter()
-		.map(|(signature, _)| signature)
-		.collect::<BTreeSet<_>>();
+	let mut transaction_confirmations = Vec::new();
 
-	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
-	extrinsic_indices.extend(extrinsic_success_indices(&events));
+	let monitored_egress_ids: BTreeSet<_> = pending_tx_signatures.iter().cloned().collect();
 
-	let extrinsics: Vec<Bytes> = hub_client.extrinsics(header.hash).await;
+	// all indices of all successful extrinsics. This includes both egresses and
+	// extrinsics that caused ProxyAdded events.
+	let extrinsic_indices = extrinsic_success_indices(&header.events);
 
-	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
+	let extrinsics: Vec<Bytes> = hub_client.extrinsics(header.block_hash).await?;
+
+	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &header.events) {
 		let xt = extrinsics.get(extrinsic_index as usize).expect(
 			"We know this exists since we got
 	this index from the event, from the block we are querying.",
 		);
 
-		match extract_state_chain_signature(&xt.0[..]) {
-			Some(signature) =>
+		match extract_state_chain_signer_and_signature(&xt.0[..]) {
+			Some((signer, signature)) =>
 				if monitored_egress_ids.contains(&signature) {
 					tracing::info!(
 						"Witnessing Assethub transaction succeeded. signature: {signature:?}"
 					);
-					process_call(
-						pallet_cf_broadcast::Call::<_, AssethubInstance>::transaction_succeeded {
-							tx_out_id: signature,
-							signer_id: epoch.info.0,
-							tx_fee,
-							tx_metadata: (),
-							transaction_ref: PolkadotTransactionId {
-								block_number: header.index,
-								extrinsic_index,
-							},
-						}
-						.into(),
-						epoch.index,
-					)
-					.await;
+					transaction_confirmations.push(pallet_cf_broadcast::TransactionConfirmation {
+						tx_out_id: signature,
+						signer_id: signer, /* this is the account that gets refunded for
+						                    * submitting this tx */
+						tx_fee,
+						tx_metadata: (),
+						transaction_ref: PolkadotTransactionId {
+							block_number: header.block_height,
+							extrinsic_index,
+						},
+					});
 				},
 			None => {
 				// We expect this to occur when attempting to decode v5 or bare extrinsics.
 				tracing::debug!(
 					"Unable to extract signature for extrinsic {}:{}.",
-					header.hash,
+					header.block_hash,
 					extrinsic_index,
 				);
 			},
 		}
 	}
-}
 
-pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
-	scope: &Scope<'_, anyhow::Error>,
-	hub_client: DotRetryRpcClient,
-	process_call: ProcessCall,
-	state_chain_client: Arc<StateChainClient>,
-	db: Arc<PersistentKeyDB>,
-) where
-	StateChainClient: ChainApi + StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	ProcessingFut: Future<Output = ()> + Send + 'static,
-{
-	let sos_client = state_chain_client.clone();
-	scope.spawn_with_restart(
-		"hub_witnessing",
-		move || {
-			let hub_client = hub_client.clone();
-			let process_call = process_call.clone();
-			let state_chain_client = state_chain_client.clone();
-			let db = db.clone();
-			async move {
-				cf_utilities::task_scope::task_scope(|scope| {
-					async move {
-						let epoch_stream = state_chain_client.finalized_block_stream().await;
-						let deposit_addresses_stream =
-							state_chain_client.finalized_block_stream().await;
-						let egress_items_stream = state_chain_client.finalized_block_stream().await;
-
-						let epoch_source =
-							EpochSource::builder(scope, epoch_stream, state_chain_client.clone())
-								.await
-								.participating(state_chain_client.account_id())
-								.await;
-
-						let unfinalised_source = HubUnfinalisedSource::new(hub_client.clone())
-							.strictly_monotonic()
-							.then(|header| async move {
-								header.data.iter().filter_map(filter_map_events).collect()
-							})
-							.shared(scope);
-
-						unfinalised_source
-							.clone()
-							.chunk_by_time(epoch_source.clone(), scope)
-							.chain_tracking(state_chain_client.clone(), hub_client.clone())
-							.logging("chain tracking")
-							.spawn(scope);
-
-						let epoch_source = epoch_source
-							.filter_map(
-								|state_chain_client, _epoch_index, hash, _info| async move {
-									state_chain_client
-										.storage_value::<pallet_cf_environment::AssethubVaultAccountId<
-											state_chain_runtime::Runtime,
-										>>(hash)
-										.await
-										.expect(STATE_CHAIN_CONNECTION)
-								},
-								|_state_chain_client, _epoch, _block_hash, historic_info| async move {
-									Some(historic_info)
-								},
-							)
-							.await;
-
-						let vaults = epoch_source.vaults::<cf_chains::Assethub>().await;
-
-						// Full witnessing
-						HubFinalisedSource::new(hub_client.clone())
-							.strictly_monotonic()
-							.logging("finalised block produced")
-							.then(|header| async move {
-								header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
-							})
-							.chunk_by_vault(vaults, scope)
-							.deposit_addresses(
-								scope,
-								deposit_addresses_stream,
-								state_chain_client.clone(),
-							)
-							.await
-							// Deposit witnessing
-							.hub_deposits(process_call.clone(), hub_client.clone())
-							// Proxy added witnessing
-							.then(proxy_added_witnessing)
-							// Broadcast success
-							.egress_items(scope, egress_items_stream, state_chain_client.clone())
-							.await
-							.then({
-								let process_call = process_call.clone();
-								let hub_client = hub_client.clone();
-								move |epoch, header| {
-									process_egress(
-										epoch,
-										header,
-										process_call.clone(),
-										hub_client.clone(),
-									)
-								}
-							})
-							.continuous("Assethub".to_string(), db)
-							.logging("witnessing")
-							.spawn(scope);
-
-						Ok(())
-					}
-					.boxed()
-				})
-				.await
-			}
-		},
-		move || {
-			crate::witness::common::submit_sos_extrinsic(
-				sos_client.clone(),
-				cf_primitives::WitnessingTaskName::Assethub,
-			)
-		},
-	);
+	Ok(transaction_confirmations)
 }
 
 fn transaction_fee_paids(
@@ -403,30 +237,6 @@ fn extrinsic_success_indices(events: &[(Phase, EventWrapper)]) -> BTreeSet<Polka
 		.collect()
 }
 
-fn proxy_addeds(
-	block_number: PolkadotBlockNumber,
-	events: &Vec<(Phase, EventWrapper)>,
-	our_vault: &PolkadotAccountId,
-) -> BTreeSet<PolkadotExtrinsicIndex> {
-	let mut extrinsic_indices = BTreeSet::new();
-	for (phase, wrapped_event) in events {
-		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
-			if let EventWrapper::ProxyAdded { delegator, delegatee } = wrapped_event {
-				if &PolkadotAccountId::from_aliased(delegator.0) != our_vault {
-					continue
-				}
-
-				tracing::info!(
-					"Witnessing ProxyAdded. new delegatee: {delegatee} at block number {block_number} and extrinsic_index; {extrinsic_index}"
-				);
-
-				extrinsic_indices.insert(extrinsic_index);
-			}
-		}
-	}
-	extrinsic_indices
-}
-
 #[cfg(test)]
 pub mod test {
 	use super::*;
@@ -440,39 +250,8 @@ pub mod test {
 			.collect()
 	}
 
-	fn mock_proxy_added(
-		delegator: &PolkadotAccountId,
-		delegatee: &PolkadotAccountId,
-	) -> EventWrapper {
-		EventWrapper::ProxyAdded {
-			delegator: delegator.aliased_ref().to_owned().into(),
-			delegatee: delegatee.aliased_ref().to_owned().into(),
-		}
-	}
-
 	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
 		EventWrapper::TransactionFeePaid { actual_fee, tip: Default::default() }
-	}
-
-	#[test]
-	fn proxy_added_event_for_our_vault_witnessed() {
-		let our_vault = PolkadotAccountId::from_aliased([0; 32]);
-		let other_acct = PolkadotAccountId::from_aliased([1; 32]);
-		let our_proxy_added_index = 1u32;
-		let fee_paid = 10000;
-		let block_event_details = phase_and_events(vec![
-			// we should witness this one
-			(our_proxy_added_index, mock_proxy_added(&our_vault, &other_acct)),
-			(our_proxy_added_index, mock_tx_fee_paid(fee_paid)),
-			// we should not witness this one
-			(3u32, mock_proxy_added(&other_acct, &our_vault)),
-			(3u32, mock_tx_fee_paid(20000)),
-		]);
-
-		let extrinsic_indices = proxy_addeds(20, &block_event_details, &our_vault);
-
-		assert_eq!(extrinsic_indices.len(), 1);
-		assert!(extrinsic_indices.contains(&our_proxy_added_index));
 	}
 
 	#[tokio::test]

@@ -441,6 +441,37 @@ fn can_update_config_for_specific_asset() {
 }
 
 #[test]
+fn cannot_set_out_of_range_interest_payment_interval() {
+	new_test_ext().execute_with(|| {
+		let original_interval = LendingConfig::<Test>::get().interest_payment_interval_blocks;
+
+		for invalid_interval in [0, MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS + 1] {
+			assert_noop!(
+				LendingPools::update_pallet_config(
+					RuntimeOrigin::root(),
+					bounded_vec![PalletConfigUpdate::SetInterestPaymentIntervalBlocks(
+						invalid_interval
+					)]
+				),
+				crate::Error::<Test>::InvalidConfigurationParameters
+			);
+		}
+
+		assert_eq!(
+			LendingConfig::<Test>::get().interest_payment_interval_blocks,
+			original_interval
+		);
+
+		assert_ok!(LendingPools::update_pallet_config(
+			RuntimeOrigin::root(),
+			bounded_vec![PalletConfigUpdate::SetInterestPaymentIntervalBlocks(
+				MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS
+			)]
+		));
+	});
+}
+
+#[test]
 fn test_add_funds_to_legacy_boost_pool() {
 	new_test_ext().execute_with(|| {
 		const BOOST_FUNDS: AssetAmount = 500_000_000;

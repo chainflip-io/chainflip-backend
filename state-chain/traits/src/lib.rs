@@ -1309,6 +1309,9 @@ pub trait WithdrawalAddressRestriction {
 		owner: &Self::AccountId,
 		address: cf_chains::evm::Address,
 	) -> Result<(), WithdrawalAddressAlreadyBound>;
+
+	/// Discard delayed withdrawal-configuration changes after successful deregistration.
+	fn clear_pending_withdrawal_changes(owner: &Self::AccountId);
 }
 
 /// Error returned when trying to set a bound withdrawal address when the binding already exists.

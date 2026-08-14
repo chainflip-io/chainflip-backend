@@ -7,8 +7,10 @@ import {
   Asset,
 } from 'shared/utils';
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
-import { getAssethubApi } from 'shared/utils/substrate';
+import { DisposableApiPromise, getAssethubApi } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
+import { SubmittableExtrinsic } from '@polkadot/api/types';
+import { ISubmittableResult } from '@polkadot/types/types';
 
 let nextAliceNonce: number | undefined;
 
@@ -24,6 +26,11 @@ async function allocateAliceNonce(): Promise<number> {
 }
 
 const MAX_ATTEMPTS = 5;
+// The fork-aware tx pool can strand a watched transaction indefinitely on a healthy, authoring
+// chain (observed in CI: a tx sat outside any block for 90s, then went Invalid, while its tip-bumped
+// resubmission was included within a second). So don't watch a submission forever: if it hasn't
+// reached a block by this deadline, give up on it and resubmit.
+const INCLUSION_TIMEOUT_MS = 30_000;
 // Each retry re-signs the same transfer with a higher tip. sr25519 signatures are
 // non-deterministic, so a resubmission is a *replacement* of the (possibly still pooled) previous
 // attempt and needs strictly higher priority to be accepted; without the tip bump a retry against
@@ -49,15 +56,15 @@ async function fillNonceGap(logger: Logger, nonce: number) {
   }
 }
 
-export async function sendHubAsset(
+// the signer is always `//Alice`
+export async function submitHubExtrinsic(
   logger: Logger,
-  asset: Asset,
-  address: string,
-  amount: string,
-): Promise<string> {
-  const planckAmount = amountToFineAmount(amount, assetDecimals(asset));
+  extrinsic: (api: DisposableApiPromise) => SubmittableExtrinsic<'promise', ISubmittableResult>,
+  extrinsicName: string,
+  expectedEvent?: { pallet: string; name: string },
+): Promise<{ txHash: string; eventData?: unknown }> {
   const alice = await aliceKeyringPair();
-  await using assethub = await getAssethubApi();
+  await using assethubApi = await getAssethubApi();
 
   // The nonce is pinned for the lifetime of this transfer and reused by every retry. Retrying
   // with a fresh nonce is what caused double-deposits in the past, when a retracted tx got
@@ -66,26 +73,50 @@ export async function sendHubAsset(
 
   const runSignAndSubmit = async (
     tip: number,
-    resolve: (txHash: string) => void,
+    resolve: (result: { txHash: string; eventData?: unknown }) => void,
     reject: (error: Error) => void,
   ) => {
-    let transferFunction;
-    if (asset === 'HubDot') {
-      transferFunction = assethub.tx.balances.transferKeepAlive(address, parseInt(planckAmount));
-    } else if (asset === 'HubUsdc' || asset === 'HubUsdt') {
-      transferFunction = assethub.tx.assets.transferKeepAlive(
-        getHubAssetId(asset),
-        address,
-        parseInt(planckAmount),
-      );
-    } else {
-      throw new Error(`Unsupported hub asset type: ${asset}`);
-    }
+    const tx = extrinsic(assethubApi);
+    const txHash = tx.hash.toString();
+    let done = false;
+    let inBlock = false;
+    let inclusionTimer: ReturnType<typeof setTimeout> | undefined;
+    // Assigned when signAndSend resolves; the deadline is only armed after that, and status
+    // callbacks only fire once the subscription exists.
+    let unsubscribe: () => void;
 
-    const unsubscribe = await transferFunction.signAndSend(alice, { nonce, tip }, (result) => {
+    // The deadline is armed whenever the transaction is not in a block: on initial submission,
+    // and again if the block it made it into is retracted. It is disarmed while the transaction
+    // is in a block, so slow finalization doesn't trigger a false retry.
+    const armInclusionDeadline = () => {
+      clearTimeout(inclusionTimer);
+      inclusionTimer = setTimeout(() => {
+        if (!done && !inBlock) {
+          done = true;
+          unsubscribe();
+          reject(
+            new Error(
+              `Transaction not included within ${INCLUSION_TIMEOUT_MS / 1000}s of submission`,
+            ),
+          );
+        }
+      }, INCLUSION_TIMEOUT_MS);
+    };
+
+    unsubscribe = await tx.signAndSend(alice, { nonce, tip }, (result) => {
+      if (result.status.isInBlock || result.status.isFinalized) {
+        inBlock = true;
+        clearTimeout(inclusionTimer);
+      }
+      if (result.status.isRetracted) {
+        inBlock = false;
+        armInclusionDeadline();
+      }
       if (result.dispatchError !== undefined) {
+        done = true;
+        clearTimeout(inclusionTimer);
         if (result.dispatchError.isModule) {
-          const decoded = assethub.registry.findMetaError(result.dispatchError.asModule);
+          const decoded = assethubApi.registry.findMetaError(result.dispatchError.asModule);
           const { docs, name, section } = decoded;
           unsubscribe();
           reject(new Error(`${section}.${name}: ${docs.join(' ')}`));
@@ -95,31 +126,54 @@ export async function sendHubAsset(
         }
       }
       if (result.status.isFinalized) {
+        done = true;
+        clearTimeout(inclusionTimer);
         unsubscribe();
-        resolve(result.status.hash.toString());
+
+        if (expectedEvent) {
+          const eventData = result.findRecord(expectedEvent.pallet, expectedEvent.name);
+          if (eventData === undefined) {
+            logger.warn(
+              `Error: extrinsic ${extrinsicName} submitted successfully, but expected event ${expectedEvent.pallet}.${expectedEvent.name} was not emitted.`,
+            );
+          }
+          resolve({ txHash, eventData: eventData?.event.data });
+        } else {
+          resolve({ txHash });
+        }
       }
       if (result.status.isInvalid) {
+        done = true;
+        clearTimeout(inclusionTimer);
         unsubscribe();
         reject(new Error('Transaction is invalid'));
       }
       // Only give up (and resubmit, with the pinned nonce) on terminal states where the tx
-      // definitely won't be applied. `isRetracted` is deliberately NOT terminal.
-      if (result.status.isDropped || result.status.isUsurped) {
+      // definitely won't be applied. `isRetracted` is deliberately NOT terminal, but it re-arms
+      // the inclusion deadline above so a retracted tx gets a bounded window to re-enter a block.
+      if (result.status.isDropped || result.status.isUsurped || result.status.isFinalityTimeout) {
+        done = true;
+        clearTimeout(inclusionTimer);
         unsubscribe();
         reject(new Error(`Transaction was ${result.status.type.toLowerCase()}`));
       }
     });
+    // The callback can fire before signAndSend resolves, so only arm if the transaction isn't
+    // already in a block.
+    if (!done && !inBlock) {
+      armInclusionDeadline();
+    }
   };
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      return await new Promise<string>((resolve, reject) => {
+      return await new Promise<{ txHash: string; eventData?: unknown }>((resolve, reject) => {
         assethubSigningMutex
           .runExclusive(() => runSignAndSubmit(attempt * TIP_STEP, resolve, reject))
           .catch(reject);
       });
     } catch (e) {
-      logger.warn(`Error sending asset ${asset} to ${address} (nonce ${nonce}): ${e}`);
+      logger.warn(`Error submitting extrinsic ${extrinsicName} (nonce ${nonce}): ${e}`);
       if (attempt >= MAX_ATTEMPTS - 1) {
         await fillNonceGap(logger, nonce);
         throw e;
@@ -128,5 +182,35 @@ export async function sendHubAsset(
     }
   }
 
-  return '';
+  // this case is impossible as we throw above
+  return {
+    txHash: '',
+  };
+}
+
+export async function sendHubAsset(
+  logger: Logger,
+  asset: Asset,
+  address: string,
+  amount: string,
+): Promise<string> {
+  const planckAmount = parseInt(amountToFineAmount(amount, assetDecimals(asset)));
+
+  let result;
+  if (asset === 'HubDot') {
+    result = await submitHubExtrinsic(
+      logger,
+      (api) => api.tx.balances.transferKeepAlive(address, planckAmount),
+      `balances.transferKeepAlive(${address}, ${planckAmount})`,
+    );
+  } else if (asset === 'HubUsdc' || asset === 'HubUsdt') {
+    result = await submitHubExtrinsic(
+      logger,
+      (api) => api.tx.assets.transferKeepAlive(getHubAssetId(asset), address, planckAmount),
+      `assets.transferKeepAlive(${asset}, ${address}, ${planckAmount})`,
+    );
+  } else {
+    throw new Error(`Unsupported hub asset type: ${asset}`);
+  }
+  return result.txHash;
 }
