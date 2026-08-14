@@ -23,7 +23,6 @@ use engine_sc_client::{
 };
 
 use crate::retrier::{RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY};
-use anyhow::anyhow;
 use cf_primitives::MILLISECONDS_PER_BLOCK;
 use cf_utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
 use futures::{stream, StreamExt, TryStreamExt};
@@ -120,24 +119,19 @@ where
 	async fn reset_and_continuously_vote(&self) -> Result<(), anyhow::Error> {
 		let mut rng = rand::rngs::OsRng;
 		let latest_unfinalized_block = self.state_chain_client.latest_unfinalized_block();
-		if let Some(_electoral_data) = self.state_chain_client.electoral_data(latest_unfinalized_block).await {
-			let extrinsic_data = self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::ignore_my_votes {}).await.until_in_block().await?;
+		if let Some(electoral_data) = self.state_chain_client.electoral_data(latest_unfinalized_block).await {
 
-			if let Some(electoral_data) = self.state_chain_client.electoral_data(extrinsic_data.header.into()).await {
-				stream::iter(electoral_data.current_elections).map(|(election_identifier, election_data)| {
-					let state_chain_client = &self.state_chain_client;
-					async move {
-						if election_data.option_existing_vote.is_some() {
-							state_chain_client.finalize_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::delete_vote {
-								election_identifier,
-							}).await.until_in_block().await?;
-						}
-						Ok::<_, anyhow::Error>(())
-					}
-				}).buffer_unordered(32).try_collect::<Vec<_>>().await?;
-
-				self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::stop_ignoring_my_votes {}).await.until_in_block().await?;
-			}
+            stream::iter(electoral_data.current_elections).map(|(election_identifier, election_data)| {
+                let state_chain_client = &self.state_chain_client;
+                async move {
+                    if election_data.option_existing_vote.is_some() {
+                        state_chain_client.finalize_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::delete_vote {
+                            election_identifier,
+                        }).await.until_in_block().await?;
+                    }
+                    Ok::<_, anyhow::Error>(())
+                }
+            }).buffer_unordered(32).try_collect::<Vec<_>>().await?;
 		}
 
 		let mut unfinalized_block_stream = self.state_chain_client.unfinalized_block_stream().await;
@@ -235,73 +229,68 @@ where
 
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
 					authority_count = core::cmp::max(electoral_data.authority_count, 1);
-					if electoral_data.contributing {
-						if let Some(caches) = &self.cache_invalidation_senders {
-							for sender in caches {
-								if let Err(e) = sender.send(()).await {
-									self.log(Level::WARN, &format!("Cache receiver dropped: {e}"))
-								}
-							}
-						}
 
-						let open_election_identifiers =
-							electoral_data.current_elections.keys().copied().collect::<BTreeSet<_>>();
-						for election_identifier in vote_tasks.remove_where(|election_identifier| {
-								!open_election_identifiers.contains(election_identifier)
-							}) {
-							self.log(
-								Level::DEBUG,
-								&format!(
-									"Voting task for election: '{:?}' aborted as election is no longer open.",
-									election_identifier
-								),
-							);
-						}
+                    if let Some(caches) = &self.cache_invalidation_senders {
+                        for sender in caches {
+                            if let Err(e) = sender.send(()).await {
+                                self.log(Level::WARN, &format!("Cache receiver dropped: {e}"))
+                            }
+                        }
+                    }
 
-						for (election_identifier, election_data) in electoral_data.current_elections {
-							if election_data.is_vote_desired {
-								if !vote_tasks.contains_key(&election_identifier) {
-									self.log(Level::DEBUG, &format!("Voting task for election: '{:?}' initiated.", election_identifier));
-									vote_tasks.insert(
-										election_identifier,
-										Box::pin(self.voter.request_with_limit(
-											RequestLog::new(format!("{} | {}", self.voter_name, "vote"), Some(format!("{election_identifier:?}"))),
-											Box::pin(move |client| {
-												let election_data = election_data.clone();
-												Box::pin(async move {
-													client.vote(
-														election_data.settings,
-														election_data.properties,
-													).await
-												})
-											}),
-											3,
-										))
-									);
-								} else {
-									self.log(Level::DEBUG, &format!("Voting task for election: '{:?}' not initiated as a task is already running for that election.", election_identifier));
-								}
-							}
-						}
+                    let open_election_identifiers =
+                        electoral_data.current_elections.keys().copied().collect::<BTreeSet<_>>();
+                    for election_identifier in vote_tasks.remove_where(|election_identifier| {
+                            !open_election_identifiers.contains(election_identifier)
+                        }) {
+                        self.log(
+                            Level::DEBUG,
+                            &format!(
+                                "Voting task for election: '{:?}' aborted as election is no longer open.",
+                                election_identifier
+                            ),
+                        );
+                    }
 
-						for (unprovided_shared_data_hash, reference_details) in electoral_data.unprovided_shared_data_hashes {
-							if let Some((shared_data, _)) = shared_data_cache.get(&unprovided_shared_data_hash) {
-								// We hit this branch *only if* no authority provided the full vote hence we can use a higher falure rate here (i.e. 1%)
-								// The probability of no authority submitting the shared data is then:
-								// probability of no authority submitting full vote * (probability of no authority submitting the shared data)^number of times we retry to submit the shared data
-								// which keeps decreasing exponentially (i.e. with the current values => 2 blocks delay: 1 in 40k, 3 blocks delay: 1 in 4million ...)
-								if (reference_details.created..reference_details.expires).contains(&block_info.number) && rng.gen_bool(required_full_vote_probability(authority_count, 0.01)) {
-									self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::provide_shared_data {
-										shared_data: Box::new(shared_data.clone()),
-									}).await;
-								}
-							}
-						}
-					} else {
-						// We expect this to happen when a validator joins the set, since they won't be contributing, but will be a validator.
-						// Therefore they get Some() from `electoral_data` but `contributing` is false, until we reset the voting by throwing an error here.
-						return Err(anyhow!("{} | Validator has just joined the authority set, or has been unexpectedly set as not contributing.", self.voter_name));
-					}
+                    for (election_identifier, election_data) in electoral_data.current_elections {
+                        if election_data.is_vote_desired {
+                            if !vote_tasks.contains_key(&election_identifier) {
+                                self.log(Level::DEBUG, &format!("Voting task for election: '{:?}' initiated.", election_identifier));
+                                vote_tasks.insert(
+                                    election_identifier,
+                                    Box::pin(self.voter.request_with_limit(
+                                        RequestLog::new(format!("{} | {}", self.voter_name, "vote"), Some(format!("{election_identifier:?}"))),
+                                        Box::pin(move |client| {
+                                            let election_data = election_data.clone();
+                                            Box::pin(async move {
+                                                client.vote(
+                                                    election_data.settings,
+                                                    election_data.properties,
+                                                ).await
+                                            })
+                                        }),
+                                        3,
+                                    ))
+                                );
+                            } else {
+                                self.log(Level::DEBUG, &format!("Voting task for election: '{:?}' not initiated as a task is already running for that election.", election_identifier));
+                            }
+                        }
+                    }
+
+                    for (unprovided_shared_data_hash, reference_details) in electoral_data.unprovided_shared_data_hashes {
+                        if let Some((shared_data, _)) = shared_data_cache.get(&unprovided_shared_data_hash) {
+                            // We hit this branch *only if* no authority provided the full vote hence we can use a higher falure rate here (i.e. 1%)
+                            // The probability of no authority submitting the shared data is then:
+                            // probability of no authority submitting full vote * (probability of no authority submitting the shared data)^number of times we retry to submit the shared data
+                            // which keeps decreasing exponentially (i.e. with the current values => 2 blocks delay: 1 in 40k, 3 blocks delay: 1 in 4million ...)
+                            if (reference_details.created..reference_details.expires).contains(&block_info.number) && rng.gen_bool(required_full_vote_probability(authority_count, 0.01)) {
+                                self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::provide_shared_data {
+                                    shared_data: Box::new(shared_data.clone()),
+                                }).await;
+                            }
+                        }
+                    }
 				} else {
 					self.log(Level::INFO, "Not voting as not an authority.");
 				}
