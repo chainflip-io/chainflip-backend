@@ -432,6 +432,13 @@ pub struct LiquidityProviderSafeMode {
 	pub internal_swaps_enabled: bool,
 }
 
+// Code green, to match the default of every other pallet safe mode.
+impl Default for LiquidityProviderSafeMode {
+	fn default() -> Self {
+		Self { deposit_enabled: true, withdrawal_enabled: true, internal_swaps_enabled: true }
+	}
+}
+
 impl From<LiquidityProviderSafeMode> for pallet_cf_lp::PalletSafeMode {
 	fn from(old: LiquidityProviderSafeMode) -> Self {
 		Self {
@@ -444,7 +451,14 @@ impl From<LiquidityProviderSafeMode> for pallet_cf_lp::PalletSafeMode {
 }
 
 #[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
+	Encode,
+	Decode,
+	TypeInfo,
+	Default,
+	Clone,
+	PartialEq,
+	Eq,
+	frame_support::pallet_prelude::RuntimeDebug,
 )]
 pub struct RuntimeSafeMode {
 	pub emissions: pallet_cf_emissions::PalletSafeMode,
