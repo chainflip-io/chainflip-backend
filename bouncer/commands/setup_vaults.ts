@@ -91,6 +91,7 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
 export async function createAssetHubVault(logger: Logger): Promise<AddressOrPair> {
   // Step a
   logger.info('Requesting Assethub Vault creation');
+  // The timeout must accommodate submitHubExtrinsic's full retry ladder
   const { vaultAddress: hubVaultAddress } = await runWithTimeout(
     submitHubExtrinsic(
       logger,
