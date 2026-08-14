@@ -264,13 +264,38 @@ jobs:
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
+
+          # These patches rewrite the OLD bouncer checkout, so their patterns go stale whenever
+          # OLD_BIN_COMMIT_HASH moves — and `sed -i` exits 0 whether or not it substituted
+          # anything. Fail loudly instead: a silently skipped patch reintroduces the exact
+          # failure it was added to prevent, and does so in a way that is hard to spot.
+          patch_old_bouncer() {
+            local file=$1 expr=$2 desc=$3
+            cp "$file" "$file.pre-patch"
+            sed -i "$expr" "$file"
+            if cmp -s "$file" "$file.pre-patch"; then
+              echo "::error::Pre-upgrade patch did not apply: ${desc}. Its pattern no longer matches ${{ env.OLD_BIN_COMMIT_HASH }} ($file). Update the pattern, or drop the patch if the old checkout no longer needs it."
+              exit 1
+            fi
+            rm "$file.pre-patch"
+          }
+
           # Remove after 2.3 release.
           # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc and
           # Ethereum cbBTC are the unreleased assets now, so retarget the filter to exclude
           # them instead.
-          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" bouncer/tests/rpc_tests.ts
+          patch_old_bouncer bouncer/tests/rpc_tests.ts \
+            "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" \
+            "rpc_tests unreleased-asset filter"
+
           # Apply the current Solana nonce timeout to the pre-upgrade bouncer checkout.
-          sed -i "/'CheckAvailabilityAllSolanaNonces'/,/^  );$/ s/5 \* ciTimeoutFactor/30 * ciTimeoutFactor/" bouncer/tests/fast_bouncer.test.ts
+          # Patched to an absolute value: the old checkout's `ciTimeoutFactor` differs from the
+          # current one, so a factor-scaled patch lands below the check's own ~60s poll budget and
+          # the timeout fires before the check can report the actual nonce count.
+          patch_old_bouncer bouncer/tests/fast_bouncer.test.ts \
+            "/'CheckAvailabilityAllSolanaNonces'/,/^  );$/ s/[0-9][0-9]* \* ciTimeoutFactor/90/" \
+            "Solana nonce check timeout"
+
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
@@ -335,11 +360,18 @@ jobs:
           ./commands/setup_new_cbbtc_asset.ts
           ./test_commands/all_cuncurrent_tests.sh
 
+      # Globbed so that engines restarted mid-run are included. The binary upgrade writes to
+      # `chainflip-engine-binaries-upgrade.*log`, which the previous fixed paths missed entirely,
+      # hiding the logs for the phase most likely to fail.
       - name: Print chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/*/chainflip-engine.*log
+          for log in /tmp/chainflip/*/chainflip-engine*.log; do
+            echo "::group::$log"
+            cat "$log"
+            echo "::endgroup::"
+          done
 
       - name: Print solana logs ☀️
         if: inputs.run-job || failure() || cancelled()
@@ -347,18 +379,6 @@ jobs:
         run: |
           cat /tmp/solana/*.log
           cat /tmp/solana/test-ledger/validator.log
-
-      - name: Print during-upgrade chainflip-engine logs 🚗
-        if: inputs.run-job || failure() || cancelled()
-        continue-on-error: true
-        run: |
-          cat /tmp/chainflip/*/chainflip-engine-upgrade-test-1.*log
-
-      - name: Print post-upgrade chainflip-engine logs 🚗
-        if: inputs.run-job || failure() || cancelled()
-        continue-on-error: true
-        run: |
-          cat /tmp/chainflip/*/chainflip-engine-upgrade-test-2.*log
 
       - name: Print chainflip-node logs 📡
         if: inputs.run-job || failure() || cancelled()

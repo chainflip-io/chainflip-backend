@@ -2,7 +2,7 @@ import { describe } from 'vitest';
 import { testBoostingSwap } from 'tests/boost';
 import { testVaultSwap } from 'tests/vault_swap_tests';
 import { checkSolEventAccountsClosure } from 'shared/vault_swap/sol_vault_swap';
-import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
+import { checkAvailabilityAllSolanaNonces, solanaNoncesPollBudgetSeconds } from 'shared/utils';
 import { checkNoWitnessingTaskRestarts } from 'shared/check_witnessing_task_restarts';
 import { checkNoTransferFallbacks } from 'shared/check_transfer_fallbacks';
 import { testAllSwaps } from 'tests/all_swaps';
@@ -82,10 +82,12 @@ describe('ConcurrentTests', () => {
 
   // Post test checks
   serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 5 * ciTimeoutFactor);
+  // Not scaled by `ciTimeoutFactor`: the test just polls for a fixed wall-clock budget, so the
+  // timeout only needs headroom over that budget for the initial connection and final query.
   serialTest(
     'CheckAvailabilityAllSolanaNonces',
     checkAvailabilityAllSolanaNonces,
-    30 * ciTimeoutFactor,
+    solanaNoncesPollBudgetSeconds + 30,
   );
   serialTest('CheckNoWitnessingTaskRestarts', checkNoWitnessingTaskRestarts, 5 * ciTimeoutFactor);
   serialTest('CheckNoTransferFallbacks', checkNoTransferFallbacks, 10 * ciTimeoutFactor);

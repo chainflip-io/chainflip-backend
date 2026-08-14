@@ -1486,13 +1486,18 @@ export async function getNodesInfo(numberOfNodes: 1 | 3) {
   return { SELECTED_NODES, nodeCount };
 }
 
+// How long `checkAvailabilityAllSolanaNonces` waits for every nonce to be returned to the
+// available pool.
+export const solanaNoncesPollBudgetSeconds = 60;
+
 // Check that all Solana Nonces are available
 export async function checkAvailabilityAllSolanaNonces(testContext: TestContext) {
   testContext.info('Checking Solana Nonce Availability');
 
   // Check that all Solana nonces are available
   await using chainflip = await getChainflipPolkadotApi();
-  const maxRetries = 10; // 60 seconds
+  const pollIntervalSeconds = 6;
+  const maxRetries = solanaNoncesPollBudgetSeconds / pollIntervalSeconds;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1504,8 +1509,58 @@ export async function checkAvailabilityAllSolanaNonces(testContext: TestContext)
         `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces + solanaNumberOfAdditionalNonces}`,
       );
     } else {
-      await sleep(6000);
+      await sleep(pollIntervalSeconds * 1000);
     }
+  }
+}
+
+// Wait until no broadcast is in flight on any chain.
+//
+// A broadcast holds chain resources between initiation and witnessing — notably a Solana durable
+// nonce, which only returns to the available pool once the nonce-tracking election sees the
+// transaction land. Restarting the engines mid-flight can lose the broadcast request outright:
+// `CfeEvents` is a per-block buffer that is not replayed on startup, and on a single-node network
+// one missed request is already "all authorities failed", so the broadcast aborts and its nonce is
+// leaked for the rest of the run.
+//
+// Broadcasters are discovered from the runtime metadata rather than hardcoded, so this works
+// against both the pre- and post-upgrade runtimes.
+export async function waitForNoPendingBroadcasts(
+  logger: Logger = globalLogger,
+  timeoutSeconds = 120,
+) {
+  await using chainflip = await getChainflipPolkadotApi();
+
+  const broadcasters = Object.keys(chainflip.query).filter(
+    (pallet) => pallet.endsWith('Broadcaster') && chainflip.query[pallet].pendingBroadcasts,
+  );
+
+  const pollIntervalSeconds = 3;
+  const maxAttempts = Math.ceil(timeoutSeconds / pollIntervalSeconds);
+  for (let attempt = 1; ; attempt++) {
+    const pending = (
+      await Promise.all(
+        broadcasters.map(async (pallet) => ({
+          pallet,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ids: ((await chainflip.query[pallet].pendingBroadcasts()).toJSON() as any[]) ?? [],
+        })),
+      )
+    ).filter(({ ids }) => ids.length > 0);
+
+    if (pending.length === 0) {
+      logger.info('No pending broadcasts remain.');
+      return;
+    }
+
+    const summary = pending.map(({ pallet, ids }) => `${pallet}: [${ids}]`).join(', ');
+    if (attempt >= maxAttempts) {
+      throw new Error(
+        `Timed out after ${timeoutSeconds}s waiting for pending broadcasts to clear. Still pending: ${summary}`,
+      );
+    }
+    logger.info(`Waiting for pending broadcasts to clear (${summary})`);
+    await sleep(pollIntervalSeconds * 1000);
   }
 }
 
