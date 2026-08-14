@@ -1061,21 +1061,22 @@ pub trait CommKeyBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey);
 }
 
-/// Provides an interface to access the amount of Flip that is ready to be burned,
-/// moved to the state-chain-gateway or to be offsetted against the burn
-pub trait FlipBurnOrMoveInfo {
+/// Flip that is pending a movement off-chain: either burned, or transferred from the Vault to the
+/// State Chain Gateway.
+pub trait FlipBurnOrMove {
+	/// Adjusts the total Flip to be burned. Negative amounts are offset against the next burn.
+	fn add_to_flip_to_burn(amount: i128);
+
 	/// Takes the available Flip and returns it.
 	fn take_flip_to_burn() -> i128;
 
-	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
-}
-
-/// Allows Flip held in the Vault to be earmarked for transfer to the State Chain Gateway.
-///
-/// Whenever Flip is credited to an on-chain balance without a corresponding Gateway deposit, the
-/// same amount must be earmarked here so that the Gateway remains fully backed.
-pub trait MoveFlipToGateway {
+	/// Earmarks Flip held in the Vault for transfer to the State Chain Gateway.
+	///
+	/// Whenever Flip is credited to an on-chain balance without a corresponding Gateway deposit,
+	/// the same amount must be earmarked here so that the Gateway remains fully backed.
 	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount);
+
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
 }
 
 /// The trait implementation is intentionally no-op by default

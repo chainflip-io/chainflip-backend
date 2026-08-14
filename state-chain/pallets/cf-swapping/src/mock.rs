@@ -24,7 +24,8 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
-		fee_payment::MockFeePayment, ingress_egress_fee_handler::MockIngressEgressFeeHandler,
+		fee_payment::MockFeePayment, flip_burn_info::MockFlipBurnOrMoveInfo,
+		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		lending_pools::MockLendingSystemApi, minimum_funding::MockMinimumFundingProvider,
 		pool_price_api::MockPoolPriceApi, price_feed_api::MockPriceFeedApi,
 		withdrawal_address_restriction::MockWithdrawalAddressRestriction,
@@ -235,6 +236,7 @@ impl pallet_cf_swapping::Config for Test {
 	type PoolPriceApi = MockPoolPriceApi;
 	type PriceFeedApi = MockPriceFeedApi;
 	type FundAccount = MockFundingInfo<Test>;
+	type FlipBurnOrMove = MockFlipBurnOrMoveInfo;
 	type RuntimeCall = RuntimeCall;
 	type ChainflipNetwork = MockChainflipNetworkProvider;
 	type MinimumFunding = MockMinimumFundingProvider;

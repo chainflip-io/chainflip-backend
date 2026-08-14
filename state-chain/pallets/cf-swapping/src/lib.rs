@@ -39,7 +39,7 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
 	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
-	FeePayment, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi,
+	FeePayment, FlipBurnOrMove, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi,
 	LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
 	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 	WithdrawalAddressRestriction,
@@ -88,7 +88,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const STORAGE_VERSION_U16: u16 = 17;
+pub const STORAGE_VERSION_U16: u16 = 18;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
@@ -672,6 +672,9 @@ pub mod pallet {
 			Amount = <Self as Chainflip>::Amount,
 		>;
 
+		/// Accounting for Flip pending a burn or a transfer to the State Chain Gateway.
+		type FlipBurnOrMove: FlipBurnOrMove;
+
 		type PoolPriceApi: PoolPriceProvider;
 
 		type PriceFeedApi: PriceFeedApi;
@@ -721,14 +724,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn maximum_swap_amount)]
 	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
-
-	/// FLIP ready to be burned.
-	#[pallet::storage]
-	pub type FlipToBurn<T: Config> = StorageValue<_, i128, ValueQuery>;
-
-	/// FLIP ready to be sent to gateway.
-	#[pallet::storage]
-	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	/// Interval at which we buy FLIP from swap fees in order to distribute as rewards.
 	#[pallet::storage]
@@ -2656,9 +2651,7 @@ pub mod pallet {
 													-deficit,
 												);
 											} else {
-												FlipToBurn::<T>::mutate(|total| {
-													total.saturating_reduce(deficit);
-												});
+												T::FlipBurnOrMove::add_to_flip_to_burn(-deficit);
 											}
 										} else {
 											T::FundAccount::fund_account(
@@ -2687,11 +2680,9 @@ pub mod pallet {
 								output_amount.try_into().unwrap_or(i128::MAX),
 							);
 						} else {
-							FlipToBurn::<T>::mutate(|total| {
-								total.saturating_accrue(
-									output_amount.try_into().unwrap_or(i128::MAX),
-								);
-							});
+							T::FlipBurnOrMove::add_to_flip_to_burn(
+								output_amount.try_into().unwrap_or(i128::MAX),
+							);
 						}
 					} else {
 						log_or_panic!(
@@ -3154,13 +3145,11 @@ pub mod pallet {
 			amount: AssetAmount,
 		) -> AssetAmount {
 			// Add flip that was just distributed to validators, to be sent to the gateway
-			FlipToBeSentToGateway::<T>::mutate(|total| {
-				total.saturating_accrue(amount);
-			});
+			T::FlipBurnOrMove::add_flip_to_be_sent_to_gateway(amount);
 			match with_storage_layer(|| {
 				T::EgressHandler::schedule_egress(
 					cf_chains::assets::any::Asset::Flip,
-					FlipToBeSentToGateway::<T>::take(),
+					T::FlipBurnOrMove::take_flip_to_be_sent_to_gateway(),
 					ForeignChainAddress::Eth(state_chain_gateway_address),
 					None,
 				)
@@ -3176,7 +3165,7 @@ pub mod pallet {
 				)
 			}) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld, .. }) => {
-					FlipToBeSentToGateway::<T>::put(fee_withheld);
+					T::FlipBurnOrMove::add_flip_to_be_sent_to_gateway(fee_withheld);
 					Self::deposit_event(Event::SentFlipToGateway {
 						amount: egress_amount,
 						egress_id,
@@ -3563,23 +3552,6 @@ impl<T: Config> DeregistrationCheck for PendingSwapDeregistrationCheck<T> {
 		);
 
 		Ok(())
-	}
-}
-
-impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
-	fn take_flip_to_burn() -> i128 {
-		FlipToBurn::<T>::take()
-	}
-	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
-		FlipToBeSentToGateway::<T>::take()
-	}
-}
-
-impl<T: Config> cf_traits::MoveFlipToGateway for Pallet<T> {
-	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount) {
-		FlipToBeSentToGateway::<T>::mutate(|total| {
-			total.saturating_accrue(amount);
-		});
 	}
 }
 

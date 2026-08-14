@@ -37,7 +37,7 @@ use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	FundAccount, Funding, FundingSource, GetMinimumFunding, MoveFlipToGateway, RedemptionCheck,
+	FlipBurnOrMove, FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck,
 	SpawnAccount,
 };
 use cf_utilities::derive_common_traits;
@@ -417,8 +417,8 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
 
-		/// Earmarks Flip held in the Vault for transfer to the State Chain Gateway.
-		type MoveFlipToGateway: MoveFlipToGateway;
+		/// Accounting for Flip pending a burn or a transfer to the State Chain Gateway.
+		type FlipBurnOrMove: FlipBurnOrMove;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -1209,7 +1209,7 @@ impl<T: Config> FundAccount for Pallet<T> {
 			FundingSource::FreeBalance |
 			FundingSource::Swap { .. } |
 			FundingSource::InitialFunding { .. } =>
-				T::MoveFlipToGateway::add_flip_to_be_sent_to_gateway(amount.into()),
+				T::FlipBurnOrMove::add_flip_to_be_sent_to_gateway(amount.into()),
 		}
 
 		Self::deposit_event(Event::Funded {

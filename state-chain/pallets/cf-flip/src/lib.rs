@@ -33,10 +33,10 @@ use scale_info::TypeInfo;
 use sp_runtime::traits::Saturating;
 pub use weights::WeightInfo;
 
-use cf_primitives::EpochIndex;
+use cf_primitives::{AssetAmount, EpochIndex};
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationCheck, EpochInfo, FeePayment, FundingInfo, Issuance,
-	RewardsDistribution, Slashing,
+	AccountInfo, Bonding, DeregistrationCheck, EpochInfo, FeePayment, FlipBurnOrMove, FundingInfo,
+	Issuance, RewardsDistribution, Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
@@ -186,6 +186,14 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type FlipToDistribute<T: Config> = StorageValue<_, i128, ValueQuery>;
+
+	/// Flip ready to be burned. Negative values are offset against the next burn.
+	#[pallet::storage]
+	pub type FlipToBurn<T: Config> = StorageValue<_, i128, ValueQuery>;
+
+	/// Flip held in the Vault that is earmarked for transfer to the State Chain Gateway.
+	#[pallet::storage]
+	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	/// The epoch from which flip 2.1 activates.
 	/// Defaults to u32::MAX (effectively disabled) until set via governance.
@@ -626,6 +634,24 @@ impl<T: Config> Pallet<T> {
 		} else {
 			Self::burn(amount)
 		}
+	}
+}
+
+impl<T: Config> FlipBurnOrMove for Pallet<T> {
+	fn add_to_flip_to_burn(amount: i128) {
+		FlipToBurn::<T>::mutate(|total| total.saturating_accrue(amount));
+	}
+
+	fn take_flip_to_burn() -> i128 {
+		FlipToBurn::<T>::take()
+	}
+
+	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount) {
+		FlipToBeSentToGateway::<T>::mutate(|total| total.saturating_accrue(amount));
+	}
+
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
+		FlipToBeSentToGateway::<T>::take()
 	}
 }
 
