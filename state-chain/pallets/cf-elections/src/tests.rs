@@ -255,7 +255,7 @@ impl ElectoralSystemRunnerTestExt for TestRunner<TestContext> {
 fn consensus_state_transitions() {
 	const VOTE: AuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
 
-	election_test_ext(TestSetup { num_authorities: 3, ..Default::default() })
+	election_test_ext(TestSetup { num_authorities: 5, ..Default::default() })
 		.new_election()
 		// Initial consensus state of the mock election system is `None`.
 		.expect_consensus(ConsensusStatus::None)
