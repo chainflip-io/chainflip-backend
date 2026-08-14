@@ -1198,6 +1198,7 @@ impl<T: Config> FundAccount for Pallet<T> {
 	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, source: FundingSource) {
 		let total_balance = Self::add_funds_to_account(&account_id, amount);
 		match source {
+			// Deposited directly into the Gateway, so these funds are already backed.
 			FundingSource::EthTransaction { funder, .. } =>
 				if RestrictedAddresses::<T>::contains_key(funder) {
 					RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
@@ -1206,11 +1207,12 @@ impl<T: Config> FundAccount for Pallet<T> {
 							.or_insert(amount);
 					});
 				},
-			// These funds are backed by Flip in the Vault rather than in the Gateway, so an
-			// equivalent amount must be moved across to keep the Gateway fully backed.
-			FundingSource::FreeBalance =>
+			// Every other source credits Flip that is held in the Vault, so an equivalent amount
+			// must be moved across to keep the Gateway fully backed.
+			FundingSource::FreeBalance |
+			FundingSource::Swap { .. } |
+			FundingSource::InitialFunding { .. } =>
 				T::MoveFlipToGateway::add_flip_to_be_sent_to_gateway(amount.into()),
-			FundingSource::Swap { .. } | FundingSource::InitialFunding { .. } => {},
 		}
 
 		Self::deposit_event(Event::Funded {

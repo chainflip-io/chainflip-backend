@@ -2660,11 +2660,6 @@ pub mod pallet {
 													total.saturating_reduce(deficit);
 												});
 											}
-											FlipToBeSentToGateway::<T>::mutate(|total| {
-												total.saturating_accrue(
-													*flip_to_subtract_from_swap_output,
-												);
-											});
 										} else {
 											T::FundAccount::fund_account(
 												account_id.clone(),
@@ -2675,9 +2670,6 @@ pub mod pallet {
 													.into(),
 												FundingSource::Swap { swap_request_id },
 											);
-											FlipToBeSentToGateway::<T>::mutate(|total| {
-												total.saturating_accrue(output_amount);
-											});
 										}
 									} else {
 										log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");

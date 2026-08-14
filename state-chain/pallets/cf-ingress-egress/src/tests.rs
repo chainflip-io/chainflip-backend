@@ -66,8 +66,9 @@ use cf_traits::{
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BalanceApi, BroadcastOutcomeHandler,
 	DepositApi, EgressApi, EpochInfo,
 	ExpiryBehaviour::RefundIfExpires,
-	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, PriceLimitsAndExpiry, SafeMode,
-	ScheduledEgressDetails, SwapOutputAction, SwapRequestType, INITIAL_FLIP_FUNDING,
+	FetchesTransfersLimitProvider, FundingInfo, FundingSource, GetBlockHeight,
+	PriceLimitsAndExpiry, SafeMode, ScheduledEgressDetails, SwapOutputAction, SwapRequestType,
+	INITIAL_FLIP_FUNDING,
 };
 use std::collections::{BTreeMap, HashSet};
 
@@ -3247,6 +3248,68 @@ fn additional_action_correctly_prefund_and_create_account() {
 		));
 		assert_eq!(frame_system::Pallet::<Test>::account_nonce(NEW_ACCOUNT), 1);
 		assert_eq!(MockFundingInfo::<Test>::balance(&NEW_ACCOUNT), INITIAL_FLIP_FUNDING);
+
+		// These funds come from the Vault, so the source must identify them as such - the funding
+		// pallet keys the Vault -> Gateway earmark off it. The rest of the swap output is
+		// earmarked separately when the swap completes and funds the account again.
+		assert_eq!(
+			MockFundingInfo::<Test>::last_funding_source(),
+			Some(FundingSource::InitialFunding { channel_id: Some(0), asset: Asset::Eth }),
+		);
+	});
+}
+
+#[test]
+fn additional_action_prefunds_from_a_flip_deposit_without_swapping() {
+	const DEPOSIT_AMOUNT: AssetAmount = FLIPPERINOS_PER_FLIP * 100;
+	const FLIP_TO_CREDIT: AssetAmount = FLIPPERINOS_PER_FLIP * 10;
+	const NEW_ACCOUNT: u64 = 0;
+
+	let full_witness = || {
+		EthereumIngressEgress::process_full_witness_deposit_inner(
+			None,
+			EthAsset::Flip,
+			DEPOSIT_AMOUNT,
+			Default::default(),
+			BoostStatus::NotBoosted,
+			0,
+			None,
+			ChannelAction::LiquidityProvision {
+				lp_account: NEW_ACCOUNT,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+				additional_action: Some(AdditionalDepositAction::FundFlip {
+					flip_amount_to_credit: FLIP_TO_CREDIT,
+				}),
+			},
+			0,
+			DepositOrigin::DepositChannel {
+				deposit_address: Default::default(),
+				channel_id: 0,
+				deposit_block_height: 0,
+				broker_id: BROKER,
+			},
+		)
+	};
+
+	new_test_ext().execute_with(|| {
+		assert!(full_witness().is_ok());
+
+		// The deposit is already Flip, so it is credited directly rather than swapped.
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+		assert_eq!(MockFundingInfo::<Test>::balance(&NEW_ACCOUNT), FLIP_TO_CREDIT);
+
+		// These funds come straight from the Vault, so the source must identify them as such -
+		// the funding pallet keys the Vault -> Gateway earmark off it.
+		assert_eq!(
+			MockFundingInfo::<Test>::last_funding_source(),
+			Some(FundingSource::InitialFunding { channel_id: Some(0), asset: Asset::Flip }),
+		);
+
+		// Whatever is left over lands in the free balance.
+		assert_eq!(
+			MockBalance::get_balance(&NEW_ACCOUNT, Asset::Flip),
+			DEPOSIT_AMOUNT - FLIP_TO_CREDIT
+		);
 	});
 }
 
