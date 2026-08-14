@@ -45,7 +45,7 @@ use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
 	sp_runtime::{
-		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
+		traits::{One, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
 	storage::TransactionOutcome,
@@ -57,7 +57,7 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_runtime::DispatchError;
+use sp_runtime::{traits::CheckedSub, DispatchError};
 use sp_std::{
 	cmp::{max, min},
 	collections::btree_map::BTreeMap,
@@ -216,9 +216,12 @@ impl<T: Config> Redemption<T> {
 			RedemptionAmount::Exact(amount) => (amount.saturating_add(applied_fee), amount),
 		};
 
-		debug_assert_eq!(
-			debit_amount.checked_sub(&redeem_amount),
-			Some(applied_fee),
+		debug_assert!(
+			if require_deregistration {
+				debit_amount.checked_sub(&redeem_amount) == Some(applied_fee)
+			} else {
+				true
+			},
 			"Debit amount must equal redeem amount plus redemption fee",
 		);
 
