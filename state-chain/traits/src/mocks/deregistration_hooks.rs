@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::DeregistrationHooks;
+use cf_primitives::AccountRole;
 use codec::{Decode, Encode};
 use sp_std::marker::PhantomData;
 
@@ -29,6 +30,7 @@ impl<Id> MockPallet for MockDeregistrationHooks<Id> {
 
 const SHOULD_FAIL: &[u8] = b"SHOULD_FAIL";
 const ON_DEREGISTERED_CALLED: &[u8] = b"ON_DEREGISTERED_CALLED";
+const ROLE_AT_ON_DEREGISTERED: &[u8] = b"ROLE_AT_ON_DEREGISTERED";
 
 impl<Id: Encode + Decode> MockDeregistrationHooks<Id> {
 	pub fn set_should_fail(account_id: &Id, should_fail: bool) {
@@ -45,6 +47,10 @@ impl<Id: Encode + Decode> MockDeregistrationHooks<Id> {
 		<Self as MockPalletStorage>::get_storage::<_, ()>(ON_DEREGISTERED_CALLED, account_id)
 			.is_some()
 	}
+	/// The role passed to `on_deregistered` the last time it was called for this account.
+	pub fn role_at_on_deregistered(account_id: &Id) -> Option<AccountRole> {
+		<Self as MockPalletStorage>::get_storage(ROLE_AT_ON_DEREGISTERED, account_id)
+	}
 }
 
 impl<Id: Encode + Decode> DeregistrationHooks for MockDeregistrationHooks<Id> {
@@ -59,7 +65,8 @@ impl<Id: Encode + Decode> DeregistrationHooks for MockDeregistrationHooks<Id> {
 		}
 	}
 
-	fn on_deregistered(account_id: &Self::AccountId) {
+	fn on_deregistered(account_id: &Self::AccountId, account_role: AccountRole) {
 		<Self as MockPalletStorage>::put_storage(ON_DEREGISTERED_CALLED, account_id, ());
+		<Self as MockPalletStorage>::put_storage(ROLE_AT_ON_DEREGISTERED, account_id, account_role);
 	}
 }

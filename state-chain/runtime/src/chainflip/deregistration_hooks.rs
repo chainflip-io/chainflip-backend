@@ -64,8 +64,8 @@ impl DeregistrationHooks for RuntimeDeregistrationHooks {
 		}
 	}
 
-	fn on_deregistered(account_id: &Self::AccountId) {
-		if AccountRoles::account_role(account_id) == AccountRole::LiquidityProvider {
+	fn on_deregistered(account_id: &Self::AccountId, account_role: AccountRole) {
+		if account_role == AccountRole::LiquidityProvider {
 			pallet_cf_asset_balances::Pallet::<Runtime>::clear_refund_addresses(account_id);
 		}
 	}

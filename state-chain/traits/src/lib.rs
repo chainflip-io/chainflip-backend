@@ -973,7 +973,7 @@ pub trait DeregistrationHooks {
 
 	/// Called on successful deregistration to possibly cleanup other state associated to the
 	/// deregistered account
-	fn on_deregistered(_account_id: &Self::AccountId) {}
+	fn on_deregistered(_account_id: &Self::AccountId, _account_role: AccountRole) {}
 }
 
 impl<
@@ -992,10 +992,10 @@ impl<
 			.and_then(|()| C::check(account_id).map_err(Into::into))
 	}
 
-	fn on_deregistered(account_id: &Self::AccountId) {
-		A::on_deregistered(account_id);
-		B::on_deregistered(account_id);
-		C::on_deregistered(account_id);
+	fn on_deregistered(account_id: &Self::AccountId, account_role: AccountRole) {
+		A::on_deregistered(account_id, account_role);
+		B::on_deregistered(account_id, account_role);
+		C::on_deregistered(account_id, account_role);
 	}
 }
 

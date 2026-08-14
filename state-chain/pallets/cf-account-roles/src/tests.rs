@@ -237,11 +237,11 @@ fn on_deregistered_sees_the_role_being_deregistered() {
 			&ALICE
 		));
 
-		// `on_deregistered` must see the role that is being deregistered, not
-		// `Unregistered` - i.e. the role must not already have been cleared from storage
-		// by the time the hook runs.
+		// `on_deregistered` must be told the role that was deregistered, not `Unregistered`
+		// - i.e. it must receive the role explicitly, since by the time the hook runs it has
+		// already been cleared from storage.
 		assert_eq!(
-			ACCOUNT_ROLE_AT_ON_DEREGISTERED.with(|role| *role.borrow()),
+			MockDeregistrationHooks::role_at_on_deregistered(&ALICE),
 			Some(AccountRole::LiquidityProvider),
 		);
 	});
