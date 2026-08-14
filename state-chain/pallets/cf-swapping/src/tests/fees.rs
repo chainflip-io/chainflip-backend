@@ -757,7 +757,7 @@ fn network_fee_swap_gets_burnt() {
 		.execute_with(|| {
 			Swapping::init_network_fee_swap_request(INPUT_ASSET, AMOUNT);
 
-			assert_eq!(FlipToBurn::<Test>::get(), 0);
+			assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_burn(), 0);
 
 			assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_some());
 
@@ -778,7 +778,10 @@ fn network_fee_swap_gets_burnt() {
 		})
 		.then_process_blocks_until_block(SWAP_BLOCK)
 		.then_execute_with(|_| {
-			assert_eq!(FlipToBurn::<Test>::get(), (AMOUNT * DEFAULT_SWAP_RATE).try_into().unwrap());
+			assert_eq!(
+				MockFlipBurnOrMoveInfo::peek_flip_to_burn(),
+				(AMOUNT * DEFAULT_SWAP_RATE).try_into().unwrap()
+			);
 			assert_swaps_queue_is_empty();
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapExecuted { .. }),);

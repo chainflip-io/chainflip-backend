@@ -253,6 +253,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
 	type FundAccount = Funding;
+	type FlipBurnOrMove = Flip;
 	type MinimumFunding = Funding;
 	type RuntimeCall = RuntimeCall;
 	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
@@ -780,7 +781,7 @@ impl pallet_cf_funding::Config for Runtime {
 	type RedemptionChecker = Validator;
 	type EthereumSCApi = crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>;
 	type SafeMode = RuntimeSafeMode;
-	type MoveFlipToGateway = Swapping;
+	type FlipBurnOrMove = Flip;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
 
@@ -814,7 +815,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = DelegatedRewardsDistribution<Runtime>;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EvmEnvironment;
-	type FlipToBurnOrMove = Swapping;
+	type FlipToBurnOrMove = Flip;
 	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
