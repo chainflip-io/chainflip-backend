@@ -1031,12 +1031,15 @@ pub trait BroadcastAnyChainGovKey {
 pub trait CommKeyBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey);
 }
+
 /// Allows Flip held in the Vault to be earmarked for transfer to the State Chain Gateway.
 ///
 /// Whenever Flip is credited to an on-chain balance without a corresponding Gateway deposit, the
 /// same amount must be earmarked here so that the Gateway remains fully backed.
 pub trait MoveFlipToGateway {
 	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount);
+
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
 }
 
 /// The trait implementation is intentionally no-op by default
