@@ -112,7 +112,7 @@ use cf_traits::{
 };
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
-pub use deregistration_hooks::RuntimeDeregistrationCheck;
+pub use deregistration_hooks::RuntimeDeregistrationHooks;
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
