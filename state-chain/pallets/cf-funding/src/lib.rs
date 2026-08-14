@@ -34,7 +34,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset, AssetAmount};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	FundAccount, Funding, FundingSource, GetMinimumFunding, MoveFlipToGateway, RedemptionCheck,
@@ -1195,6 +1195,7 @@ impl<T: Config> FundAccount for Pallet<T> {
 	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, source: FundingSource) {
 		let total_balance = Self::add_funds_to_account(&account_id, amount);
 		match source {
+			// Deposited directly into the Gateway, so these funds are already backed.
 			FundingSource::EthTransaction { funder, .. } =>
 				if RestrictedAddresses::<T>::contains_key(funder) {
 					RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
@@ -1203,17 +1204,12 @@ impl<T: Config> FundAccount for Pallet<T> {
 							.or_insert(amount);
 					});
 				},
-			// These funds are backed by Flip in the Vault rather than in the Gateway, so an
-			// equivalent amount must be moved across to keep the Gateway fully backed.
-			//
-			// The same applies to a Flip deposit at account creation, which is credited straight
-			// from the Vault. Account creation with any other asset instead reaches the account
-			// via a swap, and the swap output action earmarks the full output itself - so
-			// earmarking here as well would double-count it.
+			// Every other source credits Flip that is held in the Vault, so an equivalent amount
+			// must be moved across to keep the Gateway fully backed.
 			FundingSource::FreeBalance |
-			FundingSource::InitialFunding { asset: Asset::Flip, .. } =>
+			FundingSource::Swap { .. } |
+			FundingSource::InitialFunding { .. } =>
 				T::MoveFlipToGateway::add_flip_to_be_sent_to_gateway(amount.into()),
-			FundingSource::Swap { .. } | FundingSource::InitialFunding { .. } => {},
 		}
 
 		Self::deposit_event(Event::Funded {

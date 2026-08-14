@@ -19,7 +19,7 @@ use crate::{
 	PendingRedemptions, Redemption, RedemptionAmount, RedemptionTax, RestrictedAddresses,
 	RestrictedBalances,
 };
-use cf_primitives::{Asset, FlipBalance};
+use cf_primitives::{Asset, FlipBalance, SwapRequestId};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
@@ -2831,27 +2831,28 @@ fn funding_from_free_balance_earmarks_a_transfer_to_the_gateway() {
 	});
 }
 
+/// Only a deposit into the Gateway arrives already backed. Every other source credits Flip that
+/// is sitting in the Vault, so it must be earmarked for transfer to keep the Gateway whole.
 #[test]
-fn only_flip_account_creation_deposits_are_earmarked() {
+fn every_source_but_a_gateway_deposit_is_earmarked() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 1_000;
 
-		// Account creation with a non-Flip deposit funds the account up front and reaches it via
-		// a swap, which earmarks the full swap output itself. Earmarking here too would
-		// double-count.
-		Funding::fund_account(
-			ALICE,
-			AMOUNT,
+		for (i, source) in [
 			FundingSource::InitialFunding { channel_id: Some(1), asset: Asset::Eth },
-		);
-		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), 0);
-
-		// A Flip deposit is credited straight from the Vault, so it must be earmarked.
-		Funding::fund_account(
-			BOB,
-			AMOUNT,
 			FundingSource::InitialFunding { channel_id: Some(2), asset: Asset::Flip },
-		);
-		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), AMOUNT);
+			FundingSource::Swap { swap_request_id: SwapRequestId(1) },
+			FundingSource::FreeBalance,
+		]
+		.into_iter()
+		.enumerate()
+		{
+			Funding::fund_account(ALICE, AMOUNT, source.clone());
+			assert_eq!(
+				MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(),
+				AMOUNT * (i as u128 + 1),
+				"expected {source:?} to be earmarked"
+			);
+		}
 	});
 }

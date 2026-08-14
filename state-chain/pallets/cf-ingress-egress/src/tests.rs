@@ -3249,9 +3249,9 @@ fn additional_action_correctly_prefund_and_create_account() {
 		assert_eq!(frame_system::Pallet::<Test>::account_nonce(NEW_ACCOUNT), 1);
 		assert_eq!(MockFundingInfo::<Test>::balance(&NEW_ACCOUNT), INITIAL_FLIP_FUNDING);
 
-		// The swap output action earmarks the full swap output, so these funds must not be
-		// earmarked again by the funding pallet. See
-		// `only_flip_account_creation_deposits_are_earmarked`.
+		// These funds come from the Vault, so the source must identify them as such - the funding
+		// pallet keys the Vault -> Gateway earmark off it. The rest of the swap output is
+		// earmarked separately when the swap completes and funds the account again.
 		assert_eq!(
 			MockFundingInfo::<Test>::last_funding_source(),
 			Some(FundingSource::InitialFunding { channel_id: Some(0), asset: Asset::Eth }),
