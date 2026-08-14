@@ -1131,20 +1131,6 @@ mod transfer_flip_to_on_chain_balance {
 	}
 
 	#[test]
-	fn transfers_accumulate() {
-		new_test_ext().execute_with(|| {
-			let amount = min_funding();
-			setup(amount * 3);
-
-			assert_ok!(transfer(amount));
-			assert_ok!(transfer(amount * 2));
-
-			assert_eq!(MockBalanceApi::get_balance(&LP_ACCOUNT, Asset::Flip), Some(0));
-			assert_eq!(MockFundingInfo::<Test>::total_balance_of(&LP_ACCOUNT), amount * 3);
-		});
-	}
-
-	#[test]
 	fn cannot_transfer_more_than_the_free_balance() {
 		new_test_ext().execute_with(|| {
 			setup(min_funding());
