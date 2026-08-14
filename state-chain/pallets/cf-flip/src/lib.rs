@@ -656,6 +656,11 @@ impl<T: Config> FeePayment for Pallet<T> {
 		Pallet::<T>::settle(account_id, Pallet::<T>::mint(amount).into());
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
+	fn activate_flip_2_1() {
+		FeeRewardsActivationEpoch::<T>::set(T::EpochInfo::epoch_index());
+	}
+
 	fn try_take_fee(
 		account_id: &Self::AccountId,
 		amount: Self::Amount,

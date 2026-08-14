@@ -21,8 +21,10 @@ use crate::{
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
-	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, Chainflip, FundAccount, SetSafeMode, Slashing,
+	mocks::{
+		account_role_registry::MockAccountRoleRegistry, flip_burn_info::MockFlipBurnOrMoveInfo,
+	},
+	AccountInfo, AccountRoleRegistry, Bonding, Chainflip, FundAccount, SetSafeMode, Slashing,
 };
 use sp_core::H160;
 
@@ -2701,4 +2703,27 @@ pub mod sub_accounts {
 			assert!(frame_system::Pallet::<Test>::account_exists(&sub_account_id));
 		});
 	}
+}
+
+#[test]
+fn funding_from_free_balance_earmarks_a_transfer_to_the_gateway() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 1_000;
+
+		// Funds arriving via the Gateway are already backed, so nothing is earmarked.
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_DUMMY_ADDR },
+		);
+		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), 0);
+
+		// Funds moved from a free balance are backed by Flip in the Vault, so the same amount
+		// must be earmarked for transfer to the Gateway.
+		Funding::fund_account(ALICE, AMOUNT, FundingSource::FreeBalance);
+		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), AMOUNT);
+
+		Funding::fund_account(BOB, AMOUNT * 2, FundingSource::FreeBalance);
+		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), AMOUNT * 3);
+	});
 }

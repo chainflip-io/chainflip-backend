@@ -2816,6 +2816,11 @@ export interface ChainEvents extends GenericChainEvents {
         error: DispatchError;
       }
     >;
+    FlipTransferredToOnChainBalance: GenericPalletEvent<
+      'LiquidityProvider',
+      'FlipTransferredToOnChainBalance',
+      { accountId: AccountId32; amount: bigint }
+    >;
 
     /**
      * Generic pallet event
