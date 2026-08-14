@@ -473,15 +473,25 @@ mod tests {
 			Perquintill::from_percent(5)
 		);
 
-		// Intervals outside of the range enforced by the setter are caught rather than
-		// dividing by zero (`log_or_panic!` panics in tests, logs in production):
-		cf_utilities::assert_panics!(CONFIG.interest_per_year_to_per_payment_interval(
-			interest_per_year,
-			MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS + 1
-		));
-		cf_utilities::assert_panics!(
-			CONFIG.interest_per_year_to_per_payment_interval(interest_per_year, 0)
-		);
+		// Intervals outside of the range enforced by the setter are caught rather than dividing
+		// by zero. `log_or_panic!` panics under debug assertions and only logs without them, so
+		// which of the two we observe depends on the profile the tests are built with.
+		for invalid_interval in [0, MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS + 1] {
+			if cfg!(debug_assertions) {
+				cf_utilities::assert_panics!(CONFIG.interest_per_year_to_per_payment_interval(
+					interest_per_year,
+					invalid_interval
+				));
+			} else {
+				assert_eq!(
+					CONFIG.interest_per_year_to_per_payment_interval(
+						interest_per_year,
+						invalid_interval
+					),
+					Perquintill::zero()
+				);
+			}
+		}
 	}
 
 	#[test]
