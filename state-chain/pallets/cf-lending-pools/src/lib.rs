@@ -117,6 +117,7 @@ pub struct BoostConfiguration {
 	PartialEq,
 	Eq,
 	RuntimeDebug,
+	Default,
 )]
 pub struct PalletSafeMode {
 	pub add_boost_funds_enabled: bool,
