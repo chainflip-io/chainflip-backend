@@ -34,7 +34,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset, AssetAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	FundAccount, Funding, FundingSource, GetMinimumFunding, MoveFlipToGateway, RedemptionCheck,
@@ -1205,7 +1205,13 @@ impl<T: Config> FundAccount for Pallet<T> {
 				},
 			// These funds are backed by Flip in the Vault rather than in the Gateway, so an
 			// equivalent amount must be moved across to keep the Gateway fully backed.
-			FundingSource::FreeBalance =>
+			//
+			// The same applies to a Flip deposit at account creation, which is credited straight
+			// from the Vault. Account creation with any other asset instead reaches the account
+			// via a swap, and the swap output action earmarks the full output itself - so
+			// earmarking here as well would double-count it.
+			FundingSource::FreeBalance |
+			FundingSource::InitialFunding { asset: Asset::Flip, .. } =>
 				T::MoveFlipToGateway::add_flip_to_be_sent_to_gateway(amount.into()),
 			FundingSource::Swap { .. } | FundingSource::InitialFunding { .. } => {},
 		}
