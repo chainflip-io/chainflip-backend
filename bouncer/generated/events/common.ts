@@ -121,6 +121,7 @@ export const palletCfLpPalletSafeMode = z.object({
   depositEnabled: z.boolean(),
   withdrawalEnabled: z.boolean(),
   internalSwapsEnabled: z.boolean(),
+  flipToOnChainBalanceEnabled: z.boolean(),
 });
 
 export const palletCfValidatorPalletSafeMode = z.object({
@@ -409,6 +410,7 @@ export const cfTraitsFundingSource = z.discriminatedUnion('__kind', [
     channelId: numberOrHex.nullish(),
     asset: cfPrimitivesChainsAssetsAnyAsset,
   }),
+  z.object({ __kind: z.literal('FreeBalance') }),
 ]);
 
 export const palletCfValidatorDelegationDelegationAmount = z.discriminatedUnion('__kind', [
