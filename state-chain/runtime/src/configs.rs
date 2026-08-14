@@ -600,9 +600,10 @@ impl pallet_cf_lp::Config for Runtime {
 	type RefundAddressRegistry = AssetBalances;
 	type SwapRequestHandler = Swapping;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
-	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type MinimumDeposit = MinimumDepositProvider;
+	type FundAccount = Funding;
+	type MinimumFunding = Funding;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -779,6 +780,7 @@ impl pallet_cf_funding::Config for Runtime {
 	type RedemptionChecker = Validator;
 	type EthereumSCApi = crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>;
 	type SafeMode = RuntimeSafeMode;
+	type MoveFlipToGateway = Swapping;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
 

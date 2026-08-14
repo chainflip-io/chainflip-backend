@@ -3583,6 +3583,14 @@ impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
 	}
 }
 
+impl<T: Config> cf_traits::MoveFlipToGateway for Pallet<T> {
+	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount) {
+		FlipToBeSentToGateway::<T>::mutate(|total| {
+			total.saturating_accrue(amount);
+		});
+	}
+}
+
 impl<T: Config> cf_traits::NetworkFeeApi for Pallet<T> {
 	fn get_network_fee_rate(
 		input_asset: Asset,
