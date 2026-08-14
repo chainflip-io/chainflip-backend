@@ -470,6 +470,30 @@ fn test_redeem_all() {
 }
 
 #[test]
+fn redeem_max_panics_when_liquid_balance_is_below_redemption_fee() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		// Bonded such that the liquid balance (AMOUNT - BOND) is smaller than the redemption
+		// fee (REDEMPTION_TAX), so `RedemptionAmount::Max` can't actually cover the fee.
+		const BOND: u128 = AMOUNT - REDEMPTION_TAX + 1;
+
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+		Bonder::<Test>::update_bond(&ALICE, BOND);
+
+		let _ = Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR,
+			Default::default(),
+		);
+	});
+}
+
+#[test]
 fn redemption_expiry_removes_redemption() {
 	new_test_ext().execute_with(|| {
 		const TOTAL_FUNDS: u128 = 100;
