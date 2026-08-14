@@ -1486,13 +1486,18 @@ export async function getNodesInfo(numberOfNodes: 1 | 3) {
   return { SELECTED_NODES, nodeCount };
 }
 
+// How long `checkAvailabilityAllSolanaNonces` waits for every nonce to be returned to the
+// available pool.
+export const solanaNoncesPollBudgetSeconds = 60;
+
 // Check that all Solana Nonces are available
 export async function checkAvailabilityAllSolanaNonces(testContext: TestContext) {
   testContext.info('Checking Solana Nonce Availability');
 
   // Check that all Solana nonces are available
   await using chainflip = await getChainflipPolkadotApi();
-  const maxRetries = 10; // 60 seconds
+  const pollIntervalSeconds = 6;
+  const maxRetries = solanaNoncesPollBudgetSeconds / pollIntervalSeconds;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1504,7 +1509,7 @@ export async function checkAvailabilityAllSolanaNonces(testContext: TestContext)
         `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces + solanaNumberOfAdditionalNonces}`,
       );
     } else {
-      await sleep(6000);
+      await sleep(pollIntervalSeconds * 1000);
     }
   }
 }

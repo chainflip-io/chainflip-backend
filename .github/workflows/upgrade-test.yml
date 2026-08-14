@@ -270,7 +270,10 @@ jobs:
           # them instead.
           sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" bouncer/tests/rpc_tests.ts
           # Apply the current Solana nonce timeout to the pre-upgrade bouncer checkout.
-          sed -i "/'CheckAvailabilityAllSolanaNonces'/,/^  );$/ s/5 \* ciTimeoutFactor/30 * ciTimeoutFactor/" bouncer/tests/fast_bouncer.test.ts
+          # Patched to an absolute value: the old checkout's `ciTimeoutFactor` differs from the
+          # current one, so a factor-scaled patch lands below the check's own ~60s poll budget and
+          # the timeout fires before the check can report the actual nonce count.
+          sed -i "/'CheckAvailabilityAllSolanaNonces'/,/^  );$/ s/[0-9][0-9]* \* ciTimeoutFactor/90/" bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
