@@ -264,16 +264,38 @@ jobs:
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
+
+          # These patches rewrite the OLD bouncer checkout, so their patterns go stale whenever
+          # OLD_BIN_COMMIT_HASH moves — and `sed -i` exits 0 whether or not it substituted
+          # anything. Fail loudly instead: a silently skipped patch reintroduces the exact
+          # failure it was added to prevent, and does so in a way that is hard to spot.
+          patch_old_bouncer() {
+            local file=$1 expr=$2 desc=$3
+            cp "$file" "$file.pre-patch"
+            sed -i "$expr" "$file"
+            if cmp -s "$file" "$file.pre-patch"; then
+              echo "::error::Pre-upgrade patch did not apply: ${desc}. Its pattern no longer matches ${{ env.OLD_BIN_COMMIT_HASH }} ($file). Update the pattern, or drop the patch if the old checkout no longer needs it."
+              exit 1
+            fi
+            rm "$file.pre-patch"
+          }
+
           # Remove after 2.3 release.
           # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc and
           # Ethereum cbBTC are the unreleased assets now, so retarget the filter to exclude
           # them instead.
-          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" bouncer/tests/rpc_tests.ts
+          patch_old_bouncer bouncer/tests/rpc_tests.ts \
+            "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" \
+            "rpc_tests unreleased-asset filter"
+
           # Apply the current Solana nonce timeout to the pre-upgrade bouncer checkout.
           # Patched to an absolute value: the old checkout's `ciTimeoutFactor` differs from the
           # current one, so a factor-scaled patch lands below the check's own ~60s poll budget and
           # the timeout fires before the check can report the actual nonce count.
-          sed -i "/'CheckAvailabilityAllSolanaNonces'/,/^  );$/ s/[0-9][0-9]* \* ciTimeoutFactor/90/" bouncer/tests/fast_bouncer.test.ts
+          patch_old_bouncer bouncer/tests/fast_bouncer.test.ts \
+            "/'CheckAvailabilityAllSolanaNonces'/,/^  );$/ s/[0-9][0-9]* \* ciTimeoutFactor/90/" \
+            "Solana nonce check timeout"
+
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
