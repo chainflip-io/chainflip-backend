@@ -1404,7 +1404,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			decrease: DelegationAmount<T::Amount>,
 		) -> DispatchResult {
-			let delegator = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			let delegator = ensure_signed(origin)?;
 
 			let (current_operator, current_max_bid) =
 				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
