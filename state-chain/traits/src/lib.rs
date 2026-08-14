@@ -773,6 +773,12 @@ pub trait FeePayment {
 		unimplemented!()
 	}
 
+	/// Helper function to activate FLIP 2.1 from the current epoch.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn activate_flip_2_1() {
+		unimplemented!()
+	}
+
 	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
 	fn try_take_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 
@@ -1062,6 +1068,14 @@ pub trait FlipBurnOrMoveInfo {
 	fn take_flip_to_burn() -> i128;
 
 	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
+}
+
+/// Allows Flip held in the Vault to be earmarked for transfer to the State Chain Gateway.
+///
+/// Whenever Flip is credited to an on-chain balance without a corresponding Gateway deposit, the
+/// same amount must be earmarked here so that the Gateway remains fully backed.
+pub trait MoveFlipToGateway {
+	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount);
 }
 
 /// The trait implementation is intentionally no-op by default
@@ -1486,6 +1500,7 @@ pub enum FundingSource {
 	EthTransaction { tx_hash: [u8; 32], funder: cf_chains::evm::Address },
 	Swap { swap_request_id: SwapRequestId },
 	InitialFunding { channel_id: Option<u64>, asset: Asset },
+	FreeBalance,
 }
 
 pub trait FundAccount {

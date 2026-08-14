@@ -454,6 +454,27 @@ impl From<LendingPoolsSafeMode> for pallet_cf_lending_pools::PalletSafeMode {
 	}
 }
 
+// The liquidity provider safe mode before `flip_to_on_chain_balance_enabled` was added.
+#[derive(
+	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
+)]
+pub struct LiquidityProviderSafeMode {
+	pub deposit_enabled: bool,
+	pub withdrawal_enabled: bool,
+	pub internal_swaps_enabled: bool,
+}
+
+impl From<LiquidityProviderSafeMode> for pallet_cf_lp::PalletSafeMode {
+	fn from(old: LiquidityProviderSafeMode) -> Self {
+		Self {
+			deposit_enabled: old.deposit_enabled,
+			withdrawal_enabled: old.withdrawal_enabled,
+			internal_swaps_enabled: old.internal_swaps_enabled,
+			flip_to_on_chain_balance_enabled: true,
+		}
+	}
+}
+
 // The v16 RuntimeSafeMode: no broadcast_tron, ingress_egress_tron, or tron_elections fields,
 // and with the old LendingPoolsSafeMode and WitnesserCallPermission.
 #[derive(
@@ -463,7 +484,7 @@ pub struct RuntimeSafeMode {
 	pub emissions: pallet_cf_emissions::PalletSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,
 	pub swapping: pallet_cf_swapping::PalletSafeMode,
-	pub liquidity_provider: pallet_cf_lp::PalletSafeMode,
+	pub liquidity_provider: LiquidityProviderSafeMode,
 	pub validator: pallet_cf_validator::PalletSafeMode,
 	pub pools: pallet_cf_pools::PalletSafeMode,
 	pub trading_strategies: pallet_cf_trading_strategy::PalletSafeMode,
@@ -513,7 +534,7 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 			emissions: old.emissions,
 			funding: old.funding,
 			swapping: old.swapping,
-			liquidity_provider: old.liquidity_provider,
+			liquidity_provider: old.liquidity_provider.into(),
 			validator: old.validator,
 			pools: old.pools,
 			trading_strategies: old.trading_strategies,

@@ -23,7 +23,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DepositApi, EgressApi,
-	LpStatsApi, PoolApi, RefundAddressRegistry, ScheduledEgressDetails, SwapRequestHandler,
+	FeePayment, FundAccount, FundingSource, GetMinimumFunding, LpStatsApi, PoolApi,
+	RefundAddressRegistry, ScheduledEgressDetails, SwapRequestHandler,
 	WithdrawalAddressRestriction,
 };
 use frame_support::{
@@ -52,7 +53,7 @@ use cf_chains::address::EncodedAddress;
 pub const STORAGE_VERSION_U16: u16 = 4;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
-impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, internal_swaps_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, internal_swaps_enabled, flip_to_on_chain_balance_enabled);
 
 pub const STATS_UPDATE_INTERVAL_IN_BLOCKS: u64 = 24 * 3600 / SECONDS_PER_BLOCK; // 24 hours
 
@@ -244,7 +245,6 @@ pub mod pallet {
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 
-		#[cfg(feature = "runtime-benchmarks")]
 		type FeePayment: cf_traits::FeePayment<
 			Amount = <Self as Chainflip>::Amount,
 			AccountId = <Self as frame_system::Config>::AccountId,
@@ -252,6 +252,15 @@ pub mod pallet {
 
 		/// The interface to access the minimum deposit amount for each asset
 		type MinimumDeposit: MinimumDeposit;
+
+		/// Credits Flip to an account's on-chain balance.
+		type FundAccount: FundAccount<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
+		>;
+
+		/// The minimum amount of Flip that may be credited to an on-chain balance.
+		type MinimumFunding: GetMinimumFunding;
 	}
 
 	#[pallet::error]
@@ -287,6 +296,12 @@ pub mod pallet {
 		InternalSwapBelowMinimumDepositAmount,
 		/// Internal swaps disabled due to safe mode.
 		InternalSwapsDisabled,
+		/// Transfers to the on-chain balance are disabled due to safe mode.
+		FlipTransferToOnChainBalanceDisabled,
+		/// Transfers to the on-chain balance are only available once Flip 2.1 is active.
+		FlipTransferToOnChainBalanceUnavailable,
+		/// The transferred amount is below the minimum funding amount.
+		BelowMinimumFunding,
 	}
 
 	#[pallet::event]
@@ -576,6 +591,45 @@ pub mod pallet {
 					});
 				}
 			}
+
+			Ok(())
+		}
+
+		/// Move Flip from the caller's free balance to their on-chain balance, where it can be
+		/// used to pay transaction fees or to delegate.
+		///
+		/// The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
+		/// external address.
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::transfer_flip_to_on_chain_balance())]
+		pub fn transfer_flip_to_on_chain_balance(
+			origin: OriginFor<T>,
+			amount: AssetAmount,
+		) -> DispatchResult {
+			ensure!(
+				T::SafeMode::get().flip_to_on_chain_balance_enabled,
+				Error::<T>::FlipTransferToOnChainBalanceDisabled
+			);
+
+			// The on-chain balance is backed by Flip in the State Chain Gateway, whereas the free
+			// balance is backed by Flip in the Vault. Earmarked Flip is only egressed from the
+			// Vault to the Gateway at the end of an epoch, and only while Flip 2.1 is active.
+			ensure!(
+				T::FeePayment::is_flip_2_1_activated(),
+				Error::<T>::FlipTransferToOnChainBalanceUnavailable
+			);
+
+			ensure!(
+				amount >= T::MinimumFunding::get_min_funding_amount(),
+				Error::<T>::BelowMinimumFunding
+			);
+
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			T::BalanceApi::try_debit_account(&account_id, Asset::Flip, amount)
+				.map_err(|_| Error::<T>::InsufficientBalance)?;
+
+			T::FundAccount::fund_account(account_id, amount.into(), FundingSource::FreeBalance);
 
 			Ok(())
 		}
