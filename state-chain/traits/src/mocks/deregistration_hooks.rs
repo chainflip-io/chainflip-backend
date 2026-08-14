@@ -21,16 +21,16 @@ use sp_std::marker::PhantomData;
 use super::{MockPallet, MockPalletStorage};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct MockDeregistrationCheck<Id>(PhantomData<Id>);
+pub struct MockDeregistrationHooks<Id>(PhantomData<Id>);
 
-impl<Id> MockPallet for MockDeregistrationCheck<Id> {
-	const PREFIX: &'static [u8] = b"cf-mocks//DeregistrationCheck";
+impl<Id> MockPallet for MockDeregistrationHooks<Id> {
+	const PREFIX: &'static [u8] = b"cf-mocks//DeregistrationHooks";
 }
 
 const SHOULD_FAIL: &[u8] = b"SHOULD_FAIL";
 const ON_DEREGISTERED_CALLED: &[u8] = b"ON_DEREGISTERED_CALLED";
 
-impl<Id: Encode + Decode> MockDeregistrationCheck<Id> {
+impl<Id: Encode + Decode> MockDeregistrationHooks<Id> {
 	pub fn set_should_fail(account_id: &Id, should_fail: bool) {
 		if should_fail {
 			<Self as MockPalletStorage>::put_storage(SHOULD_FAIL, account_id, ());
@@ -47,7 +47,7 @@ impl<Id: Encode + Decode> MockDeregistrationCheck<Id> {
 	}
 }
 
-impl<Id: Encode + Decode> DeregistrationHooks for MockDeregistrationCheck<Id> {
+impl<Id: Encode + Decode> DeregistrationHooks for MockDeregistrationHooks<Id> {
 	type AccountId = Id;
 	type Error = &'static str;
 

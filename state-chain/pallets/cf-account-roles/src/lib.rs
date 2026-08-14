@@ -283,14 +283,13 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		account_role: AccountRole,
 	) -> DispatchResult {
 		T::DeregistrationHooks::check(account_id).map_err(Into::into)?;
+		T::DeregistrationHooks::on_deregistered(account_id);
 		AccountRoles::<T>::try_mutate(account_id, |role| {
 			role.replace(AccountRole::Unregistered)
 				.filter(|r| *r == account_role)
 				.ok_or(Error::<T>::UnknownAccount)
 		})?;
 		<frame_system::Pallet<T>>::dec_consumers(account_id);
-
-		T::DeregistrationHooks::on_deregistered(account_id);
 
 		Self::deposit_event(Event::AccountRoleDeregistered {
 			account_id: account_id.clone(),

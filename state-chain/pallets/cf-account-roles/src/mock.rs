@@ -17,14 +17,18 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_account_roles, Config};
+use cf_primitives::AccountRole;
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
-	impl_mock_chainflip, mocks::deregistration_check::MockDeregistrationCheck, SpawnAccount,
+	impl_mock_chainflip,
+	mocks::deregistration_hooks::MockDeregistrationHooks as SharedMockDeregistrationHooks,
+	AccountRoleRegistry, DeregistrationHooks, SpawnAccount,
 };
 use codec::Encode;
 use frame_support::{derive_impl, StorageHasher};
 use sp_runtime::DispatchError;
+use std::cell::RefCell;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -74,9 +78,33 @@ impl SpawnAccount for MockSpawnAccount {
 	}
 }
 
+thread_local! {
+	// Records what `Pallet::<Test>::account_role` returns at the moment `on_deregistered` is
+	// called, so tests can assert the role hasn't already been wiped from storage by then.
+	pub static ACCOUNT_ROLE_AT_ON_DEREGISTERED: RefCell<Option<AccountRole>> = RefCell::new(None);
+}
+
+pub struct TestDeregistrationHooks;
+
+impl DeregistrationHooks for TestDeregistrationHooks {
+	type AccountId = u64;
+	type Error = &'static str;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		SharedMockDeregistrationHooks::<u64>::check(account_id)
+	}
+
+	fn on_deregistered(account_id: &Self::AccountId) {
+		ACCOUNT_ROLE_AT_ON_DEREGISTERED.with(|role| {
+			*role.borrow_mut() = Some(crate::Pallet::<Test>::account_role(account_id));
+		});
+		SharedMockDeregistrationHooks::<u64>::on_deregistered(account_id);
+	}
+}
+
 impl Config for Test {
 	type EnsureGovernance = frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
-	type DeregistrationHooks = MockDeregistrationCheck<Self::AccountId>;
+	type DeregistrationHooks = TestDeregistrationHooks;
 	type RuntimeCall = RuntimeCall;
 	type SpawnAccount = MockSpawnAccount;
 	#[cfg(feature = "runtime-benchmarks")]

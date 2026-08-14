@@ -608,7 +608,7 @@ impl pallet_cf_lp::Config for Runtime {
 
 impl pallet_cf_account_roles::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type DeregistrationHooks = chainflip::RuntimeDeregistrationCheck;
+	type DeregistrationHooks = chainflip::RuntimeDeregistrationHooks;
 	type RuntimeCall = RuntimeCall;
 	type SpawnAccount = Funding;
 	#[cfg(feature = "runtime-benchmarks")]

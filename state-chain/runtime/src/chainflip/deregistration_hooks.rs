@@ -20,9 +20,9 @@ use cf_traits::{AccountRoleRegistry, DeregistrationHooks, RefundAddressRegistry}
 use frame_support::sp_runtime::DispatchError;
 use pallet_cf_flip::Bonder;
 
-pub struct RuntimeDeregistrationCheck;
+pub struct RuntimeDeregistrationHooks;
 
-impl DeregistrationHooks for RuntimeDeregistrationCheck {
+impl DeregistrationHooks for RuntimeDeregistrationHooks {
 	type AccountId = AccountId;
 	type Error = DispatchError;
 
