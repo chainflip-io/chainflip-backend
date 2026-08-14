@@ -79,13 +79,42 @@ export async function submitHubExtrinsic(
     const tx = extrinsic(assethubApi);
     const txHash = tx.hash.toString();
     let done = false;
-    let seenInBlock = false;
-    const unsubscribe = await tx.signAndSend(alice, { nonce, tip }, (result) => {
+    let inBlock = false;
+    let inclusionTimer: ReturnType<typeof setTimeout> | undefined;
+    // Assigned when signAndSend resolves; the deadline is only armed after that, and status
+    // callbacks only fire once the subscription exists.
+    let unsubscribe: () => void;
+
+    // The deadline is armed whenever the transaction is not in a block: on initial submission,
+    // and again if the block it made it into is retracted. It is disarmed while the transaction
+    // is in a block, so slow finalization doesn't trigger a false retry.
+    const armInclusionDeadline = () => {
+      clearTimeout(inclusionTimer);
+      inclusionTimer = setTimeout(() => {
+        if (!done && !inBlock) {
+          done = true;
+          unsubscribe();
+          reject(
+            new Error(
+              `Transaction not included within ${INCLUSION_TIMEOUT_MS / 1000}s of submission`,
+            ),
+          );
+        }
+      }, INCLUSION_TIMEOUT_MS);
+    };
+
+    unsubscribe = await tx.signAndSend(alice, { nonce, tip }, (result) => {
       if (result.status.isInBlock || result.status.isFinalized) {
-        seenInBlock = true;
+        inBlock = true;
+        clearTimeout(inclusionTimer);
+      }
+      if (result.status.isRetracted) {
+        inBlock = false;
+        armInclusionDeadline();
       }
       if (result.dispatchError !== undefined) {
         done = true;
+        clearTimeout(inclusionTimer);
         if (result.dispatchError.isModule) {
           const decoded = assethubApi.registry.findMetaError(result.dispatchError.asModule);
           const { docs, name, section } = decoded;
@@ -98,6 +127,7 @@ export async function submitHubExtrinsic(
       }
       if (result.status.isFinalized) {
         done = true;
+        clearTimeout(inclusionTimer);
         unsubscribe();
 
         if (expectedEvent) {
@@ -114,28 +144,25 @@ export async function submitHubExtrinsic(
       }
       if (result.status.isInvalid) {
         done = true;
+        clearTimeout(inclusionTimer);
         unsubscribe();
         reject(new Error('Transaction is invalid'));
       }
       // Only give up (and resubmit, with the pinned nonce) on terminal states where the tx
-      // definitely won't be applied. `isRetracted` is deliberately NOT terminal.
+      // definitely won't be applied. `isRetracted` is deliberately NOT terminal, but it re-arms
+      // the inclusion deadline above so a retracted tx gets a bounded window to re-enter a block.
       if (result.status.isDropped || result.status.isUsurped || result.status.isFinalityTimeout) {
         done = true;
+        clearTimeout(inclusionTimer);
         unsubscribe();
         reject(new Error(`Transaction was ${result.status.type.toLowerCase()}`));
       }
     });
-    setTimeout(() => {
-      if (!done && !seenInBlock) {
-        done = true;
-        unsubscribe();
-        reject(
-          new Error(
-            `Transaction not included within ${INCLUSION_TIMEOUT_MS / 1000}s of submission`,
-          ),
-        );
-      }
-    }, INCLUSION_TIMEOUT_MS);
+    // The callback can fire before signAndSend resolves, so only arm if the transaction isn't
+    // already in a block.
+    if (!done && !inBlock) {
+      armInclusionDeadline();
+    }
   };
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
