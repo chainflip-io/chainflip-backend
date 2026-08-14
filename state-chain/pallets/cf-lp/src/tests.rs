@@ -1123,6 +1123,10 @@ mod transfer_flip_to_on_chain_balance {
 				MockFundingInfo::<Test>::last_funding_source(),
 				Some(FundingSource::FreeBalance)
 			);
+
+			System::assert_last_event(RuntimeEvent::LiquidityProvider(
+				Event::FlipTransferredToOnChainBalance { account_id: LP_ACCOUNT, amount: AMOUNT },
+			));
 		});
 	}
 

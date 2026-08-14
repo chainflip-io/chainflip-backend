@@ -349,6 +349,10 @@ pub mod pallet {
 			amount: AssetAmount,
 			error: DispatchError,
 		},
+		FlipTransferredToOnChainBalance {
+			account_id: T::AccountId,
+			amount: AssetAmount,
+		},
 	}
 
 	#[pallet::pallet]
@@ -610,6 +614,7 @@ pub mod pallet {
 				T::SafeMode::get().flip_to_on_chain_balance_enabled,
 				Error::<T>::FlipTransferToOnChainBalanceDisabled
 			);
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			// The on-chain balance is backed by Flip in the State Chain Gateway, whereas the free
 			// balance is backed by Flip in the Vault. Earmarked Flip is only egressed from the
@@ -624,12 +629,16 @@ pub mod pallet {
 				Error::<T>::BelowMinimumFunding
 			);
 
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
 			T::BalanceApi::try_debit_account(&account_id, Asset::Flip, amount)
 				.map_err(|_| Error::<T>::InsufficientBalance)?;
 
-			T::FundAccount::fund_account(account_id, amount.into(), FundingSource::FreeBalance);
+			T::FundAccount::fund_account(
+				account_id.clone(),
+				amount.into(),
+				FundingSource::FreeBalance,
+			);
+
+			Self::deposit_event(Event::<T>::FlipTransferredToOnChainBalance { account_id, amount });
 
 			Ok(())
 		}
