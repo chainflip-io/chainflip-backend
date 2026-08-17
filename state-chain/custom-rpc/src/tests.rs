@@ -86,6 +86,17 @@ use sp_runtime::{AccountId32, FixedU64};
 const ID_1: AccountId32 = AccountId32::new([1; 32]);
 const ID_2: AccountId32 = AccountId32::new([2; 32]);
 
+/// Pretty-print a value as JSON, for snapshots that would otherwise be squashed onto a single
+/// line.
+///
+/// Goes via [`serde_json::Value`] rather than serializing directly: some of our types are backed
+/// by hash maps, so serializing them directly yields a non-deterministic key order, whereas
+/// `Value`'s map is sorted. Note also that `insta::assert_json_snapshot!` is not equivalent - it
+/// uses insta's own serializer instead of serde_json.
+pub fn to_pretty_json<T: Serialize>(value: &T) -> String {
+	serde_json::to_string_pretty(&serde_json::to_value(value).unwrap()).unwrap()
+}
+
 fn asset_map<T: Clone>(v: T) -> any::AssetMap<T> {
 	any::AssetMap {
 		eth: eth::AssetMap {
@@ -434,7 +445,7 @@ fn test_environment_serialization() {
 		},
 	};
 
-	insta::assert_snapshot!(serde_json::to_value(env).unwrap());
+	insta::assert_snapshot!(to_pretty_json(&env));
 }
 
 #[test]
@@ -508,15 +519,14 @@ fn test_boost_fees_serialization() {
 
 #[test]
 fn test_swap_output_serialization() {
-	insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2 {
+	insta::assert_snapshot!(to_pretty_json(&RpcSwapOutputV2 {
 		output: 1_000_000_000_000_000_000u128.into(),
 		intermediary: Some(1_000_000u128.into()),
 		network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
 		ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
 		egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
 		broker_commission: RpcFee { asset: Asset::Usdc, amount: 100u128.into() },
-	})
-	.unwrap());
+	}));
 }
 
 #[test]
@@ -543,15 +553,14 @@ fn test_vault_addresses_custom_rpc() {
 
 #[test]
 fn swap_output_v2_serialization() {
-	insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2 {
+	insta::assert_snapshot!(to_pretty_json(&RpcSwapOutputV2 {
 		output: 1_000_000_000_000_000_000u128.into(),
 		intermediary: Some(1_000_000u128.into()),
 		network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
 		ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
 		egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
 		broker_commission: RpcFee { asset: Asset::Usdc, amount: 100u128.into() },
-	})
-	.unwrap());
+	}));
 }
 
 #[test]
