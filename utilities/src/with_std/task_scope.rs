@@ -324,7 +324,7 @@ impl TaskProperties {
 	) {
 		match &result {
 			Ok(result) => match result {
-				Ok(_) => tracing::info!(
+				Ok(_) => tracing::debug!(
 					target: "task_scope",
 					"child task #{} ended: '{}'",
 					self.task_id,
@@ -653,7 +653,7 @@ impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 				Pin::new(&mut self.as_mut().receiver.as_mut().unwrap()).poll_next(cx)
 			{
 				if let Some((properties, future)) = option {
-					tracing::info!(
+					tracing::debug!(
 						target: "task_scope",
 						"child task #{} started: '{}'",
 						properties.task_id,
