@@ -252,6 +252,7 @@ impl From<validator_info_before_v7::ValidatorInfo> for ValidatorInfo {
 	}
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct ValidatorInfo {
 	pub balance: AssetAmount,
@@ -273,6 +274,14 @@ pub struct ValidatorInfo {
 	/// The validator's direct bid for the next auction (before delegation, if any, is applied).
 	pub bid: AssetAmount,
 	pub max_bid: Option<AssetAmount>,
+}
+
+impl HasChangelog for ValidatorInfo {
+	type if_unspecified = _ValidatorInfo::see_field_changelogs;
+	type in_20300 = _ValidatorInfo::see_field_changelogs_and_also<(
+		_ValidatorInfo::field::bid::Added,
+		_ValidatorInfo::field::max_bid::Added,
+	)>;
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
