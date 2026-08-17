@@ -19,7 +19,7 @@
 use super::*;
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_primitives::{AccountRole, Asset, FLIPPERINOS_PER_FLIP};
-use cf_traits::{AccountRoleRegistry, FeePayment, RefundAddressRegistry};
+use cf_traits::{AccountRoleRegistry, FeePayment, GetMinimumFunding, RefundAddressRegistry};
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::OnNewAccount};
 use frame_system::RawOrigin;
@@ -140,6 +140,24 @@ mod benchmarks {
 			Default::default(),
 			None,
 		);
+	}
+
+	#[benchmark]
+	fn transfer_flip_to_on_chain_balance() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::LiquidityProvider,
+		)
+		.unwrap();
+
+		T::FeePayment::activate_flip_2_1();
+
+		let amount = T::MinimumFunding::get_min_funding_amount();
+		T::BalanceApi::credit_account(&caller, Asset::Flip, amount);
+
+		#[extrinsic_call]
+		transfer_flip_to_on_chain_balance(RawOrigin::Signed(caller.clone()), amount);
+
+		assert_eq!(T::BalanceApi::get_balance(&caller, Asset::Flip), 0);
 	}
 
 	#[benchmark]

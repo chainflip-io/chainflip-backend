@@ -21,8 +21,8 @@ use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		broadcaster::MockBroadcaster, rewards_distribution::MockRewardsDistribution, time_source,
-		waived_fees::WaivedFeesMock,
+		broadcaster::MockBroadcaster, flip_burn_info::MockFlipBurnOrMoveInfo,
+		rewards_distribution::MockRewardsDistribution, time_source, waived_fees::WaivedFeesMock,
 	},
 	AccountRoleRegistry, RedemptionCheck,
 };
@@ -225,6 +225,7 @@ impl pallet_cf_funding::Config for Test {
 	type EthereumSCApi = EmptyCall;
 	type SafeMode = MockRuntimeSafeMode;
 	type RegisterRedemption = MockRegisterRedemption;
+	type MoveFlipToGateway = MockFlipBurnOrMoveInfo;
 }
 
 pub const REDEMPTION_TTL_SECS: u64 = 10;

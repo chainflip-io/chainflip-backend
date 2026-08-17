@@ -23,6 +23,7 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter, balance_api::MockRefundAddressRegistry,
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
+		fee_payment::MockFeePayment, minimum_funding::MockMinimumFundingProvider,
 		pool_api::MockPoolApi, swap_request_api::MockSwapRequestHandler,
 		withdrawal_address_restriction::MockWithdrawalAddressRestriction,
 	},
@@ -148,10 +149,11 @@ impl crate::Config for Test {
 	type WithdrawalRestriction =
 		MockWithdrawalAddressRestriction<<Self as frame_system::Config>::AccountId>;
 	type RefundAddressRegistry = MockRefundAddressRegistry;
-	#[cfg(feature = "runtime-benchmarks")]
-	type FeePayment = cf_traits::mocks::fee_payment::MockFeePayment<Self>;
+	type FeePayment = MockFeePayment<Self>;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type MinimumDeposit = MockMinimumDepositProvider;
+	type FundAccount = MockFundingInfo<Self>;
+	type MinimumFunding = MockMinimumFundingProvider;
 }
 
 pub const LP_ACCOUNT: AccountId = 1;

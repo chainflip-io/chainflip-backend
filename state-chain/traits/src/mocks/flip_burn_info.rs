@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{MockPallet, MockPalletStorage};
-use crate::FlipBurnOrMoveInfo;
+use crate::{FlipBurnOrMoveInfo, MoveFlipToGateway};
 use cf_primitives::AssetAmount;
 
 pub struct MockFlipBurnOrMoveInfo;
@@ -50,5 +50,11 @@ impl FlipBurnOrMoveInfo for MockFlipBurnOrMoveInfo {
 	}
 	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
 		Self::take_value(FLIP_TO_BE_SENT_TO_GATEWAY).unwrap_or_default()
+	}
+}
+
+impl MoveFlipToGateway for MockFlipBurnOrMoveInfo {
+	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount) {
+		Self::set_flip_to_be_sent_to_gateway(Self::peek_flip_to_be_sent_to_gateway() + amount);
 	}
 }

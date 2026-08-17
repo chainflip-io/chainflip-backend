@@ -18,7 +18,8 @@ expression: val
   "liquidity_provider": {
     "deposit_enabled": true,
     "withdrawal_enabled": true,
-    "internal_swaps_enabled": true
+    "internal_swaps_enabled": true,
+    "flip_to_on_chain_balance_enabled": true
   },
   "validator": {
     "authority_rotation_enabled": true,

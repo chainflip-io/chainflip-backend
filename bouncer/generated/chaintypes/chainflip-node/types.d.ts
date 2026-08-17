@@ -636,6 +636,7 @@ export type PalletCfLpPalletSafeMode = {
   depositEnabled: boolean;
   withdrawalEnabled: boolean;
   internalSwapsEnabled: boolean;
+  flipToOnChainBalanceEnabled: boolean;
 };
 
 export type PalletCfValidatorPalletSafeMode = {
@@ -3935,7 +3936,15 @@ export type PalletCfLpCall =
   | {
       name: 'PurgeBalances';
       params: { accounts: Array<[AccountId32, CfPrimitivesChainsAssetsAnyAsset, bigint]> };
-    };
+    }
+  /**
+   * Move Flip from the caller's free balance to their on-chain balance, where it can be
+   * used to pay transaction fees or to delegate.
+   *
+   * The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
+   * external address.
+   **/
+  | { name: 'TransferFlipToOnChainBalance'; params: { amount: bigint } };
 
 export type PalletCfLpCallLike =
   /**
@@ -3999,7 +4008,15 @@ export type PalletCfLpCallLike =
   | {
       name: 'PurgeBalances';
       params: { accounts: Array<[AccountId32Like, CfPrimitivesChainsAssetsAnyAsset, bigint]> };
-    };
+    }
+  /**
+   * Move Flip from the caller's free balance to their on-chain balance, where it can be
+   * used to pay transaction fees or to delegate.
+   *
+   * The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
+   * external address.
+   **/
+  | { name: 'TransferFlipToOnChainBalance'; params: { amount: bigint } };
 
 export type CfAmmMathPriceLimits = {
   minPrice: CfAmmMathPrice;
@@ -13385,7 +13402,8 @@ export type CfTraitsFundingSource =
   | {
       type: 'InitialFunding';
       value: { channelId?: bigint | undefined; asset: CfPrimitivesChainsAssetsAnyAsset };
-    };
+    }
+  | { type: 'FreeBalance' };
 
 export type CfPrimitivesSwapRequestId = bigint;
 
@@ -14976,7 +14994,8 @@ export type PalletCfLpEvent =
         amount: bigint;
         error: DispatchError;
       };
-    };
+    }
+  | { name: 'FlipTransferredToOnChainBalance'; data: { accountId: AccountId32; amount: bigint } };
 
 /**
  * The `Event` enum of this pallet
@@ -19104,7 +19123,19 @@ export type PalletCfLpError =
   /**
    * Internal swaps disabled due to safe mode.
    **/
-  | 'InternalSwapsDisabled';
+  | 'InternalSwapsDisabled'
+  /**
+   * Transfers to the on-chain balance are disabled due to safe mode.
+   **/
+  | 'FlipTransferToOnChainBalanceDisabled'
+  /**
+   * Transfers to the on-chain balance are only available once Flip 2.1 is active.
+   **/
+  | 'FlipTransferToOnChainBalanceUnavailable'
+  /**
+   * The transferred amount is below the minimum funding amount.
+   **/
+  | 'BelowMinimumFunding';
 
 export type PalletCfIngressEgressDepositChannelDetailsEthereum = {
   owner: AccountId32;

@@ -4369,6 +4369,28 @@ export interface ChainTx<
     >;
 
     /**
+     * Move Flip from the caller's free balance to their on-chain balance, where it can be
+     * used to pay transaction fees or to delegate.
+     *
+     * The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
+     * external address.
+     *
+     * @param {bigint} amount
+     **/
+    transferFlipToOnChainBalance: GenericTxCall<
+      (amount: bigint) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'LiquidityProvider';
+          palletCall: {
+            name: 'TransferFlipToOnChainBalance';
+            params: { amount: bigint };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;

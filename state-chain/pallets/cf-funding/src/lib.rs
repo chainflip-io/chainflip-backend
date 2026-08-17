@@ -37,7 +37,8 @@ use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
+	FundAccount, Funding, FundingSource, GetMinimumFunding, MoveFlipToGateway, RedemptionCheck,
+	SpawnAccount,
 };
 use cf_utilities::derive_common_traits;
 use codec::{Decode, DecodeWithMemTracking, Encode};
@@ -418,6 +419,9 @@ pub mod pallet {
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
+
+		/// Earmarks Flip held in the Vault for transfer to the State Chain Gateway.
+		type MoveFlipToGateway: MoveFlipToGateway;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -1193,12 +1197,20 @@ impl<T: Config> FundAccount for Pallet<T> {
 
 	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, source: FundingSource) {
 		let total_balance = Self::add_funds_to_account(&account_id, amount);
-		if let FundingSource::EthTransaction { funder, .. } = source {
-			if RestrictedAddresses::<T>::contains_key(funder) {
-				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
-					map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);
-				});
-			}
+		match source {
+			FundingSource::EthTransaction { funder, .. } =>
+				if RestrictedAddresses::<T>::contains_key(funder) {
+					RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
+						map.entry(funder)
+							.and_modify(|balance| *balance += amount)
+							.or_insert(amount);
+					});
+				},
+			// These funds are backed by Flip in the Vault rather than in the Gateway, so an
+			// equivalent amount must be moved across to keep the Gateway fully backed.
+			FundingSource::FreeBalance =>
+				T::MoveFlipToGateway::add_flip_to_be_sent_to_gateway(amount.into()),
+			FundingSource::Swap { .. } | FundingSource::InitialFunding { .. } => {},
 		}
 
 		Self::deposit_event(Event::Funded {

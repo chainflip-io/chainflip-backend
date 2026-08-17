@@ -36,7 +36,10 @@ use cf_traits::{
 	LpStatsApi, PriceLimitsAndExpiry, RefundAddressRegistry, SafeMode, SetSafeMode,
 	SwapOutputAction, SwapRequestType,
 };
-use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
+use frame_support::{
+	assert_err, assert_noop, assert_ok, error::BadOrigin, sp_runtime::DispatchResult,
+	traits::OriginTrait,
+};
 use sp_runtime::FixedU128;
 
 #[test]
@@ -1074,6 +1077,127 @@ mod withdrawal_restriction {
 				Asset::Eth,
 				LP_ACCOUNT_2,
 			));
+		});
+	}
+}
+
+mod transfer_flip_to_on_chain_balance {
+	use super::*;
+	use cf_traits::{
+		mocks::{
+			fee_payment::MockFeePayment, funding_info::MockFundingInfo,
+			minimum_funding::MockMinimumFundingProvider,
+		},
+		FundingInfo, FundingSource, GetMinimumFunding,
+	};
+
+	fn min_funding() -> AssetAmount {
+		MockMinimumFundingProvider::get_min_funding_amount()
+	}
+
+	fn transfer(amount: AssetAmount) -> DispatchResult {
+		LiquidityProvider::transfer_flip_to_on_chain_balance(
+			RuntimeOrigin::signed(LP_ACCOUNT),
+			amount,
+		)
+	}
+
+	fn setup(free_balance: AssetAmount) {
+		MockFeePayment::<Test>::set_flip_2_1_activated(true);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Flip, free_balance);
+	}
+
+	#[test]
+	fn moves_free_balance_to_on_chain_balance() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: AssetAmount = 1_000;
+			setup(AMOUNT * 2);
+
+			assert_ok!(transfer(AMOUNT));
+
+			assert_eq!(MockBalanceApi::get_balance(&LP_ACCOUNT, Asset::Flip), Some(AMOUNT));
+			assert_eq!(MockFundingInfo::<Test>::total_balance_of(&LP_ACCOUNT), AMOUNT);
+			// The funding source is what earmarks the equivalent amount for transfer to the
+			// gateway, so that the on-chain balance remains fully backed. See the funding pallet.
+			assert_eq!(
+				MockFundingInfo::<Test>::last_funding_source(),
+				Some(FundingSource::FreeBalance)
+			);
+
+			System::assert_last_event(RuntimeEvent::LiquidityProvider(
+				Event::FlipTransferredToOnChainBalance { account_id: LP_ACCOUNT, amount: AMOUNT },
+			));
+		});
+	}
+
+	#[test]
+	fn cannot_transfer_more_than_the_free_balance() {
+		new_test_ext().execute_with(|| {
+			setup(min_funding());
+
+			assert_noop!(transfer(min_funding() + 1), Error::<Test>::InsufficientBalance);
+		});
+	}
+
+	#[test]
+	fn cannot_transfer_below_the_minimum_funding_amount() {
+		new_test_ext().execute_with(|| {
+			setup(min_funding());
+
+			assert_noop!(transfer(min_funding() - 1), Error::<Test>::BelowMinimumFunding);
+			assert_ok!(transfer(min_funding()));
+		});
+	}
+
+	#[test]
+	fn cannot_transfer_before_flip_2_1_is_activated() {
+		new_test_ext().execute_with(|| {
+			setup(min_funding());
+			MockFeePayment::<Test>::set_flip_2_1_activated(false);
+
+			assert_noop!(
+				transfer(min_funding()),
+				Error::<Test>::FlipTransferToOnChainBalanceUnavailable
+			);
+		});
+	}
+
+	#[test]
+	fn safe_mode_prevents_transfers() {
+		new_test_ext().execute_with(|| {
+			setup(min_funding());
+
+			MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+				liquidity_provider: PalletSafeMode {
+					flip_to_on_chain_balance_enabled: false,
+					..PalletSafeMode::code_green()
+				},
+			});
+			assert_err!(
+				transfer(min_funding()),
+				Error::<Test>::FlipTransferToOnChainBalanceDisabled
+			);
+
+			MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+				liquidity_provider: PalletSafeMode::code_green(),
+			});
+			assert_ok!(transfer(min_funding()));
+		});
+	}
+
+	#[test]
+	fn only_liquidity_providers_can_transfer() {
+		new_test_ext().execute_with(|| {
+			MockFeePayment::<Test>::set_flip_2_1_activated(true);
+			MockBalanceApi::insert_balance(NON_LP_ACCOUNT, Asset::Flip, min_funding());
+
+			assert_noop!(
+				LiquidityProvider::transfer_flip_to_on_chain_balance(
+					RuntimeOrigin::signed(NON_LP_ACCOUNT),
+					min_funding(),
+				),
+				BadOrigin
+			);
 		});
 	}
 }
