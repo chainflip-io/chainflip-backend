@@ -183,7 +183,8 @@ macro_rules! test_all_crypto_chains_async {
 pub(crate) use test_all_crypto_chains_async;
 
 lazy_static! {
-	pub static ref ACCOUNT_IDS: Vec<AccountId> = (1..=4).map(|i| AccountId::new([i; 32])).collect();
+	pub static ref ACCOUNT_IDS: Vec<AccountId> =
+		(1..=10).map(|i| AccountId::new([i; 32])).collect();
 }
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
