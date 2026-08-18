@@ -492,28 +492,3 @@ decl_runtime_apis!(
 		fn cf_supported_assets() -> Vec<Asset>;
 	}
 );
-
-// Mapping of `CustomRuntimeApi` version to the runtime releases that expose it. Use this to work
-// out which `#[changed_in(N)]` / `before_version_N` shape a given historical block requires: a
-// block authored by release R must be decoded with the api version listed against R.
-//
-// | Api version | Runtime spec_version | Releases        |
-// |-------------|----------------------|-----------------|
-// | 5           | 1_10_00 - 1_10_06    | 1.10.x          |
-// | 6           | -                    | unreleased      |
-// | 7           | 1_11_00 - 1_12_00    | 1.11.x, 1.12.0  |
-// | 8           | 1_12_01 - 1_12_07    | 1.12.1 - 1.12.7 |
-// | 9           | 2_00_00 - 2_00_04    | 2.0.0 - 2.0.4   |
-// | 10          | -                    | unreleased      |
-// | 11          | 2_00_05              | 2.0.5           |
-// | 12          | 2_00_06 - 2_00_13    | 2.0.6 - 2.0.13  |
-// | 13 - 15     | -                    | unreleased      |
-// | 16          | 2_01_00 - 2_01_20    | 2.1.x           |
-// | 17          | 2_02_00              | 2.2.0           |
-// | 18          | 2_02_01 - 2_02_08    | 2.2.1 - 2.2.8   |
-// | 19          | -                    | unreleased      |
-// | 20          | 2_03_00              | 2.3 (current)   |
-//
-// Versions marked unreleased only ever existed on `main` between releases, so no live node ever
-// served them. Note also that 2.0.1 shipped with spec_version 2_01_00 (a versioning slip), so
-// spec_version alone doesn't order the 2.0.x line - match on the release tag there.
