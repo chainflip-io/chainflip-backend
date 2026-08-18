@@ -17,7 +17,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, *};
-use cf_traits::mocks::deregistration_check::MockDeregistrationCheck;
+use cf_traits::mocks::deregistration_hooks::MockDeregistrationHooks;
 use frame_support::{assert_noop, assert_ok, traits::HandleLifetime};
 use frame_system::Provider;
 
@@ -194,12 +194,55 @@ fn deregistration_checks() {
 		AccountRolesPallet::register_account_role(&ALICE, ROLE).unwrap();
 		AccountRolesPallet::register_account_role(&BOB, ROLE).unwrap();
 
-		MockDeregistrationCheck::set_should_fail(&ALICE, true);
+		MockDeregistrationHooks::set_should_fail(&ALICE, true);
 
 		assert!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(&ALICE, ROLE)
 			.is_err());
 		assert!(
 			<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(&BOB, ROLE).is_ok()
+		);
+	});
+}
+
+#[test]
+fn on_deregistered_hook_runs_only_when_check_passes() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		AccountRolesPallet::register_account_role(&ALICE, AccountRole::LiquidityProvider).unwrap();
+
+		// A failed check must prevent the on_deregistered hook from running at all - otherwise an
+		// account that fails the check would still have its state cleaned up while remaining a
+		// registered Liquidity Provider.
+		MockDeregistrationHooks::set_should_fail(&ALICE, true);
+		assert!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_as_liquidity_provider(&ALICE)
+			.is_err());
+		assert!(!MockDeregistrationHooks::was_deregistered(&ALICE));
+
+		MockDeregistrationHooks::set_should_fail(&ALICE, false);
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_as_liquidity_provider(
+			&ALICE
+		));
+
+		assert!(MockDeregistrationHooks::was_deregistered(&ALICE));
+	});
+}
+
+#[test]
+fn on_deregistered_sees_the_role_being_deregistered() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		AccountRolesPallet::register_account_role(&ALICE, AccountRole::LiquidityProvider).unwrap();
+
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_as_liquidity_provider(
+			&ALICE
+		));
+
+		// `on_deregistered` must be told the role that was deregistered, not `Unregistered`
+		// - i.e. it must receive the role explicitly, since by the time the hook runs it has
+		// already been cleared from storage.
+		assert_eq!(
+			MockDeregistrationHooks::role_at_on_deregistered(&ALICE),
+			Some(AccountRole::LiquidityProvider),
 		);
 	});
 }

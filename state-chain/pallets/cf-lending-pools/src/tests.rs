@@ -26,7 +26,7 @@ use cf_primitives::Beneficiary;
 use cf_test_utilities::{assert_event_sequence, assert_events_eq};
 use cf_traits::{
 	mocks::{balance_api::MockBalance, price_feed_api::MockPriceFeedApi},
-	DeregistrationCheck, SafeMode, SetSafeMode,
+	DeregistrationHooks, SafeMode, SetSafeMode,
 };
 use frame_support::{
 	assert_noop, assert_ok,
@@ -1763,7 +1763,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 
 #[test]
 fn deregistration_check() {
-	use cf_traits::{mocks::price_feed_api::MockPriceFeedApi, DeregistrationCheck};
+	use cf_traits::{mocks::price_feed_api::MockPriceFeedApi, DeregistrationHooks};
 
 	new_test_ext().execute_with(|| {
 		const BOOST_FUNDS: AssetAmount = 500_000_000;

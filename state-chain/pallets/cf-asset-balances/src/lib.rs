@@ -26,7 +26,7 @@ use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
-	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
+	DeregistrationHooks, EgressApi, KeyProvider, LiabilityTracker, PoolApi, RefundAddressRegistry,
 	ScheduledEgressDetails, WithdrawalAddressAlreadyBound, WithdrawalAddressRestriction,
 };
 use cf_utilities::derive_common_traits;
@@ -983,7 +983,7 @@ where
 
 pub struct FreeBalancesDeregistrationCheck<T: Config>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for FreeBalancesDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for FreeBalancesDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
@@ -999,7 +999,7 @@ impl<T: Config> DeregistrationCheck for FreeBalancesDeregistrationCheck<T> {
 
 pub struct WithdrawalWhitelistDeregistrationCheck<T: Config>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for WithdrawalWhitelistDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for WithdrawalWhitelistDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
@@ -1018,7 +1018,7 @@ pub struct DeleteAccount<T: Config>(PhantomData<T>);
 impl<T: Config> OnKilledAccount<T::AccountId> for DeleteAccount<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
-		let _ = RefundAddresses::<T>::clear_prefix(who, u32::MAX, None);
+		Pallet::<T>::clear_refund_addresses(who);
 		WithdrawalWhitelists::<T>::remove(who);
 		BoundBrokerWithdrawalAddress::<T>::remove(who);
 		Pallet::<T>::discard_pending_matching(who, |_| true);

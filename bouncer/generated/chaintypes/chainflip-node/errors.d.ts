@@ -557,6 +557,16 @@ export interface ChainErrors extends GenericChainErrors {
     DelegatorTransferRestricted: GenericPalletError;
 
     /**
+     * Only accounts registered as a Liquidity Provider can delegate.
+     **/
+    NotLiquidityProvider: GenericPalletError;
+
+    /**
+     * The account cannot deregister as a Liquidity Provider while actively delegating.
+     **/
+    StillDelegating: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;

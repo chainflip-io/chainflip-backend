@@ -389,7 +389,7 @@ fn can_reconciliate_multiple_chains_at_once() {
 
 pub mod balance_api {
 	use crate::{DeleteAccount, FreeBalancesDeregistrationCheck};
-	use cf_traits::DeregistrationCheck;
+	use cf_traits::DeregistrationHooks;
 
 	use super::*;
 
@@ -514,7 +514,7 @@ mod withdrawal_whitelist {
 	};
 	use cf_traits::{
 		mocks::{address_converter::MockAddressConverter, time_source},
-		DeregistrationCheck, RefundAddressRegistry, WithdrawalAddressAlreadyBound,
+		DeregistrationHooks, RefundAddressRegistry, WithdrawalAddressAlreadyBound,
 		WithdrawalAddressRestriction,
 	};
 	use core::time::Duration;

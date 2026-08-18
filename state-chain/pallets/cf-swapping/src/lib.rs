@@ -38,7 +38,7 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
+	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationHooks, ExpiryBehaviour,
 	FeePayment, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi,
 	LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
 	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
@@ -3539,7 +3539,7 @@ pub mod pallet {
 
 pub struct BrokerDeregistrationCheck<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for BrokerDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for BrokerDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
@@ -3561,7 +3561,7 @@ impl<T: Config> DeregistrationCheck for BrokerDeregistrationCheck<T> {
 
 pub struct PendingSwapDeregistrationCheck<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationCheck for PendingSwapDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for PendingSwapDeregistrationCheck<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

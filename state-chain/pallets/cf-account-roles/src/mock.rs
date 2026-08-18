@@ -20,7 +20,7 @@ use crate::{self as pallet_cf_account_roles, Config};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
-	impl_mock_chainflip, mocks::deregistration_check::MockDeregistrationCheck, SpawnAccount,
+	impl_mock_chainflip, mocks::deregistration_hooks::MockDeregistrationHooks, SpawnAccount,
 };
 use codec::Encode;
 use frame_support::{derive_impl, StorageHasher};
@@ -76,7 +76,7 @@ impl SpawnAccount for MockSpawnAccount {
 
 impl Config for Test {
 	type EnsureGovernance = frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
-	type DeregistrationCheck = MockDeregistrationCheck<Self::AccountId>;
+	type DeregistrationHooks = MockDeregistrationHooks<u64>;
 	type RuntimeCall = RuntimeCall;
 	type SpawnAccount = MockSpawnAccount;
 	#[cfg(feature = "runtime-benchmarks")]

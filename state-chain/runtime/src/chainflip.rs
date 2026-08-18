@@ -18,7 +18,7 @@
 pub mod address_derivation;
 pub mod cons_key_rotator;
 pub mod decompose_recompose;
-pub mod deregistration_check;
+pub mod deregistration_hooks;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 pub mod multi_vault_activator;
@@ -112,7 +112,7 @@ use cf_traits::{
 };
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
-pub use deregistration_check::RuntimeDeregistrationCheck;
+pub use deregistration_hooks::RuntimeDeregistrationHooks;
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,

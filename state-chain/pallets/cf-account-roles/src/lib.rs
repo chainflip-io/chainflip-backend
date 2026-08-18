@@ -30,7 +30,7 @@ use sp_std::boxed::Box;
 use cf_traits::Chainflip;
 
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, DeregistrationCheck, SpawnAccount, VanityName};
+use cf_traits::{AccountRoleRegistry, DeregistrationHooks, SpawnAccount, VanityName};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	error::BadOrigin,
@@ -52,7 +52,7 @@ pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::DeregistrationCheck;
+	use cf_traits::DeregistrationHooks;
 	use frame_support::{
 		dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
 		pallet_prelude::*,
@@ -63,7 +63,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + cf_traits::Chainflip {
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
-		type DeregistrationCheck: DeregistrationCheck<
+		type DeregistrationHooks: DeregistrationHooks<
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		type RuntimeCall: Parameter
@@ -282,13 +282,14 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
-		T::DeregistrationCheck::check(account_id).map_err(Into::into)?;
+		T::DeregistrationHooks::check(account_id).map_err(Into::into)?;
 		AccountRoles::<T>::try_mutate(account_id, |role| {
 			role.replace(AccountRole::Unregistered)
 				.filter(|r| *r == account_role)
 				.ok_or(Error::<T>::UnknownAccount)
 		})?;
 		<frame_system::Pallet<T>>::dec_consumers(account_id);
+		T::DeregistrationHooks::on_deregistered(account_id, account_role);
 
 		Self::deposit_event(Event::AccountRoleDeregistered {
 			account_id: account_id.clone(),
