@@ -1845,6 +1845,7 @@ dependencies = [
 name = "cf-runtime-utilities"
 version = "0.1.0"
 dependencies = [
+ "cf-proc-macros",
  "cf-runtime-macros",
  "frame-support",
  "frame-system",
@@ -1855,6 +1856,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sp-tracing",
 ]
 
 [[package]]

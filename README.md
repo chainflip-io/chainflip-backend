@@ -175,7 +175,47 @@ Each captured span is logged as one line, tagged `wasm=true`:
 TRACE main sc_tracing: pallet_cf_elections::pallet: on_initialize, time: 667, id: 29, ...
 ```
 
-Things that fail silently, and how to tell:
+Out of the box this only covers what FRAME instruments itself (block hooks and extrinsic
+dispatch, per pallet). To time a specific function, annotate it with
+`#[cf_runtime_utilities::instrument]`, which opens a span named after the function for the
+duration of its body. No feature or dependency plumbing is needed: the span compiles away
+entirely unless `sp-tracing/with-tracing` is on, which `runtime-tracing` turns on for the whole
+build.
+
+Span names are compile-time literals, so every instance of an instantiable pallet reports under
+the same name and target. Annotate with `#[cf_runtime_utilities::instrument(pallet)]` to tell
+them apart: it records the runtime's name for the instance as a span field, which is reported
+after the timing.
+
+```text
+TRACE main sc_tracing: pallet_cf_elections::pallet: on_finalize, time: 667, id: 29,
+  parent_id: Some(2), values: pallet="BitcoinElections"
+```
+
+#### Visualizing the results
+
+The log is one line per span and grows to tens of megabytes, so it is not meant to be read by hand.
+`./state-chain/scripts/spans-to-profile.py` rebuilds the span tree from it, prints summary
+tables, and writes a profile for [samply](https://github.com/mstange/samply)'s Firefox Profiler
+front-end (`cargo install --locked samply`):
+
+```bash
+./state-chain/scripts/spans-to-profile.py trace.log   # tables + spans.json
+samply load spans.json                                # flamegraph, times in ms
+```
+
+The tables cover the block's top-level structure, every pallet's `on_initialize`/`on_finalize`,
+each elections instance broken down into its electoral systems, and extrinsic dispatches. A table
+with no matching spans is skipped rather than shown empty, so a missing section means the log has
+nothing to put in it — usually because the code in question isn't annotated, or because its
+target isn't in `--tracing-targets`, which is a strict prefix allowlist.
+
+`benchmark block` replays each block `--repeat` times, so every figure is a mean per execution,
+and the first execution of each block is excluded: wasmtime compiles the runtime during that pass.
+Blocks are reported separately rather than averaged together; use `--block N` for just one.
+`--no-tables` skips the report and only writes the profile.
+
+#### Troubleshooting
 
 - **The override is ignored unless its `spec_name` *and* `spec_version` match the on-chain
   runtime at that block.** A `spec_name` mismatch logs a warning, but a `spec_version` mismatch

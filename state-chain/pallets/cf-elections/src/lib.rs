@@ -1372,6 +1372,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[pallet::call_index(0)]
 		#[pallet::weight((T::WeightInfo::vote(authority_votes.len() as u32), DispatchClass::Operational))]
+		#[cf_runtime_utilities::instrument(pallet)]
 		pub fn vote(
 			origin: OriginFor<T>,
 			// Box to avoid RuntimeCall size
@@ -1760,6 +1761,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		#[cf_runtime_utilities::instrument(pallet)]
 		fn on_finalize(block_number: BlockNumberFor<T>) {
 			if let Some(status) = Status::<T, I>::get() {
 				match status {
