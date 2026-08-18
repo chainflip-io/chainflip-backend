@@ -309,9 +309,8 @@ pnpm eslint:check          # Lint (use eslint:fix for auto-fix)
 | `generate_event_schemas.ts`      | Regenerate the zod event schemas from runtime metadata      | §5        |
 | `perform_swap.ts`                | Run one real end-to-end swap                                | see below |
 | `query_storage.ts`               | Read any state chain storage value                          | §9        |
-| `list_pallet_config_updates.ts`  | List the governance config items each pallet exposes        | §10       |
-| `submit_pallet_config_update.ts` | Change a pallet config item via governance                  | §10       |
-| `set_safe_mode.ts`               | Set the runtime safe mode (per-pallet flags) via governance | §11       |
+| `governance.ts config`           | Change a pallet config item via governance                  | §10       |
+| `governance.ts safe-mode`        | Set the runtime safe mode (per-pallet flags) via governance | §11       |
 | `oracle_prices.ts`               | Fetch the state chain's oracle prices, decoded to USD       | §12       |
 
 ### `perform_swap.ts` — a one-off test swap
@@ -355,23 +354,25 @@ CF_NODE_ENDPOINT=wss://mainnet-rpc.chainflip.io ./commands/query_storage.ts swap
 
 ## 10. Updating a pallet config item
 
-Many pallets expose a governance-gated `update_pallet_config` extrinsic — the canonical way to change a runtime config knob (network fees, durations, limits, safe-mode, etc.). Two commands cover discover → submit; verify with §9. This **changes on-chain state via a snowWhite governance proposal** (it auto-executes on localnet), so always `--dry-run` first.
+Many pallets expose a governance-gated `update_pallet_config` extrinsic — the canonical way to change a runtime config knob (network fees, durations, limits, safe-mode, etc.). `governance.ts config` submits one; verify with §9. This **changes on-chain state via a snowWhite governance proposal** (it auto-executes on localnet), so always `--dry-run` first.
 
-**1. Discover** the config items a pallet exposes:
+**1. Find the update shape from the generated types.** See "Finding a shape in the generated types" below — the config update is the argument to `<pallet>.updatePalletConfig`. For a specific field's _semantics_ (units, meaning) read its Rust definition in `state-chain/pallets/<pallet>/src/lib.rs`.
 
-```bash
-cd bouncer
-./commands/list_pallet_config_updates.ts            # all pallets, JSON
-./commands/list_pallet_config_updates.ts swapping   # filter by pallet (substring)
-```
+> #### Finding a shape in the generated types
+>
+> The generated dedot chaintypes under `bouncer/generated/chaintypes/chainflip-node/` are the source of truth for the shape of **any** call, storage entry, or type (regenerated per commit; these commands only run on same-commit localnets, so the types match). To find the shape of:
+>
+> - **an extrinsic's arguments** → `tx.d.ts`: find `<pallet>.<call>`; its parameter list names each argument and its type. e.g. `swapping.updatePalletConfig` takes `Array<PalletCfSwappingPalletConfigUpdate>`; `ethereumBroadcaster.updatePalletConfig` takes a single `PalletCfBroadcastPalletConfigUpdate` (not an array).
+> - **a storage entry** (key types + decoded value) → `query.d.ts`: find `<pallet>.<entry>`.
+> - **a named struct/enum** referenced by either → search `types.d.ts` for `export type <Name>`. A struct is `{ field: Type; … }`; an enum is a union of `{ type: 'Variant'; value: {…} }` (fieldless variants are just `{ type: 'Variant' }`). So a config update value is one variant, e.g. `{ "type": "SetNetworkFee", "value": { … } }` — copy `type` verbatim and fill in `value`.
+>
+> The resolved TS type also tells you how to _write_ a value: **camelCase** keys exactly as shown; a **`bigint`** field (u64/u128/…) must be a quoted decimal string while `number` (u32 and smaller) is a plain number; an **`Option`** shows as `field?:` — include the key for `Some`, omit for `None`.
 
-Each entry lists its variants in dedot's `{ type, value }` form plus an `arity` (`array` or `single`). Example variant: `{ "type": "SetNetworkFeeForAsset", "value": { "asset": "enum Asset: Eth|Flip|...", "rate": "Option<u32>" } }`.
-
-**2. Craft + dry-run.** Build a JSON **array** of `{ type, value }` variants (always an array — the submit command adapts to single-arity pallets, and errors if you pass more than one element to one). Dry-run encodes + validates the call without submitting:
+**2. Craft + dry-run.** Build the JSON in the shape the `updatePalletConfig` parameter shows: an **array** `[{ type, value }, …]` for most pallets, or a **single** `{ type, value }` object for single-arity pallets (validator, `*Broadcaster`, `*ThresholdSigner`). Dry-run encodes + validates without submitting:
 
 ```bash
 echo '[{"type":"SetNetworkFeeForAsset","value":{"asset":"Btc","rate":15000}}]' \
-  | ./commands/submit_pallet_config_update.ts swapping - --dry-run
+  | ./commands/governance.ts config swapping - --dry-run
 ```
 
 The `updates` argument can be a literal JSON string, `@path/to/file.json`, or `-` (stdin).
@@ -380,32 +381,30 @@ The `updates` argument can be a literal JSON string, `@path/to/file.json`, or `-
 
 ```bash
 echo '[{"type":"SetNetworkFeeForAsset","value":{"asset":"Btc","rate":15000}}]' \
-  | ./commands/submit_pallet_config_update.ts swapping -
+  | ./commands/governance.ts config swapping -
 ```
 
 **4. Verify** with §9: `./commands/query_storage.ts swapping networkFeeForAsset Btc` → `15000`.
 
-Gotchas:
+Gotchas specific to config updates (value-encoding conventions — camelCase, `bigint`-as-string, `Option` — are in the shape guide above):
 
-- **Units are domain-specific and not shown by the listing.** A field typed `u32`/`u128` may really be a `Permill` (parts-per-million), a USD/USDC amount (6 decimals), a block count, etc. Convert before submitting — e.g. 150 bps = 1.5% = **15000** Permill; 1000 USDC = **1000000000** atomic units; $200 = **200000000** (6-dp USD). Check the pallet's `PalletConfigUpdate` enum in `state-chain/pallets/<pallet>/src/lib.rs` when unsure.
-- **Use the field keys exactly as listed — they're camelCase** (`minimumLoanAmountUsd`), matching dedot's codec. Passing the Rust snake_case form is rejected with an opaque `ApiCompatibilityError: invalid input type`.
-- **Integers wider than 32 bits must be quoted strings** (`u64`/`u128`/…, which the listing annotates `(pass as string)`) — decoded to BigInt; a plain JSON number is rejected even when it fits in a JS number. `u32` and smaller can be plain numbers.
-- **Variants that set a group of values set _all_ of them at once** (e.g. lending's `SetMinimumAmounts` takes all four minimums, not just one). Query the current values first (§9) and pass the unchanged ones through, or you'll clobber them.
-- **`Option` fields**: include the field for `Some`, omit it for `None` (omitting often clears/removes the entry).
+- **Units are domain-specific** — a `bigint`/`number` may be a `Permill` (parts-per-million), a 6-dp USD/USDC amount, a block count, etc. Convert first: 150 bps = 1.5% = **15000** Permill; 1000 USDC = **1000000000** atomic units; $200 = **200000000** (6-dp USD). Check `state-chain/pallets/<pallet>/src/lib.rs` when unsure.
+- **Group setters set _all_ their fields at once** (e.g. lending's `SetMinimumAmounts` takes all four minimums). Query the current values first (§9) and pass the unchanged ones through, or you'll clobber them.
+- **Omitting an `Option` field clears it.** A `foo?:` you leave out is submitted as `None` — which often removes/resets the entry, not "leave unchanged". To keep a value, read it (§9) and pass it back.
 - **Submission needs the localnet indexer running** (the proposal id is read from the `Governance.Proposed` event via the indexer) — fine on any normally-booted localnet.
 
 ## 11. Setting the runtime safe mode
 
-`./commands/set_safe_mode.ts` sets the runtime safe mode via governance (`environment.update_safe_mode`). Safe mode is a single struct of per-pallet flags; `CodeAmber` replaces the **whole** struct, so setting one item is a read-modify-write (read current → change one flag → submit the whole struct, other flags preserved). Verify with §9 (`query_storage.ts environment runtimeSafeMode`).
+`./commands/governance.ts safe-mode` sets the runtime safe mode via governance (`environment.update_safe_mode`). Safe mode is a single struct of per-pallet flags; `CodeAmber` replaces the **whole** struct, so setting one item is a read-modify-write (read current → change one flag → submit the whole struct, other flags preserved). Verify with §9 (`query_storage.ts environment runtimeSafeMode`).
 
 ```bash
 cd bouncer
-./commands/set_safe_mode.ts                                # list the current safe mode (all pallets/flags)
-./commands/set_safe_mode.ts swapping swapsEnabled false    # set a boolean flag
-./commands/set_safe_mode.ts lendingPools borrowing Red     # set an enum flag  -> { type: 'Red' }
-./commands/set_safe_mode.ts witnesser CodeRed              # set a pallet-level enum
-./commands/set_safe_mode.ts code-red                       # whole runtime off (CodeRed)
-./commands/set_safe_mode.ts code-green                     # whole runtime on  (CodeGreen)
+./commands/governance.ts safe-mode                                # list the current safe mode (all pallets/flags)
+./commands/governance.ts safe-mode swapping swapsEnabled false    # set a boolean flag
+./commands/governance.ts safe-mode lendingPools borrowing Red     # set an enum flag  -> { type: 'Red' }
+./commands/governance.ts safe-mode witnesser CodeRed              # set a pallet-level enum
+./commands/governance.ts safe-mode code-red                       # whole runtime off (CodeRed)
+./commands/governance.ts safe-mode code-green                     # whole runtime on  (CodeGreen)
 # add --dry-run to any set to encode + print the call without submitting
 ```
 
