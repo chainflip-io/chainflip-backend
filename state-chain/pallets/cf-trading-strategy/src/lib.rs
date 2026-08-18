@@ -31,7 +31,7 @@ mod tests;
 extern crate proptest;
 
 use cf_amm::common::AssetPair;
-use cf_amm_math::Price;
+use cf_amm_math::{Amount, Price};
 use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -216,11 +216,20 @@ impl TradingStrategy {
 					*max_sell_tick,
 				)?;
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
-				// The strategy treats the base and quote assets as equivalent (1:1), which is only
-				// valid if they share the same number of decimals.
+				// The strategy values one unit of each asset equally, so it only makes sense for
+				// stablecoin pairs. A difference in decimals is absorbed into a fixed tick offset.
+				ensure!(base_asset.is_usd_stablecoin(), Error::<T>::InvalidAssetsForStrategy);
+				let pricing = PricingMode::equivalent(*base_asset, STABLE_ASSET)
+					.ok_or(Error::<T>::InvalidAssetsForStrategy)?;
+				// The configured ticks are shifted by that offset, so the shifted range must still
+				// be within the valid tick range.
 				ensure!(
-					base_asset.decimals() == STABLE_ASSET.decimals(),
-					Error::<T>::InvalidAssetsForStrategy
+					[*min_buy_tick, *max_buy_tick, *min_sell_tick, *max_sell_tick].into_iter().all(
+						|tick| cf_amm_math::is_tick_valid(
+							tick.saturating_add(pricing.relative_tick)
+						)
+					),
+					Error::<T>::InvalidTick
 				);
 			},
 			TradingStrategy::OracleTracking {
@@ -314,7 +323,7 @@ pub mod pallet {
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
-		StablecoinDefaults<1_000_000_000>, // $1,000 USD
+		StablecoinDefaults<1_000>, // $1,000 USD
 	>;
 
 	/// Stores minimum amount per asset necessary to deploy a strategy if only one of the
@@ -327,7 +336,7 @@ pub mod pallet {
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
-		StablecoinDefaults<20_000_000_000>, // $20,000 USD
+		StablecoinDefaults<20_000>, // $20,000 USD
 	>;
 
 	/// Stores the minimum amount per asset that can be added to an existing strategy.
@@ -337,7 +346,7 @@ pub mod pallet {
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
-		StablecoinDefaults<10_000_000>, // $10 USD
+		StablecoinDefaults<10>, // $10 USD
 	>;
 
 	/// Cursor into `Strategies` for incremental `on_idle` processing: the raw storage
@@ -682,54 +691,69 @@ pub mod pallet {
 	}
 }
 
+/// How the base asset is valued in terms of the quote asset when pricing and sizing orders.
 #[derive(Clone, Copy)]
-enum PricingMode {
-	/// Used by static strategies (`InventoryBased`): the two assets are treated as equivalent
-	/// (1:1). This relies on both assets having the same number of decimals, which is enforced at
-	/// deploy time by `validate_params`.
-	Equivalent,
-	/// Used by `OracleTracking`: `relative_price` is the oracle price of the base asset
-	/// denominated in the quote asset, with its matching `relative_tick`. Amounts are compared in
-	/// the quote denomination and orders are additionally refreshed whenever the oracle moves the
-	/// ticks.
-	Oracle { relative_tick: Tick, relative_price: Price },
+struct PricingMode {
+	/// Price of the base asset denominated in the quote asset, expressed in fine amounts, so it
+	/// also accounts for any difference in the two assets' decimals.
+	relative_price: Price,
+	/// The tick closest to `relative_price`, applied as an offset to the configured tick ranges.
+	/// Rounded to the nearest tick rather than truncated, so the whole order grid isn't
+	/// systematically shifted below the price it is meant to be centred on.
+	relative_tick: Tick,
+	/// Whether orders should also be refreshed when `relative_tick` moves. Only oracle prices
+	/// move; the fixed 1:1 price does not.
+	tracks_oracle: bool,
 }
 
 impl PricingMode {
-	/// The tick offset applied to the configured tick ranges (zero for static strategies).
-	fn tick_offset(self) -> Tick {
-		match self {
-			PricingMode::Equivalent => 0,
-			PricingMode::Oracle { relative_tick, .. } => relative_tick,
-		}
+	/// Values one unit of the base asset as one unit of the quote asset, scaled for any difference
+	/// in their decimals. Used by `InventoryBased`, which is restricted to stablecoin pairs.
+	fn equivalent(base_asset: Asset, quote_asset: Asset) -> Option<Self> {
+		let relative_price = equivalent_value_price(base_asset, quote_asset)?;
+		Some(Self {
+			relative_price,
+			relative_tick: relative_price.into_nearest_tick()?,
+			tracks_oracle: false,
+		})
 	}
 
-	/// Whether orders should also be refreshed when the (oracle-driven) ticks move.
-	fn tracks_oracle(self) -> bool {
-		matches!(self, PricingMode::Oracle { .. })
+	/// Values the base asset at the given oracle price of the base asset denominated in the quote
+	/// asset.
+	fn oracle(relative_price: Price) -> Option<Self> {
+		Some(Self {
+			relative_price,
+			relative_tick: relative_price.into_nearest_tick()?,
+			tracks_oracle: true,
+		})
 	}
 
-	/// Express an amount of the base asset in the quote denomination (identity for static
-	/// strategies). Rounds up to match the threshold/balance comparison semantics.
+	/// Express an amount of the base asset in the quote denomination. Rounds up to match the
+	/// threshold/balance comparison semantics.
 	fn base_to_quote(self, base_amount: AssetAmount) -> Option<AssetAmount> {
 		use frame_support::sp_runtime::SaturatedConversion;
-		match self {
-			PricingMode::Equivalent => Some(base_amount),
-			PricingMode::Oracle { relative_price, .. } =>
-				relative_price.output_amount_ceil(base_amount).map(|v| v.saturated_into()),
-		}
+		self.relative_price
+			.output_amount_ceil(base_amount)
+			.map(|amount| amount.saturated_into())
 	}
 
-	/// Convert an amount expressed in the quote denomination back to the base asset (identity for
-	/// static strategies). Rounds down so we never place orders exceeding the available balance.
+	/// Convert an amount expressed in the quote denomination back to the base asset. Rounds down so
+	/// we never place orders exceeding the available balance.
 	fn quote_to_base(self, quote_amount: AssetAmount) -> Option<AssetAmount> {
 		use frame_support::sp_runtime::SaturatedConversion;
-		match self {
-			PricingMode::Equivalent => Some(quote_amount),
-			PricingMode::Oracle { relative_price, .. } =>
-				relative_price.input_amount_floor(quote_amount).map(|v| v.saturated_into()),
-		}
+		self.relative_price
+			.input_amount_floor(quote_amount)
+			.map(|amount| amount.saturated_into())
 	}
+}
+
+/// The price of `base_asset` in terms of `quote_asset` assuming one unit of each is worth the same,
+/// i.e. purely the ratio of their fine-amount scales (exactly one when the decimals match).
+fn equivalent_value_price(base_asset: Asset, quote_asset: Asset) -> Option<Price> {
+	Price::from_amounts(
+		Amount::from(10u128).pow(quote_asset.decimals().into()),
+		Amount::from(10u128).pow(base_asset.decimals().into()),
+	)
 }
 
 impl<T: Config> Pallet<T> {
@@ -886,7 +910,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Execute the InventoryBased strategy.
 	///
-	/// Uses fixed ticks (no oracle offset) and native asset amounts (no USD conversion).
+	/// Values the base and quote assets 1:1, so the only price adjustment is the fixed offset that
+	/// accounts for a difference in the two assets' decimals.
 	fn execute_inventory_based(
 		base_asset: Asset,
 		min_buy_tick: Tick,
@@ -897,6 +922,15 @@ impl<T: Config> Pallet<T> {
 		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
 		thresholds: &BTreeMap<Asset, AssetAmount>,
 	) {
+		let Some(pricing) = PricingMode::equivalent(base_asset, STABLE_ASSET) else {
+			log_or_panic!(
+				"Failed to derive the 1:1 price for asset {:?}, skipping strategy {:?}",
+				base_asset,
+				strategy_id
+			);
+			return;
+		};
+
 		Self::execute_with_inventory_logic(
 			base_asset,
 			STABLE_ASSET,
@@ -904,7 +938,7 @@ impl<T: Config> Pallet<T> {
 			max_buy_tick,
 			min_sell_tick,
 			max_sell_tick,
-			PricingMode::Equivalent,
+			pricing,
 			strategy_id,
 			existing_orders,
 			thresholds,
@@ -937,10 +971,7 @@ impl<T: Config> Pallet<T> {
 				None
 			},
 			Some(oracle) if oracle.stale => None,
-			Some(oracle) => oracle.price.into_tick().map(|relative_tick| PricingMode::Oracle {
-				relative_tick,
-				relative_price: oracle.price,
-			}),
+			Some(oracle) => PricingMode::oracle(oracle.price),
 		};
 
 		let pricing = match pricing {
@@ -972,8 +1003,8 @@ impl<T: Config> Pallet<T> {
 	/// for oracle strategies, because the oracle has moved the ticks), cancels existing orders, and
 	/// places new ones according to the inventory-based logic.
 	///
-	/// Amounts are valued in the quote denomination using `pricing` (the identity for static
-	/// strategies), so no price lookups happen here.
+	/// Amounts are valued in the quote denomination using `pricing`, so no price lookups happen
+	/// here.
 	fn execute_with_inventory_logic(
 		base_asset: Asset,
 		quote_asset: Asset,
@@ -1020,7 +1051,7 @@ impl<T: Config> Pallet<T> {
 			pricing.base_to_quote(base_threshold).unwrap_or(u128::MAX).min(quote_threshold);
 
 		// Use the balance of assets to calculate the desired limit orders
-		let tick_offset = pricing.tick_offset();
+		let tick_offset = pricing.relative_tick;
 		let total = total_quote.saturating_add(total_base);
 		let new_orders: Vec<_> = inventory_based_strategy_logic(
 			total_quote,
@@ -1046,7 +1077,7 @@ impl<T: Config> Pallet<T> {
 		.collect();
 
 		// Check if the ticks changed to justify updating the orders.
-		let ticks_need_update = pricing.tracks_oracle() && {
+		let ticks_need_update = pricing.tracks_oracle && {
 			existing_orders
 				.iter()
 				.map(|order| (order.tick, order.side))

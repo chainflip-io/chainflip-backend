@@ -524,12 +524,12 @@ impl
 			>,
 			Vec<
 				ElectionIdentifier<
-					<EthereumLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<EthereumFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
 				ElectionIdentifier<
-					<EthereumFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<EthereumLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<

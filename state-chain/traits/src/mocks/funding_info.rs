@@ -33,6 +33,7 @@ impl<T> MockPallet for MockFundingInfo<T> {
 }
 
 const BALANCES: &[u8] = b"BALANCES";
+const LAST_FUNDING_SOURCE: &[u8] = b"LAST_FUNDING_SOURCE";
 
 impl<T: Chainflip> MockFundingInfo<T> {
 	pub fn credit_funds(account_id: &T::AccountId, amount: T::Amount) {
@@ -122,7 +123,14 @@ impl<T: Chainflip> FundAccount for MockFundingInfo<T> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
 
-	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, _source: FundingSource) {
+	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, source: FundingSource) {
 		Self::credit_funds(&account_id, amount);
+		<Self as MockPalletStorage>::put_value(LAST_FUNDING_SOURCE, source);
+	}
+}
+
+impl<T: Chainflip> MockFundingInfo<T> {
+	pub fn last_funding_source() -> Option<FundingSource> {
+		<Self as MockPalletStorage>::get_value(LAST_FUNDING_SOURCE)
 	}
 }

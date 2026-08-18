@@ -293,10 +293,18 @@ pub mod tests {
 				let first_height = if witness_from_index == Default::default() { random_index } else { witness_from_index };
 				return {
 					let headers =
-						header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
-							block_height: first_height.saturating_forward(ix),
-							hash: h1.clone(),
-							parent_hash: h0.clone(),
+						header_data.iter().zip(header_data.iter().skip(1)).enumerate().filter_map(|(ix, (h0, h1))| {
+							// filter out heights beyond BlockHeight::MAX, i.e. once heights start repeating even
+							// though we do steps. This is not allowed by the validity predicate of NonemptyContinuousHeaders
+							if ix > 0 && first_height.saturating_forward(ix - 1) == first_height.saturating_forward(ix) {
+								None
+							} else {
+								Some(Header {
+									block_height: first_height.saturating_forward(ix),
+									hash: h1.clone(),
+									parent_hash: h0.clone(),
+								})
+							}
 						});
 					NonemptyContinuousHeaders::<C>::try_new(headers.collect()).unwrap()
 				}

@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 use super::{primitives::NonemptyContinuousHeaders, BHWTypes, HeightWitnesserProperties};
 use crate::electoral_systems::state_machine::consensus::{
@@ -48,8 +48,12 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 			let mut consensus: SupermajorityConsensus<_> = Default::default();
 
 			for vote in &self.votes {
-				for header in &vote.get_headers() {
-					consensus.insert_vote(header.clone());
+				// we have to make sure that a single voter can't submit the same header multiple
+				// times (and thus effectively gets multiple votes), so we reduce to just the
+				// unique headers submitted
+				let unique_headers = vote.get_headers().into_iter().collect::<BTreeSet<_>>();
+				for header in unique_headers {
+					consensus.insert_vote(header);
 				}
 			}
 
@@ -84,4 +88,50 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
 		vote.clone()
 	}
+
+	#[cfg(test)]
+	fn is_supported_by_vote(consensus: &Self::Result, vote: &Self::Vote) -> bool {
+		consensus.get_headers().iter().all(|header| vote.get_headers().contains(header))
+	}
+
+	#[cfg(test)]
+	fn get_success_threshold(settings: &Self::Settings) -> &SuccessThreshold {
+		&settings.0
+	}
+}
+
+#[test]
+fn test_bhw_consensus() {
+	use proptest::{
+		prelude::Arbitrary,
+		strategy::{LazyJust, Strategy},
+	};
+
+	type Types = crate::electoral_systems::state_machine::core::TypesFor<(u8, bool, Vec<()>)>;
+
+	BlockHeightWitnesserConsensus::<Types>::check_consensus_is_always_supported_by_success_threshold_votes(
+		file!(),
+		3,
+		LazyJust::new(|| {
+			(
+				SuccessThreshold { success_threshold: 3 },
+				HeightWitnesserProperties { witness_from_index: 0 },
+			)
+		}),
+		(0, 10),
+	);
+
+	BlockHeightWitnesserConsensus::<
+		crate::electoral_systems::state_machine::core::TypesFor<(u8, bool, ())>,
+	>::check_consensus_is_always_supported_by_success_threshold_votes(
+		file!(),
+		3,
+		u8::arbitrary().prop_map(|witness_from_index| {
+			(
+				SuccessThreshold { success_threshold: 3 },
+				HeightWitnesserProperties { witness_from_index },
+			)
+		}),
+		(0, 10),
+	);
 }

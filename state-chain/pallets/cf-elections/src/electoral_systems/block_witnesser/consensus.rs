@@ -71,4 +71,40 @@ where
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
 		vote.clone()
 	}
+
+	#[cfg(test)]
+	fn is_supported_by_vote(consensus: &Self::Result, vote: &Self::Vote) -> bool {
+		consensus == vote
+	}
+
+	#[cfg(test)]
+	fn get_success_threshold(settings: &Self::Settings) -> &SuccessThreshold {
+		&settings.0
+	}
+}
+
+#[test]
+fn test_bw_consensus() {
+	use crate::electoral_systems::block_witnesser::state_machine::EngineElectionType;
+	use proptest::{
+		prelude::{Arbitrary, Strategy},
+		result::Probability,
+		sample::SizeRange,
+	};
+
+	type Types = crate::electoral_systems::state_machine::core::TypesFor<(u8, bool, Vec<()>)>;
+
+	BWConsensus::<Types>::check_consensus_is_always_supported_by_success_threshold_votes(
+		file!(),
+		3,
+		(EngineElectionType::<Types>::arbitrary(), u8::arbitrary()).prop_map(
+			|(election_type, block_height)| {
+				(
+					SuccessThreshold { success_threshold: 3 },
+					BWElectionProperties { election_type, block_height, properties: () },
+				)
+			},
+		),
+		((SizeRange::new(0..=5usize), ()), (Probability::new(0.5), ())), /* size of blockdata */
+	);
 }

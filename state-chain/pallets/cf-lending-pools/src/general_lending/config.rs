@@ -15,6 +15,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
+use cf_primitives::BLOCKS_IN_YEAR;
+
+/// Longer intervals would make the number of payment intervals per year round down to zero,
+/// which we can't derive a per-interval interest rate from.
+pub const MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS: u32 = BLOCKS_IN_YEAR;
+
 /// Interest "curve" is defined as two linear segments. One is in effect from 0% to
 /// `junction_utilisation`, and the second is in effect from `junction_utilisation` to 100%.
 #[derive(
@@ -231,12 +237,19 @@ impl LendingConfiguration {
 		interest_per_year: Permill,
 		interval_blocks: u32,
 	) -> Perquintill {
-		use cf_primitives::BLOCKS_IN_YEAR;
+		// Guaranteed to be non-zero by the validation performed when the interval is set, but
+		// this is reached from `on_initialize`, so we don't risk dividing by zero here.
+		let Some(intervals_per_year) =
+			BLOCKS_IN_YEAR.checked_div(interval_blocks).filter(|intervals| *intervals > 0)
+		else {
+			log_or_panic!("Invalid interest payment interval: {interval_blocks} blocks");
+			return Perquintill::zero();
+		};
 
 		Perquintill::from_parts(
 			(interest_per_year.deconstruct() as u64 *
 				(Perquintill::ACCURACY / Permill::ACCURACY as u64)) /
-				(BLOCKS_IN_YEAR / interval_blocks) as u64,
+				intervals_per_year as u64,
 		)
 	}
 
@@ -436,6 +449,49 @@ mod tests {
 			CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(100)),
 			Permill::from_percent(50)
 		);
+	}
+
+	#[test]
+	fn interest_per_payment_interval() {
+		let interest_per_year = Permill::from_percent(10);
+
+		// With a payment interval of exactly one year, the per-interval rate is the annual rate:
+		assert_eq!(
+			CONFIG.interest_per_year_to_per_payment_interval(
+				interest_per_year,
+				MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS
+			),
+			Perquintill::from_percent(10)
+		);
+
+		// Halving the interval halves the per-interval rate:
+		assert_eq!(
+			CONFIG.interest_per_year_to_per_payment_interval(
+				interest_per_year,
+				MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS / 2
+			),
+			Perquintill::from_percent(5)
+		);
+
+		// Intervals outside of the range enforced by the setter are caught rather than dividing
+		// by zero. `log_or_panic!` panics under debug assertions and only logs without them, so
+		// which of the two we observe depends on the profile the tests are built with.
+		for invalid_interval in [0, MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS + 1] {
+			if cfg!(debug_assertions) {
+				cf_utilities::assert_panics!(CONFIG.interest_per_year_to_per_payment_interval(
+					interest_per_year,
+					invalid_interval
+				));
+			} else {
+				assert_eq!(
+					CONFIG.interest_per_year_to_per_payment_interval(
+						interest_per_year,
+						invalid_interval
+					),
+					Perquintill::zero()
+				);
+			}
+		}
 	}
 
 	#[test]

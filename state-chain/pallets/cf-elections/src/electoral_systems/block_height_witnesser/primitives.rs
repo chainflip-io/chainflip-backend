@@ -44,7 +44,10 @@ defx! {
 	}
 	validate this (else ContinuousHeadersError) {
 		matching_hashes: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
-		continuous_heights: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
+		continuous_heights: pairs.clone().all(|(a, b)|
+			(a.block_height.saturating_forward(1) == b.block_height) &&
+			(a.block_height != b.block_height)
+		),
 
 		( where pairs = this.all_headers.clone().into_iter().zip(this.all_headers.clone().into_iter().skip(1)) )
 	}
@@ -100,7 +103,10 @@ defx! {
 	validate this (else NonemptyContinuousHeadersError) {
 		empty: true,
 		matching_hashes: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
-		continuous_heights: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
+		continuous_heights: pairs.clone().all(|(a, b)|
+			(a.block_height.saturating_forward(1) == b.block_height) &&
+			(a.block_height != b.block_height)
+		),
 
 		( where pairs = this.get_headers().into_iter().zip(this.get_headers().into_iter().skip(1)) )
 	}

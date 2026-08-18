@@ -18,9 +18,21 @@ use frame_support::sp_runtime::{DispatchError, DispatchResult};
 
 use crate::{Chainflip, FeePayment};
 
-use super::funding_info::MockFundingInfo;
+use super::{funding_info::MockFundingInfo, MockPallet, MockPalletStorage};
 
 pub struct MockFeePayment<T>(sp_std::marker::PhantomData<T>);
+
+impl<T> MockPallet for MockFeePayment<T> {
+	const PREFIX: &'static [u8] = b"MockFeePayment";
+}
+
+const FLIP_2_1_ACTIVATED: &[u8] = b"FLIP_2_1_ACTIVATED";
+
+impl<T> MockFeePayment<T> {
+	pub fn set_flip_2_1_activated(activated: bool) {
+		Self::put_value(FLIP_2_1_ACTIVATED, activated);
+	}
+}
 
 pub const ERROR_INSUFFICIENT_LIQUIDITY: DispatchError =
 	DispatchError::Other("Insufficient liquidity");
@@ -40,11 +52,16 @@ impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayme
 	fn burn_or_reserve_offchain(_amount: Self::Amount) {}
 
 	fn is_flip_2_1_activated() -> bool {
-		false
+		Self::get_value(FLIP_2_1_ACTIVATED).unwrap_or(false)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
 		MockFundingInfo::<T>::credit_funds(account_id, amount);
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn activate_flip_2_1() {
+		Self::set_flip_2_1_activated(true);
 	}
 }

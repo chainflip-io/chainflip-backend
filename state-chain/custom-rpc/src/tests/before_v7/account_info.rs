@@ -20,11 +20,10 @@ use state_chain_runtime::runtime_apis::types::{
 
 #[test]
 fn test_no_account_serialization() {
-	insta::assert_snapshot!(serde_json::to_value(RpcAccountInfoBeforeV7::unregistered(
+	insta::assert_snapshot!(to_pretty_json(&RpcAccountInfoBeforeV7::unregistered(
 		0,
 		any::AssetMap::default()
-	))
-	.unwrap());
+	)));
 }
 
 #[test]
@@ -121,7 +120,7 @@ fn test_lp_serialization() {
 		0,
 	);
 
-	insta::assert_snapshot!(serde_json::to_value(lp).unwrap());
+	insta::assert_snapshot!(to_pretty_json(&lp));
 }
 
 #[test]
@@ -143,5 +142,5 @@ fn test_validator_serialization() {
 		estimated_redeemable_balance: 0,
 	});
 
-	insta::assert_snapshot!(serde_json::to_value(validator).unwrap());
+	insta::assert_snapshot!(to_pretty_json(&validator));
 }

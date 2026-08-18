@@ -180,6 +180,11 @@ import type {
   PalletCfElectionsInitialState007,
   CfChainsWitnessPeriodBlockWitnessRangeBsc,
   StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes,
+  PalletCfElectionsVoteStorageAuthorityVote008,
+  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+  PalletCfElectionsInitialState008,
+  CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+  StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes,
 } from './types.js';
 
 export type ChainSubmittableExtrinsic<
@@ -4357,6 +4362,28 @@ export interface ChainTx<
             params: {
               accounts: Array<[AccountId32Like, CfPrimitivesChainsAssetsAnyAsset, bigint]>;
             };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Move Flip from the caller's free balance to their on-chain balance, where it can be
+     * used to pay transaction fees or to delegate.
+     *
+     * The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
+     * external address.
+     *
+     * @param {bigint} amount
+     **/
+    transferFlipToOnChainBalance: GenericTxCall<
+      (amount: bigint) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'LiquidityProvider';
+          palletCall: {
+            name: 'TransferFlipToOnChainBalance';
+            params: { amount: bigint };
           };
         },
         ChainKnownTypes
@@ -10674,6 +10701,347 @@ export interface ChainTx<
               properties: [
                 CfChainsWitnessPeriodBlockWitnessRangeBsc,
                 StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes,
+              ];
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Generic pallet tx call
+     **/
+    [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
+  };
+  /**
+   * Pallet `AssethubElections`'s transaction calls
+   **/
+  assethubElections: {
+    /**
+     *
+     * @param {Array<[PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote008]>} authorityVotes
+     **/
+    vote: GenericTxCall<
+      (
+        authorityVotes: Array<
+          [PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote008]
+        >,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'Vote';
+            params: {
+              authorityVotes: Array<
+                [
+                  PalletCfElectionsElectionIdentifier005,
+                  PalletCfElectionsVoteStorageAuthorityVote008,
+                ]
+              >;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub} sharedData
+     **/
+    provideSharedData: GenericTxCall<
+      (
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'ProvideSharedData';
+            params: {
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     **/
+    ignoreMyVotes: GenericTxCall<
+      () => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'IgnoreMyVotes';
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     **/
+    stopIgnoringMyVotes: GenericTxCall<
+      () => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'StopIgnoringMyVotes';
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsElectionIdentifier005} electionIdentifier
+     **/
+    deleteVote: GenericTxCall<
+      (electionIdentifier: PalletCfElectionsElectionIdentifier005) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'DeleteVote';
+            params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsInitialState008} initialState
+     **/
+    initialize: GenericTxCall<
+      (initialState: PalletCfElectionsInitialState008) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'Initialize';
+            params: { initialState: PalletCfElectionsInitialState008 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {[PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings, number, []] | undefined} unsynchronisedSettings
+     * @param {[[], [], [], [], number] | undefined} settings
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     **/
+    updateSettings: GenericTxCall<
+      (
+        unsynchronisedSettings:
+          | [
+              PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
+              PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+              PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+              number,
+              [],
+            ]
+          | undefined,
+        settings: [[], [], [], [], number] | undefined,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'UpdateSettings';
+            params: {
+              unsynchronisedSettings:
+                | [
+                    PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
+                    PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+                    PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
+                    number,
+                    [],
+                  ]
+                | undefined;
+              settings: [[], [], [], [], number] | undefined;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {number} blocks
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     **/
+    setSharedDataReferenceLifetime: GenericTxCall<
+      (
+        blocks: number,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'SetSharedDataReferenceLifetime';
+            params: {
+              blocks: number;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsElectionIdentifier005} electionIdentifier
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     * @param {boolean} checkElectionExists
+     **/
+    clearElectionVotes: GenericTxCall<
+      (
+        electionIdentifier: PalletCfElectionsElectionIdentifier005,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+        checkElectionExists: boolean,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'ClearElectionVotes';
+            params: {
+              electionIdentifier: PalletCfElectionsElectionIdentifier005;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+              checkElectionExists: boolean;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {PalletCfElectionsElectionIdentifier005} electionIdentifier
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     * @param {boolean} checkElectionExists
+     **/
+    invalidateElectionConsensusCache: GenericTxCall<
+      (
+        electionIdentifier: PalletCfElectionsElectionIdentifier005,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+        checkElectionExists: boolean,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'InvalidateElectionConsensusCache';
+            params: {
+              electionIdentifier: PalletCfElectionsElectionIdentifier005;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+              checkElectionExists: boolean;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     **/
+    pauseElections: GenericTxCall<
+      () => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'PauseElections';
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {boolean} requireVotesCleared
+     **/
+    unpauseElections: GenericTxCall<
+      (requireVotesCleared: boolean) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'UnpauseElections';
+            params: { requireVotesCleared: boolean };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {number} limit
+     * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
+     **/
+    clearAllVotes: GenericTxCall<
+      (
+        limit: number,
+        ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'ClearAllVotes';
+            params: {
+              limit: number;
+              ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
+            };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     **/
+    validateStorage: GenericTxCall<
+      () => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'ValidateStorage';
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     *
+     * @param {[CfChainsWitnessPeriodBlockWitnessRangeAssethub, StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes]} properties
+     **/
+    startNewBlockWitnesserElection: GenericTxCall<
+      (
+        properties: [
+          CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+          StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes,
+        ],
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubElections';
+          palletCall: {
+            name: 'StartNewBlockWitnesserElection';
+            params: {
+              properties: [
+                CfChainsWitnessPeriodBlockWitnessRangeAssethub,
+                StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes,
               ];
             };
           };

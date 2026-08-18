@@ -11,6 +11,7 @@ import {
   killProcess,
   startEngines,
   startNodes,
+  waitForNoPendingBroadcasts,
   waitForPortOpen,
 } from 'shared/utils';
 import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
@@ -133,6 +134,16 @@ export async function upgradeBinaries<A = []>(
   // Drop the cached dedot client so the next extrinsic submission connects fresh to the new
   // node, rather than relying on the stale connection's auto-reconnect.
   await clearChainflipClientCache();
+
+  // A broadcast that is initiated but not yet witnessed will be lost if we restart the engines
+  // now: its `SolTxBroadcastRequest` lands in a block no engine is watching, and on a single-node
+  // network that one miss aborts the broadcast and leaks its Solana durable nonce for the rest of
+  // the run.
+  //
+  // Keep this immediately before `killEngines`. Anything initiated between the check and the kill
+  // is still unprotected, so moving it earlier — above the governance call, say, or into the
+  // preceding setup step — widens that window back out to several blocks.
+  await waitForNoPendingBroadcasts(cf.logger);
 
   // Kill engines first so they don't try to submit extrinsics while the node
   // is shutting down.

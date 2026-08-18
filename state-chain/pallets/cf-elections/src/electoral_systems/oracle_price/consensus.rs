@@ -86,6 +86,17 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 			})
 			.collect()
 	}
+
+	#[cfg(test)]
+	fn is_supported_by_vote(_consensus: &Self::Result, _vote: &Self::Vote) -> bool {
+		// currently not testing this
+		false
+	}
+
+	#[cfg(test)]
+	fn get_success_threshold(settings: &Self::Settings) -> &SuccessThreshold {
+		&settings.0
+	}
 }
 
 #[cfg(test)]

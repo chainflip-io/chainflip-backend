@@ -1491,6 +1491,21 @@ export interface ChainErrors extends GenericChainErrors {
     InternalSwapsDisabled: GenericPalletError;
 
     /**
+     * Transfers to the on-chain balance are disabled due to safe mode.
+     **/
+    FlipTransferToOnChainBalanceDisabled: GenericPalletError;
+
+    /**
+     * Transfers to the on-chain balance are only available once Flip 2.1 is active.
+     **/
+    FlipTransferToOnChainBalanceUnavailable: GenericPalletError;
+
+    /**
+     * The transferred amount is below the minimum funding amount.
+     **/
+    BelowMinimumFunding: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -3152,6 +3167,27 @@ export interface ChainErrors extends GenericChainErrors {
    * Pallet `BscElections`'s errors
    **/
   bscElections: {
+    Uninitialized: GenericPalletError;
+    AlreadyInitialized: GenericPalletError;
+    UnknownElection: GenericPalletError;
+    Unauthorised: GenericPalletError;
+    Paused: GenericPalletError;
+    NotPaused: GenericPalletError;
+    UnreferencedSharedData: GenericPalletError;
+    CorruptStorage: GenericPalletError;
+    VotesNotCleared: GenericPalletError;
+    NotContributing: GenericPalletError;
+    NoVotesSpecified: GenericPalletError;
+
+    /**
+     * Generic pallet error
+     **/
+    [error: string]: GenericPalletError;
+  };
+  /**
+   * Pallet `AssethubElections`'s errors
+   **/
+  assethubElections: {
     Uninitialized: GenericPalletError;
     AlreadyInitialized: GenericPalletError;
     UnknownElection: GenericPalletError;

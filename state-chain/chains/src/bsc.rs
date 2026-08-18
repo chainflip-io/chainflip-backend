@@ -150,12 +150,11 @@ impl BscTrackedData {
 	}
 }
 
-// todo: revisit these constants
 pub mod fees {
-	pub const BASE_COST_PER_BATCH: u128 = 50_000;
-	pub const GAS_COST_PER_FETCH: u128 = 30_000;
-	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
-	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+	pub const BASE_COST_PER_BATCH: u128 = 70_000;
+	pub const GAS_COST_PER_FETCH: u128 = 16_000;
+	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 36_000;
+	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 35_000;
 	pub const MAX_GAS_LIMIT: u128 = 10_000_000;
 	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 90_000;
 	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 120_000;
