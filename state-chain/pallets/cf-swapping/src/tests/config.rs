@@ -394,6 +394,38 @@ fn cannot_withdraw_in_safe_mode() {
 }
 
 #[test]
+fn cannot_withdraw_affiliate_fees_in_safe_mode() {
+	new_test_ext().execute_with(|| {
+		const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+
+		assert_ok!(Swapping::register_affiliate(RuntimeOrigin::signed(BROKER), [0xcc; 20].into()));
+		let affiliate = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+			.expect("Affiliate must be registered!");
+		<Test as Config>::BalanceApi::credit_account(&affiliate, Asset::Usdc, 200);
+
+		// Activate code red
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+
+		assert_noop!(
+			Swapping::affiliate_withdrawal_request(RuntimeOrigin::signed(BROKER), affiliate),
+			Error::<Test>::WithdrawalsDisabled
+		);
+
+		assert_eq!(get_broker_balance::<Test>(&affiliate, Asset::Usdc), 200);
+
+		// Change back to code green
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
+
+		// withdraws are now allowed
+		assert_ok!(Swapping::affiliate_withdrawal_request(
+			RuntimeOrigin::signed(BROKER),
+			affiliate
+		));
+		assert_eq!(get_broker_balance::<Test>(&affiliate, Asset::Usdc), 0);
+	});
+}
+
+#[test]
 fn cannot_register_as_broker_in_safe_mode() {
 	pub const BROKER: <Test as frame_system::Config>::AccountId = 6969u64;
 

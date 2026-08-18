@@ -1263,8 +1263,6 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
-			ensure!(T::SafeMode::get().withdrawals_enabled, Error::<T>::WithdrawalsDisabled);
-
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
@@ -1946,6 +1944,9 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: ForeignChainAddress,
 		) -> DispatchResult {
+			// Gated here rather than in the extrinsics so that every withdrawal path is covered.
+			ensure!(T::SafeMode::get().withdrawals_enabled, Error::<T>::WithdrawalsDisabled);
+
 			let earned_fees = T::BalanceApi::get_balance(account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
 
