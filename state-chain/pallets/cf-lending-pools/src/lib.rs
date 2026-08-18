@@ -37,7 +37,7 @@ pub use general_lending::{
 
 pub use general_lending::config::{
 	InterestRateConfiguration, LendingConfiguration, LendingPoolConfiguration, LtvThresholds,
-	NetworkFeeContributions,
+	NetworkFeeContributions, MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS,
 };
 
 use boost::BoostPool;
@@ -117,6 +117,7 @@ pub struct BoostConfiguration {
 	PartialEq,
 	Eq,
 	RuntimeDebug,
+	Default,
 )]
 pub struct PalletSafeMode {
 	pub add_boost_funds_enabled: bool,
@@ -666,7 +667,10 @@ pub mod pallet {
 							config.fee_swap_interval_blocks = *interval;
 						},
 						PalletConfigUpdate::SetInterestPaymentIntervalBlocks(interval) => {
-							ensure!(*interval > 0, Error::<T>::InvalidConfigurationParameters);
+							ensure!(
+								*interval > 0 && *interval <= MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS,
+								Error::<T>::InvalidConfigurationParameters
+							);
 							config.interest_payment_interval_blocks = *interval;
 						},
 						PalletConfigUpdate::SetFeeSwapThresholdUsd(amount_threshold) => {

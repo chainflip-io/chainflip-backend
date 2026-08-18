@@ -2,6 +2,8 @@ export LOCALNET_INIT_DIR=localnet/init
 export WORKFLOW=build-localnet
 export GENESIS_NODES=("bashful" "doc" "dopey")
 export REQUIRED_BINARIES="engine-runner chainflip-node chainflip-broker-api chainflip-lp-api"
+# The native (non-docker) processes that `destroy` is allowed to kill.
+export LOCALNET_BINARIES="$REQUIRED_BINARIES solana-test-validator"
 export INIT_CONTAINERS="eth-init solana-init"
 export CORE_CONTAINERS="bitcoin geth bsc polkadot1 polkadot2 assethub redis tron tron-peer"
 export DEPOSIT_MONITOR_CONTAINER="deposit-monitor"
@@ -250,8 +252,7 @@ build-localnet() {
 destroy() {
   echo "💣 Destroying network..."
   $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
-  for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
-  for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
+  kill_by_binary_name $LOCALNET_BINARIES
   rm -rf "/tmp/chainflip"
   rm -rf $SOLANA_BASE_PATH
 

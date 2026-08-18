@@ -21,6 +21,7 @@ use cf_primitives::{FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_test_utilities::TestExternalities;
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, EpochInfo};
 use mock_runtime::MIN_FUNDING;
+use pallet_cf_flip::PalletConfigUpdate;
 use pallet_cf_funding::{pallet::Error, RedemptionAmount};
 use pallet_cf_validator::CurrentRotationPhase;
 use sp_runtime::{FixedPointNumber, FixedU64};
@@ -203,6 +204,8 @@ fn validator_info_includes_bid_and_max_bid() {
 
 #[test]
 fn can_calculate_account_apy() {
+	use state_chain_runtime::runtime_apis::custom_api::runtime_decl_for_custom_runtime_api::CustomRuntimeApi;
+
 	const EPOCH_BLOCKS: u32 = 1_000;
 	const MAX_AUTHORITIES: u32 = 10;
 	const NUM_BACKUPS: u32 = 20;
@@ -229,6 +232,17 @@ fn can_calculate_account_apy() {
 				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
 			assert_eq!(apy_basis_point, 49u32);
 			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
+
+			// Once FLIP 2.1 is active, we dont return an apy since we move to the rewards
+			// distrubtion rpc
+			assert_ok!(Flip::update_pallet_config(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				vec![PalletConfigUpdate::SetFeeRewardsActivationEpoch(Validator::epoch_index())]
+					.try_into()
+					.unwrap(),
+			));
+			assert!(Flip::is_flip_2_1_activated());
+			assert!(Runtime::cf_validator_info(&validator).apy_bp.is_none());
 		});
 }
 

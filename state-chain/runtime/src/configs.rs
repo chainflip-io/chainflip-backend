@@ -600,9 +600,10 @@ impl pallet_cf_lp::Config for Runtime {
 	type RefundAddressRegistry = AssetBalances;
 	type SwapRequestHandler = Swapping;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
-	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type MinimumDeposit = MinimumDepositProvider;
+	type FundAccount = Funding;
+	type MinimumFunding = Funding;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -779,6 +780,7 @@ impl pallet_cf_funding::Config for Runtime {
 	type RedemptionChecker = Validator;
 	type EthereumSCApi = crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>;
 	type SafeMode = RuntimeSafeMode;
+	type MoveFlipToGateway = Swapping;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
 
@@ -1216,6 +1218,16 @@ impl pallet_cf_elections::Config<Instance4> for Runtime {
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 	type ElectoralSystemConfiguration =
 		chainflip::witnessing::arbitrum_elections::ElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
+}
+
+impl pallet_cf_elections::Config<Instance6> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Assethub as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
+	type ElectoralSystemRunner =
+		chainflip::witnessing::assethub_elections::AssethubElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type ElectoralSystemConfiguration =
+		chainflip::witnessing::assethub_elections::ElectoralSystemConfiguration;
 	type SafeMode = RuntimeSafeMode;
 }
 

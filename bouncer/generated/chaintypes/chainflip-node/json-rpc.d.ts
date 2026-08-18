@@ -74,6 +74,8 @@ export type ChainJsonRpcApis = Pick<
   | 'cf_arbitrum_electoral_data'
   | 'cf_arbitrum_filter_votes'
   | 'cf_asset_balances'
+  | 'cf_assethub_electoral_data'
+  | 'cf_assethub_filter_votes'
   | 'cf_auction_parameters'
   | 'cf_auction_state'
   | 'cf_authority_emission_per_block'

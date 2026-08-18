@@ -15,7 +15,7 @@ import {
   runWithTimeoutAndExit,
 } from 'shared/utils';
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
-import { createPolkadotVault } from 'commands/setup_vaults';
+import { createAssetHubVault } from 'commands/setup_vaults';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 export async function rotateAndFund(
@@ -74,7 +74,7 @@ async function main(): Promise<void> {
     'assethubVault:AwaitingGovernanceActivation',
   ).event;
   const hubKey = (await hubActivationRequest).data.newPublicKey;
-  const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
+  const hubVaultAddress = await createAssetHubVault(cf.logger);
   const hubProxyAdded = observeEvent(cf.logger, 'proxy:ProxyAdded', { chain: 'assethub' }).event;
   const [, hubVaultEvent] = await Promise.all([
     rotateAndFund(assethub, hubVaultAddress, hubKey),

@@ -22,10 +22,14 @@ use cf_chains::{
 	address::EncodedAddress,
 	assets::any::AssetMap,
 	evm::Address as EvmAddress,
-	instances::{ArbitrumInstance, BitcoinInstance, BscInstance, EthereumInstance, TronInstance},
+	instances::{
+		ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
+		TronInstance,
+	},
 	sol::SolInstructionRpc,
 	tron::TronAddress,
-	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, TransactionInId, Tron,
+	Arbitrum, Assethub, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
+	TransactionInId, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{
@@ -783,6 +787,10 @@ pub enum RawWitnessedEvents {
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, BscInstance>)>,
 		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, BscInstance>)>,
 	},
+	Assethub {
+		deposits: Vec<(u64, DepositWitness<Assethub>)>,
+		broadcasts: Vec<(u64, TransactionConfirmation<Runtime, AssethubInstance>)>,
+	},
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
@@ -793,6 +801,7 @@ pub enum DepositDetails {
 	Arbitrum(<Arbitrum as Chain>::DepositDetails),
 	Tron(<Tron as Chain>::DepositDetails),
 	Bsc(<Bsc as Chain>::DepositDetails),
+	Assethub(<Assethub as Chain>::DepositDetails),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]

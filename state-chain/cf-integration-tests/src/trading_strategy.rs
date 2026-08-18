@@ -354,7 +354,7 @@ fn oracle_strategy_basic_usage() {
 				Runtime,
 				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
 					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Decrease(ORDER_AMOUNT)),
-					tick: -199,
+					tick: -198,
 					..
 				})
 			);
@@ -362,7 +362,7 @@ fn oracle_strategy_basic_usage() {
 				Runtime,
 				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
 					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Decrease(ORDER_AMOUNT)),
-					tick: -195,
+					tick: -194,
 					..
 				})
 			);

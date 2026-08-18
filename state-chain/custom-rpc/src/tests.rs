@@ -53,7 +53,7 @@ use cf_chains::{
 		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
 		SolPubkey, VaultSwapOrDepositChannelId,
 	},
-	Arbitrum, Bitcoin, CcmAdditionalData, CcmChannelMetadataChecked, Ethereum,
+	Arbitrum, Assethub, Bitcoin, CcmAdditionalData, CcmChannelMetadataChecked, Ethereum,
 	EvmVaultSwapExtraParameters, ForeignChainAddress, Solana,
 };
 
@@ -85,6 +85,17 @@ use sp_runtime::{AccountId32, FixedU64};
 
 const ID_1: AccountId32 = AccountId32::new([1; 32]);
 const ID_2: AccountId32 = AccountId32::new([2; 32]);
+
+/// Pretty-print a value as JSON, for snapshots that would otherwise be squashed onto a single
+/// line.
+///
+/// Goes via [`serde_json::Value`] rather than serializing directly: some of our types are backed
+/// by hash maps, so serializing them directly yields a non-deterministic key order, whereas
+/// `Value`'s map is sorted. Note also that `insta::assert_json_snapshot!` is not equivalent - it
+/// uses insta's own serializer instead of serde_json.
+pub fn to_pretty_json<T: Serialize>(value: &T) -> String {
+	serde_json::to_string_pretty(&serde_json::to_value(value).unwrap()).unwrap()
+}
 
 fn asset_map<T: Clone>(v: T) -> any::AssetMap<T> {
 	any::AssetMap {
@@ -434,7 +445,7 @@ fn test_environment_serialization() {
 		},
 	};
 
-	insta::assert_snapshot!(serde_json::to_value(env).unwrap());
+	insta::assert_snapshot!(to_pretty_json(&env));
 }
 
 #[test]
@@ -508,15 +519,14 @@ fn test_boost_fees_serialization() {
 
 #[test]
 fn test_swap_output_serialization() {
-	insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2 {
+	insta::assert_snapshot!(to_pretty_json(&RpcSwapOutputV2 {
 		output: 1_000_000_000_000_000_000u128.into(),
 		intermediary: Some(1_000_000u128.into()),
 		network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
 		ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
 		egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
 		broker_commission: RpcFee { asset: Asset::Usdc, amount: 100u128.into() },
-	})
-	.unwrap());
+	}));
 }
 
 #[test]
@@ -543,15 +553,14 @@ fn test_vault_addresses_custom_rpc() {
 
 #[test]
 fn swap_output_v2_serialization() {
-	insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2 {
+	insta::assert_snapshot!(to_pretty_json(&RpcSwapOutputV2 {
 		output: 1_000_000_000_000_000_000u128.into(),
 		intermediary: Some(1_000_000u128.into()),
 		network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
 		ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
 		egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
 		broker_commission: RpcFee { asset: Asset::Usdc, amount: 100u128.into() },
-	})
-	.unwrap());
+	}));
 }
 
 #[test]
@@ -888,6 +897,14 @@ fn witnessed_events_serialization() {
 
 	let converted_deposit =
 		convert_deposit_witness::<Ethereum>(&deposit_witness, 1, NetworkEnvironment::Mainnet);
+	let deposit_witness2: DepositWitness<Assethub> = DepositWitness {
+		deposit_address: PolkadotAccountId([0x33; 32]),
+		asset: cf_chains::assets::hub::Asset::HubDot,
+		amount: 200u128,
+		deposit_details: cf_primitives::TxId { block_number: 42, extrinsic_index: 7 },
+	};
+	let converted_deposit2 =
+		convert_deposit_witness::<Assethub>(&deposit_witness2, 2, NetworkEnvironment::Mainnet);
 
 	// Create the raw VaultDepositWitness and convert it to test the serialization
 	let vault_deposit_witness: VaultDepositWitness<Runtime, EthereumInstance> =
@@ -947,7 +964,7 @@ fn witnessed_events_serialization() {
 	// (convert_bitcoin_broadcast, convert_evm_broadcast) depend on runtime storage lookups
 	// for broadcast_id which cannot be easily mocked in unit tests.
 	let response = RpcWitnessedEventsResponse {
-		deposits: vec![converted_deposit],
+		deposits: vec![converted_deposit, converted_deposit2],
 		broadcasts: vec![BroadcastWitnessInfo {
 			broadcast_chain_block_height: 2,
 			broadcast_id: 7,

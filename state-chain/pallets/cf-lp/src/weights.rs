@@ -54,6 +54,7 @@ pub trait WeightInfo {
 	fn deregister_lp_account() -> Weight;
 	fn register_liquidity_refund_address() -> Weight;
 	fn schedule_swap() -> Weight;
+	fn transfer_flip_to_on_chain_balance() -> Weight;
 	fn update_agg_stats_item() -> Weight;
 	fn on_idle_nothing_to_do() -> Weight;
 	fn purge_balances(n: u32, ) -> Weight;
@@ -207,6 +208,33 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Estimated: `0`
 		// Minimum execution time: 81_602_000 picoseconds.
 		Weight::from_parts(82_797_000, 0)
+	}
+	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
+	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::FeeRewardsActivationEpoch` (r:1 w:0)
+	/// Proof: `Flip::FeeRewardsActivationEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Funding::MinimumFunding` (r:1 w:0)
+	/// Proof: `Funding::MinimumFunding` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:1 w:0)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::Account` (r:1 w:1)
+	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::OffchainFunds` (r:1 w:1)
+	/// Proof: `Flip::OffchainFunds` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::FlipToBeSentToGateway` (r:1 w:1)
+	/// Proof: `Swapping::FlipToBeSentToGateway` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn transfer_flip_to_on_chain_balance() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1824`
+		//  Estimated: `5289`
+		// Minimum execution time: 61_957_000 picoseconds.
+		Weight::from_parts(62_863_000, 5289)
+			.saturating_add(T::DbWeight::get().reads(9_u64))
+			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
 	/// Storage: `LiquidityProvider::LpDeltaStats` (r:1 w:1)
 	/// Proof: `LiquidityProvider::LpDeltaStats` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -397,6 +425,33 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 81_602_000 picoseconds.
 		Weight::from_parts(82_797_000, 0)
+	}
+	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
+	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::FeeRewardsActivationEpoch` (r:1 w:0)
+	/// Proof: `Flip::FeeRewardsActivationEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Funding::MinimumFunding` (r:1 w:0)
+	/// Proof: `Funding::MinimumFunding` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:1 w:0)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::Account` (r:1 w:1)
+	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::OffchainFunds` (r:1 w:1)
+	/// Proof: `Flip::OffchainFunds` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::FlipToBeSentToGateway` (r:1 w:1)
+	/// Proof: `Swapping::FlipToBeSentToGateway` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn transfer_flip_to_on_chain_balance() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1824`
+		//  Estimated: `5289`
+		// Minimum execution time: 61_957_000 picoseconds.
+		Weight::from_parts(62_863_000, 5289)
+			.saturating_add(ParityDbWeight::get().reads(9_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `LiquidityProvider::LpDeltaStats` (r:1 w:1)
 	/// Proof: `LiquidityProvider::LpDeltaStats` (`max_values`: None, `max_size`: None, mode: `Measured`)

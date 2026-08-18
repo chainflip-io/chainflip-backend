@@ -351,7 +351,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						tx_hash,
 						Some(transaction_status_stream),
 					);
-					info!(target: "state_chain_client", request_id = request.id, submission_id = submission_id, "Submission succeeded");
+					debug!(target: "state_chain_client", request_id = request.id, submission_id = submission_id, "Submission succeeded");
 					break Ok(Ok(tx_hash))
 				},
 				Err(rpc_err) => {
@@ -853,7 +853,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 								extrinsic_index as usize,
 								block_hash,
 							);
-							info!(target: "state_chain_client", request_id = matching_request.id, submission_id = submission.id, "Request found in finalized block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
+							debug!(target: "state_chain_client", request_id = matching_request.id, submission_id = submission.id, "Request found in finalized block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
 							if let Some(until_in_block_sender) =
 								matching_request.until_in_block_sender
 							{
@@ -885,7 +885,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 					if !alive {
 						any_submission_expired = true;
-						info!(target: "state_chain_client", request_id = submission.request_id, submission_id = submission.id, "Submission has timed out.");
+						warn!(target: "state_chain_client", request_id = submission.request_id, submission_id = submission.id, "Submission has timed out.");
 						if let Some(request) = requests.get_mut(&submission.request_id) {
 							request.pending_submissions.remove(&submission.id).unwrap();
 						}
@@ -909,7 +909,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					(!request.resubmit_window.contains(&(block.header.number + 1)) ||
 						request.strictly_one_submission)
 			}) {
-				info!(target: "state_chain_client", request_id = request.id, "Request has timed out.");
+				warn!(target: "state_chain_client", request_id = request.id, "Request has timed out.");
 				if let Some(until_in_block_sender) = request.until_in_block_sender {
 					let _result = until_in_block_sender
 						.send(Err(ExtrinsicError::Other(InBlockError::NotInBlock)));
