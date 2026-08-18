@@ -1538,7 +1538,8 @@ fn incoming_key_is_activated_by_its_own_rotation_broadcast() {
 			SIG1,
 			TxType::Rotation { new_key: NEW_AGG_KEY },
 		);
-		let other_broadcast_id = initiate_and_sign_broadcast(&mock_api_call(), SIG2, TxType::Normal);
+		let other_broadcast_id =
+			initiate_and_sign_broadcast(&mock_api_call(), SIG2, TxType::Normal);
 
 		assert_eq!(
 			IncomingKeyAndBroadcastId::<Test, Instance1>::get(),
