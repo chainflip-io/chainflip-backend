@@ -16,7 +16,8 @@
 
 use crate::{
 	mock::*, pallet, BoundExecutorAddress, Error, EthereumAddress, Event, FundingSource,
-	PendingRedemptions, RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
+	PendingRedemptions, Redemption, RedemptionAmount, RedemptionTax, RestrictedAddresses,
+	RestrictedBalances,
 };
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
@@ -468,6 +469,108 @@ fn test_redeem_all() {
 				total_balance: AMOUNT
 			})
 		);
+	});
+}
+
+#[test]
+fn cannot_redeem_max_when_liquid_balance_is_below_redemption_fee() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		// Bonded such that the liquid balance (AMOUNT - BOND) is smaller than the redemption
+		// fee (REDEMPTION_TAX), so `RedemptionAmount::Max` can't actually cover the fee.
+		const BOND: u128 = AMOUNT - REDEMPTION_TAX + 1;
+
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+		Bonder::<Test>::update_bond(&ALICE, BOND);
+
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Max,
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
+			Error::<Test>::InsufficientBalance
+		);
+	});
+}
+
+// The fee is taken from the liquid balance, but restricted funds are only checked against
+// `debit_amount`. Without the affordability check, the fee would come out of the restricted funds
+// while redeeming nothing, leaving the account with less than its restricted total.
+#[test]
+fn cannot_redeem_max_when_only_restricted_funds_can_cover_the_fee() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x42; 20]);
+		const RESTRICTED_AMOUNT: FlipBalance = MIN_FUNDING * 10;
+		// The unrestricted portion is the liquid balance, and it can't cover the fee.
+		const UNRESTRICTED_AMOUNT: FlipBalance = REDEMPTION_TAX - 1;
+
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
+		Funding::fund_account(
+			ALICE,
+			RESTRICTED_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS },
+		);
+		Funding::fund_account(
+			ALICE,
+			UNRESTRICTED_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Max,
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
+			Error::<Test>::InsufficientBalance
+		);
+		assert_eq!(
+			Flip::total_balance_of(&ALICE),
+			RESTRICTED_AMOUNT + UNRESTRICTED_AMOUNT,
+			"No fee should be charged for a rejected redemption",
+		);
+		assert_eq!(
+			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS),
+			Some(&RESTRICTED_AMOUNT),
+		);
+	});
+}
+
+// The rpc estimate is queried for every account, including fully bonded validators that have
+// nothing to redeem.
+#[test]
+fn rpc_redeemable_balance_estimate() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+
+		let estimate =
+			|| Redemption::<Test>::for_rpc(&ALICE).map(|r| r.redeem_amount).unwrap_or_default();
+
+		// Unbonded: the whole balance is redeemable, and the fee is waived.
+		assert_eq!(estimate(), AMOUNT);
+
+		// Partially bonded: the fee is deducted from the liquid balance.
+		Bonder::<Test>::update_bond(&ALICE, AMOUNT / 2);
+		assert_eq!(estimate(), AMOUNT / 2 - REDEMPTION_TAX);
+
+		// Liquid balance below the fee, and fully bonded: nothing is redeemable.
+		Bonder::<Test>::update_bond(&ALICE, AMOUNT - REDEMPTION_TAX);
+		assert_eq!(estimate(), 0);
+		Bonder::<Test>::update_bond(&ALICE, AMOUNT);
+		assert_eq!(estimate(), 0);
 	});
 }
 

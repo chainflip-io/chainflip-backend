@@ -58,7 +58,7 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_runtime::{traits::CheckedSub, DispatchError};
+use sp_runtime::DispatchError;
 use sp_std::{
 	cmp::{max, min},
 	collections::btree_map::BTreeMap,
@@ -213,18 +213,15 @@ impl<T: Config> Redemption<T> {
 		};
 
 		let (debit_amount, redeem_amount) = match amount {
-			RedemptionAmount::Max => (liquid_balance, liquid_balance.saturating_sub(applied_fee)),
+			RedemptionAmount::Max => {
+				// Without this, the redeem amount would saturate to zero while the fee is still
+				// charged in full, so the balance checks below would be applied to a debit amount
+				// smaller than what is actually taken from the account.
+				ensure!(liquid_balance > applied_fee, Error::<T>::InsufficientBalance);
+				(liquid_balance, liquid_balance.saturating_sub(applied_fee))
+			},
 			RedemptionAmount::Exact(amount) => (amount.saturating_add(applied_fee), amount),
 		};
-
-		debug_assert!(
-			if require_deregistration {
-				debit_amount.checked_sub(&redeem_amount) == Some(applied_fee)
-			} else {
-				true
-			},
-			"Debit amount must equal redeem amount plus redemption fee",
-		);
 
 		ensure!(debit_amount <= account_balance, Error::<T>::InsufficientBalance);
 		let remaining_balance = account_balance.saturating_sub(debit_amount);
