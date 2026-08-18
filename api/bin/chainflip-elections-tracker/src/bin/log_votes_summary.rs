@@ -159,15 +159,24 @@ async fn run_dashboard(
 	tx: broadcast::Sender<String>,
 	block_query_tx: BlockQuerySender,
 ) {
-	let index = warp::path::end().and(warp::get()).map(|| warp::reply::html(DASHBOARD_HTML));
+	let index = warp::path::end()
+		.and(warp::get())
+		.map(|| warp::reply::html(DASHBOARD_HTML.to_string()));
 
-	let ws_route = warp::path("ws").and(warp::ws()).map(move |ws: warp::ws::Ws| {
+	// Path segments are owned `String`s (and `warp::path!` is expanded by hand) because
+	// `&'static str` segments trip higher-ranked lifetime inference in the spawned task
+	// ("implementation of `AsRef` is not general enough").
+	let ws_route = warp::path("ws".to_string()).and(warp::ws()).map(move |ws: warp::ws::Ws| {
 		let rx = tx.subscribe();
 		ws.on_upgrade(move |websocket| handle_ws_client(websocket, rx))
 	});
 
-	let block_query =
-		warp::path!("api" / "block" / u32).and(warp::get()).then(move |number: u32| {
+	let block_query = warp::path("api".to_string())
+		.and(warp::path("block".to_string()))
+		.and(warp::path::param::<u32>())
+		.and(warp::path::end())
+		.and(warp::get())
+		.then(move |number: u32| {
 			let tx = block_query_tx.clone();
 			async move {
 				let (reply_tx, reply_rx) = oneshot::channel();
