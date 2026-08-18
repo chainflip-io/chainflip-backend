@@ -2,6 +2,74 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.3] - 2026-08-18
+
+### Features
+
+- Add fee rewards activation script ([#6764](https://github.com/chainflip-io/chainflip-backend/issues/6764))
+- Extrinsic for moving funds from vault to native balance ([#6789](https://github.com/chainflip-io/chainflip-backend/issues/6789))
+- Update bsc gas estimation constants ([#6784](https://github.com/chainflip-io/chainflip-backend/issues/6784))
+- Assethub elections ([#6740](https://github.com/chainflip-io/chainflip-backend/issues/6740))
+- Inventory strategy support for different decimal assets ([#6772](https://github.com/chainflip-io/chainflip-backend/issues/6772))
+- Validator max bid ([#6727](https://github.com/chainflip-io/chainflip-backend/issues/6727))
+- Relocate bound broker addresses to cf-asset-balances ([#6734](https://github.com/chainflip-io/chainflip-backend/issues/6734))
+- Flip 2.1 ([#6603](https://github.com/chainflip-io/chainflip-backend/issues/6603))
+- Update bsc contract addresses ([#6733](https://github.com/chainflip-io/chainflip-backend/issues/6733))
+- Bouncer aggregate/generic events ([#6691](https://github.com/chainflip-io/chainflip-backend/issues/6691))
+- Add cbbtc support ([#6713](https://github.com/chainflip-io/chainflip-backend/issues/6713))
+- Asset withdrawal whitelist ([#6708](https://github.com/chainflip-io/chainflip-backend/issues/6708))
+- Bouncer type safe client ([#6668](https://github.com/chainflip-io/chainflip-backend/issues/6668))
+- Set bsc min fee per gas ([#6719](https://github.com/chainflip-io/chainflip-backend/issues/6719))
+- Support more types in migration system ([#6682](https://github.com/chainflip-io/chainflip-backend/issues/6682))
+- Trading strategy on idle weight calculation ([#6695](https://github.com/chainflip-io/chainflip-backend/issues/6695))
+- Add min to order amount ([#6620](https://github.com/chainflip-io/chainflip-backend/issues/6620))
+- Automatic cherry picks from release to main ([#6664](https://github.com/chainflip-io/chainflip-backend/issues/6664))
+- Bsc integration ([#6396](https://github.com/chainflip-io/chainflip-backend/issues/6396))
+- Collect outstanding interest on settlement ([#6665](https://github.com/chainflip-io/chainflip-backend/issues/6665))
+- Introduce migration system ([#6601](https://github.com/chainflip-io/chainflip-backend/issues/6601))
+- Bouncer improvements ([#6662](https://github.com/chainflip-io/chainflip-backend/issues/6662))
+- Open deposit channel defence-in-depth checks ([#6671](https://github.com/chainflip-io/chainflip-backend/issues/6671))
+- Configurable per-chain refund multiplier ([#6675](https://github.com/chainflip-io/chainflip-backend/issues/6675))
+- Simplify lending network fee collection ([#6631](https://github.com/chainflip-io/chainflip-backend/issues/6631))
+- Don't refund rejection below dust egress limit ([#6642](https://github.com/chainflip-io/chainflip-backend/issues/6642))
+- Remove lending whitelist ([#6650](https://github.com/chainflip-io/chainflip-backend/issues/6650))
+- Remove unused broker_fee fields ([#6637](https://github.com/chainflip-io/chainflip-backend/issues/6637))
+- Grandpa delegation benchmarks ([#6645](https://github.com/chainflip-io/chainflip-backend/issues/6645))
+- Version bump to 2.3 and remove old migrations ([#6611](https://github.com/chainflip-io/chainflip-backend/issues/6611))
+
+### Fixes
+
+- Bouncer resubmit assethub txs that fail to be included ([#6782](https://github.com/chainflip-io/chainflip-backend/issues/6782))
+- Solana nonce test flakiness ([#6788](https://github.com/chainflip-io/chainflip-backend/issues/6788))
+- Improve BHW startup consensus ([#6774](https://github.com/chainflip-io/chainflip-backend/issues/6774))
+- Validate lending interest payment interval (([PRO-2966](https://linear.app/chainflip/issue/PRO-2966))) ([#6785](https://github.com/chainflip-io/chainflip-backend/issues/6785))
+- Update Solana localnet connection to use 127.0.0.1 ([#6777](https://github.com/chainflip-io/chainflip-backend/issues/6777))
+- Implement more selective process killing in localnet scripts ([#6778](https://github.com/chainflip-io/chainflip-backend/issues/6778))
+- Save generated keys before displaying them (([PRO-2955](https://linear.app/chainflip/issue/PRO-2955))) ([#6781](https://github.com/chainflip-io/chainflip-backend/issues/6781))
+- Increase timeout for `CheckAvailabilityAllSolanaNonces` test. ([#6780](https://github.com/chainflip-io/chainflip-backend/issues/6780))
+- Gate generated Arbitrary impls on the proptest feature ([#6779](https://github.com/chainflip-io/chainflip-backend/issues/6779))
+- Scale StablecoinDefaults to each asset's decimals ([#6768](https://github.com/chainflip-io/chainflip-backend/issues/6768))
+- Retry assethub vault creation extrinsic on startup ([#6769](https://github.com/chainflip-io/chainflip-backend/issues/6769))
+- Resubmit pending Assethub broadcasts and re-enable Assethub in AllSwaps ([#6741](https://github.com/chainflip-io/chainflip-backend/issues/6741))
+- Lp deregistration checks in-progress swap ([#6746](https://github.com/chainflip-io/chainflip-backend/issues/6746))
+- Handle BSC in `cf_ingress_egress_events` rpc. ([#6743](https://github.com/chainflip-io/chainflip-backend/issues/6743))
+- Clear next epoch snapshots when rotation starts ([#6732](https://github.com/chainflip-io/chainflip-backend/issues/6732))
+- Continue accruing interest even if oracle prices aren't available ([#6730](https://github.com/chainflip-io/chainflip-backend/issues/6730))
+- Call outer witness function instead of inner for vault swaps ([#6725](https://github.com/chainflip-io/chainflip-backend/issues/6725))
+- Correctly finalise boosted vault deposits when lost ([#6715](https://github.com/chainflip-io/chainflip-backend/issues/6715))
+- Cf_lp_total_balances no longer double counts supply funds ([#6716](https://github.com/chainflip-io/chainflip-backend/issues/6716))
+- Vote extrinsic benchmark correctly process n votes ([#6717](https://github.com/chainflip-io/chainflip-backend/issues/6717))
+- Remove implicit sqrt price conversions ([#6581](https://github.com/chainflip-io/chainflip-backend/issues/6581))
+- Move lp agg stats update to on_idle hook ([#6710](https://github.com/chainflip-io/chainflip-backend/issues/6710))
+- Limit witness culling ([#6705](https://github.com/chainflip-io/chainflip-backend/issues/6705))
+- Account for db reads/writes in benchmark weight analysis ([#6703](https://github.com/chainflip-io/chainflip-backend/issues/6703))
+- Implement on_idle hook for pruning expired vault start block numbers ([#6641](https://github.com/chainflip-io/chainflip-backend/issues/6641))
+- Assethub balance witnessing ([#6618](https://github.com/chainflip-io/chainflip-backend/issues/6618))
+- Small lending refactors/optimisations ([#6652](https://github.com/chainflip-io/chainflip-backend/issues/6652))
+- Cleanup oracle and inventory based ASS ([#6617](https://github.com/chainflip-io/chainflip-backend/issues/6617))
+- Zero price defense ([#6596](https://github.com/chainflip-io/chainflip-backend/issues/6596))
+- Is oracle supported function for price feed api ([#6607](https://github.com/chainflip-io/chainflip-backend/issues/6607))
+
 ## [2.2.8] - 2026-08-11
 
 ### Fixes
