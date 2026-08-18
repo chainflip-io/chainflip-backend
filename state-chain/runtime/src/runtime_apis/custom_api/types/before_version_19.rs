@@ -311,6 +311,8 @@ impl From<TransactionScreeningEvents> for super::TransactionScreeningEvents {
 	}
 }
 
+pub type ValidatorInfo = <super::ValidatorInfo as HasVersion<v20200>>::HistoricalType;
+
 #[derive(Encode, Decode, TypeInfo)]
 pub enum RuntimeApiAccountInfo {
 	Unregistered,

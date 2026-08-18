@@ -39,11 +39,12 @@ use cf_primitives::{
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
-		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
-		IsHistoricalType, Migration, NewFieldWithDefault, OverrideMigrationWith,
+		try_migrate_from_historical_type, vCurrent, GlobalMigrationFromGeneric, HasGenericVariant,
+		HasVersion, IdentityMigration, IsHistoricalType, Migration, NewFieldWithDefault,
+		OverrideMigrationWith,
 	},
 	primitives::NewTypeWithDefault,
-	v20100, v20200, v20300, HasChangelog,
+	v11100, v20100, v20200, v20300, HasChangelog,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -206,50 +207,28 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 }
 
 pub mod validator_info_before_v7 {
-	use super::*;
-	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
-	pub struct ValidatorInfo {
-		pub balance: AssetAmount,
-		pub bond: AssetAmount,
-		pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
-		pub reputation_points: i32,
-		pub keyholder_epochs: Vec<EpochIndex>,
-		pub is_current_authority: bool,
-		#[deprecated]
-		pub is_current_backup: bool,
-		pub is_qualified: bool,
-		pub is_online: bool,
-		pub is_bidding: bool,
-		pub bound_redeem_address: Option<EvmAddress>,
-		pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-		pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
-		pub estimated_redeemable_balance: AssetAmount,
-	}
-}
+	use cf_utilities::migrations::v11100;
 
-impl From<validator_info_before_v7::ValidatorInfo> for ValidatorInfo {
-	fn from(old: validator_info_before_v7::ValidatorInfo) -> Self {
-		ValidatorInfo {
-			balance: old.balance,
-			bond: old.bond,
-			last_heartbeat: old.last_heartbeat,
-			reputation_points: old.reputation_points,
-			keyholder_epochs: old.keyholder_epochs,
-			is_current_authority: old.is_current_authority,
-			#[expect(deprecated)]
-			is_current_backup: old.is_current_backup,
-			is_qualified: old.is_qualified,
-			is_online: old.is_online,
-			is_bidding: old.is_bidding,
-			bound_redeem_address: old.bound_redeem_address,
-			apy_bp: old.apy_bp,
-			restricted_balances: old.restricted_balances,
-			estimated_redeemable_balance: old.estimated_redeemable_balance,
-			operator: None,
-			max_bid: None,
-			bid: old.balance,
-		}
-	}
+	use super::*;
+	// #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+	// pub struct ValidatorInfo {
+	// 	pub balance: AssetAmount,
+	// 	pub bond: AssetAmount,
+	// 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
+	// 	pub reputation_points: i32,
+	// 	pub keyholder_epochs: Vec<EpochIndex>,
+	// 	pub is_current_authority: bool,
+	// 	#[deprecated]
+	// 	pub is_current_backup: bool,
+	// 	pub is_qualified: bool,
+	// 	pub is_online: bool,
+	// 	pub is_bidding: bool,
+	// 	pub bound_redeem_address: Option<EvmAddress>,
+	// 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
+	// 	pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
+	// 	pub estimated_redeemable_balance: AssetAmount,
+	// }
+	pub type ValidatorInfo = <super::ValidatorInfo as HasVersion<v11100>>::HistoricalType;
 }
 
 #[cf_proc_macros::generate_module]
@@ -278,6 +257,8 @@ pub struct ValidatorInfo {
 
 impl HasChangelog for ValidatorInfo {
 	type if_unspecified = _ValidatorInfo::see_field_changelogs;
+	type in_11100 =
+		_ValidatorInfo::see_field_changelogs_and_also<_ValidatorInfo::field::operator::Added>;
 	type in_20300 = _ValidatorInfo::see_field_changelogs_and_also<(
 		_ValidatorInfo::field::bid::Added,
 		_ValidatorInfo::field::max_bid::Added,
@@ -548,6 +529,7 @@ impl HasChangelog for LiquidityProviderInfo {
 	type if_unspecified = _LiquidityProviderInfo::see_field_changelogs;
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, DefaultNoBound)]
 #[derive_n_functor]
 pub struct BrokerInfo<BtcAddress> {
@@ -556,6 +538,9 @@ pub struct BrokerInfo<BtcAddress> {
 	pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
 	pub bond: AssetAmount,
 	pub bound_fee_withdrawal_address: Option<EvmAddress>,
+}
+impl<BtcAddress: HasChangelog> HasChangelog for BrokerInfo<BtcAddress> {
+	type if_unspecified = _BrokerInfo::see_field_changelogs;
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
@@ -1008,6 +993,7 @@ pub struct RuntimeApiAccountInfoWrapper {
 	pub role: RuntimeApiAccountInfo,
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo)]
 pub enum RuntimeApiAccountInfo {
 	Unregistered,
@@ -1015,6 +1001,9 @@ pub enum RuntimeApiAccountInfo {
 	LiquidityProvider(Box<LiquidityProviderInfo>),
 	Validator(Box<ValidatorInfo>),
 	Operator(Box<OperatorInfo<FlipBalance>>),
+}
+impl HasChangelog for RuntimeApiAccountInfo {
+	type if_unspecified = _RuntimeApiAccountInfo::see_variant_changelogs;
 }
 
 #[derive(

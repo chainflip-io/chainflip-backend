@@ -2302,7 +2302,17 @@ where
 						),
 						AccountRole::Validator => {
 							#[expect(deprecated)]
-							let info = api.cf_validator_info_before_version_7(hash, &account_id)?;
+							let info = try_migrate_from_historical_type(
+								v11100,
+								api.cf_validator_info_before_version_7(hash, &account_id)?,
+							)
+							.map_err(|_err| {
+								CfApiError::ErrorObject(ErrorObject::owned(
+									ErrorCode::InternalError.code(),
+									"Error when migrating runtime api reply",
+									None::<()>,
+								))
+							})?;
 
 							RpcAccountInfoLegacy::validator(info)
 						},
