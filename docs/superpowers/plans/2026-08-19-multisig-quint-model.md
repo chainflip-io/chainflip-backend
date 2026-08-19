@@ -1555,7 +1555,7 @@ and `SHARING` / `RECEIVING` are declared as `const` in `keygen.qnt`, supplied pe
   const RECEIVING: Set[Party]
 ```
 
-Quint `const` + parameterised instancing is confirmed working: `import keygen(SHARING = Set(1,2,3), ...).* from "./keygen"` typechecks and the importing module inherits `keygen`'s `init`/`step`, so `quint run harness.qnt` drives the instantiated machine.
+Quint `const` + parameterised instancing is confirmed working on 0.32.0: `import keygen(SHARING = Set(1,2,3), ...).* from "./keygen"` typechecks, and the importing module inherits `keygen`'s `init`/`step`, so `quint run harness.qnt --main=handover` drives the instantiated machine. Several instantiations may live in one file.
 
 - [ ] **Step 4: Check with the fix on**
 
@@ -1584,7 +1584,7 @@ Expected: `[violation] Found an issue` for BOTH. The first trace should show a n
 
 **If either reports `[ok]`, the model is too weak** — it cannot express a bug the Rust already fixes, so it cannot be trusted to find similar ones. Fix the model before continuing.
 
-If `--main` is not a valid flag on `quint run` in this version, check `quint run --help`; the equivalent is to point the run at the module by name. Confirm the exact form once and use it consistently in `check.sh`.
+`--main=<module>` is confirmed working on quint 0.32.0, as is holding several instantiations of the same `const`-parameterised module in one file. Without `--main`, quint infers the module from the filename, which is wrong for a multi-module `harness.qnt` — so every harness check must pass `--main` explicitly.
 
 - [ ] **Step 6: Commit**
 
