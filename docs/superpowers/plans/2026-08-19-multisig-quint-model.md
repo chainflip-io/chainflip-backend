@@ -353,7 +353,7 @@ git commit -m "test: model verify_broadcasts three-way outcome in Quint"
 
 **Interfaces:**
 - Consumes: `verify` from Task 3.
-- Produces: state vars `sends: Set[Send]`, `claims: Set[Claim]`, `out: Party -> Outcome`; actions `init`, `step`; invariants `L1_NoFalseBlame`, `L2_ValueAgreement`, `L3_HonestValuePreservation`, `L4_SafeDivergence`, `L5_Liveness`.
+- Produces: state vars `sends: Set[Send]`, `claims: Set[Claim]`, `out: Party -> Outcome`; actions `init`, `step`; invariants `L1_NoFalseBlame`, `L2_ValueAgreement`, `L3_HonestValuePreservation`, `L4_SafeDivergence`; and the scenario test `run L5_LivenessTest` (liveness is conditional on no Byzantine deviation, so it is a test, not an invariant over the free adversary).
 
 The whole ceremony is one step: `init` sets empty state, `step` picks every adversary choice at once and computes each party's outcome. A one-step model is what makes Apalache tractable here.
 
@@ -908,7 +908,7 @@ git commit -m "test: add a single entry point for the multisig Quint checks"
 
 **Interfaces:**
 - Consumes: `types.*`, `oracle.*`.
-- Produces: `type Stage`, `type CeremonyOutcome = Running | Done(Party -> Vote) | Failed(Set[Party])`, state vars `stage: Party -> Stage`, `result: Party -> CeremonyOutcome`, `shareValid: Set[{ from: Party, to: Party }]`; invariants `K1_NoHonestBlamed`, `K2_NoConflictingOutcome`, `K5_Termination`.
+- Produces: `type Stage`, `type CeremonyOutcome = Running | Done(Party -> Vote) | Failed(Set[Party])`, state vars `stage: Party -> Stage`, `result: Party -> CeremonyOutcome`; `pure val KEY_A/KEY_B`, `ORACLE_RESULTS`, `ORACLE_ASSIGNMENTS`; invariants `K1_NoHonestBlamed`, `K2_NoConflictingOutcome`, `K5_Termination`.
 
 Model the stage sequence as a per-party program counter. Each `Verify*` stage consumes one oracle result; each non-verify stage advances. Secret shares are private and unverifiable, so `shareValid` is an adversary-chosen relation for Byzantine senders and always true for honest ones.
 
@@ -991,30 +991,63 @@ Append:
     result' = PARTIES.mapBy(_ => Running),
   }
 
-  // One stage transition. Verify stages consume an oracle result honouring the
-  // contract; other stages advance unconditionally.
+  // Two distinct candidate keys, so K2 (no two honest parties finish with
+  // different keys) is not vacuously true.
+  pure val KEY_A: Party -> Vote = PARTIES.mapBy(i => Sent(i))
+  pure val KEY_B: Party -> Vote = PARTIES.mapBy(i => Sent(i + 1))
+
+  pure val ORACLE_RESULTS: Set[OracleResult] =
+    Set(OkAgreed(KEY_A), OkAgreed(KEY_B), OkAttributed(BYZ), OkFailed)
+
+  pure val ORACLE_ASSIGNMENTS: Set[{ p: Party, r: OracleResult }] =
+    tuples(PARTIES, ORACLE_RESULTS).map(t => { p: t._1, r: t._2 })
+
+  // One stage transition.
+  //
+  // Each party gets its OWN oracle result. This matters: the verified L4
+  // counterexample shows a Byzantine party can equivocate in round 1 and
+  // tie-break in round 2, leaving some honest parties agreeing while others
+  // fail. A single shared result would make K2 and K7 vacuously true, and K7
+  // exists precisely to ask what that divergence can be walked into.
+  //
+  // The results are jointly constrained by what the lemma layer proved: honest
+  // parties never land on two different agreed maps (L2), and no blame set
+  // names an honest party (L1).
   action step = {
-    nondet r = Set(OkAgreed(PARTIES.mapBy(i => Sent(i))),
-                   OkAttributed(BYZ),
-                   OkFailed).oneOf()
+    nondet oracleChoice = ORACLE_ASSIGNMENTS.powerset().oneOf()
+    val res = PARTIES.mapBy(k =>
+      oracleChoice.filter(x => x.p == k).fold(OkFailed, (_, x) => x.r))
+    val agreedAt = (k) => match res.get(k) {
+      | OkAgreed(_) => true
+      | OkAttributed(_) => false
+      | OkFailed => false
+    }
     all {
-      oracleWellFormed(r, HONEST),
+      PARTIES.forall(k => oracleChoice.filter(x => x.p == k).size() == 1),
+      HONEST.forall(k => oracleWellFormed(res.get(k), HONEST)),
+      tuples(HONEST, HONEST).forall(q =>
+        match res.get(q._1) {
+        | OkAgreed(m1) => match res.get(q._2) {
+            | OkAgreed(m2) => m1 == m2
+            | OkAttributed(_) => true
+            | OkFailed => true
+          }
+        | OkAttributed(_) => true
+        | OkFailed => true
+        }),
       stage' = PARTIES.mapBy(k =>
         if (result.get(k) != Running) stage.get(k)
-        else if (isVerifyStage(stage.get(k)) and r != OkAgreed(PARTIES.mapBy(i => Sent(i))))
-          stage.get(k)
+        else if (isVerifyStage(stage.get(k)) and not(agreedAt(k))) stage.get(k)
         else nextStage(stage.get(k))),
       result' = PARTIES.mapBy(k =>
         if (result.get(k) != Running) result.get(k)
         else if (isVerifyStage(stage.get(k)))
-          match r {
-          | OkAgreed(_) => if (nextStage(stage.get(k)) == Finished)
-                             Done(PARTIES.mapBy(i => Sent(i))) else Running
+          match res.get(k) {
+          | OkAgreed(m) => if (nextStage(stage.get(k)) == Finished) Done(m) else Running
           | OkAttributed(bad) => Failed(bad)
           | OkFailed => Failed(Set())
           }
-        else if (nextStage(stage.get(k)) == Finished)
-          Done(PARTIES.mapBy(i => Sent(i)))
+        else if (nextStage(stage.get(k)) == Finished) Done(KEY_A)
         else Running),
     }
   }
@@ -1068,7 +1101,7 @@ git commit -m "test: model keygen stage machine over the broadcast oracle"
 
 **Interfaces:**
 - Consumes: Task 9's stage machine.
-- Produces: state var `shareValid: Set[{ from: Party, to: Party }]`, `complaints: Set[{ by: Party, about: Party }]`, `revealed: Set[{ by: Party, about: Party, ok: bool }]`; `pure def blameResponseComplete(...)`; invariant `K3_AttributionProgress`.
+- Produces: state vars `shareValid: Set[{ from: Party, to: Party }]`, `complaints: Set[{ by: Party, about: Party }]`, `revealed: Set[{ by: Party, about: Party, ok: bool }]`; `pure def blameResponseComplete(...)`; invariant `K3_AttributionProgress`. All three state vars must be declared, initialised in `init`, and assigned in every `step` branch — Quint requires every transition to assign every variable.
 
 This is the second, independent attribution mechanism — the one not covered by the echo lemma, and the richest source of false-blame bugs. Stage 5 shares are private, so a Byzantine sender can send a bad share undetectably; stage 6 lets the receiver complain; stage 8 forces the blamed party to reveal; stage 9 re-verifies and attributes.
 
@@ -1179,6 +1212,8 @@ and `step` gains two, so that every transition assigns every state variable (Qui
                       ALL_PAIRS.exclude(byzBadShares) else shareValid,
       complaints' = if (PARTIES.exists(k => stage.get(k) == Complaints6))
                       honestComplaints.union(byzComplaints) else complaints,
+      revealed' = if (PARTIES.exists(k => stage.get(k) == BlameResponses8))
+                    honestReveals.union(byzReveals) else revealed,
 ```
 
 with the two `nondet` picks hoisted to the top of `step` alongside the existing oracle pick:
@@ -1192,9 +1227,28 @@ with the two `nondet` picks hoisted to the top of `step` alongside the existing 
       tuples(HONEST, PARTIES)
         .filter(t => not(shareValid.contains({ from: t._2, to: t._1 })))
         .map(t => { by: t._1, about: t._2 })
+    // Stage 8: a blamed party reveals the share it sent to each complainant.
+    // An honest party reveals exactly those, truthfully. A Byzantine party may
+    // reveal any subset, with any validity.
+    nondet byzReveals =
+      tuples(BYZ, PARTIES, Set(false, true))
+        .map(t => { by: t._1, about: t._2, ok: t._3 })
+        .powerset().oneOf()
+    val honestReveals =
+      complaints.filter(c => HONEST.contains(c.about))
+        .map(c => { by: c.about, about: c.by,
+                    ok: shareValid.contains({ from: c.about, to: c.by }) })
 ```
 
-Both picks are powersets of record sets — never `setOfMaps`. Delete the standalone `chooseShares` / `chooseComplaints` actions shown above; they are inlined here.
+All three picks are powersets of record sets — never `setOfMaps`. Delete the standalone `chooseShares` / `chooseComplaints` actions shown above; they are inlined here.
+
+`revealed` must also be declared and initialised alongside the others:
+
+```quint
+  var revealed: Set[{ by: Party, about: Party, ok: bool }]
+```
+
+with `revealed' = Set(),` added to `init`. Task 12 consumes `revealed` and will not compile without it.
 
 - [ ] **Step 6: Check**
 
@@ -1260,9 +1314,10 @@ Expected: failure with `Name 'commitmentLengthValid' not found`.
   pure val KEY_THRESHOLD: int = thresholdOf(PARTIES.size())
 
   // validate_commitments (keygen_detail.rs): an honest party commits to exactly
-  // `threshold + 1` coefficients. Set to false to reproduce the pre-fix
-  // behaviour (the global byte cap only) and watch K6 fail.
-  pure val ENFORCE_COEFF_LENGTH: bool = true
+  // `threshold + 1` coefficients. Declared `const` so harness.qnt can
+  // instantiate a deliberately-broken variant as a permanent negative control,
+  // rather than this being a manual edit-and-revert that nobody re-runs.
+  const ENFORCE_COEFF_LENGTH: bool
 
   pure def commitmentLengthValid(len: int, keyThreshold: int): bool =
     len == keyThreshold + 1
@@ -1325,16 +1380,26 @@ quint run keygen.qnt --invariant=K6_KeyConsistency --max-steps=12 --max-samples=
 
 Expected: `[ok]`.
 
-Now set `ENFORCE_COEFF_LENGTH = false` and re-run:
+Because `ENFORCE_COEFF_LENGTH` is a `const`, `keygen.qnt` cannot be run directly — it must be instantiated. Create a throwaway probe to confirm both polarities, then delete it (Task 12 makes the negative control permanent in `harness.qnt`):
+
+```quint
+module coeffprobe {
+  import keygen(ENFORCE_COEFF_LENGTH = true, SHARING = PARTIES, RECEIVING = PARTIES).* from "./keygen"
+}
+```
 
 ```bash
-quint run keygen.qnt --invariant=K6_KeyConsistency --max-steps=12 --max-samples=50000 \
+quint run coeffprobe.qnt --invariant=K6_KeyConsistency --max-steps=12 --max-samples=20000 \
   | grep -E '^\[(ok|violation)\]'
 ```
 
+Expected: `[ok]`.
+
+Then flip the instantiation to `ENFORCE_COEFF_LENGTH = false` and re-run:
+
 Expected: `[violation] Found an issue`, with a trace where a Byzantine party commits to `KEY_THRESHOLD + 2` coefficients and the ceremony still reaches `Done`. That is finding #1 reproduced in the model.
 
-**If this still reports `[ok]`, the model is too weak to have found the bug the review identified** — fix it before continuing. Restore `true` afterwards.
+**If this still reports `[ok]`, the model is too weak to have found the bug the review identified** — fix it before continuing.
 
 - [ ] **Step 7: Commit**
 
@@ -1355,8 +1420,10 @@ finding #1 - a ceremony finalising with an over-long commitment vector."
 - Create: `engine/multisig/quint/harness.qnt`
 
 **Interfaces:**
-- Consumes: Task 10's model.
-- Produces: `SHARING`, `RECEIVING`, `futureIndex`; invariants `K4_HandoverNoFalseBlame`, `K6_KeyConsistency`, `K7_StageDivergenceSafety`.
+- Consumes: Tasks 9-11's model.
+- Produces: in `keygen.qnt`, `const SHARING`, `const RECEIVING`, `const FILTER_NON_RECEIVER_COMPLAINTS`, `const ENFORCE_COEFF_LENGTH`, `pure def admissibleComplaints`; in `harness.qnt`, modules `plain`, `handover`, `handoverUnfixed`, `plainNoCoeffCheck` with `K4_HandoverNoFalseBlame`, `K7_StageDivergenceSafety`, `K4_MustFailHere`, `K6_MustFailHere`.
+
+Note: introducing `const`s means `keygen.qnt` can no longer be run directly — every check must target an instantiating module in `harness.qnt`. Task 13 updates `check.sh` accordingly.
 
 Handover splits parties into sharers and receivers with an index remapping. `VerifyComplaintsBroadcastStage7` already discards complaints from non-receiving participants, because acting on one forces the blamed party to reveal a share at a bogus index, fail stage-9 verification, and be wrongly attributed. **The model must not bake that fix in as an assumption** — it should be able to express the unfixed behaviour, so K4 demonstrably fails without the filter and passes with it.
 
@@ -1364,30 +1431,85 @@ Handover splits parties into sharers and receivers with an index remapping. `Ver
 
 Create `harness.qnt`:
 
+Each configuration is a separate module instantiating `keygen` with different
+`const` values. A module may instantiate `keygen` only once, so each
+configuration gets its own file-level module in `harness.qnt`.
+
 ```quint
-// Instantiations. Plain keygen is the case where every party shares and receives.
-module harness {
+// Handover: n=5, f=1, sharers {1,2,3}, receivers {3,4,5}. Deliberately tight -
+// a quorum over three sharers is two, so there is no slack if the Byzantine
+// party is a sharer.
+module handover {
   import types.* from "./types"
-  import keygen.* from "./keygen"
+  import keygen(
+    SHARING = Set(1, 2, 3),
+    RECEIVING = Set(3, 4, 5),
+    FILTER_NON_RECEIVER_COMPLAINTS = true,
+    ENFORCE_COEFF_LENGTH = true
+  ).* from "./keygen"
 
-  // n=5, f=1, sharers {1,2,3} and receivers {3,4,5}. Deliberately tight: a
-  // quorum over three sharers is two, so there is no slack if the Byzantine
-  // party is a sharer.
-  pure val SHARING: Set[Party] = Set(1, 2, 3)
-  pure val RECEIVING: Set[Party] = Set(3, 4, 5)
-
-  // K4: no honest party is blamed under handover.
+  // K4 is K1 under the handover configuration - the property is the same, the
+  // configuration is what makes it a distinct check.
   val K4_HandoverNoFalseBlame = K1_NoHonestBlamed
 
   // K7: a subset of honest parties proceeding past a stage while others abort
-  // must not be walkable to a finalised key.
+  // must not be walkable to a finalised key. Reachable only because each party
+  // draws its own oracle result (Task 9).
   val K7_StageDivergenceSafety =
-    HONEST.forall(a => HONEST.forall(b =>
-      match result.get(a) {
-      | Done(_) => match result.get(b) { Failed(_) => false | Done(_) => true | Running => true }
+    tuples(HONEST, HONEST).forall(q =>
+      match result.get(q._1) {
+      | Done(_) => match result.get(q._2) {
+          | Failed(_) => false
+          | Done(_) => true
+          | Running => true
+        }
       | Failed(_) => true
       | Running => true
-      }))
+      })
+}
+
+// Negative control: the non-receiver complaint filter switched OFF. K4 MUST
+// fail here. If it passes, the model cannot see a bug the Rust already fixes
+// (VerifyComplaintsBroadcastStage7) and is not trustworthy for finding others.
+module handoverUnfixed {
+  import types.* from "./types"
+  import keygen(
+    SHARING = Set(1, 2, 3),
+    RECEIVING = Set(3, 4, 5),
+    FILTER_NON_RECEIVER_COMPLAINTS = false,
+    ENFORCE_COEFF_LENGTH = true
+  ).* from "./keygen"
+
+  val K4_MustFailHere = K1_NoHonestBlamed
+}
+
+// Negative control: the coefficient-length check switched OFF. K6 MUST fail
+// here - this is review finding #1 reproduced.
+module plainNoCoeffCheck {
+  import types.* from "./types"
+  import keygen(
+    SHARING = PARTIES,
+    RECEIVING = PARTIES,
+    FILTER_NON_RECEIVER_COMPLAINTS = true,
+    ENFORCE_COEFF_LENGTH = false
+  ).* from "./keygen"
+
+  val K6_MustFailHere = K6_KeyConsistency
+}
+```
+
+Plain keygen (`SHARING = RECEIVING = PARTIES`, both flags true) also needs a
+module, since Tasks 9-11 checked `keygen.qnt` directly and it now has `const`s:
+
+```quint
+module plain {
+  import types.* from "./types"
+  import keygen(
+    SHARING = PARTIES,
+    RECEIVING = PARTIES,
+    FILTER_NON_RECEIVER_COMPLAINTS = true,
+    ENFORCE_COEFF_LENGTH = true
+  ).* from "./keygen"
 }
 ```
 
@@ -1408,8 +1530,9 @@ Parameterise the complaint rule so the non-receiver filter is a *modelled behavi
   // processes no shares, so any complaint from one is necessarily dishonest;
   // acting on it forces the blamed party to reveal a share at an index that
   // then fails stage-9 verification, wrongly attributing a possibly honest node.
-  // Set to false to reproduce the unfixed behaviour and watch K4 fail.
-  pure val FILTER_NON_RECEIVER_COMPLAINTS: bool = true
+  // `const` so harness.qnt can instantiate the unfixed variant as a permanent
+  // negative control.
+  const FILTER_NON_RECEIVER_COMPLAINTS: bool
 
   pure def admissibleComplaints(
     cs: Set[{ by: Party, about: Party }],
@@ -1424,12 +1547,15 @@ Then replace every use of `complaints` in the stage-7 transition with `admissibl
       blameResponseComplete(sender, admissibleComplaints(complaints, RECEIVING), revealed)
 ```
 
-and `RECEIVING` must be passed into `keygen.qnt` as a `pure val` (defaulting to `PARTIES`, which is exactly plain keygen) rather than imported from `harness.qnt`, to avoid a circular import:
+and `SHARING` / `RECEIVING` are declared as `const` in `keygen.qnt`, supplied per-instantiation by `harness.qnt`. Plain keygen is the instantiation where both equal `PARTIES`:
 
 ```quint
-  // Overridden per-instantiation. Plain keygen: every party receives.
-  pure val RECEIVING: Set[Party] = PARTIES
+  // Supplied per-instantiation. Plain keygen: SHARING = RECEIVING = PARTIES.
+  const SHARING: Set[Party]
+  const RECEIVING: Set[Party]
 ```
+
+Quint `const` + parameterised instancing is confirmed working: `import keygen(SHARING = Set(1,2,3), ...).* from "./keygen"` typechecks and the importing module inherits `keygen`'s `init`/`step`, so `quint run harness.qnt` drives the instantiated machine.
 
 - [ ] **Step 4: Check with the fix on**
 
@@ -1445,16 +1571,20 @@ Expected: `[ok]` for both.
 
 - [ ] **Step 5: Confirm the model can see the bug**
 
-Set `FILTER_NON_RECEIVER_COMPLAINTS = false` and re-run:
+The negative controls are permanent modules, so this is a normal run — no editing and reverting:
 
 ```bash
-quint run harness.qnt --invariant=K4_HandoverNoFalseBlame --max-steps=12 --max-samples=50000 \
-  | grep -E '^\[(ok|violation)\]'
+quint run harness.qnt --main=handoverUnfixed --invariant=K4_MustFailHere \
+  --max-steps=12 --max-samples=50000 | grep -E '^\[(ok|violation)\]'
+quint run harness.qnt --main=plainNoCoeffCheck --invariant=K6_MustFailHere \
+  --max-steps=12 --max-samples=50000 | grep -E '^\[(ok|violation)\]'
 ```
 
-Expected: `[violation] Found an issue`, with a trace in which a non-receiving Byzantine party complains about an honest sharer and the honest sharer ends up in a reported set.
+Expected: `[violation] Found an issue` for BOTH. The first trace should show a non-receiving Byzantine party complaining about an honest sharer, which then lands in a reported set. The second should show a Byzantine party committing to `KEY_THRESHOLD + 2` coefficients with the ceremony still reaching `Done`.
 
-**If this still reports `[ok]`, the model is too weak** — it cannot express the bug the Rust already fixes, so it cannot be trusted to find similar ones. Fix the model before continuing. Restore `true` afterwards.
+**If either reports `[ok]`, the model is too weak** — it cannot express a bug the Rust already fixes, so it cannot be trusted to find similar ones. Fix the model before continuing.
+
+If `--main` is not a valid flag on `quint run` in this version, check `quint run --help`; the equivalent is to point the run at the module by name. Confirm the exact form once and use it consistently in `check.sh`.
 
 - [ ] **Step 6: Commit**
 
