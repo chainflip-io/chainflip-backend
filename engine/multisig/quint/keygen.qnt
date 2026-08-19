@@ -63,6 +63,27 @@ module keygen {
   pure val KEY_A: Party -> Vote = PARTIES.mapBy(i => Sent(i))
   pure val KEY_B: Party -> Vote = PARTIES.mapBy(i => Sent(i + 1))
 
+  // Handover splits parties into sharers (hold the current key material and
+  // send shares of the new key) and receivers (hold the new key material and
+  // verify/complain/finalise). Supplied per-instantiation by harness.qnt.
+  // Plain keygen: SHARING = RECEIVING = PARTIES.
+  const SHARING: Set[Party]
+  const RECEIVING: Set[Party]
+
+  // Complaints from non-receiving participants must be discarded. A non-receiver
+  // processes no shares, so any complaint from one is necessarily dishonest;
+  // acting on it forces the blamed party to reveal a share at an index that
+  // then fails stage-9 verification, wrongly attributing a possibly honest node.
+  // `const` so harness.qnt can instantiate the unfixed variant as a permanent
+  // negative control.
+  const FILTER_NON_RECEIVER_COMPLAINTS: bool
+
+  pure def admissibleComplaints(
+    cs: Set[{ by: Party, about: Party }],
+    receiving: Set[Party]
+  ): Set[{ by: Party, about: Party }] =
+    if (FILTER_NON_RECEIVER_COMPLAINTS) cs.filter(c => receiving.contains(c.by)) else cs
+
   // One stage transition.
   //
   // Each party gets its OWN oracle result: the verified L4 counterexample shows
@@ -116,9 +137,20 @@ module keygen {
     val byzReveals = byzRevealMade.map(t =>
       { by: t._1, about: t._2, ok: byzRevealOk.contains(t) })
     val honestReveals =
-      complaints.filter(c => HONEST.contains(c.about))
+      admissibleComplaints(complaints, RECEIVING)
+        .filter(c => HONEST.contains(c.about))
         .map(c => { by: c.about, about: c.by,
-                    ok: shareValid.contains({ from: c.about, to: c.by }) })
+                    // A reveal at a non-receiver's index is evaluated at an
+                    // index that party never held a share for, so it fails
+                    // verification - which is how an honest node gets blamed.
+                    ok: RECEIVING.contains(c.by)
+                        and shareValid.contains({ from: c.about, to: c.by }) })
+    // Attribution for VerifyBlameResponses9: whoever produced a failing reveal
+    // (in `revealed`, populated during the previous step's BlameResponses8) is
+    // blamed. Reads the already-committed `revealed`, NOT this step's fresh
+    // `honestReveals.union(byzReveals)` draw - same one-step-later pattern as
+    // `badLenParties` below.
+    val badRevealers = revealed.filter(r => not(r.ok)).map(r => r.by)
     val newLens = PARTIES.mapBy(i =>
       if (not(BYZ.contains(i))) KEY_THRESHOLD + 1
       else if (lenHi.contains(i))
@@ -137,6 +169,8 @@ module keygen {
         if (result.get(k) != Running) stage.get(k)
         else if (stage.get(k) == VerifyCommitments4 and badLenParties != Set())
           stage.get(k)
+        else if (stage.get(k) == VerifyBlameResponses9 and badRevealers != Set())
+          stage.get(k)
         else if (isVerifyStage(stage.get(k)) and
                  (match res.get(k) {
                   | OkAgreed(_) => false
@@ -148,6 +182,8 @@ module keygen {
         if (result.get(k) != Running) result.get(k)
         else if (stage.get(k) == VerifyCommitments4 and badLenParties != Set())
           Failed(badLenParties)
+        else if (stage.get(k) == VerifyBlameResponses9 and badRevealers != Set())
+          Failed(badRevealers)
         else if (isVerifyStage(stage.get(k)))
           match res.get(k) {
           | OkAgreed(m) => if (nextStage(stage.get(k)) == Finished) Done(m) else Running
