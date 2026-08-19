@@ -22,6 +22,8 @@ These were established by a working prototype. Violating any of them means rewri
 - **Cross-file imports** use `import types.* from "./types"` (no `.qnt` extension).
 - **Tuple-keyed map types need double parentheses:** `((Party, Party)) -> Vote`.
 - All models live in `engine/multisig/quint/`. No Rust is modified by this plan.
+- **Encode every adversary choice as characteristic-function subsets, so that every draw is well-formed by construction.** Never draw an arbitrary subset and then reject the ill-formed ones with a guard inside `all { ... }`. A guard makes the simulator reject essentially every draw (a valid round-2 claim set has probability ~2⁻¹⁶), `step` becomes unreachable, and every `quint run` reports a vacuous `[ok]`. To choose one of `k` options per slot, use `⌈log₂ k⌉` independent subsets of the slot set and decode them; to choose "absent or one of two values", use one `present` subset and one `which-value` subset.
+- **Every `quint run` result must be read together with its `Trace length statistics: max=` line.** If `max=1`, no `step` ever executed and the `[ok]` means nothing. A run that exercises a one-step model must show `max=2`. Report this number alongside every result.
 - Quorum is `count > threshold` where `threshold(n) = (2n − 1) / 3` in integer arithmetic — copy this exactly; it is `threshold_from_share_count` in `utilities/src/lib.rs:72`.
 
 ## File Structure
@@ -249,7 +251,9 @@ git commit -m "test: model find_frequent_element in Quint"
 
 **Interfaces:**
 - Consumes: `frequent` from Task 2.
-- Produces: `pure def claimed(cs: Set[Claim], by: Party, k: Party, about: Party): Vote`, `pure def sentRound2(cs: Set[Claim], by: Party, k: Party): bool`, `pure def verify(k: Party, cs: Set[Claim]): Outcome`.
+- Produces: `pure def claimed(cs: Set[Claim], by: Party, k: Party, about: Party): Vote`, `pure def sentRound2(ps: Set[(Party, Party)], by: Party, k: Party): bool`, `pure def verify(k: Party, ps: Set[(Party, Party)], cs: Set[Claim]): Outcome`.
+
+Note the explicit `ps` (present) argument. A round-2 message carries an entry for *every* party — the Rust drops any verification message whose key set is not exactly the participant set (`check_verification_message_indexes`) — so "this party sent a message that reports Nothing about everyone" and "this party sent no message" are different situations that must not be conflated. `ps` records which messages exist; `cs` records what they say.
 
 This is the security-critical function (`client/common/broadcast_verification.rs`). The three outcomes must stay distinct: a quorum agreeing a party sent *nothing* is attributable and reported; no quorum either way fails the stage and reports **nobody**. Collapsing those two is the bug this whole model exists to rule out.
 
@@ -266,21 +270,23 @@ Append to `broadcast.qnt`:
     tuples(PARTIES, PARTIES, PARTIES).map(t =>
       { by: t._1, to: t._2, about: t._3, vote: f(t._3) })
 
+  pure val ALL_PRESENT: Set[(Party, Party)] = tuples(PARTIES, PARTIES)
+
   run verifyTest = all {
     // Everyone agrees every party sent its index as a value -> Agreed.
-    assert(match verify(1, allClaims(i => Sent(i))) {
+    assert(match verify(1, ALL_PRESENT, allClaims(i => Sent(i))) {
       | Agreed(m) => m.get(3) == Sent(3)
       | Attributed(_) => false
       | Unattributed => false
     }),
     // Everyone agrees party 4 sent nothing -> attributable to 4, and only 4.
-    assert(match verify(1, allClaims(i => if (i == 4) Nothing else Sent(i))) {
+    assert(match verify(1, ALL_PRESENT, allClaims(i => if (i == 4) Nothing else Sent(i))) {
       | Attributed(bad) => bad == Set(4)
       | Agreed(_) => false
       | Unattributed => false
     }),
     // Too few round-2 messages -> Unattributed, nobody blamed.
-    assert(verify(1, Set()) == Unattributed),
+    assert(verify(1, Set(), Set()) == Unattributed),
   }
 ```
 
@@ -304,12 +310,16 @@ Add above the tests:
     if (c.size() == 1) c.fold(Nothing, (_, x) => x.vote) else Nothing
   }
 
-  pure def sentRound2(cs: Set[Claim], by: Party, k: Party): bool =
-    cs.exists(x => x.by == by and x.to == k)
+  // A round-2 message carries an entry for every party (the Rust rejects any
+  // whose key set is not exactly the participant set), so presence is tracked
+  // separately from content: a message reporting Nothing about everyone is
+  // present, and is not the same as no message at all.
+  pure def sentRound2(ps: Set[(Party, Party)], by: Party, k: Party): bool =
+    ps.contains((by, k))
 
   // verify_broadcasts (broadcast_verification.rs) as executed by party k.
-  pure def verify(k: Party, cs: Set[Claim]): Outcome = {
-    val present = PARTIES.filter(j => sentRound2(cs, j, k))
+  pure def verify(k: Party, ps: Set[(Party, Party)], cs: Set[Claim]): Outcome = {
+    val present = PARTIES.filter(j => sentRound2(ps, j, k))
     if (present.size() <= T) Unattributed
     else {
       val resolved = PARTIES.mapBy(i =>
@@ -353,7 +363,7 @@ git commit -m "test: model verify_broadcasts three-way outcome in Quint"
 
 **Interfaces:**
 - Consumes: `verify` from Task 3.
-- Produces: state vars `sends: Set[Send]`, `claims: Set[Claim]`, `out: Party -> Outcome`; actions `init`, `step`; invariants `L1_NoFalseBlame`, `L2_ValueAgreement`, `L3_HonestValuePreservation`, `L4_SafeDivergence`; and the scenario test `run L5_LivenessTest` (liveness is conditional on no Byzantine deviation, so it is a test, not an invariant over the free adversary).
+- Produces: state vars `sends: Set[Send]`, `claims: Set[Claim]`, `present: Set[(Party, Party)]`, `out: Party -> Outcome`; actions `init`, `step`; invariants `L1_NoFalseBlame`, `L2_ValueAgreement`, `L3_HonestValuePreservation`, `L4_SafeDivergence`; and the scenario test `run L5_LivenessTest` (liveness is conditional on no Byzantine deviation, so it is a test, not an invariant over the free adversary).
 
 The whole ceremony is one step: `init` sets empty state, `step` picks every adversary choice at once and computes each party's outcome. A one-step model is what makes Apalache tractable here.
 
@@ -366,6 +376,7 @@ Append to `broadcast.qnt`:
 ```quint
   var sends: Set[Send]
   var claims: Set[Claim]
+  var present: Set[(Party, Party)]
   var out: Party -> Outcome
 
   // L1: an honest party never blames an honest party. THE headline property.
@@ -416,38 +427,37 @@ Expected: failure — `init`/`step` are not defined yet, so there is no state ma
 Add above the invariants:
 
 ```quint
-  pure val BYZ_SENDS: Set[Send] =
-    tuples(BYZ, PARTIES, VOTES).map(t => { from: t._1, to: t._2, vote: t._3 })
-
-  pure val BYZ_CLAIMS: Set[Claim] =
-    tuples(BYZ, PARTIES, PARTIES, VOTES).map(t =>
-      { by: t._1, to: t._2, about: t._3, vote: t._4 })
-
-  // A Byzantine party may send anything, but only one thing per destination.
-  pure def wellFormedSends(ss: Set[Send]): bool =
-    tuples(BYZ, PARTIES).forall(t =>
-      ss.filter(x => x.from == t._1 and x.to == t._2).size() <= 1)
-
-  pure def wellFormedClaims(cs: Set[Claim]): bool =
-    tuples(BYZ, PARTIES, PARTIES).forall(t =>
-      cs.filter(x => x.by == t._1 and x.to == t._2 and x.about == t._3).size() <= 1)
+  // Slots an adversary may act on. Choices are encoded as characteristic-
+  // function subsets of these, so EVERY draw is well-formed by construction.
+  // Drawing arbitrary subsets and rejecting the ill-formed ones with a guard
+  // makes the simulator reject ~every draw (a valid claim set has probability
+  // about 2^-16), leaving `step` unreachable and every run vacuously ok.
+  pure val SEND_SLOTS: Set[(Party, Party)] = tuples(BYZ, PARTIES)
+  pure val CLAIM_SLOTS: Set[(Party, Party, Party)] = tuples(BYZ, PARTIES, PARTIES)
 
   action init = all {
     sends' = Set(),
     claims' = Set(),
+    present' = Set(),
     out' = PARTIES.mapBy(i => Unattributed),
   }
 
   action step = {
-    // NOTE: powerset, never setOfMaps - Apalache cannot expand sets of functions.
-    nondet hvs = tuples(HONEST, VALUES).map(t => { p: t._1, v: t._2 }).powerset().oneOf()
-    nondet bs = BYZ_SENDS.powerset().oneOf()
-    nondet bc = BYZ_CLAIMS.powerset().oneOf()
+    // One bit per honest party: which of the two values it broadcasts.
+    nondet hvHigh = HONEST.powerset().oneOf()
+    // Byzantine round 1: sent-at-all, and which value.
+    nondet bsMade = SEND_SLOTS.powerset().oneOf()
+    nondet bsHigh = SEND_SLOTS.powerset().oneOf()
+    // Byzantine round 2: which messages exist, then per-slot content.
+    nondet bcPresent = SEND_SLOTS.powerset().oneOf()
+    nondet bcMade = CLAIM_SLOTS.powerset().oneOf()
+    nondet bcHigh = CLAIM_SLOTS.powerset().oneOf()
 
     val honestSends = tuples(HONEST, PARTIES).map(t =>
-      { from: t._1, to: t._2,
-        vote: Sent(hvs.filter(x => x.p == t._1).fold(0, (_, x) => x.v)) })
-    val allSends = honestSends.union(bs)
+      { from: t._1, to: t._2, vote: Sent(if (hvHigh.contains(t._1)) 1 else 0) })
+    val byzSends = SEND_SLOTS.filter(sl => bsMade.contains(sl)).map(sl =>
+      { from: sl._1, to: sl._2, vote: Sent(if (bsHigh.contains(sl)) 1 else 0) })
+    val allSends = honestSends.union(byzSends)
 
     // An honest party echoes to everyone exactly what it received.
     val honestClaims = tuples(HONEST, PARTIES, PARTIES).map(t => {
@@ -455,15 +465,21 @@ Add above the invariants:
       { by: t._1, to: t._2, about: t._3,
         vote: if (heard.size() == 1) heard.fold(Nothing, (_, x) => x.vote) else Nothing }
     })
-    val allClaims = honestClaims.union(bc)
+    // A slot the Byzantine party omits reads as Nothing (it claims it heard
+    // nothing from that party) - the message still exists if bcPresent says so.
+    val byzClaims = CLAIM_SLOTS.filter(sl => bcMade.contains(sl)).map(sl =>
+      { by: sl._1, to: sl._2, about: sl._3,
+        vote: if (bcHigh.contains(sl)) Sent(1) else Sent(0) })
+    val allClaims = honestClaims.union(byzClaims)
+
+    // Honest parties always send their round-2 message to everyone.
+    val allPresent = tuples(HONEST, PARTIES).union(bcPresent)
 
     all {
-      HONEST.forall(h => hvs.filter(x => x.p == h).size() == 1),
-      wellFormedSends(allSends),
-      wellFormedClaims(allClaims),
       sends' = allSends,
       claims' = allClaims,
-      out' = PARTIES.mapBy(k => verify(k, allClaims)),
+      present' = allPresent,
+      out' = PARTIES.mapBy(k => verify(k, allPresent, allClaims)),
     }
   }
 ```
@@ -476,7 +492,7 @@ quint run broadcast.qnt --invariant=L2_ValueAgreement --max-steps=1 --max-sample
 quint run broadcast.qnt --invariant=L3_HonestValuePreservation --max-steps=1 --max-samples=20000
 ```
 
-Expected: `[ok] No violation found` for all three.
+Expected: `[ok] No violation found` for all three, **each showing `max=2` in its trace-length statistics**. If any shows `max=1`, `step` never ran and the result is meaningless — fix the encoding before going further.
 
 Then the exhaustive check. Each takes roughly 2.5 minutes at n=4/f=1; do not interrupt them:
 
@@ -485,7 +501,7 @@ quint verify broadcast.qnt --invariant=L1_NoFalseBlame --max-steps=1
 quint verify broadcast.qnt --invariant=L2_ValueAgreement --max-steps=1
 ```
 
-Expected: `The outcome is: NoError` and `[ok] No violation found` for both. Reference timings from the prototype: L1 144 s, L2 159 s.
+Expected: `The outcome is: NoError` and `[ok] No violation found` for both. Reference timing from the prototype under this encoding: L1 about 111 s.
 
 If Apalache instead prints *"Trying to expand a set of functions"*, a `setOfMaps` has crept in — find it and convert it to a powerset of records.
 
@@ -500,7 +516,7 @@ Liveness is conditional — it only holds when nobody deviates — so it is a sc
     val ss = tuples(PARTIES, PARTIES).map(t => { from: t._1, to: t._2, vote: Sent(t._1) })
     val cs = tuples(PARTIES, PARTIES, PARTIES).map(t =>
       { by: t._1, to: t._2, about: t._3, vote: Sent(t._3) })
-    assert(PARTIES.forall(k => match verify(k, cs) {
+    assert(PARTIES.forall(k => match verify(k, ALL_PRESENT, cs) {
       | Agreed(m) => PARTIES.forall(i => m.get(i) == Sent(i))
       | Attributed(_) => false
       | Unattributed => false
@@ -745,7 +761,8 @@ module seam {
     }
 
   // Every outcome the concrete verify() can produce at an honest party must
-  // satisfy the contract keygen.qnt assumes.
+  // satisfy the contract keygen.qnt assumes. `out` is broadcast.qnt's state
+  // variable, already computed from the corrected `verify(k, present, claims)`.
   val SeamSound = HONEST.forall(k => oracleWellFormed(toOracle(out.get(k)), HONEST))
 }
 ```
@@ -908,7 +925,7 @@ git commit -m "test: add a single entry point for the multisig Quint checks"
 
 **Interfaces:**
 - Consumes: `types.*`, `oracle.*`.
-- Produces: `type Stage`, `type CeremonyOutcome = Running | Done(Party -> Vote) | Failed(Set[Party])`, state vars `stage: Party -> Stage`, `result: Party -> CeremonyOutcome`; `pure val KEY_A/KEY_B`, `ORACLE_RESULTS`, `ORACLE_ASSIGNMENTS`; invariants `K1_NoHonestBlamed`, `K2_NoConflictingOutcome`, `K5_Termination`.
+- Produces: `type Stage`, `type CeremonyOutcome = Running | Done(Party -> Vote) | Failed(Set[Party])`, state vars `stage: Party -> Stage`, `result: Party -> CeremonyOutcome`; `pure val KEY_A/KEY_B`, `pure def resultFor`; invariants `K1_NoHonestBlamed`, `K2_NoConflictingOutcome`, `K5_Termination`.
 
 Model the stage sequence as a per-party program counter. Each `Verify*` stage consumes one oracle result; each non-verify stage advances. Secret shares are private and unverifiable, so `shareValid` is an adversary-chosen relation for Byzantine senders and always true for honest ones.
 
@@ -996,11 +1013,13 @@ Append:
   pure val KEY_A: Party -> Vote = PARTIES.mapBy(i => Sent(i))
   pure val KEY_B: Party -> Vote = PARTIES.mapBy(i => Sent(i + 1))
 
-  pure val ORACLE_RESULTS: Set[OracleResult] =
-    Set(OkAgreed(KEY_A), OkAgreed(KEY_B), OkAttributed(BYZ), OkFailed)
-
-  pure val ORACLE_ASSIGNMENTS: Set[{ p: Party, r: OracleResult }] =
-    tuples(PARTIES, ORACLE_RESULTS).map(t => { p: t._1, r: t._2 })
+  // Four possible results per party, selected by two characteristic subsets,
+  // so every draw is valid by construction (see Global Constraints).
+  pure def resultFor(k: Party, hi: Set[Party], lo: Set[Party]): OracleResult =
+    if (hi.contains(k))
+      (if (lo.contains(k)) OkAgreed(KEY_A) else OkAgreed(KEY_B))
+    else
+      (if (lo.contains(k)) OkAttributed(BYZ) else OkFailed)
 
   // One stage transition.
   //
@@ -1014,16 +1033,15 @@ Append:
   // parties never land on two different agreed maps (L2), and no blame set
   // names an honest party (L1).
   action step = {
-    nondet oracleChoice = ORACLE_ASSIGNMENTS.powerset().oneOf()
-    val res = PARTIES.mapBy(k =>
-      oracleChoice.filter(x => x.p == k).fold(OkFailed, (_, x) => x.r))
+    nondet oracleHi = PARTIES.powerset().oneOf()
+    nondet oracleLo = PARTIES.powerset().oneOf()
+    val res = PARTIES.mapBy(k => resultFor(k, oracleHi, oracleLo))
     val agreedAt = (k) => match res.get(k) {
       | OkAgreed(_) => true
       | OkAttributed(_) => false
       | OkFailed => false
     }
     all {
-      PARTIES.forall(k => oracleChoice.filter(x => x.p == k).size() == 1),
       HONEST.forall(k => oracleWellFormed(res.get(k), HONEST)),
       tuples(HONEST, HONEST).forall(q =>
         match res.get(q._1) {
@@ -1230,10 +1248,12 @@ with the two `nondet` picks hoisted to the top of `step` alongside the existing 
     // Stage 8: a blamed party reveals the share it sent to each complainant.
     // An honest party reveals exactly those, truthfully. A Byzantine party may
     // reveal any subset, with any validity.
-    nondet byzReveals =
-      tuples(BYZ, PARTIES, Set(false, true))
-        .map(t => { by: t._1, about: t._2, ok: t._3 })
-        .powerset().oneOf()
+    // Revealed-at-all and valid-or-not, as two characteristic subsets, so a
+    // draw can never assert both ok:true and ok:false for the same pair.
+    nondet byzRevealMade = tuples(BYZ, PARTIES).powerset().oneOf()
+    nondet byzRevealOk = tuples(BYZ, PARTIES).powerset().oneOf()
+    val byzReveals = byzRevealMade.map(t =>
+      { by: t._1, about: t._2, ok: byzRevealOk.contains(t) })
     val honestReveals =
       complaints.filter(c => HONEST.contains(c.about))
         .map(c => { by: c.about, about: c.by,
@@ -1341,7 +1361,8 @@ Add the state variable, an adversary choice of lengths, and the stage-4 rejectio
 ```quint
   var coeffLen: Party -> int
 
-  pure val LENGTH_CHOICES: Set[int] = Set(0, KEY_THRESHOLD, KEY_THRESHOLD + 1, KEY_THRESHOLD + 2)
+  // 0 and KEY_THRESHOLD are too short; KEY_THRESHOLD + 2 is too long;
+  // KEY_THRESHOLD + 1 is the honest length.
 ```
 
 In `init`: `coeffLen' = PARTIES.mapBy(_ => KEY_THRESHOLD + 1),`
@@ -1349,14 +1370,18 @@ In `init`: `coeffLen' = PARTIES.mapBy(_ => KEY_THRESHOLD + 1),`
 In `step`, hoisted alongside the other picks:
 
 ```quint
-    nondet byzLens = tuples(BYZ, LENGTH_CHOICES).map(t => { p: t._1, n: t._2 }).powerset().oneOf()
+    // Four length choices per Byzantine party via two characteristic subsets.
+    nondet lenHi = BYZ.powerset().oneOf()
+    nondet lenLo = BYZ.powerset().oneOf()
     val newLens = PARTIES.mapBy(i =>
-      if (BYZ.contains(i))
-        byzLens.filter(x => x.p == i).fold(KEY_THRESHOLD + 1, (_, x) => x.n)
-      else KEY_THRESHOLD + 1)
+      if (not(BYZ.contains(i))) KEY_THRESHOLD + 1
+      else if (lenHi.contains(i))
+        (if (lenLo.contains(i)) 0 else KEY_THRESHOLD)
+      else
+        (if (lenLo.contains(i)) KEY_THRESHOLD + 1 else KEY_THRESHOLD + 2))
 ```
 
-with `BYZ.forall(b => byzLens.filter(x => x.p == b).size() == 1)` as a conjunct, `coeffLen' = if (PARTIES.exists(k => stage.get(k) == CoefficientCommitments3)) newLens else coeffLen,` as the assignment, and the `VerifyCommitments4` branch failing with the offending parties attributed when any `commitmentAccepted` is false.
+with `coeffLen' = if (PARTIES.exists(k => stage.get(k) == CoefficientCommitments3)) newLens else coeffLen,` as the assignment, and the `VerifyCommitments4` branch failing with the offending parties attributed when any `commitmentAccepted` is false.
 
 ```quint
   // K6: a ceremony can never finalise with a wrong-length commitment in play.
