@@ -173,7 +173,7 @@ scope.
 | L1 | **NoFalseBlame** — `reported ∩ honest = ∅` at every honest party |
 | L2 | **ValueAgreement** — two honest parties returning `Agreed` return equal maps |
 | L3 | **HonestValuePreservation** — an agreed map holds each honest sender's actual value |
-| L4 | **OutcomeAgreement** — honest parties return the same variant |
+| L4 | **SafeDivergence** — honest parties may diverge between `Agreed` and a failure outcome, but never between two *different* `Agreed` maps, and a diverging party never blames an honest party |
 | L5 | **Liveness** — if every party's message is delivered and Byzantine parties behave honestly, all honest parties return `Agreed` |
 | L6 | **VoteAgreement** — two honest parties returning `Agreed` from `QuorumVote` return the same value, and `QuorumVote` never reports anyone |
 
@@ -182,21 +182,38 @@ scope.
 | | Property |
 | --- | --- |
 | K1 | **NoHonestBlamed** — no honest party in any honest party's final reported set |
-| K2 | **OutcomeAgreement** — same Done/Error verdict and same reported set everywhere |
+| K2 | **NoConflictingOutcome** — no two honest parties finish `Done` with different keys or participant sets |
 | K3 | **AttributionProgress** — a non-empty reported set contains at least one Byzantine party |
 | K4 | **HandoverNoFalseBlame** — K1 with `sharing ≠ receiving` |
 | K5 | **Termination** — every run reaches Done or Error |
 | K6 | **KeyConsistency** — on Done, all honest parties derived the same key and participant set |
+| K7 | **StageDivergenceSafety** — if some honest parties proceed past a stage while others abort, the proceeding parties cannot finalise a key; they must eventually fail |
 
 L1 and K1 are the headline properties. K3 complements K1: blame must be not only
 safe but productive, or an adversary can force repeated unattributed retries.
 
-**L4 and K2 are genuinely open questions, not expected passes.** Honest parties
-do not feed identical inputs into `verify_broadcasts`: a Byzantine party
-equivocating in round 1 causes honest echoes to differ legitimately, and whether
-a value clears `> (2n − 1)/3` can therefore differ per receiver. If L4 fails,
-the counterexample distinguishes a real desync bug from a degradation the retry
-logic already absorbs. Either answer is worth recording.
+**L4-as-originally-stated is false. This was settled during planning, not left
+open.** A prototype of the lemma layer produced a concrete counterexample at
+n=4/f=1 in milliseconds:
+
+> Byzantine party 4 equivocates in round 1, sending value `0` to parties 1, 2, 4
+> and value `1` to party 3. Honest echoes about party 4 therefore split 2–1. In
+> round 2 party 4 uses its own claim as a tie-breaker: it tells parties 3 and 4
+> it sent `0` (giving `0` three votes, clearing the quorum of 3 → `Agreed`), and
+> tells parties 1 and 2 it sent `1` (2 votes each way → no quorum →
+> `Unattributed`). Honest party 3 proceeds to the next stage while honest
+> parties 1 and 2 abort.
+
+This is a liveness degradation, not a safety violation: no honest party is
+blamed and no two honest parties commit to different values. The ceremony fails
+and is retried. L4 is therefore restated as **SafeDivergence** above, and K2 is
+weakened to match — full outcome agreement is not a property this protocol has,
+and a model asserting it would fail immediately for a benign reason.
+
+The finding does raise a genuine question the ceremony layer must answer, which
+is why **K7** exists: a single Byzantine party can, at every echo stage, split
+the honest set into one group that proceeds and another that aborts. K7 requires
+that the proceeding group cannot be walked all the way to a finalised key.
 
 K4 targets a bug class known to be real. `VerifyComplaintsBroadcastStage7`
 already carries a fix for it: complaints from non-receiving participants are
@@ -211,8 +228,24 @@ modelling any curve arithmetic.
 
 ## Verification
 
-Quint is not currently installed anywhere in the repo. Tooling required:
-`@informalsystems/quint` (npm) and Apalache (JVM) for `quint verify`.
+Tooling: `@informalsystems/quint` (npm, tested at 0.32.0) and Apalache (tested
+at 0.56.1, auto-downloaded into `~/.quint` on first `quint verify`; requires a
+JDK). A prototype confirmed the approach end to end before this plan was
+written:
+
+| Property | Result at n=4/f=1 | Time |
+| --- | --- | --- |
+| L1 NoFalseBlame | verified exhaustively | 144 s |
+| L2 ValueAgreement | verified exhaustively | 159 s |
+| L4 OutcomeAgreement (original form) | **falsified**, counterexample above | 14 ms |
+
+**Encoding constraint discovered during prototyping.** Apalache rejects
+`setOfMaps(D, C).oneOf()` with *"Trying to expand a set of functions. This will
+blow up the solver."* Adversary choices must therefore be encoded as
+`Set[record].powerset().oneOf()` plus explicit well-formedness constraints,
+not as sets of maps. The simulator (`quint run`) accepts either form, so this
+only surfaces at `quint verify` time — it must be got right from the first
+module or every model has to be rewritten later.
 
 Configurations:
 
