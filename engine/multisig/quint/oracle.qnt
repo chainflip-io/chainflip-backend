@@ -6,16 +6,14 @@ module oracle {
     | OkAttributed(Set[Party])
     | OkFailed
 
-  // The postconditions broadcast.qnt discharges (L1-L6). keygen.qnt consumes
-  // the oracle as one atomic step; this predicate is the seam made explicit.
-  //
-  //   OkAgreed(m)     - m is identical at every honest party, and records what
-  //                     each honest sender actually sent          (L2, L3)
-  //   OkAttributed(b) - b is non-empty and contains no honest party    (L1)
-  //   OkFailed        - the stage failed and nobody is blamed
-  //
-  // Honest parties may diverge between OkAgreed and a failure result, but never
-  // between two different OkAgreed maps: full outcome agreement is false.
+  // What this predicate mechanically checks, arm by arm:
+  //   OkAgreed(_)     - unconditional (true)
+  //   OkAttributed(b) - `b != Set()` is dead: toOracle already maps an empty
+  //                     blame set to OkFailed. The live clause is
+  //                     `b.intersect(honest) == Set()`, i.e. L1.
+  //   OkFailed        - unconditional (true)
+  // This is per-party, so agreement (L2) is NOT checked here - see
+  // SeamAgreementSound in seam.qnt.
   pure def oracleWellFormed(r: OracleResult, honest: Set[Party]): bool =
     match r {
     | OkAgreed(_) => true
