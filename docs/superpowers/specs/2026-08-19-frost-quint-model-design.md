@@ -187,7 +187,7 @@ scope.
 | K4 | **HandoverNoFalseBlame** — K1 with `sharing ≠ receiving` |
 | K5 | **Termination** — every run reaches Done or Error |
 | K6 | **KeyConsistency** — on Done, all honest parties derived the same key and participant set |
-| K7 | **StageDivergenceSafety** — if some honest parties proceed past a stage while others abort, the proceeding parties cannot finalise a key; they must eventually fail |
+| K7 | **QuorumCoupling** — a stage cannot succeed for anyone unless a quorum is still participating (modelled as a constraint, with divergence covered by a witness rather than an invariant) |
 
 L1 and K1 are the headline properties. K3 complements K1: blame must be not only
 safe but productive, or an adversary can force repeated unattributed retries.
@@ -210,10 +210,28 @@ and is retried. L4 is therefore restated as **SafeDivergence** above, and K2 is
 weakened to match — full outcome agreement is not a property this protocol has,
 and a model asserting it would fail immediately for a benign reason.
 
-The finding does raise a genuine question the ceremony layer must answer, which
-is why **K7** exists: a single Byzantine party can, at every echo stage, split
-the honest set into one group that proceeds and another that aborts. K7 requires
-that the proceeding group cannot be walked all the way to a finalised key.
+The finding does raise a genuine question at the ceremony layer, and prototyping
+answered it. K7 was originally stated as "the proceeding group cannot be walked
+all the way to a finalised key". **That is false, and it is false of the real
+protocol, not just the model.** Two things came out of testing it:
+
+1. A real faithfulness gap in the abstraction, now fixed: the model let a party
+   draw a successful stage outcome regardless of how many other parties had
+   already aborted. Every stage collects from all participants, so once too many
+   have aborted the rest time out. This is now a modelled constraint — a stage
+   succeeds for nobody unless a quorum is still participating.
+2. Even with that constraint, a minority of honest parties can abort while the
+   quorum completes, and at the final verify stage a single honest party can
+   finalise locally while others fail. That is correct threshold behaviour, not
+   a safety violation. Whether a locally-finalised key is ever *used* is decided
+   outside this model, by the State Chain requiring a threshold of success
+   reports — and that aggregation is out of scope (the model is scoped to
+   `engine/multisig/src/client/`).
+
+So K7 is not an invariant. The quorum-coupling constraint is kept as part of the
+model, divergence is tracked by a **witness** confirming the model can still
+reach it, and sub-quorum finalisation is recorded here as a deliberate
+non-property with its scope boundary stated.
 
 K4 targets a bug class known to be real. `VerifyComplaintsBroadcastStage7`
 already carries a fix for it: complaints from non-receiving participants are

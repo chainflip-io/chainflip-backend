@@ -23,7 +23,9 @@ These were established by a working prototype. Violating any of them means rewri
 - **Tuple-keyed map types need double parentheses:** `((Party, Party)) -> Vote`.
 - All models live in `engine/multisig/quint/`. No Rust is modified by this plan.
 - **Encode every adversary choice as characteristic-function subsets, so that every draw is well-formed by construction.** Never draw an arbitrary subset and then reject the ill-formed ones with a guard inside `all { ... }`. A guard makes the simulator reject essentially every draw (a valid round-2 claim set has probability ~2⁻¹⁶), `step` becomes unreachable, and every `quint run` reports a vacuous `[ok]`. To choose one of `k` options per slot, use `⌈log₂ k⌉` independent subsets of the slot set and decode them; to choose "absent or one of two values", use one `present` subset and one `which-value` subset.
-- **Every `quint run` result must be read together with its `Trace length statistics: max=` line.** If `max=1`, no `step` ever executed and the `[ok]` means nothing. A run that exercises a one-step model must show `max=2`. Report this number alongside every result.
+- **Every `quint run` must carry `--witnesses`, and every witness must be reached in > 0 traces.** An invariant that is never violated proves nothing if the interesting states were never reached; a witness reported as `0 trace(s) out of N explored (0.00%)` means the state is unreachable — an over-constrained action or a broken encoding — and must be fixed before the accompanying `[ok]` means anything. Also read the `Trace length statistics: max=` line: `max=1` in a one-step model means `step` never fired at all.
+- **`quint run`/`verify`/`test` need concrete `const`s.** A module declaring `const` cannot be run directly — it fails `QNT500: Uninitialized const`. Bind them in a small instance module and pass `--main <instance>`. `assume` does NOT bind a const.
+- **Simulation is not proof.** Report a `quint run` `[ok]` as "no counterexample in N sampled traces", never as "the property holds". Only `quint verify` justifies the stronger claim.
 - Quorum is `count > threshold` where `threshold(n) = (2n − 1) / 3` in integer arithmetic — copy this exactly; it is `threshold_from_share_count` in `utilities/src/lib.rs:72`.
 
 ## File Structure
@@ -412,6 +414,18 @@ Append to `broadcast.qnt`:
   // two different Agreed maps, and never into blame. Full outcome agreement is
   // FALSE for this protocol - see the spec for the counterexample.
   val L4_SafeDivergence = L1_NoFalseBlame and L2_ValueAgreement
+
+  // Witnesses. These are not properties to hold - they are coverage checks.
+  // Each must be reached in > 0 traces, or the run's `[ok]` on the invariants
+  // above is vacuous because the interesting states were never explored.
+  val wAgreed = HONEST.exists(k =>
+    match out.get(k) { Agreed(_) => true | Attributed(_) => false | Unattributed => false })
+  val wAttributed = HONEST.exists(k =>
+    match out.get(k) { Attributed(_) => true | Agreed(_) => false | Unattributed => false })
+  val wUnattributed = HONEST.exists(k =>
+    match out.get(k) { Unattributed => true | Agreed(_) => false | Attributed(_) => false })
+  // The verified L4 divergence: two honest parties reaching different outcomes.
+  val wDiverged = tuples(HONEST, HONEST).exists(p => out.get(p._1) != out.get(p._2))
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -487,12 +501,16 @@ Add above the invariants:
 - [ ] **Step 4: Simulate, then verify exhaustively**
 
 ```bash
-quint run broadcast.qnt --invariant=L1_NoFalseBlame --max-steps=1 --max-samples=20000
-quint run broadcast.qnt --invariant=L2_ValueAgreement --max-steps=1 --max-samples=20000
-quint run broadcast.qnt --invariant=L3_HonestValuePreservation --max-steps=1 --max-samples=20000
+for inv in L1_NoFalseBlame L2_ValueAgreement L3_HonestValuePreservation; do
+  quint run broadcast.qnt --invariant=$inv \
+    --witnesses wAgreed wAttributed wUnattributed wDiverged \
+    --max-steps=1 --max-samples=20000
+done
 ```
 
-Expected: `[ok] No violation found` for all three, **each showing `max=2` in its trace-length statistics**. If any shows `max=1`, `step` never ran and the result is meaningless — fix the encoding before going further.
+Expected for each: `[ok] No violation found`, `max=2` in the trace-length statistics, and **every one of the four witnesses reached in more than 0 traces**.
+
+A witness at `0 trace(s) ... (0.00%)` means that state is unreachable, so the `[ok]` beside it is vacuous — stop and fix the encoding. `wDiverged` in particular must fire: it is the verified L4 counterexample, and a model that cannot reach it has no adversarial power.
 
 Then the exhaustive check. Each takes roughly 2.5 minutes at n=4/f=1; do not interrupt them:
 
@@ -1041,8 +1059,19 @@ Append:
       | OkAttributed(_) => false
       | OkFailed => false
     }
+    val stillRunning = PARTIES.filter(p => result.get(p) == Running)
     all {
       HONEST.forall(k => oracleWellFormed(res.get(k), HONEST)),
+      // A stage cannot succeed for anyone unless a quorum is still taking part.
+      // Every stage collects from all participants, so once too many parties
+      // have aborted the rest time out rather than walking on alone. Without
+      // this the model lets one party stroll to a finalised key while everyone
+      // else has failed.
+      PARTIES.forall(k => match res.get(k) {
+        | OkAgreed(_) => stillRunning.size() > T
+        | OkAttributed(_) => true
+        | OkFailed => true
+      }),
       tuples(HONEST, HONEST).forall(q =>
         match res.get(q._1) {
         | OkAgreed(m1) => match res.get(q._2) {
@@ -1446,7 +1475,7 @@ finding #1 - a ceremony finalising with an over-long commitment vector."
 
 **Interfaces:**
 - Consumes: Tasks 9-11's model.
-- Produces: in `keygen.qnt`, `const SHARING`, `const RECEIVING`, `const FILTER_NON_RECEIVER_COMPLAINTS`, `const ENFORCE_COEFF_LENGTH`, `pure def admissibleComplaints`; in `harness.qnt`, modules `plain`, `handover`, `handoverUnfixed`, `plainNoCoeffCheck` with `K4_HandoverNoFalseBlame`, `K7_StageDivergenceSafety`, `K4_MustFailHere`, `K6_MustFailHere`.
+- Produces: in `keygen.qnt`, `const SHARING`, `const RECEIVING`, `const FILTER_NON_RECEIVER_COMPLAINTS`, `const ENFORCE_COEFF_LENGTH`, `pure def admissibleComplaints`; in `harness.qnt`, modules `plain`, `handover`, `handoverUnfixed`, `plainNoCoeffCheck` with `K4_HandoverNoFalseBlame`, the witnesses `wCeremonyDiverged` / `wCeremonyDone` / `wCeremonyBlamed`, and the negative controls `K4_MustFailHere` / `K6_MustFailHere`.
 
 Note: introducing `const`s means `keygen.qnt` can no longer be run directly — every check must target an instantiating module in `harness.qnt`. Task 13 updates `check.sh` accordingly.
 
@@ -1477,20 +1506,20 @@ module handover {
   // configuration is what makes it a distinct check.
   val K4_HandoverNoFalseBlame = K1_NoHonestBlamed
 
-  // K7: a subset of honest parties proceeding past a stage while others abort
-  // must not be walkable to a finalised key. Reachable only because each party
-  // draws its own oracle result (Task 9).
-  val K7_StageDivergenceSafety =
-    tuples(HONEST, HONEST).forall(q =>
-      match result.get(q._1) {
-      | Done(_) => match result.get(q._2) {
-          | Failed(_) => false
-          | Done(_) => true
-          | Running => true
-        }
-      | Failed(_) => true
-      | Running => true
-      })
+  // K7 is a WITNESS, not an invariant. Stating it as "no honest party may
+  // finalise while another failed" is false of the real protocol: a minority of
+  // honest parties aborting while the quorum completes is correct threshold
+  // behaviour. Whether a locally-finalised key is ever used is decided outside
+  // this model, by the State Chain requiring a threshold of success reports.
+  // What the model must show is that it can still REACH divergence - a model
+  // that cannot has lost the adversarial power the L4 counterexample proved is
+  // real. Must be witnessed in > 0 traces.
+  val wCeremonyDiverged = tuples(HONEST, HONEST).exists(q =>
+    result.get(q._1) != result.get(q._2))
+  val wCeremonyDone = HONEST.exists(k =>
+    match result.get(k) { Done(_) => true | Failed(_) => false | Running => false })
+  val wCeremonyBlamed = HONEST.exists(k =>
+    match result.get(k) { Failed(bad) => bad != Set() | Done(_) => false | Running => false })
 }
 
 // Negative control: the non-receiver complaint filter switched OFF. K4 MUST
@@ -1641,7 +1670,6 @@ Add to `SIM_INVARIANTS`:
   "keygen.qnt:K5_Termination"
   "keygen.qnt:K6_KeyConsistency"
   "harness.qnt:K4_HandoverNoFalseBlame"
-  "harness.qnt:K7_StageDivergenceSafety"
 ```
 
 The ceremony invariants need more steps than the lemma's single one, so give them their own loop rather than reusing `--max-steps=1`:
