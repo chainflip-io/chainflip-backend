@@ -872,10 +872,17 @@ echo "== unit tests =="
 quint test broadcast.qnt
 quint test oracle.qnt
 
+# Witnesses are not optional: an invariant that is never violated proves
+# nothing if the interesting states were never reached. A witness at 0% means
+# the run below it is vacuous.
+WITNESSES="wAgreed wAttributed wUnattributed wDiverged"
+
 echo "== simulation =="
 for entry in "${SIM_INVARIANTS[@]}"; do
-  quint run "${entry%%:*}" --invariant="${entry##*:}" --max-steps=1 --max-samples=20000 \
-    | grep -E '^\[(ok|violation)\]' | sed "s|^|  ${entry} |"
+  echo "  ${entry}"
+  quint run "${entry%%:*}" --invariant="${entry##*:}" --witnesses $WITNESSES \
+    --max-steps=1 --max-samples=20000 \
+    | grep -E '^\[(ok|violation)\]|witnessed in|Trace length' | sed 's|^|    |'
 done
 
 if [[ "${1:-}" == "--verify" ]]; then
@@ -895,7 +902,9 @@ chmod +x engine/multisig/quint/check.sh
 ./engine/multisig/quint/check.sh
 ```
 
-Expected: typecheck ok for all four files, both test suites pass, and `[ok]` for all six simulated invariants.
+Expected: typecheck ok for all four files, both test suites pass, and for every simulated invariant: `[ok]`, `max=2` in the trace-length line, and all four witnesses above 0%.
+
+A `0.00%` witness anywhere means the `[ok]` printed beside it is vacuous — treat that as a failure of the run, not a pass.
 
 - [ ] **Step 3: Run the full verification**
 
