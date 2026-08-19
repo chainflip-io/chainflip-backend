@@ -42,6 +42,9 @@ module keygen {
   var shareValid: Set[{ from: Party, to: Party }]
   var complaints: Set[{ by: Party, about: Party }]
   var revealed: Set[{ by: Party, about: Party, ok: bool }]
+  // 0 and KEY_THRESHOLD are too short; KEY_THRESHOLD + 2 is too long;
+  // KEY_THRESHOLD + 1 is the honest length.
+  var coeffLen: Party -> int
 
   pure val ALL_PAIRS: Set[{ from: Party, to: Party }] =
     tuples(PARTIES, PARTIES).map(t => { from: t._1, to: t._2 })
@@ -52,6 +55,7 @@ module keygen {
     shareValid' = ALL_PAIRS,
     complaints' = Set(),
     revealed' = Set(),
+    coeffLen' = PARTIES.mapBy(_ => KEY_THRESHOLD + 1),
   }
 
   // Two distinct candidate keys, so K2 (no two honest parties finish with
@@ -92,6 +96,9 @@ module keygen {
     // draw can never assert both ok:true and ok:false for the same pair.
     nondet byzRevealMade = tuples(BYZ, PARTIES).powerset().oneOf()
     nondet byzRevealOk = tuples(BYZ, PARTIES).powerset().oneOf()
+    // Four length choices per Byzantine party via two characteristic subsets.
+    nondet lenHi = BYZ.powerset().oneOf()
+    nondet lenLo = BYZ.powerset().oneOf()
 
     val stillRunning = PARTIES.filter(p => result.get(p) == Running)
     val canAgree = stillRunning.size() > T
@@ -112,10 +119,24 @@ module keygen {
       complaints.filter(c => HONEST.contains(c.about))
         .map(c => { by: c.about, about: c.by,
                     ok: shareValid.contains({ from: c.about, to: c.by }) })
+    val newLens = PARTIES.mapBy(i =>
+      if (not(BYZ.contains(i))) KEY_THRESHOLD + 1
+      else if (lenHi.contains(i))
+        (if (lenLo.contains(i)) 0 else KEY_THRESHOLD)
+      else
+        (if (lenLo.contains(i)) KEY_THRESHOLD + 1 else KEY_THRESHOLD + 2))
+    // Checked against the COMMITTED lengths in `coeffLen`, NOT against this
+    // step's fresh `newLens` draw. The commitment is broadcast at stage 3 and
+    // validated at stage 4, one step later. Reading `newLens` here tests a
+    // value that was never committed, and K6 then fails even with the check
+    // enabled - a trap this plan hit once already.
+    val badLenParties = PARTIES.filter(i => not(commitmentAccepted(coeffLen.get(i))))
 
     all {
       stage' = PARTIES.mapBy(k =>
         if (result.get(k) != Running) stage.get(k)
+        else if (stage.get(k) == VerifyCommitments4 and badLenParties != Set())
+          stage.get(k)
         else if (isVerifyStage(stage.get(k)) and
                  (match res.get(k) {
                   | OkAgreed(_) => false
@@ -125,6 +146,8 @@ module keygen {
         else nextStage(stage.get(k))),
       result' = PARTIES.mapBy(k =>
         if (result.get(k) != Running) result.get(k)
+        else if (stage.get(k) == VerifyCommitments4 and badLenParties != Set())
+          Failed(badLenParties)
         else if (isVerifyStage(stage.get(k)))
           match res.get(k) {
           | OkAgreed(m) => if (nextStage(stage.get(k)) == Finished) Done(m) else Running
@@ -139,6 +162,8 @@ module keygen {
                       honestComplaints.union(byzComplaints) else complaints,
       revealed' = if (PARTIES.exists(k => stage.get(k) == BlameResponses8))
                     honestReveals.union(byzReveals) else revealed,
+      coeffLen' = if (PARTIES.exists(k => stage.get(k) == CoefficientCommitments3))
+                    newLens else coeffLen,
     }
   }
 
@@ -169,6 +194,16 @@ module keygen {
     match result.get(k) {
     | Failed(bad) => bad == Set() or bad.intersect(BYZ) != Set()
     | Done(_) => true
+    | Running => true
+    })
+
+  // K6: a ceremony can never finalise with a wrong-length commitment in play.
+  // This is review finding #1 stated as an invariant: "keygen finalises, first
+  // signing fails for everyone" must be unreachable.
+  val K6_KeyConsistency = HONEST.forall(k =>
+    match result.get(k) {
+    | Done(_) => PARTIES.forall(i => commitmentLengthValid(coeffLen.get(i), KEY_THRESHOLD))
+    | Failed(_) => true
     | Running => true
     })
 
@@ -207,5 +242,29 @@ module keygen {
     assert(not(blameResponseComplete(4,
       Set({ by: 1, about: 4 }),
       Set({ by: 4, about: 1, ok: true }, { by: 4, about: 3, ok: true })))),
+  }
+
+  // The key being generated. Under handover this is the NEW key's threshold,
+  // not the current ceremony's party count.
+  pure val KEY_THRESHOLD: int = thresholdOf(PARTIES.size())
+
+  // validate_commitments (keygen_detail.rs): an honest party commits to exactly
+  // `threshold + 1` coefficients. Declared `const` so harness.qnt can
+  // instantiate a deliberately-broken variant as a permanent negative control,
+  // rather than this being a manual edit-and-revert that nobody re-runs.
+  const ENFORCE_COEFF_LENGTH: bool
+
+  pure def commitmentLengthValid(len: int, keyThreshold: int): bool =
+    len == keyThreshold + 1
+
+  pure def commitmentAccepted(len: int): bool =
+    not(ENFORCE_COEFF_LENGTH) or commitmentLengthValid(len, KEY_THRESHOLD)
+
+  run coeffLengthTest = all {
+    // threshold 2 -> exactly 3 coefficients
+    assert(commitmentLengthValid(3, 2)),
+    assert(not(commitmentLengthValid(4, 2))),   // over-long: raises the degree
+    assert(not(commitmentLengthValid(2, 2))),   // too short: OOB on honest nodes
+    assert(not(commitmentLengthValid(0, 2))),   // empty
   }
 }
