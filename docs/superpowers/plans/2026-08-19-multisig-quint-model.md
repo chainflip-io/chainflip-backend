@@ -22,6 +22,7 @@ These were established by a working prototype. Violating any of them means rewri
 - **Cross-file imports** use `import types.* from "./types"` (no `.qnt` extension).
 - **Tuple-keyed map types need double parentheses:** `((Party, Party)) -> Vote`.
 - All models live in `engine/multisig/quint/`. No Rust is modified by this plan.
+- **No rejection sampling, anywhere, ever.** This is the single most important rule in this plan and it was violated twice, each time producing results that looked fine and meant nothing. A constraint inside `all { ... }` does not restrict a choice — it *disables the transition*, and the simulator then has to redraw. In a one-step model that yields a vacuous `[ok]` (`step` never fires); in a multi-step model the chance of completing a trace falls off geometrically with depth — measured at 84 s for 8 steps, 217 s for 9, and over 9 minutes for 10, versus **133 ms for 2000 traces at 12 steps** once the rejection was removed. Always decode a draw into a *valid* configuration instead of drawing freely and filtering. State-dependent requirements are decoded too: gate on the state (`if (canAgree and ...)`) rather than asserting it.
 - **Encode every adversary choice as characteristic-function subsets, so that every draw is well-formed by construction.** Never draw an arbitrary subset and then reject the ill-formed ones with a guard inside `all { ... }`. A guard makes the simulator reject essentially every draw (a valid round-2 claim set has probability ~2⁻¹⁶), `step` becomes unreachable, and every `quint run` reports a vacuous `[ok]`. To choose one of `k` options per slot, use `⌈log₂ k⌉` independent subsets of the slot set and decode them; to choose "absent or one of two values", use one `present` subset and one `which-value` subset.
 - **Every `quint run` must carry `--witnesses`, and every witness must be reached in > 0 traces.** An invariant that is never violated proves nothing if the interesting states were never reached; a witness reported as `0 trace(s) out of N explored (0.00%)` means the state is unreachable — an over-constrained action or a broken encoding — and must be fixed before the accompanying `[ok]` means anything. Also read the `Trace length statistics: max=` line: `max=1` in a one-step model means `step` never fired at all.
 - **`quint run`/`verify`/`test` need concrete `const`s.** A module declaring `const` cannot be run directly — it fails `QNT500: Uninitialized const`. Bind them in a small instance module and pass `--main <instance>`. `assume` does NOT bind a const.
@@ -943,7 +944,7 @@ git commit -m "test: add a single entry point for the multisig Quint checks"
 
 **Interfaces:**
 - Consumes: `types.*`, `oracle.*`.
-- Produces: `type Stage`, `type CeremonyOutcome = Running | Done(Party -> Vote) | Failed(Set[Party])`, state vars `stage: Party -> Stage`, `result: Party -> CeremonyOutcome`; `pure val KEY_A/KEY_B`, `pure def resultFor`; invariants `K1_NoHonestBlamed`, `K2_NoConflictingOutcome`, `K5_Termination`.
+- Produces: `type Stage`, `type CeremonyOutcome = Running | Done(Party -> Vote) | Failed(Set[Party])`, state vars `stage: Party -> Stage`, `result: Party -> CeremonyOutcome`; `pure val KEY_A/KEY_B`; invariants `K1_NoHonestBlamed`, `K2_NoConflictingOutcome`, `K5_Termination`.
 
 Model the stage sequence as a per-party program counter. Each `Verify*` stage consumes one oracle result; each non-verify stage advances. Secret shares are private and unverifiable, so `shareValid` is an adversary-chosen relation for Byzantine senders and always true for honest ones.
 
@@ -1031,60 +1032,46 @@ Append:
   pure val KEY_A: Party -> Vote = PARTIES.mapBy(i => Sent(i))
   pure val KEY_B: Party -> Vote = PARTIES.mapBy(i => Sent(i + 1))
 
-  // Four possible results per party, selected by two characteristic subsets,
-  // so every draw is valid by construction (see Global Constraints).
-  pure def resultFor(k: Party, hi: Set[Party], lo: Set[Party]): OracleResult =
-    if (hi.contains(k))
-      (if (lo.contains(k)) OkAgreed(KEY_A) else OkAgreed(KEY_B))
-    else
-      (if (lo.contains(k)) OkAttributed(BYZ) else OkFailed)
-
   // One stage transition.
   //
-  // Each party gets its OWN oracle result. This matters: the verified L4
-  // counterexample shows a Byzantine party can equivocate in round 1 and
-  // tie-break in round 2, leaving some honest parties agreeing while others
-  // fail. A single shared result would make K2 and K7 vacuously true, and K7
-  // exists precisely to ask what that divergence can be walked into.
+  // Each party gets its OWN oracle result: the verified L4 counterexample shows
+  // a Byzantine party can equivocate in round 1 and tie-break in round 2, so
+  // some honest parties agree while others fail. A single shared result would
+  // make K2 vacuous.
   //
-  // The results are jointly constrained by what the lemma layer proved: honest
-  // parties never land on two different agreed maps (L2), and no blame set
-  // names an honest party (L1).
+  // CRITICAL: every choice is decoded into a valid configuration. Do NOT draw
+  // freely and add constraints inside `all { }` - that disables the transition
+  // rather than restricting the choice, and the cost of completing a trace then
+  // grows about 2.6x per step (measured: 84s at 8 steps, over 9 minutes at 10).
+  // The oracle contract is honoured structurally instead:
+  //   - ONE agreed key is chosen per step, so two honest parties can never land
+  //     on different agreed maps (this is L2, which broadcast.qnt proved);
+  //   - blame is always BYZ - non-empty and disjoint from HONEST (this is L1);
+  //   - agreement is only offered while a quorum is still participating, because
+  //     every stage collects from all participants and the rest time out once
+  //     too many have aborted.
   action step = {
-    nondet oracleHi = PARTIES.powerset().oneOf()
-    nondet oracleLo = PARTIES.powerset().oneOf()
-    val res = PARTIES.mapBy(k => resultFor(k, oracleHi, oracleLo))
-    val agreedAt = (k) => match res.get(k) {
-      | OkAgreed(_) => true
-      | OkAttributed(_) => false
-      | OkFailed => false
-    }
+    nondet keyIsA = Set(false, true).oneOf()
+    nondet agreedSet = PARTIES.powerset().oneOf()
+    nondet blamedSet = PARTIES.powerset().oneOf()
+
     val stillRunning = PARTIES.filter(p => result.get(p) == Running)
+    val canAgree = stillRunning.size() > T
+    val theKey = if (keyIsA) KEY_A else KEY_B
+    val res = PARTIES.mapBy(k =>
+      if (canAgree and agreedSet.contains(k)) OkAgreed(theKey)
+      else if (blamedSet.contains(k)) OkAttributed(BYZ)
+      else OkFailed)
+
     all {
-      HONEST.forall(k => oracleWellFormed(res.get(k), HONEST)),
-      // A stage cannot succeed for anyone unless a quorum is still taking part.
-      // Every stage collects from all participants, so once too many parties
-      // have aborted the rest time out rather than walking on alone. Without
-      // this the model lets one party stroll to a finalised key while everyone
-      // else has failed.
-      PARTIES.forall(k => match res.get(k) {
-        | OkAgreed(_) => stillRunning.size() > T
-        | OkAttributed(_) => true
-        | OkFailed => true
-      }),
-      tuples(HONEST, HONEST).forall(q =>
-        match res.get(q._1) {
-        | OkAgreed(m1) => match res.get(q._2) {
-            | OkAgreed(m2) => m1 == m2
-            | OkAttributed(_) => true
-            | OkFailed => true
-          }
-        | OkAttributed(_) => true
-        | OkFailed => true
-        }),
       stage' = PARTIES.mapBy(k =>
         if (result.get(k) != Running) stage.get(k)
-        else if (isVerifyStage(stage.get(k)) and not(agreedAt(k))) stage.get(k)
+        else if (isVerifyStage(stage.get(k)) and
+                 (match res.get(k) {
+                  | OkAgreed(_) => false
+                  | OkAttributed(_) => true
+                  | OkFailed => true
+                 })) stage.get(k)
         else nextStage(stage.get(k))),
       result' = PARTIES.mapBy(k =>
         if (result.get(k) != Running) result.get(k)
@@ -1125,12 +1112,23 @@ Append:
 ```bash
 quint typecheck keygen.qnt && echo TYPECHECK-OK
 for inv in K1_NoHonestBlamed K2_NoConflictingOutcome K5_Termination; do
-  quint run keygen.qnt --invariant=$inv --max-steps=12 --max-samples=20000 \
-    | grep -E '^\[(ok|violation)\]' | sed "s|^|$inv |"
+  quint run keygen.qnt --invariant=$inv \
+    --witnesses wCeremonyDiverged wCeremonyDone wCeremonyBlamed \
+    --max-steps=12 --max-samples=20000
 done
 ```
 
-Expected: `TYPECHECK-OK` and `[ok]` for all three. `--max-steps=12` covers the ten stages plus slack.
+Expected: `TYPECHECK-OK`, `[ok]` for all three, `max=13` in the trace-length statistics, and every witness above 0%. `--max-steps=12` covers the ten stages plus slack.
+
+**Reference timings under the structural encoding: about 130 ms for 2000 traces at 12 steps.** If a run instead takes minutes, a rejection guard has crept into `step` — find it and decode it into the draw instead. Reference witness coverage: diverged ~97%, blamed ~87%, done ~0.5%.
+
+`wCeremonyDone` is deliberately low: reaching `Done` needs agreement at all four verify stages. That means K2 and K6, which only bite on `Done`, are thinly exercised by simulation — which is why K1 is also checked exhaustively:
+
+```bash
+quint verify keygen.qnt --invariant=K1_NoHonestBlamed --max-steps=12
+```
+
+Expected: `The outcome is: NoError`, about 50 s.
 
 - [ ] **Step 7: Commit**
 
@@ -1263,7 +1261,7 @@ and `step` gains two, so that every transition assigns every state variable (Qui
                     honestReveals.union(byzReveals) else revealed,
 ```
 
-with the two `nondet` picks hoisted to the top of `step` alongside the existing oracle pick:
+with the `nondet` picks hoisted to the top of `step` alongside the existing `keyIsA` / `agreedSet` / `blamedSet` picks (no guards — every draw must decode to a valid configuration):
 
 ```quint
     nondet byzBadShares =
