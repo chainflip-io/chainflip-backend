@@ -19,7 +19,7 @@ downloaded automatically into `~/.quint` on first use. Apalache needs a JDK.
 
 ```bash
 ./check.sh            # everything, with the configurations that are known to fit
-./check.sh --verify   # add exhaustive Apalache checks (~7-15 minutes)
+./check.sh --verify   # add exhaustive Apalache checks (~11 minutes)
 quint typecheck broadcast.qnt
 quint run broadcast.qnt --invariant=L1_NoFalseBlame --max-steps=1 --max-samples=20000
 quint verify broadcast.qnt --invariant=L1_NoFalseBlame --max-steps=1
@@ -57,54 +57,60 @@ quint run harness.qnt --main=handover --invariant=K4_HandoverNoFalseBlame --max-
 
 ### Exhaustively verified (`quint verify`, n=4, 1 Byzantine party)
 
-These are properties of the echo-broadcast primitive (`broadcast.qnt`) and its
-correspondence to the oracle abstraction the ceremony model builds on
-(`seam.qnt`). Times are from the most recent `./check.sh --verify` run.
+Times are from the most recent `./check.sh --verify` run.
+
+**Echo-broadcast lemma layer** (`broadcast.qnt`) and its correspondence to the
+oracle abstraction the ceremony model builds on (`seam.qnt`):
 
 | Property | Meaning | Time |
 | --- | --- | --- |
-| L1 NoFalseBlame | an honest node is never blamed | ~77 s |
-| L2 ValueAgreement | honest nodes never agree on different values | ~83 s |
-| L6 VoteAgreement | honest nodes never disagree on a quorum-vote result | ~79 s |
+| L1 NoFalseBlame | an honest node is never blamed | ~78 s |
+| L2 ValueAgreement | honest nodes never agree on different values | ~79 s |
+| L6 VoteAgreement | honest nodes never disagree on a quorum-vote result | ~83 s |
 | SeamSound | the oracle's blame clause matches concrete `verify_broadcasts` | ~78 s |
-| SeamAgreementSound | the oracle's agreement clause matches it too | ~84 s |
-
-Total verify time for the suite above: ~7m17s (budget: 15 minutes).
+| SeamAgreementSound | the oracle's agreement clause matches it too | ~82 s |
 
 `SeamSound` alone is a weaker check than it looks: it is per-party, so its only
 falsifiable content is the no-blame clause. `SeamAgreementSound` is what covers
 agreement. Mutating `verify` so the agreed map depends on the observing party is
 caught by the second and missed entirely by the first.
 
+**Ten-stage keygen ceremony layer** (`keygen.qnt` via `harness.qnt`, `--main`
+routing as shown):
+
+| Property | Meaning | Time |
+| --- | --- | --- |
+| K1 NoHonestBlamed (`--main=plain`) | no honest party is blamed by any honest party | ~41 s |
+| K2 NoConflictingOutcome (`--main=plain`) | no two honest parties finish with different keys | ~35 s |
+| K3 AttributionProgress (`--main=plain`) | a non-empty blame set always contains a Byzantine party | ~40 s |
+| K5 Termination (`--main=plain`) | no honest party is stuck `Running` once it reaches `Finished` | ~25 s |
+| K6 KeyConsistency (`--main=plain`) | a ceremony never finalises with a wrong-length commitment in play | ~38 s |
+| K4 HandoverNoFalseBlame (`--main=handover`) | K1 re-checked under the handover split (`SHARING={2,3,4}`, `RECEIVING={1,2,3}`) | ~44 s |
+
+`wCeremonyDone` (an honest party reaching `Done`) is thin under simulation —
+around 0.03-0.07% of sampled traces, i.e. only ~10-15 traces out of 20000 —
+because it is the last of ten stages and depends on every nondet draw in the
+step lining up. K2 and K6 only constrain states where a party reached `Done`,
+so a `quint run` `[ok]` on them would rest on that thin a sample. That is
+exactly why all six ceremony properties are checked with `quint verify`
+instead of relying on simulation: Apalache explores the full state space
+regardless of how rarely a random walk reaches `Done`, so the K2/K6 result
+does not depend on witness coverage at all.
+
+Total verify time for all eleven checks above: ~10m22s (budget: ~11 minutes).
+
 ### Checked by simulation only (`quint run` — samples, does not prove)
 
 - **L3, L4** (`broadcast.qnt`).
-- **K1 NoHonestBlamed, K2 NoConflictingOutcome, K3 AttributionProgress,
-  K5 Termination, K6 KeyConsistency** — the ten-stage keygen ceremony
-  (`keygen.qnt` via `harness.qnt --main=plain`), n=4, 1 Byzantine party,
-  12 steps, 20000 samples.
-- **K4 HandoverNoFalseBlame** — K1 re-checked under the handover
-  configuration (`harness.qnt --main=handover`: `SHARING = {2,3,4}`,
-  `RECEIVING = {1,2,3}`), same bounds.
 
-None of these were run through `quint verify`. Exhaustive verification of the
-full ten-stage ceremony was out of scope for this plan (see "Deferred" in the
-design spec) — its state space is much larger than the echo-broadcast lemma's
-(seven nondet draws per step vs. the lemma's few), and no configuration was
-found or attempted that fits an Apalache run in a reasonable time. Treat K1-K6
-and K4 as "no counterexample found in the traces sampled," not as proven.
-
-Witness coverage for the ceremony checks (`wCeremonyDiverged`, `wCeremonyDone`,
-`wCeremonyBlamed`, 20000 samples, 12 steps, trace length max=13 as required):
-`wCeremonyDiverged` and `wCeremonyBlamed` are both consistently well over
-85%. `wCeremonyDone` — an honest party reaching `Done` — is thin and has been
-falling as nondet dimensions accumulated across tasks: ~0.55% after Task 10,
-0.12-0.16% after Task 11, and now **0.03-0.06%** (observed across the `plain`
-and `handover` configurations; confirmed nonzero at 100k samples too, ~0.05%).
-It is never 0.00% in any run performed, so K2 and K6 (the only invariants that
-bite exclusively on `Done`) are not vacuous, but the coverage is sparse enough
-that a future task narrowing the state space further should re-check this
-before trusting a green K2/K6 result.
+Everything else — the full lemma layer and the full ceremony layer, including
+handover — is exhaustively verified per the tables above. Simulation is still
+run for all of them too (`./check.sh`, no `--verify`) as a fast pre-verify
+smoke check; witness coverage for the ceremony simulation runs
+(`wCeremonyDiverged`, `wCeremonyDone`, `wCeremonyBlamed`, 20000 samples,
+12 steps, trace length max=13 as required) is `wCeremonyDiverged` and
+`wCeremonyBlamed` consistently well over 85%, `wCeremonyDone` 0.03-0.07% and
+never 0.00% in any run performed.
 
 ### Permanent negative controls
 

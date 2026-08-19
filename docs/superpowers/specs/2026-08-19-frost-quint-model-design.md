@@ -4,9 +4,11 @@
 **Status:** implemented
 **Scope:** `engine/multisig/src/client/{common,keygen}/`
 
-See `engine/multisig/quint/README.md` for current results: what is exhaustively
-verified vs. simulation-only, witness coverage, and the two permanent negative
-controls.
+Both the echo-broadcast lemma layer and the full ten-stage ceremony layer
+(K1-K6, K4) are verified exhaustively via `quint verify`, at n=4/f=1. Only L3
+and L4 (`broadcast.qnt`) remain simulation-only. See
+`engine/multisig/quint/README.md` for the property-by-property results,
+witness coverage, and the two permanent negative controls.
 
 ## Motivation
 

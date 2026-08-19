@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run every Quint check for the multisig models.
 #   ./check.sh          simulation only (fast, ~seconds)
-#   ./check.sh --verify  add exhaustive Apalache checks (slow, ~15 minutes)
+#   ./check.sh --verify  add exhaustive Apalache checks (slow, ~11 minutes)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -35,6 +35,21 @@ CEREMONY_STEPS=12
 # Uninitialized const). Every ceremony check instead targets one of the
 # `harness.qnt` modules via `--main`. Format: "file:main:invariant".
 CEREMONY_INVARIANTS=(
+  "harness.qnt:plain:K1_NoHonestBlamed"
+  "harness.qnt:plain:K2_NoConflictingOutcome"
+  "harness.qnt:plain:K3_AttributionProgress"
+  "harness.qnt:plain:K5_Termination"
+  "harness.qnt:plain:K6_KeyConsistency"
+  "harness.qnt:handover:K4_HandoverNoFalseBlame"
+)
+
+# The ceremony properties verify exhaustively too, and cheaply (24-44s each
+# measured). K2 and K6 only constrain states where a party reached Done,
+# which simulation reaches in only ~0.05% of traces - too thin a witness rate
+# to trust an `[ok]` from `quint run` alone, so these are checked with
+# Apalache rather than relying on that sample. Format matches
+# CEREMONY_INVARIANTS: "file:main:invariant".
+CEREMONY_VERIFY_INVARIANTS=(
   "harness.qnt:plain:K1_NoHonestBlamed"
   "harness.qnt:plain:K2_NoConflictingOutcome"
   "harness.qnt:plain:K3_AttributionProgress"
@@ -91,5 +106,12 @@ if [[ "${1:-}" == "--verify" ]]; then
     echo "  ${entry} ..."
     quint verify "${entry%%:*}" --invariant="${entry##*:}" --max-steps=1 \
       | grep -E '^\[(ok|violation)\]' | sed "s|^|  ${entry} |"
+  done
+  echo "== exhaustive verification (ceremony, slow) =="
+  for entry in "${CEREMONY_VERIFY_INVARIANTS[@]}"; do
+    IFS=':' read -r file main inv <<< "$entry"
+    echo "  ${file}::${main}::${inv} ..."
+    quint verify "$file" --main="$main" --invariant="$inv" --max-steps="$CEREMONY_STEPS" \
+      | grep -E '^\[(ok|violation)\]' | sed "s|^|  ${file}::${main}::${inv} |"
   done
 fi
