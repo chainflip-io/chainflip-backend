@@ -861,13 +861,23 @@ SIM_INVARIANTS=(
 VERIFY_INVARIANTS=(
   "broadcast.qnt:L1_NoFalseBlame"
   "broadcast.qnt:L2_ValueAgreement"
+  "broadcast.qnt:L6_VoteAgreement"
   "seam.qnt:SeamSound"
   "seam.qnt:SeamAgreementSound"
 )
 
 echo "== typecheck =="
+# NOT `quint typecheck "$f" && echo ok`: under `set -e`, a command to the left
+# of && is exempt from errexit, so a typecheck failure would print its error and
+# the script would carry on and exit 0. A check script that exits 0 on failure
+# is worse than no check script.
 for f in types.qnt broadcast.qnt oracle.qnt seam.qnt; do
-  quint typecheck "$f" && echo "  ok $f"
+  if quint typecheck "$f"; then
+    echo "  ok $f"
+  else
+    echo "  FAILED $f"
+    exit 1
+  fi
 done
 
 echo "== unit tests =="
@@ -914,7 +924,7 @@ A `0.00%` witness anywhere means the `[ok]` printed beside it is vacuous — tre
 ./engine/multisig/quint/check.sh --verify
 ```
 
-Expected: `[ok]` for all four exhaustive checks. Budget ~12 minutes.
+Expected: `[ok]` for all five exhaustive checks. Budget ~12 minutes.
 
 - [ ] **Step 4: Record results in the README**
 
@@ -929,6 +939,7 @@ Verified exhaustively at n=4 with 1 Byzantine party (`quint verify`):
 | --- | --- | --- |
 | L1 NoFalseBlame | an honest node is never blamed | ~144 s |
 | L2 ValueAgreement | honest nodes never agree on different values | ~159 s |
+| L6 VoteAgreement | honest nodes never disagree on a single-round quorum vote | ~80 s |
 | SeamSound | the oracle's blame clause matches concrete `verify_broadcasts` | ~90 s |
 | SeamAgreementSound | the oracle's agreement clause matches it too | ~130 s |
 
