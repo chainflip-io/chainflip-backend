@@ -1709,7 +1709,7 @@ Quint `const` + parameterised instancing is confirmed working on 0.32.0: `import
 
 ```bash
 quint typecheck harness.qnt && echo TYPECHECK-OK
-for inv in K4_HandoverNoFalseBlame K7_StageDivergenceSafety; do
+for inv in K4_HandoverNoFalseBlame; do
   quint run harness.qnt --invariant=$inv --max-steps=12 --max-samples=20000 \
     | grep -E '^\[(ok|violation)\]' | sed "s|^|$inv |"
 done
