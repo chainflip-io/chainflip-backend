@@ -1135,6 +1135,17 @@ Append:
   // K5: no honest party is stuck Running once it reaches Finished.
   val K5_Termination = HONEST.forall(k =>
     stage.get(k) != Finished or result.get(k) != Running)
+
+  // Witnesses — coverage checks, not properties. Each must be reached in > 0
+  // traces or the invariants above are vacuous. They live here, in keygen.qnt,
+  // so every instantiation in harness.qnt inherits them; do NOT redeclare them
+  // there (duplicate name).
+  val wCeremonyDiverged = tuples(HONEST, HONEST).exists(q =>
+    result.get(q._1) != result.get(q._2))
+  val wCeremonyDone = HONEST.exists(k =>
+    match result.get(k) { Done(_) => true | Failed(_) => false | Running => false })
+  val wCeremonyBlamed = HONEST.exists(k =>
+    match result.get(k) { Failed(bad) => bad != Set() | Done(_) => false | Running => false })
 ```
 
 - [ ] **Step 6: Check**
@@ -1488,8 +1499,10 @@ Expected: `[ok]`.
 Because `ENFORCE_COEFF_LENGTH` is a `const`, `keygen.qnt` cannot be run directly — it must be instantiated. Create a throwaway probe to confirm both polarities, then delete it (Task 12 makes the negative control permanent in `harness.qnt`):
 
 ```quint
+// At this point ENFORCE_COEFF_LENGTH is the only const; SHARING and RECEIVING
+// are not introduced until Task 12, so do not bind them here.
 module coeffprobe {
-  import keygen(ENFORCE_COEFF_LENGTH = true, SHARING = PARTIES, RECEIVING = PARTIES).* from "./keygen"
+  import keygen(ENFORCE_COEFF_LENGTH = true).* from "./keygen"
 }
 ```
 
@@ -1566,20 +1579,16 @@ module handover {
   // configuration is what makes it a distinct check.
   val K4_HandoverNoFalseBlame = K1_NoHonestBlamed
 
-  // K7 is a WITNESS, not an invariant. Stating it as "no honest party may
+  // NOTE: wCeremonyDiverged / wCeremonyDone / wCeremonyBlamed are declared in
+  // keygen.qnt and inherited through this import. Do NOT redeclare them here.
+  //
+  // K7 is a witness, not an invariant. Stating it as "no honest party may
   // finalise while another failed" is false of the real protocol: a minority of
   // honest parties aborting while the quorum completes is correct threshold
-  // behaviour. Whether a locally-finalised key is ever used is decided outside
-  // this model, by the State Chain requiring a threshold of success reports.
+  // behaviour, and whether a locally-finalised key is ever used is decided
+  // outside this model by the State Chain's threshold of success reports.
   // What the model must show is that it can still REACH divergence - a model
-  // that cannot has lost the adversarial power the L4 counterexample proved is
-  // real. Must be witnessed in > 0 traces.
-  val wCeremonyDiverged = tuples(HONEST, HONEST).exists(q =>
-    result.get(q._1) != result.get(q._2))
-  val wCeremonyDone = HONEST.exists(k =>
-    match result.get(k) { Done(_) => true | Failed(_) => false | Running => false })
-  val wCeremonyBlamed = HONEST.exists(k =>
-    match result.get(k) { Failed(bad) => bad != Set() | Done(_) => false | Running => false })
+  // that cannot has lost the adversarial power the L4 counterexample proved.
 }
 
 // Negative control: the non-receiver complaint filter switched OFF. K4 MUST
