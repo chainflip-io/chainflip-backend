@@ -20,13 +20,23 @@ SIM_INVARIANTS=(
 VERIFY_INVARIANTS=(
   "broadcast.qnt:L1_NoFalseBlame"
   "broadcast.qnt:L2_ValueAgreement"
+  "broadcast.qnt:L6_VoteAgreement"
   "seam.qnt:SeamSound"
   "seam.qnt:SeamAgreementSound"
 )
 
 echo "== typecheck =="
+# NOT `quint typecheck "$f" && echo ok`: under `set -e`, a command to the left
+# of && is exempt from errexit, so a typecheck failure would print its error and
+# the script would carry on and exit 0. A check script that exits 0 on failure
+# is worse than no check script.
 for f in types.qnt broadcast.qnt oracle.qnt seam.qnt; do
-  quint typecheck "$f" && echo "  ok $f"
+  if quint typecheck "$f"; then
+    echo "  ok $f"
+  else
+    echo "  FAILED $f"
+    exit 1
+  fi
 done
 
 echo "== unit tests =="

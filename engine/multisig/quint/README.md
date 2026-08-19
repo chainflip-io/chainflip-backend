@@ -43,8 +43,9 @@ Verified exhaustively at n=4 with 1 Byzantine party (`quint verify`):
 | Property | Meaning | Time |
 | --- | --- | --- |
 | L1 NoFalseBlame | an honest node is never blamed | ~74 s |
-| L2 ValueAgreement | honest nodes never agree on different values | ~79 s |
-| SeamSound | the oracle's blame clause matches concrete `verify_broadcasts` | ~72 s |
+| L2 ValueAgreement | honest nodes never agree on different values | ~75 s |
+| L6 VoteAgreement | honest nodes never disagree on a quorum-vote result | ~78 s |
+| SeamSound | the oracle's blame clause matches concrete `verify_broadcasts` | ~73 s |
 | SeamAgreementSound | the oracle's agreement clause matches it too | ~78 s |
 
 Checked by simulation only: L3, L4.
