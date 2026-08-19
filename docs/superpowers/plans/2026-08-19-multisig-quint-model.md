@@ -1408,7 +1408,30 @@ In `step`, hoisted alongside the other picks:
         (if (lenLo.contains(i)) KEY_THRESHOLD + 1 else KEY_THRESHOLD + 2))
 ```
 
-with `coeffLen' = if (PARTIES.exists(k => stage.get(k) == CoefficientCommitments3)) newLens else coeffLen,` as the assignment, and the `VerifyCommitments4` branch failing with the offending parties attributed when any `commitmentAccepted` is false.
+with this assignment:
+
+```quint
+      coeffLen' = if (PARTIES.exists(k => stage.get(k) == CoefficientCommitments3))
+                    newLens else coeffLen,
+```
+
+and the `VerifyCommitments4` branch failing with the offending parties attributed:
+
+```quint
+    // Checked against the COMMITTED lengths in `coeffLen`, NOT against this
+    // step's fresh `newLens` draw. The commitment is broadcast at stage 3 and
+    // validated at stage 4, one step later. Reading `newLens` here tests a
+    // value that was never committed, and K6 then fails even with the check
+    // enabled - a trap this plan hit once already.
+    val badLenParties = PARTIES.filter(i => not(commitmentAccepted(coeffLen.get(i))))
+```
+
+Both the `stage'` and `result'` branches must consult it, so a party at `VerifyCommitments4` with any bad-length commitment in play fails and stops rather than advancing:
+
+```quint
+        else if (stage.get(k) == VerifyCommitments4 and badLenParties != Set())
+          Failed(badLenParties)
+```
 
 ```quint
   // K6: a ceremony can never finalise with a wrong-length commitment in play.
@@ -1445,7 +1468,9 @@ quint run coeffprobe.qnt --invariant=K6_KeyConsistency --max-steps=12 --max-samp
   | grep -E '^\[(ok|violation)\]'
 ```
 
-Expected: `[ok]`.
+Expected: `[ok]` with `max=13`.
+
+If this reports `[violation]` even with the check enabled, the wiring is reading `newLens` instead of `coeffLen` — see the timing note above.
 
 Then flip the instantiation to `ENFORCE_COEFF_LENGTH = false` and re-run:
 
