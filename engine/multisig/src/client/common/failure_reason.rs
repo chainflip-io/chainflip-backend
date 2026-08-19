@@ -74,6 +74,10 @@ pub enum KeygenFailureReason {
 	InvalidBlameResponse,
 	#[error("Invalid Complaint")]
 	InvalidComplaint,
+	/// A party was blamed by enough others that answering every complaint would
+	/// have published its whole sharing polynomial.
+	#[error("Too Many Complaints")]
+	TooManyComplaints,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -136,6 +140,7 @@ impl CeremonyFailureReason for KeygenFailureReason {
 			KeygenFailureReason::InvalidBlameResponse |
 			KeygenFailureReason::InvalidCommitment |
 			KeygenFailureReason::DeserializationError |
+			KeygenFailureReason::TooManyComplaints |
 			KeygenFailureReason::InvalidComplaint => {
 				warn!(
 					tag = KEYGEN_CEREMONY_FAILED,

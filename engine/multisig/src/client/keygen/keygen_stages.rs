@@ -27,7 +27,7 @@ use crate::{
 			try_deserialize, BroadcastFailureReason, DelayDeserialization, KeygenFailureReason,
 			KeygenStageName, ParticipantStatus, ResharingContext,
 		},
-		utils::{find_frequent_element, threshold_for_broadcast_verification},
+		utils::{find_frequent_element, threshold_for_broadcast_verification, PartyIdxMapping},
 		KeygenResult, KeygenResultInfo,
 	},
 	crypto::ECScalar,
@@ -35,6 +35,7 @@ use crate::{
 
 use async_trait::async_trait;
 use cf_primitives::AuthorityCount;
+use cf_utilities::format_iterator;
 use client::{
 	common::{
 		broadcast::{
@@ -726,6 +727,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// the complainer's index in Stage 8, which then fails verification in
 		// Stage 9 and wrongly attributes the (possibly honest) blamed party.
 		if let Some(context) = self.keygen_common.resharing_context.as_ref() {
+			let validator_mapping = &self.keygen_common.common.validator_mapping;
+
 			verified_complaints.retain(|idx_from, _| {
 				let is_receiver = context.receiving_participants.contains(idx_from);
 				if !is_receiver {
@@ -741,6 +744,25 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				}
 				is_receiver
 			});
+
+			// Symmetrically, ignore complaints *against* non-sharing participants.
+			// Only sharing parties deal shares, and Stage 4 discards the commitments
+			// of everyone else, so a non-sharer has nothing to answer a complaint
+			// with and nothing to verify such an answer against. Acting on one would
+			// have the blamed non-sharer reveal a share in Stage 8 that no node can
+			// then check in Stage 9.
+			for (idx_from, Complaints6(blamed_idxs)) in verified_complaints.iter_mut() {
+				blamed_idxs.retain(|idx_blamed| {
+					let is_sharer = context.sharing_participants.contains(idx_blamed);
+					if !is_sharer {
+						warn!(
+							from_id = validator_mapping.get_id(*idx_from).to_string(),
+							"Ignoring complaint against a non-sharing participant [{idx_blamed}]",
+						);
+					}
+					is_sharer
+				});
+			}
 		}
 
 		if verified_complaints.iter().all(|(_idx, c)| c.0.is_empty()) {
@@ -757,6 +779,18 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// Some complaints have been issued, entering the blaming stage
 
 		let common = &self.keygen_common.common;
+
+		warn!(
+			complainers = format!(
+				"{:?}",
+				verified_complaints
+					.iter()
+					.filter(|(_, Complaints6(blamed))| !blamed.is_empty())
+					.map(|(idx_from, Complaints6(blamed))| (*idx_from, blamed.len()))
+					.collect::<BTreeMap<_, _>>()
+			),
+			"Complaints raised",
+		);
 
 		let idxs_to_report: BTreeSet<_> = verified_complaints
 			.iter()
@@ -781,24 +815,76 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			})
 			.collect();
 
-		if idxs_to_report.is_empty() {
-			let common = self.keygen_common.common.clone();
-			let processor = BlameResponsesStage8 {
-				keygen_common: self.keygen_common,
-				complaints: verified_complaints,
-				agg_pubkey: self.agg_pubkey,
-				shares: self.shares,
-				outgoing_shares: self.outgoing_shares,
-				commitments: self.commitments,
-			};
+		if !idxs_to_report.is_empty() {
+			return StageResult::Error(idxs_to_report, KeygenFailureReason::InvalidComplaint)
+		}
 
-			let stage = BroadcastStage::new(processor, common);
+		// No honest party reaches this: it takes `threshold + 1` complaints against
+		// one party, which is also the number needed to sign, so this cannot be
+		// used to evict a dealer more cheaply than owning the key outright. It
+		// caps the disclosure rather than preventing it - what keeps an honest
+		// dealer safe is that only corrupt parties ever complain about it.
+		let over_blamed = parties_blamed_beyond_disclosure_limit(
+			&verified_complaints,
+			self.keygen_common.sharing_params.key_params.threshold as usize,
+			&common.validator_mapping,
+		);
 
-			StageResult::NextStage(Box::new(stage))
-		} else {
-			StageResult::Error(idxs_to_report, KeygenFailureReason::InvalidComplaint)
+		if !over_blamed.is_empty() {
+			return StageResult::Error(over_blamed, KeygenFailureReason::TooManyComplaints)
+		}
+
+		let common = self.keygen_common.common.clone();
+		let processor = BlameResponsesStage8 {
+			keygen_common: self.keygen_common,
+			complaints: verified_complaints,
+			agg_pubkey: self.agg_pubkey,
+			shares: self.shares,
+			outgoing_shares: self.outgoing_shares,
+			commitments: self.commitments,
+		};
+
+		let stage = BroadcastStage::new(processor, common);
+
+		StageResult::NextStage(Box::new(stage))
+	}
+}
+
+/// Parties blamed by enough others that answering every complaint would expose
+/// their sharing polynomial.
+///
+/// A blame response carries one evaluation of the sender's polynomial per
+/// complainer, and `threshold + 1` evaluations determine a polynomial of degree
+/// `threshold`. Exposing it exposes the secret behind it, which during a key
+/// handover is that party's share of the live aggregate key.
+fn parties_blamed_beyond_disclosure_limit(
+	complaints: &BTreeMap<AuthorityCount, Complaints6>,
+	threshold: usize,
+	validator_mapping: &PartyIdxMapping,
+) -> BTreeSet<AuthorityCount> {
+	let mut blame_counts: BTreeMap<AuthorityCount, usize> = BTreeMap::new();
+
+	for Complaints6(blamed_idxs) in complaints.values() {
+		for idx_blamed in blamed_idxs {
+			*blame_counts.entry(*idx_blamed).or_default() += 1;
 		}
 	}
+
+	let over_blamed: BTreeSet<_> = blame_counts
+		.into_iter()
+		.filter_map(|(idx_blamed, count)| (count > threshold).then_some(idx_blamed))
+		.collect();
+
+	if !over_blamed.is_empty() {
+		warn!(
+			blamed_ids =
+				format_iterator(validator_mapping.get_ids(over_blamed.clone())).to_string(),
+			"Refusing to enter the blame round: revealing every requested share \
+			 would expose the sharing polynomial",
+		);
+	}
+
+	over_blamed
 }
 
 /// The index at which a receiver's share is evaluated.
@@ -893,7 +979,18 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			})
 			.collect();
 
-		// TODO: put a limit on how many shares to reveal?
+		// This is the only point at which the protocol publishes key material, and having to
+		// respond to a complaint is unusual, which merits a warning:
+		if !idxs_to_reveal.is_empty() {
+			warn!(
+				revealed = idxs_to_reveal.len(),
+				limit = self.keygen_common.sharing_params.key_params.threshold,
+				"Revealing secret shares in response to complaints",
+			);
+		}
+
+		// Stage 7 caps this at `threshold` shares, one short of the number that
+		// would give away the sharing polynomial.
 		let data = DataToSend::Broadcast(BlameResponse8(
 			idxs_to_reveal
 				.iter()
@@ -992,10 +1089,21 @@ impl<Crypto: CryptoScheme> VerifyBlameResponsesBroadcastStage9<Crypto> {
 					return Err(sender_idx)
 				}
 
+				// This ignores any party without commitments (it should never legitimately
+				// be blamed and stage 7 already filters invalid complaints out):
+				let Some(commitment) = self.commitments.get(sender_idx) else {
+					if !response.0.is_empty() {
+						warn!(
+							from_id = common.validator_mapping.get_id(*sender_idx).to_string(),
+							"Ignoring blame response from a party with no commitment",
+						);
+					}
+					return Ok((*sender_idx, None))
+				};
+
 				if !response.0.iter().all(|(dest_idx, share)| {
-					share_evaluation_index(common, resharing_context, *dest_idx).is_some_and(
-						|eval_idx| verify_share(share, &self.commitments[sender_idx], eval_idx),
-					)
+					share_evaluation_index(common, resharing_context, *dest_idx)
+						.is_some_and(|eval_idx| verify_share(share, commitment, eval_idx))
 				}) {
 					warn!(
 						from_id = common.validator_mapping.get_id(*sender_idx).to_string(),
@@ -1064,5 +1172,56 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			Err(bad_parties) =>
 				StageResult::Error(bad_parties, KeygenFailureReason::InvalidBlameResponse),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn complaints(
+		entries: &[(AuthorityCount, &[AuthorityCount])],
+	) -> BTreeMap<AuthorityCount, Complaints6> {
+		entries
+			.iter()
+			.map(|(idx_from, blamed)| (*idx_from, Complaints6(blamed.iter().copied().collect())))
+			.collect()
+	}
+
+	/// Only used so the warnings can name the parties; indices are 1..=9.
+	fn mapping() -> PartyIdxMapping {
+		PartyIdxMapping::from_participants(
+			(1..=9u8).map(|i| cf_primitives::AccountId::new([i; 32])).collect(),
+		)
+	}
+
+	#[test]
+	fn disclosure_limit_is_exceeded_one_complaint_past_the_threshold() {
+		const THRESHOLD: usize = 3;
+
+		let at_limit = complaints(&[(1, &[9]), (2, &[9]), (3, &[9])]);
+		assert!(parties_blamed_beyond_disclosure_limit(&at_limit, THRESHOLD, &mapping()).is_empty());
+
+		let over_limit = complaints(&[(1, &[9]), (2, &[9]), (3, &[9]), (4, &[9])]);
+		assert_eq!(
+			parties_blamed_beyond_disclosure_limit(&over_limit, THRESHOLD, &mapping()),
+			BTreeSet::from([9]),
+		);
+	}
+
+	#[test]
+	fn disclosure_limit_counts_each_blamed_party_separately() {
+		const THRESHOLD: usize = 1;
+
+		// Four complaints, but nobody is blamed more than once.
+		let spread = complaints(&[(1, &[6, 7]), (2, &[8, 9])]);
+		assert!(parties_blamed_beyond_disclosure_limit(&spread, THRESHOLD, &mapping()).is_empty());
+
+		// Same number of complaints, but now (7) alone is blamed twice.
+		let concentrated = complaints(&[(1, &[6, 7]), (2, &[7, 9])]);
+		assert_eq!(
+			parties_blamed_beyond_disclosure_limit(&concentrated, THRESHOLD, &mapping()),
+			BTreeSet::from([7]),
+		);
 	}
 }
