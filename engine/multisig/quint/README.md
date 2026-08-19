@@ -35,3 +35,26 @@ developing, `verify` before believing a result.
   time. Use `Set[record].powerset().oneOf()` with well-formedness constraints.
 - `Option` is not in the standard library.
 - There is no `quint eval`; use `quint repl -r file.qnt::module`.
+
+## Status
+
+Verified exhaustively at n=4 with 1 Byzantine party (`quint verify`):
+
+| Property | Meaning | Time |
+| --- | --- | --- |
+| L1 NoFalseBlame | an honest node is never blamed | ~74 s |
+| L2 ValueAgreement | honest nodes never agree on different values | ~79 s |
+| SeamSound | the oracle's blame clause matches concrete `verify_broadcasts` | ~72 s |
+| SeamAgreementSound | the oracle's agreement clause matches it too | ~78 s |
+
+Checked by simulation only: L3, L4.
+
+`SeamSound` alone is a weaker check than it looks: it is per-party, so its only
+falsifiable content is the no-blame clause. `SeamAgreementSound` is what covers
+agreement. Mutating `verify` so the agreed map depends on the observing party is
+caught by the second and missed entirely by the first.
+
+**Not a property of this protocol:** full outcome agreement. A Byzantine party
+can equivocate in round 1 and tie-break in round 2, leaving some honest parties
+`Agreed` and others failing. This is a liveness degradation, not a safety
+violation — see the spec for the counterexample.
