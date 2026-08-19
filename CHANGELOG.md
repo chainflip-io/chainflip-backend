@@ -2,12 +2,18 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.9] - 2026-08-19
+
+### Fixes
+
+- Further ceremony hardening.
+
 ## [2.2.8] - 2026-08-11
 
 ### Fixes
 
-- Broadcast verification requires 2/3 majority ([#2](https://github.com/chainflip-io/chainflip-backend/issues/2))
-- Key handover non receiver hardening ([#3](https://github.com/chainflip-io/chainflip-backend/issues/3))
+- Broadcast verification requires 2/3 majority.
+- Key handover non receiver hardening.
 - Only allow (un-)delegation if rotation status is idle.
 - Registering account as operator or validator is only possible if not delegating.
 - Performance improvements ([#6756](https://github.com/chainflip-io/chainflip-backend/issues/6756))
