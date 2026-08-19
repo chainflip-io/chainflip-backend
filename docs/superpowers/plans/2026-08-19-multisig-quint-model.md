@@ -677,7 +677,9 @@ git commit -m "test: model PubkeyShares0 single-round quorum vote and verify L6"
 
 **Interfaces:**
 - Consumes: `types.*`.
-- Produces: `type OracleResult = OkAgreed(Party -> Vote) | OkAttributed(Set[Party]) | OkFailed`, `pure def oracleWellFormed(r: OracleResult, honest: Set[Party]): bool`, `action echoBroadcast`.
+- Produces: `type OracleResult = OkAgreed(Party -> Vote) | OkAttributed(Set[Party]) | OkFailed`, `pure def oracleWellFormed(r: OracleResult, honest: Set[Party]): bool`.
+
+There is deliberately no `echoBroadcast` action. `keygen.qnt` does not *call* the oracle — after ruling P10 it decodes valid oracle results structurally inside its own `step`, and `oracleWellFormed` is the predicate that says what "valid" means. The contract is a specification, not a subroutine.
 
 This module is the seam between the verified lemma and the ceremony. It states what `broadcast.qnt` proved, so `keygen.qnt` can call it as one atomic step. Writing the contract down explicitly means a future bug at the seam can be traced to a specific violated clause.
 
