@@ -1,8 +1,12 @@
 # Quint model of the multisig keygen ceremony
 
 **Date:** 2026-08-19
-**Status:** design approved, not yet implemented
+**Status:** implemented
 **Scope:** `engine/multisig/src/client/{common,keygen}/`
+
+See `engine/multisig/quint/README.md` for current results: what is exhaustively
+verified vs. simulation-only, witness coverage, and the two permanent negative
+controls.
 
 ## Motivation
 

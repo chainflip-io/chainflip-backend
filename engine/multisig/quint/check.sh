@@ -25,12 +25,30 @@ VERIFY_INVARIANTS=(
   "seam.qnt:SeamAgreementSound"
 )
 
+# The ten-stage keygen ceremony (keygen.qnt/harness.qnt) needs more steps than
+# the echo-broadcast lemma's single one, so it gets its own step budget and
+# loop rather than reusing --max-steps=1.
+CEREMONY_STEPS=12
+
+# `keygen.qnt` declares `SHARING`, `RECEIVING`, `FILTER_NON_RECEIVER_COMPLAINTS`
+# and `ENFORCE_COEFF_LENGTH` as `const`, so it cannot be run directly (QNT500:
+# Uninitialized const). Every ceremony check instead targets one of the
+# `harness.qnt` modules via `--main`. Format: "file:main:invariant".
+CEREMONY_INVARIANTS=(
+  "harness.qnt:plain:K1_NoHonestBlamed"
+  "harness.qnt:plain:K2_NoConflictingOutcome"
+  "harness.qnt:plain:K3_AttributionProgress"
+  "harness.qnt:plain:K5_Termination"
+  "harness.qnt:plain:K6_KeyConsistency"
+  "harness.qnt:handover:K4_HandoverNoFalseBlame"
+)
+
 echo "== typecheck =="
 # NOT `quint typecheck "$f" && echo ok`: under `set -e`, a command to the left
 # of && is exempt from errexit, so a typecheck failure would print its error and
 # the script would carry on and exit 0. A check script that exits 0 on failure
 # is worse than no check script.
-for f in types.qnt broadcast.qnt oracle.qnt seam.qnt; do
+for f in types.qnt broadcast.qnt oracle.qnt seam.qnt keygen.qnt harness.qnt; do
   if quint typecheck "$f"; then
     echo "  ok $f"
   else
@@ -42,17 +60,28 @@ done
 echo "== unit tests =="
 quint test broadcast.qnt
 quint test oracle.qnt
+quint test keygen.qnt
 
 # Witnesses are not optional: an invariant that is never violated proves
 # nothing if the interesting states were never reached. A witness at 0% means
 # the run below it is vacuous.
 WITNESSES="wAgreed wAttributed wUnattributed wDiverged"
+CEREMONY_WITNESSES="wCeremonyDiverged wCeremonyDone wCeremonyBlamed"
 
 echo "== simulation =="
 for entry in "${SIM_INVARIANTS[@]}"; do
   echo "  ${entry}"
   quint run "${entry%%:*}" --invariant="${entry##*:}" --witnesses $WITNESSES \
     --max-steps=1 --max-samples=20000 \
+    | grep -E '^\[(ok|violation)\]|witnessed in|Trace length' | sed 's|^|    |'
+done
+
+echo "== simulation (ceremony) =="
+for entry in "${CEREMONY_INVARIANTS[@]}"; do
+  IFS=':' read -r file main inv <<< "$entry"
+  echo "  ${file}::${main}::${inv}"
+  quint run "$file" --main="$main" --invariant="$inv" --witnesses $CEREMONY_WITNESSES \
+    --max-steps="$CEREMONY_STEPS" --max-samples=20000 \
     | grep -E '^\[(ok|violation)\]|witnessed in|Trace length' | sed 's|^|    |'
 done
 
