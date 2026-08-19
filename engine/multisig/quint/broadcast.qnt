@@ -81,4 +81,33 @@ module broadcast {
     // Too few round-2 messages -> Unattributed, nobody blamed.
     assert(verify(1, Set(), Set()) == Unattributed),
   }
+
+  // Party `about` is reported inconsistently: parties 1,2 say one thing and
+  // 3,4 another, so with T=2 nothing exceeds the quorum for that party.
+  pure def claimsSplitAbout(about: Party): Set[Claim] =
+    tuples(PARTIES, PARTIES, PARTIES).map(t =>
+      { by: t._1, to: t._2, about: t._3,
+        vote: if (t._3 == about) (if (t._1 <= 2) Sent(0) else Sent(1))
+              else Sent(t._3) })
+
+  // Party 4 unanimously reported as having sent nothing (attributable), while
+  // party 3 is split with no quorum either way (unresolved, unattributable).
+  pure val claimsBlamedAndStuck: Set[Claim] =
+    tuples(PARTIES, PARTIES, PARTIES).map(t =>
+      { by: t._1, to: t._2, about: t._3,
+        vote: if (t._3 == 4) Nothing
+              else if (t._3 == 3) (if (t._1 <= 2) Sent(0) else Sent(1))
+              else Sent(t._3) })
+
+  run stuckBranchTest = all {
+    // No quorum on party 3 -> stage fails, and NOBODY is blamed. Blaming here
+    // would let a colluding minority frame an honest node by denying quorum.
+    assert(verify(1, ALL_PRESENT, claimsSplitAbout(3)) == Unattributed),
+    // Blame wins over unresolved, and the unresolved party is NOT added to it.
+    assert(match verify(1, ALL_PRESENT, claimsBlamedAndStuck) {
+      | Attributed(bad) => bad == Set(4)
+      | Agreed(_) => false
+      | Unattributed => false
+    }),
+  }
 }
