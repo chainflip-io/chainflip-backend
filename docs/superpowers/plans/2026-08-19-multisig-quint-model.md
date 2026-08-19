@@ -1532,14 +1532,21 @@ Each configuration is a separate module instantiating `keygen` with different
 configuration gets its own file-level module in `harness.qnt`.
 
 ```quint
-// Handover: n=5, f=1, sharers {1,2,3}, receivers {3,4,5}. Deliberately tight -
-// a quorum over three sharers is two, so there is no slack if the Byzantine
-// party is a sharer.
+// Handover with BYZ = {4} as a SHARER THAT IS NOT A RECEIVER.
+//
+// This configuration is not arbitrary and must not be "tidied". The bug this
+// task exists to catch only arises for a non-receiving participant: it holds no
+// incoming shares, so any complaint from it is necessarily dishonest. If the
+// Byzantine party is also a receiver, its complaints are legitimate, the bug is
+// unreachable, and the negative control below passes silently - which reads as
+// success while proving nothing. Verified: with RECEIVING = {3,4} (party 4 a
+// receiver) the control reports [ok]; with the split below it reports
+// [violation], as it must.
 module handover {
   import types.* from "./types"
   import keygen(
-    SHARING = Set(1, 2, 3),
-    RECEIVING = Set(3, 4, 5),
+    SHARING = Set(2, 3, 4),
+    RECEIVING = Set(1, 2, 3),
     FILTER_NON_RECEIVER_COMPLAINTS = true,
     ENFORCE_COEFF_LENGTH = true
   ).* from "./keygen"
@@ -1570,8 +1577,8 @@ module handover {
 module handoverUnfixed {
   import types.* from "./types"
   import keygen(
-    SHARING = Set(1, 2, 3),
-    RECEIVING = Set(3, 4, 5),
+    SHARING = Set(2, 3, 4),
+    RECEIVING = Set(1, 2, 3),
     FILTER_NON_RECEIVER_COMPLAINTS = false,
     ENFORCE_COEFF_LENGTH = true
   ).* from "./keygen"
@@ -1636,6 +1643,31 @@ Parameterise the complaint rule so the non-receiver filter is a *modelled behavi
   ): Set[{ by: Party, about: Party }] =
     if (FILTER_NON_RECEIVER_COMPLAINTS) cs.filter(c => receiving.contains(c.by)) else cs
 ```
+
+The filter alone is not enough to make the bug expressible — the model also has to represent *why* an inadmissible complaint hurts. Revealing a share at a non-receiver's index produces a share that fails stage-9 verification, so `honestReveals` must gate validity on the complainer actually being a receiver, and stage 9 must attribute whoever produced a failing reveal:
+
+```quint
+    val honestReveals =
+      admissibleComplaints(complaints, RECEIVING)
+        .filter(c => HONEST.contains(c.about))
+        .map(c => { by: c.about, about: c.by,
+                    // A reveal at a non-receiver's index is evaluated at an
+                    // index that party never held a share for, so it fails
+                    // verification - which is how an honest node gets blamed.
+                    ok: RECEIVING.contains(c.by)
+                        and shareValid.contains({ from: c.about, to: c.by }) })
+
+    val badRevealers = revealed.filter(r => not(r.ok)).map(r => r.by)
+```
+
+and in both the `stage'` and `result'` branches:
+
+```quint
+        else if (stage.get(k) == VerifyBlameResponses9 and badRevealers != Set())
+          Failed(badRevealers)
+```
+
+Without `badRevealers`, `FILTER_NON_RECEIVER_COMPLAINTS = false` changes nothing observable and the negative control passes silently.
 
 Then replace every use of `complaints` in the stage-7 transition with `admissibleComplaints(complaints, RECEIVING)`. Concretely, the `blameResponseComplete` call in the `VerifyBlameResponses9` branch becomes:
 
