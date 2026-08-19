@@ -9,6 +9,18 @@ module broadcast {
     if (winners.size() == 0) NoQuorum else Found(winners.fold(Nothing, (_, v) => v))
   }
 
+  // PubkeySharesStage0 (keygen_stages.rs:129). One round, threshold taken over
+  // the SHARING participants only, and it can never attribute: all its failure
+  // paths report an empty set.
+  pure def quorumVote(k: Party, sharers: Set[Party], ss: Set[Send]): Opt = {
+    val t = thresholdOf(sharers.size())
+    val received = sharers.fold(List(), (acc, j) => {
+      val m = ss.filter(s => s.from == j and s.to == k)
+      if (m.size() == 1) acc.append(m.fold(Nothing, (_, x) => x.vote)) else acc
+    })
+    if (received.length() <= t) NoQuorum else frequent(received, t)
+  }
+
   run frequentTest = all {
     // 3 of 4 agree, t = 2 -> quorum
     assert(frequent([Sent(1), Sent(1), Sent(1), Nothing], 2) == Found(Sent(1))),
@@ -229,5 +241,30 @@ module broadcast {
       | Attributed(_) => false
       | Unattributed => false
     }))
+  }
+
+  // L6: honest parties never disagree on a quorum-vote result, and the
+  // primitive never blames anyone (it returns no blame set at all).
+  val L6_VoteAgreement = tuples(HONEST, HONEST).forall(p =>
+    quorumVote(p._1, PARTIES, sends) == quorumVote(p._2, PARTIES, sends)
+    or quorumVote(p._1, PARTIES, sends) == NoQuorum
+    or quorumVote(p._2, PARTIES, sends) == NoQuorum)
+
+  run quorumVoteTest = all {
+    // 3 sharers all sending the same value: threshold over 3 is 1, so 3 > 1.
+    assert(quorumVote(1, Set(1, 2, 3),
+      Set({ from: 1, to: 1, vote: Sent(7) },
+          { from: 2, to: 1, vote: Sent(7) },
+          { from: 3, to: 1, vote: Sent(7) })) == Found(Sent(7))),
+    // A 2-1 split over 3 sharers: 2 > 1, so the majority still carries.
+    assert(quorumVote(1, Set(1, 2, 3),
+      Set({ from: 1, to: 1, vote: Sent(7) },
+          { from: 2, to: 1, vote: Sent(7) },
+          { from: 3, to: 1, vote: Sent(9) })) == Found(Sent(7))),
+    // A 1-1-1 split reaches nothing.
+    assert(quorumVote(1, Set(1, 2, 3),
+      Set({ from: 1, to: 1, vote: Sent(7) },
+          { from: 2, to: 1, vote: Sent(8) },
+          { from: 3, to: 1, vote: Sent(9) })) == NoQuorum),
   }
 }
