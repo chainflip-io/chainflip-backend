@@ -32,7 +32,7 @@ sound and modelled abstractly.
 
 Keygen, all ten stages (`KeygenStageName`, `client/common.rs`):
 
-```
+```text
 PubkeyShares0 → HashCommitments1 → VerifyHashCommitmentsBroadcast2
               → CoefficientCommitments3 → VerifyCommitmentsBroadcast4
               → SecretSharesStage5 → ComplaintsStage6 → VerifyComplaintsBroadcastStage7
@@ -85,7 +85,7 @@ n=7/f=2 as the natural check configurations.
 Five modules under `engine/multisig/quint/`:
 
 | Module | Contents |
-|---|---|
+| --- | --- |
 | `types.qnt` | party indices, roles, abstract `Value`/`Share` types, ceremony parameters |
 | `broadcast.qnt` | lemma layer: both broadcast primitives, modelled concretely |
 | `oracle.qnt` | the idealised contract `broadcast.qnt` discharges; consumed by `keygen.qnt` |
@@ -100,7 +100,7 @@ The split mirrors the Rust, where `BroadcastStage` is generic over
 `oracle.qnt` is the load-bearing part of the design and is stated as an explicit
 contract rather than left implicit:
 
-```
+```text
 EchoBroadcast(senders, values) returns one of:
   Agreed(m)        — m : idx -> Value, identical at every honest party,
                      and m[i] = values[i] for every honest sender i
@@ -124,7 +124,7 @@ assumption, and phase 2 below adds a cross-check against the concrete module.
 ### Faithful vs. abstract in `keygen.qnt`
 
 | Faithful | Abstract |
-|---|---|
+| --- | --- |
 | Stage sequence 0→9 and every early-exit branch | EC points, scalars, polynomials |
 | Private share delivery (per-recipient) | `share_valid(from, to)` — adversary-set for Byzantine senders |
 | Coefficient-length check (`== threshold + 1`) | ZKP and hash-commitment verification (assumed sound) |
@@ -169,7 +169,7 @@ scope.
 ### Lemma layer (`broadcast.qnt`)
 
 | | Property |
-|---|---|
+| --- | --- |
 | L1 | **NoFalseBlame** — `reported ∩ honest = ∅` at every honest party |
 | L2 | **ValueAgreement** — two honest parties returning `Agreed` return equal maps |
 | L3 | **HonestValuePreservation** — an agreed map holds each honest sender's actual value |
@@ -180,7 +180,7 @@ scope.
 ### Ceremony layer (`keygen.qnt`)
 
 | | Property |
-|---|---|
+| --- | --- |
 | K1 | **NoHonestBlamed** — no honest party in any honest party's final reported set |
 | K2 | **OutcomeAgreement** — same Done/Error verdict and same reported set everywhere |
 | K3 | **AttributionProgress** — a non-empty reported set contains at least one Byzantine party |
