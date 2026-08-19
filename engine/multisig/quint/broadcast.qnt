@@ -110,4 +110,124 @@ module broadcast {
       | Unattributed => false
     }),
   }
+
+  // Slots an adversary may act on. Choices are encoded as characteristic-
+  // function subsets of these, so EVERY draw is well-formed by construction.
+  // Drawing arbitrary subsets and rejecting the ill-formed ones with a guard
+  // makes the simulator reject ~every draw (a valid claim set has probability
+  // about 2^-16), leaving `step` unreachable and every run vacuously ok.
+  pure val SEND_SLOTS: Set[(Party, Party)] = tuples(BYZ, PARTIES)
+  pure val CLAIM_SLOTS: Set[(Party, Party, Party)] = tuples(BYZ, PARTIES, PARTIES)
+
+  action init = all {
+    sends' = Set(),
+    claims' = Set(),
+    present' = Set(),
+    out' = PARTIES.mapBy(i => Unattributed),
+  }
+
+  action step = {
+    // One bit per honest party: which of the two values it broadcasts.
+    nondet hvHigh = HONEST.powerset().oneOf()
+    // Byzantine round 1: sent-at-all, and which value.
+    nondet bsMade = SEND_SLOTS.powerset().oneOf()
+    nondet bsHigh = SEND_SLOTS.powerset().oneOf()
+    // Byzantine round 2: which messages exist, then per-slot content.
+    nondet bcPresent = SEND_SLOTS.powerset().oneOf()
+    nondet bcMade = CLAIM_SLOTS.powerset().oneOf()
+    nondet bcHigh = CLAIM_SLOTS.powerset().oneOf()
+
+    val honestSends = tuples(HONEST, PARTIES).map(t =>
+      { from: t._1, to: t._2, vote: Sent(if (hvHigh.contains(t._1)) 1 else 0) })
+    val byzSends = SEND_SLOTS.filter(sl => bsMade.contains(sl)).map(sl =>
+      { from: sl._1, to: sl._2, vote: Sent(if (bsHigh.contains(sl)) 1 else 0) })
+    val allSends = honestSends.union(byzSends)
+
+    // An honest party echoes to everyone exactly what it received.
+    val honestClaims = tuples(HONEST, PARTIES, PARTIES).map(t => {
+      val heard = allSends.filter(s => s.from == t._3 and s.to == t._1)
+      { by: t._1, to: t._2, about: t._3,
+        vote: if (heard.size() == 1) heard.fold(Nothing, (_, x) => x.vote) else Nothing }
+    })
+    // A slot the Byzantine party omits reads as Nothing (it claims it heard
+    // nothing from that party) - the message still exists if bcPresent says so.
+    val byzClaims = CLAIM_SLOTS.filter(sl => bcMade.contains(sl)).map(sl =>
+      { by: sl._1, to: sl._2, about: sl._3,
+        vote: if (bcHigh.contains(sl)) Sent(1) else Sent(0) })
+    val allClaims = honestClaims.union(byzClaims)
+
+    // Honest parties always send their round-2 message to everyone.
+    val allPresent = tuples(HONEST, PARTIES).union(bcPresent)
+
+    all {
+      sends' = allSends,
+      claims' = allClaims,
+      present' = allPresent,
+      out' = PARTIES.mapBy(k => verify(k, allPresent, allClaims)),
+    }
+  }
+
+  var sends: Set[Send]
+  var claims: Set[Claim]
+  var present: Set[(Party, Party)]
+  var out: Party -> Outcome
+
+  // L1: an honest party never blames an honest party. THE headline property.
+  val L1_NoFalseBlame = HONEST.forall(k =>
+    match out.get(k) {
+    | Attributed(bad) => bad.intersect(HONEST) == Set()
+    | Agreed(_) => true
+    | Unattributed => true
+    })
+
+  // L2: two honest parties that both agree, agree on the same map.
+  val L2_ValueAgreement = tuples(HONEST, HONEST).forall(p =>
+    match out.get(p._1) {
+    | Agreed(m1) => match out.get(p._2) {
+        | Agreed(m2) => m1 == m2
+        | Attributed(_) => true
+        | Unattributed => true
+      }
+    | Attributed(_) => true
+    | Unattributed => true
+    })
+
+  // L3: an agreed map records what honest senders actually sent.
+  val L3_HonestValuePreservation = HONEST.forall(k =>
+    match out.get(k) {
+    | Agreed(m) => HONEST.forall(i =>
+        sends.exists(s => s.from == i and s.to == k and s.vote == m.get(i)))
+    | Attributed(_) => true
+    | Unattributed => true
+    })
+
+  // L4: divergence is permitted between Agreed and failure, but never between
+  // two different Agreed maps, and never into blame. Full outcome agreement is
+  // FALSE for this protocol - see the spec for the counterexample.
+  val L4_SafeDivergence = L1_NoFalseBlame and L2_ValueAgreement
+
+  // Witnesses. These are not properties to hold - they are coverage checks.
+  // Each must be reached in > 0 traces, or the run's `[ok]` on the invariants
+  // above is vacuous because the interesting states were never explored.
+  val wAgreed = HONEST.exists(k =>
+    match out.get(k) { Agreed(_) => true | Attributed(_) => false | Unattributed => false })
+  val wAttributed = HONEST.exists(k =>
+    match out.get(k) { Attributed(_) => true | Agreed(_) => false | Unattributed => false })
+  val wUnattributed = HONEST.exists(k =>
+    match out.get(k) { Unattributed => true | Agreed(_) => false | Attributed(_) => false })
+  // The verified L4 divergence: two honest parties reaching different outcomes.
+  val wDiverged = tuples(HONEST, HONEST).exists(p => out.get(p._1) != out.get(p._2))
+
+  // L5: with no Byzantine deviation (everyone sends one consistent value and
+  // echoes truthfully), every party reaches Agreed and recovers what was sent.
+  run L5_LivenessTest = {
+    val ss = tuples(PARTIES, PARTIES).map(t => { from: t._1, to: t._2, vote: Sent(t._1) })
+    val cs = tuples(PARTIES, PARTIES, PARTIES).map(t =>
+      { by: t._1, to: t._2, about: t._3, vote: Sent(t._3) })
+    assert(PARTIES.forall(k => match verify(k, ALL_PRESENT, cs) {
+      | Agreed(m) => PARTIES.forall(i => m.get(i) == Sent(i))
+      | Attributed(_) => false
+      | Unattributed => false
+    }))
+  }
 }
