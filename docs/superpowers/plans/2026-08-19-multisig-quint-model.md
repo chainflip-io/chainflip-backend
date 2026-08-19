@@ -369,7 +369,7 @@ git commit -m "test: model verify_broadcasts three-way outcome in Quint"
 
 The whole ceremony is one step: `init` sets empty state, `step` picks every adversary choice at once and computes each party's outcome. A one-step model is what makes Apalache tractable here.
 
-**This task's encoding is the one that must not use `setOfMaps`.** Honest value assignment, Byzantine round-1 sends, and Byzantine round-2 claims are all subsets of a finite record set, constrained afterwards.
+**This task's encoding is the one that decides whether any later result means anything.** Honest value assignment, Byzantine round-1 sends, and Byzantine round-2 claims are each chosen by *characteristic-function subsets* — one subset per bit of choice, decoded into the message sets. Never `setOfMaps` (Apalache rejects it), and never "draw an arbitrary subset, then reject the ill-formed ones with a guard": that was measured to make `step` unreachable, leaving every `quint run` vacuously `[ok]` while the negative control that must fail also reported `[ok]`.
 
 - [ ] **Step 1: Write the failing invariant check**
 
