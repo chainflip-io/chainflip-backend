@@ -86,21 +86,24 @@ pub async fn start<'a, 'env>(
 
 	const PATH: &str = "health";
 
-	let future =
-		warp::serve(warp::any().and(warp::path(PATH)).and(warp::path::end()).map(move || {
-			warp::reply::with_status(
-				if has_completed_initialising.load(std::sync::atomic::Ordering::Relaxed) {
-					RUNNING
-				} else {
-					INITIALISING
-				},
-				warp::http::StatusCode::OK,
-			)
-		}))
-		.bind((health_check_settings.hostname.parse::<IpAddr>()?, health_check_settings.port));
+	let server =
+		warp::serve(warp::any().and(warp::path(PATH.to_string())).and(warp::path::end()).map(
+			move || {
+				warp::reply::with_status(
+					if has_completed_initialising.load(std::sync::atomic::Ordering::Relaxed) {
+						RUNNING.to_string()
+					} else {
+						INITIALISING.to_string()
+					},
+					warp::http::StatusCode::OK,
+				)
+			},
+		))
+		.bind((health_check_settings.hostname.parse::<IpAddr>()?, health_check_settings.port))
+		.await;
 
 	scope.spawn_weak(async move {
-		future.await;
+		server.run().await;
 		Ok(())
 	});
 

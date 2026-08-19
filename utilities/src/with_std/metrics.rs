@@ -571,13 +571,19 @@ pub async fn start<'a, 'env>(
 
 	const PATH: &str = "metrics";
 
-	let future = {
-		warp::serve(warp::any().and(warp::path(PATH)).and(warp::path::end()).map(metrics_handler))
-			.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port))
+	let server = {
+		warp::serve(
+			warp::any()
+				.and(warp::path(PATH.to_string()))
+				.and(warp::path::end())
+				.map(metrics_handler),
+		)
+		.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port))
+		.await
 	};
 
 	scope.spawn_weak(async move {
-		future.await;
+		server.run().await;
 		Ok(())
 	});
 
