@@ -855,12 +855,14 @@ SIM_INVARIANTS=(
   "broadcast.qnt:L4_SafeDivergence"
   "broadcast.qnt:L6_VoteAgreement"
   "seam.qnt:SeamSound"
+  "seam.qnt:SeamAgreementSound"
 )
 # Exhaustive checks, each ~2-3 minutes at n=4/f=1.
 VERIFY_INVARIANTS=(
   "broadcast.qnt:L1_NoFalseBlame"
   "broadcast.qnt:L2_ValueAgreement"
   "seam.qnt:SeamSound"
+  "seam.qnt:SeamAgreementSound"
 )
 
 echo "== typecheck =="
@@ -912,7 +914,7 @@ A `0.00%` witness anywhere means the `[ok]` printed beside it is vacuous — tre
 ./engine/multisig/quint/check.sh --verify
 ```
 
-Expected: `[ok]` for all three exhaustive checks. Budget ~10 minutes.
+Expected: `[ok]` for all four exhaustive checks. Budget ~12 minutes.
 
 - [ ] **Step 4: Record results in the README**
 
@@ -927,9 +929,15 @@ Verified exhaustively at n=4 with 1 Byzantine party (`quint verify`):
 | --- | --- | --- |
 | L1 NoFalseBlame | an honest node is never blamed | ~144 s |
 | L2 ValueAgreement | honest nodes never agree on different values | ~159 s |
-| SeamSound | the oracle contract matches concrete `verify_broadcasts` | ~170 s |
+| SeamSound | the oracle's blame clause matches concrete `verify_broadcasts` | ~90 s |
+| SeamAgreementSound | the oracle's agreement clause matches it too | ~130 s |
 
-Checked by simulation only: L3, L4, L6.
+Checked by simulation only: L3, L4.
+
+`SeamSound` alone is a weaker check than it looks: it is per-party, so its only
+falsifiable content is the no-blame clause. `SeamAgreementSound` is what covers
+agreement. Mutating `verify` so the agreed map depends on the observing party is
+caught by the second and missed entirely by the first.
 
 **Not a property of this protocol:** full outcome agreement. A Byzantine party
 can equivocate in round 1 and tie-break in round 2, leaving some honest parties
