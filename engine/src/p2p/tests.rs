@@ -89,7 +89,7 @@ async fn multisig_messages_over_quic_with_muxer() {
 	let mut shutdown_senders = Vec::new();
 
 	for (idx, (signing_key, peer_info, account_id)) in node_infos.into_iter().enumerate() {
-		let (incoming_tx, incoming_rx) = mpsc::unbounded_channel();
+		let (incoming_tx, mut incoming_rx) = mpsc::unbounded_channel();
 		let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel();
 		let (_peer_update_tx, peer_update_rx) = mpsc::unbounded_channel();
 		let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -119,9 +119,18 @@ async fn multisig_messages_over_quic_with_muxer() {
 			.instrument(info_span!("quic_node", idx = idx)),
 		);
 
+		// The transport reports incoming messages on a plain channel; the supervisor is what
+		// normally applies the per-peer bound on the way to the muxer, so stand in for it here.
+		let (to_muxer_sender, to_muxer_receiver) = fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
+		tokio::spawn(async move {
+			while let Some((account_id, payload)) = incoming_rx.recv().await {
+				to_muxer_sender.try_send_or_drop(account_id, payload, || {});
+			}
+		});
+
 		// Set up TopicMuxer for this node
 		let (muxer_future, mut handles) =
-			TopicMuxer::start(incoming_rx, outgoing_tx, [MultisigTopic(ChainTag::Ethereum)]);
+			TopicMuxer::start(to_muxer_receiver, outgoing_tx, [MultisigTopic(ChainTag::Ethereum)]);
 		tokio::spawn(muxer_future.instrument(info_span!("muxer", idx = idx)));
 
 		// Create multisig channels for Ethereum

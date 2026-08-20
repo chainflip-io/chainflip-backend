@@ -293,7 +293,7 @@ mod tests {
 	async fn wait_for_bad_msg_increment(reason: &str, before: u64) {
 		let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_secs(1);
 		loop {
-			if bad_msg_count(reason) >= before + 1 {
+			if bad_msg_count(reason) > before {
 				return;
 			}
 			if tokio::time::Instant::now() >= deadline {
