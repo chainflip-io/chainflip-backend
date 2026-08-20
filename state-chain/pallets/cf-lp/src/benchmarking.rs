@@ -43,7 +43,7 @@ mod benchmarks {
 			EncodedAddress::Eth(Default::default()),
 		));
 		// A non-zero balance is required to pay for the channel opening fee.
-		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
 		#[extrinsic_call]
 		request_liquidity_deposit_address(RawOrigin::Signed(caller), Asset::Eth, 0);
