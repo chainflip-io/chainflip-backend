@@ -220,7 +220,11 @@ module keygen {
           | OkAttributed(bad) => Failed(bad)
           | OkFailed => Failed(Set())
           }
-        else if (nextStage(stage.get(k)) == Finished) Done(KEY_A)
+        // No fall-through to Done here: the only non-verify stage whose
+        // nextStage is Finished is Finished itself, and reaching Finished
+        // already set result to Done/Failed, so the guard above short-circuits.
+        // A branch naming a fixed key would also mask a K2 violation if a future
+        // refactor ever broke the stage'/result' coupling.
         else Running),
       shareValid' = if (PARTIES.exists(k => stage.get(k) == SecretShares5))
                       ALL_PAIRS.exclude(byzBadShares) else shareValid,

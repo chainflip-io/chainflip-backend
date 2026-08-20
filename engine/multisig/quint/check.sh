@@ -148,11 +148,21 @@ for entry in "${MUST_VIOLATE[@]}"; do
   set -e
   result="$(printf '%s\n' "$output" | grep -E '^\[(ok|violation)\]' || true)"
   echo "    ${result}"
-  if ! printf '%s\n' "$result" | grep -q '^\[violation\]'; then
+  # Three outcomes, not two. Collapsing the last two into "reported [ok]" sends
+  # whoever reads the FATAL hunting for a weakened model when the real cause may
+  # be a renamed invariant, a bad --main, or a toolchain error.
+  if printf '%s\n' "$result" | grep -q '^\[violation\]'; then
+    : # the control fired, as it must
+  elif printf '%s\n' "$result" | grep -q '^\[ok\]'; then
     echo "FATAL: negative control ${file}::${main}::${inv} reported [ok]." >&2
     echo "       This negative control has gone INERT - the model can no" >&2
     echo "       longer detect the bug class it exists to catch. Do not" >&2
     echo "       treat this as a passing check." >&2
+    exit 1
+  else
+    echo "FATAL: negative control ${file}::${main}::${inv} produced no verdict." >&2
+    echo "       quint printed neither [ok] nor [violation]. Raw output:" >&2
+    printf '%s\n' "$output" >&2
     exit 1
   fi
 done
