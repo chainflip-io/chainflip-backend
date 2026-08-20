@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use cf_utilities::{
 	testing::{expect_recv_with_timeout, recv_with_custom_timeout},
@@ -27,6 +27,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 
 use super::{
+	auth::AllowlistVerifier,
+	cert::CertificateIdentity,
 	connection::{MAX_INACTIVITY_THRESHOLD, RECONNECT_INTERVAL},
 	start, PeerInfo, PeerUpdate, ACTIVITY_CHECK_INTERVAL,
 };
@@ -557,4 +559,55 @@ async fn shutdown_returns_and_releases_the_port() {
 		.expect("replacement transport did not return")
 		.expect("replacement transport task panicked")
 		.expect("replacement transport failed to bind the released port");
+}
+
+/// Build a bare QUIC endpoint (no control loop) so a test can drive individual streams.
+fn raw_endpoint(key: &SigningKey, port: Port, allowed: &[PeerInfo]) -> quinn::Endpoint {
+	use super::connection::{configure_client, configure_server, create_endpoint};
+
+	let identity = CertificateIdentity::from_ed25519(key).unwrap();
+	let allowlist = Arc::new(AllowlistVerifier::new());
+	for peer in allowed {
+		allowlist.add_peer(peer.ed_pubkey, peer.account_id.clone());
+	}
+
+	create_endpoint(
+		port,
+		configure_server(&identity, allowlist.clone()).unwrap(),
+		configure_client(&identity, allowlist).unwrap(),
+	)
+	.unwrap()
+}
+
+/// A peer that opens a stream and stalls part-way through the length prefix must not hold up
+/// its own subsequent messages: inbound streams are read independently of each other.
+#[tokio::test]
+async fn stalled_inbound_stream_does_not_block_later_messages() {
+	let node_key1 = create_keypair();
+	let node_key2 = create_keypair();
+
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 9111);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 9112);
+
+	let mut node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone()]);
+	tokio::time::sleep(Duration::from_millis(500)).await;
+
+	// Stand in for node 2 with a bare endpoint so we control each stream.
+	let endpoint = raw_endpoint(&node_key2, pi2.port, &[pi1.clone()]);
+	let peer = super::connection::connect_to_peer(&endpoint, &pi1).await.unwrap();
+
+	// Stream A: send half a length prefix and then stall, leaving the stream open.
+	let mut stalled = peer.connection.open_uni().await.unwrap();
+	stalled.write_all(&[0u8; 2]).await.unwrap();
+
+	// Give node 1 time to accept stream A and start reading it.
+	tokio::time::sleep(Duration::from_millis(200)).await;
+
+	// Stream B: a well-formed message, which must still be delivered.
+	super::connection::send_message(&peer.connection, b"after the stall".to_vec())
+		.await
+		.unwrap();
+
+	let received = recv_with_custom_timeout(&mut node1.msg_receiver, Duration::from_secs(2)).await;
+	assert_eq!(received, Some((pi2.account_id.clone(), b"after the stall".to_vec())));
 }
