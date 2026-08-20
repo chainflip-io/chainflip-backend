@@ -222,7 +222,7 @@ fn parse_response(
 			replies
 				.iter()
 				.map(|reply| match reply.as_object() {
-					Some(reply) => result_from_reply(reply),
+					Some(reply) => result_from_reply(reply, bad_response),
 					None => {
 						tracing::warn!(
 							"The rpc response returned for {method:?} with params: {params:?} \
@@ -235,17 +235,24 @@ fn parse_response(
 		},
 		// A single reply instead of a batch: the node rejected the request as a whole.
 		Ok(serde_json::Value::Object(reply)) =>
-			result_from_reply(&reply).map(|result| vec![result]),
+			result_from_reply(&reply, bad_response).map(|result| vec![result]),
 		_ => Err(bad_response()),
 	}
 }
 
 /// The result of a single JSON-RPC reply, or the error it reported.
-fn result_from_reply(reply: &Map<String, serde_json::Value>) -> Result<serde_json::Value, Error> {
-	match reply.get("error") {
-		Some(error) if !error.is_null() =>
+///
+/// A reply carrying neither is not a JSON-RPC reply, so it is reported through `bad_response`. Note
+/// that a `result` that is present but `null` is a valid result, which some methods do return.
+fn result_from_reply(
+	reply: &Map<String, serde_json::Value>,
+	bad_response: impl Fn() -> Error,
+) -> Result<serde_json::Value, Error> {
+	match (reply.get("error"), reply.get("result")) {
+		(Some(error), _) if !error.is_null() =>
 			Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?)),
-		_ => Ok(reply.get("result").cloned().unwrap_or_default()),
+		(_, Some(result)) => Ok(result.clone()),
+		_ => Err(bad_response()),
 	}
 }
 
@@ -662,6 +669,28 @@ mod tests {
 		assert_matches!(
 			parse_response(StatusCode::INTERNAL_SERVER_ERROR, body, "getblockhash", &params),
 			Err(Error::Rpc(RpcError { code: -8, .. }))
+		);
+	}
+
+	#[test]
+	fn reply_with_neither_result_nor_error_is_rejected() {
+		// A reply object carrying neither `result` nor `error` is not a JSON-RPC reply.
+		let body = br#"[{"id":0}]"#;
+		let params = ReqParams::Batch(vec![json!([json!(0)])]);
+		assert_matches!(
+			parse_response(StatusCode::OK, body, "getblockhash", &params),
+			Err(Error::BadResponse { .. })
+		);
+	}
+
+	#[test]
+	fn null_result_is_preserved() {
+		// A present-but-null `result` is a valid result that some methods return.
+		let body = br#"[{"result":null,"error":null,"id":0}]"#;
+		let params = ReqParams::Batch(vec![json!([json!(0)])]);
+		assert_eq!(
+			parse_response(StatusCode::OK, body, "getblockhash", &params).unwrap(),
+			vec![serde_json::Value::Null]
 		);
 	}
 
