@@ -77,10 +77,13 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
+	/// Keygen ceremonies have no payloads, so the participant count is all that is needed.
+	type SizeContext = ();
+
 	fn is_data_size_valid<Chain: ChainSigning>(
 		&self,
 		num_of_parties: AuthorityCount,
-		_num_of_payloads: Option<usize>,
+		_size_context: Self::SizeContext,
 	) -> bool {
 		let num_of_parties = num_of_parties as usize;
 		match self {

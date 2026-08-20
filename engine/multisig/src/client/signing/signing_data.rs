@@ -160,25 +160,27 @@ impl<P: ECPoint> Display for SigningData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
+	/// The number of payloads being signed, always known once the ceremony is authorised.
+	type SizeContext = usize;
+
 	fn is_data_size_valid<Chain: ChainSigning>(
 		&self,
 		num_of_parties: AuthorityCount,
-		num_of_payloads: Option<usize>,
+		num_of_payloads: Self::SizeContext,
 	) -> bool {
 		let num_of_parties = num_of_parties as usize;
 		match self {
-			SigningData::CommStage1(_) => self.is_initial_stage_data_size_valid::<Chain>(),
-			// It is safe to unwrap after the first stage because the number of payloads is always
-			// known from then on (only for signing ceremonies)
-			SigningData::BroadcastVerificationStage2(message) => message.is_data_size_valid(
-				num_of_parties,
-				max_signing_commitments_size(num_of_payloads.unwrap()),
-			),
+			// We bound the size by the exact number of payloads. This bound must never be looser
+			// than the one applied to the stage 2 echo of the same message.
+			SigningData::CommStage1(message) =>
+				message.payload.len() <= max_signing_commitments_size(num_of_payloads),
+			SigningData::BroadcastVerificationStage2(message) => message
+				.is_data_size_valid(num_of_parties, max_signing_commitments_size(num_of_payloads)),
 			SigningData::LocalSigStage3(message) =>
-				message.payload.len() <= max_local_sigs_size(num_of_payloads.unwrap()),
+				message.payload.len() <= max_local_sigs_size(num_of_payloads),
 
-			SigningData::VerifyLocalSigsStage4(message) => message
-				.is_data_size_valid(num_of_parties, max_local_sigs_size(num_of_payloads.unwrap())),
+			SigningData::VerifyLocalSigsStage4(message) =>
+				message.is_data_size_valid(num_of_parties, max_local_sigs_size(num_of_payloads)),
 		}
 	}
 
@@ -223,7 +225,7 @@ mod tests {
 
 	use crate::{
 		bitcoin::BtcSigning,
-		client::helpers::{gen_dummy_local_sig, gen_dummy_signing_comm1},
+		client::helpers::{gen_dummy_local_sig, gen_dummy_signing_comm1, test_all_crypto_chains},
 		crypto::eth::Point,
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
@@ -298,23 +300,67 @@ mod tests {
 	}
 
 	#[test]
+	fn check_authorised_data_size_stage1() {
+		const PARTIES: AuthorityCount = 4;
+
+		// Once the payload count is known, btc commitments are bounded by it rather than by the
+		// wide `MAX_BTC_SIGNING_PAYLOADS` bound used before authorisation.
+		assert!(gen_signing_data_stage1(1).is_data_size_valid::<BtcSigning>(PARTIES, 1));
+		assert!(!gen_signing_data_stage1(2).is_data_size_valid::<BtcSigning>(PARTIES, 1));
+		assert!(gen_signing_data_stage1(3).is_data_size_valid::<BtcSigning>(PARTIES, 3));
+		assert!(!gen_signing_data_stage1(4).is_data_size_valid::<BtcSigning>(PARTIES, 3));
+		assert!(!gen_signing_data_stage1(MAX_BTC_SIGNING_PAYLOADS as u64)
+			.is_data_size_valid::<BtcSigning>(PARTIES, 1));
+	}
+
+	fn stage1_commitments_fit_in_stage2_echo_for_scheme<Chain: ChainSigning>() {
+		const PARTIES: AuthorityCount = 4;
+
+		for payload_count in [1, 2, 3, 10] {
+			for commitment_count in 1..=12 {
+				if !gen_signing_data_stage1(commitment_count as u64)
+					.is_data_size_valid::<Chain>(PARTIES, payload_count)
+				{
+					continue
+				}
+
+				assert!(
+					gen_signing_data_stage2(PARTIES, commitment_count)
+						.is_data_size_valid::<Chain>(PARTIES, payload_count),
+					"a commitment accepted at stage 1 ({commitment_count} commitments, \
+					{payload_count} payloads) cannot be carried by a stage 2 echo",
+				);
+			}
+		}
+	}
+
+	#[test]
+	/// The stage 1 bound must never be looser than the bound applied to the stage 2 echo that
+	/// re-transmits the same commitment. Otherwise a commitment could be accepted at stage 1 yet
+	/// invalidate every honest node's echo, aborting the ceremony without attributing it to the
+	/// sender.
+	fn stage1_commitments_fit_in_stage2_echo() {
+		test_all_crypto_chains!(stage1_commitments_fit_in_stage2_echo_for_scheme());
+	}
+
+	#[test]
 	fn check_data_size_stage2() {
 		const PARTIES: AuthorityCount = 4;
 		const PAYLOAD_COUNT: usize = 3;
 
 		// Outer collection should fail on sizes larger or smaller than expected
 		assert!(gen_signing_data_stage2(PARTIES, PAYLOAD_COUNT)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 		assert!(!gen_signing_data_stage2(PARTIES - 1, PAYLOAD_COUNT)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 		assert!(!gen_signing_data_stage2(PARTIES + 1, PAYLOAD_COUNT)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 
 		// Inner collection should fail on sizes larger than the maximum size
 		assert!(gen_signing_data_stage2(PARTIES, PAYLOAD_COUNT - 1)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 		assert!(!gen_signing_data_stage2(PARTIES, PAYLOAD_COUNT + 1)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 	}
 
 	#[test]
@@ -324,11 +370,11 @@ mod tests {
 
 		// Should fail if it has too many responses
 		assert!(gen_signing_data_stage3(PAYLOAD_COUNT)
-			.is_data_size_valid::<EthSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<EthSigning>(PARTIES, PAYLOAD_COUNT));
 		assert!(gen_signing_data_stage3(PAYLOAD_COUNT - 1)
-			.is_data_size_valid::<EthSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<EthSigning>(PARTIES, PAYLOAD_COUNT));
 		assert!(!gen_signing_data_stage3(PAYLOAD_COUNT + 1)
-			.is_data_size_valid::<EthSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<EthSigning>(PARTIES, PAYLOAD_COUNT));
 	}
 
 	#[test]
@@ -338,17 +384,17 @@ mod tests {
 
 		// Outer collection should fail on sizes larger or smaller than expected
 		assert!(gen_signing_data_stage4(PARTIES, PAYLOAD_COUNT)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 		assert!(!gen_signing_data_stage4(PARTIES - 1, PAYLOAD_COUNT)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 		assert!(!gen_signing_data_stage4(PARTIES + 1, PAYLOAD_COUNT)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 
 		// Inner collection should fail on sizes larger than the maximum size
 		assert!(gen_signing_data_stage4(PARTIES, PAYLOAD_COUNT - 1)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 		assert!(!gen_signing_data_stage4(PARTIES, PAYLOAD_COUNT + 1)
-			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcSigning>(PARTIES, PAYLOAD_COUNT));
 	}
 
 	#[test]

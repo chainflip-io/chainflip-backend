@@ -100,6 +100,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	type Message = PubkeyShares0<Crypto::Point>;
 	const NAME: KeygenStageName = KeygenStageName::PubkeyShares0;
 
+	fn size_context(&self) {}
+
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let ResharingContext { sharing_participants, party_status, .. } = &self.resharing_context;
 
@@ -304,6 +306,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	type Message = HashComm1;
 	const NAME: KeygenStageName = KeygenStageName::HashCommitments1;
 
+	fn size_context(&self) {}
+
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		// We don't want to reveal the public coefficients yet, so sending the hash commitment only
 		DataToSend::Broadcast(HashComm1(self.hash_commitment))
@@ -343,6 +347,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 {
 	type Message = VerifyHashComm2;
 	const NAME: KeygenStageName = KeygenStageName::VerifyHashCommitmentsBroadcast2;
+
+	fn size_context(&self) {}
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		DataToSend::Broadcast(VerifyHashComm2 { data: self.hash_commitments.clone() })
@@ -401,6 +407,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	type Message = CoeffComm3<Crypto::Point>;
 	const NAME: KeygenStageName = KeygenStageName::CoefficientCommitments3;
 
+	fn size_context(&self) {}
+
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		DataToSend::Broadcast(DelayDeserialization::new(&self.own_commitment))
 	}
@@ -441,6 +449,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 {
 	type Message = VerifyCoeffComm4<Crypto::Point>;
 	const NAME: KeygenStageName = KeygenStageName::VerifyCommitmentsBroadcast4;
+
+	fn size_context(&self) {}
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let data = self.commitments.clone();
@@ -540,6 +550,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 {
 	type Message = SecretShare5<Crypto::Point>;
 	const NAME: KeygenStageName = KeygenStageName::SecretSharesStage5;
+
+	fn size_context(&self) {}
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		// With everyone committed to their secrets and sharing polynomial coefficients
@@ -659,6 +671,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	type Message = Complaints6;
 	const NAME: KeygenStageName = KeygenStageName::ComplaintsStage6;
 
+	fn size_context(&self) {}
+
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		DataToSend::Broadcast(Complaints6(self.complaints.clone()))
 	}
@@ -700,6 +714,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 {
 	type Message = VerifyComplaints7;
 	const NAME: KeygenStageName = KeygenStageName::VerifyComplaintsBroadcastStage7;
+
+	fn size_context(&self) {}
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let data = self.received_complaints.clone();
@@ -961,6 +977,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	type Message = BlameResponse8<Crypto::Point>;
 	const NAME: KeygenStageName = KeygenStageName::BlameResponsesStage8;
 
+	fn size_context(&self) {}
+
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let common = &self.keygen_common.common;
 
@@ -1138,6 +1156,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 {
 	type Message = VerifyBlameResponses9<Crypto::Point>;
 	const NAME: KeygenStageName = KeygenStageName::VerifyBlameResponsesBroadcastStage9;
+
+	fn size_context(&self) {}
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let data = self.blame_responses.clone();
