@@ -15,15 +15,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use cf_chains::{address::ToHumanreadableAddress, instances::ChainInstanceFor, Chain};
+use cf_chains::{
+	address::ToHumanreadableAddress, instances::ChainInstanceFor, AccountOrAddress, Chain,
+	ForeignChainAddress,
+};
 use cf_primitives::{AssetAmount, EpochIndex, FlipBalance};
-use cf_rpc_types::SwapChannelInfo;
+use cf_rpc_types::{
+	lp::{WhitelistChangeRpc, WhitelistDestinationRpc},
+	SwapChannelInfo,
+};
 use cf_utilities::task_scope;
 use codec::Decode;
 use custom_rpc::CustomApiClient;
 use engine_sc_client::{chain_api::ChainApi, storage_api::StorageApi};
 use frame_support::sp_runtime::DigestItem;
 use jsonrpsee::core::ClientError;
+use pallet_cf_asset_balances::whitelist::{PendingChange, Seconds, WhitelistChange};
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_validator::RotationPhase;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
@@ -37,6 +44,32 @@ pub struct PreUpdateStatus {
 	pub rotation: bool,
 	pub is_authority: bool,
 	pub next_block_in: Option<usize>,
+}
+
+/// An account's withdrawal whitelist: its active state plus the timelocked updates that have been
+/// submitted but not yet applied.
+pub struct WithdrawalWhitelistState {
+	/// `None` if the account has no whitelist configured, in which case withdrawals to any
+	/// destination are allowed.
+	pub active: Option<ActiveWithdrawalWhitelist>,
+	pub pending: Vec<PendingWhitelistUpdate>,
+}
+
+pub struct ActiveWithdrawalWhitelist {
+	/// The delay applied to whitelist updates. Zero means updates apply immediately.
+	pub timelock_secs: Seconds,
+	pub allowed: Vec<WhitelistDestinationRpc>,
+}
+
+pub struct PendingWhitelistUpdate {
+	/// Wall-clock time (unix seconds) at which the update is applied.
+	pub activates_at: Seconds,
+	pub update: WhitelistUpdate,
+}
+
+pub enum WhitelistUpdate {
+	Destination(WhitelistChangeRpc),
+	Timelock(Seconds),
 }
 
 pub struct QueryApi {
@@ -179,6 +212,83 @@ impl QueryApi {
 				&account_id,
 			)
 			.await?)
+	}
+
+	pub async fn get_withdrawal_whitelist(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		account_id: Option<state_chain_runtime::AccountId>,
+	) -> Result<WithdrawalWhitelistState> {
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
+		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+
+		let (whitelist, pending_changes, network) = tokio::try_join!(
+			self.state_chain_client
+				.storage_map_entry::<pallet_cf_asset_balances::WithdrawalWhitelists<
+					state_chain_runtime::Runtime,
+				>>(block_hash, &account_id),
+			self.state_chain_client
+				.storage_value::<pallet_cf_asset_balances::PendingChanges<
+					state_chain_runtime::Runtime,
+				>>(block_hash),
+			self.state_chain_client
+				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
+					state_chain_runtime::Runtime,
+				>>(block_hash),
+		)?;
+
+		let to_destination =
+			|destination: AccountOrAddress<AccountId32, ForeignChainAddress>| match destination {
+				AccountOrAddress::InternalAccount(account) =>
+					WhitelistDestinationRpc::InternalAccount(account),
+				AccountOrAddress::ExternalAddress(address) =>
+					WhitelistDestinationRpc::ExternalAddress {
+						chain: address.chain(),
+						address: AddressString::from_encoded_address(
+							address.to_encoded_address(network),
+						),
+					},
+			};
+
+		let mut pending = vec![];
+		for (activates_at, changes) in pending_changes {
+			for (_, change) in changes.iter().filter(|(account, _)| *account == account_id) {
+				// Refund address updates are timelocked alongside whitelist updates but are not
+				// part of the whitelist itself.
+				let update = match change {
+					PendingChange::Whitelist(WhitelistChange::Allow(destination)) =>
+						WhitelistUpdate::Destination(WhitelistChangeRpc::Allow(to_destination(
+							destination.clone(),
+						))),
+					PendingChange::Whitelist(WhitelistChange::Remove(destination)) =>
+						WhitelistUpdate::Destination(WhitelistChangeRpc::Remove(to_destination(
+							destination.clone(),
+						))),
+					PendingChange::Timelock(timelock) => WhitelistUpdate::Timelock(*timelock),
+					PendingChange::RefundAddress(..) => continue,
+				};
+				pending.push(PendingWhitelistUpdate { activates_at, update });
+			}
+		}
+
+		Ok(WithdrawalWhitelistState {
+			active: whitelist.map(|whitelist| ActiveWithdrawalWhitelist {
+				timelock_secs: whitelist.timelock(),
+				allowed: whitelist
+					.external()
+					.values()
+					.flatten()
+					.cloned()
+					.map(AccountOrAddress::ExternalAddress)
+					.chain(
+						whitelist.internal().iter().cloned().map(AccountOrAddress::InternalAccount),
+					)
+					.map(to_destination)
+					.collect(),
+			}),
+			pending,
+		})
 	}
 
 	pub async fn pre_update_check(
