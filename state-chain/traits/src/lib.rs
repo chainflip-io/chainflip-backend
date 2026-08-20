@@ -738,7 +738,7 @@ pub trait FeePayment {
 	type AccountId;
 	/// Helper function to mint FLIP to an account.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
+	fn credit_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
 		unimplemented!()
 	}
 
