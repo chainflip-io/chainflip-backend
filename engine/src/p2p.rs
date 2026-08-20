@@ -252,8 +252,8 @@ where
 						);
 						// If the supervisor has gone away the engine is already shutting down,
 						// so a send error here is benign.
-						let _ = transport_restart_sender
-							.send(to_engine_transport(on_chain_transport));
+						let _ =
+							transport_restart_sender.send(to_engine_transport(on_chain_transport));
 						current_transport = on_chain_transport;
 					}
 				}

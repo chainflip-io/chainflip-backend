@@ -77,9 +77,7 @@ impl<C: ChainCrypto> MultisigMessageReceiver<C> {
 	}
 
 	/// Take ownership of the underlying receiver for passing to CeremonyManager
-	pub fn into_inner(
-		self,
-	) -> Receiver<(AccountId, multisig::p2p::VersionedCeremonyMessage)> {
+	pub fn into_inner(self) -> Receiver<(AccountId, multisig::p2p::VersionedCeremonyMessage)> {
 		self.receiver
 	}
 }
@@ -97,10 +95,10 @@ pub fn create_multisig_channels<C: ChainCrypto>(
 
 	// Bounded channel feeding the ceremony manager. Backpressure here lets the fair channels
 	// upstream apply their per-peer drop policy rather than buffering unboundedly.
-	let (incoming_multisig_tx, incoming_multisig_rx) =
-		tokio::sync::mpsc::channel::<(AccountId, multisig::p2p::VersionedCeremonyMessage)>(
-			FORWARDER_BUFFER_SIZE,
-		);
+	let (incoming_multisig_tx, incoming_multisig_rx) = tokio::sync::mpsc::channel::<(
+		AccountId,
+		multisig::p2p::VersionedCeremonyMessage,
+	)>(FORWARDER_BUFFER_SIZE);
 
 	let outgoing_sender = handle.outgoing_sender;
 

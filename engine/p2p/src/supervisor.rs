@@ -29,10 +29,7 @@
 
 use std::{collections::BTreeMap, future::Future};
 
-use cf_utilities::{
-	metrics::P2P_BAD_MSG,
-	Port,
-};
+use cf_utilities::{metrics::P2P_BAD_MSG, Port};
 use tokio::sync::{
 	mpsc::{UnboundedReceiver, UnboundedSender},
 	oneshot,
@@ -352,9 +349,10 @@ mod tests {
 		let (_peer_update_sender, peer_update_receiver) = mpsc::unbounded_channel();
 		let (_restart_sender, restart_receiver) = mpsc::unbounded_channel();
 
-		let run_transport = move |_transport, _peers: Vec<PeerInfo>, _channels: TransportChannels| async move {
-			anyhow::bail!("transport blew up")
-		};
+		let run_transport =
+			move |_transport, _peers: Vec<PeerInfo>, _channels: TransportChannels| async move {
+				anyhow::bail!("transport blew up")
+			};
 
 		let result = run_transport_supervisor_with(
 			Transport::Zmq,
@@ -383,24 +381,25 @@ mod tests {
 		let (incoming_handle_sender, mut incoming_handle_receiver) = mpsc::unbounded_channel();
 		let (observed_outgoing_sender, mut observed_outgoing_receiver) = mpsc::unbounded_channel();
 
-		let run_transport = move |_transport, _peers: Vec<PeerInfo>, channels: TransportChannels| {
-			let incoming_handle_sender = incoming_handle_sender.clone();
-			let observed_outgoing_sender = observed_outgoing_sender.clone();
-			async move {
-				incoming_handle_sender.send(channels.incoming_message_sender.clone()).unwrap();
-				let mut outgoing_message_receiver = channels.outgoing_message_receiver;
-				let mut shutdown = channels.shutdown;
-				loop {
-					tokio::select! {
-						Some(message) = outgoing_message_receiver.recv() => {
-							observed_outgoing_sender.send(message).unwrap();
-						},
-						_ = &mut shutdown => break,
+		let run_transport =
+			move |_transport, _peers: Vec<PeerInfo>, channels: TransportChannels| {
+				let incoming_handle_sender = incoming_handle_sender.clone();
+				let observed_outgoing_sender = observed_outgoing_sender.clone();
+				async move {
+					incoming_handle_sender.send(channels.incoming_message_sender.clone()).unwrap();
+					let mut outgoing_message_receiver = channels.outgoing_message_receiver;
+					let mut shutdown = channels.shutdown;
+					loop {
+						tokio::select! {
+							Some(message) = outgoing_message_receiver.recv() => {
+								observed_outgoing_sender.send(message).unwrap();
+							},
+							_ = &mut shutdown => break,
+						}
 					}
+					Ok(())
 				}
-				Ok(())
-			}
-		};
+			};
 
 		let supervisor = tokio::spawn(run_transport_supervisor_with(
 			Transport::Zmq,
@@ -423,7 +422,9 @@ mod tests {
 		assert_eq!(observed_outgoing_receiver.recv().await.unwrap(), message);
 
 		// Incoming: transport -> supervisor -> muxer.
-		transport_incoming_sender.send((AccountId::new([7; 32]), vec![4, 5, 6])).unwrap();
+		transport_incoming_sender
+			.send((AccountId::new([7; 32]), vec![4, 5, 6]))
+			.unwrap();
 		assert_eq!(
 			muxer_incoming_receiver.recv().await.unwrap(),
 			(AccountId::new([7; 32]), vec![4, 5, 6])
