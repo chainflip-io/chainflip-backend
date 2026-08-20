@@ -52,6 +52,10 @@ pub const STREAM_READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// How much of a payload to allocate at a time while reading it.
 const READ_CHUNK_SIZE: usize = 64 * 1024;
 
+/// How many messages to hold for a peer while its handshake is in flight. Past this, further
+/// messages are dropped rather than letting a peer we cannot reach grow the queue without bound.
+pub const MAX_PENDING_MESSAGES: usize = 64;
+
 /// How long before a connection is considered stale
 pub const MAX_INACTIVITY_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 
@@ -64,6 +68,8 @@ pub struct PeerConnection {
 pub enum ConnectionState {
 	/// Active QUIC connection
 	Connected(PeerConnection),
+	/// Handshake in flight; anything sent meanwhile is held until it completes.
+	Connecting { pending: Vec<Vec<u8>> },
 	/// Waiting to reconnect (exponential backoff)
 	ReconnectionScheduled,
 	/// No active connection due to inactivity (will reconnect on demand)
