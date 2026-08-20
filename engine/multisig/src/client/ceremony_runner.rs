@@ -288,7 +288,7 @@ where
 				// Check that the number of elements in the data is what we expect
 				if !data.is_data_size_valid::<Chain>(
 					stage.ceremony_common().all_idxs.len() as AuthorityCount,
-					stage.ceremony_common().number_of_signing_payloads,
+					stage.size_context(),
 				) {
 					self.metrics.bad_message.inc(&[INCORRECT_NUMBER_ELEMENTS]);
 					debug!(
