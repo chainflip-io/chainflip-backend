@@ -57,10 +57,9 @@ impl AllowedPubkeysWrapper {
 		// Enforce one key per account: if this account previously registered a
 		// different key (e.g. a node-key rotation), revoke the old key so it can
 		// no longer authenticate.
-		self.map
-			.retain(|existing_pubkey, existing_account| {
-				*existing_account != account_id || *existing_pubkey == pubkey
-			});
+		self.map.retain(|existing_pubkey, existing_account| {
+			*existing_account != account_id || *existing_pubkey == pubkey
+		});
 		self.map.insert(pubkey, account_id);
 		self.metric.set(self.map.len());
 	}

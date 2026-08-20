@@ -51,8 +51,7 @@ use crate::{
 	ed25519_public_key_to_x25519_public_key,
 	fair_channel::{fair_channel, FairReceiver},
 	message::{AccountId, OutgoingMessage},
-	pk_to_string, P2PKey, X25519KeyPair, XPublicKey,
-	INCOMING_MESSAGE_PER_PEER_LIMIT,
+	pk_to_string, P2PKey, X25519KeyPair, XPublicKey, INCOMING_MESSAGE_PER_PEER_LIMIT,
 };
 
 // Peer-identity types are shared across transports; ZMQ additionally derives the

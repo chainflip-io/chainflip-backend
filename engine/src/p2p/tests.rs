@@ -24,8 +24,10 @@ use std::{collections::BTreeSet, net::Ipv4Addr, sync::Arc, time::Duration};
 use cf_primitives::{AccountId, GENESIS_EPOCH};
 use cf_utilities::{testing::new_temp_directory_with_nonexistent_file, Port};
 use ed25519_dalek::SigningKey;
-use engine_p2p::{fair_channel::fair_channel, quic::PeerInfo, P2PKey, TopicMuxer, Transport,
-	INCOMING_MESSAGE_PER_PEER_LIMIT};
+use engine_p2p::{
+	fair_channel::fair_channel, quic::PeerInfo, P2PKey, TopicMuxer, Transport,
+	INCOMING_MESSAGE_PER_PEER_LIMIT,
+};
 use futures::future::join_all;
 use multisig::{
 	client::MultisigClientApi,
@@ -74,7 +76,8 @@ async fn multisig_messages_over_quic_with_muxer() {
 	const NUM_NODES: usize = 3;
 
 	// Create peer infos for all nodes
-	let node_infos: Vec<_> = (0..NUM_NODES).map(|idx| create_test_node_info(idx, BASE_PORT)).collect();
+	let node_infos: Vec<_> =
+		(0..NUM_NODES).map(|idx| create_test_node_info(idx, BASE_PORT)).collect();
 	let all_peer_infos: Vec<_> = node_infos.iter().map(|(_, pi, _)| pi.clone()).collect();
 	let account_ids: Vec<_> = node_infos.iter().map(|(_, _, id)| id.clone()).collect();
 
@@ -164,11 +167,10 @@ async fn multisig_messages_over_quic_with_muxer() {
 
 	// Both node 1 and node 2 should receive it
 	for eth_receiver in &mut eth_receivers[1..NUM_NODES] {
-		let received =
-			tokio::time::timeout(Duration::from_secs(5), eth_receiver.receiver.recv())
-				.await
-				.expect("timeout waiting for broadcast")
-				.expect("channel closed");
+		let received = tokio::time::timeout(Duration::from_secs(5), eth_receiver.receiver.recv())
+			.await
+			.expect("timeout waiting for broadcast")
+			.expect("channel closed");
 
 		assert_eq!(received.0, account_ids[0]);
 		assert_eq!(received.1.payload, broadcast_payload);
@@ -247,8 +249,11 @@ fn spawn_ceremony_node(
 	let (from_muxer_sender, from_muxer_receiver) = mpsc::unbounded_channel();
 
 	// Topic muxer with a single Ethereum topic.
-	let (muxer_future, mut handles) =
-		TopicMuxer::start(to_muxer_receiver, from_muxer_sender, [MultisigTopic(ChainTag::Ethereum)]);
+	let (muxer_future, mut handles) = TopicMuxer::start(
+		to_muxer_receiver,
+		from_muxer_sender,
+		[MultisigTopic(ChainTag::Ethereum)],
+	);
 	tokio::spawn(muxer_future.instrument(info_span!("muxer", idx = idx)));
 
 	let eth_handle = handles.remove(&MultisigTopic(ChainTag::Ethereum)).unwrap();
@@ -258,7 +263,8 @@ fn spawn_ceremony_node(
 	// Real multisig client backed by a temp on-disk key store.
 	let (tempdir, db_file) = new_temp_directory_with_nonexistent_file();
 	let key_store = KeyStore::<EthSigning>::new(Arc::new(
-		PersistentKeyDB::open_and_migrate_to_latest(&db_file, None).expect("Failed to open database"),
+		PersistentKeyDB::open_and_migrate_to_latest(&db_file, None)
+			.expect("Failed to open database"),
 	));
 	let (client, client_future) =
 		start_client::<EthSigning>(account_id.clone(), key_store, eth_receiver, eth_sender, 0);
@@ -307,8 +313,9 @@ fn spawn_ceremony_node(
 async fn signing_works_after_in_place_transport_switch() {
 	const NUM_NODES: usize = 3;
 
-	let node_infos: Vec<_> =
-		(0..NUM_NODES).map(|idx| create_test_node_info(idx, CEREMONY_BASE_PORT)).collect();
+	let node_infos: Vec<_> = (0..NUM_NODES)
+		.map(|idx| create_test_node_info(idx, CEREMONY_BASE_PORT))
+		.collect();
 	let all_peer_infos: Vec<_> = node_infos.iter().map(|(_, pi, _)| pi.clone()).collect();
 
 	// Start every node on ZMQ (the network-wide default).
@@ -377,18 +384,19 @@ async fn signing_works_after_in_place_transport_switch() {
 /// finalized blocks, so for a window the validators are split across two non-interoperable
 /// transports. We reproduce that split (one node on QUIC, the rest on ZMQ) and show:
 ///
-///  1. A ceremony that needs a node on the far side of the split does **not** hang or panic —
-///     it self-times-out (MAX_STAGE_DURATION) and resolves to an error, which the State Chain
-///     would observe and retry.
-///  2. Once the nodes converge onto one transport, signing works again (here with the two
-///     nodes that ended up together, which meet the 2-of-3 success threshold) — so the switch
-///     is recoverable, not a dead end.
+///  1. A ceremony that needs a node on the far side of the split does **not** hang or panic — it
+///     self-times-out (MAX_STAGE_DURATION) and resolves to an error, which the State Chain would
+///     observe and retry.
+///  2. Once the nodes converge onto one transport, signing works again (here with the two nodes
+///     that ended up together, which meet the 2-of-3 success threshold) — so the switch is
+///     recoverable, not a dead end.
 #[tokio::test]
 async fn signing_fails_then_recovers_when_transport_switches_mid_ceremony() {
 	const NUM_NODES: usize = 3;
 
-	let node_infos: Vec<_> =
-		(0..NUM_NODES).map(|idx| create_test_node_info(idx, MID_CEREMONY_BASE_PORT)).collect();
+	let node_infos: Vec<_> = (0..NUM_NODES)
+		.map(|idx| create_test_node_info(idx, MID_CEREMONY_BASE_PORT))
+		.collect();
 	let all_peer_infos: Vec<_> = node_infos.iter().map(|(_, pi, _)| pi.clone()).collect();
 
 	// Everyone starts on ZMQ.
@@ -414,7 +422,11 @@ async fn signing_fails_then_recovers_when_transport_switches_mid_ceremony() {
 	// Generate a key while everyone is still on ZMQ.
 	let public_keys = with_timeout(
 		"keygen",
-		join_all(nodes.iter().map(|n| n.client.initiate_keygen(1, GENESIS_EPOCH, all_signers.clone()))),
+		join_all(
+			nodes
+				.iter()
+				.map(|n| n.client.initiate_keygen(1, GENESIS_EPOCH, all_signers.clone())),
+		),
 	)
 	.await
 	.into_iter()
@@ -435,7 +447,11 @@ async fn signing_fails_then_recovers_when_transport_switches_mid_ceremony() {
 	let split_results = with_timeout(
 		"signing across the transport split",
 		join_all(nodes.iter().map(|n| {
-			n.client.initiate_signing(2, all_signers.clone(), vec![(key_id.clone(), payload.clone())])
+			n.client.initiate_signing(
+				2,
+				all_signers.clone(),
+				vec![(key_id.clone(), payload.clone())],
+			)
 		})),
 	)
 	.await;
