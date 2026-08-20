@@ -135,13 +135,22 @@ assumption, and phase 2 below adds a cross-check against the concrete module.
 | Private share delivery (per-recipient) | `share_valid(from, to)` — adversary-set for Byzantine senders |
 | Coefficient-length check (`== threshold + 1`) | ZKP and hash-commitment verification (assumed sound) |
 | Complaint sets, `is_blame_response_complete`, stage-9 re-verification | Share arithmetic |
-| `sharing_participants` / `receiving_participants` / `future_index_mapping` | Key material |
+| `sharing_participants` / `receiving_participants` | Key material |
 | Membership of `reported_parties` | Aggregate pubkey value |
 
 The coefficient-length check stays faithful rather than assumed: it is an
 integer comparison, it is the check the review flagged, and under handover the
 expected count derives from the *new* key's threshold — an asymmetry worth
 exercising.
+
+**Modelling gap: `future_index_mapping` is not represented.** Handover is
+modelled only as two distinct sharing/receiving `Set[Party]` — the sets that
+`SHARING`/`RECEIVING` parameterise in `keygen.qnt` — with shares tracked by
+the same party indices on both sides. The Rust's remapping between the old
+key's index domain and the new key's index domain has no model counterpart.
+Nothing in the model depends on it, so this does not affect any invariant
+above, but it means the model cannot distinguish a bug that lives specifically
+in that remapping from one that doesn't.
 
 ## Adversary model
 
@@ -188,11 +197,11 @@ scope.
 | | Property |
 | --- | --- |
 | K1 | **NoHonestBlamed** — no honest party in any honest party's final reported set |
-| K2 | **NoConflictingOutcome** — no two honest parties finish `Done` with different keys or participant sets |
+| K2 | **NoConflictingOutcome** — no two honest parties finish `Done` with different keys |
 | K3 | **AttributionProgress** — a non-empty reported set contains at least one Byzantine party |
 | K4 | **HandoverNoFalseBlame** — K1 with `sharing ≠ receiving` |
 | K5 | **Termination** — every run reaches Done or Error |
-| K6 | **KeyConsistency** — on Done, all honest parties derived the same key and participant set |
+| K6 | **KeyConsistency** — a ceremony never finalises with a wrong-length commitment in play |
 | K7 | **QuorumCoupling** — a stage cannot succeed for anyone unless a quorum is still participating (modelled as a constraint, with divergence covered by a witness rather than an invariant) |
 
 L1 and K1 are the headline properties. K3 complements K1: blame must be not only
@@ -271,18 +280,32 @@ not as sets of maps. The simulator (`quint run`) accepts either form, so this
 only surfaces at `quint verify` time — it must be got right from the first
 module or every model has to be rewritten later.
 
-Configurations:
+Configurations actually run:
 
-- lemma layer: exhaustive at n=4/f=1 and n=7/f=2;
-- ceremony layer: exhaustive at n=4/f=1 and n=5/f=1;
-- handover splits: `sharing = {1,2,3}`, `receiving = {3,4,5}` at n=5/f=1 — note
-  this is deliberately tight, since a quorum over three sharing parties is two,
-  leaving no slack if the Byzantine party is a sharer;
+- lemma layer: exhaustive at n=4/f=1;
+- ceremony layer: exhaustive at n=4/f=1, bounded at `--max-steps=12` (the
+  stage machine needs at most 10 transitions to reach `Finished`, so this
+  bound is not a restriction);
+- handover split: `SHARING = Set(2,3,4)`, `RECEIVING = Set(1,2,3)` at n=4/f=1,
+  Byzantine party 4. This split is load-bearing, not arbitrary: the Byzantine
+  party must be a sharer that is *not* a receiver, because the bug class K4
+  guards against (a forced reveal at an index the party never held a share
+  for) is only reachable for a non-receiving participant. A split where the
+  Byzantine party is also a receiver makes the negative control pass silently
+  while proving nothing — confirmed directly, not just asserted;
 - randomised `quint run` beyond the exhaustive envelope for bug-hunting.
 
 Where a configuration does not fit an exhaustive check, use bounded-depth
 verification and record the bound in `harness.qnt` alongside the run, so the
 coverage claim stays honest.
+
+### Deferred
+
+Not run. Listed here rather than silently dropped, so the gap stays visible:
+
+- lemma layer at n=7/f=2 — the second Byzantine-tolerance boundary implied by
+  `n ≥ 3f + 1`, untried;
+- ceremony layer at n=5/f=1 — untried at any party count other than n=4.
 
 ### Counterexamples become Rust tests
 
@@ -298,16 +321,18 @@ independently of whether anyone re-runs the model.
 
 Each phase ends with something checkable.
 
-1. **Lemma.** `types.qnt` + `broadcast.qnt`; L1–L6 verified at n=4/f=1, then
-   n=7/f=2. This phase alone answers the review's "pressure-test the quorum
-   math" request and is the milestone to reach before committing to the rest.
+1. **Lemma.** `types.qnt` + `broadcast.qnt`; L1–L6 verified at n=4/f=1
+   (n=7/f=2 deferred — see Deferred above). This phase alone answers the
+   review's "pressure-test the quorum math" request and is the milestone to
+   reach before committing to the rest.
 2. **Ceremony skeleton.** `oracle.qnt` + keygen stages 0–5; K1, K2, K5.
    Includes the seam cross-check: instantiate `keygen.qnt` against the concrete
    `broadcast.qnt` at n=4 to confirm the idealisation is no stronger than what
    L1–L6 prove.
 3. **Blame sub-protocol.** Stages 6–9; K3.
-4. **Handover.** Parameterise sharing/receiving sets and index remapping;
-   K4, K6.
+4. **Handover.** Parameterise sharing/receiving sets; K4, K6. (The index
+   remapping was planned here but not delivered — see the modelling-gap note
+   on `future_index_mapping` above.)
 5. **Integration.** CI wiring and the counterexample-to-Rust workflow.
 
 ## Risks

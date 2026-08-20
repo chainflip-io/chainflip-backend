@@ -12,6 +12,35 @@ module plain {
     FILTER_NON_RECEIVER_COMPLAINTS = true,
     ENFORCE_COEFF_LENGTH = true
   ).* from "./keygen"
+
+  // Proves `Done` is reachable via `step`'s actual transition logic
+  // (`stepWith`, the deterministic core `step` draws its nondet arguments
+  // for) - not inferred from random sampling. After wiring in the
+  // blame-response-completeness check (F3), a uniformly random walk only
+  // reaches `Done` in about 1 in 45000 traces, because it requires agreement
+  // at all four verify stages simultaneously - correct model behaviour, but
+  // the wrong instrument for a reachability claim. This test drives the
+  // happy path directly: every party agrees at every verify stage, no bad
+  // shares, no complaints, no blame, honest coefficient lengths throughout.
+  // It is deterministic (fixed arguments, no `nondet`) and runs in
+  // milliseconds - it does not depend on sampling luck.
+  //
+  // lenHi = Set(), lenLo = BYZ gives every Byzantine party the honest
+  // coefficient-commitment length too (KEY_THRESHOLD + 1) - see the
+  // `newLens` branching in `stepWith` - so nobody fails the length check
+  // either. The ceremony needs exactly 10 stage transitions to reach
+  // `Finished` from `PubkeyShares0` (see the README's --max-steps note).
+  run doneReachableTest = {
+    init
+      .then(10.reps(_ => stepWith(
+        true, PARTIES, Set(), Set(), Set(), Set(), Set(), Set(), BYZ)))
+      .expect(HONEST.forall(k =>
+        match result.get(k) {
+        | Done(m) => m == KEY_A
+        | Failed(_) => false
+        | Running => false
+        }))
+  }
 }
 
 // Handover with BYZ = {4} as a SHARER THAT IS NOT A RECEIVER.

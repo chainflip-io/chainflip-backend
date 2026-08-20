@@ -19,10 +19,11 @@ downloaded automatically into `~/.quint` on first use. Apalache needs a JDK.
 
 ```bash
 ./check.sh            # everything, with the configurations that are known to fit
-./check.sh --verify   # add exhaustive Apalache checks (~11 minutes)
+./check.sh --verify   # add exhaustive Apalache checks (~12 minutes)
 quint typecheck broadcast.qnt
 quint run broadcast.qnt --invariant=L1_NoFalseBlame --max-steps=1 --max-samples=20000
 quint verify broadcast.qnt --invariant=L1_NoFalseBlame --max-steps=1
+quint test harness.qnt --main=plain   # includes doneReachableTest - see Status below
 ```
 
 `quint run` samples and is fast (~30k traces/s); it finds bugs but proves
@@ -78,26 +79,48 @@ caught by the second and missed entirely by the first.
 **Ten-stage keygen ceremony layer** (`keygen.qnt` via `harness.qnt`, `--main`
 routing as shown):
 
+All six ceremony checks below (and both negative controls in the section
+below) are bounded at `--max-steps=12`. The stage machine needs at most 10
+transitions to reach `Finished` from `PubkeyShares0` (11 states including
+init), so this bound sits comfortably above the deepest reachable trace — it
+is not a restriction on what the checks can see.
+
 | Property | Meaning | Time |
 | --- | --- | --- |
-| K1 NoHonestBlamed (`--main=plain`) | no honest party is blamed by any honest party | ~41 s |
-| K2 NoConflictingOutcome (`--main=plain`) | no two honest parties finish with different keys | ~35 s |
-| K3 AttributionProgress (`--main=plain`) | a non-empty blame set always contains a Byzantine party | ~40 s |
-| K5 Termination (`--main=plain`) | no honest party is stuck `Running` once it reaches `Finished` | ~25 s |
-| K6 KeyConsistency (`--main=plain`) | a ceremony never finalises with a wrong-length commitment in play | ~38 s |
-| K4 HandoverNoFalseBlame (`--main=handover`) | K1 re-checked under the handover split (`SHARING={2,3,4}`, `RECEIVING={1,2,3}`) | ~44 s |
+| K1 NoHonestBlamed (`--main=plain`) | no honest party is blamed by any honest party | ~73 s |
+| K2 NoConflictingOutcome (`--main=plain`) | no two honest parties finish with different keys | ~41 s |
+| K3 AttributionProgress (`--main=plain`) | a non-empty blame set always contains a Byzantine party | ~57 s |
+| K5 Termination (`--main=plain`) | no honest party is stuck `Running` once it reaches `Finished` | ~27 s |
+| K6 KeyConsistency (`--main=plain`) | a ceremony never finalises with a wrong-length commitment in play | ~54 s |
+| K4 HandoverNoFalseBlame (`--main=handover`) | K1 re-checked under the handover split (`SHARING={2,3,4}`, `RECEIVING={1,2,3}`) | ~51 s |
 
-`wCeremonyDone` (an honest party reaching `Done`) is thin under simulation —
-around 0.03-0.07% of sampled traces, i.e. only ~10-15 traces out of 20000 —
-because it is the last of ten stages and depends on every nondet draw in the
-step lining up. K2 and K6 only constrain states where a party reached `Done`,
-so a `quint run` `[ok]` on them would rest on that thin a sample. That is
-exactly why all six ceremony properties are checked with `quint verify`
-instead of relying on simulation: Apalache explores the full state space
-regardless of how rarely a random walk reaches `Done`, so the K2/K6 result
-does not depend on witness coverage at all.
+K2 holds partly by construction: `step` (`keygen.qnt`) draws exactly one
+agreed key per step, so two honest parties are never even offered different
+agreed maps to disagree on. Its falsifiable content is therefore "the
+encoding preserves L2" — L2 ValueAgreement is what `broadcast.qnt` proves
+independently, over the concrete broadcast primitive rather than the
+encoding shortcut.
 
-Total verify time for all eleven checks above: ~10m22s (budget: ~11 minutes).
+**`Done`-reachability is proven deterministically, not by sampling.** Since
+the blame-response-completeness fix (F3) wired `Done` behind agreement at all
+four verify stages simultaneously, a uniformly random walk over the
+adversarial choice space reaches `Done` in only about 1 in 45000 traces
+(~0.002%) — correct model behaviour (a genuine consequence of closing a real
+gap), but the wrong instrument for a reachability claim: too rare for
+`quint run`'s `CEREMONY_SAMPLES` (20000) to reliably witness, and no sample
+size that keeps `./check.sh` fast changes that. Reachability is established
+instead by `doneReachableTest` (`harness.qnt`, `plain` module): a
+deterministic `run` test that drives `stepWith` — the parameterised core
+`step` draws its random arguments for — through the happy path (agreement at
+every verify stage, no bad shares, no complaints, no blame, honest
+coefficient lengths) and asserts every honest party ends in `Done`. It has no
+`nondet` of its own, runs in milliseconds, and is checked by `quint test`,
+not `quint run`. Combined with the exhaustive `quint verify` of K2/K6 below
+(which explores the full state space regardless of how rarely a random walk
+reaches `Done`), `wCeremonyDone`'s simulation count is not required to be
+non-zero — see the Status section below.
+
+Total verify time for all eleven checks above: ~11m43s (budget: ~12 minutes).
 
 ### Checked by simulation only (`quint run` — samples, does not prove)
 
@@ -109,20 +132,27 @@ run for all of them too (`./check.sh`, no `--verify`) as a fast pre-verify
 smoke check; witness coverage for the ceremony simulation runs
 (`wCeremonyDiverged`, `wCeremonyDone`, `wCeremonyBlamed`, 20000 samples,
 12 steps, trace length max=13 as required) is `wCeremonyDiverged` and
-`wCeremonyBlamed` consistently well over 85%, `wCeremonyDone` 0.03-0.07% and
-never 0.00% in any run performed.
+`wCeremonyBlamed` consistently well over 85% — both are required-positive,
+and doing real coverage work. `wCeremonyDone` is not: at this sample size it
+routinely reads 0 traces, and that is expected, not a vacuousness signal —
+see the note on its rate above. `Done`-reachability is established by
+`doneReachableTest` and the exhaustive K2/K6 verification, not by this
+simulation pass.
 
 ### Permanent negative controls
 
 Two `harness.qnt` modules exist solely to prove the model can see the bugs the
 Rust already fixes. Both currently report `[violation]`, as required — if
 either ever reports `[ok]`, the model has lost the power to detect that bug
-class and should not be trusted:
+class and should not be trusted. Both are run automatically by `./check.sh`
+(the `MUST_VIOLATE` section) with the exit condition inverted: a `[violation]`
+is a pass, and an `[ok]` makes `check.sh` fail loudly rather than pass
+silently:
 
 | Control | Command | Result |
 | --- | --- | --- |
-| `handoverUnfixed` / `K4_MustFailHere` | non-receiver complaint filter (`FILTER_NON_RECEIVER_COMPLAINTS`) switched off under the handover split | `[violation]` — an honest sharer is wrongly attributed after a non-receiving Byzantine party (party 4) complains about it; the forced reveal at a non-receiver's index fails stage-9 verification |
-| `plainNoCoeffCheck` / `K6_MustFailHere` | coefficient-length check (`ENFORCE_COEFF_LENGTH`) switched off | `[violation]` — reproduces review finding #1: a Byzantine party commits to `KEY_THRESHOLD + 2` coefficients and the ceremony still reaches `Done` for an honest party |
+| `handoverUnfixed` / `K4_MustFailHere` | `quint run harness.qnt --main=handoverUnfixed --invariant=K4_MustFailHere --max-steps=12 --max-samples=50000` | `[violation]` — an honest sharer is wrongly attributed after a non-receiving Byzantine party (party 4) complains about it; the forced reveal at a non-receiver's index fails stage-9 verification |
+| `plainNoCoeffCheck` / `K6_MustFailHere` | `quint run harness.qnt --main=plainNoCoeffCheck --invariant=K6_MustFailHere --max-steps=12 --max-samples=50000` | `[violation]` — reproduces review finding #1: a Byzantine party commits to `KEY_THRESHOLD + 2` coefficients and the ceremony still reaches `Done` for an honest party |
 
 The handover split (`SHARING = {2,3,4}`, `RECEIVING = {1,2,3}`, Byzantine party
 4 a sharer that is *not* a receiver) is load-bearing, not arbitrary: with

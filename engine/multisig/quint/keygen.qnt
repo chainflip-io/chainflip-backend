@@ -120,7 +120,27 @@ module keygen {
     // Four length choices per Byzantine party via two characteristic subsets.
     nondet lenHi = BYZ.powerset().oneOf()
     nondet lenLo = BYZ.powerset().oneOf()
+    stepWith(keyIsA, agreedSet, blamedSet, byzBadShares, byzComplaints,
+             byzRevealMade, byzRevealOk, lenHi, lenLo)
+  }
 
+  // The deterministic core of `step`, factored out so a test can drive the
+  // real transition logic with concrete arguments instead of `step`'s random
+  // draws - see `doneReachableTest` in harness.qnt. Pure extraction: this is
+  // exactly the body `step` used to run inline, unchanged; `step` above is
+  // now a thin nondet-drawing wrapper around it. Behaviour is identical to
+  // before the split.
+  action stepWith(
+    keyIsA: bool,
+    agreedSet: Set[Party],
+    blamedSet: Set[Party],
+    byzBadShares: Set[{ from: Party, to: Party }],
+    byzComplaints: Set[{ by: Party, about: Party }],
+    byzRevealMade: Set[(Party, Party)],
+    byzRevealOk: Set[(Party, Party)],
+    lenHi: Set[Party],
+    lenLo: Set[Party]
+  ): bool = {
     val stillRunning = PARTIES.filter(p => result.get(p) == Running)
     val canAgree = stillRunning.size() > T
     val theKey = if (keyIsA) KEY_A else KEY_B
@@ -151,6 +171,16 @@ module keygen {
     // `honestReveals.union(byzReveals)` draw - same one-step-later pattern as
     // `badLenParties` below.
     val badRevealers = revealed.filter(r => not(r.ok)).map(r => r.by)
+    // is_blame_response_complete (keygen_stages.rs check_blame_responses,
+    // ~986-993): a sender whose response omits a requested reveal - or reveals
+    // one nobody asked for - is reported alongside `badRevealers`, not just a
+    // sender who revealed something invalid. Same one-step-later reasoning:
+    // `complaints` and `revealed` are both the values already committed when
+    // BlameResponses8 ran, so this recomputes exactly the admissible-complaint
+    // set that produced `honestReveals` for that step.
+    val incompleteResponders = PARTIES.filter(p =>
+      not(blameResponseComplete(p, admissibleComplaints(complaints, RECEIVING), revealed)))
+    val stage9BadParties = badRevealers.union(incompleteResponders)
     val newLens = PARTIES.mapBy(i =>
       if (not(BYZ.contains(i))) KEY_THRESHOLD + 1
       else if (lenHi.contains(i))
@@ -169,7 +199,7 @@ module keygen {
         if (result.get(k) != Running) stage.get(k)
         else if (stage.get(k) == VerifyCommitments4 and badLenParties != Set())
           stage.get(k)
-        else if (stage.get(k) == VerifyBlameResponses9 and badRevealers != Set())
+        else if (stage.get(k) == VerifyBlameResponses9 and stage9BadParties != Set())
           stage.get(k)
         else if (isVerifyStage(stage.get(k)) and
                  (match res.get(k) {
@@ -182,8 +212,8 @@ module keygen {
         if (result.get(k) != Running) result.get(k)
         else if (stage.get(k) == VerifyCommitments4 and badLenParties != Set())
           Failed(badLenParties)
-        else if (stage.get(k) == VerifyBlameResponses9 and badRevealers != Set())
-          Failed(badRevealers)
+        else if (stage.get(k) == VerifyBlameResponses9 and stage9BadParties != Set())
+          Failed(stage9BadParties)
         else if (isVerifyStage(stage.get(k)))
           match res.get(k) {
           | OkAgreed(m) => if (nextStage(stage.get(k)) == Finished) Done(m) else Running
@@ -220,6 +250,10 @@ module keygen {
     })
 
   // K5: no honest party is stuck Running once it reaches Finished.
+  // Cannot fail as written: `Finished` is only ever entered on the branch that
+  // also sets `Done`/`Failed` (see `step`), so this is a structural consistency
+  // check on that coupling, not a property that can be falsified independently.
+  // Its `[ok]` is not evidence of anything beyond that coupling holding.
   val K5_Termination = HONEST.forall(k =>
     stage.get(k) != Finished or result.get(k) != Running)
 

@@ -12,6 +12,13 @@ module broadcast {
   // PubkeySharesStage0 (keygen_stages.rs:129). One round, threshold taken over
   // the SHARING participants only, and it can never attribute: all its failure
   // paths report an empty set.
+  //
+  // Not modelled: after find_frequent_element succeeds, the Rust also requires
+  // the agreed pubkey-share map's keys to equal sharing_participants exactly,
+  // else it fails with an empty set too (a THIRD empty-set failure path, on
+  // top of "insufficient messages" and "no frequent element" below). Omitting
+  // it is immaterial to L6: all three Rust paths report an empty set, so there
+  // is no attribution difference for this model to miss.
   pure def quorumVote(k: Party, sharers: Set[Party], ss: Set[Send]): Opt = {
     val t = thresholdOf(sharers.size())
     val received = sharers.fold(List(), (acc, j) => {
@@ -66,10 +73,6 @@ module broadcast {
       }))
     }
   }
-
-  // Helper for tests: everyone honestly echoes that `about` sent `v`.
-  pure def unanimous(about: Party, v: Vote): Set[Claim] =
-    tuples(PARTIES, PARTIES).map(t => { by: t._1, to: t._2, about: about, vote: v })
 
   pure def allClaims(f: (Party) => Vote): Set[Claim] =
     tuples(PARTIES, PARTIES, PARTIES).map(t =>
