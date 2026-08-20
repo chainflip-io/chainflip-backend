@@ -45,6 +45,13 @@ pub const RECONNECT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 /// Maximum message size (same as ZMQ: 2MB)
 pub const MAX_MESSAGE_SIZE: usize = 2 * 1024 * 1024;
 
+/// How long a single inbound message has to arrive in full. Kept below the connection idle
+/// timeout so a stream that stalls mid-message is cleaned up while the peer is otherwise healthy.
+pub const STREAM_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How much of a payload to allocate at a time while reading it.
+const READ_CHUNK_SIZE: usize = 64 * 1024;
+
 /// How long before a connection is considered stale
 pub const MAX_INACTIVITY_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 
@@ -289,8 +296,14 @@ pub async fn send_message(connection: &Connection, payload: Vec<u8>) -> anyhow::
 	Ok(())
 }
 
-/// Receive a message from a QUIC stream.
+/// Receive a message from a QUIC stream, giving up if the peer stalls part-way through.
 pub async fn receive_message(recv_stream: &mut quinn::RecvStream) -> anyhow::Result<Vec<u8>> {
+	tokio::time::timeout(STREAM_READ_TIMEOUT, read_message(recv_stream))
+		.await
+		.map_err(|_| anyhow::anyhow!("Timed out after {STREAM_READ_TIMEOUT:?}"))?
+}
+
+async fn read_message(recv_stream: &mut quinn::RecvStream) -> anyhow::Result<Vec<u8>> {
 	// Read length prefix
 	let mut len_buf = [0u8; 4];
 	recv_stream.read_exact(&mut len_buf).await?;
@@ -300,9 +313,15 @@ pub async fn receive_message(recv_stream: &mut quinn::RecvStream) -> anyhow::Res
 		anyhow::bail!("Message too large: {} bytes (max {})", len, MAX_MESSAGE_SIZE);
 	}
 
-	// Read payload
-	let mut payload = vec![0u8; len];
-	recv_stream.read_exact(&mut payload).await?;
+	// Grow the buffer as the payload arrives rather than allocating `len` up front: the length
+	// is peer-supplied, so a peer announcing a large message and then stalling would otherwise
+	// pin that much memory on every stream it opens.
+	let mut payload = Vec::new();
+	while payload.len() < len {
+		let read_from = payload.len();
+		payload.resize(std::cmp::min(read_from + READ_CHUNK_SIZE, len), 0);
+		recv_stream.read_exact(&mut payload[read_from..]).await?;
+	}
 
 	trace!("Received {} bytes", len);
 

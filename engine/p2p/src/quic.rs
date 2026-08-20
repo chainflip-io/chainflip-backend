@@ -411,15 +411,27 @@ async fn handle_incoming_connection(
 ) {
 	loop {
 		match connection.accept_uni().await {
-			Ok(mut recv_stream) => match receive_message(&mut recv_stream).await {
-				Ok(payload) =>
-					if incoming_sender.send((account_id.clone(), payload)).is_err() {
-						debug!("Incoming message channel closed");
-						return;
-					},
-				Err(e) => {
-					trace!("Error receiving message: {e}");
-				},
+			Ok(mut recv_stream) => {
+				if incoming_sender.is_closed() {
+					debug!("Incoming message channel closed");
+					return;
+				}
+
+				// Read each stream in its own task: one message per stream is only free of
+				// head-of-line blocking if a peer stalling part-way through one message can't
+				// hold up the messages queued behind it.
+				let incoming_sender = incoming_sender.clone();
+				let account_id = account_id.clone();
+				tokio::spawn(async move {
+					match receive_message(&mut recv_stream).await {
+						Ok(payload) => {
+							let _ = incoming_sender.send((account_id, payload));
+						},
+						Err(e) => {
+							trace!("Error receiving message from {account_id}: {e}");
+						},
+					}
+				});
 			},
 			Err(quinn::ConnectionError::ApplicationClosed(_)) => {
 				debug!("Connection closed by peer {}", account_id);
