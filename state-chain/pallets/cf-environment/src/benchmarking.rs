@@ -252,7 +252,7 @@ mod benchmarks {
             sig_type: submit_runtime_call::SolEncodingType::Domain,
         };
 
-		pallet_cf_flip::Pallet::<T>::mint_to_account(
+		pallet_cf_flip::Pallet::<T>::credit_to_account(
 			&signature_data.signer_account().unwrap(),
 			(10 * FLIPPERINOS_PER_FLIP).into(),
 		);

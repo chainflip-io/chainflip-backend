@@ -54,7 +54,7 @@ impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayme
 	fn bridge_in_to_onchain_reserve(_amount: Self::Amount) {}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
+	fn credit_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
 		MockFundingInfo::<T>::credit_funds(account_id, amount);
 	}
 }
