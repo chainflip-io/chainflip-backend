@@ -20,8 +20,13 @@ use crate::settings::{
 };
 use anyhow::{Context, Result};
 use api::{
-	lp::LpApi, primitives::EpochIndex, queries::QueryApi, AccountId32, GovernanceApi, KeyPair,
-	OperatorApi, StateChainApi, ValidatorApi,
+	lp::LpApi,
+	primitives::EpochIndex,
+	queries::{
+		ActiveWithdrawalWhitelist, PendingWhitelistUpdate, QueryApi, WhitelistUpdate,
+		WithdrawalWhitelistState,
+	},
+	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
 use cf_chains::evm::Address as EthereumAddress;
@@ -154,6 +159,9 @@ async fn run_cli() -> Result<()> {
 						};
 						let tx_hash = api.lp_api().update_whitelist(change).await?;
 						println!("Withdrawal whitelist updated. Tx hash: {tx_hash}");
+					},
+					LiquidityProviderSubcommands::GetWhitelist => {
+						get_withdrawal_whitelist(api.query_api()).await?;
 					},
 					LiquidityProviderSubcommands::RegisterAccount => {
 						api.lp_api().register_account().await?;
@@ -435,6 +443,53 @@ async fn bind_executor_address(api: Arc<impl OperatorApi + Sync>, eth_address: &
 	Ok(())
 }
 
+fn describe_destination(destination: &WhitelistDestinationRpc) -> String {
+	match destination {
+		WhitelistDestinationRpc::InternalAccount(account) => format!("account {account}"),
+		WhitelistDestinationRpc::ExternalAddress { chain, address } =>
+			format!("{chain} address {address}"),
+	}
+}
+
+async fn get_withdrawal_whitelist(api: QueryApi) -> Result<()> {
+	let WithdrawalWhitelistState { active, pending } =
+		api.get_withdrawal_whitelist(None, None).await?;
+
+	match active {
+		Some(ActiveWithdrawalWhitelist { timelock_secs, allowed }) => {
+			println!("Withdrawal whitelist timelock: {timelock_secs} seconds.");
+			if allowed.is_empty() {
+				println!("No destinations are whitelisted, so withdrawals are blocked.");
+			} else {
+				println!("Withdrawals are allowed to:");
+				for destination in &allowed {
+					println!("  {}", describe_destination(destination));
+				}
+			}
+		},
+		None => println!(
+			"Your account has no withdrawal whitelist: withdrawals to any destination are allowed."
+		),
+	}
+
+	if !pending.is_empty() {
+		println!("Timelocked updates that have not been applied yet:");
+		for PendingWhitelistUpdate { activates_at, update } in &pending {
+			let update = match update {
+				WhitelistUpdate::Destination(WhitelistChangeRpc::Allow(destination)) =>
+					format!("allow {}", describe_destination(destination)),
+				WhitelistUpdate::Destination(WhitelistChangeRpc::Remove(destination)) =>
+					format!("remove {}", describe_destination(destination)),
+				WhitelistUpdate::Timelock(timelock) =>
+					format!("set timelock to {timelock} seconds"),
+			};
+			println!("  {update}, from unix time {activates_at}");
+		}
+	}
+
+	Ok(())
+}
+
 async fn get_bound_redeem_address(api: QueryApi) -> Result<()> {
 	if let Some(bound_address) = api.get_bound_redeem_address(None, None).await? {
 		println!("Your account is bound to redeem address: {bound_address:?}");
@@ -536,22 +591,22 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 
 	impl std::fmt::Display for Keys {
 		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-			writeln!(f, "🔑 Node Public Key: 0x{}", hex::encode(&self.node_key.public_key))?;
-			writeln!(f, "👤 Node Peer ID: {}", self.peer_id)?;
+			writeln!(f, "\u{1f511} Node Public Key: 0x{}", hex::encode(&self.node_key.public_key))?;
+			writeln!(f, "\u{1f464} Node Peer ID: {}", self.peer_id)?;
 			writeln!(
 				f,
-				"🔑 Ethereum Public Key: 0x{}",
+				"\u{1f511} Ethereum Public Key: 0x{}",
 				hex::encode(&self.ethereum_key.public_key)
 			)?;
-			writeln!(f, "👤 Ethereum Address: {:?}", self.ethereum_address)?;
+			writeln!(f, "\u{1f464} Ethereum Address: {:?}", self.ethereum_address)?;
 			writeln!(
 				f,
-				"🔑 Validator Public Key: 0x{}",
+				"\u{1f511} Validator Public Key: 0x{}",
 				hex::encode(&self.signing_key.public_key)
 			)?;
-			writeln!(f, "👤 Validator Account ID: {}", self.signing_account_id)?;
+			writeln!(f, "\u{1f464} Validator Account ID: {}", self.signing_account_id)?;
 			writeln!(f)?;
-			writeln!(f, "🌱 Seed Phrase: {}", self.seed_phrase)?;
+			writeln!(f, "\u{1f331} Seed Phrase: {}", self.seed_phrase)?;
 			Ok(())
 		}
 	}
@@ -609,13 +664,13 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 
 	if let Some(path) = key_dir {
 		eprintln!();
-		eprintln!(" 💾 Saved all secret keys to '{}'.", path.display());
+		eprintln!(" \u{1f4be} Saved all secret keys to '{}'.", path.display());
 	} else {
 		eprintln!();
 		eprintln!(
-			"💡 You can save the private key files to a directory using the --path argument:"
+			"\u{1f4a1} You can save the private key files to a directory using the --path argument:"
 		);
-		eprintln!("💡 `chainflip-cli generate-keys --seed-phrase $MY_SEED_PHRASE --path $PATH_TO_KEYS_DIR`");
+		eprintln!("\u{1f4a1} `chainflip-cli generate-keys --seed-phrase $MY_SEED_PHRASE --path $PATH_TO_KEYS_DIR`");
 	}
 
 	Ok(())
