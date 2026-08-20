@@ -28,7 +28,7 @@ use cf_utilities::Port;
 use crate::{message::AccountId, EdPublicKey};
 
 /// Information about a peer, shared across all transports.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeerInfo {
 	pub account_id: AccountId,
 	/// The peer's Ed25519 public key, as registered on chain.

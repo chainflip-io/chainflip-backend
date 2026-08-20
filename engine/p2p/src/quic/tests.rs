@@ -593,7 +593,7 @@ async fn stalled_inbound_stream_does_not_block_later_messages() {
 	tokio::time::sleep(Duration::from_millis(500)).await;
 
 	// Stand in for node 2 with a bare endpoint so we control each stream.
-	let endpoint = raw_endpoint(&node_key2, pi2.port, &[pi1.clone()]);
+	let endpoint = raw_endpoint(&node_key2, pi2.port, std::slice::from_ref(&pi1));
 	let peer = super::connection::connect_to_peer(&endpoint, &pi1).await.unwrap();
 
 	// Stream A: send half a length prefix and then stall, leaving the stream open.
@@ -610,4 +610,35 @@ async fn stalled_inbound_stream_does_not_block_later_messages() {
 
 	let received = recv_with_custom_timeout(&mut node1.msg_receiver, Duration::from_secs(2)).await;
 	assert_eq!(received, Some((pi2.account_id.clone(), b"after the stall".to_vec())));
+}
+
+/// A message addressed to an unreachable peer must not hold up messages to the other
+/// recipients: the handshake has to happen off the control loop.
+#[tokio::test]
+async fn unreachable_peer_does_not_stall_sends_to_others() {
+	let node_key1 = create_keypair();
+	let node_key2 = create_keypair();
+	let node_key3 = create_keypair();
+
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 9113);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 9114);
+	// Registered, but nothing ever listens on this port.
+	let pi3 = create_node_info(AccountId::new([3; 32]), &node_key3, 9115);
+
+	let node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone(), pi3.clone()]);
+	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
+
+	tokio::time::sleep(Duration::from_millis(500)).await;
+
+	// Both peers are stale, so both need connecting; the unreachable one is addressed first.
+	node1
+		.msg_sender
+		.send(OutgoingMessage::Broadcast {
+			recipients: vec![pi3.account_id.clone(), pi2.account_id.clone()],
+			payload: b"not stalled".to_vec(),
+		})
+		.unwrap();
+
+	let received = recv_with_custom_timeout(&mut node2.msg_receiver, Duration::from_secs(2)).await;
+	assert_eq!(received, Some((pi1.account_id.clone(), b"not stalled".to_vec())));
 }

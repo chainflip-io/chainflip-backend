@@ -31,8 +31,8 @@ use anyhow::Context;
 use cf_utilities::{make_periodic_tick, metrics::P2P_MSG_SENT, Port};
 use connection::{
 	configure_client, configure_server, connect_to_peer, create_endpoint, receive_message,
-	send_message, ActiveConnectionWrapper, ConnectionState, ConnectionStateInfo, ReconnectContext,
-	MAX_INACTIVITY_THRESHOLD,
+	send_message, ActiveConnectionWrapper, ConnectionState, ConnectionStateInfo, PeerConnection,
+	ReconnectContext, MAX_INACTIVITY_THRESHOLD, MAX_PENDING_MESSAGES,
 };
 use quinn::Endpoint;
 use tokio::sync::{
@@ -62,6 +62,14 @@ struct QuicContext {
 	active_connections: ActiveConnectionWrapper,
 	reconnect_context: ReconnectContext,
 	our_account_id: AccountId,
+	connect_result_sender: UnboundedSender<ConnectResult>,
+}
+
+/// The outcome of a handshake that was run off the control loop.
+struct ConnectResult {
+	peer_info: PeerInfo,
+	previous_activity: tokio::time::Instant,
+	connection: anyhow::Result<PeerConnection>,
 }
 
 impl QuicContext {
@@ -83,36 +91,43 @@ impl QuicContext {
 	}
 
 	async fn send_message_to(&mut self, account_id: AccountId, payload: Vec<u8>) {
-		if let Some(peer) = self.active_connections.get(&account_id) {
-			peer.last_activity.set(tokio::time::Instant::now());
-
-			match &peer.state {
-				ConnectionState::Connected(conn) => {
-					if let Err(e) = send_message(&conn.connection, payload).await {
-						warn!("Failed to send message to {}: {e}", account_id);
-						// Connection might be dead, schedule reconnection
-						if let Some(peer_mut) = self.active_connections.get_mut(&account_id) {
-							peer_mut.state = ConnectionState::ReconnectionScheduled;
-							self.reconnect_context.schedule_reconnect(account_id);
-						}
-					} else {
-						P2P_MSG_SENT.inc();
-					}
-				},
-				ConnectionState::ReconnectionScheduled => {
-					warn!("Cannot send to {}: reconnection scheduled", account_id);
-				},
-				ConnectionState::Stale => {
-					// Reconnect lazily
-					let peer_info = peer.info.clone();
-					let last_activity = peer.last_activity.get();
-					self.connect_to_peer(peer_info, last_activity).await;
-					// Retry send after connecting
-					Box::pin(self.send_message_to(account_id, payload)).await;
-				},
-			}
-		} else {
+		let Some(peer) = self.active_connections.get(&account_id) else {
 			warn!("Cannot send to {}: peer not registered", account_id);
+			return;
+		};
+		peer.last_activity.set(tokio::time::Instant::now());
+
+		match &peer.state {
+			ConnectionState::Connected(conn) => {
+				if let Err(e) = send_message(&conn.connection, payload).await {
+					warn!("Failed to send message to {}: {e}", account_id);
+					// Connection might be dead, schedule reconnection
+					if let Some(peer_mut) = self.active_connections.get_mut(&account_id) {
+						peer_mut.state = ConnectionState::ReconnectionScheduled;
+						self.reconnect_context.schedule_reconnect(account_id);
+					}
+				} else {
+					P2P_MSG_SENT.inc();
+				}
+			},
+			ConnectionState::Connecting { .. } => {
+				if let Some(ConnectionState::Connecting { pending }) =
+					self.active_connections.get_mut(&account_id).map(|peer| &mut peer.state)
+				{
+					if pending.len() < MAX_PENDING_MESSAGES {
+						pending.push(payload);
+					} else {
+						warn!("Dropping message to {}: connection still pending", account_id);
+					}
+				}
+			},
+			ConnectionState::ReconnectionScheduled => {
+				warn!("Cannot send to {}: reconnection scheduled", account_id);
+			},
+			ConnectionState::Stale => {
+				// Connect lazily, holding on to this message until the handshake completes.
+				self.start_connecting(&account_id, vec![payload]);
+			},
 		}
 	}
 
@@ -140,7 +155,9 @@ impl QuicContext {
 						ConnectionState::ReconnectionScheduled => {
 							reconnect_context.reset(&account_id);
 						},
-						ConnectionState::Stale => {},
+						// An in-flight handshake is discarded when it reports back, since it
+						// no longer matches this peer's registered info.
+						ConnectionState::Connecting { .. } | ConnectionState::Stale => {},
 					}
 				}
 
@@ -171,17 +188,68 @@ impl QuicContext {
 		}
 	}
 
-	async fn connect_to_peer(
-		&mut self,
-		peer_info: PeerInfo,
-		previous_activity: tokio::time::Instant,
-	) {
+	/// Start a handshake in the background, holding `pending` until it completes.
+	///
+	/// The handshake is not awaited here: it can take seconds against an unreachable peer, and
+	/// the control loop must stay free to route messages to everyone else in the meantime.
+	fn start_connecting(&mut self, account_id: &AccountId, pending: Vec<Vec<u8>>) {
+		let Some(peer) = self.active_connections.get_mut(account_id) else {
+			return;
+		};
+		peer.state = ConnectionState::Connecting { pending };
+
+		let peer_info = peer.info.clone();
+		let previous_activity = peer.last_activity.get();
+		let endpoint = self.endpoint.clone();
+		let result_sender = self.connect_result_sender.clone();
+
+		tokio::spawn(async move {
+			let connection = connect_to_peer(&endpoint, &peer_info).await;
+			let _ = result_sender.send(ConnectResult { peer_info, previous_activity, connection });
+		});
+	}
+
+	async fn on_connect_result(&mut self, result: ConnectResult) {
+		let ConnectResult { peer_info, previous_activity, connection } = result;
 		let account_id = peer_info.account_id.clone();
 
-		match connect_to_peer(&self.endpoint, &peer_info).await {
+		// The peer may have been deregistered, or re-registered at a different address or key,
+		// while the handshake was in flight; that connection is no longer the one we want.
+		let pending = match self.active_connections.get_mut(&account_id) {
+			Some(peer) if peer.info == peer_info => {
+				match std::mem::replace(&mut peer.state, ConnectionState::Stale) {
+					ConnectionState::Connecting { pending } => pending,
+					superseded => {
+						peer.state = superseded;
+						debug!("Discarding superseded connection to {account_id}");
+						if let Ok(peer_conn) = connection {
+							peer_conn.connection.close(0u32.into(), b"connection superseded");
+						}
+						return;
+					},
+				}
+			},
+			_ => {
+				debug!("Discarding connection to peer that is no longer registered: {account_id}");
+				if let Ok(peer_conn) = connection {
+					peer_conn.connection.close(0u32.into(), b"peer no longer registered");
+				}
+				return;
+			},
+		};
+
+		match connection {
 			Ok(peer_conn) => {
 				info!("Connected to peer {}", account_id);
 				self.reconnect_context.reset(&account_id);
+
+				for payload in pending {
+					if let Err(e) = send_message(&peer_conn.connection, payload).await {
+						warn!("Failed to send queued message to {}: {e}", account_id);
+					} else {
+						P2P_MSG_SENT.inc();
+					}
+				}
 
 				self.active_connections.insert(
 					account_id,
@@ -194,6 +262,9 @@ impl QuicContext {
 			},
 			Err(e) => {
 				warn!("Failed to connect to {}: {e}", account_id);
+				if !pending.is_empty() {
+					warn!("Dropping {} queued message(s) to {}", pending.len(), account_id);
+				}
 				self.reconnect_context.schedule_reconnect(account_id.clone());
 
 				self.active_connections.insert(
@@ -208,30 +279,30 @@ impl QuicContext {
 		}
 	}
 
-	async fn reconnect_to_peer(&mut self, account_id: &AccountId) {
-		if let Some(peer) = self.active_connections.remove(account_id) {
-			match peer.state {
-				ConnectionState::ReconnectionScheduled => {
-					info!("Reconnecting to peer: {account_id}");
-					self.connect_to_peer(peer.info.clone(), peer.last_activity.get()).await;
-				},
-				ConnectionState::Connected(_) => {
-					debug!("Reconnection cancelled for {}: already connected", account_id);
-					self.active_connections.insert(account_id.clone(), peer);
-				},
-				ConnectionState::Stale => {
-					debug!("Reconnection cancelled for {}: connection is stale", account_id);
-					self.active_connections.insert(account_id.clone(), peer);
-				},
-			}
-		} else {
-			debug!("Will not reconnect to deregistered peer: {}", account_id);
+	fn reconnect_to_peer(&mut self, account_id: &AccountId) {
+		match self.active_connections.get(account_id).map(|peer| &peer.state) {
+			Some(ConnectionState::ReconnectionScheduled) => {
+				info!("Reconnecting to peer: {account_id}");
+				self.start_connecting(account_id, Vec::new());
+			},
+			Some(ConnectionState::Connected(_)) => {
+				debug!("Reconnection cancelled for {}: already connected", account_id);
+			},
+			Some(ConnectionState::Connecting { .. }) => {
+				debug!("Reconnection cancelled for {}: already connecting", account_id);
+			},
+			Some(ConnectionState::Stale) => {
+				debug!("Reconnection cancelled for {}: connection is stale", account_id);
+			},
+			None => {
+				debug!("Will not reconnect to deregistered peer: {}", account_id);
+			},
 		}
 	}
 
 	fn check_activity(&mut self) {
 		for (account_id, state) in &mut self.active_connections.map {
-			if !matches!(state.state, ConnectionState::Stale) &&
+			if !matches!(state.state, ConnectionState::Stale | ConnectionState::Connecting { .. }) &&
 				state.last_activity.get().elapsed() > MAX_INACTIVITY_THRESHOLD
 			{
 				debug!("Peer connection is deemed stale due to inactivity: {}", account_id);
@@ -279,6 +350,7 @@ pub async fn start(
 	let endpoint = create_endpoint(port, server_config, client_config)?;
 
 	let (reconnect_sender, reconnect_receiver) = tokio::sync::mpsc::unbounded_channel();
+	let (connect_result_sender, connect_result_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 	let mut context = QuicContext {
 		endpoint: endpoint.clone(),
@@ -286,6 +358,7 @@ pub async fn start(
 		active_connections: ActiveConnectionWrapper::new(),
 		reconnect_context: ReconnectContext::new(reconnect_sender),
 		our_account_id: our_account_id.clone(),
+		connect_result_sender,
 	};
 
 	// Register initial peers
@@ -305,7 +378,13 @@ pub async fn start(
 		},
 		_ = run_listener(endpoint.clone(), incoming_message_sender, allowlist)
 			.instrument(info_span!("quic_listener")) => {},
-		_ = control_loop(context, outgoing_message_receiver, peer_update_receiver, reconnect_receiver)
+		_ = control_loop(
+			context,
+			outgoing_message_receiver,
+			peer_update_receiver,
+			reconnect_receiver,
+			connect_result_receiver,
+		)
 			.instrument(info_span!("quic")) => {},
 	}
 
@@ -322,6 +401,7 @@ async fn control_loop(
 	mut outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 	mut peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 	mut reconnect_receiver: UnboundedReceiver<AccountId>,
+	mut connect_result_receiver: UnboundedReceiver<ConnectResult>,
 ) {
 	let mut check_activity_interval = make_periodic_tick(ACTIVITY_CHECK_INTERVAL, false);
 
@@ -334,7 +414,10 @@ async fn control_loop(
 				context.on_peer_update(peer_update);
 			}
 			Some(account_id) = reconnect_receiver.recv() => {
-				context.reconnect_to_peer(&account_id).await;
+				context.reconnect_to_peer(&account_id);
+			}
+			Some(result) = connect_result_receiver.recv() => {
+				context.on_connect_result(result).await;
 			}
 			_ = check_activity_interval.tick() => {
 				context.check_activity();
