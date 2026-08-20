@@ -73,6 +73,7 @@ pub mod abi {
 }
 
 pub mod register_redemption;
+pub mod update_flip_supply;
 
 /// Chainflip api calls available on Ethereum.
 #[derive(
@@ -89,6 +90,7 @@ pub mod register_redemption;
 pub enum EthereumApi<Environment: 'static> {
 	SetAggKeyWithAggKey(EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>),
 	RegisterRedemption(EvmTransactionBuilder<register_redemption::RegisterRedemption>),
+	UpdateFlipSupply(EvmTransactionBuilder<update_flip_supply::UpdateFlipSupply>),
 	SetGovKeyWithAggKey(EvmTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>),
 	SetCommKeyWithAggKey(EvmTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>),
 	AllBatch(EvmTransactionBuilder<all_batch::AllBatch>),
@@ -295,6 +297,12 @@ impl<E> From<EvmTransactionBuilder<register_redemption::RegisterRedemption>> for
 	}
 }
 
+impl<E> From<EvmTransactionBuilder<update_flip_supply::UpdateFlipSupply>> for EthereumApi<E> {
+	fn from(tx: EvmTransactionBuilder<update_flip_supply::UpdateFlipSupply>) -> Self {
+		Self::UpdateFlipSupply(tx)
+	}
+}
+
 impl<E> From<EvmTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>>
 	for EthereumApi<E>
 {
@@ -336,6 +344,7 @@ macro_rules! map_over_api_variants {
 		match $self {
 			EthereumApi::SetAggKeyWithAggKey($var) => $var_method,
 			EthereumApi::RegisterRedemption($var) => $var_method,
+			EthereumApi::UpdateFlipSupply($var) => $var_method,
 			EthereumApi::SetGovKeyWithAggKey($var) => $var_method,
 			EthereumApi::SetCommKeyWithAggKey($var) => $var_method,
 			EthereumApi::AllBatch($var) => $var_method,
