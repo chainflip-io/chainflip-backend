@@ -454,23 +454,13 @@ impl From<LendingPoolsSafeMode> for pallet_cf_lending_pools::PalletSafeMode {
 	}
 }
 
-// The emissions pallet was removed once FLIP 2.1 activated; this frozen shim preserves the
-// encoding of its PalletSafeMode (a single `emissions_sync_enabled: bool` flag) for decoding
-// blocks from before the pallet was removed.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
-pub struct EmissionsSafeMode {
-	pub emissions_sync_enabled: bool,
-}
-
 // The v16 RuntimeSafeMode: no broadcast_tron, ingress_egress_tron, or tron_elections fields,
 // and with the old LendingPoolsSafeMode and WitnesserCallPermission.
 #[derive(
 	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
 )]
 pub struct RuntimeSafeMode {
-	pub emissions: EmissionsSafeMode,
+	pub emissions: super::before_version_19::EmissionsSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,
 	pub swapping: pallet_cf_swapping::PalletSafeMode,
 	pub liquidity_provider: before_version_19::LiquidityProviderSafeMode,
