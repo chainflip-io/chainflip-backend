@@ -24,7 +24,9 @@ use tracing::{info_span, trace, Instrument};
 
 use crate::{
 	fair_channel::{fair_channel, FairReceiver, FairSender},
-	message::{IncomingMessage, OutgoingMessage, ProtocolVersion, TopicId, CURRENT_PROTOCOL_VERSION},
+	message::{
+		IncomingMessage, OutgoingMessage, ProtocolVersion, TopicId, CURRENT_PROTOCOL_VERSION,
+	},
 };
 use cf_utilities::metrics::P2P_BAD_MSG;
 

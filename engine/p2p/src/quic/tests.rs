@@ -267,7 +267,8 @@ async fn deregistered_peer_cannot_receive_messages() {
 		.unwrap();
 
 	// Node 2 should not receive the message
-	let result = recv_with_custom_timeout(&mut node2.msg_receiver, Duration::from_millis(500)).await;
+	let result =
+		recv_with_custom_timeout(&mut node2.msg_receiver, Duration::from_millis(500)).await;
 	assert!(result.is_none(), "Deregistered peer should not receive messages");
 }
 
@@ -295,8 +296,7 @@ async fn large_message_within_limit() {
 		})
 		.unwrap();
 
-	let received =
-		recv_with_custom_timeout(&mut node2.msg_receiver, Duration::from_secs(5)).await;
+	let received = recv_with_custom_timeout(&mut node2.msg_receiver, Duration::from_secs(5)).await;
 	assert!(received.is_some(), "Large message should be delivered");
 	assert_eq!(received.unwrap().1.len(), 1024 * 1024);
 }
@@ -354,10 +354,8 @@ async fn stale_connections_reactivate_on_demand() {
 
 	// Sleep long enough for nodes to deem connections "stale" (due to inactivity)
 	// This uses tokio's time manipulation since test is started with `start_paused = true`
-	tokio::time::sleep(
-		ACTIVITY_CHECK_INTERVAL + MAX_INACTIVITY_THRESHOLD + Duration::from_secs(1),
-	)
-	.await;
+	tokio::time::sleep(ACTIVITY_CHECK_INTERVAL + MAX_INACTIVITY_THRESHOLD + Duration::from_secs(1))
+		.await;
 
 	// Resume time so real network operations can complete
 	tokio::time::resume();
