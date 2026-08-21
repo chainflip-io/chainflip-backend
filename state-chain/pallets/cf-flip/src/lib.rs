@@ -36,8 +36,8 @@ pub use weights::WeightInfo;
 
 use cf_primitives::EpochIndex;
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationHooks, FeePayment, FundingInfo, Issuance,
-	RewardsDistribution, Slashing,
+	AccountInfo, Bonding, DeregistrationHooks, FeePayment, FundingInfo, RewardsDistribution,
+	Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
