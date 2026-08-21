@@ -6,28 +6,36 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    sfw-check:
+        uses: ./.github/workflows/_00_sfw_check.yml
     pre-check:
+        needs: [sfw-check]
         uses: ./.github/workflows/_01_pre_check.yml
         secrets: inherit
     force-version-bump:
+        needs: [sfw-check]
         uses: ./.github/workflows/_05_force_version_bump.yml
         secrets: inherit
         with:
             network-to-check-against: "sisyphos"
     test:
+        needs: [sfw-check]
         uses: ./.github/workflows/_10_test.yml
         secrets: inherit
     coverage:
+        needs: [sfw-check]
         uses: ./.github/workflows/_11_coverage.yml
         with:
             test_features: runtime-benchmarks
         secrets: inherit
     build:
+        needs: [sfw-check]
         uses: ./.github/workflows/_20_build.yml
         secrets: inherit
         with:
             profile: "release"
     build-turbo:
+        needs: [sfw-check]
         uses: ./.github/workflows/_20_build.yml
         secrets: inherit
         with:
@@ -35,6 +43,7 @@ jobs:
             upload-name: "chainflip-backend-bin-turbo"
     # Used to test upgrades to this version from the latest release
     build-try-runtime:
+        needs: [sfw-check]
         uses: ./.github/workflows/_20_build.yml
         secrets: inherit
         with:
@@ -42,6 +51,7 @@ jobs:
             upload-name: "chainflip-backend-bin-try-runtime"
             binary-subdir: release
     build-benchmarks:
+        needs: [sfw-check]
         uses: ./.github/workflows/_20_build.yml
         secrets: inherit
         with:

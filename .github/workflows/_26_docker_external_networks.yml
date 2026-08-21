@@ -35,7 +35,9 @@ jobs:
     runs-on: namespace-profile-default
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Install and configure Namespace CLI 📟
         uses: namespacelabs/nscloud-setup@df198f982fcecfb8264bea3f1274b56a61b6dfdc # v0.0.12
@@ -45,7 +47,7 @@ jobs:
 
       - name: Docker meta 📄
         id: meta
-        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4
+        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4 # v5.3.0
         with:
           images: ghcr.io/${{ github.repository }}/${{ inputs.network }}-${{ inputs.localnet-speed-setting }}
           flavor: |

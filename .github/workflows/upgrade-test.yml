@@ -45,7 +45,9 @@ jobs:
       server-id: ${{ steps.provision.outputs.server-id }}
     steps:
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Provision ephemeral Hetzner runner ☁️
         id: provision
@@ -76,9 +78,10 @@ jobs:
 
       - name: Checkout chainflip-backend 🛒
         if: inputs.run-job
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Login to Github Container Registry 🔑
         if: inputs.run-job
@@ -135,7 +138,7 @@ jobs:
         if: inputs.run-job
         run: |
           mkdir -p upgrade-from-bins; ( cd upgrade-from-bins
-            curl https://artifacts.chainflip.io/${{ env.OLD_VERSION }}/chainflip-backend-bin.zip --output chainflip-backend-bin.zip
+            curl "https://artifacts.chainflip.io/${OLD_VERSION}/chainflip-backend-bin.zip" --output chainflip-backend-bin.zip
             unzip chainflip-backend-bin.zip -d .
             mv ./artifacts/chainflip-backend-bin/* .
           ); ls -l upgrade-from-bins
@@ -159,7 +162,7 @@ jobs:
 
       - name: Download upgrade-to binaries 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
@@ -182,7 +185,7 @@ jobs:
 
       - name: Download upgrade-to runtime 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: chainflip-node-runtime-try-runtime-${{ steps.main-version.outputs.version }}
           path: upgrade-to-runtime
@@ -198,7 +201,7 @@ jobs:
           BINARY_ROOT_PATH: ./upgrade-from-bins
           DEBUG_OUTPUT_DESTINATION: /dev/stdout
         run: |
-          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          git checkout "${OLD_BIN_COMMIT_HASH}"
           set -x
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p /tmp/chainflip/bashful
@@ -219,7 +222,7 @@ jobs:
       - name: Setup bouncer tests initial state 📦
         if: inputs.run-job
         run: |
-          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          git checkout "${OLD_BIN_COMMIT_HASH}"
           set -x
           cd bouncer
           pnpm install --frozen-lockfile
@@ -246,7 +249,7 @@ jobs:
           SKIP_BLS_TESTS: "true"
           PRE_UPGRADE_BOUNCER: "true"
         run: |
-          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          git checkout "${OLD_BIN_COMMIT_HASH}"
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
@@ -441,7 +444,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Destroy ephemeral Hetzner runner 🧹
         env:
