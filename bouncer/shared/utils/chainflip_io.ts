@@ -17,6 +17,7 @@ import {
 import {
   OneOfEventsResult,
   EventName,
+  findAnyEventsOfMany,
   findOneEventOfMany,
   EventDescriptions,
   AllOfEventsResult,
@@ -342,13 +343,31 @@ export class ChainflipIO<Requirements> {
       }
       const event = await this.waitFor(
         target,
-        findOneEventOfMany(this.logger, descriptions, {
-          startFromBlock: this.lastIoBlockHeight,
-        }),
+        findOneEventOfMany(this.logger, descriptions, { startFromBlock: this.lastIoBlockHeight }),
       );
       this.debug(`found event ${JSON.stringify(event)}`);
       this.lastIoBlockHeight = event.blockHeight;
       return event;
+    });
+  }
+
+  /**
+   * Advance the current chainflip block height until at least one of the given events appears, and
+   * return every match found in order.
+   * @param descriptions Record containing an arbitrary number of event descriptions (name and schema).
+   * @returns The key, data and block height of every event that matched.
+   */
+  async stepUntilAnyEventsOf<Events extends EventDescriptions>(
+    descriptions: Events,
+  ): Promise<OneOfEventsResult<Events>[]> {
+    return this.runExclusively('stepUntilAnyEventsOf', async () => {
+      const events = await this.waitFor(
+        `any of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
+        findAnyEventsOfMany(descriptions, { startFromBlock: this.lastIoBlockHeight }),
+      );
+      this.debug(`found events ${JSON.stringify(events)}`);
+      this.lastIoBlockHeight = Math.max(...events.map((event) => event.blockHeight));
+      return events;
     });
   }
 
