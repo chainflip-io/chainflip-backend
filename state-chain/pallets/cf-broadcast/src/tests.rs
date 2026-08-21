@@ -19,11 +19,12 @@
 use core::cmp::max;
 
 use crate::{
-	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastId,
-	BroadcastIdToTransactionOutIds, ChainBlockNumberFor, CurrentOnChainKey,
-	DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, Event, FailedBroadcasters,
-	IncomingKeyAndBroadcastId, Instance1, PalletConfigUpdate, PalletOffence, PendingApiCalls,
-	PendingBroadcasts, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
+	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastAttemptCount,
+	BroadcastBarriers, BroadcastId, BroadcastIdToTransactionOutIds, ChainBlockNumberFor,
+	CurrentOnChainKey, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, Event,
+	FailedBroadcasters, IncomingKeyAndBroadcastId, Instance1, PalletConfigUpdate, PalletOffence,
+	PendingApiCalls, PendingBroadcasts, Timeouts, TransactionMetadata,
+	TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	mocks::{
@@ -253,6 +254,8 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
 		let broadcast_id = initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal);
 		let next_block = System::block_number() + 1;
+		// The authority count exceeds the pallet's minimum number of retry attempts, so the
+		// broadcast is aborted as soon as every authority has failed once.
 		for i in 0..MockEpochInfo::current_authority_count() {
 			// Nominated signer responds that they can't sign the transaction.
 			// retry should kick off at end of block if sufficient block space is free.
@@ -270,6 +273,53 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 			RuntimeEvent::Broadcaster(Event::BroadcastAborted { broadcast_id })
 		);
 	});
+}
+
+#[test]
+fn test_abort_only_after_minimum_number_of_attempts() {
+	// Small enough that a single round of attempts is below the pallet's minimum of 10.
+	const AUTHORITY_COUNT: u32 = 8;
+	// Attempts are made in rounds of `AUTHORITY_COUNT`, so it takes two rounds to reach the
+	// minimum.
+	const EXPECTED_ATTEMPTS: u32 = 2 * AUTHORITY_COUNT;
+
+	new_test_ext()
+		.execute_with(|| {
+			MockEpochInfo::set_authorities((0..AUTHORITY_COUNT as u64).collect());
+			MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+
+			(initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal), 0u32)
+		})
+		// Each block retries the broadcast with a freshly nominated broadcaster.
+		.then_process_blocks_with(EXPECTED_ATTEMPTS, |(broadcast_id, attempt)| {
+			let attempt = attempt + 1;
+			assert!(
+				PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id),
+				"Broadcast was aborted at attempt {attempt}, expected {EXPECTED_ATTEMPTS} attempts."
+			);
+
+			// The nominated broadcaster reports failure.
+			MockCfe::respond(Scenario::BroadcastFailure);
+
+			if attempt < EXPECTED_ATTEMPTS {
+				assert_eq!(Broadcaster::attempt_count(broadcast_id), attempt);
+				if attempt % AUTHORITY_COUNT == 0 {
+					// All authorities have failed, but the minimum number of attempts has not
+					// been reached: everyone is given a clean slate so that they can be
+					// re-nominated.
+					assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
+				}
+			}
+
+			(broadcast_id, attempt)
+		})
+		.then_execute_with(|(broadcast_id, _)| {
+			assert_eq!(
+				System::events().pop().expect("an event").event,
+				RuntimeEvent::Broadcaster(Event::BroadcastAborted { broadcast_id })
+			);
+			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+		});
 }
 
 #[test]
@@ -309,6 +359,7 @@ fn ready_to_abort_broadcast(broadcast_id: BroadcastId) -> u64 {
 
 	// The nominee should be the last one *not* in the `FailedBroadcasters` list
 	validators.remove(&nominee);
+	BroadcastAttemptCount::<Test, Instance1>::insert(broadcast_id, validators.len() as u32);
 	FailedBroadcasters::<Test, Instance1>::insert(broadcast_id, validators);
 	nominee
 }
@@ -964,6 +1015,7 @@ fn broadcast_can_be_aborted_due_to_timeout() {
 			assert!(
 				FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(broadcast_id).is_none()
 			);
+			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
 		});
 }
 
