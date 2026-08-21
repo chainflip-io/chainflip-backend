@@ -28,7 +28,7 @@ use state_chain_runtime::{
 	runtime_apis::{
 		monitoring_api::MonitoringRuntimeApi,
 		types::{
-			ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState,
+			before_version_21, ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState,
 			ExternalChainsBlockHeight, FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo,
 			MonitoringDataV2, OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies,
 			RedemptionsInfo, SolanaNonces,
@@ -234,7 +234,6 @@ where
 		cf_external_chains_block_height() -> ExternalChainsBlockHeight,
 		cf_btc_utxos() -> BtcUtxos,
 		cf_dot_aggkey() -> PolkadotAccountId,
-		cf_suspended_validators() -> Vec<(Offence, u32)>,
 		cf_epoch_state() -> RpcEpochState [map: Into::into],
 		cf_redemptions() -> RedemptionsInfo,
 		cf_pending_broadcasts_count() -> PendingBroadcasts,
@@ -246,7 +245,40 @@ where
 		cf_sol_nonces() -> SolanaNonces,
 		cf_sol_aggkey() -> SolAddress,
 		cf_sol_onchain_key() -> SolAddress,
-		cf_monitoring_data() -> RpcMonitoringData [map: Into::into],
+	}
+
+	fn cf_suspended_validators(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(Offence, u32)>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+			if api_version < 5 {
+				#[expect(deprecated)]
+				api.cf_suspended_validators_before_version_5(hash)
+					.map(before_version_21::into_current_offences)
+			} else {
+				api.cf_suspended_validators(hash)
+			}
+		})
+	}
+
+	fn cf_monitoring_data(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcMonitoringData> {
+		self.rpc_backend
+			.with_versioned_runtime_api(at, |api, hash, api_version| {
+				if api_version < 3 {
+					#[expect(deprecated)]
+					api.cf_monitoring_data_before_version_3(hash).map(MonitoringDataV2::from)
+				} else if api_version < 5 {
+					#[expect(deprecated)]
+					api.cf_monitoring_data_before_version_5(hash).map(MonitoringDataV2::from)
+				} else {
+					api.cf_monitoring_data(hash)
+				}
+			})
+			.map(Into::into)
 	}
 
 	fn cf_fee_imbalance(

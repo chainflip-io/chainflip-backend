@@ -541,6 +541,7 @@ macro_rules! instanced_migrations {
 
 // Add version-specific migrations here.
 pub type MigrationsForV2_3 = (
+	migrations::failed_broadcast_chain::Migration,
 	migrations::safe_mode::SafeModeMigration,
 	migrations::assethub_deposit_details::Migration,
 	migrations::assethub_elections::AssethubElectionsInit,
