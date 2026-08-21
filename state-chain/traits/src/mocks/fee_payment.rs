@@ -31,10 +31,6 @@ pub const ERROR_INSUFFICIENT_LIQUIDITY: DispatchError =
 
 const OFFCHAIN_FLIP_TO_BE_DISTRIBUTED: &[u8] = b"OFFCHAIN_FLIP_TO_BE_DISTRIBUTED";
 
-impl<T> MockPallet for MockFeePayment<T> {
-	const PREFIX: &'static [u8] = b"MockFeePayment";
-}
-
 impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayment<T> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;

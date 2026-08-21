@@ -470,7 +470,7 @@ impl From<LiquidityProviderSafeMode> for pallet_cf_lp::PalletSafeMode {
 	frame_support::pallet_prelude::RuntimeDebug,
 )]
 pub struct RuntimeSafeMode {
-	pub emissions: EmissionsSafeMode,
+	pub emissions: super::before_version_21::EmissionsSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,
 	pub swapping: pallet_cf_swapping::PalletSafeMode,
 	pub liquidity_provider: LiquidityProviderSafeMode,

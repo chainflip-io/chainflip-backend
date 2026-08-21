@@ -23,7 +23,7 @@ use cf_primitives::{Asset, FlipBalance, SwapRequestId};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
-		account_role_registry::MockAccountRoleRegistry, flip_burn_info::MockFlipBurnOrMoveInfo,
+		account_role_registry::MockAccountRoleRegistry, flip_move_to_gateway::MockMoveFlipToGateway,
 	},
 	AccountInfo, AccountRoleRegistry, Bonding, Chainflip, FundAccount, SetSafeMode, Slashing,
 };
@@ -2819,15 +2819,15 @@ fn funding_from_free_balance_earmarks_a_transfer_to_the_gateway() {
 			AMOUNT,
 			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_DUMMY_ADDR },
 		);
-		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), 0);
+		assert_eq!(MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(), 0);
 
 		// Funds moved from a free balance are backed by Flip in the Vault, so the same amount
 		// must be earmarked for transfer to the Gateway.
 		Funding::fund_account(ALICE, AMOUNT, FundingSource::FreeBalance);
-		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), AMOUNT);
+		assert_eq!(MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(), AMOUNT);
 
 		Funding::fund_account(BOB, AMOUNT * 2, FundingSource::FreeBalance);
-		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), AMOUNT * 3);
+		assert_eq!(MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(), AMOUNT * 3);
 	});
 }
 
