@@ -8,8 +8,11 @@ if [ "$ENV_LOCALNET_SPEED_SETTING" == "turbo" ]; then
 elif [ "$ENV_LOCALNET_SPEED_SETTING" == "slow" ]; then
   btc_block_time=15
 else
-  # default block time
-  btc_block_time=5
+  # Default block time. Kept *above* the state chain's default 6s block time so
+  # the tracked Bitcoin height advances at most one block per state-chain block.
+  # This keeps deposits reliably pre-witnessed (and therefore boosted) before
+  # they age past the ingress safety margin, avoiding flaky boost tests.
+  btc_block_time=7
 fi
 
 echo "Prune setting is: $ENV_PRUNE"
