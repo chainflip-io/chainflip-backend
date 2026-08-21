@@ -19,9 +19,7 @@ use cf_chains::instances::{
 	ArbitrumInstance, AssethubInstance, BitcoinCryptoInstance, BitcoinInstance, EthereumInstance,
 	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaCryptoInstance, SolanaInstance,
 };
-use cf_utilities::migrations::basics::{
-	migrate_from_historical_type, try_migrate_from_historical_type,
-};
+use cf_utilities::migrations::basics::migrate_from_historical_type;
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 
 pub type EncodedAddress = <super::EncodedAddress as HasVersion<v20200>>::HistoricalType;

@@ -39,12 +39,11 @@ use cf_primitives::{
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
-		try_migrate_from_historical_type, vCurrent, GlobalMigrationFromGeneric, HasGenericVariant,
-		HasVersion, IdentityMigration, IsHistoricalType, Migration, NewFieldWithDefault,
-		OverrideMigrationWith,
+		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
+		IsHistoricalType, Migration, NewFieldWithDefault, OverrideMigrationWith,
 	},
 	primitives::NewTypeWithDefault,
-	v11100, v20100, v20200, v20300, HasChangelog,
+	v20100, v20200, v20300, HasChangelog,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -210,24 +209,6 @@ pub mod validator_info_before_v7 {
 	use cf_utilities::migrations::v11100;
 
 	use super::*;
-	// #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
-	// pub struct ValidatorInfo {
-	// 	pub balance: AssetAmount,
-	// 	pub bond: AssetAmount,
-	// 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
-	// 	pub reputation_points: i32,
-	// 	pub keyholder_epochs: Vec<EpochIndex>,
-	// 	pub is_current_authority: bool,
-	// 	#[deprecated]
-	// 	pub is_current_backup: bool,
-	// 	pub is_qualified: bool,
-	// 	pub is_online: bool,
-	// 	pub is_bidding: bool,
-	// 	pub bound_redeem_address: Option<EvmAddress>,
-	// 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-	// 	pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
-	// 	pub estimated_redeemable_balance: AssetAmount,
-	// }
 	pub type ValidatorInfo = <super::ValidatorInfo as HasVersion<v11100>>::HistoricalType;
 }
 

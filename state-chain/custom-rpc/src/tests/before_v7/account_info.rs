@@ -14,9 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use super::{account_info_before_api_v7::RpcAccountInfo as RpcAccountInfoBeforeV7, *};
-use state_chain_runtime::runtime_apis::types::{
-	before_version_10::BrokerInfo, validator_info_before_v7::ValidatorInfo as ValidatorInfoBeforeV7,
-};
+use state_chain_runtime::runtime_apis::types::before_version_10::BrokerInfo;
 
 #[test]
 fn test_no_account_serialization() {
