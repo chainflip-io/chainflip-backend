@@ -1,6 +1,6 @@
 ---
 name: bouncer
-description: Use for Chainflip bouncer or localnet tasks: run end-to-end tests, start or rebuild localnet, run bouncer setup scripts, regenerate event schemas, debug bouncer logs, and run pre-commit TypeScript checks. Trigger on requests like "run the bouncer test", "run the fast bouncer tests", "start a localnet", "rebuild the localnet", "regenerate schemas", "run bouncer lints", or when a specific bouncer test is named.
+description: Use for Chainflip bouncer or localnet tasks: run end-to-end tests, start or rebuild localnet, run bouncer setup scripts, regenerate event schemas, debug bouncer logs, run pre-commit TypeScript checks, query state chain storage values, fetch oracle prices, update pallet config items via governance, and set the runtime safe mode. Trigger on requests like "run the bouncer test", "run the fast bouncer tests", "start a localnet", "rebuild the localnet", "regenerate schemas", "run bouncer lints", a named bouncer test, "what is the value of X on the statechain/bouncer/mainnet", "query X storage", "what is the oracle price of X", "change/update the bouncer X config", or "set/change the safe mode".
 ---
 
 # Running bouncer tests
@@ -302,12 +302,16 @@ pnpm eslint:check          # Lint (use eslint:fix for auto-fix)
 
 `bouncer/commands/` holds standalone CLI scripts — run them directly from `bouncer/` (e.g. `./commands/<name>.ts`). Each one has a header comment documenting its arguments. The ones this skill leans on:
 
-| Command                     | Purpose                                                | Section   |
-| --------------------------- | ------------------------------------------------------ | --------- |
-| `check_localnet_state.ts`   | Report localnet `State` (DOWN/STALE/UNREADY/READY)     | §1        |
-| `run_test.ts`               | Run a single test by name, file, or swap number (+seed) | §4        |
-| `generate_event_schemas.ts` | Regenerate the zod event schemas from runtime metadata | §5        |
-| `perform_swap.ts`           | Run one real end-to-end swap                           | see below |
+| Command                          | Purpose                                                     | Section   |
+| -------------------------------- | ----------------------------------------------------------- | --------- |
+| `check_localnet_state.ts`        | Report localnet `State` (DOWN/STALE/UNREADY/READY)          | §1        |
+| `run_test.ts`                    | Run a single test by name, file, or swap number (+seed)     | §4        |
+| `generate_event_schemas.ts`      | Regenerate the zod event schemas from runtime metadata      | §5        |
+| `perform_swap.ts`                | Run one real end-to-end swap                                | see below |
+| `query_storage.ts`               | Read any state chain storage value                          | §9        |
+| `governance.ts config`           | Change a pallet config item via governance                  | §10       |
+| `governance.ts safe-mode`        | Set the runtime safe mode (per-pallet flags) via governance | §11       |
+| `oracle_prices.ts`               | Fetch the state chain's oracle prices, decoded to USD       | §12       |
 
 ### `perform_swap.ts` — a one-off test swap
 
@@ -320,6 +324,107 @@ Exercises the full deposit → swap → egress path without running a vitest tes
 ```
 
 Omitting the destination address generates a fresh one for the destination asset. It opens a deposit channel, sends the deposit, and waits through to egress (a couple of minutes).
+
+## 9. Querying a state chain storage value
+
+`./commands/query_storage.ts` is a generic, read-only dedot reader for any pallet storage entry (plain value, map, or n-map). Use it to answer "what is the value of X on the state chain?" and to verify a config change. Pallet and entry names are the camelCase dedot keys.
+
+```bash
+cd bouncer
+./commands/query_storage.ts                                  # list pallets that have storage
+./commands/query_storage.ts swapping                         # list swapping's storage entries
+./commands/query_storage.ts --search loan                    # find entries across ALL pallets (name + docs)
+./commands/query_storage.ts swapping networkFeeForAsset Btc  # map + full key -> exact value (e.g. 15000)
+./commands/query_storage.ts swapping networkFeeForAsset      # map + no key  -> dump ALL entries
+./commands/query_storage.ts swapping collectedNetworkFee     # plain value
+./commands/query_storage.ts <pallet> <entry> <partialKey>    # n-map + partial key -> prefix dump
+
+# Any network — read-only, so safe against mainnet. Flags may appear anywhere in the args.
+./commands/query_storage.ts --network mainnet swapping networkFee        # known nets: mainnet/berghain/perseverance/sisyphos/localnet
+./commands/query_storage.ts --endpoint wss://my.node swapping networkFee  # any custom ws endpoint
+CF_NODE_ENDPOINT=wss://mainnet-rpc.chainflip.io ./commands/query_storage.ts swapping networkFee  # env-var form
+```
+
+- **Finding an item without knowing its pallet:** `--search <term>` (alias `--find`) substring-matches across every `pallet.entry` name and its docs, returning `{ pallet, entry, docs }` pairs to query directly. It matches storage entry _names_, not nested struct fields — e.g. `--search lending` surfaces `lendingConfig`, whose decoded value then holds `minimumLoanAmountUsd`.
+- **Discovery is built in:** no args lists pallets; `<pallet>` alone lists that pallet's entries; an unknown pallet/entry errors with the valid options.
+- **How many keys to pass is auto-detected** from the entry's metadata — no flag. Pass the full key set for an exact lookup; pass fewer keys (or none) to dump all matching entries (a no-key map dumps everything; a partial key prefix-filters an n-map). A plain `StorageValue` takes no keys and is read directly — if it holds a map (e.g. `tradingStrategy.minimumDeploymentAmountForStrategy`), the read returns the whole collection.
+- **Keys** are parsed as JSON when valid (`5` → number, `{"chain":"Bitcoin"}` → object), otherwise treated as a string (`Btc`). Pass large integers as quoted decimal strings (decoded to BigInt).
+- **Output** is JSON; an unset entry (no stored value/default) prints `null`. Decoded enums render as `{ "type", "value" }`, accounts as SS58 strings.
+- **Target network** defaults to localnet. Override with `--endpoint <wss-url>` (highest precedence), `--network <name>`, or `CF_NODE_ENDPOINT`. It's metadata-driven, so it adapts to whatever runtime the remote chain serves — no regenerated chaintypes needed. The chosen endpoint is echoed to stderr; stdout stays pure JSON.
+
+## 10. Updating a pallet config item
+
+Many pallets expose a governance-gated `update_pallet_config` extrinsic — the canonical way to change a runtime config knob (network fees, durations, limits, safe-mode, etc.). `governance.ts config` submits one; verify with §9. This **changes on-chain state via a snowWhite governance proposal** (it auto-executes on localnet), so always `--dry-run` first.
+
+**1. Find the update shape from the generated types.** See "Finding a shape in the generated types" below — the config update is the argument to `<pallet>.updatePalletConfig`. For a specific field's _semantics_ (units, meaning) read its Rust definition in `state-chain/pallets/<pallet>/src/lib.rs`.
+
+> #### Finding a shape in the generated types
+>
+> The generated dedot chaintypes under `bouncer/generated/chaintypes/chainflip-node/` are the source of truth for the shape of **any** call, storage entry, or type (regenerated per commit; these commands only run on same-commit localnets, so the types match). To find the shape of:
+>
+> - **an extrinsic's arguments** → `tx.d.ts`: find `<pallet>.<call>`; its parameter list names each argument and its type. e.g. `swapping.updatePalletConfig` takes `Array<PalletCfSwappingPalletConfigUpdate>`; `ethereumBroadcaster.updatePalletConfig` takes a single `PalletCfBroadcastPalletConfigUpdate` (not an array).
+> - **a storage entry** (key types + decoded value) → `query.d.ts`: find `<pallet>.<entry>`.
+> - **a named struct/enum** referenced by either → search `types.d.ts` for `export type <Name>`. A struct is `{ field: Type; … }`; an enum is a union of `{ type: 'Variant'; value: {…} }` (fieldless variants are just `{ type: 'Variant' }`). So a config update value is one variant, e.g. `{ "type": "SetNetworkFee", "value": { … } }` — copy `type` verbatim and fill in `value`.
+>
+> The resolved TS type also tells you how to _write_ a value: **camelCase** keys exactly as shown; a **`bigint`** field (u64/u128/…) must be a quoted decimal string while `number` (u32 and smaller) is a plain number; an **`Option`** shows as `field?:` — include the key for `Some`, omit for `None`.
+
+**2. Craft + dry-run.** Build the JSON in the shape the `updatePalletConfig` parameter shows: an **array** `[{ type, value }, …]` for most pallets, or a **single** `{ type, value }` object for single-arity pallets (validator, `*Broadcaster`, `*ThresholdSigner`). Dry-run encodes + validates without submitting:
+
+```bash
+echo '[{"type":"SetNetworkFeeForAsset","value":{"asset":"Btc","rate":15000}}]' \
+  | ./commands/governance.ts config swapping - --dry-run
+```
+
+The `updates` argument can be a literal JSON string, `@path/to/file.json`, or `-` (stdin).
+
+**3. Submit** for real by dropping `--dry-run`. Prints the governance proposal id:
+
+```bash
+echo '[{"type":"SetNetworkFeeForAsset","value":{"asset":"Btc","rate":15000}}]' \
+  | ./commands/governance.ts config swapping -
+```
+
+**4. Verify** with §9: `./commands/query_storage.ts swapping networkFeeForAsset Btc` → `15000`.
+
+Gotchas specific to config updates (value-encoding conventions — camelCase, `bigint`-as-string, `Option` — are in the shape guide above):
+
+- **Units are domain-specific** — a `bigint`/`number` may be a `Permill` (parts-per-million), a 6-dp USD/USDC amount, a block count, etc. Convert first: 150 bps = 1.5% = **15000** Permill; 1000 USDC = **1000000000** atomic units; $200 = **200000000** (6-dp USD). Check `state-chain/pallets/<pallet>/src/lib.rs` when unsure.
+- **Group setters set _all_ their fields at once** (e.g. lending's `SetMinimumAmounts` takes all four minimums). Query the current values first (§9) and pass the unchanged ones through, or you'll clobber them.
+- **Omitting an `Option` field clears it.** A `foo?:` you leave out is submitted as `None` — which often removes/resets the entry, not "leave unchanged". To keep a value, read it (§9) and pass it back.
+- **Submission needs the localnet indexer running** (the proposal id is read from the `Governance.Proposed` event via the indexer) — fine on any normally-booted localnet.
+
+## 11. Setting the runtime safe mode
+
+`./commands/governance.ts safe-mode` sets the runtime safe mode via governance (`environment.update_safe_mode`). Safe mode is a single struct of per-pallet flags; `CodeAmber` replaces the **whole** struct, so setting one item is a read-modify-write (read current → change one flag → submit the whole struct, other flags preserved). Verify with §9 (`query_storage.ts environment runtimeSafeMode`).
+
+```bash
+cd bouncer
+./commands/governance.ts safe-mode                                # list the current safe mode (all pallets/flags)
+./commands/governance.ts safe-mode swapping swapsEnabled false    # set a boolean flag
+./commands/governance.ts safe-mode lendingPools borrowing Red     # set an enum flag  -> { type: 'Red' }
+./commands/governance.ts safe-mode witnesser CodeRed              # set a pallet-level enum
+./commands/governance.ts safe-mode code-red                       # whole runtime off (CodeRed)
+./commands/governance.ts safe-mode code-green                     # whole runtime on  (CodeGreen)
+# add --dry-run to any set to encode + print the call without submitting
+```
+
+- **Flags aren't all booleans.** The value is coerced to the flag's current type: booleans take `true`/`false`; nested enum flags (e.g. `lendingPools.borrowing`) and pallet-level enums (e.g. `witnesser`) take the variant name (`Red`/`Green`, `CodeRed`/`CodeGreen`). The no-arg listing shows each pallet's flags and current values; unknown pallet/flag errors list the valid options.
+- **Same governance caveats as §10**: it submits a snowWhite proposal that auto-executes on localnet, but the submit returns at the _proposed_ stage — execution lands a block or two later, so poll after submitting. Needs the localnet indexer running (proposal id read via the indexer).
+
+## 12. Oracle prices
+
+`./commands/oracle_prices.ts` reads the Chainlink oracle prices the state chain currently holds (via the `cf_oracle_prices` RPC) and decodes each into a human-readable USD value. Read-only, so safe on any network.
+
+```bash
+cd bouncer
+./commands/oracle_prices.ts --network mainnet          # all prices, decoded to USD
+./commands/oracle_prices.ts --network mainnet Eth       # just one base asset
+./commands/oracle_prices.ts --network mainnet --json    # decoded rows as JSON (pipeable)
+```
+
+Prints a table of `PAIR / USD / STATUS / UPDATED (BLOCK)` — e.g. `Eth/Usd  1880.60  UpToDate  57s ago (#14002001)`. Same network selection as §9 (`--network` / `--endpoint` / `CF_NODE_ENDPOINT`, defaults to localnet).
+
+- **`price_status`** is `UpToDate` when the feed is fresh; a stale/absent status means the price shouldn't be trusted.
 
 ## When _not_ to use the bouncer
 
