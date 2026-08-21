@@ -16,6 +16,7 @@
 
 use sp_core::{bounded::BoundedVec, Get};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::boxed::Box;
 
 pub trait HasTypeIntrospection: Sized {
 	fn is_empty_type() -> bool;
@@ -68,6 +69,16 @@ impl<A: HasTypeIntrospection> HasTypeIntrospection for Vec<A> {
 
 	fn sample_all_shapes() -> Vec<Self> {
 		A::sample_all_shapes().into_iter().map(|a| vec![a]).chain([vec![]]).collect()
+	}
+}
+
+impl<A: HasTypeIntrospection> HasTypeIntrospection for Box<A> {
+	fn is_empty_type() -> bool {
+        A::is_empty_type() // Box is constructible if the inner type is constructible
+	}
+
+	fn sample_all_shapes() -> Vec<Self> {
+		A::sample_all_shapes().into_iter().map(|a| Box::new(a)).collect()
 	}
 }
 
