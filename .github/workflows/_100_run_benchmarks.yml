@@ -60,15 +60,17 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Resolve full commit SHA
         id: resolve-sha
         run: |
-          FULL_SHA=$(git rev-parse "${{ inputs.commit_sha }}")
+          FULL_SHA=$(git rev-parse "${INPUTS_COMMIT_SHA}")
           echo "full_sha=$FULL_SHA" >> "$GITHUB_OUTPUT"
+        env:
+          INPUTS_COMMIT_SHA: ${{ inputs.commit_sha }}
 
       # Binaries for main commits are built by ci-benchmarks-main.yml, for
       # release/* commits by ci-benchmarks-release.yml.
@@ -81,7 +83,7 @@ jobs:
           esac
 
       - name: Fetch chainflip-node with benchmarks from ${{ inputs.commit_sha }}
-        uses: dawidd6/action-download-artifact@fe9d59ce33ce92db8a6ac90b2c8be6b6d90417c8
+        uses: dawidd6/action-download-artifact@fe9d59ce33ce92db8a6ac90b2c8be6b6d90417c8 # v15
         with:
           workflow: ci-benchmarks-${{ steps.artefact-source.outputs.source }}.yml
           workflow_conclusion: completed
@@ -98,8 +100,11 @@ jobs:
         run: >
           ./state-chain/scripts/benchmark-all.sh
           --binary ./chainflip-node
-          --steps ${{ github.event.inputs.steps }}
-          --repetitions ${{ github.event.inputs.repetitions }}
+          --steps ${GITHUB_EVENT_INPUTS_STEPS}
+          --repetitions ${GITHUB_EVENT_INPUTS_REPETITIONS}
+        env:
+          GITHUB_EVENT_INPUTS_STEPS: ${{ github.event.inputs.steps }}
+          GITHUB_EVENT_INPUTS_REPETITIONS: ${{ github.event.inputs.repetitions }}
 
       - name: Cleanup 🧹
         run: >
@@ -123,7 +128,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Make a pull request with the changed weight files 🕯️
-        uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38
+        uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38 # v5.0.2
         with:
           base: ${{ github.ref_name }}
           title: "[AUTOMATED] Benchmark results"

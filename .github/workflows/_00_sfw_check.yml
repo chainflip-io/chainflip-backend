@@ -1,0 +1,30 @@
+name: Socket Firewall pre-check
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check-cargo-dependencies:
+    runs-on: namespace-profile-default-light
+    container:
+      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06"
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
+
+      - name: Install Socket Firewall 🔥
+        uses: SocketDev/action@2d3f25590c6ed6ba11a9a14c064d962a3a04698f # v1.3.1
+        with:
+          mode: firewall-free
+          shims: "false"
+
+      - name: Configure Git 🛠️
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Check Cargo dependencies 🔍
+        run: sfw cargo fetch --locked

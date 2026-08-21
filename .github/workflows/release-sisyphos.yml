@@ -9,23 +9,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  sfw-check:
+    uses: ./.github/workflows/_00_sfw_check.yml
   pre-check:
+    needs: [sfw-check]
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
   force-version-bump:
+    needs: [sfw-check]
     uses: ./.github/workflows/_05_force_version_bump.yml
     secrets: inherit
     with:
       network-to-check-against: "perseverance"
   release-checks:
+    needs: [sfw-check]
     uses: ./.github/workflows/_03_release_checks.yml
     with:
       network: "sisyphos"
     secrets: inherit
   test:
+    needs: [sfw-check]
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
   coverage:
+    needs: [sfw-check]
     uses: ./.github/workflows/_11_coverage.yml
     with:
       test_features: runtime-benchmarks

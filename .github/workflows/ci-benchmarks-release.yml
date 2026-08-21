@@ -5,7 +5,10 @@ on:
       - release/*
 
 jobs:
+  sfw-check:
+    uses: ./.github/workflows/_00_sfw_check.yml
   run-benchmarks-release:
+    needs: [sfw-check]
     uses: ./.github/workflows/_27_benchmarks.yml
     secrets: inherit
     with:

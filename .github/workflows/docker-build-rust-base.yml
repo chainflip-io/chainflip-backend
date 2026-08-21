@@ -20,7 +20,9 @@ jobs:
     runs-on: namespace-profile-rust-builder
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Get toolchain version 🛠🦀️
         id: toolchain
@@ -31,31 +33,36 @@ jobs:
 
       - name: Set Image Tags 🏷
         id: image_tags
+        env:
+          DEBUG_IMAGE: ${{ github.event.inputs.debug_image }}
+          RUST_TOOLCHAIN: ${{ steps.toolchain.outputs.rust_toolchain }}
         run: |
-          if [ "${{ github.event.inputs.debug_image }}" = "true" ]; then
-            echo "image_tag=${{ steps.toolchain.outputs.rust_toolchain }}-${{ github.run_number }}" >> $GITHUB_OUTPUT
+          if [ "${DEBUG_IMAGE}" = "true" ]; then
+            echo "image_tag=${RUST_TOOLCHAIN}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
           else
-            echo "image_tag=${{ steps.toolchain.outputs.rust_toolchain }}" >> $GITHUB_OUTPUT
+            echo "image_tag=${RUST_TOOLCHAIN}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Debug | Check Docker Image Tag 🧐🐳
-        run: echo "Docker Image Tag output ${{ steps.image_tags.outputs.image_tag }}"
+        env:
+          IMAGE_TAG: ${{ steps.image_tags.outputs.image_tag }}
+        run: echo "Docker Image Tag output ${IMAGE_TAG}"
 
       - name: Install and configure Namespace CLI 📟
-        uses: namespacelabs/nscloud-setup@v0
+        uses: namespacelabs/nscloud-setup@df198f982fcecfb8264bea3f1274b56a61b6dfdc # v0.0.12
 
       - name: Set up Namespace Buildx 👷
-        uses: namespacelabs/nscloud-setup-buildx-action@v0
+        uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd # v0.0.23
 
       - name: Docker meta 🔖
         id: meta
-        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4
+        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4 # v5.3.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: ${{ steps.image_tags.outputs.image_tag }}
 
       - name: Build and push 🏗️🫸
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
         with:
           context: .
           push: true
@@ -64,5 +71,7 @@ jobs:
           file: ci/docker/development/rust-base.Dockerfile
 
       - name: Summary 📋
+        env:
+          IMAGE_TAG: ${{ steps.image_tags.outputs.image_tag }}
         run: |
-          echo "The following images were built and pushed: \`${{ steps.image_tags.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "The following images were built and pushed: \`${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"

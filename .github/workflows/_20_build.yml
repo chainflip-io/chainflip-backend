@@ -45,11 +45,13 @@ jobs:
 
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Set up Rust cache 🦀💰
         if: contains(inputs.ci-runner, 'no-cache') == false
-        uses: namespacelabs/nscloud-cache-action@v1
+        uses: namespacelabs/nscloud-cache-action@c5f8dab7560444c4bf8dbc64f1b203431873c547 # v1.6.1
         with:
           cache: rust
 
@@ -112,35 +114,44 @@ jobs:
           fi
 
       - name: Build chainflip binaries 🏗️
+        env:
+          BUILD_PROFILE: ${{ inputs.profile }}
         run: |
           if [ "${{ inputs.is-mainnet }}" = "true" ]; then
             export IS_MAINNET=true
           fi
-          cargo cf-build-${{ inputs.profile }} --locked
+          cargo "cf-build-${BUILD_PROFILE}" --locked
 
       - name: ls directory
-        run: |
-          ls -la ./target/${{ inputs.binary-subdir }}
+        env:
+          BINARY_SUBDIR: ${{ inputs.binary-subdir }}
+        run: ls -la "./target/${BINARY_SUBDIR}"
 
       # We flatten the structure so upload-artifact uploads a flattened structure
       - name: Prepare binaries for upload
+        env:
+          BINARY_SUBDIR: ${{ inputs.binary-subdir }}
         run: |
-          mkdir -p ./target/${{ inputs.binary-subdir }}
-          cp ./target/${{ inputs.binary-subdir }}/deps/libchainflip_engine_v*.so ./target/${{ inputs.binary-subdir }}/ || true
+          BINARY_DIR="./target/${BINARY_SUBDIR}"
+          mkdir -p "${BINARY_DIR}"
+          cp "${BINARY_DIR}"/deps/libchainflip_engine_v*.so "${BINARY_DIR}/" || true
 
       - name: Extract version from binary 🔦
         id: extract-version
+        env:
+          BINARY_SUBDIR: ${{ inputs.binary-subdir }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          if [ -n "${INPUT_VERSION}" ]; then
+            echo "version=${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
           else
-            VERSION=$(./ci/scripts/extract_version.sh "$(./target/${{ inputs.binary-subdir }}/chainflip-node --version)" full)
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            VERSION=$(./ci/scripts/extract_version.sh "$("./target/${BINARY_SUBDIR}/chainflip-node" --version)" full)
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           fi
-          echo "Resolved version: $(grep '^version=' $GITHUB_OUTPUT | cut -d= -f2)"
+          echo "Resolved version: $(grep '^version=' "$GITHUB_OUTPUT" | cut -d= -f2)"
 
       - name: Upload binary artifacts
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: ${{ inputs.upload-name }}
           path: |
@@ -153,7 +164,7 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/engine-runner
 
       - name: Upload runtime artifacts
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: chainflip-node-runtime-${{ inputs.profile }}-${{ steps.extract-version.outputs.version }}
           path: |

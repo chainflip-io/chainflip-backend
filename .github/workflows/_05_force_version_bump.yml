@@ -11,22 +11,24 @@ jobs:
     runs-on: namespace-profile-default-light
     steps:
       - name: Checkout backend
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Install pnpm 💿
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
           version: 10
 
       - name: Configure NodeJS 🛠️
-        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
       - name: Download latest release binaries
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d # v3.0.0
         with:
           workflow: release-${{ inputs.network-to-check-against }}.yml
           name: chainflip-backend-bin
@@ -53,5 +55,7 @@ jobs:
         working-directory: bouncer
         run: |
             set -x
-            echo ${{ env.RELEASE_VERSION }}
-            ./commands/check_bin_and_runtime_versions.ts ${{ github.workspace }} "${{ env.RELEASE_VERSION }}" ${{ inputs.network-to-check-against }}
+            echo "${RELEASE_VERSION}"
+            ./commands/check_bin_and_runtime_versions.ts "${GITHUB_WORKSPACE}" "${RELEASE_VERSION}" "${NETWORK_TO_CHECK_AGAINST}"
+        env:
+          NETWORK_TO_CHECK_AGAINST: ${{ inputs.network-to-check-against }}
