@@ -18,7 +18,7 @@ use crate::{
 	ValidatorToOperator,
 };
 use cf_primitives::EpochIndex;
-use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
+use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
 use cf_utilities::migrations::{HasChangelog, OrdMigrations};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;

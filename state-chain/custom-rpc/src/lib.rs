@@ -397,7 +397,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 
 pub mod account_info_before_api_v7 {
 	use super::*;
-	use state_chain_runtime::runtime_apis::types::{before_version_10, validator_info_before_v7};
+	use state_chain_runtime::runtime_apis::types::before_version_10;
 
 	#[expect(clippy::large_enum_variant)]
 	#[derive(Serialize, Deserialize, Clone)]
@@ -2108,7 +2108,7 @@ where
 							.into_iter()
 							.map(|info| try_migrate_from_historical_type(v20200, info))
 							.collect::<Result<Vec<_>, _>>()
-							.map_err(|err| {
+							.map_err(|_| {
 								CfApiError::ErrorObject(ErrorObject::owned(
 									ErrorCode::InternalError.code(),
 									"Error when migrating runtime api reply",

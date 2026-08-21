@@ -748,7 +748,6 @@ impl FromStr for Hash {
 	}
 }
 
-// impl_identity_migrations! { Address, }
 impl_identity_migrations_with_wrapper! {
    #[derive(PartialOrd, PartialEq, Eq, Ord)]
    struct WrappedSolAddress(Address) where |x: [u8; 32]| Address(x);
