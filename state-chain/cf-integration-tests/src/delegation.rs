@@ -26,7 +26,7 @@ use crate::{
 };
 
 use cf_primitives::{AccountRole, FlipBalance};
-use cf_traits::{AccountInfo, FundAccount, FundingSource};
+use cf_traits::{AccountInfo, EpochInfo, FundAccount, FundingSource};
 use frame_support::assert_ok;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, PerU16};
@@ -93,6 +93,105 @@ pub(crate) fn setup_delegation(
 	testnet.move_to_the_next_epoch();
 	assert!(pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&validator));
 	assert!(Flip::balance(&validator) < pallet_cf_validator::Bond::<Runtime>::get());
+}
+
+#[test]
+fn block_author_rewards_are_distributed_among_delegators() {
+	const EPOCH_DURATION_BLOCKS: u32 = 200;
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	const REWARD: u128 = 25_000_000_000_000_000_000_000; //25000 flip
+	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_DURATION_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[(
+			managed_validator.clone(),
+			AccountRole::Validator,
+			GENESIS_BALANCE / 5,
+		)])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			testnet.move_to_the_next_epoch();
+
+			let operator = AccountId::from([0xe1; 32]);
+
+			// Setup 3 delegator, operator and association with validator.
+			let delegators = BTreeMap::from_iter([
+				(AccountId::from([0xA0; 32]), 2 * GENESIS_BALANCE),
+				(AccountId::from([0xA1; 32]), 4 * GENESIS_BALANCE),
+				(AccountId::from([0xA2; 32]), 5 * GENESIS_BALANCE),
+			]);
+			setup_delegation(
+				&mut testnet,
+				managed_validator.clone(),
+				operator.clone(),
+				2000, // 20%
+				delegators.clone(),
+			);
+
+			testnet.move_to_the_next_epoch();
+
+			let epoch_index = pallet_cf_validator::Pallet::<Runtime>::epoch_index();
+			let snapshot =
+				pallet_cf_validator::DelegationSnapshots::<Runtime>::get(epoch_index, &operator)
+					.expect("Snapshot should be registered on new epoch");
+			assert!(
+				pallet_cf_validator::ValidatorToOperator::<Runtime>::get(
+					epoch_index,
+					&managed_validator
+				)
+				.expect("Validator should be mapped to operator") ==
+					operator
+			);
+			assert!(
+				snapshot.validators.len() == 1 &&
+					snapshot.validators.keys().any(|v| *v == managed_validator) &&
+					snapshot.delegators == delegators,
+				"Bad snapshot: {:#?}",
+				snapshot,
+			);
+
+			let validator_pre_balance = Flip::balance(&managed_validator);
+			let operator_pre_balance = Flip::balance(&operator);
+			let total_delegators_pre_balance: FlipBalance =
+				delegators.keys().map(Flip::balance).sum();
+
+			// Credit the fee-distribution reserve directly (normally funded by swap fees) and
+			// move to the next epoch to trigger `on_epoch_ending`'s reward distribution.
+			// `distribute_all` splits the reserve evenly across all authorities, so scale it up
+			// by the authority count such that each authority's (and hence the managed
+			// validator's operator snapshot's) share works out to exactly `REWARD`.
+			pallet_cf_flip::Reserve::<Runtime>::insert(*b"FEES", REWARD * MAX_AUTHORITIES as u128);
+			testnet.move_to_the_next_epoch();
+
+			let validator_post_balance = Flip::balance(&managed_validator);
+			let validator_cut = validator_post_balance - validator_pre_balance;
+
+			let operator_post_balance = Flip::balance(&operator);
+			let operator_cut = operator_post_balance - operator_pre_balance;
+
+			let total_delegators_post_balance: FlipBalance =
+				delegators.keys().map(Flip::balance).sum();
+			let delegators_cut = total_delegators_post_balance - total_delegators_pre_balance;
+
+			let epsilon = REWARD / 10_000; // allow 0.01% error due to rounding
+
+			assert!(validator_cut > 0u128);
+			assert!(delegators_cut > 0u128);
+			assert!(operator_cut > 0u128);
+			assert!(FlipBalance::abs_diff(delegators_cut, operator_cut * 4) < epsilon,); // 20/80 split
+
+			// Verify that rewards are distributed according to portion of bond..
+			assert_eq!(
+				PerU16::from_rational(validator_cut, REWARD,),
+				PerU16::from_rational(
+					validator_pre_balance,
+					pallet_cf_validator::Bond::<Runtime>::get(),
+				)
+			);
+		});
 }
 
 #[test]
