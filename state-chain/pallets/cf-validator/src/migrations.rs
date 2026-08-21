@@ -20,7 +20,7 @@ use frame_support::migrations::VersionedMigration;
 
 mod assign_lp_role_to_delegators;
 
-pub type PalletMigration<T> = (
+pub type PalletMigration<T: Config> = (
 	VersionedMigration<
 		10,
 		11,

@@ -39,7 +39,7 @@ use cf_traits::mocks::bonding::MockBonderFor;
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
-type Block = frame_system::mocking::MockBlock<Test>;
+pub type Block = frame_system::mocking::MockBlock<Test>;
 
 pub const MIN_AUTHORITY_SIZE: u32 = 1;
 pub const MAX_AUTHORITY_SIZE: u32 = WINNING_BIDS.len() as u32;
