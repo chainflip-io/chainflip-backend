@@ -50,7 +50,7 @@ use cf_rpc_apis::{
 use cf_utilities::{
 	migrations::{
 		basics::{migrate_from_historical_type, try_migrate_from_historical_type},
-		v20000, v20100, v20200,
+		v11100, v20000, v20100, v20200,
 	},
 	rpc::NumberOrHex,
 };
@@ -491,7 +491,7 @@ pub mod account_info_before_api_v7 {
 			}
 		}
 
-		pub fn validator(info: validator_info_before_v7::ValidatorInfo) -> Self {
+		pub fn validator(info: super::ValidatorInfo) -> Self {
 			Self::Validator {
 				flip_balance: info.balance.into(),
 				bond: info.bond.into(),
@@ -2106,8 +2106,15 @@ where
 						#[expect(deprecated)]
 						api.cf_all_account_infos_before_version_19(hash, roles)?
 							.into_iter()
-							.map(Into::into)
-							.collect::<Vec<_>>()
+							.map(|info| try_migrate_from_historical_type(v20200, info))
+							.collect::<Result<Vec<_>, _>>()
+							.map_err(|err| {
+								CfApiError::ErrorObject(ErrorObject::owned(
+									ErrorCode::InternalError.code(),
+									"Error when migrating runtime api reply",
+									None::<()>,
+								))
+							})?
 					} else {
 						api.cf_all_account_infos(hash, roles)?
 					};
@@ -2513,8 +2520,18 @@ where
 								operator,
 								..
 							} = if api_version < 19 {
-								#[expect(deprecated)]
-								api.cf_validator_info_before_version_19(hash, &account_id)?.into()
+								try_migrate_from_historical_type(
+									v20200,
+									#[expect(deprecated)]
+									api.cf_validator_info_before_version_19(hash, &account_id)?,
+								)
+								.map_err(|_err| {
+									CfApiError::ErrorObject(ErrorObject::owned(
+										ErrorCode::InternalError.code(),
+										"Error when migrating runtime api reply",
+										None::<()>,
+									))
+								})?
 							} else {
 								api.cf_validator_info(hash, &account_id)?
 							};
