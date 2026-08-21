@@ -611,6 +611,44 @@ pub struct ChainAccounts {
 	pub chain_accounts: Vec<(EncodedAddress, Asset)>,
 }
 
+/// An account's withdrawal whitelist: its active state plus the timelocked updates that have been
+/// submitted but not yet applied.
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct WithdrawalWhitelistInfo {
+	/// `None` if the account has no whitelist configured, in which case withdrawals to any
+	/// destination are allowed.
+	pub active: Option<ActiveWithdrawalWhitelist>,
+	pub pending: Vec<PendingWhitelistUpdate>,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct ActiveWithdrawalWhitelist {
+	/// The delay applied to whitelist updates, in seconds. Zero means updates apply immediately.
+	pub timelock_secs: u64,
+	pub allowed: Vec<WhitelistDestination>,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct PendingWhitelistUpdate {
+	/// Wall-clock time (unix seconds) at which the update is applied.
+	pub activates_at: u64,
+	pub update: WhitelistUpdate,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub enum WhitelistUpdate {
+	Allow(WhitelistDestination),
+	Remove(WhitelistDestination),
+	Timelock(u64),
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub enum WhitelistDestination {
+	InternalAccount(AccountId32),
+	/// The chain is implied by the address.
+	ExternalAddress(EncodedAddress),
+}
+
 #[derive(
 	Serialize,
 	Deserialize,

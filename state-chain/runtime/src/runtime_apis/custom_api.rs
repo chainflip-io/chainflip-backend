@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(20)]
+	#[api_version(21)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -242,6 +242,9 @@ decl_runtime_apis!(
 			account_id: AccountId32,
 		) -> before_version_19::AssetMap<AssetAmount>;
 		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
+		#[changed_in(21)]
+		fn cf_withdrawal_whitelist();
+		fn cf_withdrawal_whitelist(account_id: AccountId32) -> WithdrawalWhitelistInfo;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
 		fn cf_failed_call_ethereum(

@@ -40,9 +40,10 @@ use cf_chains::{
 	btc::{api::BitcoinApi, ScriptPubkey},
 	cf_parameters::build_and_encode_cf_parameters,
 	evm::{api::EvmCall, Address as EvmAddress, U256},
-	CcmChannelMetadataUnchecked, Chain, ChainCrypto, ChannelRefundParametersUncheckedEncoded,
-	EvmVaultSwapExtraParameters, TransactionBuilder, VaultSwapExtraParameters,
-	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
+	AccountOrAddress, CcmChannelMetadataUnchecked, Chain, ChainCrypto,
+	ChannelRefundParametersUncheckedEncoded, EvmVaultSwapExtraParameters, ForeignChainAddress,
+	TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
+	VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	chains::*, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
@@ -763,6 +764,69 @@ impl_runtime_apis! {
 		}
 		fn cf_free_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
 			AssetBalances::free_balances(&account_id)
+		}
+		fn cf_withdrawal_whitelist(account_id: AccountId) -> WithdrawalWhitelistInfo {
+			use pallet_cf_asset_balances::whitelist::{PendingChange, WhitelistChange};
+
+			fn to_destination(
+				destination: AccountOrAddress<AccountId, ForeignChainAddress>,
+				network_environment: NetworkEnvironment,
+			) -> WhitelistDestination {
+				match destination {
+					AccountOrAddress::InternalAccount(account) =>
+						WhitelistDestination::InternalAccount(account),
+					AccountOrAddress::ExternalAddress(address) =>
+						WhitelistDestination::ExternalAddress(
+							address.to_encoded_address(network_environment),
+						),
+				}
+			}
+
+			let network_environment = Environment::network_environment();
+
+			let active = pallet_cf_asset_balances::WithdrawalWhitelists::<Runtime>::get(&account_id)
+				.map(|whitelist| ActiveWithdrawalWhitelist {
+					timelock_secs: whitelist.timelock(),
+					allowed: whitelist
+						.external()
+						.values()
+						.flatten()
+						.cloned()
+						.map(AccountOrAddress::ExternalAddress)
+						.chain(
+							whitelist
+								.internal()
+								.iter()
+								.cloned()
+								.map(AccountOrAddress::InternalAccount),
+						)
+						.map(|destination| to_destination(destination, network_environment))
+						.collect(),
+				});
+
+			let mut pending = Vec::new();
+			for (activates_at, changes) in
+				pallet_cf_asset_balances::PendingChanges::<Runtime>::get()
+			{
+				for (account, change) in changes {
+					if account != account_id {
+						continue
+					}
+					let update = match change {
+						PendingChange::Whitelist(WhitelistChange::Allow(destination)) =>
+							WhitelistUpdate::Allow(to_destination(destination, network_environment)),
+						PendingChange::Whitelist(WhitelistChange::Remove(destination)) =>
+							WhitelistUpdate::Remove(to_destination(destination, network_environment)),
+						PendingChange::Timelock(timelock) => WhitelistUpdate::Timelock(timelock),
+						// Refund address updates are timelocked alongside whitelist updates but are
+						// not part of the whitelist itself.
+						PendingChange::RefundAddress(..) => continue,
+					};
+					pending.push(PendingWhitelistUpdate { activates_at, update });
+				}
+			}
+
+			WithdrawalWhitelistInfo { active, pending }
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
 			let free_balances = AssetBalances::free_balances(&account_id);

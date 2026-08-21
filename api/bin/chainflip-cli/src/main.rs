@@ -21,11 +21,14 @@ use crate::settings::{
 use anyhow::{Context, Result};
 use api::{
 	lp::LpApi,
-	primitives::EpochIndex,
-	queries::{
-		ActiveWithdrawalWhitelist, PendingWhitelistUpdate, QueryApi, WhitelistUpdate,
-		WithdrawalWhitelistState,
+	primitives::{
+		state_chain_runtime::runtime_apis::types::{
+			ActiveWithdrawalWhitelist, PendingWhitelistUpdate, WhitelistDestination,
+			WhitelistUpdate, WithdrawalWhitelistInfo,
+		},
+		EpochIndex,
 	},
+	queries::QueryApi,
 	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
@@ -39,6 +42,10 @@ use chainflip_api::{
 	Asset, BrokerApi,
 };
 use clap::Parser;
+use custom_rpc::{
+	RpcActiveWithdrawalWhitelist, RpcPendingWhitelistUpdate, RpcWhitelistDestination,
+	RpcWhitelistUpdate, RpcWithdrawalWhitelist,
+};
 use futures::FutureExt;
 use serde::Serialize;
 use std::{
@@ -443,20 +450,20 @@ async fn bind_executor_address(api: Arc<impl OperatorApi + Sync>, eth_address: &
 	Ok(())
 }
 
-fn describe_destination(destination: &WhitelistDestinationRpc) -> String {
+fn describe_destination(destination: &RpcWhitelistDestination) -> String {
 	match destination {
-		WhitelistDestinationRpc::InternalAccount(account) => format!("account {account}"),
-		WhitelistDestinationRpc::ExternalAddress { chain, address } =>
+		RpcWhitelistDestination::InternalAccount(account) => format!("account {account}"),
+		RpcWhitelistDestination::ExternalAddress { chain, address } =>
 			format!("{chain} address {address}"),
 	}
 }
 
 async fn get_withdrawal_whitelist(api: QueryApi) -> Result<()> {
-	let WithdrawalWhitelistState { active, pending } =
+	let RpcWithdrawalWhitelist { active, pending } =
 		api.get_withdrawal_whitelist(None, None).await?;
 
 	match active {
-		Some(ActiveWithdrawalWhitelist { timelock_secs, allowed }) => {
+		Some(RpcActiveWithdrawalWhitelist { timelock_secs, allowed }) => {
 			println!("Withdrawal whitelist timelock: {timelock_secs} seconds.");
 			if allowed.is_empty() {
 				println!("No destinations are whitelisted, so withdrawals are blocked.");
@@ -474,13 +481,13 @@ async fn get_withdrawal_whitelist(api: QueryApi) -> Result<()> {
 
 	if !pending.is_empty() {
 		println!("Timelocked updates that have not been applied yet:");
-		for PendingWhitelistUpdate { activates_at, update } in &pending {
+		for RpcPendingWhitelistUpdate { activates_at, update } in &pending {
 			let update = match update {
-				WhitelistUpdate::Destination(WhitelistChangeRpc::Allow(destination)) =>
+				RpcWhitelistUpdate::Allow(destination) =>
 					format!("allow {}", describe_destination(destination)),
-				WhitelistUpdate::Destination(WhitelistChangeRpc::Remove(destination)) =>
+				RpcWhitelistUpdate::Remove(destination) =>
 					format!("remove {}", describe_destination(destination)),
-				WhitelistUpdate::Timelock(timelock) =>
+				RpcWhitelistUpdate::Timelock(timelock) =>
 					format!("set timelock to {timelock} seconds"),
 			};
 			println!("  {update}, from unix time {activates_at}");

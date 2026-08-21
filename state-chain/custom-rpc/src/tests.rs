@@ -40,6 +40,9 @@ use pallet_cf_pools::{
 };
 use pallet_cf_swapping::FeeRateAndMinimum;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
+use state_chain_runtime::runtime_apis::types::{
+	ActiveWithdrawalWhitelist, PendingWhitelistUpdate, WhitelistDestination, WhitelistUpdate,
+};
 
 use cf_chains::{
 	address::EncodedAddress,
@@ -446,6 +449,36 @@ fn test_environment_serialization() {
 	};
 
 	insta::assert_snapshot!(to_pretty_json(&env));
+}
+
+#[test]
+fn test_withdrawal_whitelist_serialization() {
+	let val = RpcWithdrawalWhitelist::from(WithdrawalWhitelistInfo {
+		active: Some(ActiveWithdrawalWhitelist {
+			timelock_secs: 86_400,
+			allowed: vec![
+				WhitelistDestination::ExternalAddress(EncodedAddress::Eth([0xcf; 20])),
+				WhitelistDestination::InternalAccount(ID_1),
+			],
+		}),
+		pending: vec![
+			PendingWhitelistUpdate {
+				activates_at: 1_700_000_000,
+				update: WhitelistUpdate::Allow(WhitelistDestination::ExternalAddress(
+					EncodedAddress::Btc(b"bc1qxyz".to_vec()),
+				)),
+			},
+			PendingWhitelistUpdate {
+				activates_at: 1_700_086_400,
+				update: WhitelistUpdate::Remove(WhitelistDestination::InternalAccount(ID_2)),
+			},
+			PendingWhitelistUpdate {
+				activates_at: 1_700_172_800,
+				update: WhitelistUpdate::Timelock(0),
+			},
+		],
+	});
+	insta::assert_json_snapshot!(val);
 }
 
 #[test]
