@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{GetStorageVersion, OnInitialize},
+};
 
 use cf_traits::{
 	mocks::{account_role_registry::MockAccountRoleRegistry, flip_slasher::MockFlipSlasher},
@@ -26,6 +29,13 @@ use crate::{mock::*, *};
 
 fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> ReputationPoints {
 	ReputationPallet::reputation(who).reputation_points
+}
+
+#[test]
+fn genesis_sets_current_storage_version() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(ReputationPallet::on_chain_storage_version(), STORAGE_VERSION);
+	});
 }
 
 pub fn advance_by_heartbeat_intervals(n: u64) {
