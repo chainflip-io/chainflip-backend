@@ -122,12 +122,16 @@ enum EgressType {
 	Refund { refund_fee: AssetAmount },
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(
 	Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Copy, Clone, Debug,
 )]
 pub struct AffiliateDetails {
 	pub short_id: AffiliateShortId,
 	pub withdrawal_address: EthereumAddress,
+}
+impl HasChangelog for AffiliateDetails {
+	type if_unspecified = _AffiliateDetails::see_field_changelogs;
 }
 
 /// Refund parameter used within the swapping pallet.

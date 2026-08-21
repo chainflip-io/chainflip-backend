@@ -17,6 +17,7 @@
 #![allow(clippy::allow_attributes)]
 
 pub mod basics;
+pub mod bounded_vec;
 pub mod primitives;
 
 use self::basics::*;
@@ -213,6 +214,21 @@ macro_rules! generate_migration_helpers {
 // 3. `changelog_entry: in_MajorMinor00`: this should match up with the first entry, and is the name
 //    of the changelog entry (in the `HasChangelog` type) for this release.
 define_all_runtime_versions! {
+	{
+		release: v11000,
+		canonical_patch: Released(11001),
+		changelog_entry: in_11000,
+	},
+	{
+		release: v11100,
+		canonical_patch: Released(11106),
+		changelog_entry: in_11100,
+	},
+	{
+		release: v11200,
+		canonical_patch: Released(11201),
+		changelog_entry: in_11200,
+	},
 	{
 		release: v20000,
 		canonical_patch: Released(20012),

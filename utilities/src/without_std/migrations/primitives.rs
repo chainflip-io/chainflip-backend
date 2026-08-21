@@ -16,7 +16,7 @@
 
 // --------- primitives --------
 
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
 use crate::{
 	migrations::{
@@ -30,26 +30,33 @@ use crate::{
 
 // ----------- identity migrations -------------
 
+#[macro_export]
 macro_rules! impl_identity_migrations {
 	($($ty:ty, )*) => {
 
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-        impl IsHistoricalType for Type {
+        impl $crate::migrations::basics::IsHistoricalType for Type {
             type GetCurrentType = Self;
         }
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-        impl HasGenericVariant for Type {
+        impl $crate::migrations::basics::HasGenericVariant for Type {
             type GenericType = Type;
-            type MigrationFromGeneric = IdentityMigration;
+            type MigrationFromGeneric = $crate::migrations::basics::IdentityMigration;
         }
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-        impl HasChangelog for Type {
-            type if_unspecified = IdentityMigration;
+        impl $crate::migrations::HasChangelog for Type {
+            type if_unspecified = $crate::migrations::basics::IdentityMigration;
         }
     };
 }
+pub use impl_identity_migrations;
 
-impl_identity_migrations! {(), bool, u16, u32, u64, u128, u8, Never, }
+impl_identity_migrations! {
+	(), Never, bool,
+	u8, u16, u32, u64, u128,
+	i8, i16, i32, i64, i128,
+	[u8; 20], [u8; 32],
+}
 
 impl<T> IsHistoricalType for PhantomData<T> {
 	type GetCurrentType = Self;
@@ -68,6 +75,7 @@ impl<T> HasChangelog for PhantomData<T> {
 
 pub struct WrapMigration;
 
+#[macro_export]
 macro_rules! impl_identity_migrations_with_wrapper {
 	(
         $(#[$meta:meta])*
@@ -92,7 +100,7 @@ macro_rules! impl_identity_migrations_with_wrapper {
 			}
 		}
 
-		impl Migration<$Ty, crate::migrations::vCurrent> for WrapMigration {
+		impl $crate::migrations::basics::Migration<$Ty, $crate::migrations::basics::vCurrent> for $crate::migrations::primitives::WrapMigration {
 			type From = $Wrapper;
 
 			fn try_forwards(x: Self::From) -> Result<$Ty, Self::ForwardsError> {
@@ -104,15 +112,15 @@ macro_rules! impl_identity_migrations_with_wrapper {
 			}
 		}
 
-		impl IsHistoricalType for $Wrapper {
+		impl $crate::migrations::basics::IsHistoricalType for $Wrapper {
 			type GetCurrentType = $Ty;
 		}
-		impl HasGenericVariant for $Ty {
+		impl $crate::migrations::basics::HasGenericVariant for $Ty {
             type GenericType = $Wrapper;
-			type MigrationFromGeneric = WrapMigration;
+			type MigrationFromGeneric = $crate::migrations::primitives::WrapMigration;
 		}
-		impl HasChangelog for $Ty {
-			type if_unspecified = IdentityMigration;
+		impl $crate::migrations::HasChangelog for $Ty {
+			type if_unspecified = $crate::migrations::basics::IdentityMigration;
 		}
 
 		$(
@@ -146,8 +154,10 @@ macro_rules! impl_identity_migrations_with_wrapper {
         )?
 	};
 }
+pub use impl_identity_migrations_with_wrapper;
 
 impl_identity_migrations_with_wrapper! {
+	#[derive(PartialOrd, Ord, PartialEq, Eq)]
 	struct WrappedAccountId32(sp_core::crypto::AccountId32) where |x: [u8; 32]| sp_core::crypto::AccountId32::new(x);
 }
 
@@ -159,6 +169,11 @@ impl_identity_migrations_with_wrapper! {
 impl_identity_migrations_with_wrapper! {
 	#[derive(PartialOrd, PartialEq, Eq, Ord, Default)]
 	struct WrappedPermill(sp_arithmetic::Permill) where |x: u32| sp_arithmetic::Permill::from_parts(x);
+}
+
+impl_identity_migrations_with_wrapper! {
+	#[derive(PartialOrd, PartialEq, Eq, Ord, Default)]
+	struct WrappedU256(sp_core::U256) where |x: [u64; 4]| sp_core::U256(x);
 }
 
 // ----------- simple migration that introduces a new type -------------
@@ -307,6 +322,8 @@ macro_rules! impl_migrations_for_container {
     };
 }
 
+// ---- Option ----
+
 impl_migrations_for_container! {
 	Option<X>,
 	impl_changelog_for_option,
@@ -344,6 +361,22 @@ impl_migrations_for_container! {
 		}
 	},
 }
+
+// ---- Box ----
+
+impl_migrations_for_container! {
+	Box<X>,
+	impl_changelog_for_box,
+	[M],
+	type ForwardsError = M::ForwardsError,
+	type BackwardsError = M::BackwardsError,
+	try_forwards |x| M::try_forwards(*x).map(Box::new),
+	try_backwards |x| M::try_backwards(*x).map(Box::new),
+	generic_try_forwards |x| M::try_forwards(*x).map(Box::new),
+	generic_try_backwards |x| M::try_backwards(*x).map(Box::new),
+}
+
+// ---- Vec ----
 
 impl_migrations_for_container! {
 	Vec<X>,
@@ -393,6 +426,8 @@ impl_migrations_for_container! {
 	},
 }
 
+// ---- TupleWith1Entry ----
+
 pub type TupleWith1Entry<A> = (A,);
 
 impl_migrations_for_container! {
@@ -414,6 +449,8 @@ impl_migrations_for_container! {
 		Ok((M1::try_backwards(x.0)?,))
 	},
 }
+
+// ---- TupleWith2Entries ----
 
 pub type TupleWith2Entries<A, B> = (A, B);
 
@@ -443,7 +480,8 @@ impl_migrations_for_container! {
 	},
 }
 
-// ---- btreemap ----
+// ---- BTreeMap ----
+
 // the bounds are quite messy and difficult to replicate with the `impl_migrations_for_container`
 // macro, so we use a manual implementation:
 

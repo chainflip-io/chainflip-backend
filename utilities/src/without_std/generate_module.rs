@@ -270,7 +270,9 @@ macro_rules! generate_module {
             pub mod field {
                 $(
                     pub mod $field {
-                        use super::super::{OverrideMigrationWith, Version, HistoricalTypesAt, FieldCustomMigration, NewFieldWithDefault};
+                        use super::super::{OverrideMigrationWith, Version, HistoricalTypesAt, FieldCustomMigration, NewFieldWithDefault,
+                            HasVersion, Migration, RemovedFieldWithDefault
+                        };
 
                         #[derive(Debug)]
                         pub struct Added;
@@ -278,6 +280,26 @@ macro_rules! generate_module {
                             FieldCustomMigration<TargetFieldsTypes, V> for Added
                         {
                             type $field = OverrideMigrationWith<NewFieldWithDefault>;
+                        }
+
+                        #[derive(Debug)]
+                        pub struct Removed<T>(T);
+                        impl<V: Version, TargetFieldsTypes: HistoricalTypesAt<V, $field = ()>, T: HasVersion<V>>
+                            FieldCustomMigration<TargetFieldsTypes, V> for Removed<T>
+                        where
+	                        <T::HistoricalMigration as Migration<T::HistoricalType, V>>::From: Default,
+                        {
+                            type $field = OverrideMigrationWith<RemovedFieldWithDefault<T>>;
+                        }
+
+                        #[derive(Debug)]
+                        pub struct CustomMigration<M>(M);
+                        impl<V: Version, TargetFieldsTypes: HistoricalTypesAt<V>,
+                            M: Migration<TargetFieldsTypes::$field, V>
+                        >
+                            FieldCustomMigration<TargetFieldsTypes, V> for CustomMigration<M>
+                        {
+                            type $field = OverrideMigrationWith<M>;
                         }
                     }
                 )*
@@ -323,6 +345,10 @@ macro_rules! generate_module {
             use super::*;
             use cf_utilities::migrations::*;
             use cf_utilities::migrations::basics::*;
+
+            mod user_imports {
+                pub use super::super::*;
+            }
 
             pub trait Types {
                 $(
@@ -426,27 +452,51 @@ macro_rules! generate_module {
                                 }
 
                                 fn encode_to<__W: codec::Output + ?Sized>(&self, dest: &mut __W) {
-                                    let mut _disc: u8 = 0;
-                                    $(
-                                        let $variant;
-                                        if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
-                                            $( _disc = $variant_discriminant as u8; )?
-                                            $variant = _disc;
-                                            _disc += 1;
-                                        } else {
-                                            $variant = 0; // dummy value, variant will never be encoded
+                                    // very unfortunately we have to move the implementation into an inner module
+                                    // because for some reason the syntax
+                                    //
+                                    //  let $variant: u8;
+                                    //
+                                    // and all of its variants breaks if there is a struct (!) in scope with the
+                                    // name $variant.
+                                    //
+                                    // So we move into a module where no external symbols are in scope.
+                                    mod inner {
+                                        mod bounds {
+                                            use super::super::*;
+                                            $( $( pub trait $T = $( $TBound )?; )+ )?
                                         }
-                                    )*
+                                        pub fn do_encode<Ty: super::Types, __W: codec::Output + ?Sized, $( $( $T: bounds::$T, )+ )?>(
+                                            this: &super::Enum,
+                                            dest: &mut __W,
+                                        )
+                                        where $( Ty::$variant: cf_utilities::type_introspection::HasTypeIntrospection + codec::Encode, )*
+                                        {
+                                            let mut _disc: u8 = 0;
+                                            $(
+                                                let $variant: u8;
+                                                if !<Ty::$variant as cf_utilities::type_introspection::HasTypeIntrospection>::is_empty_type() {
+                                                    $( _disc = $variant_discriminant as u8; )?
+                                                    $variant = _disc;
+                                                    _disc += 1;
+                                                } else {
+                                                    $variant = 0; // dummy value, variant will never be encoded
+                                                }
+                                            )*
 
-                                    match self {
-                                        $(
-                                            Self::$variant(val) => {
-                                                codec::Encode::encode_to(&$variant, dest);
-                                                codec::Encode::encode_to(val, dest);
+                                            match this {
+                                                $(
+                                                    super::Enum::$variant(val) => {
+                                                        codec::Encode::encode_to(&$variant, dest);
+                                                        codec::Encode::encode_to(val, dest);
+                                                    }
+                                                )*
+                                                super::Enum::_phantom(never, _) => match *never {}
                                             }
-                                        )*
-                                        Self::_phantom(never, _) => match *never {}
+                                        }
                                     }
+
+                                    inner::do_encode(self, dest)
                                 }
                             }
 
@@ -630,7 +680,7 @@ macro_rules! generate_module {
                                                         .map_err(EnumForwardsError::$variant)?
                                                 ),
                                             )*
-                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                                            Enum::_phantom(never, _) => Enum::_phantom(never, core::default::Default::default()),
                                         })
                                     }
 
@@ -642,7 +692,7 @@ macro_rules! generate_module {
                                                         .map_err(EnumBackwardsError::$variant)?
                                                 ),
                                             )*
-                                            Enum::_phantom(never, _) => Enum::_phantom(never, Default::default()),
+                                            Enum::_phantom(never, _) => Enum::_phantom(never, core::default::Default::default()),
                                         })
                                     }
                                 }
@@ -678,12 +728,11 @@ macro_rules! generate_module {
                     pub type RealEnum = $enum $(< $($T,)+ >)?;
 
                     pub mod variants {
-                        use super::*;
+                        use super::user_imports::*;
                         pub mod __impls {
-                            use super::*;
                             $(
                                 pub mod $variant {
-                                    use super::*;
+                                    use super::super::super::user_imports::*;
                                     $crate::generate_module! {
                                         pub struct variant_struct {
                                             $( $( pub $variant_tuple_entry: $variant_ty,)*)?
@@ -691,10 +740,10 @@ macro_rules! generate_module {
                                         }
                                         mod variant_mod { #![migrations] }
                                     }
-                                    impl HasChangelog for variant_struct
+                                    impl $crate::migrations::HasChangelog for variant_struct
                                     where
-                                        $( $( $variant_ty: HasChangelog, )* )?
-                                        $( $( $variant_field_ty: HasChangelog, )* )?
+                                        $( $( $variant_ty: $crate::migrations::HasChangelog, )* )?
+                                        $( $( $variant_field_ty: $crate::migrations::HasChangelog, )* )?
                                     {
                                         type if_unspecified = variant_mod::see_field_changelogs;
                                     }
@@ -705,8 +754,8 @@ macro_rules! generate_module {
                         $(
                             pub type $variant = __impls::$variant::variant_struct;
 
-                            impl From<$variant> for RealEnum {
-                                fn from(this: $variant) -> RealEnum {
+                            impl From<$variant> for super::RealEnum {
+                                fn from(this: $variant) -> super::RealEnum {
                                     $enum::$variant
                                     $(
                                         {

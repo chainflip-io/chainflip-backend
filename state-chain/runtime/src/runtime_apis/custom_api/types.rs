@@ -19,7 +19,7 @@ pub use crate::{chainflip::Offence, AccountId, Block, Runtime};
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
 	self,
-	address::EncodedAddress,
+	address::{EncodedAddress, _EncodedAddress},
 	assets::any::AssetMap,
 	evm::Address as EvmAddress,
 	instances::{
@@ -40,7 +40,7 @@ pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
 		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
-		IsHistoricalType, Migration, NewFieldWithDefault,
+		IsHistoricalType, Migration, NewFieldWithDefault, OverrideMigrationWith,
 	},
 	primitives::NewTypeWithDefault,
 	v20100, v20200, v20300, HasChangelog,
@@ -97,6 +97,7 @@ pub enum NonceOrAccount {
 	Account(AccountId32),
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Serialize, Deserialize, Debug)]
 pub struct LendingPosition<Amount> {
 	#[serde(flatten)]
@@ -105,6 +106,9 @@ pub struct LendingPosition<Amount> {
 	pub total_amount: Amount,
 	// Total amount available to the lender (equals total_amount if the pool has enough liquidity)
 	pub available_amount: Amount,
+}
+impl<Amount: HasChangelog> HasChangelog for LendingPosition<Amount> {
+	type if_unspecified = _LendingPosition::see_field_changelogs;
 }
 
 pub type VanityName = Vec<u8>;
@@ -202,53 +206,14 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 }
 
 pub mod validator_info_before_v7 {
-	use super::*;
-	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
-	pub struct ValidatorInfo {
-		pub balance: AssetAmount,
-		pub bond: AssetAmount,
-		pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
-		pub reputation_points: i32,
-		pub keyholder_epochs: Vec<EpochIndex>,
-		pub is_current_authority: bool,
-		#[deprecated]
-		pub is_current_backup: bool,
-		pub is_qualified: bool,
-		pub is_online: bool,
-		pub is_bidding: bool,
-		pub bound_redeem_address: Option<EvmAddress>,
-		pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-		pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
-		pub estimated_redeemable_balance: AssetAmount,
-	}
-}
+	use cf_utilities::migrations::v11100;
 
-impl From<validator_info_before_v7::ValidatorInfo> for ValidatorInfo {
-	fn from(old: validator_info_before_v7::ValidatorInfo) -> Self {
-		ValidatorInfo {
-			balance: old.balance,
-			bond: old.bond,
-			last_heartbeat: old.last_heartbeat,
-			reputation_points: old.reputation_points,
-			keyholder_epochs: old.keyholder_epochs,
-			is_current_authority: old.is_current_authority,
-			#[expect(deprecated)]
-			is_current_backup: old.is_current_backup,
-			is_qualified: old.is_qualified,
-			is_online: old.is_online,
-			is_bidding: old.is_bidding,
-			bound_redeem_address: old.bound_redeem_address,
-			apy_bp: old.apy_bp,
-			restricted_balances: old.restricted_balances,
-			estimated_redeemable_balance: old.estimated_redeemable_balance,
-			operator: None,
-			max_bid: None,
-			bid: old.balance,
-		}
-	}
+	use super::*;
+	pub type ValidatorInfo = <super::ValidatorInfo as HasVersion<v11100>>::HistoricalType;
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+#[cf_proc_macros::generate_module]
 pub struct ValidatorInfo {
 	pub balance: AssetAmount,
 	pub bond: AssetAmount,
@@ -271,6 +236,17 @@ pub struct ValidatorInfo {
 	pub max_bid: Option<AssetAmount>,
 }
 
+impl HasChangelog for ValidatorInfo {
+	type if_unspecified = _ValidatorInfo::see_field_changelogs;
+	type in_11100 =
+		_ValidatorInfo::see_field_changelogs_and_also<_ValidatorInfo::field::operator::Added>;
+	type in_20300 = _ValidatorInfo::see_field_changelogs_and_also<(
+		_ValidatorInfo::field::bid::Added,
+		_ValidatorInfo::field::max_bid::Added,
+	)>;
+}
+
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct OperatorInfo<Amount> {
 	pub managed_validators: BTreeMap<AccountId32, Amount>,
@@ -283,6 +259,9 @@ pub struct OperatorInfo<Amount> {
 	pub delegators: BTreeMap<AccountId32, Amount>,
 	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
 	pub active_delegation: Option<DelegationSnapshot<AccountId32, Amount>>,
+}
+impl<Amount: HasChangelog> HasChangelog for OperatorInfo<Amount> {
+	type if_unspecified = _OperatorInfo::see_field_changelogs;
 }
 
 #[cf_proc_macros::generate_module]
@@ -520,6 +499,7 @@ impl HasChangelog for LiquidityProviderBoostPoolInfo {
 	type if_unspecified = _LiquidityProviderBoostPoolInfo::see_field_changelogs;
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
@@ -530,14 +510,25 @@ pub struct LiquidityProviderInfo {
 	pub collateral_balances: Vec<(Asset, AssetAmount)>,
 }
 
-#[derive(Encode, Decode, TypeInfo, DefaultNoBound)]
+impl HasChangelog for LiquidityProviderInfo {
+	type if_unspecified = _LiquidityProviderInfo::see_field_changelogs;
+}
+
 #[derive_n_functor]
+#[cf_proc_macros::generate_module]
+#[derive(Encode, Decode, TypeInfo, DefaultNoBound)]
 pub struct BrokerInfo<BtcAddress> {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 	pub btc_vault_deposit_address: Option<BtcAddress>,
 	pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
 	pub bond: AssetAmount,
 	pub bound_fee_withdrawal_address: Option<EvmAddress>,
+}
+impl<BtcAddress: HasChangelog> HasChangelog for BrokerInfo<BtcAddress> {
+	type if_unspecified = _BrokerInfo::see_field_changelogs;
+	type in_20100 = _BrokerInfo::see_field_changelogs_and_also<
+		_BrokerInfo::field::bound_fee_withdrawal_address::Added,
+	>;
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
@@ -685,6 +676,7 @@ pub struct TransactionScreeningEvents {
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[cf_proc_macros::generate_module]
 pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
@@ -704,6 +696,69 @@ pub struct VaultAddresses {
 	pub bsc: EncodedAddress,
 
 	pub predicted_seconds_until_next_vault_rotation: u64,
+}
+impl HasChangelog for VaultAddresses {
+	type if_unspecified = _VaultAddresses::see_field_changelogs;
+	type in_20100 = _VaultAddresses::see_field_changelogs_and_also<(
+		_VaultAddresses::field::usdt_token_mint_pubkey::CustomMigration<NewSolEncodedAddress>,
+		_VaultAddresses::field::solana_usdt_token_vault_ata::CustomMigration<NewSolEncodedAddress>,
+	)>;
+	type in_20200 = _VaultAddresses::see_field_changelogs_and_also<
+		_VaultAddresses::field::tron::CustomMigration<NewTronEncodedAddress>,
+	>;
+	type in_20300 = _VaultAddresses::see_field_changelogs_and_also<
+		_VaultAddresses::field::bsc::CustomMigration<NewBscEncodedAddress>,
+	>;
+}
+// Currently the migrations have to be specified in a verbose form,
+// because `EncodedAddress` doesn't have a default() implementation.
+pub struct NewBscEncodedAddress;
+impl Migration<<EncodedAddress as HasVersion<v20300>>::HistoricalType, v20300>
+	for NewBscEncodedAddress
+{
+	type From = ();
+	fn try_forwards(
+		_x: Self::From,
+	) -> Result<<EncodedAddress as HasVersion<v20300>>::HistoricalType, Self::ForwardsError> {
+		Ok(_EncodedAddress::Enum::Bsc(Default::default()))
+	}
+	fn try_backwards(
+		_x: <EncodedAddress as HasVersion<v20300>>::HistoricalType,
+	) -> Result<Self::From, Self::BackwardsError> {
+		Ok(())
+	}
+}
+pub struct NewTronEncodedAddress;
+impl Migration<<EncodedAddress as HasVersion<v20200>>::HistoricalType, v20200>
+	for NewTronEncodedAddress
+{
+	type From = ();
+	fn try_forwards(
+		_x: Self::From,
+	) -> Result<<EncodedAddress as HasVersion<v20200>>::HistoricalType, Self::ForwardsError> {
+		Ok(_EncodedAddress::Enum::Tron(Default::default()))
+	}
+	fn try_backwards(
+		_x: <EncodedAddress as HasVersion<v20200>>::HistoricalType,
+	) -> Result<Self::From, Self::BackwardsError> {
+		Ok(())
+	}
+}
+pub struct NewSolEncodedAddress;
+impl Migration<<EncodedAddress as HasVersion<v20100>>::HistoricalType, v20100>
+	for NewSolEncodedAddress
+{
+	type From = ();
+	fn try_forwards(
+		_x: Self::From,
+	) -> Result<<EncodedAddress as HasVersion<v20100>>::HistoricalType, Self::ForwardsError> {
+		Ok(_EncodedAddress::Enum::Sol(Default::default()))
+	}
+	fn try_backwards(
+		_x: <EncodedAddress as HasVersion<v20100>>::HistoricalType,
+	) -> Result<Self::From, Self::BackwardsError> {
+		Ok(())
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -940,12 +995,17 @@ impl<A> RpcAccountInfoCommonItems<A> {
 	}
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo)]
 pub struct RuntimeApiAccountInfoWrapper {
 	pub common_items: RpcAccountInfoCommonItems<FlipBalance>,
 	pub role: RuntimeApiAccountInfo,
 }
+impl HasChangelog for RuntimeApiAccountInfoWrapper {
+	type if_unspecified = _RuntimeApiAccountInfoWrapper::see_field_changelogs;
+}
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo)]
 pub enum RuntimeApiAccountInfo {
 	Unregistered,
@@ -953,6 +1013,9 @@ pub enum RuntimeApiAccountInfo {
 	LiquidityProvider(Box<LiquidityProviderInfo>),
 	Validator(Box<ValidatorInfo>),
 	Operator(Box<OperatorInfo<FlipBalance>>),
+}
+impl HasChangelog for RuntimeApiAccountInfo {
+	type if_unspecified = _RuntimeApiAccountInfo::see_variant_changelogs;
 }
 
 #[derive(

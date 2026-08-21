@@ -14,9 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use super::{account_info_before_api_v7::RpcAccountInfo as RpcAccountInfoBeforeV7, *};
-use state_chain_runtime::runtime_apis::types::{
-	before_version_10::BrokerInfo, validator_info_before_v7::ValidatorInfo as ValidatorInfoBeforeV7,
-};
+use state_chain_runtime::runtime_apis::types::before_version_10::BrokerInfo;
 
 #[test]
 fn test_no_account_serialization() {
@@ -125,7 +123,7 @@ fn test_lp_serialization() {
 
 #[test]
 fn test_validator_serialization() {
-	let validator = RpcAccountInfoBeforeV7::validator(ValidatorInfoBeforeV7 {
+	let validator = RpcAccountInfoBeforeV7::validator(ValidatorInfo {
 		balance: FLIPPERINOS_PER_FLIP,
 		bond: FLIPPERINOS_PER_FLIP,
 		last_heartbeat: 0,
@@ -140,6 +138,9 @@ fn test_validator_serialization() {
 		apy_bp: Some(100u32),
 		restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), FLIPPERINOS_PER_FLIP)]),
 		estimated_redeemable_balance: 0,
+		operator: None, // didn't exist historically, not serialized
+		bid: 0,         // didn't exist historically, not serialized
+		max_bid: None,  // didn't exist historically, not serialized
 	});
 
 	insta::assert_snapshot!(to_pretty_json(&validator));

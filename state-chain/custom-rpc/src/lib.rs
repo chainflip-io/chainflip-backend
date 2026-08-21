@@ -50,7 +50,7 @@ use cf_rpc_apis::{
 use cf_utilities::{
 	migrations::{
 		basics::{migrate_from_historical_type, try_migrate_from_historical_type},
-		v20000, v20100,
+		v11100, v20000, v20100, v20200,
 	},
 	rpc::NumberOrHex,
 };
@@ -397,7 +397,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 
 pub mod account_info_before_api_v7 {
 	use super::*;
-	use state_chain_runtime::runtime_apis::types::{before_version_10, validator_info_before_v7};
+	use state_chain_runtime::runtime_apis::types::before_version_10;
 
 	#[expect(clippy::large_enum_variant)]
 	#[derive(Serialize, Deserialize, Clone)]
@@ -491,7 +491,7 @@ pub mod account_info_before_api_v7 {
 			}
 		}
 
-		pub fn validator(info: validator_info_before_v7::ValidatorInfo) -> Self {
+		pub fn validator(info: super::ValidatorInfo) -> Self {
 			Self::Validator {
 				flip_balance: info.balance.into(),
 				bond: info.bond.into(),
@@ -1851,7 +1851,8 @@ where
 				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_free_balances_before_version_19(hash, account_id).map(Into::into)
+				api.cf_free_balances_before_version_19(hash, account_id)
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_free_balances(hash, account_id)
 			}
@@ -1878,7 +1879,8 @@ where
 				api.cf_lp_total_balances_before_version_17(hash, account_id).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_lp_total_balances_before_version_19(hash, account_id).map(Into::into)
+				api.cf_lp_total_balances_before_version_19(hash, account_id)
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_lp_total_balances(hash, account_id)
 			}
@@ -1899,7 +1901,8 @@ where
 				api.cf_trading_strategy_limits_before_version_17(hash).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_trading_strategy_limits_before_version_19(hash).map(Into::into)
+				api.cf_trading_strategy_limits_before_version_19(hash)
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_trading_strategy_limits(hash)
 			}
@@ -1933,14 +1936,17 @@ where
 				api.cf_lending_pools_before_version_17(hash, asset).map(|lending_pools| {
 					lending_pools
 						.into_iter()
-						.map(state_chain_runtime::runtime_apis::custom_api::types::before_version_19::RpcLendingPool::from)
-						.map(Into::into)
+						.map(|pool| migrate_from_historical_type(v20100, pool))
 						.collect()
 				})
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_lending_pools_before_version_19(hash, asset)
-					.map(|lending_pools| lending_pools.into_iter().map(Into::into).collect())
+				api.cf_lending_pools_before_version_19(hash, asset).map(|lending_pools| {
+					lending_pools
+						.into_iter()
+						.map(|pool| migrate_from_historical_type(v20200, pool))
+						.collect()
+				})
 			} else {
 				api.cf_lending_pools(hash, asset)
 			}
@@ -1955,6 +1961,7 @@ where
 						utilisation_cap: pool.utilisation_cap,
 						current_interest_rate: pool.current_interest_rate,
 						config: pool.config,
+						owed_to_network: (),
 					})
 					.collect()
 			})
@@ -2099,8 +2106,15 @@ where
 						#[expect(deprecated)]
 						api.cf_all_account_infos_before_version_19(hash, roles)?
 							.into_iter()
-							.map(Into::into)
-							.collect::<Vec<_>>()
+							.map(|info| try_migrate_from_historical_type(v20200, info))
+							.collect::<Result<Vec<_>, _>>()
+							.map_err(|_| {
+								CfApiError::ErrorObject(ErrorObject::owned(
+									ErrorCode::InternalError.code(),
+									"Error when migrating runtime api reply",
+									None::<()>,
+								))
+							})?
 					} else {
 						api.cf_all_account_infos(hash, roles)?
 					};
@@ -2295,7 +2309,17 @@ where
 						),
 						AccountRole::Validator => {
 							#[expect(deprecated)]
-							let info = api.cf_validator_info_before_version_7(hash, &account_id)?;
+							let info = try_migrate_from_historical_type(
+								v11100,
+								api.cf_validator_info_before_version_7(hash, &account_id)?,
+							)
+							.map_err(|_err| {
+								CfApiError::ErrorObject(ErrorObject::owned(
+									ErrorCode::InternalError.code(),
+									"Error when migrating runtime api reply",
+									None::<()>,
+								))
+							})?;
 
 							RpcAccountInfoLegacy::validator(info)
 						},
@@ -2341,12 +2365,21 @@ where
 					})?
 				} else if api_version < 19 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_19(
-						hash,
-						&account_id,
-						ShouldSweep::Yes,
-					)?
-					.into()
+					try_migrate_from_historical_type(
+						v20200,
+						api.cf_common_account_info_before_version_19(
+							hash,
+							&account_id,
+							ShouldSweep::Yes,
+						)?,
+					)
+					.map_err(|_err| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InternalError.code(),
+							"Error when migrating runtime api reply",
+							None::<()>,
+						))
+					})?
 				} else {
 					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}
@@ -2487,8 +2520,18 @@ where
 								operator,
 								..
 							} = if api_version < 19 {
-								#[expect(deprecated)]
-								api.cf_validator_info_before_version_19(hash, &account_id)?.into()
+								try_migrate_from_historical_type(
+									v20200,
+									#[expect(deprecated)]
+									api.cf_validator_info_before_version_19(hash, &account_id)?,
+								)
+								.map_err(|_err| {
+									CfApiError::ErrorObject(ErrorObject::owned(
+										ErrorCode::InternalError.code(),
+										"Error when migrating runtime api reply",
+										None::<()>,
+									))
+								})?
 							} else {
 								api.cf_validator_info(hash, &account_id)?
 							};
@@ -2752,7 +2795,7 @@ where
 				migrate_from_historical_type(v20100, api.cf_network_fees_before_version_17(hash)?)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_network_fees_before_version_19(hash)?.into()
+				migrate_from_historical_type(v20200, api.cf_network_fees_before_version_19(hash)?)
 			} else {
 				api.cf_network_fees(hash)?
 			};
@@ -2790,8 +2833,11 @@ where
 						api.cf_default_oracle_price_protection_before_version_17(hash)?.into()
 					}
 				} else if version < 19 {
-					#[expect(deprecated)]
-					api.cf_default_oracle_price_protection_before_version_19(hash)?.into()
+					migrate_from_historical_type(
+						v20200,
+						#[expect(deprecated)]
+						api.cf_default_oracle_price_protection_before_version_19(hash)?,
+					)
 				} else {
 					api.cf_default_oracle_price_protection(hash)?
 				},
@@ -3572,7 +3618,8 @@ where
 				api.cf_vault_addresses_before_version_17(hash).map(Into::into)
 			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_vault_addresses_before_version_19(hash).map(Into::into)
+				api.cf_vault_addresses_before_version_19(hash)
+					.map(|x| migrate_from_historical_type(v20200, x))
 			} else {
 				api.cf_vault_addresses(hash)
 			}
