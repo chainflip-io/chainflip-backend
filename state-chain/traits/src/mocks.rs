@@ -43,6 +43,7 @@ pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod fee_payment;
 pub mod fetches_transfers_limit_provider;
+pub mod flip_move_to_gateway;
 pub mod flip_slasher;
 pub mod funding_info;
 pub mod ingress_egress_fee_handler;

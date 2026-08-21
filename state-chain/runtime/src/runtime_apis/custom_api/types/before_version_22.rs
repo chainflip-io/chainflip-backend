@@ -16,6 +16,20 @@
 
 use super::*;
 
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	Clone,
+	PartialEq,
+	Eq,
+	frame_support::pallet_prelude::RuntimeDebug,
+	Default,
+)]
+pub struct EmissionsSafeMode {
+	pub emissions_sync_enabled: bool,
+}
+
 // The v20 ValidatorInfo, with apy_bp: emissions (and therefore APY) no longer exist as of v21.
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct ValidatorInfo {

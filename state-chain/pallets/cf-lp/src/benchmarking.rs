@@ -149,8 +149,6 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		T::FeePayment::activate_flip_2_1();
-
 		let amount = T::MinimumFunding::get_min_funding_amount();
 		T::BalanceApi::credit_account(&caller, Asset::Flip, amount);
 
