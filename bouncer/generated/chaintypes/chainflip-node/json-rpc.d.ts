@@ -194,6 +194,7 @@ export type ChainJsonRpcApis = Pick<
   | 'cf_unsubscribe_transaction_screening_events'
   | 'cf_validate_dca_params'
   | 'cf_validate_refund_params'
+  | 'cf_withdrawal_whitelist'
   | 'cf_witness_count'
   | 'chainHead_v1_body'
   | 'chainHead_v1_call'

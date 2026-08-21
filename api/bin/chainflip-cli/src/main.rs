@@ -34,6 +34,10 @@ use chainflip_api::{
 	Asset, BrokerApi,
 };
 use clap::Parser;
+use custom_rpc::{
+	RpcActiveWithdrawalWhitelist, RpcPendingWhitelistUpdate, RpcWhitelistDestination,
+	RpcWhitelistUpdate, RpcWithdrawalWhitelist,
+};
 use futures::FutureExt;
 use serde::Serialize;
 use std::{
@@ -154,6 +158,9 @@ async fn run_cli() -> Result<()> {
 						};
 						let tx_hash = api.lp_api().update_whitelist(change).await?;
 						println!("Withdrawal whitelist updated. Tx hash: {tx_hash}");
+					},
+					LiquidityProviderSubcommands::GetWhitelist => {
+						get_withdrawal_whitelist(api.query_api()).await?;
 					},
 					LiquidityProviderSubcommands::RegisterAccount => {
 						api.lp_api().register_account().await?;
@@ -431,6 +438,53 @@ async fn bind_executor_address(api: Arc<impl OperatorApi + Sync>, eth_address: &
 	let tx_hash = api.bind_executor_address(eth_address).await?;
 
 	println!("Account bound to executor address {eth_address}, transaction hash: `{tx_hash:#x}`.");
+
+	Ok(())
+}
+
+fn describe_destination(destination: &RpcWhitelistDestination) -> String {
+	match destination {
+		RpcWhitelistDestination::InternalAccount(account) => format!("account {account}"),
+		RpcWhitelistDestination::ExternalAddress { chain, address } =>
+			format!("{chain} address {address}"),
+	}
+}
+
+async fn get_withdrawal_whitelist(api: QueryApi) -> Result<()> {
+	let RpcWithdrawalWhitelist { active, pending } =
+		api.get_withdrawal_whitelist(None, None).await?;
+
+	match active {
+		Some(RpcActiveWithdrawalWhitelist { timelock_secs, allowed }) => {
+			println!("Withdrawal whitelist timelock: {timelock_secs} seconds.");
+			if allowed.is_empty() {
+				println!("No destinations are whitelisted, so withdrawals are blocked.");
+			} else {
+				println!("Withdrawals are allowed to:");
+				for destination in &allowed {
+					println!("  {}", describe_destination(destination));
+				}
+			}
+		},
+		None => println!(
+			"Your account has no withdrawal whitelist: withdrawals to any destination are allowed."
+		),
+	}
+
+	if !pending.is_empty() {
+		println!("Timelocked updates that have not been applied yet:");
+		for RpcPendingWhitelistUpdate { activates_at, update } in &pending {
+			let update = match update {
+				RpcWhitelistUpdate::Allow(destination) =>
+					format!("allow {}", describe_destination(destination)),
+				RpcWhitelistUpdate::Remove(destination) =>
+					format!("remove {}", describe_destination(destination)),
+				RpcWhitelistUpdate::Timelock(timelock) =>
+					format!("set timelock to {timelock} seconds"),
+			};
+			println!("  {update}, from unix time {activates_at}");
+		}
+	}
 
 	Ok(())
 }

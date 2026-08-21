@@ -105,7 +105,8 @@ use state_chain_runtime::{
 			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo,
 			RuntimeApiPenalty, ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
 			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
-			VaultAddresses, VaultSwapDetails,
+			VaultAddresses, VaultSwapDetails, WhitelistDestination, WhitelistUpdate,
+			WithdrawalWhitelistInfo,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -836,6 +837,85 @@ pub use ingress_egress_tracker::{
 	RpcTransactionRef, RpcVaultDepositWitnessInfo, RpcWitnessedEventsResponse,
 };
 
+/// An account's withdrawal whitelist, with addresses rendered in their human-readable form.
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct RpcWithdrawalWhitelist {
+	/// `None` if the account has no whitelist configured, in which case withdrawals to any
+	/// destination are allowed.
+	pub active: Option<RpcActiveWithdrawalWhitelist>,
+	pub pending: Vec<RpcPendingWhitelistUpdate>,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct RpcActiveWithdrawalWhitelist {
+	/// The delay applied to whitelist updates, in seconds. Zero means updates apply immediately.
+	pub timelock_secs: u64,
+	pub allowed: Vec<RpcWhitelistDestination>,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct RpcPendingWhitelistUpdate {
+	/// Wall-clock time (unix seconds) at which the update is applied.
+	pub activates_at: u64,
+	pub update: RpcWhitelistUpdate,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub enum RpcWhitelistUpdate {
+	Allow(RpcWhitelistDestination),
+	Remove(RpcWhitelistDestination),
+	Timelock(u64),
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub enum RpcWhitelistDestination {
+	InternalAccount(AccountId32),
+	ExternalAddress { chain: ForeignChain, address: String },
+}
+
+impl From<WhitelistDestination> for RpcWhitelistDestination {
+	fn from(destination: WhitelistDestination) -> Self {
+		match destination {
+			WhitelistDestination::InternalAccount(account) =>
+				RpcWhitelistDestination::InternalAccount(account),
+			WhitelistDestination::ExternalAddress(address) =>
+				RpcWhitelistDestination::ExternalAddress {
+					chain: address.chain(),
+					address: address.to_string(),
+				},
+		}
+	}
+}
+
+impl From<WhitelistUpdate> for RpcWhitelistUpdate {
+	fn from(update: WhitelistUpdate) -> Self {
+		match update {
+			WhitelistUpdate::Allow(destination) => RpcWhitelistUpdate::Allow(destination.into()),
+			WhitelistUpdate::Remove(destination) => RpcWhitelistUpdate::Remove(destination.into()),
+			WhitelistUpdate::Timelock(timelock) => RpcWhitelistUpdate::Timelock(timelock),
+		}
+	}
+}
+
+impl From<WithdrawalWhitelistInfo> for RpcWithdrawalWhitelist {
+	fn from(info: WithdrawalWhitelistInfo) -> Self {
+		RpcWithdrawalWhitelist {
+			active: info.active.map(|active| RpcActiveWithdrawalWhitelist {
+				timelock_secs: active.timelock_secs,
+				allowed: active.allowed.into_iter().map(Into::into).collect(),
+			}),
+			pending: info
+				.pending
+				.into_iter()
+				.map(|update| RpcPendingWhitelistUpdate {
+					activates_at: update.activates_at,
+					update: update.update.into(),
+				})
+				.collect(),
+		}
+	}
+}
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -925,6 +1005,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<any::AssetMap<U256>>;
+	#[method(name = "withdrawal_whitelist")]
+	fn cf_withdrawal_whitelist(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWithdrawalWhitelist>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -1883,6 +1969,27 @@ where
 				api.cf_lp_total_balances(hash, account_id)
 			}
 			.map(|balances| balances.map(Into::into))
+		})
+	}
+
+	fn cf_withdrawal_whitelist(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWithdrawalWhitelist> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			// The withdrawal whitelist itself only exists from version 21 onwards, so there is
+			// nothing sensible to return for older blocks.
+			if version < 21 {
+				Err(CfApiError::ErrorObject(call_error(
+					"cf_withdrawal_whitelist is not supported at this block",
+					CfErrorCode::UnsupportedRuntimeApiVersion,
+				)))
+			} else {
+				api.cf_withdrawal_whitelist(hash, account_id)
+					.map(RpcWithdrawalWhitelist::from)
+					.map_err(CfApiError::from)
+			}
 		})
 	}
 

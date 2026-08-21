@@ -131,6 +131,9 @@ pub enum LiquidityProviderSubcommands {
 	/// Add or remove a destination from the withdrawal whitelist.
 	#[clap(subcommand)]
 	UpdateWhitelist(WhitelistSubcommands),
+	/// Show the withdrawal whitelist: the destinations withdrawals are currently allowed to, plus
+	/// any timelocked updates that have not been applied yet.
+	GetWhitelist,
 	/// Register this account as a liquidity provider account.
 	RegisterAccount,
 	/// De-register this liquidity provider account.
@@ -475,6 +478,14 @@ mod tests {
 			)) => assert_eq!(account, AccountId32::from_str(account_ss58).unwrap()),
 			other => panic!("unexpected command: {other:?}"),
 		}
+
+		// `lp get-whitelist`
+		let opts = CLICommandLineOptions::try_parse_from(["chainflip-cli", "lp", "get-whitelist"])
+			.unwrap();
+		assert!(matches!(
+			opts.cmd,
+			CliCommand::LiquidityProvider(LiquidityProviderSubcommands::GetWhitelist)
+		));
 
 		// `lp update-whitelist remove-account <ss58>`
 		let opts = CLICommandLineOptions::try_parse_from([
