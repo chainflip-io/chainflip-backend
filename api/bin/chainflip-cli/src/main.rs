@@ -20,16 +20,8 @@ use crate::settings::{
 };
 use anyhow::{Context, Result};
 use api::{
-	lp::LpApi,
-	primitives::{
-		state_chain_runtime::runtime_apis::types::{
-			ActiveWithdrawalWhitelist, PendingWhitelistUpdate, WhitelistDestination,
-			WhitelistUpdate, WithdrawalWhitelistInfo,
-		},
-		EpochIndex,
-	},
-	queries::QueryApi,
-	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
+	lp::LpApi, primitives::EpochIndex, queries::QueryApi, AccountId32, GovernanceApi, KeyPair,
+	OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
 use cf_chains::evm::Address as EthereumAddress;
