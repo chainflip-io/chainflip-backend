@@ -3915,6 +3915,7 @@ export type PalletCfBroadcastCallLike =
 export type CfChainsEthApiEthereumApi =
   | { type: 'SetAggKeyWithAggKey'; value: CfChainsEvmApiEvmTransactionBuilder }
   | { type: 'RegisterRedemption'; value: CfChainsEvmApiEvmTransactionBuilderRegisterRedemption }
+  | { type: 'UpdateFlipSupply'; value: CfChainsEvmApiEvmTransactionBuilderUpdateFlipSupply }
   | { type: 'SetGovKeyWithAggKey'; value: CfChainsEvmApiEvmTransactionBuilderSetGovKeyWithAggKey }
   | { type: 'SetCommKeyWithAggKey'; value: CfChainsEvmApiEvmTransactionBuilderSetCommKeyWithAggKey }
   | { type: 'AllBatch'; value: CfChainsEvmApiEvmTransactionBuilderAllBatch }
@@ -3956,6 +3957,14 @@ export type CfChainsEthApiRegisterRedemption = {
 export type CfChainsEthApiRegisterRedemptionRedemptionExecutor =
   | { type: 'AnyAddress' }
   | { type: 'OnlyAddress'; value: H160 };
+
+export type CfChainsEvmApiEvmTransactionBuilderUpdateFlipSupply = {
+  signerAndSigData?: [CfChainsEvmAggKey, CfChainsEvmApiSigData] | undefined;
+  replayProtection: CfChainsEvmApiEvmReplayProtection;
+  call: CfChainsEthApiUpdateFlipSupply;
+};
+
+export type CfChainsEthApiUpdateFlipSupply = { newTotalSupply: U256; stateChainBlockNumber: U256 };
 
 export type CfChainsEvmApiEvmTransactionBuilderSetGovKeyWithAggKey = {
   signerAndSigData?: [CfChainsEvmAggKey, CfChainsEvmApiSigData] | undefined;
