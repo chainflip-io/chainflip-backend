@@ -546,6 +546,9 @@ pub struct BrokerInfo<BtcAddress> {
 }
 impl<BtcAddress: HasChangelog> HasChangelog for BrokerInfo<BtcAddress> {
 	type if_unspecified = _BrokerInfo::see_field_changelogs;
+	type in_20100 = _BrokerInfo::see_field_changelogs_and_also<
+		_BrokerInfo::field::bound_fee_withdrawal_address::Added,
+	>;
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
