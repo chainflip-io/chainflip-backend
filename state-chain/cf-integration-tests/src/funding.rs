@@ -21,7 +21,6 @@ use cf_primitives::{FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_test_utilities::TestExternalities;
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, EpochInfo};
 use mock_runtime::MIN_FUNDING;
-use pallet_cf_flip::PalletConfigUpdate;
 use pallet_cf_funding::{pallet::Error, RedemptionAmount};
 use pallet_cf_validator::CurrentRotationPhase;
 use state_chain_runtime::chainflip::Offence;
