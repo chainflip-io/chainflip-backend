@@ -313,44 +313,11 @@ impl From<TransactionScreeningEvents> for super::TransactionScreeningEvents {
 
 pub type ValidatorInfo = <super::ValidatorInfo as HasVersion<v20200>>::HistoricalType;
 
-#[derive(Encode, Decode, TypeInfo)]
-pub enum RuntimeApiAccountInfo {
-	Unregistered,
-	Broker(Box<super::BrokerInfo<<Bitcoin as Chain>::ChainAccount>>),
-	LiquidityProvider(Box<LiquidityProviderInfo>),
-	Validator(Box<ValidatorInfo>),
-	Operator(Box<super::OperatorInfo<FlipBalance>>),
-}
+pub type RuntimeApiAccountInfo =
+	<super::RuntimeApiAccountInfo as HasVersion<v20200>>::HistoricalType;
 
-impl From<RuntimeApiAccountInfo> for super::RuntimeApiAccountInfo {
-	fn from(old: RuntimeApiAccountInfo) -> Self {
-		match old {
-			RuntimeApiAccountInfo::Unregistered => Self::Unregistered,
-			RuntimeApiAccountInfo::Broker(info) => Self::Broker(info),
-			RuntimeApiAccountInfo::LiquidityProvider(info) =>
-				Self::LiquidityProvider(Box::new((*info).into())),
-			RuntimeApiAccountInfo::Validator(info) => Self::Validator(Box::new((*info).into())),
-			RuntimeApiAccountInfo::Operator(info) => Self::Operator(info),
-		}
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo)]
-pub struct RuntimeApiAccountInfoWrapper {
-	pub common_items: RpcAccountInfoCommonItems<FlipBalance>,
-	pub role: RuntimeApiAccountInfo,
-}
-
-impl From<RuntimeApiAccountInfoWrapper> for super::RuntimeApiAccountInfoWrapper {
-	fn from(value: RuntimeApiAccountInfoWrapper) -> Self {
-		// TODO!!!
-		let result = match try_migrate_from_historical_type(v20200, value.common_items) {
-			Ok(x) => x,
-			Err(_err) => panic!(),
-		};
-		Self { common_items: result, role: value.role.into() }
-	}
-}
+pub type RuntimeApiAccountInfoWrapper =
+	<super::RuntimeApiAccountInfoWrapper as HasVersion<v20200>>::HistoricalType;
 
 // Ingress events as returned by pre-v19 runtimes: identical to the current types except the
 // `Bsc` variant (appended at the end at v19) is absent from `TransactionInId`, `DepositDetails`

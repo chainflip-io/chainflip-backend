@@ -231,7 +231,6 @@ pub mod validator_info_before_v7 {
 	pub type ValidatorInfo = <super::ValidatorInfo as HasVersion<v11100>>::HistoricalType;
 }
 
-#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 #[cf_proc_macros::generate_module]
 pub struct ValidatorInfo {
@@ -264,9 +263,6 @@ impl HasChangelog for ValidatorInfo {
 		_ValidatorInfo::field::bid::Added,
 		_ValidatorInfo::field::max_bid::Added,
 	)>;
-}
-impl HasChangelog for ValidatorInfo {
-	type if_unspecified = _ValidatorInfo::see_field_changelogs;
 }
 
 #[cf_proc_macros::generate_module]
