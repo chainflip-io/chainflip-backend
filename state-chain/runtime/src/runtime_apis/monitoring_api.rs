@@ -22,7 +22,7 @@ use sp_api::decl_runtime_apis;
 use types::*;
 
 decl_runtime_apis!(
-	#[api_version(4)]
+	#[api_version(5)]
 	pub trait MonitoringRuntimeApi {
 		fn cf_authorities() -> AuthoritiesInfo;
 		#[changed_in(3)]
@@ -31,6 +31,9 @@ decl_runtime_apis!(
 		fn cf_external_chains_block_height() -> ExternalChainsBlockHeight;
 		fn cf_btc_utxos() -> BtcUtxos;
 		fn cf_dot_aggkey() -> PolkadotAccountId;
+		#[changed_in(5)]
+		fn cf_suspended_validators(
+		) -> Vec<(super::custom_api::types::before_version_21::Offence, u32)>;
 		fn cf_suspended_validators() -> Vec<(Offence, u32)>;
 		fn cf_epoch_state() -> EpochState;
 		fn cf_redemptions() -> RedemptionsInfo;
@@ -54,6 +57,8 @@ decl_runtime_apis!(
 		fn cf_sol_onchain_key() -> SolAddress;
 		#[changed_in(3)]
 		fn cf_monitoring_data() -> types::before_monitoring_v3::MonitoringDataV2;
+		#[changed_in(5)]
+		fn cf_monitoring_data() -> types::before_monitoring_v5::MonitoringDataV2;
 		fn cf_monitoring_data() -> MonitoringDataV2;
 		#[changed_in(4)]
 		fn cf_accounts_info(

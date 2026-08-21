@@ -21,7 +21,7 @@
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::traits::{BlockNumberProvider, Saturating, Zero},
-	traits::{Get, OnKilledAccount},
+	traits::{Get, OnKilledAccount, StorageVersion},
 };
 use frame_system::pallet_prelude::*;
 use sp_std::{
@@ -109,6 +109,9 @@ pub enum PalletOffence {
 	MissedHeartbeat,
 }
 
+pub const STORAGE_VERSION_U16: u16 = 1;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
+
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -119,6 +122,7 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 

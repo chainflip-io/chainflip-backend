@@ -14,14 +14,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_traits::{offence_reporting::OffenceReporter, EpochInfo, ThresholdSignerNomination};
+use cf_primitives::ForeignChain;
+use cf_traits::{
+	offence_reporting::OffenceReporter, BroadcastNomination, EpochInfo, ThresholdSignerNomination,
+};
 use pallet_cf_threshold_signature::PalletOffence;
 use pallet_cf_validator::{CurrentAuthorities, CurrentEpoch, HistoricalAuthorities};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{EvmInstance, Reputation, Runtime, Validator};
+use state_chain_runtime::{
+	chainflip::Offence, BitcoinInstance, EthereumInstance, EvmInstance, Reputation, Runtime,
+	Validator,
+};
 
 type RuntimeThresholdSignerNomination =
 	<Runtime as pallet_cf_threshold_signature::Config<EvmInstance>>::ThresholdSignerNomination;
+type EthereumBroadcastSignerNomination =
+	<Runtime as pallet_cf_broadcast::Config<EthereumInstance>>::BroadcastSignerNomination;
+type BitcoinBroadcastSignerNomination =
+	<Runtime as pallet_cf_broadcast::Config<BitcoinInstance>>::BroadcastSignerNomination;
 
 #[test]
 fn threshold_signer_nomination_respects_epoch() {
@@ -94,5 +104,28 @@ fn nodes_who_failed_to_sign_excluded_from_threshold_nomination() {
 		test_not_nominated_for_offence(|node_id| {
 			Reputation::report(PalletOffence::ParticipateSigningFailed, node_id)
 		});
+	});
+}
+
+#[test]
+fn failed_broadcasters_are_only_excluded_on_the_failed_chain() {
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let mut authorities = Validator::current_authorities();
+		let failed_broadcaster = authorities.pop().expect("the test has authorities");
+
+		Reputation::suspend_all(
+			[failed_broadcaster.clone()],
+			&Offence::FailedToBroadcastTransaction(ForeignChain::Ethereum),
+			10,
+		);
+
+		assert_eq!(
+			EthereumBroadcastSignerNomination::nominate_broadcaster((), authorities.clone()),
+			None,
+		);
+		assert_eq!(
+			BitcoinBroadcastSignerNomination::nominate_broadcaster((), authorities),
+			Some(failed_broadcaster),
+		);
 	});
 }

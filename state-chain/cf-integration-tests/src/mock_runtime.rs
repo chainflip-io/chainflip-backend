@@ -76,7 +76,14 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	// We exclude them from the nomination pool of the next attempt,
 	// so there is no need to suspend them further.
-	(Offence::FailedToBroadcastTransaction, (10, 0)),
+	(Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Ethereum), (10, 0)),
+	(Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Polkadot), (10, 0)),
+	(Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Bitcoin), (10, 0)),
+	(Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Arbitrum), (10, 0)),
+	(Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Solana), (10, 0)),
+	(Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Assethub), (10, 0)),
+	(Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Tron), (10, 0)),
+	(Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Bsc), (10, 0)),
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
 	(Offence::FailedLivenessCheck(cf_chains::ForeignChain::Solana), (4, 0)),
 ];
