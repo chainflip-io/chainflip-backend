@@ -158,11 +158,6 @@ fn block_author_rewards_are_distributed_among_delegators() {
 			let total_delegators_pre_balance: FlipBalance =
 				delegators.keys().map(Flip::balance).sum();
 
-			// Credit the fee-distribution reserve directly (normally funded by swap fees) and
-			// move to the next epoch to trigger `on_epoch_ending`'s reward distribution.
-			// `distribute_all` splits the reserve evenly across all authorities, so scale it up
-			// by the authority count such that each authority's (and hence the managed
-			// validator's operator snapshot's) share works out to exactly `REWARD`.
 			pallet_cf_flip::Reserve::<Runtime>::insert(*b"FEES", REWARD * MAX_AUTHORITIES as u128);
 			testnet.move_to_the_next_epoch();
 
