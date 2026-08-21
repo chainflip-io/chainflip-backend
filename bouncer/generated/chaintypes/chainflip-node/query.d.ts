@@ -2613,6 +2613,16 @@ export interface ChainStorage extends GenericChainStorage {
     failedBroadcasters: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
 
     /**
+     * The number of failed attempts for each broadcast. This is *not* the same as the size of
+     * `FailedBroadcasters`, which is cleared each time all authorities have failed, so that they
+     * all become eligible for nomination again.
+     *
+     * @param {number} arg
+     * @param {Callback<number> =} callback
+     **/
+    broadcastAttemptCount: GenericStorageQuery<(arg: number) => number, number>;
+
+    /**
      * Live transaction broadcast requests.
      *
      * @param {number} arg
@@ -2756,6 +2766,16 @@ export interface ChainStorage extends GenericChainStorage {
     failedBroadcasters: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
 
     /**
+     * The number of failed attempts for each broadcast. This is *not* the same as the size of
+     * `FailedBroadcasters`, which is cleared each time all authorities have failed, so that they
+     * all become eligible for nomination again.
+     *
+     * @param {number} arg
+     * @param {Callback<number> =} callback
+     **/
+    broadcastAttemptCount: GenericStorageQuery<(arg: number) => number, number>;
+
+    /**
      * Live transaction broadcast requests.
      *
      * @param {number} arg
@@ -2896,6 +2916,16 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<Array<AccountId32>> =} callback
      **/
     failedBroadcasters: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
+
+    /**
+     * The number of failed attempts for each broadcast. This is *not* the same as the size of
+     * `FailedBroadcasters`, which is cleared each time all authorities have failed, so that they
+     * all become eligible for nomination again.
+     *
+     * @param {number} arg
+     * @param {Callback<number> =} callback
+     **/
+    broadcastAttemptCount: GenericStorageQuery<(arg: number) => number, number>;
 
     /**
      * Live transaction broadcast requests.
@@ -4393,6 +4423,16 @@ export interface ChainStorage extends GenericChainStorage {
     failedBroadcasters: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
 
     /**
+     * The number of failed attempts for each broadcast. This is *not* the same as the size of
+     * `FailedBroadcasters`, which is cleared each time all authorities have failed, so that they
+     * all become eligible for nomination again.
+     *
+     * @param {number} arg
+     * @param {Callback<number> =} callback
+     **/
+    broadcastAttemptCount: GenericStorageQuery<(arg: number) => number, number>;
+
+    /**
      * Live transaction broadcast requests.
      *
      * @param {number} arg
@@ -5047,6 +5087,16 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<Array<AccountId32>> =} callback
      **/
     failedBroadcasters: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
+
+    /**
+     * The number of failed attempts for each broadcast. This is *not* the same as the size of
+     * `FailedBroadcasters`, which is cleared each time all authorities have failed, so that they
+     * all become eligible for nomination again.
+     *
+     * @param {number} arg
+     * @param {Callback<number> =} callback
+     **/
+    broadcastAttemptCount: GenericStorageQuery<(arg: number) => number, number>;
 
     /**
      * Live transaction broadcast requests.
@@ -5946,6 +5996,16 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<Array<AccountId32>> =} callback
      **/
     failedBroadcasters: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
+
+    /**
+     * The number of failed attempts for each broadcast. This is *not* the same as the size of
+     * `FailedBroadcasters`, which is cleared each time all authorities have failed, so that they
+     * all become eligible for nomination again.
+     *
+     * @param {number} arg
+     * @param {Callback<number> =} callback
+     **/
+    broadcastAttemptCount: GenericStorageQuery<(arg: number) => number, number>;
 
     /**
      * Live transaction broadcast requests.
@@ -7602,6 +7662,16 @@ export interface ChainStorage extends GenericChainStorage {
     failedBroadcasters: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
 
     /**
+     * The number of failed attempts for each broadcast. This is *not* the same as the size of
+     * `FailedBroadcasters`, which is cleared each time all authorities have failed, so that they
+     * all become eligible for nomination again.
+     *
+     * @param {number} arg
+     * @param {Callback<number> =} callback
+     **/
+    broadcastAttemptCount: GenericStorageQuery<(arg: number) => number, number>;
+
+    /**
      * Live transaction broadcast requests.
      *
      * @param {number} arg
@@ -8340,6 +8410,16 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<Array<AccountId32>> =} callback
      **/
     failedBroadcasters: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
+
+    /**
+     * The number of failed attempts for each broadcast. This is *not* the same as the size of
+     * `FailedBroadcasters`, which is cleared each time all authorities have failed, so that they
+     * all become eligible for nomination again.
+     *
+     * @param {number} arg
+     * @param {Callback<number> =} callback
+     **/
+    broadcastAttemptCount: GenericStorageQuery<(arg: number) => number, number>;
 
     /**
      * Live transaction broadcast requests.
