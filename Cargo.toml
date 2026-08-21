@@ -244,6 +244,7 @@ sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", t
 sp-storage = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 sp-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
+sp-tracing = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 sp-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 
