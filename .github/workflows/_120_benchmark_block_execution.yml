@@ -78,7 +78,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
@@ -86,9 +86,10 @@ jobs:
         id: resolve-sha
         env:
           GH_TOKEN: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+          INPUTS_COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
-          if [ -n "${{ inputs.commit_sha }}" ]; then
-            FULL_SHA=$(git rev-parse "${{ inputs.commit_sha }}")
+          if [ -n "${INPUTS_COMMIT_SHA}" ]; then
+            FULL_SHA=$(git rev-parse "${INPUTS_COMMIT_SHA}")
           else
             FULL_SHA=$(curl -sH "Authorization: token $GH_TOKEN" \
               "https://api.github.com/repos/${{ github.repository }}/actions/workflows/ci-benchmarks-${{ inputs.binary_artefact_source }}.yml/runs?status=success&per_page=1" \
@@ -102,7 +103,7 @@ jobs:
           echo "Using commit $FULL_SHA"
 
       - name: Fetch chainflip-node from ci-benchmarks-${{ inputs.binary_artefact_source }}.yml
-        uses: dawidd6/action-download-artifact@fe9d59ce33ce92db8a6ac90b2c8be6b6d90417c8
+        uses: dawidd6/action-download-artifact@fe9d59ce33ce92db8a6ac90b2c8be6b6d90417c8 # v15
         with:
           workflow: ci-benchmarks-${{ inputs.binary_artefact_source }}.yml
           workflow_conclusion: completed
@@ -131,8 +132,10 @@ jobs:
             > "$BASE_PATH/sync.log" 2>&1 &
           echo "sync_pid=$!" >> "$GITHUB_ENV"
 
-          echo "Syncing for ${{ inputs.sync_duration_minutes }} minutes..."
-          sleep $(( ${{ inputs.sync_duration_minutes }} * 60 ))
+          echo "Syncing for ${INPUTS_SYNC_DURATION_MINUTES} minutes..."
+          sleep $(( ${INPUTS_SYNC_DURATION_MINUTES} * 60 ))
+        env:
+          INPUTS_SYNC_DURATION_MINUTES: ${{ inputs.sync_duration_minutes }}
 
       - name: Stop sync and determine imported block range 🛑
         id: block-range
@@ -162,12 +165,15 @@ jobs:
           ./chainflip-node benchmark block \
             --chain=state-chain/node/chainspecs/berghain.chainspec.raw.json \
             --base-path="$BASE_PATH" \
-            --from=${{ steps.block-range.outputs.from }} \
-            --to=${{ steps.block-range.outputs.to }} \
+            --from=${STEPS_BLOCK_RANGE_OUTPUTS_FROM} \
+            --to=${STEPS_BLOCK_RANGE_OUTPUTS_TO} \
             2>&1 | tee benchmark-block-output.txt
+        env:
+          STEPS_BLOCK_RANGE_OUTPUTS_FROM: ${{ steps.block-range.outputs.from }}
+          STEPS_BLOCK_RANGE_OUTPUTS_TO: ${{ steps.block-range.outputs.to }}
 
       - name: Upload benchmark output 📦
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: benchmark-block-output-${{ steps.resolve-sha.outputs.full_sha }}
           path: benchmark-block-output.txt
@@ -176,18 +182,22 @@ jobs:
         run: |
           {
             echo "### Block execution benchmark"
-            echo "Commit: \`${{ steps.resolve-sha.outputs.full_sha }}\`"
-            echo "Blocks: ${{ steps.block-range.outputs.from }}..${{ steps.block-range.outputs.to }}"
+            echo "Commit: \`${STEPS_RESOLVE_SHA_OUTPUTS_FULL_SHA}\`"
+            echo "Blocks: ${STEPS_BLOCK_RANGE_OUTPUTS_FROM}..${STEPS_BLOCK_RANGE_OUTPUTS_TO}"
             echo '```'
             cat benchmark-block-output.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          STEPS_RESOLVE_SHA_OUTPUTS_FULL_SHA: ${{ steps.resolve-sha.outputs.full_sha }}
+          STEPS_BLOCK_RANGE_OUTPUTS_FROM: ${{ steps.block-range.outputs.from }}
+          STEPS_BLOCK_RANGE_OUTPUTS_TO: ${{ steps.block-range.outputs.to }}
 
       - name: Archive chain database 🗄️
         run: tar -czf "$GITHUB_WORKSPACE/berghain-chaindata.tar.gz" -C "$BASE_PATH" .
 
       - name: Upload chain database 📦
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: berghain-chaindata-${{ steps.block-range.outputs.from }}-${{ steps.block-range.outputs.to }}
           path: berghain-chaindata.tar.gz

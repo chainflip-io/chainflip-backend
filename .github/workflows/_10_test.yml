@@ -26,7 +26,15 @@ jobs:
           - cf-test-ci-nextest
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
+
+      - name: Install Socket Firewall 🔥
+        uses: SocketDev/action@2d3f25590c6ed6ba11a9a14c064d962a3a04698f # v1.3.1
+        with:
+          mode: firewall-free
+          shims: "false"
 
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands
       - name: Configure Git 🛠️
@@ -34,7 +42,7 @@ jobs:
 
       - name: Set up Rust cache 🦀💰
         if: contains(inputs.ci-runner, 'no-cache') == false
-        uses: namespacelabs/nscloud-cache-action@v1
+        uses: namespacelabs/nscloud-cache-action@c5f8dab7560444c4bf8dbc64f1b203431873c547 # v1.6.1
         with:
           cache: rust
 
@@ -42,7 +50,7 @@ jobs:
         run: apt-get update && apt-get install -y unzip
 
       - name: Install Bun Runtime
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: "latest"
 
@@ -51,11 +59,11 @@ jobs:
         run: |
           bun install
 
-      - uses: taiki-e/install-action@a209ff0ce0349f9e7cadc4ba8f6a415c8d3b0813
+      - uses: taiki-e/install-action@a209ff0ce0349f9e7cadc4ba8f6a415c8d3b0813 # v2.49.11
         with:
           tool: nextest@0.9.92
 
       - name: Run tests 🧪
         run: |
-          cargo ${{ matrix.cargo-profile }} --locked
+          sfw cargo ${{ matrix.cargo-profile }} --locked
         timeout-minutes: 30

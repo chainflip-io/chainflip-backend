@@ -30,11 +30,19 @@ jobs:
         NSC_CACHE_PATH: "/cache"
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
+
+      - name: Install Socket Firewall 🔥
+        uses: SocketDev/action@2d3f25590c6ed6ba11a9a14c064d962a3a04698f # v1.3.1
+        with:
+          mode: firewall-free
+          shims: "false"
 
       - name: Set up Rust cache 🦀💰
         if: contains(inputs.ci-runner, 'no-cache') == false
-        uses: namespacelabs/nscloud-cache-action@v1
+        uses: namespacelabs/nscloud-cache-action@c5f8dab7560444c4bf8dbc64f1b203431873c547 # v1.6.1
         with:
           cache: rust
 
@@ -42,7 +50,7 @@ jobs:
         run: apt-get update && apt-get install -y unzip
 
       - name: Install Bun Runtime
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: "latest"
 
@@ -53,7 +61,7 @@ jobs:
 
       - name: cargo cf-test-ci --locked
         run: |
-          cargo cf-test-ci --locked
+          sfw cargo cf-test-ci --locked
         timeout-minutes: 25
 
   coverage:
@@ -68,11 +76,19 @@ jobs:
         NSC_CACHE_PATH: "/cache"
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
+
+      - name: Install Socket Firewall 🔥
+        uses: SocketDev/action@2d3f25590c6ed6ba11a9a14c064d962a3a04698f # v1.3.1
+        with:
+          mode: firewall-free
+          shims: "false"
 
       - name: Set up Rust cache 🦀💰
         if: contains(inputs.ci-runner, 'no-cache') == false
-        uses: namespacelabs/nscloud-cache-action@v1
+        uses: namespacelabs/nscloud-cache-action@c5f8dab7560444c4bf8dbc64f1b203431873c547 # v1.6.1
         with:
           cache: rust
 
@@ -80,7 +96,7 @@ jobs:
         run: apt-get update && apt-get install -y unzip
 
       - name: Install Bun Runtime
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: "latest"
 
@@ -91,15 +107,17 @@ jobs:
           bun run build
 
       - name: Install cargo-llvm-cov 💿
-        uses: taiki-e/install-action@c2648687d6fe1a5a70a4b65c84715cafab1f3451
+        uses: taiki-e/install-action@c2648687d6fe1a5a70a4b65c84715cafab1f3451 # v2.22.2
         with:
           tool: cargo-llvm-cov
 
       - name: Generate code coverage ✨
-        run: cargo llvm-cov --lib --features ${{ inputs.test_features}} --workspace --codecov --output-path lcov.info
+        env:
+          TEST_FEATURES: ${{ inputs.test_features }}
+        run: sfw cargo llvm-cov --lib --features "${TEST_FEATURES}" --workspace --codecov --output-path lcov.info
 
       - name: Upload coverage to Codecov 📊
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
           files: lcov.info

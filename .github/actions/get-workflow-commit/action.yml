@@ -16,11 +16,11 @@ runs:
   steps:
     - name: Get workflow commit SHA
       id: get-workflow-commit
-      uses: actions/github-script@v5
+      uses: actions/github-script@211cb3fefb35a799baa5156f9321bb774fe56294 # v5.2.0
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const workflow_id = "${{ inputs.workflow-name }}";
+          const workflow_id = process.env.WORKFLOW_NAME;
           const owner = context.repo.owner;
           const repo = context.repo.repo;
           const runs = await github.rest.actions.listWorkflowRuns({
@@ -31,3 +31,5 @@ runs:
           });
           const run = runs.data.workflow_runs[0];
           return run.head_sha;
+      env:
+        WORKFLOW_NAME: ${{ inputs.workflow-name }}

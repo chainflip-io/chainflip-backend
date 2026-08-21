@@ -44,11 +44,13 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
       - name: Get version from branch name
         id: version
         run: |
-          version=$(./ci/scripts/extract_version.sh ${{ github.ref }})
+          version=$(./ci/scripts/extract_version.sh "${GITHUB_REF}")
           echo "Extracted version: $version"
           if [[ "$version" == "" ]]; then
             echo "version=0.0.0" >> "$GITHUB_OUTPUT"
@@ -62,8 +64,11 @@ jobs:
     steps:
       - name: Set dockerfile name 📄
         id: dockerfile
+        env:
+          DEPLOYMENT_ENVIRONMENT: ${{ inputs.environment }}
+          NETWORK: ${{ inputs.network }}
         run: |
-          if [[ "${{ inputs.environment }}" == "production" || "${{ inputs.network }}" == "sisyphos" || "${{ inputs.network }}" == "perseverance" ]] ; then
+          if [[ "${DEPLOYMENT_ENVIRONMENT}" == "production" || "${NETWORK}" == "sisyphos" || "${NETWORK}" == "perseverance" ]] ; then
             echo "dockerfile_path=ci/docker/production" >> "$GITHUB_OUTPUT"
           else
             echo "dockerfile_path=ci/docker/development" >> "$GITHUB_OUTPUT"
@@ -85,22 +90,24 @@ jobs:
     runs-on: namespace-profile-default
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: chainflip-backend-bin
 
       - name: Install and configure Namespace CLI 📟
-        uses: namespacelabs/nscloud-setup@v0
+        uses: namespacelabs/nscloud-setup@df198f982fcecfb8264bea3f1274b56a61b6dfdc # v0.0.12
 
       - name: Set up Namespace Buildx 👷
-        uses: namespacelabs/nscloud-setup-buildx-action@v0
+        uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd # v0.0.23
 
       - name: Docker meta 📄
         id: meta
-        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4
+        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4 # v5.3.0
         with:
           images: ${{ matrix.docker-repo }}/${{ matrix.target }}
           flavor: |
@@ -117,14 +124,14 @@ jobs:
             type=ref,event=pr
 
       - name: Login to Github Container Registry 🔑
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push 🏗️🫸
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
         with:
           context: .
           push: ${{ inputs.save_tags == '' }}
@@ -137,15 +144,18 @@ jobs:
 
       - name: Save tags to tar 📦
         if: inputs.save_tags != ''
+        env:
+          DOCKER_REPO: ${{ matrix.docker-repo }}
+          SAVE_TAGS: ${{ inputs.save_tags }}
         run: |
           mkdir -p private
-          for tag in ${{ inputs.save_tags }}; do
-            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o private/${{ matrix.target }}.tar
+          for tag in ${SAVE_TAGS}; do
+            docker save "${DOCKER_REPO}/${{ matrix.target }}:${tag}" -o private/${{ matrix.target }}.tar
           done
 
       - name: Upload image 📤
         if: inputs.save_tags != ''
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: chainflip-backend-private-images-${{ matrix.target }}
           path: private
@@ -165,22 +175,24 @@ jobs:
     runs-on: namespace-profile-default
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: chainflip-backend-bin
 
       - name: Install and configure Namespace CLI 📟
-        uses: namespacelabs/nscloud-setup@v0
+        uses: namespacelabs/nscloud-setup@df198f982fcecfb8264bea3f1274b56a61b6dfdc # v0.0.12
 
       - name: Set up Namespace Buildx 👷
-        uses: namespacelabs/nscloud-setup-buildx-action@v0
+        uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd # v0.0.23
 
       - name: Docker meta 📄
         id: meta
-        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4
+        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4 # v5.3.0
         with:
           images: ${{ matrix.docker-repo }}/${{ matrix.target }}
           flavor: |
@@ -197,13 +209,13 @@ jobs:
             type=ref,event=pr
 
       - name: Login to DockerHub 🔑
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
 
       - name: Build and push 🏗️🫸
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
         with:
           context: .
           push: ${{ inputs.publish_public_images }}
@@ -216,15 +228,18 @@ jobs:
 
       - name: Save image 📦
         if: inputs.save_tags != ''
+        env:
+          DOCKER_REPO: ${{ matrix.docker-repo }}
+          SAVE_TAGS: ${{ inputs.save_tags }}
         run: |
           mkdir -p public
-          for tag in ${{ inputs.save_tags }}; do
-            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o public/${{ matrix.target }}.tar
+          for tag in ${SAVE_TAGS}; do
+            docker save "${DOCKER_REPO}/${{ matrix.target }}:${tag}" -o public/${{ matrix.target }}.tar
           done
 
       - name: Upload image 📤
         if: inputs.save_tags != ''
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: chainflip-backend-public-images-${{ matrix.target }}
           path: public
@@ -239,7 +254,7 @@ jobs:
         artifact: [private, public]
     steps:
       - name: Merge artifacts 🧩
-        uses: actions/upload-artifact/merge@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact/merge@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: chainflip-backend-${{ matrix.artifact }}-images
           pattern: chainflip-backend-${{ matrix.artifact }}-images-*

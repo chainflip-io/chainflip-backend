@@ -46,7 +46,9 @@ jobs:
       server-id: ${{ steps.provision.outputs.server-id }}
     steps:
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Provision ephemeral Hetzner runner ☁️
         id: provision
@@ -77,13 +79,14 @@ jobs:
 
       - name: Checkout chainflip-backend 🛒
         if: inputs.run-job
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Login to Github Container Registry 🔑
         if: inputs.run-job
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -91,14 +94,14 @@ jobs:
 
       - name: Login to DockerHub 🔑
         if: inputs.run-job
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
 
       - name: Configure NodeJS 🛠️
         if: inputs.run-job
-        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
@@ -117,7 +120,7 @@ jobs:
 
       - name: Download try-runtime binary 📥
         if: inputs.run-job
-        uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4
+        uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4 # v1.12.0
         with:
           repo: paritytech/try-runtime-cli
           tag: v0.8.0
@@ -136,7 +139,7 @@ jobs:
         if: inputs.run-job
         run: |
           mkdir -p upgrade-from-bins; ( cd upgrade-from-bins
-            curl https://artifacts.chainflip.io/${{ env.OLD_VERSION }}/chainflip-backend-bin.zip --output chainflip-backend-bin.zip
+            curl "https://artifacts.chainflip.io/${OLD_VERSION}/chainflip-backend-bin.zip" --output chainflip-backend-bin.zip
             unzip chainflip-backend-bin.zip -d .
             mv ./artifacts/chainflip-backend-bin/* .
           ); ls -l upgrade-from-bins
@@ -160,7 +163,7 @@ jobs:
 
       - name: Download upgrade-to binaries 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
@@ -183,7 +186,7 @@ jobs:
 
       - name: Download upgrade-to runtime 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: chainflip-node-runtime-try-runtime-${{ steps.main-version.outputs.version }}
           path: upgrade-to-runtime
@@ -199,7 +202,7 @@ jobs:
           BINARY_ROOT_PATH: ./upgrade-from-bins
           DEBUG_OUTPUT_DESTINATION: /dev/stdout
         run: |
-          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          git checkout "${OLD_BIN_COMMIT_HASH}"
           set -x
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p /tmp/chainflip/bashful
@@ -235,7 +238,7 @@ jobs:
       - name: Setup bouncer tests initial state 📦
         if: inputs.run-job
         run: |
-          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          git checkout "${OLD_BIN_COMMIT_HASH}"
           set -x
           cd bouncer
           pnpm install --frozen-lockfile
@@ -262,7 +265,7 @@ jobs:
           SKIP_BLS_TESTS: "true"
           PRE_UPGRADE_BOUNCER: "true"
         run: |
-          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          git checkout "${OLD_BIN_COMMIT_HASH}"
           git rev-parse HEAD
 
           # These patches rewrite the OLD bouncer checkout, so their patterns go stale whenever
@@ -274,7 +277,7 @@ jobs:
             cp "$file" "$file.pre-patch"
             sed -i "$expr" "$file"
             if cmp -s "$file" "$file.pre-patch"; then
-              echo "::error::Pre-upgrade patch did not apply: ${desc}. Its pattern no longer matches ${{ env.OLD_BIN_COMMIT_HASH }} ($file). Update the pattern, or drop the patch if the old checkout no longer needs it."
+              echo "::error::Pre-upgrade patch did not apply: ${desc}. Its pattern no longer matches ${OLD_BIN_COMMIT_HASH} ($file). Update the pattern, or drop the patch if the old checkout no longer needs it."
               exit 1
             fi
             rm "$file.pre-patch"
@@ -413,7 +416,7 @@ jobs:
       - name: Upload Localnet Logs 💾
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: localnet-logs-upgrade-test
           path: |
@@ -425,7 +428,7 @@ jobs:
       - name: Upload Chainflip Logs 💾
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: chainflip-logs-upgrade-test
           path: |
@@ -434,7 +437,7 @@ jobs:
       - name: Upload Bouncer Logs 💾
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: bouncer-logs-upgrade-test
           path: |
@@ -456,7 +459,7 @@ jobs:
       - name: Upload chain explorer 📤
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: chain-explorer-upgrade-test
           path: /tmp/chainflip/explorer.txt
@@ -464,7 +467,7 @@ jobs:
       - name: Upload Snapshots 💾
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: failure-snapshots
           path: |
@@ -480,7 +483,7 @@ jobs:
       - name: Upload indexer database
         if: ${{ always() && inputs.run-job }}
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: indexer-pgsql-dump-upgrade-test
           path: |
@@ -498,7 +501,7 @@ jobs:
       - name: Upload Docker Container Logs 💾
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: docker-container-logs-upgrade-test
           path: /tmp/chainflip/docker-logs/
@@ -518,7 +521,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Destroy ephemeral Hetzner runner 🧹
         env:
