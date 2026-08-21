@@ -66,6 +66,9 @@ pub fn online_test_historical_compatibility_of_runtime_api() -> Result<(), Strin
 	check_incompatibilities(test_all_historical_runtime_calls(
 		&mut OnlineNodeTester {
 			get_blockhash_from_spec_version: Box::new(|spec_version| match spec_version {
+				11001 => Some("0xb3699f16a767aee5f0123436ca19615636b0a992d4cdfd17898b98165d3cb810"),
+				11106 => Some("0x6f67b731db79184786c98a80d4bbd20a1b8926f772e66a67c68c6044c4b07fbf"),
+				11201 => Some("0x056284f56992e9e6b8dcb2a4dc18d9ea35be8a9844cbaf46b0396ba880a39a3b"),
 				20012 => Some("0xc2068ad859fc5c3b3c7c5ecb3bd84033f1b5a0ce60e8c3b52cab4d22840eec37"),
 				20119 => Some("0x2ad1dd83839b13039d1a4ee85932b439e041068bd3bb91acf43455db97d71bd0"),
 				20203 => Some("0xb7ac402940505ac776988b01c41a1154e6b38a46c9f839edf74939a2c2fc1c74"),
@@ -158,6 +161,12 @@ fn test_all_historical_runtime_calls(
                     CanonicalPatchVersion::Unreleased => None,
 				}.unwrap();
 
+				if release >= 11000 {
+					incompatibilities.append(
+						&mut tester.test_call::<$version, AccountId32, ValidatorInfo>($version, "CustomRuntimeApi", "cf_validator_info")
+					);
+				}
+
 				if release >= 20000 {
 					incompatibilities.append(
 						&mut tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees")
@@ -167,9 +176,6 @@ fn test_all_historical_runtime_calls(
 					);
 					incompatibilities.append(
 						&mut tester.test_call::<$version, (AccountId32, ShouldSweep), LiquidityProviderInfo>($version, "CustomRuntimeApi", "cf_liquidity_provider_info")
-					);
-					incompatibilities.append(
-						&mut tester.test_call::<$version, AccountId32, ValidatorInfo>($version, "CustomRuntimeApi", "cf_validator_info")
 					);
 					incompatibilities.append(
 						&mut tester.test_call::<$version, AccountId32, OperatorInfo<FlipBalance>>($version, "CustomRuntimeApi", "cf_operator_info")

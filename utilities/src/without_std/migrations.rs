@@ -216,12 +216,12 @@ macro_rules! generate_migration_helpers {
 define_all_runtime_versions! {
 	{
 		release: v11000,
-		canonical_patch: Released(11000),
+		canonical_patch: Released(11001),
 		changelog_entry: in_11000,
 	},
 	{
 		release: v11100,
-		canonical_patch: Released(11100),
+		canonical_patch: Released(11106),
 		changelog_entry: in_11100,
 	},
 	{
