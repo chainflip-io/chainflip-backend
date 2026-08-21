@@ -31,7 +31,7 @@ fn create_funded_parent_account<T: Config>(
 	let balance = initial_balance * FLIPPERINOS_PER_FLIP;
 
 	// Mint some balance to the caller
-	T::FeePayment::mint_to_account(&caller, balance.into());
+	T::FeePayment::credit_to_account(&caller, balance.into());
 
 	(caller, balance)
 }

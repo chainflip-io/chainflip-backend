@@ -8,7 +8,7 @@
 // For "amber" mode, you can specify which features should remain enabled. For this, as the second argument
 // provide a comma separated list (without spaces!) of the features that should remain enabled.
 // Available features are:
-// emissions_emissionsSyncEnabled, funding_redeemEnabled, funding_startBiddingEnabled, funding_stopBiddingEnabled,
+// funding_redeemEnabled, funding_startBiddingEnabled, funding_stopBiddingEnabled,
 // swapping_swapsEnabled, swapping_withdrawalsEnabled, swapping_depositsEnabled, swapping_brokerRegistrationEnabled,
 // pools_mintingRangeOrderEnabled, pools_mintingLimitOrderEnabled, pools_burningRangeOrderEnabled,
 // pools_burningLimitOrderEnabled, reputation_reportingEnabled, liquidityProvider_depositEnabled,

@@ -88,7 +88,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const STORAGE_VERSION_U16: u16 = 17;
+pub const STORAGE_VERSION_U16: u16 = 18;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
@@ -721,10 +721,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn maximum_swap_amount)]
 	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
-
-	/// FLIP ready to be burned.
-	#[pallet::storage]
-	pub type FlipToBurn<T: Config> = StorageValue<_, i128, ValueQuery>;
 
 	/// FLIP ready to be sent to gateway.
 	#[pallet::storage]
@@ -2647,20 +2643,15 @@ pub mod pallet {
 									if request.output_asset == Asset::Flip {
 										if output_amount < *flip_to_subtract_from_swap_output {
 											// In the rare event that this occurs we will track the
-											// deficit and offset it against the next burn
+											// deficit and offset it against the accumulated fees
+											// pot
 											let deficit: i128 = flip_to_subtract_from_swap_output
 												.saturating_sub(output_amount)
 												.try_into()
 												.unwrap_or(i128::MAX);
-											if T::FeePayment::is_flip_2_1_activated() {
-												T::FeePayment::add_to_offchain_flip_to_be_distributed(
-													-deficit,
-												);
-											} else {
-												FlipToBurn::<T>::mutate(|total| {
-													total.saturating_reduce(deficit);
-												});
-											}
+											T::FeePayment::add_to_offchain_flip_to_be_distributed(
+												-deficit,
+											);
 										} else {
 											T::FundAccount::fund_account(
 												account_id.clone(),
@@ -2683,17 +2674,9 @@ pub mod pallet {
 					},
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
-						if T::FeePayment::is_flip_2_1_activated() {
-							T::FeePayment::add_to_offchain_flip_to_be_distributed(
-								output_amount.try_into().unwrap_or(i128::MAX),
-							);
-						} else {
-							FlipToBurn::<T>::mutate(|total| {
-								total.saturating_accrue(
-									output_amount.try_into().unwrap_or(i128::MAX),
-								);
-							});
-						}
+						T::FeePayment::add_to_offchain_flip_to_be_distributed(
+							output_amount.try_into().unwrap_or(i128::MAX),
+						);
 					} else {
 						log_or_panic!(
 							"NetworkFee burning should not be in asset: {:?}",
@@ -3564,15 +3547,6 @@ impl<T: Config> DeregistrationHooks for PendingSwapDeregistrationCheck<T> {
 		);
 
 		Ok(())
-	}
-}
-
-impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
-	fn take_flip_to_burn() -> i128 {
-		FlipToBurn::<T>::take()
-	}
-	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
-		FlipToBeSentToGateway::<T>::take()
 	}
 }
 

@@ -259,7 +259,6 @@ impl From<ValidatorInfo> for super::ValidatorInfo {
 			is_online: old.is_online,
 			is_bidding: old.is_bidding,
 			bound_redeem_address: old.bound_redeem_address,
-			apy_bp: old.apy_bp,
 			restricted_balances: old.restricted_balances,
 			estimated_redeemable_balance: old.estimated_redeemable_balance,
 			operator: old.operator,
@@ -284,7 +283,7 @@ impl From<super::ValidatorInfo> for ValidatorInfo {
 			is_online: current.is_online,
 			is_bidding: current.is_bidding,
 			bound_redeem_address: current.bound_redeem_address,
-			apy_bp: current.apy_bp,
+			apy_bp: None,
 			restricted_balances: current.restricted_balances,
 			estimated_redeemable_balance: current.estimated_redeemable_balance,
 			operator: current.operator,
@@ -422,6 +421,16 @@ impl From<WitnesserCallPermission> for crate::safe_mode::WitnesserCallPermission
 	}
 }
 
+// The emissions pallet was removed once FLIP 2.1 activated; this frozen shim preserves the
+// encoding of its PalletSafeMode (a single `emissions_sync_enabled: bool` flag) for decoding
+// blocks from before the pallet was removed.
+#[derive(
+	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
+)]
+pub struct EmissionsSafeMode {
+	pub emissions_sync_enabled: bool,
+}
+
 // The liquidity provider safe mode before `flip_to_on_chain_balance_enabled` was added.
 #[derive(
 	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
@@ -461,7 +470,7 @@ impl From<LiquidityProviderSafeMode> for pallet_cf_lp::PalletSafeMode {
 	frame_support::pallet_prelude::RuntimeDebug,
 )]
 pub struct RuntimeSafeMode {
-	pub emissions: pallet_cf_emissions::PalletSafeMode,
+	pub emissions: super::before_version_21::EmissionsSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,
 	pub swapping: pallet_cf_swapping::PalletSafeMode,
 	pub liquidity_provider: LiquidityProviderSafeMode,
@@ -514,7 +523,6 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 				pallet_cf_witnesser::PalletSafeMode::CodeAmber(old_perms.into()),
 		};
 		Self {
-			emissions: old.emissions,
 			funding: old.funding,
 			swapping: old.swapping,
 			liquidity_provider: old.liquidity_provider.into(),

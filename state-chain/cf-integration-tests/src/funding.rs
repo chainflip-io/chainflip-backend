@@ -21,11 +21,9 @@ use cf_primitives::{FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_test_utilities::TestExternalities;
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, EpochInfo};
 use mock_runtime::MIN_FUNDING;
-use pallet_cf_flip::PalletConfigUpdate;
 use pallet_cf_funding::{pallet::Error, RedemptionAmount};
 use pallet_cf_validator::CurrentRotationPhase;
-use sp_runtime::{FixedPointNumber, FixedU64};
-use state_chain_runtime::chainflip::{calculate_account_apy, Offence};
+use state_chain_runtime::chainflip::Offence;
 
 #[test]
 // Nodes cannot redeem when we are out of the redeeming period (50% of the epoch)
@@ -200,85 +198,6 @@ fn validator_info_includes_bid_and_max_bid() {
 		assert_eq!(validator_info.max_bid, Some(MAX_BID));
 		assert_eq!(validator_info.bid, MAX_BID);
 	});
-}
-
-#[test]
-fn can_calculate_account_apy() {
-	use state_chain_runtime::runtime_apis::custom_api::runtime_decl_for_custom_runtime_api::CustomRuntimeApi;
-
-	const EPOCH_BLOCKS: u32 = 1_000;
-	const MAX_AUTHORITIES: u32 = 10;
-	const NUM_BACKUPS: u32 = 20;
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.build()
-		.execute_with(|| {
-			let (mut network, _, _) =
-				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
-			network.move_to_the_next_epoch();
-
-			let validator = Validator::current_authorities().into_iter().next().unwrap();
-
-			// Normal account returns None
-			let no_reward = AccountId::from([0xff; 32]);
-			assert!(!Validator::current_authorities().contains(&no_reward));
-			assert!(calculate_account_apy(&no_reward).is_none());
-
-			// APY rate is correct for current Authority
-			let total = Flip::balance(&validator);
-			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128 / 10u128;
-			let apy_basis_point =
-				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
-			assert_eq!(apy_basis_point, 49u32);
-			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
-
-			// Once FLIP 2.1 is active, we dont return an apy since we move to the rewards
-			// distrubtion rpc
-			assert_ok!(Flip::update_pallet_config(
-				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-				vec![PalletConfigUpdate::SetFeeRewardsActivationEpoch(Validator::epoch_index())]
-					.try_into()
-					.unwrap(),
-			));
-			assert!(Flip::is_flip_2_1_activated());
-			assert!(Runtime::cf_validator_info(&validator).apy_bp.is_none());
-		});
-}
-
-#[test]
-fn apy_can_be_above_100_percent() {
-	const EPOCH_BLOCKS: u32 = 1_000;
-	const MAX_AUTHORITIES: u32 = 2;
-	const NUM_BACKUPS: u32 = 2;
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.build()
-		.execute_with(|| {
-			let (mut network, _, _) =
-				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
-			network.move_to_the_next_epoch();
-
-			let validator = Validator::current_authorities().into_iter().next().unwrap();
-
-			// Set the validator yield to very high
-			assert_ok!(Emissions::update_current_authority_emission_inflation(
-				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-				1_000_000_000u32
-			));
-
-			network.move_to_the_next_epoch();
-
-			// APY rate of > 100% can be calculated correctly.
-			let total = Flip::balance(&validator);
-			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128 /
-				MAX_AUTHORITIES as u128;
-			let apy_basis_point =
-				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
-			assert_eq!(apy_basis_point, 241_377_726u32);
-			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
-		});
 }
 
 #[test]
