@@ -55,7 +55,9 @@ jobs:
       server-id: ${{ steps.provision.outputs.server-id }}
     steps:
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Provision ephemeral Hetzner runner ☁️
         id: provision
@@ -95,23 +97,25 @@ jobs:
           sudo apt install ngrok
 
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Login to Github Container Registry 🔑
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to DockerHub 🔑
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
 
       - name: Configure NodeJS 🛠️
-        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
@@ -127,7 +131,7 @@ jobs:
           npm install -g wscat
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: chainflip-backend-bin${{ inputs.chainflip-backend-bin-suffix }}
 
@@ -216,7 +220,7 @@ jobs:
       - name: Upload chain explorer 📤
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: chain-explorer${{ inputs.log-postfix }}
           path: /tmp/chainflip/*_explorer.txt
@@ -261,7 +265,7 @@ jobs:
       - name: Upload Localnet Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: localnet-logs${{ inputs.log-postfix }}
           path: |
@@ -273,7 +277,7 @@ jobs:
       - name: Upload Bouncer Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: bouncer-logs${{ inputs.log-postfix }}
           path: |
@@ -282,7 +286,7 @@ jobs:
       - name: Upload runner diagnostics 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: runner-diagnostics${{ inputs.log-postfix }}
           path: /opt/actions-runner/_diag/
@@ -298,7 +302,7 @@ jobs:
       - name: Upload indexer database
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: indexer-pgsql-dump${{ inputs.log-postfix }}
           path: |
@@ -331,7 +335,7 @@ jobs:
       - name: Upload Docker Container Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: docker-container-logs${{ inputs.log-postfix }}
           path: /tmp/chainflip/docker-logs/
@@ -349,7 +353,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Destroy ephemeral Hetzner runner 🧹
         env:
@@ -369,10 +375,12 @@ jobs:
         network: [sisyphos, perseverance, berghain]
     steps:
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Download Binaries 📥
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: chainflip-backend-bin${{ inputs.chainflip-backend-bin-suffix }}
 
