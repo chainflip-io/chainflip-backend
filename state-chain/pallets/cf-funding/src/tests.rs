@@ -2964,7 +2964,7 @@ fn every_source_but_a_gateway_deposit_is_earmarked() {
 		{
 			Funding::fund_account(ALICE, AMOUNT, source.clone());
 			assert_eq!(
-				MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(),
+				MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(),
 				AMOUNT * (i as u128 + 1),
 				"expected {source:?} to be earmarked"
 			);
