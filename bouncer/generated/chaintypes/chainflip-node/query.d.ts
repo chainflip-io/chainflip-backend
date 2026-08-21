@@ -5683,22 +5683,6 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
-     * is included is controlled solely by them. This serves as a method for validators to quickly
-     * remove all their votes from consensus, without having to know which votes should be removed
-     * and without deleting votes that are still valid. This storage item is not consistent with
-     * the current authority set, and so it may include authorities that are not in the current
-     * authority set or exclude authorities that are in the current authority set.
-     *
-     * @param {AccountId32Like} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    contributingAuthorities: GenericStorageQuery<
-      (arg: AccountId32Like) => [] | undefined,
-      AccountId32
-    >;
-
-    /**
      * Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
      * this is None, the pallet is considered uninitialized.
      *
@@ -6790,22 +6774,6 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
-     * is included is controlled solely by them. This serves as a method for validators to quickly
-     * remove all their votes from consensus, without having to know which votes should be removed
-     * and without deleting votes that are still valid. This storage item is not consistent with
-     * the current authority set, and so it may include authorities that are not in the current
-     * authority set or exclude authorities that are in the current authority set.
-     *
-     * @param {AccountId32Like} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    contributingAuthorities: GenericStorageQuery<
-      (arg: AccountId32Like) => [] | undefined,
-      AccountId32
-    >;
-
-    /**
      * Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
      * this is None, the pallet is considered uninitialized.
      *
@@ -7010,22 +6978,6 @@ export interface ChainStorage extends GenericChainStorage {
     electionConsensusHistoryUpToDate: GenericStorageQuery<
       (arg: PalletCfElectionsUniqueMonotonicIdentifier) => number | undefined,
       PalletCfElectionsUniqueMonotonicIdentifier
-    >;
-
-    /**
-     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
-     * is included is controlled solely by them. This serves as a method for validators to quickly
-     * remove all their votes from consensus, without having to know which votes should be removed
-     * and without deleting votes that are still valid. This storage item is not consistent with
-     * the current authority set, and so it may include authorities that are not in the current
-     * authority set or exclude authorities that are in the current authority set.
-     *
-     * @param {AccountId32Like} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    contributingAuthorities: GenericStorageQuery<
-      (arg: AccountId32Like) => [] | undefined,
-      AccountId32
     >;
 
     /**
@@ -7256,22 +7208,6 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
-     * is included is controlled solely by them. This serves as a method for validators to quickly
-     * remove all their votes from consensus, without having to know which votes should be removed
-     * and without deleting votes that are still valid. This storage item is not consistent with
-     * the current authority set, and so it may include authorities that are not in the current
-     * authority set or exclude authorities that are in the current authority set.
-     *
-     * @param {AccountId32Like} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    contributingAuthorities: GenericStorageQuery<
-      (arg: AccountId32Like) => [] | undefined,
-      AccountId32
-    >;
-
-    /**
      * Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
      * this is None, the pallet is considered uninitialized.
      *
@@ -7492,22 +7428,6 @@ export interface ChainStorage extends GenericChainStorage {
     electionConsensusHistoryUpToDate: GenericStorageQuery<
       (arg: PalletCfElectionsUniqueMonotonicIdentifier) => number | undefined,
       PalletCfElectionsUniqueMonotonicIdentifier
-    >;
-
-    /**
-     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
-     * is included is controlled solely by them. This serves as a method for validators to quickly
-     * remove all their votes from consensus, without having to know which votes should be removed
-     * and without deleting votes that are still valid. This storage item is not consistent with
-     * the current authority set, and so it may include authorities that are not in the current
-     * authority set or exclude authorities that are in the current authority set.
-     *
-     * @param {AccountId32Like} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    contributingAuthorities: GenericStorageQuery<
-      (arg: AccountId32Like) => [] | undefined,
-      AccountId32
     >;
 
     /**
@@ -8232,22 +8152,6 @@ export interface ChainStorage extends GenericChainStorage {
     electionConsensusHistoryUpToDate: GenericStorageQuery<
       (arg: PalletCfElectionsUniqueMonotonicIdentifier) => number | undefined,
       PalletCfElectionsUniqueMonotonicIdentifier
-    >;
-
-    /**
-     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
-     * is included is controlled solely by them. This serves as a method for validators to quickly
-     * remove all their votes from consensus, without having to know which votes should be removed
-     * and without deleting votes that are still valid. This storage item is not consistent with
-     * the current authority set, and so it may include authorities that are not in the current
-     * authority set or exclude authorities that are in the current authority set.
-     *
-     * @param {AccountId32Like} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    contributingAuthorities: GenericStorageQuery<
-      (arg: AccountId32Like) => [] | undefined,
-      AccountId32
     >;
 
     /**
@@ -8976,22 +8880,6 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
-     * is included is controlled solely by them. This serves as a method for validators to quickly
-     * remove all their votes from consensus, without having to know which votes should be removed
-     * and without deleting votes that are still valid. This storage item is not consistent with
-     * the current authority set, and so it may include authorities that are not in the current
-     * authority set or exclude authorities that are in the current authority set.
-     *
-     * @param {AccountId32Like} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    contributingAuthorities: GenericStorageQuery<
-      (arg: AccountId32Like) => [] | undefined,
-      AccountId32
-    >;
-
-    /**
      * Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
      * this is None, the pallet is considered uninitialized.
      *
@@ -9210,22 +9098,6 @@ export interface ChainStorage extends GenericChainStorage {
     electionConsensusHistoryUpToDate: GenericStorageQuery<
       (arg: PalletCfElectionsUniqueMonotonicIdentifier) => number | undefined,
       PalletCfElectionsUniqueMonotonicIdentifier
-    >;
-
-    /**
-     * Stores the set of authorities whose votes can contribute to consensus. Whether an authority
-     * is included is controlled solely by them. This serves as a method for validators to quickly
-     * remove all their votes from consensus, without having to know which votes should be removed
-     * and without deleting votes that are still valid. This storage item is not consistent with
-     * the current authority set, and so it may include authorities that are not in the current
-     * authority set or exclude authorities that are in the current authority set.
-     *
-     * @param {AccountId32Like} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    contributingAuthorities: GenericStorageQuery<
-      (arg: AccountId32Like) => [] | undefined,
-      AccountId32
     >;
 
     /**
