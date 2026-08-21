@@ -313,6 +313,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 ///
 /// Each account can only be associated with a single role, and the role can only be updated from
 /// the initial [AccountRole::Unregistered] state.
+#[cf_proc_macros::generate_module]
 #[derive(
 	PartialEq,
 	Eq,
@@ -349,6 +350,10 @@ pub enum AccountRole {
 	/// Operators are responsible for managing delegated stake and validators signed up to their
 	/// account.
 	Operator,
+}
+
+impl cf_utilities::migrations::HasChangelog for AccountRole {
+	type if_unspecified = _AccountRole::see_variant_changelogs;
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
