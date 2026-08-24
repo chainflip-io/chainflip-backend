@@ -35,8 +35,8 @@ use chainflip_api::{
 };
 use clap::Parser;
 use custom_rpc::{
-	RpcActiveWithdrawalWhitelist, RpcPendingWhitelistUpdate, RpcWhitelistDestination,
-	RpcWhitelistUpdate, RpcWithdrawalWhitelist,
+	RpcActiveWithdrawalWhitelist, RpcPendingWhitelistUpdate, RpcWhitelistUpdate,
+	RpcWithdrawalWhitelist,
 };
 use futures::FutureExt;
 use serde::Serialize;
@@ -442,10 +442,10 @@ async fn bind_executor_address(api: Arc<impl OperatorApi + Sync>, eth_address: &
 	Ok(())
 }
 
-fn describe_destination(destination: &RpcWhitelistDestination) -> String {
+fn describe_destination(destination: &WhitelistDestinationRpc) -> String {
 	match destination {
-		RpcWhitelistDestination::InternalAccount(account) => format!("account {account}"),
-		RpcWhitelistDestination::ExternalAddress { chain, address } =>
+		WhitelistDestinationRpc::InternalAccount(account) => format!("account {account}"),
+		WhitelistDestinationRpc::ExternalAddress { chain, address } =>
 			format!("{chain} address {address}"),
 	}
 }

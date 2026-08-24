@@ -44,8 +44,9 @@ use cf_rpc_apis::{
 		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc, RpcBytes,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc,
 	},
-	call_error, internal_error, CfErrorCode, NotificationBehaviour, OrderFills,
-	RefundParametersRpc, RpcApiError, RpcResult,
+	call_error, internal_error,
+	lp::WhitelistDestinationRpc,
+	CfErrorCode, NotificationBehaviour, OrderFills, RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::{
 	migrations::{
@@ -850,7 +851,7 @@ pub struct RpcWithdrawalWhitelist {
 pub struct RpcActiveWithdrawalWhitelist {
 	/// The delay applied to whitelist updates, in seconds. Zero means updates apply immediately.
 	pub timelock_secs: u64,
-	pub allowed: Vec<RpcWhitelistDestination>,
+	pub allowed: Vec<WhitelistDestinationRpc>,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -860,38 +861,35 @@ pub struct RpcPendingWhitelistUpdate {
 	pub update: RpcWhitelistUpdate,
 }
 
+/// Mirrors the pallet's `WhitelistUpdate`. Distinct from `WhitelistChangeRpc`, which mirrors
+/// `WhitelistChange` and so has no timelock variant.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RpcWhitelistUpdate {
-	Allow(RpcWhitelistDestination),
-	Remove(RpcWhitelistDestination),
+	Allow(WhitelistDestinationRpc),
+	Remove(WhitelistDestinationRpc),
 	Timelock(u64),
 }
 
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub enum RpcWhitelistDestination {
-	InternalAccount(AccountId32),
-	ExternalAddress { chain: ForeignChain, address: String },
-}
-
-impl From<WhitelistDestination> for RpcWhitelistDestination {
-	fn from(destination: WhitelistDestination) -> Self {
-		match destination {
-			WhitelistDestination::InternalAccount(account) =>
-				RpcWhitelistDestination::InternalAccount(account),
-			WhitelistDestination::ExternalAddress(address) =>
-				RpcWhitelistDestination::ExternalAddress {
-					chain: address.chain(),
-					address: address.to_string(),
-				},
-		}
+/// Both types are foreign to this crate, so this can't be a `From` impl.
+fn destination_to_rpc(destination: WhitelistDestination) -> WhitelistDestinationRpc {
+	match destination {
+		WhitelistDestination::InternalAccount(account) =>
+			WhitelistDestinationRpc::InternalAccount(account),
+		WhitelistDestination::ExternalAddress(address) =>
+			WhitelistDestinationRpc::ExternalAddress {
+				chain: address.chain(),
+				address: AddressString::from_encoded_address(&address),
+			},
 	}
 }
 
 impl From<WhitelistUpdate> for RpcWhitelistUpdate {
 	fn from(update: WhitelistUpdate) -> Self {
 		match update {
-			WhitelistUpdate::Allow(destination) => RpcWhitelistUpdate::Allow(destination.into()),
-			WhitelistUpdate::Remove(destination) => RpcWhitelistUpdate::Remove(destination.into()),
+			WhitelistUpdate::Allow(destination) =>
+				RpcWhitelistUpdate::Allow(destination_to_rpc(destination)),
+			WhitelistUpdate::Remove(destination) =>
+				RpcWhitelistUpdate::Remove(destination_to_rpc(destination)),
 			WhitelistUpdate::Timelock(timelock) => RpcWhitelistUpdate::Timelock(timelock),
 		}
 	}
@@ -902,7 +900,7 @@ impl From<WithdrawalWhitelistInfo> for RpcWithdrawalWhitelist {
 		RpcWithdrawalWhitelist {
 			active: info.active.map(|active| RpcActiveWithdrawalWhitelist {
 				timelock_secs: active.timelock_secs,
-				allowed: active.allowed.into_iter().map(Into::into).collect(),
+				allowed: active.allowed.into_iter().map(destination_to_rpc).collect(),
 			}),
 			pending: info
 				.pending
