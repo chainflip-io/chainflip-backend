@@ -1,6 +1,6 @@
 [package]
 name = "chainflip-api"
-version = "2.2.9"
+version = "2.2.10"
 edition = "2021"
 license = "Apache-2.0"
 
