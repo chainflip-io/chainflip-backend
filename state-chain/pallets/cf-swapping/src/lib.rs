@@ -3169,7 +3169,7 @@ pub mod pallet {
 				.map_err(Into::into)
 				.and_then(
 					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
-						if egress_amount < FLIP_TO_GATEWAY_MULTIPLE * fee_withheld {
+						if egress_amount <= FLIP_TO_GATEWAY_MULTIPLE * fee_withheld {
 							Err(DispatchError::Other("flip to gateway multiple below threshold"))
 						} else {
 							Ok(result)
