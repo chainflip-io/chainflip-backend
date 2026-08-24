@@ -1720,7 +1720,7 @@ dependencies = [
  "scale-json",
  "secp256k1 0.29.1",
  "serde_json",
- "similar 3.1.1",
+ "similar 3.2.0",
  "sp-arithmetic",
  "sp-block-builder",
  "sp-consensus-aura",
@@ -1845,6 +1845,7 @@ dependencies = [
 name = "cf-runtime-utilities"
 version = "0.1.0"
 dependencies = [
+ "cf-proc-macros",
  "cf-runtime-macros",
  "frame-support",
  "frame-system",
@@ -1855,6 +1856,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sp-tracing",
 ]
 
 [[package]]
@@ -13518,9 +13520,9 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "similar"
-version = "3.1.1"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6505efef05804732ed8a3f2d4f279429eb485bd69d5b0cc6b19cc02005cda16"
+checksum = "4f66ca1f7aca2474dc10c942eb22feffc897735f54cd1db90138c2fddb490987"
 dependencies = [
  "bstr",
 ]
@@ -14804,6 +14806,7 @@ dependencies = [
  "sp-session",
  "sp-std",
  "sp-storage",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",

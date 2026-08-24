@@ -19,6 +19,7 @@ use proc_macro::TokenStream;
 mod arbitrary;
 mod generate_module;
 mod generic_modules;
+mod instrument;
 mod intro_elim;
 mod type_introspection;
 
@@ -130,6 +131,36 @@ pub fn generate_module(_attr: TokenStream, item: TokenStream) -> TokenStream {
 	let item_clone: proc_macro2::TokenStream = item.clone().into();
 	let parsed = syn::parse_macro_input!(item as syn::Item);
 	generate_module::expand(item_clone, parsed).into()
+}
+
+/// Opens an `sp_tracing` span, named after the function, for the duration of the function body,
+/// so that the function shows up as its own entry when profiling runtime execution. See
+/// "Profiling runtime execution" in the README.
+///
+/// The span is only compiled in when `sp-tracing/with-tracing` is enabled, which
+/// `state-chain-runtime/runtime-tracing` does for the whole build. Annotating a function is
+/// therefore free in a normal build, and needs no feature or dependency of its own.
+///
+/// ```ignore
+/// #[cf_runtime_utilities::instrument]
+/// fn on_finalize(block_number: BlockNumberFor<T>) { .. }
+/// ```
+///
+/// Span names have to be static, so an instantiable pallet's spans are otherwise
+/// indistinguishable between instances. Pass `pallet` to record the runtime's name for the
+/// instance (e.g. `BitcoinElections`) as a span field, which is reported alongside the timing:
+///
+/// ```ignore
+/// #[cf_runtime_utilities::instrument(pallet)]
+/// fn on_finalize(block_number: BlockNumberFor<T>) { .. }
+/// ```
+///
+/// Anything else is forwarded verbatim as `tracing` span fields, sigils included:
+/// `#[instrument(asset = ?asset)]`.
+#[proc_macro_attribute]
+pub fn instrument(attr: TokenStream, item: TokenStream) -> TokenStream {
+	let parsed = syn::parse_macro_input!(item as syn::ItemFn);
+	instrument::expand(attr.into(), parsed).into()
 }
 
 /// Derive macro that implements `cf_utilities::type_introspection::HasTypeIntrospection`.

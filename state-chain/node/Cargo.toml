@@ -115,6 +115,7 @@ try-runtime = [
 	"cf-chains/try-runtime",
 	"pallet-staking/try-runtime",
 ]
+runtime-tracing = ["state-chain-runtime/runtime-tracing"]
 
 [package.metadata.deb]
 depends = "$auto, systemd"
