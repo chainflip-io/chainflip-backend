@@ -121,6 +121,18 @@ pub type AssetAmount = u128;
 /// least this many times greater than the egress fee.
 pub const FLIP_TO_GATEWAY_MULTIPLE: AssetAmount = 100;
 
+pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
+
+/// Sets global that ensures SC AccountId's are printed correctly.
+///
+/// Lives here rather than in the node so that off-chain consumers (engine, APIs) can reach it
+/// without depending on the whole node crate.
+pub fn use_chainflip_account_id_encoding() {
+	sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(
+		CHAINFLIP_SS58_PREFIX,
+	));
+}
+
 pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;

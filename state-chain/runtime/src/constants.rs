@@ -20,7 +20,7 @@ pub mod common {
 		SECONDS_PER_BLOCK,
 	};
 
-	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
+	pub use cf_primitives::CHAINFLIP_SS58_PREFIX;
 
 	pub const TOTAL_ISSUANCE: FlipBalance = {
 		const TOTAL_ISSUANCE_IN_FLIP: FlipBalance = 90_000_000;
