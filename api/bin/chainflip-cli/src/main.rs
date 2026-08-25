@@ -458,17 +458,15 @@ async fn get_withdrawal_whitelist(api: QueryApi) -> Result<()> {
 		Some(RpcActiveWithdrawalWhitelist { timelock_secs, allowed }) => {
 			println!("Withdrawal whitelist timelock: {timelock_secs} seconds.");
 			if allowed.is_empty() {
-				println!("No destinations are whitelisted, so withdrawals are blocked.");
+				println!("The whitelist is empty.");
 			} else {
-				println!("Withdrawals are allowed to:");
+				println!("Whitelisted destinations:");
 				for destination in &allowed {
 					println!("  {}", describe_destination(destination));
 				}
 			}
 		},
-		None => println!(
-			"Your account has no withdrawal whitelist: withdrawals to any destination are allowed."
-		),
+		None => println!("No withdrawal whitelist is set for this account."),
 	}
 
 	if !pending.is_empty() {
@@ -485,6 +483,14 @@ async fn get_withdrawal_whitelist(api: QueryApi) -> Result<()> {
 			println!("  {update}, from unix time {activates_at}");
 		}
 	}
+
+	// The whitelist is not the only thing that decides a withdrawal, so don't let the output above
+	// be read as the full set of allowed destinations.
+	println!(
+		"\nNote: this reports the whitelist only. A registered refund address is also allowed \
+		 without being whitelisted, and a bound broker withdrawal address blocks Ethereum \
+		 withdrawals to anywhere else, whitelisted or not."
+	);
 
 	Ok(())
 }
