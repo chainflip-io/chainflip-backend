@@ -20,7 +20,7 @@ use super::*;
 use crate::{
 	client::{
 		self,
-		common::SigningFailureReason,
+		common::{KeygenFailureReason, SigningFailureReason},
 		helpers::{
 			new_nodes, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
 		},
@@ -66,6 +66,43 @@ async fn should_ignore_rts_for_unknown_key() {
 	assert_matches!(
 		assert_ok!(assert_future_can_complete(ceremony_request_receiver.recv())),
 		CeremonyRequest { ceremony_id: DEFAULT_SIGNING_CEREMONY_ID, details: None }
+	);
+}
+
+/// A node selected as a sharing participant that doesn't have the key must
+/// report the failure rather than bring the engine down: the state chain will
+/// blame it and retry the handover without it.
+#[tokio::test]
+async fn should_ignore_key_handover_for_unknown_key() {
+	let account_id = &ACCOUNT_IDS[0];
+
+	// Make the keystore return `None` when asked for a key
+	let mut mock_key_store = MockKeyStoreAPI::new();
+	mock_key_store.expect_get_key().once().returning(|_| None);
+
+	let (ceremony_request_sender, mut ceremony_request_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
+	let client = MultisigClient::<EthSigning, _>::new(
+		account_id.clone(),
+		mock_key_store,
+		ceremony_request_sender,
+	);
+
+	// Request a handover in which we are a sharing participant
+	let handover_request_fut = client.initiate_key_handover(
+		DEFAULT_KEYGEN_CEREMONY_ID,
+		KeyId::new(GENESIS_EPOCH, [0u8; 32]),
+		GENESIS_EPOCH + 1,
+		BTreeSet::from_iter([account_id.clone()]),
+		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+	);
+
+	let (_, failure_reason) = assert_err!(assert_future_can_complete(handover_request_fut));
+	assert_eq!(failure_reason, KeygenFailureReason::MissingKey);
+	assert_matches!(
+		assert_ok!(assert_future_can_complete(ceremony_request_receiver.recv())),
+		CeremonyRequest { ceremony_id: DEFAULT_KEYGEN_CEREMONY_ID, details: None }
 	);
 }
 

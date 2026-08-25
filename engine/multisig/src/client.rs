@@ -307,21 +307,27 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 			"Received a key handover request",
 		);
 
-		let resharing_context =
-			if sharing_participants.contains(&self.my_account_id) {
-				let key =
-					self.key_store.lock().unwrap().get_key(&key_id).expect(
-						"we've been selected as a sharing participant, so we must have a key.",
-					);
-				ResharingContext::from_key(
-					&key,
-					&self.my_account_id,
-					&sharing_participants,
-					&receiving_participants,
-				)
-			} else {
-				ResharingContext::without_key(&sharing_participants, &receiving_participants)
+		let resharing_context = if sharing_participants.contains(&self.my_account_id) {
+			// We have been selected to share our key share, but we don't have the
+			// key. Report the failure rather than bringing the engine down: the
+			// state chain will blame us for the failed ceremony and retry the
+			// handover without us.
+			let Some(key) = self.key_store.lock().unwrap().get_key(&key_id) else {
+				self.update_latest_ceremony_id(ceremony_id);
+				let reported_parties = Default::default();
+				let failure_reason = KeygenFailureReason::MissingKey;
+				failure_reason.log(&reported_parties);
+				return futures::future::ready(Err((reported_parties, failure_reason))).boxed()
 			};
+			ResharingContext::from_key(
+				&key,
+				&self.my_account_id,
+				&sharing_participants,
+				&receiving_participants,
+			)
+		} else {
+			ResharingContext::without_key(&sharing_participants, &receiving_participants)
+		};
 
 		self.start_keygen_with_resharing_context(
 			ceremony_id,

@@ -74,6 +74,8 @@ pub enum KeygenFailureReason {
 	InvalidBlameResponse,
 	#[error("Invalid Complaint")]
 	InvalidComplaint,
+	#[error("Missing Threshold Key")]
+	MissingKey,
 	#[error("Not Enough Sharing Participants")]
 	NotEnoughSharingParticipants,
 }
@@ -151,7 +153,7 @@ impl CeremonyFailureReason for KeygenFailureReason {
 			KeygenFailureReason::InvalidParticipants => {
 				warn!(tag = KEYGEN_REQUEST_IGNORED, "{KEYGEN_REQUEST_IGNORED_PREFIX}: {self}",);
 			},
-			KeygenFailureReason::NotEnoughSharingParticipants => {
+			KeygenFailureReason::MissingKey | KeygenFailureReason::NotEnoughSharingParticipants => {
 				error!(tag = KEYGEN_REQUEST_IGNORED, "{KEYGEN_REQUEST_IGNORED_PREFIX}: {self}",);
 			},
 		}
