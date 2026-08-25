@@ -182,6 +182,13 @@ register_checks! {
 				let (n, election_type) = election;
 				assert_eq!(get_election(post, n), election_type, "election should be of type {:?}", election_type);
 			}
+		},
+		last_processed_up_to_is(_pre, post, height: ChainBlockNumber) {
+			assert_eq!(
+				post.unsynchronised_state.processed_up_to.call_history.last().cloned(),
+				Some(height),
+				"the block processor should have last reported processed-up-to {height:?}",
+			);
 		}
 	}
 }
@@ -1052,6 +1059,155 @@ fn optimistic_election_result_saved_and_used_or_discarded_correctly() {
 					15,
 					BWElectionType::Optimistic,
 				)]),
+			],
+		);
+}
+
+/// With more than one optimistic election in flight, the engines can reach consensus on the higher
+/// block before the lower one. Closing the higher one moves `seen_heights_below` past the lower
+/// height, which drops the still-ongoing optimistic election for it. This test pins down that no
+/// block is skipped or witnessed twice as a result: the dropped height is simply re-elected by hash
+/// once the BHW reports its header. The processed-up-to report does briefly run ahead of the
+/// dropped height though, see the note below.
+#[test]
+fn multiple_optimistic_elections_resolved_out_of_order() {
+	const MAX_OPTIMISTIC_ELECTIONS: u8 = 2;
+
+	const HEADERS_RECEIVED: [Header<Types>; 2] = [
+		Header { block_height: 11, hash: 11, parent_hash: 10 },
+		Header { block_height: 12, hash: 12, parent_hash: 11 },
+	];
+	// Headers for the two heights that are witnessed optimistically, reported by the BHW only
+	// after the optimistic elections have resolved.
+	const OPTIMISTIC_HEADERS: [Header<Types>; 2] = [
+		Header { block_height: 13, hash: 13, parent_hash: 12 },
+		Header { block_height: 14, hash: 14, parent_hash: 13 },
+	];
+
+	let no_consensus = || {
+		generate_votes((0..20).collect(), (20..40).collect(), Default::default(), vec![42], None)
+	};
+	let consensus_on = |data: BlockData, hash: Option<BlockHash>| {
+		(
+			generate_votes(
+				(0..40).collect(),
+				Default::default(),
+				Default::default(),
+				data.clone(),
+				hash,
+			),
+			Some((data, hash)),
+		)
+	};
+
+	TestSetup::<SimpleBlockWitnesser>::default()
+		.with_unsynchronised_settings(BlockWitnesserSettings {
+			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
+			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
+			max_optimistic_elections: MAX_OPTIMISTIC_ELECTIONS,
+		})
+		.build()
+		// One by-hash election per received header, plus one optimistic election per height we
+		// expect to see next.
+		.test_on_finalize(
+			&vec![Some(ChainProgress { headers: HEADERS_RECEIVED.into(), removed: None })],
+			|_| {},
+			vec![
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(4),
+				Check::<SimpleBlockWitnesser>::open_elections_type_is(vec![
+					(11, BWElectionType::ByHash(11)),
+					(12, BWElectionType::ByHash(12)),
+					(13, BWElectionType::Optimistic),
+					(14, BWElectionType::Optimistic),
+				]),
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(0),
+			],
+		)
+		.then(|| println!("The optimistic election for 14 resolves, the one for 13 doesn't."))
+		.expect_consensus_multi(vec![
+			consensus_on(vec![1], None),
+			consensus_on(vec![3, 4], None),
+			(no_consensus(), None),
+			consensus_on(vec![7], Some(14)),
+		])
+		.test_on_finalize(
+			&vec![None],
+			|_| {},
+			vec![
+				// Closing the optimistic election for 14 moved `seen_heights_below` to 15, so the
+				// optimistic elections are restarted for 15 and 16 and the one for 13 is dropped.
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
+				Check::<SimpleBlockWitnesser>::open_elections_type_is(vec![
+					(15, BWElectionType::Optimistic),
+					(16, BWElectionType::Optimistic),
+				]),
+				// Only the two by-hash blocks are processed: the optimistic result for 14 is held
+				// back until its header confirms it.
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(2),
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![
+					(11, vec![1]),
+					(12, vec![3, 4]),
+				]),
+				Check::<SimpleBlockWitnesser>::block_processor_contains_block_data_for_heights(
+					vec![11, 12],
+				),
+				// NOTE: nothing is in progress for 13 any more, so the processed-up-to report
+				// follows `seen_heights_below` past a height that was never witnessed, and falls
+				// back to 12 on the next block. Deposit channel recycling keys off this value, so
+				// this needs addressing before `max_optimistic_elections` is raised above 1
+				// anywhere (see PRO-2303).
+				Check::<SimpleBlockWitnesser>::last_processed_up_to_is(14),
+			],
+		)
+		.then(|| println!("The BHW reports the headers for the two optimistic heights."))
+		.test_on_finalize(
+			&vec![Some(ChainProgress { headers: OPTIMISTIC_HEADERS.into(), removed: None })],
+			|_| {},
+			vec![
+				// 14 is served from the optimistic cache, 13 has to be elected by hash because its
+				// optimistic election never resolved.
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(3),
+				Check::<SimpleBlockWitnesser>::open_elections_type_is(vec![
+					(13, BWElectionType::ByHash(13)),
+					(15, BWElectionType::Optimistic),
+					(16, BWElectionType::Optimistic),
+				]),
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(1),
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![(14, vec![7])]),
+				Check::<SimpleBlockWitnesser>::block_processor_contains_block_data_for_heights(
+					vec![11, 12, 14],
+				),
+				// The gap at 13 holds back the processed-up-to report.
+				Check::<SimpleBlockWitnesser>::last_processed_up_to_is(12),
+			],
+		)
+		.then(|| println!("The by-hash election for the skipped optimistic height resolves."))
+		// Consensus is applied in election id order, i.e. in the order the elections were created:
+		// the two optimistic elections were carried over from the previous block, the by-hash
+		// election for 13 was only created afterwards.
+		.expect_consensus_multi(vec![
+			(no_consensus(), None),
+			(no_consensus(), None),
+			consensus_on(vec![9], None),
+		])
+		.test_on_finalize(
+			&vec![None],
+			|_| {},
+			vec![
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
+				Check::<SimpleBlockWitnesser>::open_elections_type_is(vec![
+					(15, BWElectionType::Optimistic),
+					(16, BWElectionType::Optimistic),
+				]),
+				// 13 is witnessed exactly once, and only now, after every height up to 14 has been
+				// processed, does the processed-up-to report advance.
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(1),
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![(13, vec![9])]),
+				Check::<SimpleBlockWitnesser>::block_processor_contains_block_data_for_heights(
+					vec![11, 12, 13, 14],
+				),
+				Check::<SimpleBlockWitnesser>::last_processed_up_to_is(14),
 			],
 		);
 }
