@@ -37,7 +37,7 @@ use cf_traits::{
 	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider,
 	KeyRotationStatusOuter, KeyRotator, SetSafeMode, ThresholdSigner, VaultActivator,
 };
-use cf_utilities::assert_matches;
+use cf_utilities::{assert_matches, assert_panics};
 pub use frame_support::traits::Get;
 
 use cfe_events::{KeyHandoverRequest, KeygenRequest, ThresholdSignatureRequest};
@@ -805,6 +805,58 @@ fn keygen_request_emitted() {
 			}
 			.into()
 		);
+	});
+}
+
+/// The number of sharing participants is derived from the size of the authority
+/// set that holds the key being handed over. If those two ever disagree, the
+/// handover would produce the wrong key, be rejected without anyone being
+/// blamed, and then be retried with an equally undersized set indefinitely - so
+/// we make plenty of noise about it.
+#[test]
+fn undersized_sharing_set_is_flagged() {
+	let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().take(2).cloned());
+
+	new_test_ext().execute_with(|| {
+		let current_epoch = <Test as Chainflip>::EpochInfo::epoch_index();
+
+		// The key being handed over is held by 10 authorities, so 7 of them are
+		// needed to re-share it.
+		MockEpochInfo::set_epoch_authority_count(current_epoch, 10);
+
+		PendingKeyRotation::<Test, _>::put(KeyRotationStatus::KeygenVerificationComplete {
+			new_public_key: Default::default(),
+		});
+
+		// Six of the ten key holders: one short.
+		assert_panics!(<EvmThresholdSigner as KeyRotator>::key_handover(
+			BTreeSet::from_iter(1u64..=6),
+			candidates.clone(),
+			current_epoch + 1,
+		));
+	});
+}
+
+#[test]
+fn sufficient_sharing_set_is_not_flagged() {
+	let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().take(2).cloned());
+
+	new_test_ext().execute_with(|| {
+		let current_epoch = <Test as Chainflip>::EpochInfo::epoch_index();
+
+		MockEpochInfo::set_epoch_authority_count(current_epoch, 10);
+
+		PendingKeyRotation::<Test, _>::put(KeyRotationStatus::KeygenVerificationComplete {
+			new_public_key: Default::default(),
+		});
+
+		<EvmThresholdSigner as KeyRotator>::key_handover(
+			BTreeSet::from_iter(1u64..=7),
+			candidates,
+			current_epoch + 1,
+		);
+
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 	});
 }
 

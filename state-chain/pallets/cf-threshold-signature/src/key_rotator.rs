@@ -76,6 +76,28 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 							!sharing_participants.is_empty() && !receiving_participants.is_empty()
 						);
 
+						// The key being handed over is held by the authorities of its own
+						// epoch, and re-sharing it requires the contributions of enough of
+						// them to reconstruct it. Fewer than that would produce a key
+						// unrelated to the one we are handing over, which we would then
+						// reject in `handover_key_matches` - and, since nobody would be
+						// blamed for it, retry with an equally undersized set, forever.
+						if let Some(key_holder_count) =
+							T::EpochInfo::authority_count_at_epoch(epoch_key.epoch_index)
+						{
+							let required =
+								cf_utilities::success_threshold_from_share_count(key_holder_count)
+									as usize;
+							if sharing_participants.len() < required {
+								log_or_panic!(
+									"Key handover requested with {} sharing participants, but {} are required to re-share the key from epoch {}.",
+									sharing_participants.len(),
+									required,
+									epoch_key.epoch_index,
+								);
+							}
+						}
+
 						let ceremony_id = Self::increment_ceremony_id();
 
 						// from the SC's perspective, we don't care what set they're in, they get
