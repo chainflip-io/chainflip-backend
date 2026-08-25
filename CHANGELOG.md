@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.10] - 2026-08-24
+
+### Fixes
+
+- don't finalise fetch on CCM broadcast.
+
 ## [2.2.9] - 2026-08-19
 
 ### Fixes

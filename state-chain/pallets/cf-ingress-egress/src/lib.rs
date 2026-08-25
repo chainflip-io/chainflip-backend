@@ -1918,9 +1918,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::withhold_ingress_or_egress_fee(egress_type, tx.asset, amount_after_ingress_fees)
 				.amount_after_fees;
 
-		// this is the function we use to broadcast, used multiple times below
-		let broadcast_and_finalise_fetch = |api_call| {
+		let broadcast = |api_call| {
 			let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
+			broadcast_id
+		};
+
+		// Only a call containing the fetch can prove that the channel was deployed.
+		let broadcast_and_finalise_fetch = |api_call| {
+			let broadcast_id = broadcast(api_call);
 			if let Some(deposit_address) = tx.deposit_address.clone() {
 				let addresses =
 					Self::addresses_requiring_fetch_completion_action(vec![deposit_address]);
@@ -1998,7 +2003,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ccm_refund_metadata.channel_metadata.ccm_additional_data.clone(),
 				)
 				.map_err(|_| RecordFailureAndAbortRefund)
-				.map(broadcast_and_finalise_fetch)
+				.map(broadcast)
 			},
 		}
 	}
