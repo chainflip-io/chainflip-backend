@@ -21,6 +21,8 @@ use sp_std::collections::btree_set::BTreeSet;
 use super::MockPallet;
 
 const ROTATION_OUTCOME: &[u8] = b"ROTATION_OUTCOME";
+const LAST_KEYGEN_PARTICIPANTS: &[u8] = b"LAST_KEYGEN_PARTICIPANTS";
+const LAST_HANDOVER_PARTICIPANTS: &[u8] = b"LAST_HANDOVER_PARTICIPANTS";
 
 macro_rules! mock_key_rotator {
 	($rotator_name:ident) => {
@@ -67,6 +69,17 @@ macro_rules! mock_key_rotator {
 				);
 			}
 
+			/// The participants of the most recent keygen request, if any.
+			pub fn last_keygen_participants() -> Option<BTreeSet<u64>> {
+				Self::get_value(LAST_KEYGEN_PARTICIPANTS)
+			}
+
+			/// The (sharing, receiving) participants of the most recent key handover
+			/// request, if any.
+			pub fn last_handover_participants() -> Option<(BTreeSet<u64>, BTreeSet<u64>)> {
+				Self::get_value(LAST_HANDOVER_PARTICIPANTS)
+			}
+
 			pub fn pending() {
 				Self::put_value(
 					ROTATION_OUTCOME,
@@ -78,7 +91,8 @@ macro_rules! mock_key_rotator {
 		impl KeyRotator for $rotator_name {
 			type ValidatorId = u64;
 
-			fn keygen(_candidates: BTreeSet<Self::ValidatorId>, _new_epoch_index: EpochIndex) {
+			fn keygen(candidates: BTreeSet<Self::ValidatorId>, _new_epoch_index: EpochIndex) {
+				Self::put_value(LAST_KEYGEN_PARTICIPANTS, candidates);
 				Self::put_value(
 					ROTATION_OUTCOME,
 					AsyncResult::<KeyRotationStatusOuter<u64>>::Pending,
@@ -86,10 +100,14 @@ macro_rules! mock_key_rotator {
 			}
 
 			fn key_handover(
-				_old_participants: BTreeSet<Self::ValidatorId>,
-				_new_candidates: BTreeSet<Self::ValidatorId>,
+				sharing_participants: BTreeSet<Self::ValidatorId>,
+				receiving_participants: BTreeSet<Self::ValidatorId>,
 				_epoch_index: EpochIndex,
 			) {
+				Self::put_value(
+					LAST_HANDOVER_PARTICIPANTS,
+					(sharing_participants, receiving_participants),
+				);
 				Self::put_value(
 					ROTATION_OUTCOME,
 					AsyncResult::<KeyRotationStatusOuter<u64>>::Pending,

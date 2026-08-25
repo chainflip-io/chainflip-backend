@@ -978,7 +978,10 @@ mod key_handover {
 
 	use super::*;
 
-	fn failed_handover_with_offenders(offenders: impl IntoIterator<Item = u64>) {
+	/// Sets up a rotation with `AUTHORITIES` as the current authority set and
+	/// `CANDIDATES` as the auction winners, then completes keygen so that key
+	/// handover is requested at `block_number`.
+	fn start_handover(block_number: u64) {
 		AuctionParameters::<Test>::put(SetSizeParameters {
 			min_size: MIN_AUTHORITY_SIZE,
 			max_size: CANDIDATES.count() as u32,
@@ -1002,12 +1005,103 @@ mod key_handover {
 		));
 		MockKeyRotatorA::keygen_success();
 		System::reset_events();
-		Pallet::<Test>::on_initialize(1);
+		Pallet::<Test>::on_initialize(block_number);
 
 		assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+	}
+
+	/// The sharing and receiving sets of the handover request that the pallet
+	/// most recently made to the key rotator.
+	fn requested_handover_participants() -> (BTreeSet<u64>, BTreeSet<u64>) {
+		MockKeyRotatorA::last_handover_participants()
+			.expect("a key handover should have been requested")
+	}
+
+	fn failed_handover_with_offenders(offenders: impl IntoIterator<Item = u64>) {
+		start_handover(1);
 		MockKeyRotatorA::failed(offenders);
 		System::reset_events();
 		Pallet::<Test>::on_initialize(2);
+	}
+
+	/// The number of key holders required to reconstruct the key being handed
+	/// over. Note this is derived from the *full* current authority set: banning
+	/// a node doesn't change how many shares are needed.
+	fn required_sharing_participants() -> usize {
+		success_threshold_from_share_count(AUTHORITIES.count() as u32) as usize
+	}
+
+	#[test]
+	fn sharing_set_is_a_success_threshold_of_the_current_authorities() {
+		new_test_ext().execute_with(|| {
+			start_handover(1);
+
+			let (sharing, receiving) = requested_handover_participants();
+			let current_authorities = AUTHORITIES.collect::<BTreeSet<_>>();
+
+			// Exactly enough key holders to reconstruct the key, no more: every
+			// additional participant is another node that has to stay online for
+			// the ceremony to succeed.
+			assert_eq!(sharing.len(), required_sharing_participants());
+
+			// Every sharer must hold a share of the key being handed over, i.e.
+			// must be a current authority.
+			assert!(
+				sharing.is_subset(&current_authorities),
+				"sharing set {sharing:?} contains non-authorities",
+			);
+
+			// The receiving set is the prospective new authority set.
+			assert_eq!(receiving, CANDIDATES.collect::<BTreeSet<_>>());
+		});
+	}
+
+	#[test]
+	fn sharing_set_prefers_authorities_who_are_staying_on() {
+		new_test_ext().execute_with(|| {
+			start_handover(1);
+
+			let (sharing, _) = requested_handover_participants();
+			let staying = AUTHORITIES
+				.collect::<BTreeSet<_>>()
+				.intersection(&CANDIDATES.collect())
+				.copied()
+				.collect::<BTreeSet<_>>();
+
+			// Authorities who are also candidates have just demonstrated liveness
+			// by completing keygen, so all of them should be used before falling
+			// back to the outgoing authorities.
+			assert!(staying.len() < required_sharing_participants(), "test setup is degenerate");
+			assert!(
+				staying.is_subset(&sharing),
+				"sharing set {sharing:?} should contain all of {staying:?}",
+			);
+		});
+	}
+
+	#[test]
+	fn banned_authorities_are_not_asked_to_share() {
+		new_test_ext().execute_with(|| {
+			// A non-candidate authority fails the handover: it is banned and the
+			// handover is retried with a new sharing set.
+			let offender = *AUTHORITIES
+				.collect::<BTreeSet<_>>()
+				.difference(&CANDIDATES.collect())
+				.next()
+				.unwrap();
+
+			failed_handover_with_offenders([offender]);
+
+			assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+
+			let (sharing, _) = requested_handover_participants();
+			assert!(!sharing.contains(&offender), "banned node {offender} was asked to share");
+
+			// Banning a node must not shrink the sharing set: the number of shares
+			// needed to reconstruct the key is fixed by the size of the authority
+			// set that generated it.
+			assert_eq!(sharing.len(), required_sharing_participants());
+		});
 	}
 
 	#[test]
