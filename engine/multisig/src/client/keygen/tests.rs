@@ -1269,6 +1269,53 @@ mod key_handover {
 		standard_signing(&mut signing_ceremony).await;
 	}
 
+	/// Re-sharing needs the contributions of at least `threshold + 1` holders of
+	/// the original key. With fewer, the ceremony would run to completion but
+	/// produce a key unrelated to the one being handed over (which the state
+	/// chain would then reject), so we refuse the request up front.
+	#[tokio::test]
+	async fn rejects_request_with_too_few_sharing_participants() {
+		use crate::client::ceremony_manager::prepare_key_handover_request;
+
+		let original_set = to_account_id_set([1, 2, 3]);
+		let receiving_set = to_account_id_set([4, 5, 6]);
+
+		let (_key, key_infos) = keygen::generate_key_data::<Scheme>(
+			original_set.clone().into_iter().collect(),
+			&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+		);
+
+		let threshold = key_infos.values().next().unwrap().params.threshold;
+
+		// One short of the number of key holders needed to reconstruct the key.
+		let sharing_subset: BTreeSet<_> =
+			original_set.iter().take(threshold as usize).cloned().collect();
+		assert_eq!(sharing_subset.len(), threshold as usize);
+
+		let own_id = sharing_subset.iter().next().unwrap();
+		let context = ResharingContext::from_key(
+			key_infos.get(own_id).unwrap(),
+			own_id,
+			&sharing_subset,
+			&receiving_set,
+		);
+
+		let (p2p_sender, _p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+		assert_eq!(
+			prepare_key_handover_request::<Scheme>(
+				DEFAULT_KEYGEN_CEREMONY_ID,
+				own_id,
+				sharing_subset.union(&receiving_set).cloned().collect(),
+				&p2p_sender,
+				context,
+				Rng::from_seed(DEFAULT_KEYGEN_SEED),
+			)
+			.err(),
+			Some(KeygenFailureReason::NotEnoughSharingParticipants),
+		);
+	}
+
 	#[tokio::test]
 	async fn with_disjoint_sets_of_nodes() {
 		// Test that key handover can be performed even if there no overlap

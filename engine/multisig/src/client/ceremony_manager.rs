@@ -54,6 +54,7 @@ use tokio::sync::oneshot;
 
 use client::common::{
 	broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
+	ParticipantStatus,
 };
 
 use super::{
@@ -237,6 +238,27 @@ pub fn prepare_key_handover_request<Crypto: CryptoScheme>(
 	resharing_context: ResharingContext<Crypto>,
 	rng: Rng,
 ) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
+	// Only the sharing parties know the original key's parameters, and therefore
+	// only they can check this. Re-sharing requires the contributions of at least
+	// `threshold + 1` key holders; with any fewer the ceremony would "succeed" but
+	// produce a key unrelated to the one being handed over. The state chain would
+	// reject that key, but there is no point running the ceremony to find out.
+	if let ParticipantStatus::Sharing { original_key, .. } = &resharing_context.party_status {
+		let minimum_sharing_participants = original_key.params.threshold + 1;
+		let sharing_participants_len: AuthorityCount = resharing_context
+			.sharing_participants
+			.len()
+			.try_into()
+			.expect("too many sharing participants");
+		if sharing_participants_len < minimum_sharing_participants {
+			debug!(
+				"Key Handover request invalid: not enough sharing participants ({sharing_participants_len}/{minimum_sharing_participants})",
+			);
+
+			return Err(KeygenFailureReason::NotEnoughSharingParticipants)
+		}
+	}
+
 	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
 
 	let (our_idx, signer_idxs) =
