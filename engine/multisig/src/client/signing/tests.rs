@@ -92,6 +92,48 @@ mod broadcast_commitments_stage {
 		signing_ceremony
 			.complete_with_error(&[bad_account_id], SigningFailureReason::DeserializationError);
 	}
+
+	/// A commitment carrying more payloads than the ceremony has must be rejected on arrival, so
+	/// that every honest node echoes `None` for its sender and the abort is attributed to them.
+	#[tokio::test]
+	async fn should_report_on_too_many_commitments() {
+		type BtcVerifyComm2 = signing_data::VerifyComm2<ChainPoint<BtcSigning>>;
+
+		let (mut signing_ceremony, _) = new_signing_ceremony::<BtcSigning>().await;
+
+		let mut messages = signing_ceremony.request().await;
+
+		// The ceremony has a single payload, so two commitments is one too many.
+		let [bad_account_id] = signing_ceremony.select_account_ids();
+		let too_many_commitments = gen_dummy_signing_comm1(&mut signing_ceremony.rng, 2);
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = too_many_commitments.clone();
+		}
+
+		signing_ceremony.distribute_messages(messages).await;
+
+		// Every honest node drops the oversized commitment, so none of them sees a full set of
+		// stage 1 messages and they only proceed on timeout. The sender itself received a valid
+		// commitment from everyone and has already moved on.
+		for (_, node) in signing_ceremony
+			.nodes
+			.iter_mut()
+			.filter(|(account_id, _)| *account_id != &bad_account_id)
+		{
+			node.force_stage_timeout().await;
+		}
+
+		let messages = signing_ceremony.gather_outgoing_messages::<BtcVerifyComm2, _>().await;
+		signing_ceremony.distribute_messages(messages).await;
+
+		signing_ceremony.complete_with_error(
+			&[bad_account_id],
+			SigningFailureReason::BroadcastFailure(
+				BroadcastFailureReason::InsufficientMessages,
+				SigningStageName::VerifyCommitmentsBroadcast2,
+			),
+		);
+	}
 }
 
 mod local_signatures_stage {

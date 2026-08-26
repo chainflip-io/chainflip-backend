@@ -82,6 +82,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	type Message = Comm1<Crypto::Point>;
 	const NAME: SigningStageName = SigningStageName::AwaitCommitments1;
 
+	fn size_context(&self) -> usize {
+		self.signing_common.payload_count()
+	}
+
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let comm1: Vec<_> = self
 			.nonces
@@ -137,6 +141,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 {
 	type Message = VerifyComm2<Crypto::Point>;
 	const NAME: SigningStageName = SigningStageName::VerifyCommitmentsBroadcast2;
+
+	fn size_context(&self) -> usize {
+		self.signing_common.payload_count()
+	}
 
 	/// Simply report all data that we have received from
 	/// other parties in the last stage
@@ -263,6 +271,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	type Message = LocalSig3<Crypto::Point>;
 	const NAME: SigningStageName = SigningStageName::LocalSigStage3;
 
+	fn size_context(&self) -> usize {
+		self.signing_common.payload_count()
+	}
+
 	/// With all nonce commitments verified, and the group commitment computed,
 	/// we can generate our share of signature response, which we broadcast to other parties.
 	fn init(&mut self) -> DataToSend<Self::Message> {
@@ -335,6 +347,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 {
 	type Message = VerifyLocalSig4<Crypto::Point>;
 	const NAME: SigningStageName = SigningStageName::VerifyLocalSigsBroadcastStage4;
+
+	fn size_context(&self) -> usize {
+		self.signing_common.payload_count()
+	}
 
 	/// Broadcast all signature shares sent to us
 	fn init(&mut self) -> DataToSend<Self::Message> {
@@ -462,6 +478,7 @@ mod tests {
 	use crate::{
 		bitcoin::BtcCryptoScheme,
 		client::{
+			get_key_data_for_test,
 			signing::{gen_signing_data_stage2, SigningData},
 			PartyIdxMapping,
 		},
@@ -471,6 +488,23 @@ mod tests {
 	use rand::SeedableRng;
 	use signing::gen_signing_data_stage4;
 	use std::{sync::Arc, vec};
+
+	/// The payload count a stage checks against comes from `payloads_and_keys`, so the fixture
+	/// has to hold as many entries as the ceremony is supposed to be signing.
+	fn dummy_signing_common(
+		participants: BTreeSet<AccountId>,
+		payload_count: usize,
+	) -> SigningStateCommonInfo<BtcCryptoScheme> {
+		let key = get_key_data_for_test::<BtcCryptoScheme>(participants).key;
+		SigningStateCommonInfo {
+			payloads_and_keys: (0..payload_count)
+				.map(|_| PayloadAndKey {
+					payload: BtcCryptoScheme::signing_payload_for_test(),
+					key: key.clone(),
+				})
+				.collect(),
+		}
+	}
 
 	#[tokio::test]
 	async fn should_report_on_invalid_number_of_commitments() {
@@ -483,9 +517,8 @@ mod tests {
 		let common = CeremonyCommon {
 			own_idx: OWN_IDX,
 			outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
-			number_of_signing_payloads: Some(NUMBER_OF_PAYLOADS),
 			ceremony_id: Default::default(),
-			validator_mapping: Arc::new(PartyIdxMapping::from_participants(participants)),
+			validator_mapping: Arc::new(PartyIdxMapping::from_participants(participants.clone())),
 			all_idxs: BTreeSet::new(),
 			rng: Rng::from_seed([0; 32]),
 		};
@@ -493,7 +526,7 @@ mod tests {
 		// Create the dummy stage 2 with the common data
 		let stage: VerifyCommitmentsBroadcast2<BtcCryptoScheme> = VerifyCommitmentsBroadcast2 {
 			common,
-			signing_common: SigningStateCommonInfo { payloads_and_keys: vec![] },
+			signing_common: dummy_signing_common(participants, NUMBER_OF_PAYLOADS),
 			nonces: vec![],
 			commitments: BTreeMap::new(),
 		};
@@ -526,10 +559,8 @@ mod tests {
 		let common = CeremonyCommon {
 			own_idx: OWN_IDX,
 			outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
-			// Set the number of payloads to 2
-			number_of_signing_payloads: Some(NUMBER_OF_PAYLOADS),
 			ceremony_id: Default::default(),
-			validator_mapping: Arc::new(PartyIdxMapping::from_participants(participants)),
+			validator_mapping: Arc::new(PartyIdxMapping::from_participants(participants.clone())),
 			all_idxs: BTreeSet::new(),
 			rng: Rng::from_seed([0; 32]),
 		};
@@ -538,7 +569,7 @@ mod tests {
 		let stage: VerifyLocalSigsBroadcastStage4<BtcCryptoScheme> =
 			VerifyLocalSigsBroadcastStage4 {
 				common,
-				signing_common: SigningStateCommonInfo { payloads_and_keys: vec![] },
+				signing_common: dummy_signing_common(participants, NUMBER_OF_PAYLOADS),
 				signature_data: vec![],
 				local_sigs: BTreeMap::new(),
 			};

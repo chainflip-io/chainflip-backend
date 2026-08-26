@@ -93,6 +93,25 @@ where
 	&received_idxs == expected_idxs
 }
 
+/// How the claims about a single party's broadcast were distributed: the number of
+/// reporters that received nothing, and the size of each distinct claimed value's group.
+///
+/// Only the group sizes are returned, never the values - they can be large, and the
+/// shape alone is what distinguishes equivocation from message loss.
+fn claim_distribution<T: Ord, Iter: Iterator<Item = Option<T>>>(iter: Iter) -> (usize, Vec<usize>) {
+	let mut no_value = 0;
+	let mut counts = BTreeMap::<T, usize>::new();
+
+	for claim in iter {
+		match claim {
+			Some(value) => *counts.entry(value).or_default() += 1,
+			None => no_value += 1,
+		}
+	}
+
+	(no_value, counts.into_values().collect())
+}
+
 /// Decide, for each party, what they are deemed to have broadcast, using a 2/3 quorum over
 /// what the *reporters* claim (see `threshold_for_broadcast_verification`).
 ///
@@ -128,7 +147,12 @@ where
 		.filter(|(sender, message)| {
 			let valid = check_verification_message_indexes(message, &participating_idxs);
 			if !(valid) {
-				warn!("Disregarding verification message from: {sender}");
+				// Sending a verification message that doesn't cover exactly the expected
+				// participants is a protocol violation.
+				warn!(
+					sender_idx = *sender,
+					"Disregarding a verification message covering the wrong set of parties",
+				);
 			}
 			valid
 		})
@@ -154,9 +178,9 @@ where
 
 	let mut reported_parties = BTreeSet::new();
 
-	// Set if some party's value reached no quorum either way. The stage still fails, but
+	// Indexes whose value reached no quorum either way. The stage still fails, but
 	// unlike `reported_parties` this is not attributable to anyone.
-	let mut unresolved = false;
+	let mut unresolved = BTreeSet::new();
 
 	for idx in &participating_idxs {
 		let message_iter = verification_messages.values().map(|m| m.data[idx].clone());
@@ -168,17 +192,40 @@ where
 				reported_parties.insert(*idx);
 			},
 			None => {
-				unresolved = true;
+				unresolved.insert(*idx);
 			},
 		}
 	}
 
+	for idx in &unresolved {
+		let (no_value, mut group_sizes) =
+			claim_distribution(verification_messages.values().map(|m| m.data[idx].clone()));
+		group_sizes.sort_unstable_by(|a, b| b.cmp(a));
+
+		warn!(
+			subject_idx = *idx,
+			reported_nothing = no_value,
+			value_group_sizes = format!("{group_sizes:?}"),
+			"No quorum on the value broadcast by a party; reporting nobody",
+		);
+	}
+
 	if !reported_parties.is_empty() {
-		// A quorum agrees these parties broadcast nothing, so the failure is attributable
-		// to them. Any unresolved values are reported through this same error; naming only
-		// the attributable parties is what keeps the blame set defensible.
+		// The error names the accused but not the margin they were convicted by. A verdict
+		// that clears quorum by a single claim is a very different event from a unanimous
+		// one, and only the former is worth suspecting.
+		warn!(
+			subject_idxs = format!("{reported_parties:?}"),
+			quorum_threshold = threshold,
+			reporters = verification_messages.len(),
+			"Quorum agrees these parties broadcast nothing",
+		);
+
+		// The failure is attributable to them. Any unresolved values are reported through
+		// this same error; naming only the attributable parties is what keeps the blame
+		// set defensible.
 		Err((reported_parties, BroadcastFailureReason::InsufficientMessages))
-	} else if unresolved {
+	} else if !unresolved.is_empty() {
 		// Deliberately reporting nobody: we can see the ceremony cannot proceed, but not
 		// who is at fault, and an honest node must never emit blame it cannot substantiate.
 		Err((BTreeSet::new(), BroadcastFailureReason::Inconsistency))
