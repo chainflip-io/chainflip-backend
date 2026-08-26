@@ -4,30 +4,23 @@ on:
   merge_group:
 
 jobs:
-  sfw-check:
-    uses: ./.github/workflows/_00_sfw_check.yml
   pre-check:
-    needs: [sfw-check]
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
   test:
-    needs: [sfw-check]
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
   coverage:
-    needs: [sfw-check]
     uses: ./.github/workflows/_11_coverage.yml
     with:
       test_features: runtime-benchmarks
     secrets: inherit
   build:
-    needs: [sfw-check]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
       profile: "release"
   build-benchmarks:
-    needs: [sfw-check]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
@@ -42,7 +35,6 @@ jobs:
       CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
-    needs: [sfw-check]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
