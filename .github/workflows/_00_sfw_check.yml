@@ -15,18 +15,67 @@ jobs:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
+          fetch-depth: 2
           persist-credentials: false
-
-      - name: Install Socket Firewall 🔥
-        uses: SocketDev/action@2d3f25590c6ed6ba11a9a14c064d962a3a04698f # v1.3.1
-        with:
-          mode: firewall-free
-          shims: "false"
 
       - name: Configure Git 🛠️
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
+      - name: Check for Cargo dependency changes 🔎
+        id: dependency-changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          case "${EVENT_NAME}" in
+            pull_request)
+              base_sha="${PR_BASE_SHA}"
+              ;;
+            merge_group)
+              base_sha="${MERGE_GROUP_BASE_SHA}"
+              ;;
+            push)
+              base_sha="${PUSH_BEFORE_SHA}"
+              ;;
+            *)
+              echo "changed=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+              ;;
+          esac
+
+          if [[ -z "${base_sha}" || "${base_sha}" =~ ^0+$ ]]; then
+            if ! base_sha=$(git rev-parse HEAD^); then
+              echo "changed=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          elif ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+            if ! git fetch --no-tags --depth=1 origin "${base_sha}"; then
+              echo "changed=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          fi
+
+          if git diff --name-only "${base_sha}" HEAD -- |
+            grep -E '(^|/)Cargo\.(lock|toml)$|^\.cargo/config(\.toml)?$' >/dev/null; then
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "No Cargo dependency changes detected; skipping Socket Firewall."
+          fi
+
+      - name: Install Socket Firewall 🔥
+        if: steps.dependency-changes.outputs.changed == 'true'
+        uses: SocketDev/action@2d3f25590c6ed6ba11a9a14c064d962a3a04698f # v1.3.1
+        with:
+          mode: firewall-free
+
       - name: Check Cargo dependencies 🔍
+        if: steps.dependency-changes.outputs.changed == 'true'
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: sfw cargo fetch --locked
