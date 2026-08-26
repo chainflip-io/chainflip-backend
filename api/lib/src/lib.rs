@@ -68,7 +68,7 @@ pub use engine_sc_client::{
 pub mod lp;
 pub mod queries;
 
-pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
+pub use cf_primitives::use_chainflip_account_id_encoding;
 
 // TODO: consider exporting lp types under another alias to avoid shadowing this crate's lp module.
 use cf_rpc_types::lp::LiquidityDepositChannelDetails;
