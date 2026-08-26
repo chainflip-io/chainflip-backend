@@ -10,6 +10,10 @@ env:
   FORCE_COLOR: 1
 
 jobs:
+  sfw-check:
+    if: inputs.network != 'sisyphos'
+    uses: ./.github/workflows/_00_sfw_check.yml
+
   check-version:
     runs-on: namespace-profile-default-light
     strategy:
