@@ -318,3 +318,77 @@ fn min_auction_bid_qualification() {
 		);
 	});
 }
+
+#[test]
+fn full_redemption_deregisters_liquidity_provider() {
+	use cf_chains::address::EncodedAddress;
+	use cf_primitives::{AccountRole, Asset, AssetAmount};
+	use cf_traits::{FundAccount, FundingSource};
+	use state_chain_runtime::LiquidityProvider;
+
+	const LP: AccountId = AccountId::new([0xe1; 32]);
+	const LP_BALANCE: FlipBalance = 100 * FLIPPERINOS_PER_FLIP;
+	const FREE_BALANCE: AssetAmount = 1_000_000_000_000_000_000;
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		network::new_account(&LP, AccountRole::LiquidityProvider);
+		network::register_refund_addresses(&LP);
+		Funding::fund_account(
+			LP.clone(),
+			LP_BALANCE - Flip::balance(&LP),
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
+		);
+
+		// An LP that still holds funds in the protocol can't be deregistered, and the
+		// deregistration hook says exactly why.
+		crate::swapping::credit_account(&LP, Asset::Eth, FREE_BALANCE);
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(LP.clone()),
+				RedemptionAmount::Max,
+				ETH_DUMMY_ADDR,
+				None,
+			),
+			pallet_cf_asset_balances::Error::<Runtime>::FundsRemaining
+		);
+
+		// A partial redemption is unaffected: it doesn't empty the account.
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(LP.clone()),
+			RedemptionAmount::Exact(LP_BALANCE / 2),
+			ETH_DUMMY_ADDR,
+			None,
+		));
+		assert_eq!(
+			pallet_cf_account_roles::AccountRoles::<Runtime>::get(&LP),
+			Some(AccountRole::LiquidityProvider)
+		);
+		assert_ok!(Funding::redeemed(LP.clone(), LP_BALANCE / 2, Default::default()));
+
+		// Once the LP has no state left in the protocol, redeeming the remaining balance
+		// deregisters the account - no separate deregistration extrinsic needed.
+		assert_ok!(LiquidityProvider::withdraw_asset(
+			RuntimeOrigin::signed(LP.clone()),
+			FREE_BALANCE,
+			Asset::Eth,
+			EncodedAddress::Eth(Default::default()),
+		));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(LP.clone()),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR,
+			None,
+		));
+		assert_eq!(
+			pallet_cf_account_roles::AccountRoles::<Runtime>::get(&LP),
+			Some(AccountRole::Unregistered)
+		);
+		// The deregistration hook cleans up the LP's refund addresses.
+		assert!(pallet_cf_asset_balances::RefundAddresses::<Runtime>::iter_prefix(&LP)
+			.next()
+			.is_none());
+	});
+}
