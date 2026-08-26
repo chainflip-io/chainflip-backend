@@ -34,6 +34,23 @@ import { bitcoinIngressEgressInsufficientBoostLiquidityEvent } from 'generated/e
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { boostPoolFee } from 'shared/setup_boost_pools';
 
+// A generous Bitcoin ingress safety margin applied only for the boost test. Boosting is timing-
+// sensitive: a deposit is boosted only if its block is pre-witnessed before it
+// ages past the ingress safety margin. When both fire in the same processing step the boost is
+// dropped in favour of finalisation. That happens whenever the tracked Bitcoin height advances
+// several blocks at once — which is possible when the Bitcoin block time is at or below the state
+// chain's and combined with a transient witnessing hiccup.
+const BOOST_TEST_BTC_SAFETY_MARGIN = 6n;
+
+async function setBtcWitnessSafetyMargin<A>(cf: ChainflipIO<A>, margin: bigint): Promise<void> {
+  await cf.submitGovernance({
+    extrinsic: (api) =>
+      api.tx.bitcoinIngressEgress.updatePalletConfig([
+        { type: 'SetWitnessSafetyMarginBitcoin', value: { margin } },
+      ]),
+  });
+}
+
 /// Stops boosting BTC at the 5bps tier and returns the StoppedBoosting event.
 export async function stopBoosting(
   cf: ChainflipIO<WithLpAccount>,
@@ -199,6 +216,18 @@ export async function testBoostingSwap(testContext: TestContext) {
     ]),
   );
 
-  // Pre-witnessing is only enabled for btc.
-  await doBoostingForBtcAssetTest(cf, 0.1);
+  // Raise Bitcoin's WitnessSafetyMargin for the duration of
+  // the test so boosting is reliable.
+  const originalBtcSafetyMargin = await chainflip.query.bitcoinIngressEgress.witnessSafetyMargin();
+  cf.info(
+    `Raising Bitcoin WitnessSafetyMargin to ${BOOST_TEST_BTC_SAFETY_MARGIN} for the boost test (was ${originalBtcSafetyMargin}).`,
+  );
+  await setBtcWitnessSafetyMargin(cf, BOOST_TEST_BTC_SAFETY_MARGIN);
+  try {
+    await doBoostingForBtcAssetTest(cf, 0.1);
+  } finally {
+    if (originalBtcSafetyMargin !== undefined) {
+      await setBtcWitnessSafetyMargin(cf, originalBtcSafetyMargin);
+    }
+  }
 }
