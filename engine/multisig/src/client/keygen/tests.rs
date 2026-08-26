@@ -1642,4 +1642,446 @@ mod key_handover {
 		let (new_key, _new_shares) = ceremony.complete();
 		assert_eq!(new_key, initial_key);
 	}
+
+	/// Adversarial property tests over the key-handover ceremony.
+	///
+	/// The existing handover tests each pin one hand-picked malicious behaviour to
+	/// one expected outcome. These instead enumerate a *space* of malicious
+	/// behaviours and assert the invariants that must hold across all of them,
+	/// which is what turns a known-bug regression test into a bug-finding one.
+	///
+	/// The invariants are deliberately weak and outcome-agnostic - we do not assert
+	/// what the ceremony decides, only that whatever it decides is defensible:
+	///
+	///   I1. no honest node panics;
+	///   I2. no honest node is ever named in the reported set;
+	///   I3. honest nodes do not diverge (all conclude, and all the same way).
+	///
+	/// I1 and I2 are the two properties an attacker most wants to break: I1 takes
+	/// validators offline, I2 gets them slashed.
+	///
+	/// Each sweep permits exactly one malicious participant, so any node named in a
+	/// reported set other than that one is a false accusation by definition.
+	///
+	/// (Kept inline for now so it can reuse `prepare_handover_test`; worth
+	/// extracting to its own module if a third ceremony shape is added.)
+	mod adversarial {
+		use super::*;
+		use std::panic::AssertUnwindSafe;
+
+		/// `{1,2}` hold the key and reshare it to `{3,4,5,6}`. The sharing and
+		/// receiving sets are disjoint, so a receiver is always non-sharing and the
+		/// two index domains (current ceremony vs. new key) genuinely differ.
+		const SHARERS: [u8; 2] = [1, 2];
+		const RECEIVERS: [u8; 4] = [3, 4, 5, 6];
+		const ORIGINAL_SET: [u8; 3] = [1, 2, 7];
+
+		fn account(seed: u8) -> AccountId {
+			AccountId::new([seed; 32])
+		}
+
+		/// Accounts are built from a repeated seed byte, so recovering it gives a
+		/// case label that can be read against the constants above.
+		fn label(id: &AccountId) -> String {
+			format!("n{}", AsRef::<[u8]>::as_ref(id)[0])
+		}
+
+		/// An owned, comparable summary of one node's outcome. We cannot hold
+		/// borrows of ceremony state across the `catch_unwind` boundary, and we
+		/// only need to compare outcomes, not inspect keys.
+		#[derive(Clone, Debug, PartialEq, Eq)]
+		enum NodeOutcome {
+			Success,
+			Failure { reported: BTreeSet<AccountId>, reason: String },
+			Unconcluded,
+		}
+
+		#[derive(Debug)]
+		enum Violation {
+			/// I1
+			Panicked { case: String, message: String },
+			/// I2
+			HonestNodeReported { case: String, honest_reported: BTreeSet<AccountId> },
+			/// I3
+			Diverged { case: String, detail: String },
+			/// Not an invariant but a check on the sweep itself: if the
+			/// malicious party is never caught, the case short-circuited before
+			/// the behaviour under test and the invariants above held vacuously.
+			CulpritEscaped { case: String, detail: String },
+		}
+
+		impl std::fmt::Display for Violation {
+			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+				match self {
+					Violation::Panicked { case, message } =>
+						write!(f, "[{case}] an honest node PANICKED: {message}"),
+					Violation::HonestNodeReported { case, honest_reported } => write!(
+						f,
+						"[{case}] honest node(s) falsely reported: {:?}",
+						honest_reported.iter().map(label).collect::<Vec<_>>()
+					),
+					Violation::Diverged { case, detail } =>
+						write!(f, "[{case}] nodes diverged: {detail}"),
+					Violation::CulpritEscaped { case, detail } => write!(
+						f,
+						"[{case}] culprit not caught ({detail}) - case may be vacuous"
+					),
+				}
+			}
+		}
+
+		/// Extract the panic payload as a string, so a failure names the assertion
+		/// that fired rather than just "a panic happened".
+		fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+			payload
+				.downcast_ref::<String>()
+				.cloned()
+				.or_else(|| payload.downcast_ref::<&str>().map(|s| (*s).to_string()))
+				.unwrap_or_else(|| "<non-string panic payload>".to_string())
+		}
+
+		async fn setup() -> KeygenCeremonyRunner<Chain> {
+			let (ceremony, _initial_key, _) = prepare_handover_test(
+				ORIGINAL_SET.iter().copied().map(account).collect(),
+				SHARERS.iter().copied().map(account).collect(),
+				RECEIVERS.iter().copied().map(account).collect(),
+				HandoverTestOptions::default(),
+			)
+			.await;
+			ceremony
+		}
+
+		fn collect_outcomes(
+			ceremony: &KeygenCeremonyRunner<Chain>,
+		) -> Vec<(AccountId, NodeOutcome)> {
+			ceremony
+				.outcomes()
+				.into_iter()
+				.map(|(id, outcome)| {
+					let summary = match outcome {
+						None => NodeOutcome::Unconcluded,
+						Some(Ok(_)) => NodeOutcome::Success,
+						Some(Err((reported, reason))) => NodeOutcome::Failure {
+							reported: reported.clone(),
+							reason: format!("{reason:?}"),
+						},
+					};
+					(id, summary)
+				})
+				.collect()
+		}
+
+		/// Drive one case to completion, converting a panic into a `Violation`
+		/// instead of aborting the sweep, so a single crash does not mask the rest
+		/// of the space.
+		///
+		/// Everything runs inline on this thread (the harness drives
+		/// `CeremonyRunner` directly rather than spawning tasks), so a panic inside
+		/// stage processing unwinds into this `catch_unwind` rather than escaping.
+		fn run_catching<F, Fut>(
+			case: &str,
+			body: F,
+		) -> Result<Vec<(AccountId, NodeOutcome)>, Violation>
+		where
+			F: FnOnce() -> Fut,
+			Fut: std::future::Future<Output = Vec<(AccountId, NodeOutcome)>>,
+		{
+			let runtime = tokio::runtime::Builder::new_current_thread()
+				.enable_all()
+				.build()
+				.expect("failed to build test runtime");
+
+			// Silence the default hook: a sweep containing panicking cases would
+			// otherwise bury the report under backtraces.
+			let previous_hook = std::panic::take_hook();
+			std::panic::set_hook(Box::new(|_| {}));
+			let result = std::panic::catch_unwind(AssertUnwindSafe(|| runtime.block_on(body())));
+			std::panic::set_hook(previous_hook);
+
+			result.map_err(|payload| Violation::Panicked {
+				case: case.to_string(),
+				message: panic_message(&payload),
+			})
+		}
+
+		/// Check I2 and I3 given that `malicious` is the only dishonest participant.
+		fn check_invariants(
+			case: &str,
+			malicious: &AccountId,
+			outcomes: &[(AccountId, NodeOutcome)],
+		) -> Vec<Violation> {
+			let mut violations = Vec::new();
+
+			let honest_reported: BTreeSet<AccountId> = outcomes
+				.iter()
+				.filter_map(|(_, outcome)| match outcome {
+					NodeOutcome::Failure { reported, .. } => Some(reported),
+					_ => None,
+				})
+				.flatten()
+				.filter(|id| *id != malicious)
+				.cloned()
+				.collect();
+			if !honest_reported.is_empty() {
+				violations
+	.push(Violation::HonestNodeReported {
+					case: case.to_string(),
+					honest_reported,
+				});
+			}
+
+			let honest: Vec<&NodeOutcome> = outcomes
+				.iter()
+				.filter(|(id, _)| id != malicious)
+				.map(|(_, outcome)| outcome)
+				.collect();
+			if honest.iter().any(|o| matches!(o, NodeOutcome::Unconcluded)) {
+				violations.push(Violation::Diverged {
+					case: case.to_string(),
+					detail: "some honest node reached no outcome".to_string(),
+				});
+			} else if let Some(first) = honest.first() {
+				if honest.iter().any(|o| o != first) {
+					violations.push(Violation::Diverged {
+						case: case.to_string(),
+						detail: format!("honest outcomes differ: {honest:?}"),
+					});
+				}
+			}
+
+			violations
+		}
+
+		/// Assert the sweep did real work: every honest node must have concluded
+		/// by reporting exactly `culprit`. Without this a sweep could pass simply
+		/// by never reaching the stage it means to exercise.
+		fn check_culprit_caught(
+			case: &str,
+			culprit: &AccountId,
+			outcomes: &[(AccountId, NodeOutcome)],
+		) -> Vec<Violation> {
+			let expected = BTreeSet::from([culprit.clone()]);
+			let wrong: Vec<String> = outcomes
+				.iter()
+				.filter(|(id, _)| id != culprit)
+				.filter(|(_, outcome)| {
+					!matches!(
+						outcome,
+						NodeOutcome::Failure { reported, .. } if *reported == expected
+					)
+				})
+				.map(|(id, outcome)| format!("{}={outcome:?}", label(id)))
+				.collect();
+
+			if wrong.is_empty() {
+				Vec::new()
+			} else {
+				vec![Violation::CulpritEscaped {
+					case: case.to_string(),
+					detail: format!(
+						"expected every honest node to report only {}; got {}",
+						label(culprit),
+						wrong.join(", ")
+					),
+				}]
+			}
+		}
+
+		fn report(sweep: &str, cases: usize, expected_cases: usize, violations: Vec<Violation>) {
+			// An empty sweep would satisfy every invariant vacuously.
+			assert_eq!(
+				cases, expected_cases,
+				"{sweep} sweep ran {cases} cases, expected {expected_cases}"
+			);
+			assert!(
+				violations.is_empty(),
+				"{} invariant violation(s) in the {sweep} sweep:\n{}",
+				violations.len(),
+				violations.iter().map(|v| format!("  - {v}")).collect::<Vec<_>>().join("\n")
+			);
+		}
+
+		// ----------------------------------------------------------------------
+		// Sweep 1: a bogus complaint from one participant against another.
+		// ----------------------------------------------------------------------
+
+		async fn injected_complaint_case(
+			complainer: &AccountId,
+			target_idx: AuthorityCount,
+		) -> Vec<(AccountId, NodeOutcome)> {
+			let mut ceremony = setup().await;
+
+			let messages =
+				ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
+			let mut messages = run_stages!(
+				ceremony,
+				messages,
+				keygen::HashComm1,
+				VerifyHashComm2,
+				CoeffComm3,
+				VerifyCoeffComm4,
+				SecretShare5,
+				Complaints6
+			);
+
+			// The single malicious act: one participant broadcasts a complaint
+			// against `target_idx` while everything else proceeds honestly.
+			for message in messages.get_mut(complainer).unwrap().values_mut() {
+				*message = Complaints6(BTreeSet::from([target_idx]));
+			}
+
+			let messages = ceremony.run_stage::<VerifyComplaints7, _, _>(messages).await;
+			ceremony.distribute_messages(messages).await;
+
+			// Whether the ceremony is finished here depends on whether the injected
+			// complaint survived Stage 7 - which is precisely what is under test, so
+			// we branch on observed state rather than assuming either path.
+			if ceremony.nodes.values().all(|n| n.outcome().is_none()) {
+				let messages = ceremony.gather_outgoing_messages::<BlameResponse8, _>().await;
+				let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
+				ceremony.distribute_messages(messages).await;
+			}
+
+			collect_outcomes(&ceremony)
+		}
+
+		/// Sweep every (complainer, target) pair. One participant misbehaves per
+		/// case; the rest are honest.
+		///
+		/// Exhaustive rather than randomised: the space is small and fully
+		/// enumerable, which beats sampling and needs no shrinking to produce a
+		/// minimal reproduction.
+		#[test]
+		fn no_single_injected_complaint_can_harm_an_honest_node() {
+			let participants: Vec<AccountId> =
+				SHARERS.iter().chain(RECEIVERS.iter()).copied().map(account).collect();
+			let mapping =
+				PartyIdxMapping::from_participants(participants.iter().cloned().collect());
+
+			let mut violations = Vec::new();
+			let mut cases = 0;
+			for complainer in &participants {
+				for target in &participants {
+					if complainer == target {
+						continue
+					}
+					cases += 1;
+					let case = format!(
+						"complaint: complainer={} target={}",
+						label(complainer),
+						label(target)
+					);
+					let target_idx = mapping.get_idx(target).unwrap();
+					match run_catching(&case, || injected_complaint_case(complainer, target_idx)) {
+						Err(violation) => violations.push(violation),
+						Ok(outcomes) =>
+							violations.extend(check_invariants(&case, complainer, &outcomes)),
+					}
+				}
+			}
+
+			report("complaint-injection", cases, 30, violations);
+		}
+
+		// ----------------------------------------------------------------------
+		// Sweep 2: a dealer misroutes a secret share between two index domains.
+		// ----------------------------------------------------------------------
+
+		async fn misrouted_share_case(
+			dealer: &AccountId,
+			victim: &AccountId,
+			donor: &AccountId,
+			victim_current_idx: AuthorityCount,
+		) -> Vec<(AccountId, NodeOutcome)> {
+			let mut ceremony = setup().await;
+
+			let messages =
+				ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
+			let mut messages = run_stages!(
+				ceremony,
+				messages,
+				keygen::HashComm1,
+				VerifyHashComm2,
+				CoeffComm3,
+				VerifyCoeffComm4,
+				SecretShare5
+			);
+
+			// Stage 5: hand the victim the share built for `donor`. It is a genuine
+			// evaluation of the dealer's polynomial, just at the wrong index - so it
+			// is only detectable if the receiver checks it at the correct one.
+			let poison = messages[dealer][donor].clone();
+			*messages.get_mut(dealer).unwrap().get_mut(victim).unwrap() = poison.clone();
+
+			let messages = run_stages!(ceremony, messages, Complaints6, VerifyComplaints7);
+
+			if ceremony.nodes.values().any(|n| n.outcome().is_some()) {
+				return collect_outcomes(&ceremony)
+			}
+
+			let mut messages = ceremony.run_stage::<BlameResponse8, _, _>(messages).await;
+
+			// Stage 8: persist with the misrouted share rather than revealing the
+			// real one. A dealer that backs down here is simply corrected, so the
+			// interesting adversary is the one that repeats itself and forces the
+			// index domains to be distinguished.
+			for message in messages.get_mut(dealer).unwrap().values_mut() {
+				message.0.insert(victim_current_idx, poison.clone());
+			}
+
+			let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
+			ceremony.distribute_messages(messages).await;
+
+			collect_outcomes(&ceremony)
+		}
+
+		/// Sweep every (dealer, victim, donor) triple. A sharing party sends one
+		/// receiver a share belonging to another receiver, then stands by it when
+		/// challenged.
+		///
+		/// During handover a party's index in the current ceremony differs from its
+		/// index in the new key, and shares are evaluated at the latter. Verifying a
+		/// blame response in the wrong domain lets the dealer's misrouted share look
+		/// valid, which gets the *complaining victim* blamed instead of the dealer -
+		/// the regression #3 fixed (PRO-3040). Rather than requiring a human to spot
+		/// the one alignment where the domains collide, this enumerates all of them.
+		#[test]
+		fn no_misrouted_share_can_shift_blame_onto_its_victim() {
+			let participants: Vec<AccountId> =
+				SHARERS.iter().chain(RECEIVERS.iter()).copied().map(account).collect();
+			let mapping =
+				PartyIdxMapping::from_participants(participants.iter().cloned().collect());
+
+			let mut violations = Vec::new();
+			let mut cases = 0;
+			for dealer in SHARERS.iter().copied().map(account) {
+				for victim in RECEIVERS.iter().copied().map(account) {
+					for donor in RECEIVERS.iter().copied().map(account) {
+						if victim == donor {
+							continue
+						}
+						cases += 1;
+						let case = format!(
+							"misrouted share: dealer={} victim={} donor={}",
+							label(&dealer),
+							label(&victim),
+							label(&donor)
+						);
+						let victim_current_idx = mapping.get_idx(&victim).unwrap();
+						match run_catching(&case, || {
+							misrouted_share_case(&dealer, &victim, &donor, victim_current_idx)
+						}) {
+							Err(violation) => violations.push(violation),
+							Ok(outcomes) => {
+								violations.extend(check_invariants(&case, &dealer, &outcomes));
+								violations.extend(check_culprit_caught(&case, &dealer, &outcomes));
+							},
+						}
+					}
+				}
+			}
+
+			report("misrouted-share", cases, 24, violations);
+		}
+	}
 }

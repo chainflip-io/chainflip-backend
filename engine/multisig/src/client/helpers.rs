@@ -266,6 +266,16 @@ where
 		);
 	}
 
+	/// The outcome this node has reached, if any.
+	///
+	/// Unlike `collect_and_check_outcomes`, this asserts nothing: adversarial
+	/// tests need to *observe* divergence between nodes (and nodes that reached
+	/// no outcome at all) in order to report it as a violation, rather than
+	/// panicking on it inside the harness.
+	pub fn outcome(&self) -> Option<&CeremonyOutcome<C>> {
+		self.outcome.as_ref()
+	}
+
 	pub async fn force_stage_timeout(&mut self) {
 		if let Some(outcome) = self
 			.ceremony_runner
@@ -415,6 +425,12 @@ where
 
 	pub fn get_mut_node(&mut self, account_id: &AccountId) -> &mut Node<C, Chain> {
 		self.nodes.get_mut(account_id).unwrap()
+	}
+
+	/// Non-panicking view of every node's outcome, for adversarial tests.
+	/// `None` for a node that has not concluded.
+	pub fn outcomes(&self) -> HashMap<AccountId, Option<&CeremonyOutcome<C>>> {
+		self.nodes.iter().map(|(id, node)| (id.clone(), node.outcome())).collect()
 	}
 
 	pub fn select_account_ids<const COUNT: usize>(&self) -> [AccountId; COUNT] {
