@@ -18,6 +18,31 @@ use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 
 use super::*;
 
+/// The hard-coded fallback prices that estimates are sanity-checked against. Mirrored here as
+/// exact literals (rather than derived from `Price`, which would round-trip through f64) so tests
+/// can express simulated prices relative to them. Kept honest by
+/// [`hard_coded_price_constants_mirror_production`].
+const FLIP_PRICE_CENTS: u128 = 40;
+const DOT_PRICE_CENTS: u128 = 100;
+const TRX_PRICE_CENTS: u128 = 30;
+const ETH_PRICE_CENTS: u128 = 250_000;
+
+#[test]
+fn hard_coded_price_constants_mirror_production() {
+	for (asset, cents) in [
+		(Asset::Flip, FLIP_PRICE_CENTS),
+		(Asset::Dot, DOT_PRICE_CENTS),
+		(Asset::Trx, TRX_PRICE_CENTS),
+		(Asset::Eth, ETH_PRICE_CENTS),
+	] {
+		assert_eq!(
+			utilities::hard_coded_price_for_asset(asset),
+			Price::from_usd_cents(asset, cents as u32),
+			"test constant for {asset:?} no longer matches the hard-coded price",
+		);
+	}
+}
+
 #[test]
 fn swap_output_amounts_correctly_account_for_fees() {
 	for (from, to) in
@@ -492,8 +517,12 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 	new_test_ext().execute_with(|| {
 		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
 
-		// The swap simulation will use the swap rate in tests to estimate prices.
-		SwapRate::set(2_f64);
+		// The swap simulation uses these prices to estimate. They must be within the circuit
+		// breaker's deviation limit of the hard-coded prices, but differ from them so that the
+		// assertions below distinguish a simulated price from the fallback.
+		MockSwappingApi::set_asset_price_usd_cents(Asset::Flip, FLIP_PRICE_CENTS * 2);
+		MockSwappingApi::set_asset_price_usd_cents(Asset::Dot, DOT_PRICE_CENTS * 3);
+		MockSwappingApi::set_asset_price_usd_cents(Asset::Trx, TRX_PRICE_CENTS * 2);
 
 		assert_eq!(
 			Swapping::calculate_input_for_desired_output_or_default_to_zero(
@@ -503,7 +532,8 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				false,
 				false
 			),
-			500 // 1 leg swap, so 1/2 of input
+			1_250_000_000_000_001 /* 1000 Usdc-fine of Flip at 2x $0.40, plus a small rounding
+			                       * error */
 		);
 
 		assert_eq!(
@@ -514,7 +544,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				true,
 				false
 			),
-			505 // 1 leg swap + 1% network fee
+			1_262_626_262_500_001 // Same as above + 1% network fee
 		);
 
 		assert_eq!(
@@ -525,7 +555,8 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				false,
 				false
 			),
-			250 // 2 leg swap, so 1/4th of input
+			// 2 leg swap: 1000 Dot-fine at 3x $1, paid in Flip at 2x $0.40, plus a rounding error
+			375_000_000_004
 		);
 
 		assert_eq!(
@@ -536,7 +567,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				false,
 				false
 			),
-			500 // 1 leg swap, so 1/2 of input
+			1667 // 1000 Usdc-fine of Trx at 2x $0.30
 		);
 
 		assert_eq!(
@@ -547,12 +578,11 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				true,
 				false
 			),
-			505 // 1 leg swap + 1% network fee
+			1683 // Same as above + 1% network fee
 		);
 
 		// Using a combination of swap simulation (flip) and hard coded price (Eth).
 		MockSwappingApi::set_swaps_should_fail(SwapFailureMode::Assets(vec![Asset::Eth]));
-		SwapRate::set(0.000000000002_f64); // Flip will be worth $2 via swap simulation
 		assert_eq!(
 			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Flip,
@@ -561,8 +591,9 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				false,
 				false
 			),
-			// So the result is half the Eth price, plus a small rounding error
-			1250 * 10_u128.pow(18) + 1
+			// The hard-coded Eth price divided by the simulated Flip price (2x $0.40), plus a
+			// small rounding error
+			3125 * 10_u128.pow(18) + 1
 		);
 	});
 }
@@ -623,6 +654,67 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 			6_313_131 // Same as above + 1% network fee
 		);
 	});
+}
+
+/// A pool-derived price estimate is only trusted if it is within a bounded factor of the
+/// hard-coded price. A wildly different estimate implies a manipulated or illiquid pool.
+mod price_estimate_circuit_breaker {
+	use super::*;
+
+	fn estimate_flip_price(simulated_price_cents: u128, side: Side) -> Price {
+		MockSwappingApi::set_asset_price_usd_cents(Asset::Flip, simulated_price_cents);
+		Swapping::estimate_usdc_price_using_simulated_swap_or_fallback(Asset::Flip, side)
+	}
+
+	#[test]
+	fn simulated_sell_price_far_above_hard_coded_price_is_rejected() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				estimate_flip_price(FLIP_PRICE_CENTS * 5, Side::Sell),
+				utilities::hard_coded_price_for_asset(Asset::Flip)
+			);
+		});
+	}
+
+	#[test]
+	fn simulated_sell_price_far_below_hard_coded_price_is_rejected() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				estimate_flip_price(FLIP_PRICE_CENTS / 5, Side::Sell),
+				utilities::hard_coded_price_for_asset(Asset::Flip)
+			);
+		});
+	}
+
+	#[test]
+	fn simulated_buy_price_far_above_hard_coded_price_is_rejected() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				estimate_flip_price(FLIP_PRICE_CENTS * 5, Side::Buy),
+				utilities::hard_coded_price_for_asset(Asset::Flip)
+			);
+		});
+	}
+
+	#[test]
+	fn simulated_price_well_below_the_deviation_limit_is_used() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				estimate_flip_price(FLIP_PRICE_CENTS / 2, Side::Sell),
+				Price::from_usd_cents(Asset::Flip, 20)
+			);
+		});
+	}
+
+	#[test]
+	fn simulated_price_within_the_deviation_limit_is_used() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				estimate_flip_price(FLIP_PRICE_CENTS * 2, Side::Sell),
+				Price::from_usd_cents(Asset::Flip, 80)
+			);
+		});
+	}
 }
 
 /// Test the use of the price oracle in calculating fees/gas.
@@ -697,7 +789,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 		);
 
 		// Using both Swap Simulation (Flip) and an oracle price (Btc)
-		SwapRate::set(0.000000000002_f64); // Flip will be worth $2 via swap simulation
+		MockSwappingApi::set_asset_price_usd_cents(Asset::Flip, FLIP_PRICE_CENTS * 2);
 		assert_eq!(
 			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Flip,
@@ -706,8 +798,8 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				false,
 				false
 			),
-			// ~=15k + 40bps + rounding error
-			(15_000 + 60) * 10u128.pow(Asset::Flip.decimals()) + 1
+			// $30k of Btc at the simulated Flip price (2x $0.40), + 40bps + rounding error
+			(37_500 + 150) * 10u128.pow(Asset::Flip.decimals()) + 1
 		);
 
 		// Check that the network fee is still applied when using the same asset as the input and
@@ -1227,9 +1319,16 @@ fn test_refund_fee_calculation() {
 		assert_eq!(take_refund_fee(5, Asset::Usdc, false), (0, 5));
 		assert_eq!(take_refund_fee(u128::MAX, Asset::Usdc, false), (u128::MAX - 10, 10));
 
-		// Conversion needed, no oracle price set, so the refund fee is 10 / DEFAULT_SWAP_RATE = 5
-		assert_eq!(take_refund_fee(1000, Asset::Flip, false), (995, 5));
+		// Conversion needed. At 2x the hard-coded Flip price, the 10 Usdc-fine minimum is
+		// 1.25e13 Flip-fine.
+		MockSwappingApi::set_asset_price_usd_cents(Asset::Flip, FLIP_PRICE_CENTS * 2);
+		const ONE_FLIP: AssetAmount = 10u128.pow(18);
+		assert_eq!(
+			take_refund_fee(ONE_FLIP, Asset::Flip, false),
+			(ONE_FLIP - 12_500_000_000_001, 12_500_000_000_001)
+		);
 		assert_eq!(take_refund_fee(0, Asset::Flip, false), (0, 0));
+		// Less than the fee, so the whole amount is taken.
 		assert_eq!(take_refund_fee(3, Asset::Flip, false), (0, 3));
 
 		// Internal swaps use a different network fee (and therefore refund fee)
@@ -1238,7 +1337,10 @@ fn test_refund_fee_calculation() {
 			minimum: 30,
 		});
 		assert_eq!(take_refund_fee(1000, Asset::Usdc, true), (970, 30));
-		assert_eq!(take_refund_fee(1000, Asset::Flip, true), (985, 15));
+		assert_eq!(
+			take_refund_fee(ONE_FLIP, Asset::Flip, true),
+			(ONE_FLIP - 37_500_000_000_001, 37_500_000_000_001)
+		);
 	});
 }
 

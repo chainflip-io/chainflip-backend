@@ -77,6 +77,13 @@ pub enum SwapFailureMode {
 
 thread_local! {
 	pub static SWAP_FAILURE_MODE: RefCell<SwapFailureMode> = RefCell::new(SwapFailureMode::None);
+	/// Per-asset simulated prices in USD cents, overriding [`SwapRate`] for swaps between the
+	/// asset and the stable asset. Needed because the global rate is a single multiplier applied
+	/// to every pair, which cannot represent plausible prices for more than one asset at a time.
+	///
+	/// Cents rather than a float rate so the arithmetic is exact and identical on every platform.
+	pub static ASSET_PRICES_USD_CENTS: RefCell<sp_std::collections::btree_map::BTreeMap<Asset, u128>> =
+		RefCell::new(Default::default());
 }
 
 pub struct MockSwappingApi;
@@ -84,6 +91,40 @@ pub struct MockSwappingApi;
 impl MockSwappingApi {
 	pub fn set_swaps_should_fail(mode: SwapFailureMode) {
 		SWAP_FAILURE_MODE.with(|cell| *cell.borrow_mut() = mode);
+	}
+
+	/// Set the simulated price of `asset` in USD cents, overriding the global [`SwapRate`] for
+	/// swaps between `asset` and the stable asset. Unlike the global rate this is direction-aware,
+	/// so the buy and sell sides of the same asset agree.
+	pub fn set_asset_price_usd_cents(asset: Asset, cents: u128) {
+		ASSET_PRICES_USD_CENTS.with(|prices| {
+			prices.borrow_mut().insert(asset, cents);
+		});
+	}
+
+	/// One whole unit of `asset` expressed in Usdc-fine hundredths, i.e. the divisor that turns a
+	/// cents price into a fine-amount ratio. Mirrors `Price::from_usd_cents`.
+	fn cents_scale(asset: Asset) -> u128 {
+		100u128.saturating_mul(10u128.pow(asset.decimals() - Asset::Usdc.decimals()))
+	}
+
+	fn swap_at_asset_price(
+		from: Asset,
+		to: Asset,
+		input_amount: AssetAmount,
+	) -> Option<AssetAmount> {
+		ASSET_PRICES_USD_CENTS.with(|prices| {
+			let prices = prices.borrow();
+			// Single-leg swaps always involve the stable asset, so the price is keyed on the
+			// other leg.
+			if to == STABLE_ASSET {
+				let cents = *prices.get(&from)?;
+				input_amount.checked_mul(cents).map(|v| v / Self::cents_scale(from))
+			} else {
+				let cents = *prices.get(&to)?;
+				input_amount.checked_mul(Self::cents_scale(to)).map(|v| v / cents)
+			}
+		})
 	}
 
 	fn swap_should_fail(from: Asset, to: Asset) -> bool {
@@ -127,7 +168,8 @@ impl SwappingApi for MockSwappingApi {
 		swaps.push((from, to, input_amount));
 		Swaps::set(swaps);
 
-		let output_amount = (input_amount as f64 * SwapRate::get()) as AssetAmount;
+		let output_amount = Self::swap_at_asset_price(from, to, input_amount)
+			.unwrap_or_else(|| (input_amount as f64 * SwapRate::get()) as AssetAmount);
 
 		let mut liquidity = Liquidity::get();
 
