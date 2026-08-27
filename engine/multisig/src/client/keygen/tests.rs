@@ -151,6 +151,101 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
 	ceremony.complete();
 }
 
+/// A party blamed by `threshold + 1` others would reveal enough evaluations to
+/// have its sharing polynomial reconstructed, so the ceremony must abort before
+/// the blame round rather than let it answer.
+#[tokio::test]
+async fn should_abort_rather_than_reveal_enough_shares_to_reconstruct_polynomial() {
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+
+	let party_count = ceremony.nodes.len() as u32;
+	let threshold = cf_utilities::threshold_from_share_count(party_count) as usize;
+
+	let bad_dealer = ceremony.nodes.keys().next().unwrap().clone();
+
+	let targets: Vec<_> = ceremony
+		.nodes
+		.keys()
+		.filter(|id| **id != bad_dealer)
+		.take(threshold + 1)
+		.cloned()
+		.collect();
+	assert_eq!(targets.len(), threshold + 1);
+
+	let messages = ceremony.request().await;
+
+	let mut messages = run_stages!(
+		ceremony,
+		messages,
+		VerifyHashComm2,
+		CoeffComm3,
+		VerifyCoeffComm4,
+		SecretShare5
+	);
+
+	// The complaints below are raised by honest nodes, not injected by the test.
+	for target in &targets {
+		*messages.get_mut(&bad_dealer).unwrap().get_mut(target).unwrap() =
+			SecretShare5::create_random(&mut ceremony.rng);
+	}
+
+	let messages = run_stages!(ceremony, messages, Complaints6, VerifyComplaints7);
+	ceremony.distribute_messages(messages).await;
+
+	ceremony.complete_with_error(
+		std::slice::from_ref(&bad_dealer),
+		KeygenFailureReason::TooManyComplaints,
+	);
+}
+
+/// The bound must not fire at exactly `threshold` complaints, where the
+/// polynomial still has a degree of freedom: the blame round runs as usual and
+/// the ceremony recovers.
+#[tokio::test]
+async fn should_still_enter_blame_round_at_the_disclosure_limit() {
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+
+	let party_count = ceremony.nodes.len() as u32;
+	let threshold = cf_utilities::threshold_from_share_count(party_count) as usize;
+
+	let bad_dealer = ceremony.nodes.keys().next().unwrap().clone();
+	let targets: Vec<_> = ceremony
+		.nodes
+		.keys()
+		.filter(|id| **id != bad_dealer)
+		.take(threshold)
+		.cloned()
+		.collect();
+
+	let messages = ceremony.request().await;
+
+	let mut messages = run_stages!(
+		ceremony,
+		messages,
+		VerifyHashComm2,
+		CoeffComm3,
+		VerifyCoeffComm4,
+		SecretShare5
+	);
+
+	for target in &targets {
+		*messages.get_mut(&bad_dealer).unwrap().get_mut(target).unwrap() =
+			SecretShare5::create_random(&mut ceremony.rng);
+	}
+
+	let messages = run_stages!(
+		ceremony,
+		messages,
+		Complaints6,
+		VerifyComplaints7,
+		BlameResponse8,
+		VerifyBlameResponses9
+	);
+	ceremony.distribute_messages(messages).await;
+
+	ceremony.complete();
+}
+
 /// If one or more parties send an invalid secret share both the first
 /// time and during the blaming stage, the ceremony is aborted with these
 /// parties reported
@@ -1636,6 +1731,67 @@ mod key_handover {
 
 		// After distributing the complaint verification, Stage 7 drops the bogus
 		// complaint and (no real complaints remaining) finalizes the handover.
+		let messages = ceremony.run_stage::<VerifyComplaints7, _, _>(messages).await;
+		ceremony.distribute_messages(messages).await;
+
+		let (new_key, _new_shares) = ceremony.complete();
+		assert_eq!(new_key, initial_key);
+	}
+
+	/// A complaint naming a *non-sharing* participant must be ignored.
+	///
+	/// Only sharing parties deal shares, and Stage 4 discards the commitments of
+	/// everyone else, so a non-sharer has no commitment to verify a blame
+	/// response against. If such a complaint were acted on, the blamed
+	/// non-sharer would dutifully reveal a share in Stage 8 and every node would
+	/// then index its missing commitment in Stage 9.
+	///
+	/// The complainer here is a legitimate receiver, so the Stage 7 filter on
+	/// complaint *sources* does not apply - it is the complaint *target* that is
+	/// invalid.
+	#[tokio::test]
+	async fn handover_ignores_complaint_against_non_sharer() {
+		// {2,3} reshare to {3,4,5}; (4) and (5) are receivers but not sharers.
+		let original_set = to_account_id_set([1, 2, 3]);
+		let sharing_subset = to_account_id_set([2, 3]);
+		let receiving_set = to_account_id_set([3, 4, 5]);
+
+		// Both are receivers, so neither is filtered as a complaint source.
+		let complainer = AccountId::new([5; 32]);
+		let non_sharer = AccountId::new([4; 32]);
+		assert!(!sharing_subset.contains(&non_sharer));
+
+		let all_participants: BTreeSet<_> = sharing_subset.union(&receiving_set).cloned().collect();
+		let non_sharer_idx = PartyIdxMapping::from_participants(all_participants)
+			.get_idx(&non_sharer)
+			.unwrap();
+
+		let (mut ceremony, initial_key, _) = prepare_handover_test(
+			original_set,
+			sharing_subset,
+			receiving_set,
+			HandoverTestOptions::default(),
+		)
+		.await;
+
+		let messages = ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
+		let mut messages = run_stages!(
+			ceremony,
+			messages,
+			keygen::HashComm1,
+			VerifyHashComm2,
+			CoeffComm3,
+			VerifyCoeffComm4,
+			SecretShare5,
+			Complaints6
+		);
+
+		// A receiver complains about a party that never dealt any shares.
+		for message in messages.get_mut(&complainer).unwrap().values_mut() {
+			*message = Complaints6(BTreeSet::from([non_sharer_idx]));
+		}
+
+		// Stage 7 drops the complaint, so the blame round is never entered.
 		let messages = ceremony.run_stage::<VerifyComplaints7, _, _>(messages).await;
 		ceremony.distribute_messages(messages).await;
 

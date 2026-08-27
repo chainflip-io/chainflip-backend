@@ -48,6 +48,8 @@ git diff -U50 main...HEAD state-chain/pallets/*/src/weights.rs | ./state-chain/s
 
 **Important:** Use `-U50` (or higher) to provide sufficient context for function name detection. Without it, some functions may show as "unknown" because git's default 3-line context doesn't include the function declaration.
 
+Functions are compared on their *worst case*: the base `Weight::from_parts` plus db reads/writes priced at `ParityDbWeight`, plus every parameterized term evaluated at the top of its component range. A benchmark that starts scaling with `n` therefore shows up as the increase it is, rather than as a decrease in the base term. The R/W column spells the components out as `+n≤100×(r 3, w 2)`; a `≤?` means the component's range comment fell outside the diff context, so its terms are missing from the total (use a larger `-U`).
+
 Output includes:
 
 - Top 30 most significant function weight changes with function names

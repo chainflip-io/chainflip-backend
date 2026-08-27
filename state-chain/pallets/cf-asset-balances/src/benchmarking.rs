@@ -15,8 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	Call, Config, MaxPendingWhitelistUpdates, MaxWhitelistTimelock, Pallet, PalletConfigUpdate,
-	PendingChange, PendingChanges, WhitelistChange,
+	Call, Config, MaxPendingWhitelistUpdates, MaxWhitelistEntries, MaxWhitelistTimelock, Pallet,
+	PalletConfigUpdate, PendingChange, PendingChanges, WhitelistChange,
 };
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue, AccountOrAddress};
 use frame_benchmarking::v2::*;
@@ -34,6 +34,14 @@ mod benchmarks {
 			.flatten()
 			.filter(|(account, _)| account == who)
 			.count() as u32
+	}
+
+	fn pending_total<T: Config>() -> u32 {
+		PendingChanges::<T>::get().values().flatten().count() as u32
+	}
+
+	fn target<T: Config>(i: u32) -> T::AccountId {
+		account("target", i, 0)
 	}
 
 	#[benchmark]
@@ -107,27 +115,48 @@ mod benchmarks {
 
 	#[benchmark]
 	fn on_idle_apply_change(n: Linear<1, 100>) {
-		let caller: T::AccountId = whitelisted_caller();
-		Pallet::<T>::mutate_whitelist(&caller, |whitelist| whitelist.set_timelock(1_000));
-		// Insert `n` already-due changes directly (bypassing the pending cap).
+		let max_entries = MaxWhitelistEntries::<T>::get();
+
+		// Each change must target a *distinct* account: `apply_pending_change` mutates
+		// `WithdrawalWhitelists` per account, so sharing one account across all `n` would let the
+		// storage overlay amortise that read/write into the base weight and leave the per-change
+		// term with no db cost at all. Each target is also one entry short of full, so the change
+		// is applied to a max-sized whitelist.
+		for i in 0..n {
+			Pallet::<T>::mutate_whitelist(&target::<T>(i), |whitelist| {
+				whitelist.set_timelock(1_000);
+				for j in 0..max_entries.saturating_sub(1) {
+					whitelist
+						.apply_change(
+							&WhitelistChange::Allow(AccountOrAddress::InternalAccount(account(
+								"filler", i, j,
+							))),
+							max_entries,
+						)
+						.unwrap();
+				}
+			});
+		}
+
+		// Insert the matured changes directly, bypassing the per-account pending cap.
 		PendingChanges::<T>::mutate(|pending| {
-			pending.entry(0).or_default().extend((0..n).map(|_| {
+			pending.entry(0).or_default().extend((0..n).map(|i| {
 				(
-					caller.clone(),
+					target::<T>(i),
 					PendingChange::Whitelist(WhitelistChange::Allow(
 						AccountOrAddress::ExternalAddress(BenchmarkValue::benchmark_value()),
 					)),
 				)
 			}));
 		});
-		assert_eq!(pending_count::<T>(&caller), n);
+		assert_eq!(pending_total::<T>(), n);
 
 		#[block]
 		{
 			Pallet::<T>::on_idle(Default::default(), Weight::MAX);
 		}
 
-		assert_eq!(pending_count::<T>(&caller), 0);
+		assert_eq!(pending_total::<T>(), 0);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

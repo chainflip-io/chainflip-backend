@@ -15,6 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+pub use cf_proc_macros::instrument;
 #[cfg(feature = "derive")]
 pub use cf_runtime_macros::*;
 use codec::FullCodec;
@@ -27,7 +29,9 @@ use frame_support::{
 use sp_std::marker::PhantomData;
 
 pub mod __reexports {
+	pub use frame_support;
 	pub use log;
+	pub use sp_tracing;
 }
 
 mod helper_functions;

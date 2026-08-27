@@ -39,6 +39,7 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Fixes
 
+- Further ceremony hardening.
 - Bouncer resubmit assethub txs that fail to be included ([#6782](https://github.com/chainflip-io/chainflip-backend/issues/6782))
 - Solana nonce test flakiness ([#6788](https://github.com/chainflip-io/chainflip-backend/issues/6788))
 - Improve BHW startup consensus ([#6774](https://github.com/chainflip-io/chainflip-backend/issues/6774))

@@ -186,24 +186,24 @@ fn check_data_size_verify_hash_comm2() {
 
 	// Should pass with the correct data length
 	assert!(
-		gen_keygen_data_verify_hash_comm2(PARTIES).is_data_size_valid::<EthSigning>(PARTIES, None)
+		gen_keygen_data_verify_hash_comm2(PARTIES).is_data_size_valid::<EthSigning>(PARTIES, ())
 	);
 
 	// Should fail on sizes larger or smaller than expected
 	assert!(!gen_keygen_data_verify_hash_comm2(PARTIES + 1)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 	assert!(!gen_keygen_data_verify_hash_comm2(PARTIES - 1)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 }
 
 #[test]
 fn check_data_size_coeff_comm3() {
 	const PARTIES: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_coeff_comm3(PARTIES).is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(gen_keygen_data_coeff_comm3(PARTIES).is_data_size_valid::<EthSigning>(PARTIES, ()));
 
 	assert!(!gen_keygen_data_coeff_comm3(MAX_AUTHORITIES + 1)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 }
 
 #[test]
@@ -212,19 +212,19 @@ fn check_data_size_verify_coeff_comm4() {
 
 	// Should pass when both collections are the correct size
 	assert!(gen_keygen_data_verify_coeff_comm4(PARTIES, PARTIES, PARTIES)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 
 	// Should fail if the outer collection is larger than expected
 	assert!(!gen_keygen_data_verify_coeff_comm4(PARTIES + 1, PARTIES, PARTIES)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 
 	// Should fail if the outer collection is smaller than expected
 	assert!(!gen_keygen_data_verify_coeff_comm4(PARTIES - 1, PARTIES, PARTIES)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 
 	// The nested collection should fail if any of its elements are larger than the max size
 	assert!(!gen_keygen_data_verify_coeff_comm4(PARTIES, PARTIES, MAX_AUTHORITIES + 1)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 }
 
 #[test]
@@ -232,12 +232,12 @@ fn check_data_size_complaints6() {
 	const NUM_OF_PARTIES: AuthorityCount = 4;
 
 	assert!(gen_keygen_data_complaints6(NUM_OF_PARTIES)
-		.is_data_size_valid::<EthSigning>(NUM_OF_PARTIES, None));
-	assert!(gen_keygen_data_complaints6(0).is_data_size_valid::<EthSigning>(NUM_OF_PARTIES, None));
+		.is_data_size_valid::<EthSigning>(NUM_OF_PARTIES, ()));
+	assert!(gen_keygen_data_complaints6(0).is_data_size_valid::<EthSigning>(NUM_OF_PARTIES, ()));
 
 	// Should fail on sizes larger than expected
 	assert!(!gen_keygen_data_complaints6(NUM_OF_PARTIES + 1)
-		.is_data_size_valid::<EthSigning>(NUM_OF_PARTIES, None));
+		.is_data_size_valid::<EthSigning>(NUM_OF_PARTIES, ()));
 }
 
 #[test]
@@ -246,35 +246,34 @@ fn check_data_size_verify_complaints7() {
 
 	// Should pass when both collections are the correct size
 	assert!(gen_keygen_data_verify_complaints7(PARTIES, PARTIES, PARTIES)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 	assert!(gen_keygen_data_verify_complaints7(PARTIES, PARTIES, 0)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 
 	// The outer collection should fail if larger or smaller than expected
 	assert!(!gen_keygen_data_verify_complaints7(PARTIES + 1, PARTIES, PARTIES)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 	assert!(!gen_keygen_data_verify_complaints7(PARTIES - 1, PARTIES, PARTIES)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 
 	// The nested collection should fail if larger than expected
 	assert!(!gen_keygen_data_verify_complaints7(PARTIES, PARTIES, PARTIES + 1)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 	assert!(gen_keygen_data_verify_complaints7(PARTIES, PARTIES, PARTIES - 1)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 }
 
 #[test]
 fn check_data_size_blame_response8() {
 	const PARTIES: AuthorityCount = 4;
 
-	assert!(
-		gen_keygen_data_blame_response8(PARTIES).is_data_size_valid::<EthSigning>(PARTIES, None)
-	);
-	assert!(gen_keygen_data_blame_response8(0).is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(gen_keygen_data_blame_response8(PARTIES).is_data_size_valid::<EthSigning>(PARTIES, ()));
+	assert!(gen_keygen_data_blame_response8(0).is_data_size_valid::<EthSigning>(PARTIES, ()));
 
 	// Should fail on sizes larger than expected
-	assert!(!gen_keygen_data_blame_response8(PARTIES + 1)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(
+		!gen_keygen_data_blame_response8(PARTIES + 1).is_data_size_valid::<EthSigning>(PARTIES, ())
+	);
 }
 
 #[test]
@@ -283,21 +282,21 @@ fn check_data_size_verify_blame_responses9() {
 
 	// Should pass when both collections are the correct size
 	assert!(gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, PARTIES)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 	assert!(gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, 0)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 
 	// The outer collection should fail if larger or smaller than expected
 	assert!(!gen_keygen_data_verify_blame_response9(PARTIES + 1, PARTIES, PARTIES)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 	assert!(!gen_keygen_data_verify_blame_response9(PARTIES - 1, PARTIES, PARTIES)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 
 	// The nested collection should fail if larger than expected
 	assert!(!gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, PARTIES + 1)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 	assert!(gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, PARTIES - 1)
-		.is_data_size_valid::<EthSigning>(PARTIES, None));
+		.is_data_size_valid::<EthSigning>(PARTIES, ()));
 }
 
 #[test]
