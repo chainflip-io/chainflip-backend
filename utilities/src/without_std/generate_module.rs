@@ -126,21 +126,21 @@ macro_rules! generate_module {
                         type ForwardsError = cf_utilities::never::Never;
                         type BackwardsError = cf_utilities::never::Never;
 
-                        fn try_forwards(x: Self::From) -> Result<$struct $(< $($T,)+ >)?, Self::ForwardsError> {
+                        fn try_forwards(x: Self::From, _details: ()) -> Result<$struct $(< $($T,)+ >)?, Self::ForwardsError> {
                             Ok(
                                 $struct {
                                     $(
-                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::try_forwards(x.$field)?,
+                                        $field: <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::try_forwards(x.$field, ())?,
                                     )*
                                 }
                             )
                         }
 
-                        fn try_backwards(x: $struct $(< $($T,)+ >)?) -> Result<Self::From, Self::BackwardsError> {
+                        fn try_backwards(x: $struct $(< $($T,)+ >)?, _details: ()) -> Result<Self::From, Self::BackwardsError> {
                             Ok(
                                 Struct::intro(
                                     $(
-                                        <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::try_backwards(x.$field)?,
+                                        <<$field_ty as HasGenericVariant>::MigrationFromGeneric as Migration<$field_ty, vCurrent>>::try_backwards(x.$field, ())?,
                                     )*
                                     Default::default(),
                                 )
@@ -229,31 +229,38 @@ macro_rules! generate_module {
                             }
 
                             mod $( $( ($T $(: $TBound)?) )+ )? {
-                                pub type StructVariant<Target: Types> = Struct<$($($T,)+)? Target>;
+                                pub type StructWithT<Target: Types> = Struct<$($($T,)+)? Target>;
+
+                                pub type FieldCustomMigrationDetails = StructWithT<(
+                                    $(
+                                        <field_migrations::$field as Migration<To::$field, V>>::Details,
+                                    )*
+                                )>;
 
                                 impl Migration<Struct<$($($T,)+)? To>, V> for see_field_changelogs_and_also<M> where
-                                    StructVariant<TyFrom>: IsHistoricalType,
+                                    StructWithT<TyFrom>: IsHistoricalType,
                                     $struct<$($($T,)+)?>: HasChangelog
                                 {
                                     type ForwardsError = StructForwardsError;
                                     type BackwardsError = StructBackwardsError;
+									type Details = FieldCustomMigrationDetails;
 
-                                    type From = StructVariant<TyFrom>;
+                                    type From = StructWithT<TyFrom>;
 
-                                    fn try_forwards(x: Self::From) -> Result<StructVariant<To>, Self::ForwardsError> {
+                                    fn try_forwards(x: Self::From, details: Self::Details) -> Result<StructWithT<To>, Self::ForwardsError> {
                                         Ok(Struct::intro(
                                             $(
-                                                $field::try_forwards(x.$field)
+                                                $field::try_forwards(x.$field, details.$field)
                                                     .map_err(StructForwardsError::$field)?,
                                             )*
                                             Default::default(),
                                         ))
                                     }
 
-                                    fn try_backwards(x: StructVariant<To>) -> Result<Self::From, Self::BackwardsError> {
+                                    fn try_backwards(x: StructWithT<To>, details: Self::Details) -> Result<Self::From, Self::BackwardsError> {
                                         Ok(Struct::intro(
                                             $(
-                                                $field::try_backwards(x.$field)
+                                                $field::try_backwards(x.$field, details.$field)
                                                     .map_err(StructBackwardsError::$field)?,
                                             )*
                                             Default::default(),
@@ -378,6 +385,15 @@ macro_rules! generate_module {
                         pub enum Enum {
                             $(
                                 $variant(Ty::$variant),
+                            )*
+                        }
+
+                        #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+                        #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
+                        #[derive(cf_proc_macros::HasTypeIntrospection)]
+                        pub struct Struct {
+                            $(
+                                $variant: Ty::$variant,
                             )*
                         }
 
@@ -662,21 +678,29 @@ macro_rules! generate_module {
                             }
 
                             mod $( $( ($T $(: $TBound)?) )+ )? {
-                                pub type EnumVariant<Target: Types> = Enum<$($($T,)+)? Target>;
+                                pub type EnumWithT<Target: Types> = Enum<$($($T,)+)? Target>;
+                                pub type StructWithT<Target: Types> = Struct<$($($T,)+)? Target>;
+
+                                pub type VariantCustomMigrationDetails = StructWithT<(
+                                    $(
+                                        <variant_migrations::$variant as Migration<To::$variant, V>>::Details,
+                                    )*
+                                )>;
 
                                 impl Migration<Enum<$($($T,)+)? To>, V> for see_variant_changelogs_and_also<M> where
-                                    EnumVariant<From>: IsHistoricalType,
+                                    EnumWithT<From>: IsHistoricalType,
                                     $enum<$($($T,)+)?>: HasChangelog
                                 {
-                                    type From = EnumVariant<From>;
+                                    type From = EnumWithT<From>;
                                     type ForwardsError = EnumForwardsError;
                                     type BackwardsError = EnumBackwardsError;
+									type Details = VariantCustomMigrationDetails;
 
-                                    fn try_forwards(x: Self::From) -> Result<EnumVariant<To>, Self::ForwardsError> {
+                                    fn try_forwards(x: Self::From, details: Self::Details) -> Result<EnumWithT<To>, Self::ForwardsError> {
                                         Ok(match x {
                                             $(
                                                 Enum::$variant(val) => Enum::$variant(
-                                                    $variant::try_forwards(val)
+                                                    $variant::try_forwards(val, details.$variant)
                                                         .map_err(EnumForwardsError::$variant)?
                                                 ),
                                             )*
@@ -684,11 +708,11 @@ macro_rules! generate_module {
                                         })
                                     }
 
-                                    fn try_backwards(x: EnumVariant<To>) -> Result<Self::From, Self::BackwardsError> {
+                                    fn try_backwards(x: EnumWithT<To>, details: Self::Details) -> Result<Self::From, Self::BackwardsError> {
                                         Ok(match x {
                                             $(
                                                 Enum::$variant(val) => Enum::$variant(
-                                                    $variant::try_backwards(val)
+                                                    $variant::try_backwards(val, details.$variant)
                                                         .map_err(EnumBackwardsError::$variant)?
                                                 ),
                                             )*
@@ -827,19 +851,19 @@ macro_rules! generate_module {
                         type ForwardsError = cf_utilities::never::Never;
                         type BackwardsError = cf_utilities::never::Never;
 
-                        fn try_forwards(x: Self::From) -> Result<RealEnum, Self::ForwardsError> {
+                        fn try_forwards(x: Self::From, _details: ()) -> Result<RealEnum, Self::ForwardsError> {
                             Ok(
                                 match x {
                                     $(
                                         Enum::$variant(val) =>
-                                            (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::try_forwards(val)?).into(),
+                                            (<<variants::$variant as HasGenericVariant>::MigrationFromGeneric as Migration<variants::$variant, vCurrent>>::try_forwards(val, ())?).into(),
                                     )*
                                     Enum::_phantom(never, _) => match never {},
                                 }
                             )
                         }
 
-                        fn try_backwards(x: RealEnum) -> Result<Self::From, Self::BackwardsError> {
+                        fn try_backwards(x: RealEnum, _details: ()) -> Result<Self::From, Self::BackwardsError> {
                             x.elim(
                                 $(
                                     |$($($variant_tuple_entry: $variant_ty,)*)? $($($variant_field: $variant_field_ty,)*)?|
@@ -848,7 +872,8 @@ macro_rules! generate_module {
                                             $( $( $variant_tuple_entry, )*)?
                                             $( $( $variant_field, )*)?
                                             Default::default(),
-                                        )
+                                        ),
+                                        ()
                                     ).map(Enum::$variant),
                                 )*
                             )
