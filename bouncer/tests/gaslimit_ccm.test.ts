@@ -29,10 +29,10 @@ import { chainTrackingChainStateUpdatedEvent } from 'generated/events/generic/ch
 import { ingressEgressCcmBroadcastRequestedEvent } from 'generated/events/generic/ingressEgress/ccmBroadcastRequested';
 import { broadcasterTransactionBroadcastRequestEvent } from 'generated/events/generic/broadcaster/transactionBroadcastRequest';
 import { broadcasterTransactionFeeDeficitRecordedEvent } from 'generated/events/generic/broadcaster/transactionFeeDeficitRecorded';
-import { broadcasterBroadcastAbortedEvent } from 'generated/events/generic/broadcaster/broadcastAborted';
+import { broadcasterBroadcastRetryScheduledEvent } from 'generated/events/generic/broadcaster/broadcastRetryScheduled';
 
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
-// to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
+// to avoid flakiness in the tests expecting a broadcast failure due to not having enough gas.
 const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> = {
   Ethereum: { min: 150000, max: 1000000 },
   Arbitrum: { min: 3000000, max: 5000000 },
@@ -214,7 +214,7 @@ async function testGasLimitSwapToEvm<A = []>(
   cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
-  abortTest: boolean = false,
+  insufficientGas: boolean = false,
 ) {
   function getRandomGasConsumption(chain: string): number {
     const { min, max } = RANGE_TEST_GAS_CONSUMPTION[chain];
@@ -247,7 +247,7 @@ async function testGasLimitSwapToEvm<A = []>(
   const baseCfTesterGas = await estimateCcmCfTesterGas(destChain, '0x');
 
   // Adding buffers on both ends to avoid flakiness.
-  if (abortTest) {
+  if (insufficientGas) {
     // Chainflip overestimates the overhead for safety so we use a 25% buffer to ensure that
     // the gas budget is too low.We also apply a 50% on the baseCfTesterGas since it's highly unreliable.
     ccmMetadata.gasBudget = Math.round(gasConsumption * 0.75 + baseCfTesterGas * 0.5).toString();
@@ -256,18 +256,18 @@ async function testGasLimitSwapToEvm<A = []>(
     ccmMetadata.gasBudget = (baseCfTesterGas + Math.round(gasConsumption * 1.1)).toString();
   }
 
-  const testTag = abortTest ? `InsufficientGas` : '';
+  const testTag = insufficientGas ? `InsufficientGas` : '';
 
   const { tag, destAddress, broadcastId, maxFeePerGas, gasLimitBudget } =
     await executeAndTrackCcmSwap(cf, sourceAsset, destAsset, ccmMetadata, testTag);
   cf.debug(`${tag} Finished tracking events`);
 
   cf.debug(
-    `Expecting broadcast ${abortTest ? 'abort' : 'success'}. Broadcast gas budget: ${gasLimitBudget}, user gasBudget ${ccmMetadata.gasBudget} cfTester gasConsumption ${gasConsumption}`,
+    `Expecting broadcast ${insufficientGas ? 'failure' : 'success'}. Broadcast gas budget: ${gasLimitBudget}, user gasBudget ${ccmMetadata.gasBudget} cfTester gasConsumption ${gasConsumption}`,
   );
 
-  if (abortTest) {
-    // Expect Broadcast Aborted
+  if (insufficientGas) {
+    // Expect the broadcast to fail
     let stopObservingCcmReceived = false;
 
     // We run this because we want to ensure that we *don't* get a CCM event.
@@ -285,13 +285,15 @@ async function testGasLimitSwapToEvm<A = []>(
         throw new Error(`$CCM event emitted. Transaction should not have been broadcasted!`);
       }
     });
+    // A retry is scheduled on the first failed attempt. We assert on that rather than on
+    // BroadcastAborted so that the test doesn't depend on the broadcast pallet's retry policy.
     await cf.stepUntilEvent(
-      broadcasterBroadcastAbortedEvent[destChain].refine(
+      broadcasterBroadcastRetryScheduledEvent[destChain].refine(
         (event) => event.broadcastId === broadcastId,
       ),
     );
     stopObservingCcmReceived = true;
-    cf.debug(`Broadcast Aborted found! broadcastId: ${broadcastId}`);
+    cf.debug(`Broadcast failed as expected! broadcastId: ${broadcastId}`);
   } else {
     // Check that broadcast is not aborted.
     // TODO: add ChainflipIO version of observeBadEvent.
@@ -391,7 +393,7 @@ async function testTronInsufficientGas<A = []>(
 
   cf.debug(`${tag} Finished tracking events`);
   cf.debug(
-    `Expecting broadcast abort . Broadcast gas budget: ${gasLimitBudget}, user gasBudget ${ccmMetadata.gasBudget}}`,
+    `Expecting broadcast failure. Broadcast gas budget: ${gasLimitBudget}, user gasBudget ${ccmMetadata.gasBudget}`,
   );
   let stopObservingCcmReceived = false;
 
@@ -407,13 +409,14 @@ async function testTronInsufficientGas<A = []>(
       throw new Error(`$CCM event emitted. Transaction should not have been broadcasted!`);
     }
   });
+  // See the equivalent EVM assertion for why we don't wait for the broadcast to be aborted.
   await cf.stepUntilEvent(
-    broadcasterBroadcastAbortedEvent[destChain].refine(
+    broadcasterBroadcastRetryScheduledEvent[destChain].refine(
       (data) => Number(data.broadcastId) === Number(broadcastId),
     ),
   );
   stopObservingCcmReceived = true;
-  cf.debug(`Broadcast Aborted found! broadcastId: ${broadcastId}`);
+  cf.debug(`Broadcast failed as expected! broadcastId: ${broadcastId}`);
 }
 
 function spamEvmChain<A = []>(cf: ChainflipIO<A>, chain: Chain): () => void {
