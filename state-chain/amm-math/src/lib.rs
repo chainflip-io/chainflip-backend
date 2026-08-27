@@ -592,6 +592,15 @@ impl Price {
 			if increase { ONE_AS_BASIS_POINTS + bps } else { ONE_AS_BASIS_POINTS - bps };
 		Self(mul_div_floor_checked(self.0, U256::from(adjusted_bps), ONE_AS_BASIS_POINTS).unwrap())
 	}
+	/// Returns true if this price is within `factor` of `other` in either direction, i.e. if
+	/// `other / factor <= self <= other * factor`.
+	///
+	/// Multiplication saturates, so a `factor` large enough to overflow simply widens the band.
+	pub fn is_within_factor_of(&self, other: &Price, factor: u32) -> bool {
+		let scale = |price: U256| price.saturating_mul(U256::from(factor));
+		self.0 <= scale(other.0) && scale(self.0) >= other.0
+	}
+
 	/// Calculates the basis points difference from some other price to this one, assuming they
 	/// are both prices of the same base/quote pair.
 	///
@@ -868,6 +877,31 @@ mod test {
 				asset
 			);
 		}
+	}
+
+	#[test]
+	fn is_within_factor_of_is_inclusive_at_the_boundary() {
+		let reference = Price::from_raw(U256::from(1_000_000u64));
+
+		// Exactly `factor` times the reference, in both directions.
+		assert!(Price::from_raw(U256::from(4_000_000u64)).is_within_factor_of(&reference, 4));
+		assert!(Price::from_raw(U256::from(250_000u64)).is_within_factor_of(&reference, 4));
+	}
+
+	#[test]
+	fn is_within_factor_of_rejects_one_unit_beyond_the_boundary() {
+		let reference = Price::from_raw(U256::from(1_000_000u64));
+
+		assert!(!Price::from_raw(U256::from(4_000_001u64)).is_within_factor_of(&reference, 4));
+		assert!(!Price::from_raw(U256::from(249_999u64)).is_within_factor_of(&reference, 4));
+	}
+
+	#[test]
+	fn is_within_factor_of_saturates_instead_of_overflowing() {
+		// Scaling either side would overflow U256; saturating widens the band rather than
+		// wrapping around to a spurious rejection.
+		assert!(Price::from_raw(U256::MAX).is_within_factor_of(&Price::from_raw(U256::MAX), 4));
+		assert!(Price::from_raw(U256::MAX).is_within_factor_of(&Price::from_raw(U256::MAX / 2), 4));
 	}
 
 	#[test]

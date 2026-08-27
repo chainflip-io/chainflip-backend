@@ -264,13 +264,16 @@ async function playSwapper<A = []>(cf: ChainflipIO<A>) {
   }
 }
 
+// Keep in sync with `price` in shared/setup_swaps.ts: prices for assets without an oracle feed
+// have to stay within the runtime's `MAX_PRICE_ESTIMATE_DEVIATION_FACTOR` of
+// `hard_coded_price_for_asset`, or fee estimation falls back to the hard-coded price.
 const price = new Map<Asset, number>([
   ['Eth', 1000],
-  ['Btc', 10000],
+  ['Btc', 40000],
   ['Usdc', 1],
   ['Usdt', 1],
-  ['Wbtc', 10000],
-  ['Flip', 10],
+  ['Wbtc', 40000],
+  ['Flip', 1],
   ['ArbEth', 1000],
   ['ArbUsdc', 1],
   ['ArbUsdt', 1],
