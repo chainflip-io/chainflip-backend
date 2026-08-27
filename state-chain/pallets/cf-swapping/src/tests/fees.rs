@@ -562,7 +562,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				false
 			),
 			// So the result is half the Eth price, plus a small rounding error
-			1400 * 10_u128.pow(18) + 1
+			1250 * 10_u128.pow(18) + 1
 		);
 	});
 }
@@ -584,7 +584,7 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				false,
 				false
 			),
-			14_000 * 10u128.pow(18) + 1 // 2 ETH ~= 14000 FLIP plus small rounding error
+			12_500 * 10u128.pow(18) + 1 // 2 ETH ~= 12500 FLIP plus small rounding error
 		);
 
 		assert_eq!(
@@ -608,7 +608,7 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				false,
 				false
 			),
-			6473989 // 2 ETH ~=  0.06473988439 BTC
+			6_250_000 // 2 ETH == 0.0625 BTC
 		);
 
 		// Make sure the network fee is also taken into account when using hard coded prices
@@ -620,7 +620,7 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				true, // With network fee
 				false
 			),
-			6539382 // Same as above + 1% network fee
+			6_313_131 // Same as above + 1% network fee
 		);
 	});
 }
@@ -693,7 +693,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				false,
 				false
 			),
-			236220472441 + 944_881_890 // ~236 SOL + 40bps
+			300_000_000_000 + 1_200_000_000 + 1 // 300 SOL + 40bps plus small rounding error
 		);
 
 		// Using both Swap Simulation (Flip) and an oracle price (Btc)

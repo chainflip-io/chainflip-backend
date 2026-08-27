@@ -3712,12 +3712,12 @@ pub mod utilities {
 			Asset::TrxUsdt |
 			Asset::BscUsdt => 100, // $1
 			Asset::Flip => 40,                                    // ~$0.40
-			Asset::Eth | Asset::ArbEth => 280_000,                // ~$2,800
-			Asset::Dot | Asset::HubDot => 200,                    // ~$2
-			Asset::Btc | Asset::Wbtc | Asset::Cbbtc => 8_650_000, // ~$86,500
-			Asset::Sol => 12_700,                                 // ~$127
-			Asset::Trx => 30,                                     // ~$0.3
-			Asset::Bnb => 60_000,                                 // ~$600
+			Asset::Eth | Asset::ArbEth => 250_000,                // ~$2,500
+			Asset::Dot | Asset::HubDot => 100,                    // ~$1
+			Asset::Btc | Asset::Wbtc | Asset::Cbbtc => 8_000_000, // ~$80,000
+			Asset::Sol => 10_000,                                 // ~$100
+			Asset::Trx => 30,                                     // ~$0.30
+			Asset::Bnb => 70_000,                                 // ~$700
 		};
 
 		Price::from_usd_cents(asset, price_usd_cents)
