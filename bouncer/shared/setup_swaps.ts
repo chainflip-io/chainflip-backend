@@ -9,14 +9,14 @@ export const deposits = new Map<Asset, number>([
   ['Eth', 1000],
   ['ArbEth', 1000],
   ['Bnb', 1000],
-  ['Btc', 100],
+  ['Btc', 25],
   ['Usdc', 15000000],
   ['ArbUsdc', 1000000],
   ['ArbUsdt', 1000000],
   ['BscUsdt', 1000000],
   ['Usdt', 1000000],
-  ['Wbtc', 100],
-  ['Cbbtc', 100],
+  ['Wbtc', 25],
+  ['Cbbtc', 25],
   ['Flip', 100000],
   ['Sol', 1000],
   ['SolUsdc', 100000],
@@ -28,25 +28,35 @@ export const deposits = new Map<Asset, number>([
   ['HubUsdt', 250000],
 ]);
 
+// Also pushed to the mock Chainlink feeds by `updateDefaultPriceFeeds`, so the oracle and the
+// pools always agree.
+//
+// Two constraints when changing these:
+//  - For assets with no oracle feed (see `get_chainlink_assetpair`), fees are estimated by
+//    probing the pool, and the runtime discards a probe that deviates from
+//    `hard_coded_price_for_asset` by more than `MAX_PRICE_ESTIMATE_DEVIATION_FACTOR`. A price
+//    outside that band makes every fee denominated in that asset wrong by the full ratio.
+//  - Each full-range order consumes roughly `deposits * price` of the Usdc deposit, so the sum
+//    over all pools has to stay under `deposits.get('Usdc')`.
 export const price = new Map<Asset, number>([
   ['Eth', 1000],
   ['ArbEth', 1000],
   ['Bnb', 600],
-  ['Btc', 10000],
+  ['Btc', 40000],
   ['Usdc', 1],
   ['Usdt', 1],
-  ['Wbtc', 10000],
-  ['Cbbtc', 10000],
+  ['Wbtc', 40000],
+  ['Cbbtc', 40000],
   ['ArbUsdc', 1],
   ['ArbUsdt', 1],
   ['BscUsdt', 1],
-  ['Flip', 10],
+  ['Flip', 1],
   ['Sol', 100],
   ['SolUsdc', 1],
   ['SolUsdt', 1],
   ['Trx', 1],
   ['TrxUsdt', 1],
-  ['HubDot', 10],
+  ['HubDot', 2],
   ['HubUsdc', 1],
   ['HubUsdt', 1],
 ]);
