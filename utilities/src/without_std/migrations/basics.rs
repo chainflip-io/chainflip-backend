@@ -31,35 +31,38 @@ pub trait Migration<To, V: Version> {
 	type From: IsHistoricalType;
 	type ForwardsError = Never;
 	type BackwardsError = Never;
-	fn try_forwards(_x: Self::From) -> Result<To, Self::ForwardsError>;
-	fn try_backwards(_x: To) -> Result<Self::From, Self::BackwardsError>;
+	type Details = ();
+	fn try_forwards(_x: Self::From, _i: Self::Details) -> Result<To, Self::ForwardsError>;
+	fn try_backwards(_x: To, _i: Self::Details) -> Result<Self::From, Self::BackwardsError>;
 }
 
 pub trait HasVersion<V: Version>: Sized {
 	type HistoricalType;
 	type HistoricalMigration: Migration<Self::HistoricalType, V>;
 	type MigrationToCurrent: Migration<Self, vCurrent, From = Self::HistoricalType>;
+	fn details_for_migration_to_current(
+	) -> <Self::MigrationToCurrent as Migration<Self, vCurrent>>::Details;
 }
 
 pub fn try_migrate_from_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X::HistoricalType,
 ) -> Result<X, <X::MigrationToCurrent as Migration<X, vCurrent>>::ForwardsError> {
-	X::MigrationToCurrent::try_forwards(x)
+	X::MigrationToCurrent::try_forwards(x, X::details_for_migration_to_current())
 }
 
 pub fn try_migrate_to_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X,
 ) -> Result<X::HistoricalType, <X::MigrationToCurrent as Migration<X, vCurrent>>::BackwardsError> {
-	X::MigrationToCurrent::try_backwards(x)
+	X::MigrationToCurrent::try_backwards(x, X::details_for_migration_to_current())
 }
 
 pub fn migrate_from_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X::HistoricalType) -> X
 where
 	<X::MigrationToCurrent as Migration<X, vCurrent>>::ForwardsError: IsEmptyType,
 {
-	match X::MigrationToCurrent::try_forwards(x) {
+	match X::MigrationToCurrent::try_forwards(x, X::details_for_migration_to_current()) {
 		Ok(x) => x,
 		#[allow(unreachable_code)]
 		Err(empty) => match empty.as_never() {},
@@ -70,7 +73,7 @@ pub fn migrate_to_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X) -> 
 where
 	<X::MigrationToCurrent as Migration<X, vCurrent>>::BackwardsError: IsEmptyType,
 {
-	match X::MigrationToCurrent::try_backwards(x) {
+	match X::MigrationToCurrent::try_backwards(x, X::details_for_migration_to_current()) {
 		Ok(x) => x,
 		#[allow(unreachable_code)]
 		Err(empty) => match empty.as_never() {},
@@ -82,11 +85,11 @@ pub struct IdentityMigration;
 impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 	type From = X;
 
-	fn try_forwards(x: Self::From) -> Result<X, Self::ForwardsError> {
+	fn try_forwards(x: Self::From, _impl: ()) -> Result<X, Self::ForwardsError> {
 		Ok(x)
 	}
 
-	fn try_backwards(x: X) -> Result<Self::From, Self::BackwardsError> {
+	fn try_backwards(x: X, _impl: ()) -> Result<Self::From, Self::BackwardsError> {
 		Ok(x)
 	}
 }
@@ -113,15 +116,22 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 	type From = A::From;
 	type ForwardsError = ComposedMigrationFailed<A::ForwardsError, B::ForwardsError>;
 	type BackwardsError = ComposedMigrationFailed<A::BackwardsError, B::BackwardsError>;
+	type Details = (A::Details, B::Details);
 
-	fn try_forwards(x: Self::From) -> Result<X, Self::ForwardsError> {
-		let x = A::try_forwards(x).map_err(ComposedMigrationFailed::First)?;
-		B::try_forwards(x).map_err(ComposedMigrationFailed::Second)
+	fn try_forwards(
+		x: Self::From,
+		implementation: Self::Details,
+	) -> Result<X, Self::ForwardsError> {
+		let x = A::try_forwards(x, implementation.0).map_err(ComposedMigrationFailed::First)?;
+		B::try_forwards(x, implementation.1).map_err(ComposedMigrationFailed::Second)
 	}
 
-	fn try_backwards(x: X) -> Result<Self::From, Self::BackwardsError> {
-		let x = B::try_backwards(x).map_err(ComposedMigrationFailed::Second)?;
-		A::try_backwards(x).map_err(ComposedMigrationFailed::First)
+	fn try_backwards(
+		x: X,
+		implementation: Self::Details,
+	) -> Result<Self::From, Self::BackwardsError> {
+		let x = B::try_backwards(x, implementation.1).map_err(ComposedMigrationFailed::Second)?;
+		A::try_backwards(x, implementation.0).map_err(ComposedMigrationFailed::First)
 	}
 }
 
@@ -131,11 +141,11 @@ pub struct NewFieldWithDefault;
 impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 	type From = ();
 
-	fn try_forwards(_x: Self::From) -> Result<T, Self::ForwardsError> {
+	fn try_forwards(_x: Self::From, _i: ()) -> Result<T, Self::ForwardsError> {
 		Ok(Default::default())
 	}
 
-	fn try_backwards(_x: T) -> Result<Self::From, Self::BackwardsError> {
+	fn try_backwards(_x: T, _i: ()) -> Result<Self::From, Self::BackwardsError> {
 		Ok(())
 	}
 }
@@ -151,11 +161,11 @@ impl<T, V: Version> Migration<T, V> for NewVariant {
 	type From = Never;
 	type BackwardsError = NewVariantBackwardsError;
 
-	fn try_forwards(x: Self::From) -> Result<T, Self::ForwardsError> {
+	fn try_forwards(x: Self::From, _i: ()) -> Result<T, Self::ForwardsError> {
 		match x {}
 	}
 
-	fn try_backwards(_x: T) -> Result<Self::From, Self::BackwardsError> {
+	fn try_backwards(_x: T, _i: ()) -> Result<Self::From, Self::BackwardsError> {
 		Err(NewVariantBackwardsError)
 	}
 }
@@ -169,11 +179,11 @@ where
 {
 	type From = <T::HistoricalMigration as Migration<T::HistoricalType, V>>::From;
 
-	fn try_forwards(_x: Self::From) -> Result<(), Self::ForwardsError> {
+	fn try_forwards(_x: Self::From, _i: ()) -> Result<(), Self::ForwardsError> {
 		Ok(())
 	}
 
-	fn try_backwards(_x: ()) -> Result<Self::From, Self::BackwardsError> {
+	fn try_backwards(_x: (), _i: ()) -> Result<Self::From, Self::BackwardsError> {
 		Ok(Default::default())
 	}
 }
@@ -209,6 +219,7 @@ pub trait HasGenericVariant: Sized {
 		From = Self::GenericType,
 		ForwardsError = Never,
 		BackwardsError = Never,
+		Details = (),
 	>;
 }
 
@@ -218,7 +229,7 @@ pub type GetGenericVariant<X: HasGenericVariant> =
 pub struct GlobalMigrationFromGeneric;
 
 pub fn try_migrate_from_generic_type<X: HasGenericVariant>(x: X::GenericType) -> X {
-	match X::MigrationFromGeneric::try_forwards(x) {
+	match X::MigrationFromGeneric::try_forwards(x, ()) {
 		Ok(x) => x,
 		#[allow(unreachable_code)]
 		Err(err) => match err.as_never() {},
@@ -226,7 +237,7 @@ pub fn try_migrate_from_generic_type<X: HasGenericVariant>(x: X::GenericType) ->
 }
 
 pub fn try_migrate_to_generic_type<X: HasGenericVariant>(x: X) -> X::GenericType {
-	match X::MigrationFromGeneric::try_backwards(x) {
+	match X::MigrationFromGeneric::try_backwards(x, ()) {
 		Ok(x) => x,
 		#[allow(unreachable_code)]
 		Err(err) => match err.as_never() {},
