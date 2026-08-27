@@ -103,11 +103,11 @@ macro_rules! impl_identity_migrations_with_wrapper {
 		impl $crate::migrations::basics::Migration<$Ty, $crate::migrations::basics::vCurrent> for $crate::migrations::primitives::WrapMigration {
 			type From = $Wrapper;
 
-			fn try_forwards(x: Self::From) -> Result<$Ty, Self::ForwardsError> {
+			fn try_forwards(x: Self::From, _details: &()) -> Result<$Ty, Self::ForwardsError> {
 				Ok(x.0)
 			}
 
-			fn try_backwards(x: $Ty) -> Result<Self::From, Self::BackwardsError> {
+			fn try_backwards(x: $Ty, _details: &()) -> Result<Self::From, Self::BackwardsError> {
 				Ok($Wrapper(x))
 			}
 		}
@@ -196,11 +196,11 @@ pub struct NewTypeWithDefault;
 impl<V: Version, T: HasChangelog + Default> Migration<T, V> for NewTypeWithDefault {
 	type From = HistoricalEmptyPlaceholder<T>;
 
-	fn try_forwards(_: Self::From) -> Result<T, Self::ForwardsError> {
+	fn try_forwards(_: Self::From, _details: &()) -> Result<T, Self::ForwardsError> {
 		Ok(Default::default())
 	}
 
-	fn try_backwards(_: T) -> Result<Self::From, Self::BackwardsError> {
+	fn try_backwards(_: T, _details: &()) -> Result<Self::From, Self::BackwardsError> {
 		Ok(HistoricalEmptyPlaceholder(Default::default()))
 	}
 }
@@ -268,8 +268,8 @@ macro_rules! impl_migrations_for_container {
         [$($var_M:ident $(where From: ($($from_path:tt)*) )?),+],
 		type ForwardsError = $forwards_error:ty,
 		type BackwardsError = $backwards_error:ty,
-		try_forwards |$var_try_f:ident| $expr_try_f:expr,
-		try_backwards |$var_try_b:ident| $expr_try_b:expr,
+		try_forwards |$var_try_f:ident, $var_details_f:ident| $expr_try_f:expr,
+		try_backwards |$var_try_b:ident, $var_details_b:ident| $expr_try_b:expr,
 		generic_try_forwards |$var_generic_try_f:ident| $expr_generic_try_f:expr,
 		generic_try_backwards |$var_generic_try_b:ident| $expr_generic_try_b:expr,
     ) => {
@@ -286,28 +286,30 @@ macro_rules! impl_migrations_for_container {
         }
         with_all_runtime_migrations!{ $container_macro }
 
-        impl<$($ty $(: $($ty_path)* )? ,)+  V: Version, $($var_M: Migration<$ty, V $(, From: $($from_path)*)?>),+> Migration<$container<$($ty),+>, V> for MapMigration<($($var_M, )+)> {
+        impl<$($ty $(: $($ty_path)* )? ,)+  V: Version, $($var_M: Migration<$ty, V $(, From: $($from_path)*)?>),+> Migration<$container<$($ty),+>, V> for MapMigration<($($var_M, )+)>
+		{
             type From = $container<$($var_M::From),+>;
 			type ForwardsError = $forwards_error;
 			type BackwardsError = $backwards_error;
+			type Details = ($($var_M::Details,)+);
 
-			fn try_forwards($var_try_f: Self::From) -> Result<$container<$($ty),+>, Self::ForwardsError> {
+			fn try_forwards($var_try_f: Self::From, $var_details_f: &Self::Details) -> Result<$container<$($ty),+>, Self::ForwardsError> {
 				$expr_try_f
 			}
 
-			fn try_backwards($var_try_b: $container<$($ty),+>) -> Result<Self::From, Self::BackwardsError> {
+			fn try_backwards($var_try_b: $container<$($ty),+>, $var_details_b: &Self::Details) -> Result<Self::From, Self::BackwardsError> {
 				$expr_try_b
 			}
         }
 
-		impl<$($ty $(: $($ty_path)* )? ,)+ $($var_M: Migration<$ty, vCurrent, ForwardsError = Never, BackwardsError = Never $(, From: $($from_path)*)?>),+> Migration<$container<$($ty),+>, vCurrent> for GenericMapMigration<($($var_M, )+)> {
+		impl<$($ty $(: $($ty_path)* )? ,)+ $($var_M: Migration<$ty, vCurrent, ForwardsError = Never, BackwardsError = Never, Details = () $(, From: $($from_path)*)?>),+> Migration<$container<$($ty),+>, vCurrent> for GenericMapMigration<($($var_M, )+)> {
 			type From = $container<$($var_M::From),+>;
 
-			fn try_forwards($var_generic_try_f: Self::From) -> Result<$container<$($ty),+>, Self::ForwardsError> {
+			fn try_forwards($var_generic_try_f: Self::From, _details: &()) -> Result<$container<$($ty),+>, Self::ForwardsError> {
 				$expr_generic_try_f
 			}
 
-			fn try_backwards($var_generic_try_b: $container<$($ty),+>) -> Result<Self::From, Self::BackwardsError> {
+			fn try_backwards($var_generic_try_b: $container<$($ty),+>, _details: &()) -> Result<Self::From, Self::BackwardsError> {
 				$expr_generic_try_b
 			}
 		}
@@ -330,21 +332,21 @@ impl_migrations_for_container! {
 	[M],
 	type ForwardsError = OptionMigrationFailed<M::ForwardsError>,
 	type BackwardsError = OptionMigrationFailed<M::BackwardsError>,
-	try_forwards |x| {
+	try_forwards |x, details| {
 		match x {
-			Some(x) => M::try_forwards(x).map_err(OptionMigrationFailed::Some).map(Some),
+			Some(x) => M::try_forwards(x, &details.0).map_err(OptionMigrationFailed::Some).map(Some),
 			None => Ok(None),
 		}
 	},
-	try_backwards |x| {
+	try_backwards |x, details| {
 		match x {
-			Some(x) => M::try_backwards(x).map_err(OptionMigrationFailed::Some).map(Some),
+			Some(x) => M::try_backwards(x, &details.0).map_err(OptionMigrationFailed::Some).map(Some),
 			None => Ok(None),
 		}
 	},
 	generic_try_forwards |x| {
 		match x {
-			Some(x) => match M::try_forwards(x) {
+			Some(x) => match M::try_forwards(x, &()) {
 				Ok(x) => Ok(Some(x)),
 				Err(error) => match error {},
 			},
@@ -353,7 +355,7 @@ impl_migrations_for_container! {
 	},
 	generic_try_backwards |x| {
 		match x {
-			Some(x) => match M::try_backwards(x) {
+			Some(x) => match M::try_backwards(x, &()) {
 				Ok(x) => Ok(Some(x)),
 				Err(error) => match error {},
 			},
@@ -370,10 +372,10 @@ impl_migrations_for_container! {
 	[M],
 	type ForwardsError = M::ForwardsError,
 	type BackwardsError = M::BackwardsError,
-	try_forwards |x| M::try_forwards(*x).map(Box::new),
-	try_backwards |x| M::try_backwards(*x).map(Box::new),
-	generic_try_forwards |x| M::try_forwards(*x).map(Box::new),
-	generic_try_backwards |x| M::try_backwards(*x).map(Box::new),
+	try_forwards |x, details| M::try_forwards(*x, &details.0).map(Box::new),
+	try_backwards |x, details| M::try_backwards(*x, &details.0).map(Box::new),
+	generic_try_forwards |x| M::try_forwards(*x, &()).map(Box::new),
+	generic_try_backwards |x| M::try_backwards(*x, &()).map(Box::new),
 }
 
 // ---- Vec ----
@@ -384,23 +386,25 @@ impl_migrations_for_container! {
 	[M],
 	type ForwardsError = VecMigrationFailed<M::ForwardsError>,
 	type BackwardsError = VecMigrationFailed<M::BackwardsError>,
-	try_forwards |x| {
+	try_forwards |x, details| {
 		let mut result = Vec::with_capacity(x.len());
 
 		for (index, x) in x.into_iter().enumerate() {
 			result.push(
-				M::try_forwards(x).map_err(|error| VecMigrationFailed::Element { index, error })?,
+				M::try_forwards(x, &details.0)
+					.map_err(|error| VecMigrationFailed::Element { index, error })?,
 			);
 		}
 
 		Ok(result)
 	},
-	try_backwards |x| {
+	try_backwards |x, details| {
 		let mut result = Vec::with_capacity(x.len());
 
 		for (index, x) in x.into_iter().enumerate() {
 			result.push(
-				M::try_backwards(x).map_err(|error| VecMigrationFailed::Element { index, error })?,
+				M::try_backwards(x, &details.0)
+					.map_err(|error| VecMigrationFailed::Element { index, error })?,
 			);
 		}
 
@@ -410,7 +414,7 @@ impl_migrations_for_container! {
 		let mut result = Vec::with_capacity(x.len());
 
 		for x in x {
-			result.push(M::try_forwards(x)?);
+			result.push(M::try_forwards(x, &())?);
 		}
 
 		Ok(result)
@@ -419,7 +423,7 @@ impl_migrations_for_container! {
 		let mut result = Vec::with_capacity(x.len());
 
 		for x in x {
-			result.push(M::try_backwards(x)?);
+			result.push(M::try_backwards(x, &())?);
 		}
 
 		Ok(result)
@@ -436,17 +440,19 @@ impl_migrations_for_container! {
 	[M1],
 	type ForwardsError = TupleWith1EntryMigrationFailed<M1::ForwardsError>,
 	type BackwardsError = TupleWith1EntryMigrationFailed<M1::BackwardsError>,
-	try_forwards |x| {
-		Ok((M1::try_forwards(x.0).map_err(TupleWith1EntryMigrationFailed::First)?,))
+	try_forwards |x, details| {
+		Ok((M1::try_forwards(x.0, &details.0)
+			.map_err(TupleWith1EntryMigrationFailed::First)?,))
 	},
-	try_backwards |x| {
-		Ok((M1::try_backwards(x.0).map_err(TupleWith1EntryMigrationFailed::First)?,))
+	try_backwards |x, details| {
+		Ok((M1::try_backwards(x.0, &details.0)
+			.map_err(TupleWith1EntryMigrationFailed::First)?,))
 	},
 	generic_try_forwards |x| {
-		Ok((M1::try_forwards(x.0)?,))
+		Ok((M1::try_forwards(x.0, &())?,))
 	},
 	generic_try_backwards |x| {
-		Ok((M1::try_backwards(x.0)?,))
+		Ok((M1::try_backwards(x.0, &())?,))
 	},
 }
 
@@ -460,23 +466,27 @@ impl_migrations_for_container! {
 	[M1,M2],
 	type ForwardsError = TupleWith2EntriesMigrationFailed<M1::ForwardsError, M2::ForwardsError>,
 	type BackwardsError = TupleWith2EntriesMigrationFailed<M1::BackwardsError, M2::BackwardsError>,
-	try_forwards |x| {
+	try_forwards |x, details| {
 		Ok((
-			M1::try_forwards(x.0).map_err(TupleWith2EntriesMigrationFailed::First)?,
-			M2::try_forwards(x.1).map_err(TupleWith2EntriesMigrationFailed::Second)?,
+			M1::try_forwards(x.0, &details.0)
+				.map_err(TupleWith2EntriesMigrationFailed::First)?,
+			M2::try_forwards(x.1, &details.1)
+				.map_err(TupleWith2EntriesMigrationFailed::Second)?,
 		))
 	},
-	try_backwards |x| {
+	try_backwards |x, details| {
 		Ok((
-			M1::try_backwards(x.0).map_err(TupleWith2EntriesMigrationFailed::First)?,
-			M2::try_backwards(x.1).map_err(TupleWith2EntriesMigrationFailed::Second)?,
+			M1::try_backwards(x.0, &details.0)
+				.map_err(TupleWith2EntriesMigrationFailed::First)?,
+			M2::try_backwards(x.1, &details.1)
+				.map_err(TupleWith2EntriesMigrationFailed::Second)?,
 		))
 	},
 	generic_try_forwards |x| {
-		Ok((M1::try_forwards(x.0)?, M2::try_forwards(x.1)?))
+		Ok((M1::try_forwards(x.0, &())?, M2::try_forwards(x.1, &())?))
 	},
 	generic_try_backwards |x| {
-		Ok((M1::try_backwards(x.0)?, M2::try_backwards(x.1)?))
+		Ok((M1::try_backwards(x.0, &())?, M2::try_backwards(x.1, &())?))
 	},
 }
 
@@ -515,13 +525,17 @@ impl<
 	type From = BTreeMap<M1::From, M2::From>;
 	type ForwardsError = BTreeMapMigrationFailed<M1::ForwardsError, M2::ForwardsError>;
 	type BackwardsError = BTreeMapMigrationFailed<M1::BackwardsError, M2::BackwardsError>;
+	type Details = (M1::Details, M2::Details);
 
-	fn try_forwards(x: Self::From) -> Result<BTreeMap<A, B>, Self::ForwardsError> {
+	fn try_forwards(
+		x: Self::From,
+		details: &Self::Details,
+	) -> Result<BTreeMap<A, B>, Self::ForwardsError> {
 		let mut result = BTreeMap::new();
 
 		for (a, b) in x {
-			let a = M1::try_forwards(a).map_err(BTreeMapMigrationFailed::Key)?;
-			let b = M2::try_forwards(b).map_err(BTreeMapMigrationFailed::Value)?;
+			let a = M1::try_forwards(a, &details.0).map_err(BTreeMapMigrationFailed::Key)?;
+			let b = M2::try_forwards(b, &details.1).map_err(BTreeMapMigrationFailed::Value)?;
 
 			if result.insert(a, b).is_some() {
 				return Err(BTreeMapMigrationFailed::KeyCollision);
@@ -531,12 +545,15 @@ impl<
 		Ok(result)
 	}
 
-	fn try_backwards(x: BTreeMap<A, B>) -> Result<Self::From, Self::BackwardsError> {
+	fn try_backwards(
+		x: BTreeMap<A, B>,
+		details: &Self::Details,
+	) -> Result<Self::From, Self::BackwardsError> {
 		let mut result = BTreeMap::new();
 
 		for (a, b) in x {
-			let a = M1::try_backwards(a).map_err(BTreeMapMigrationFailed::Key)?;
-			let b = M2::try_backwards(b).map_err(BTreeMapMigrationFailed::Value)?;
+			let a = M1::try_backwards(a, &details.0).map_err(BTreeMapMigrationFailed::Key)?;
+			let b = M2::try_backwards(b, &details.1).map_err(BTreeMapMigrationFailed::Value)?;
 
 			if result.insert(a, b).is_some() {
 				return Err(BTreeMapMigrationFailed::KeyCollision);
@@ -556,30 +573,31 @@ impl<
 			From: IsHistoricalType<GetCurrentType: OrdMigrations + Ord> + Ord,
 			ForwardsError = Never,
 			BackwardsError = Never,
+			Details = (),
 		>,
-		M2: Migration<B, vCurrent, ForwardsError = Never, BackwardsError = Never>,
+		M2: Migration<B, vCurrent, ForwardsError = Never, BackwardsError = Never, Details = ()>,
 	> Migration<BTreeMap<A, B>, vCurrent> for GenericMapMigration<(M1, M2)>
 {
 	type From = BTreeMap<M1::From, M2::From>;
 
-	fn try_forwards(x: Self::From) -> Result<BTreeMap<A, B>, Self::ForwardsError> {
+	fn try_forwards(x: Self::From, _details: &()) -> Result<BTreeMap<A, B>, Self::ForwardsError> {
 		let mut result = BTreeMap::new();
 
 		for (a, b) in x {
-			let a = M1::try_forwards(a)?;
-			let b = M2::try_forwards(b)?;
+			let a = M1::try_forwards(a, &())?;
+			let b = M2::try_forwards(b, &())?;
 			result.insert(a, b);
 		}
 
 		Ok(result)
 	}
 
-	fn try_backwards(x: BTreeMap<A, B>) -> Result<Self::From, Self::BackwardsError> {
+	fn try_backwards(x: BTreeMap<A, B>, _details: &()) -> Result<Self::From, Self::BackwardsError> {
 		let mut result = BTreeMap::new();
 
 		for (a, b) in x {
-			let a = M1::try_backwards(a)?;
-			let b = M2::try_backwards(b)?;
+			let a = M1::try_backwards(a, &())?;
+			let b = M2::try_backwards(b, &())?;
 			result.insert(a, b);
 		}
 

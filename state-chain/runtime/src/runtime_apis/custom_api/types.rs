@@ -720,11 +720,13 @@ impl Migration<<EncodedAddress as HasVersion<v20300>>::HistoricalType, v20300>
 	type From = ();
 	fn try_forwards(
 		_x: Self::From,
+		_details: &(),
 	) -> Result<<EncodedAddress as HasVersion<v20300>>::HistoricalType, Self::ForwardsError> {
 		Ok(_EncodedAddress::Enum::Bsc(Default::default()))
 	}
 	fn try_backwards(
 		_x: <EncodedAddress as HasVersion<v20300>>::HistoricalType,
+		_details: &(),
 	) -> Result<Self::From, Self::BackwardsError> {
 		Ok(())
 	}
@@ -736,11 +738,13 @@ impl Migration<<EncodedAddress as HasVersion<v20200>>::HistoricalType, v20200>
 	type From = ();
 	fn try_forwards(
 		_x: Self::From,
+		_details: &(),
 	) -> Result<<EncodedAddress as HasVersion<v20200>>::HistoricalType, Self::ForwardsError> {
 		Ok(_EncodedAddress::Enum::Tron(Default::default()))
 	}
 	fn try_backwards(
 		_x: <EncodedAddress as HasVersion<v20200>>::HistoricalType,
+		_details: &(),
 	) -> Result<Self::From, Self::BackwardsError> {
 		Ok(())
 	}
@@ -752,11 +756,13 @@ impl Migration<<EncodedAddress as HasVersion<v20100>>::HistoricalType, v20100>
 	type From = ();
 	fn try_forwards(
 		_x: Self::From,
+		_details: &(),
 	) -> Result<<EncodedAddress as HasVersion<v20100>>::HistoricalType, Self::ForwardsError> {
 		Ok(_EncodedAddress::Enum::Sol(Default::default()))
 	}
 	fn try_backwards(
 		_x: <EncodedAddress as HasVersion<v20100>>::HistoricalType,
+		_details: &(),
 	) -> Result<Self::From, Self::BackwardsError> {
 		Ok(())
 	}

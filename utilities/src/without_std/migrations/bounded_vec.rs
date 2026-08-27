@@ -95,27 +95,35 @@ impl<X, S: sp_core::Get<u32>, V: Version, M: Migration<X, V>> Migration<WrappedB
 	type From = WrappedBoundedVec<M::From, S>;
 	type ForwardsError = VecMigrationFailed<M::ForwardsError>;
 	type BackwardsError = VecMigrationFailed<M::BackwardsError>;
+	type Details = (M::Details,);
 
-	fn try_forwards(x: Self::From) -> Result<WrappedBoundedVec<X, S>, Self::ForwardsError> {
+	fn try_forwards(
+		x: Self::From,
+		details: &Self::Details,
+	) -> Result<WrappedBoundedVec<X, S>, Self::ForwardsError> {
 		let result =
 			x.0.into_iter()
 				.enumerate()
 				.map(|(index, x)| {
-					M::try_forwards(x).map_err(|error| VecMigrationFailed::Element { index, error })
+					M::try_forwards(x, &details.0)
+						.map_err(|error| VecMigrationFailed::Element { index, error })
 				})
 				.collect::<Result<Vec<_>, _>>()?;
 		Ok(WrappedBoundedVec(BoundedVec::truncate_from(result)))
 	}
 
-	fn try_backwards(x: WrappedBoundedVec<X, S>) -> Result<Self::From, Self::BackwardsError> {
-		let result = x
-			.0
-			.into_iter()
-			.enumerate()
-			.map(|(index, x)| {
-				M::try_backwards(x).map_err(|error| VecMigrationFailed::Element { index, error })
-			})
-			.collect::<Result<Vec<_>, _>>()?;
+	fn try_backwards(
+		x: WrappedBoundedVec<X, S>,
+		details: &Self::Details,
+	) -> Result<Self::From, Self::BackwardsError> {
+		let result =
+			x.0.into_iter()
+				.enumerate()
+				.map(|(index, x)| {
+					M::try_backwards(x, &details.0)
+						.map_err(|error| VecMigrationFailed::Element { index, error })
+				})
+				.collect::<Result<Vec<_>, _>>()?;
 		Ok(WrappedBoundedVec(BoundedVec::truncate_from(result)))
 	}
 }
@@ -123,18 +131,25 @@ impl<X, S: sp_core::Get<u32>, V: Version, M: Migration<X, V>> Migration<WrappedB
 impl<
 		X,
 		S: sp_core::Get<u32>,
-		M: Migration<X, vCurrent, ForwardsError = Never, BackwardsError = Never>,
+		M: Migration<X, vCurrent, ForwardsError = Never, BackwardsError = Never, Details = ()>,
 	> Migration<BoundedVec<X, S>, vCurrent> for GenericMapMigration<(M,)>
 {
 	type From = WrappedBoundedVec<M::From, S>;
 
-	fn try_forwards(x: Self::From) -> Result<BoundedVec<X, S>, Self::ForwardsError> {
-		let result = x.0.into_iter().map(M::try_forwards).collect::<Result<Vec<_>, _>>()?;
+	fn try_forwards(x: Self::From, _details: &()) -> Result<BoundedVec<X, S>, Self::ForwardsError> {
+		let result =
+			x.0.into_iter()
+				.map(|x| M::try_forwards(x, &()))
+				.collect::<Result<Vec<_>, _>>()?;
 		Ok(BoundedVec::truncate_from(result))
 	}
 
-	fn try_backwards(x: BoundedVec<X, S>) -> Result<Self::From, Self::BackwardsError> {
-		let result = x.into_iter().map(M::try_backwards).collect::<Result<Vec<_>, _>>()?;
+	fn try_backwards(
+		x: BoundedVec<X, S>,
+		_details: &(),
+	) -> Result<Self::From, Self::BackwardsError> {
+		let result =
+			x.into_iter().map(|x| M::try_backwards(x, &())).collect::<Result<Vec<_>, _>>()?;
 		Ok(WrappedBoundedVec(BoundedVec::truncate_from(result)))
 	}
 }
