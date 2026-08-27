@@ -1019,10 +1019,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		// Pass in the current block number as part of the seed to achieve pseudo-randomness.
-		if let Some(nominated_signer) = T::BroadcastSignerNomination::nominate_broadcaster(
-			(broadcast_id, frame_system::Pallet::<T>::block_number()),
-			FailedBroadcasters::<T, I>::get(broadcast_id),
-		) {
+		if let Some(nominated_signer) =
+			T::BroadcastSignerNomination::nominate_broadcaster::<T::TargetChain, _>(
+				(broadcast_id, frame_system::Pallet::<T>::block_number()),
+				FailedBroadcasters::<T, I>::get(broadcast_id),
+			) {
 			// Overwrite the old entry with updated broadcast data.
 			broadcast_data.nominee = Some(nominated_signer.clone());
 			AwaitingBroadcast::<T, I>::insert(broadcast_id, broadcast_data.clone());

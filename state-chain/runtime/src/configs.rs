@@ -920,7 +920,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type ApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type ThresholdSigner = EvmThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
-	type BroadcastSignerNomination = chainflip::RandomSignerNomination<Ethereum>;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
@@ -945,7 +945,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type ApiCall = dot::api::PolkadotApi<DotEnvironment>;
 	type ThresholdSigner = PolkadotThresholdSigner;
 	type TransactionBuilder = chainflip::DotTransactionBuilder;
-	type BroadcastSignerNomination = chainflip::RandomSignerNomination<Polkadot>;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotCryptoInstance>;
@@ -970,7 +970,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type ApiCall = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
 	type ThresholdSigner = BitcoinThresholdSigner;
 	type TransactionBuilder = chainflip::BtcTransactionBuilder;
-	type BroadcastSignerNomination = chainflip::RandomSignerNomination<Bitcoin>;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
@@ -995,7 +995,7 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type ApiCall = cf_chains::arb::api::ArbitrumApi<EvmEnvironment>;
 	type ThresholdSigner = EvmThresholdSigner;
 	type TransactionBuilder = chainflip::ArbTransactionBuilder;
-	type BroadcastSignerNomination = chainflip::RandomSignerNomination<Arbitrum>;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
@@ -1020,7 +1020,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type ApiCall = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type ThresholdSigner = SolanaThresholdSigner;
 	type TransactionBuilder = chainflip::SolanaTransactionBuilder;
-	type BroadcastSignerNomination = chainflip::RandomSignerNomination<Solana>;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, SolanaInstance>;
@@ -1045,7 +1045,7 @@ impl pallet_cf_broadcast::Config<Instance6> for Runtime {
 	type ApiCall = hub::api::AssethubApi<HubEnvironment>;
 	type ThresholdSigner = PolkadotThresholdSigner;
 	type TransactionBuilder = chainflip::DotTransactionBuilder;
-	type BroadcastSignerNomination = chainflip::RandomSignerNomination<Assethub>;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotCryptoInstance>;
@@ -1070,7 +1070,7 @@ impl pallet_cf_broadcast::Config<Instance7> for Runtime {
 	type ApiCall = cf_chains::tron::api::TronApi<EvmEnvironment>;
 	type ThresholdSigner = EvmThresholdSigner;
 	type TransactionBuilder = chainflip::TronTransactionBuilder;
-	type BroadcastSignerNomination = chainflip::RandomSignerNomination<Tron>;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
@@ -1095,7 +1095,7 @@ impl pallet_cf_broadcast::Config<Instance8> for Runtime {
 	type ApiCall = BscApi<EvmEnvironment>;
 	type ThresholdSigner = EvmThresholdSigner;
 	type TransactionBuilder = chainflip::BscTransactionBuilder;
-	type BroadcastSignerNomination = chainflip::RandomSignerNomination<Bsc>;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;

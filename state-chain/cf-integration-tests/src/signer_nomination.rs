@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_chains::{Bitcoin, Ethereum};
 use cf_primitives::ForeignChain;
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastNomination, EpochInfo, ThresholdSignerNomination,
@@ -120,11 +121,14 @@ fn failed_broadcasters_are_only_excluded_on_the_failed_chain() {
 		);
 
 		assert_eq!(
-			EthereumBroadcastSignerNomination::nominate_broadcaster((), authorities.clone()),
+			EthereumBroadcastSignerNomination::nominate_broadcaster::<Ethereum, _>(
+				(),
+				authorities.clone(),
+			),
 			None,
 		);
 		assert_eq!(
-			BitcoinBroadcastSignerNomination::nominate_broadcaster((), authorities),
+			BitcoinBroadcastSignerNomination::nominate_broadcaster::<Bitcoin, _>((), authorities),
 			Some(failed_broadcaster),
 		);
 	});

@@ -20,7 +20,7 @@ use cf_traits::{Chainflip, EpochInfo};
 use frame_support::{traits::Get, Hashable};
 use nanorand::{Rng, WyRand};
 use pallet_cf_validator::HistoricalAuthorities;
-use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 use super::Offence;
 
@@ -84,12 +84,12 @@ fn eligible_authorities(
 ///
 /// Signers serving a suspension for any of the offences in ExclusionOffences are
 /// excluded from being nominated.
-pub struct RandomSignerNomination<C = ()>(PhantomData<C>);
+pub struct RandomSignerNomination;
 
-impl<C: Get<ForeignChain>> cf_traits::BroadcastNomination for RandomSignerNomination<C> {
+impl cf_traits::BroadcastNomination for RandomSignerNomination {
 	type BroadcasterId = <Runtime as Chainflip>::ValidatorId;
 
-	fn nominate_broadcaster<H: Hashable>(
+	fn nominate_broadcaster<C: Get<ForeignChain>, H: Hashable>(
 		seed: H,
 		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId> {
