@@ -148,6 +148,7 @@ macro_rules! impl_identity_migrations_with_wrapper {
 }
 
 impl_identity_migrations_with_wrapper! {
+	#[derive(PartialOrd, PartialEq, Eq, Ord)]
 	struct WrappedAccountId32(sp_core::crypto::AccountId32) where |x: [u8; 32]| sp_core::crypto::AccountId32::new(x);
 }
 

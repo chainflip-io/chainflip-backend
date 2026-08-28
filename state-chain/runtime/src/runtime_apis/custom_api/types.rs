@@ -892,10 +892,12 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	pub bound_redeem_address: Option<EvmAddress>,
 	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
 	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub current_delegation_status: Option<DelegationInfo<Balance>>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
+	/// Operator -> bid, for each operator this account currently delegates to.
+	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
+	pub current_delegation_status: BTreeMap<AccountId32, Balance>,
+	/// Operator -> bid, for each operator this account will delegate to next epoch.
+	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
+	pub upcoming_delegation_status: BTreeMap<AccountId32, Balance>,
 }
 
 impl<Balance: HasChangelog> HasChangelog for RpcAccountInfoCommonItems<Balance>
@@ -931,12 +933,14 @@ impl<A> RpcAccountInfoCommonItems<A> {
 				.collect::<Result<_, E>>()?,
 			upcoming_delegation_status: self
 				.upcoming_delegation_status
-				.map(|d| d.try_map_bid(&f))
-				.transpose()?,
+				.into_iter()
+				.map(|(operator, bid)| Ok((operator, f(bid)?)))
+				.collect::<Result<_, E>>()?,
 			current_delegation_status: self
 				.current_delegation_status
-				.map(|d| d.try_map_bid(&f))
-				.transpose()?,
+				.into_iter()
+				.map(|(operator, bid)| Ok((operator, f(bid)?)))
+				.collect::<Result<_, E>>()?,
 		})
 	}
 }

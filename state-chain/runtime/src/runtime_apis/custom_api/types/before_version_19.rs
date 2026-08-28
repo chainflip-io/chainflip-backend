@@ -218,8 +218,16 @@ impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCom
 			estimated_redeemable_balance: value.estimated_redeemable_balance,
 			bound_redeem_address: value.bound_redeem_address,
 			restricted_balances: value.restricted_balances,
-			current_delegation_status: value.current_delegation_status,
-			upcoming_delegation_status: value.upcoming_delegation_status,
+			current_delegation_status: value
+				.current_delegation_status
+				.into_iter()
+				.map(|d| (d.operator, d.bid))
+				.collect(),
+			upcoming_delegation_status: value
+				.upcoming_delegation_status
+				.into_iter()
+				.map(|d| (d.operator, d.bid))
+				.collect(),
 		}
 	}
 }
