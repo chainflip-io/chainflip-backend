@@ -244,6 +244,9 @@ fn parse_response(
 ///
 /// A reply carrying neither is not a JSON-RPC reply, so it is reported through `bad_response`. Note
 /// that a `result` that is present but `null` is a valid result, which some methods do return.
+///
+/// A reply carrying *both* is malformed too, but is reported as the error it names rather than as a
+/// `bad_response`: the node's own message says more about what went wrong than the raw body does.
 fn result_from_reply(
 	reply: &Map<String, serde_json::Value>,
 	bad_response: impl Fn() -> Error,
