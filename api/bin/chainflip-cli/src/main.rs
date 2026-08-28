@@ -177,6 +177,10 @@ async fn run_cli() -> Result<()> {
 						api.validator_api().deregister_account().await?;
 						println!("Validator account successfully deregistered.");
 					},
+					ValidatorSubcommands::RotateKeys => {
+						let tx_hash = api.operator_api().rotate_session_keys().await?;
+						println!("Session key rotated at tx {tx_hash:#x}.");
+					},
 					ValidatorSubcommands::StopBidding => {
 						let tx_hash = api.validator_api().stop_bidding().await?;
 						println!("Account stopped bidding, in tx {tx_hash:#x}.");

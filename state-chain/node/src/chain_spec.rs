@@ -40,10 +40,7 @@ pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_core::{
-	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
-	Pair, Public,
-};
+use sp_core::{crypto::UncheckedInto, Pair, Public};
 use state_chain_runtime::{
 	chainflip::{
 		witnessing::{
@@ -1261,10 +1258,7 @@ pub fn chainflip_properties() -> Properties {
 	.clone()
 }
 
-/// Sets global that ensures SC AccountId's are printed correctly
-pub fn use_chainflip_account_id_encoding() {
-	set_default_ss58_version(Ss58AddressFormat::custom(common::CHAINFLIP_SS58_PREFIX));
-}
+pub use cf_primitives::use_chainflip_account_id_encoding;
 
 #[test]
 fn can_build_genesis() {

@@ -19,10 +19,11 @@
 use core::cmp::max;
 
 use crate::{
-	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastId,
-	BroadcastIdToTransactionOutIds, ChainBlockNumberFor, DelayedBroadcastRetryQueue, Error,
-	Event as BroadcastEvent, Event, FailedBroadcasters, Instance1, PalletConfigUpdate,
-	PalletOffence, PendingApiCalls, PendingBroadcasts, Timeouts, TransactionMetadata,
+	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastAttemptCount,
+	BroadcastBarriers, BroadcastId, BroadcastIdToTransactionOutIds, ChainBlockNumberFor,
+	CurrentOnChainKey, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, Event,
+	FailedBroadcasters, IncomingKeyAndBroadcastId, Instance1, PalletConfigUpdate, PalletOffence,
+	PendingApiCalls, PendingBroadcasts, Timeouts, TransactionMetadata,
 	TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
@@ -88,6 +89,10 @@ const SIG3: <MockEthereumChainCrypto as ChainCrypto>::ThresholdSignature =
 
 const SIG4: <MockEthereumChainCrypto as ChainCrypto>::ThresholdSignature =
 	MockThresholdSignature { signing_key: MockAggKey([0xdd; 4]), signed_payload: [0xdd; 4] };
+
+/// Key handed over by a rotation broadcast. Deliberately not `Default::default()`: the key
+/// storage would otherwise decode to the same value whether or not the pallet wrote to it.
+const NEW_AGG_KEY: AggKey<Test, Instance1> = MockAggKey(*b"newk");
 
 struct MockCfe;
 
@@ -249,6 +254,8 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
 		let broadcast_id = initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal);
 		let next_block = System::block_number() + 1;
+		// The authority count exceeds the pallet's minimum number of retry attempts, so the
+		// broadcast is aborted as soon as every authority has failed once.
 		for i in 0..MockEpochInfo::current_authority_count() {
 			// Nominated signer responds that they can't sign the transaction.
 			// retry should kick off at end of block if sufficient block space is free.
@@ -266,6 +273,53 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 			RuntimeEvent::Broadcaster(Event::BroadcastAborted { broadcast_id })
 		);
 	});
+}
+
+#[test]
+fn test_abort_only_after_minimum_number_of_attempts() {
+	// Small enough that a single round of attempts is below the pallet's minimum of 10.
+	const AUTHORITY_COUNT: u32 = 8;
+	// Attempts are made in rounds of `AUTHORITY_COUNT`, so it takes two rounds to reach the
+	// minimum.
+	const EXPECTED_ATTEMPTS: u32 = 2 * AUTHORITY_COUNT;
+
+	new_test_ext()
+		.execute_with(|| {
+			MockEpochInfo::set_authorities((0..AUTHORITY_COUNT as u64).collect());
+			MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+
+			(initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal), 0u32)
+		})
+		// Each block retries the broadcast with a freshly nominated broadcaster.
+		.then_process_blocks_with(EXPECTED_ATTEMPTS, |(broadcast_id, attempt)| {
+			let attempt = attempt + 1;
+			assert!(
+				PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id),
+				"Broadcast was aborted at attempt {attempt}, expected {EXPECTED_ATTEMPTS} attempts."
+			);
+
+			// The nominated broadcaster reports failure.
+			MockCfe::respond(Scenario::BroadcastFailure);
+
+			if attempt < EXPECTED_ATTEMPTS {
+				assert_eq!(Broadcaster::attempt_count(broadcast_id), attempt);
+				if attempt % AUTHORITY_COUNT == 0 {
+					// All authorities have failed, but the minimum number of attempts has not
+					// been reached: everyone is given a clean slate so that they can be
+					// re-nominated.
+					assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
+				}
+			}
+
+			(broadcast_id, attempt)
+		})
+		.then_execute_with(|(broadcast_id, _)| {
+			assert_eq!(
+				System::events().pop().expect("an event").event,
+				RuntimeEvent::Broadcaster(Event::BroadcastAborted { broadcast_id })
+			);
+			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+		});
 }
 
 #[test]
@@ -305,6 +359,7 @@ fn ready_to_abort_broadcast(broadcast_id: BroadcastId) -> u64 {
 
 	// The nominee should be the last one *not* in the `FailedBroadcasters` list
 	validators.remove(&nominee);
+	BroadcastAttemptCount::<Test, Instance1>::insert(broadcast_id, validators.len() as u32);
 	FailedBroadcasters::<Test, Instance1>::insert(broadcast_id, validators);
 	nominee
 }
@@ -708,7 +763,7 @@ fn broadcast_barrier_for_polkadot() {
 			let broadcast_id_2 = initiate_and_sign_broadcast(
 				&mock_api_call(),
 				SIG2,
-				TxType::Rotation { new_key: Default::default() },
+				TxType::Rotation { new_key: NEW_AGG_KEY },
 			);
 			// tx2 emits broadcast request and also pauses any further new broadcast requests
 			assert_transaction_broadcast_request_event(broadcast_id_2, SIG2);
@@ -766,7 +821,7 @@ fn broadcast_barrier_for_bitcoin() {
 		let broadcast_id_2 = initiate_and_sign_broadcast(
 			&mock_api_call(),
 			SIG2,
-			TxType::Rotation { new_key: Default::default() },
+			TxType::Rotation { new_key: NEW_AGG_KEY },
 		);
 		// tx2 emits broadcast request and does not pause future broadcasts in bitcoin
 		assert_transaction_broadcast_request_event(broadcast_id_2, SIG2);
@@ -802,7 +857,7 @@ fn broadcast_barrier_for_ethereum() {
 			let broadcast_id_3 = initiate_and_sign_broadcast(
 				&mock_api_call(),
 				SIG3,
-				TxType::Rotation { new_key: Default::default() },
+				TxType::Rotation { new_key: NEW_AGG_KEY },
 			);
 
 			// tx3 is ready for broadcast but since there is a broadcast pause, broadcast request is
@@ -960,6 +1015,7 @@ fn broadcast_can_be_aborted_due_to_timeout() {
 			assert!(
 				FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(broadcast_id).is_none()
 			);
+			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
 		});
 }
 
@@ -1489,7 +1545,7 @@ fn should_release_barriers_correctly_in_case_of_rotation_tx_succeeding_first() {
 		let broadcast_id_2 = initiate_and_sign_broadcast(
 			&mock_api_call(),
 			SIG2,
-			TxType::Rotation { new_key: Default::default() },
+			TxType::Rotation { new_key: NEW_AGG_KEY },
 		);
 
 		// the rotation tx should create barriers on both txs
@@ -1520,6 +1576,37 @@ fn should_release_barriers_correctly_in_case_of_rotation_tx_succeeding_first() {
 		));
 
 		assert_eq!(BroadcastBarriers::<Test, Instance1>::get(), BTreeSet::new());
+	});
+}
+
+#[test]
+fn incoming_key_is_activated_by_its_own_rotation_broadcast() {
+	new_test_ext().execute_with(|| {
+		// No barriers, so the broadcasts can be witnessed in any order.
+		MockBroadcastBarriers::set(&ChainChoice::Bitcoin);
+
+		let rotation_broadcast_id = initiate_and_sign_broadcast(
+			&mock_api_call(),
+			SIG1,
+			TxType::Rotation { new_key: NEW_AGG_KEY },
+		);
+		let other_broadcast_id =
+			initiate_and_sign_broadcast(&mock_api_call(), SIG2, TxType::Normal);
+
+		assert_eq!(
+			IncomingKeyAndBroadcastId::<Test, Instance1>::get(),
+			Some((NEW_AGG_KEY, rotation_broadcast_id))
+		);
+		assert_ne!(rotation_broadcast_id, other_broadcast_id);
+		assert_eq!(CurrentOnChainKey::<Test, Instance1>::get(), None);
+
+		// Any other broadcast succeeding must not activate the incoming key.
+		witness_broadcast(SIG2);
+		assert_eq!(CurrentOnChainKey::<Test, Instance1>::get(), None);
+
+		witness_broadcast(SIG1);
+		assert_eq!(CurrentOnChainKey::<Test, Instance1>::get(), Some(NEW_AGG_KEY));
+		assert!(!IncomingKeyAndBroadcastId::<Test, Instance1>::exists());
 	});
 }
 

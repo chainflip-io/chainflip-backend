@@ -56,11 +56,9 @@ use super::rpc::DotRpcApi;
 
 use crate::dot::PolkadotHash;
 
-// Substrate transaction pool rejection codes (see substrate's `sc-rpc-api` author errors) that
-// mean the pool already knows the submitted transaction.
-const POOL_TEMPORARILY_BANNED: i32 = 1012;
+// Substrate transaction pool rejection code (see substrate's `sc-rpc-api` author errors) meaning
+// the pool already holds this *exact* transaction, so resubmitting it is a harmless no-op.
 const POOL_ALREADY_IMPORTED: i32 = 1013;
-const POOL_TOO_LOW_PRIORITY: i32 = 1014;
 
 #[derive(Clone)]
 pub struct PolkadotHttpClient(HttpClient);
@@ -364,10 +362,9 @@ impl DotRpcApi for DotRpcClient {
 			encoded_bytes,
 		);
 		match tx.submit().await {
-			// Check if the pool already knows this transaction and treat it as a success.
+			// The pool already holds this exact transaction; treat the resubmission as a success.
 			Err(subxt::Error::Rpc(RpcError::ClientError(subxt_rpcs::Error::User(user_error))))
-				if [POOL_TEMPORARILY_BANNED, POOL_ALREADY_IMPORTED, POOL_TOO_LOW_PRIORITY]
-					.contains(&user_error.code) =>
+				if user_error.code == POOL_ALREADY_IMPORTED =>
 				Ok(tx.hash()),
 			result => Ok(result?),
 		}

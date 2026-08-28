@@ -31,7 +31,7 @@ use tokio::sync::{
 	mpsc::{UnboundedReceiver, UnboundedSender},
 	oneshot,
 };
-use tracing::{debug, warn, Instrument};
+use tracing::{debug, trace, warn, Instrument};
 
 use crate::{
 	client::{
@@ -241,6 +241,16 @@ where
 		sender_id: AccountId,
 		data: Ceremony::Data,
 	) -> OptionalCeremonyReturn<Ceremony> {
+		trace!(
+			from_id = sender_id.to_string(),
+			stage = self
+				.stage
+				.as_ref()
+				.map(|stage| stage.get_stage_name().to_string())
+				.unwrap_or_else(|| "unauthorised".to_string()),
+			"Received {data}",
+		);
+
 		match &mut self.stage {
 			None => {
 				if !data.should_delay_unauthorised() {
@@ -278,7 +288,7 @@ where
 				// Check that the number of elements in the data is what we expect
 				if !data.is_data_size_valid::<Chain>(
 					stage.ceremony_common().all_idxs.len() as AuthorityCount,
-					stage.ceremony_common().number_of_signing_payloads,
+					stage.size_context(),
 				) {
 					self.metrics.bad_message.inc(&[INCORRECT_NUMBER_ELEMENTS]);
 					debug!(

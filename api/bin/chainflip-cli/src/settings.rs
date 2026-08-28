@@ -155,6 +155,8 @@ pub enum ValidatorSubcommands {
 	RegisterAccount,
 	/// De-register this validator account.
 	DeregisterAccount,
+	/// Rotate your session keys.
+	RotateKeys,
 	/// Start bidding to participate in all future auctions.
 	StartBidding,
 	/// Stop bidding, thereby stopping participation in auctions.
@@ -238,7 +240,7 @@ pub enum CliCommand {
 	GetBoundRedeemAddress,
 	#[clap(about = "Shows the executor address your account is bound to")]
 	GetBoundExecutorAddress,
-	#[clap(about = "Rotate your session keys")]
+	#[clap(about = "Rotate your session keys [DEPRECATED - use 'validator rotate-keys' instead]")]
 	Rotate,
 	#[clap(
 		about = "Delegate your GRANDPA vote - generates a delegate key on the node if no key exists and delegates the vote to it"
@@ -404,6 +406,21 @@ mod tests {
 			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
 			settings.state_chain.signing_key_file
 		);
+	}
+
+	#[test]
+	fn parses_validator_rotate_keys() {
+		use clap::Parser;
+
+		// `validator rotate-keys`
+		let opts =
+			CLICommandLineOptions::try_parse_from(["chainflip-cli", "validator", "rotate-keys"])
+				.unwrap();
+		assert!(matches!(opts.cmd, CliCommand::Validator(ValidatorSubcommands::RotateKeys)));
+
+		// The deprecated top-level `rotate` is still accepted.
+		let opts = CLICommandLineOptions::try_parse_from(["chainflip-cli", "rotate"]).unwrap();
+		assert!(matches!(opts.cmd, CliCommand::Rotate));
 	}
 
 	#[test]

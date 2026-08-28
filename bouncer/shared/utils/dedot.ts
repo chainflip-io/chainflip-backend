@@ -9,10 +9,46 @@ import type {
 } from 'dedot/types';
 import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
 import type { ChainSubmittableExtrinsic } from 'generated/chaintypes/chainflip-node/tx';
-import { bigintReplacer, cfMutex, sleep } from 'shared/utils';
+import { bigintReplacer, cfMutex, lowercaseFirstLetter, sleep } from 'shared/utils';
 
 /** A fully-typed dedot client for the Chainflip state chain. */
 export type ChainflipClient = DedotClient<ChainflipNodeApi>;
+
+/**
+ * Every pallet in the generated chaintypes, as a literal union of camelCase dedot keys (cf.
+ * {@link StrictChainTx}). Taken across all five namespaces because a pallet with no calls is absent
+ * from `tx`, one with no storage from `query`, and so on.
+ */
+export type PalletName = string &
+  (
+    | keyof RemoveIndex<ChainflipNodeApi['query']>
+    | keyof RemoveIndex<ChainflipNodeApi['tx']>
+    | keyof RemoveIndex<ChainflipNodeApi['events']>
+    | keyof RemoveIndex<ChainflipNodeApi['errors']>
+    | keyof RemoveIndex<ChainflipNodeApi['consts']>
+  );
+
+/** A pallet's entry in the runtime metadata. */
+export type PalletInfo = ChainflipClient['metadata']['latest']['pallets'][number];
+
+/**
+ * The connected runtime's metadata for `txPallet` (a camelCase dedot key), or undefined if it has
+ * no such pallet. Takes a bare `string` for names that arrive at runtime (CLI args); prefer
+ * {@link hasPallet} for hardcoded ones, which are checked at compile time.
+ */
+export function findPallet(client: ChainflipClient, txPallet: string): PalletInfo | undefined {
+  return client.metadata.latest.pallets.find((p) => lowercaseFirstLetter(p.name) === txPallet);
+}
+
+/**
+ * True if the connected runtime has `txPallet`. dedot's query/tx proxies throw on an unknown
+ * pallet, so check before touching one that isn't on every runtime (e.g. the election pallets).
+ * Typing `txPallet` as {@link PalletName} means a typo is a compile error rather than a silent
+ * "pallet absent".
+ */
+export function hasPallet(client: ChainflipClient, txPallet: PalletName): boolean {
+  return findPallet(client, txPallet) !== undefined;
+}
 
 /**
  * Common supertype for any `client.tx.<pallet>.<call>(...)` extrinsic. The per-call return type is
@@ -44,10 +80,9 @@ export function moduleErrorMeta(
   if (err.type === 'Module') {
     const meta = client.registry.findErrorMeta(err);
     if (meta) {
-      // Lower-case the first char to match dedot's `client.errors` keys (the `DispatchErrorMatch`
-      // pallet names) and the historical `pallet.Error` message format.
-      const pallet = meta.pallet.charAt(0).toLowerCase() + meta.pallet.slice(1);
-      return { pallet, name: meta.name, docs: meta.docs };
+      // Match dedot's `client.errors` keys (the `DispatchErrorMatch` pallet names) and the
+      // historical `pallet.Error` message format.
+      return { pallet: lowercaseFirstLetter(meta.pallet), name: meta.name, docs: meta.docs };
     }
   }
   return undefined;

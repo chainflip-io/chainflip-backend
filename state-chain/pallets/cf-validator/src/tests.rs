@@ -2384,6 +2384,104 @@ mod delegation {
 	}
 
 	#[test]
+	fn delegating_account_cannot_register_as_validator_or_operator() {
+		const BID: u128 = 1_000;
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&ALICE, BID);
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Some(BID)
+			));
+
+			assert_noop!(
+				ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE)),
+				Error::<Test>::NotAuthorized
+			);
+			assert_noop!(
+				ValidatorPallet::register_as_operator(
+					OriginTrait::signed(ALICE),
+					OPERATOR_SETTINGS,
+					vanity()
+				),
+				Error::<Test>::NotAuthorized
+			);
+		});
+	}
+
+	#[test]
+	fn snapshot_ignores_stale_delegation_choice_for_validator() {
+		const BID: u128 = 1_000;
+		const INDEPENDENT_VALIDATOR: u64 = 102;
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&ALICE, BID);
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE)));
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(ALICE), BOB));
+			MockFlip::credit_funds(&INDEPENDENT_VALIDATOR, BID);
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(
+				INDEPENDENT_VALIDATOR
+			)));
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(
+				INDEPENDENT_VALIDATOR
+			)));
+
+			DelegationChoice::<Test>::insert(ALICE, (BOB, BID));
+			DelegationChoice::<Test>::insert(INDEPENDENT_VALIDATOR, (BOB, BID));
+
+			let (snapshots, independent_bidders) = ValidatorPallet::build_delegation_snapshots::<
+				<Test as crate::Config>::KeygenQualification,
+			>(&Default::default());
+			let snapshot = snapshots.get(&BOB).expect("operator snapshot should exist");
+
+			assert!(!independent_bidders.contains_key(&ALICE));
+			assert_eq!(independent_bidders.get(&INDEPENDENT_VALIDATOR), Some(&BID));
+			assert_eq!(snapshot.validators.get(&ALICE), Some(&BID));
+			assert!(!snapshot.delegators.contains_key(&ALICE));
+			assert!(!snapshot.delegators.contains_key(&INDEPENDENT_VALIDATOR));
+			assert_eq!(snapshot.total_available_bid(), BID);
+		});
+	}
+
+	#[test]
+	fn excluded_managed_validator_still_contributes_as_snapshot_delegator() {
+		const BID: u128 = 1_000;
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&ALICE, BID);
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE)));
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(ALICE), BOB));
+
+			let (snapshots, independent_bidders) = ValidatorPallet::build_delegation_snapshots::<
+				<Test as crate::Config>::KeygenQualification,
+			>(&BTreeSet::from([ALICE]));
+			let snapshot = snapshots.get(&BOB).expect("operator snapshot should exist");
+
+			assert!(!independent_bidders.contains_key(&ALICE));
+			assert!(!snapshot.validators.contains_key(&ALICE));
+			assert_eq!(snapshot.delegators.get(&ALICE), Some(&BID));
+			assert_eq!(snapshot.total_available_bid(), BID);
+		});
+	}
+
+	#[test]
 	fn can_undelegate() {
 		const BID: u128 = 1_000;
 		new_test_ext().execute_with(|| {

@@ -244,6 +244,7 @@ sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", t
 sp-storage = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 sp-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
+sp-tracing = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 sp-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.7", default-features = false }
 
@@ -348,11 +349,11 @@ blake2 = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
 chacha20poly1305 = { opt-level = 3 }
 cranelift-codegen = { opt-level = 3 }
-cranelift-wasm = { opt-level = 3 }
 crc32fast = { opt-level = 3 }
 crossbeam-deque = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
+ed25519-dalek = { opt-level = 3 }
 ed25519-zebra = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
@@ -382,6 +383,7 @@ smallvec = { opt-level = 3 }
 snow = { opt-level = 3 }
 twox-hash = { opt-level = 3 }
 uint = { opt-level = 3 }
+wasmtime-internal-cranelift = { opt-level = 3 }
 x25519-dalek = { opt-level = 3 }
 yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }

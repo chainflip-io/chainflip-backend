@@ -24,7 +24,9 @@ use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use tracing::warn;
 
-use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
+use super::ceremony_stage::{
+	CeremonyCommon, CeremonyStage, ProcessMessageResult, SizeContextOf, StageResult,
+};
 use crate::{
 	client::{ceremony_manager::CeremonyTrait, MultisigMessage},
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
@@ -52,6 +54,10 @@ pub trait BroadcastStageProcessor<C: CeremonyTrait>: Display {
 
 	/// Unique stage name used for logging and testing.
 	const NAME: C::CeremonyStageName;
+
+	/// The context used to size check messages addressed to this stage. Derived from the
+	/// processor's own state so that there is a single source of truth for it.
+	fn size_context(&self) -> SizeContextOf<C>;
 
 	/// Init the stage, returning the data to broadcast
 	fn init(&mut self) -> DataToSend<Self::Message>;
@@ -274,6 +280,10 @@ where
 
 	fn ceremony_common(&self) -> &CeremonyCommon {
 		&self.common
+	}
+
+	fn size_context(&self) -> SizeContextOf<C> {
+		self.processor.size_context()
 	}
 }
 

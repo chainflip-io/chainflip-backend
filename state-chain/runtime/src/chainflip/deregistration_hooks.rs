@@ -16,7 +16,9 @@
 
 use crate::{AccountId, AccountRoles, Runtime};
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, DeregistrationHooks, RefundAddressRegistry};
+use cf_traits::{
+	AccountRoleRegistry, DeregistrationHooks, RefundAddressRegistry, WithdrawalAddressRestriction,
+};
 use frame_support::sp_runtime::DispatchError;
 use pallet_cf_flip::Bonder;
 
@@ -67,6 +69,9 @@ impl DeregistrationHooks for RuntimeDeregistrationHooks {
 	fn on_deregistered(account_id: &Self::AccountId, account_role: AccountRole) {
 		if account_role == AccountRole::LiquidityProvider {
 			pallet_cf_asset_balances::Pallet::<Runtime>::clear_refund_addresses(account_id);
+			<pallet_cf_asset_balances::Pallet<Runtime> as WithdrawalAddressRestriction>::clear_pending_withdrawal_changes(
+				account_id,
+			);
 		}
 	}
 }

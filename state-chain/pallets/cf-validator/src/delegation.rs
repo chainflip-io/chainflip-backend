@@ -209,7 +209,7 @@ where
 		self.delegators.values().copied().sum()
 	}
 
-	fn total_available_bid(&self) -> Bid {
+	pub fn total_available_bid(&self) -> Bid {
 		self.total_validator_bid() + self.total_delegator_bid()
 	}
 
