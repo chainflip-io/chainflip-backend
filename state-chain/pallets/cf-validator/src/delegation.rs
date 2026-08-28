@@ -139,6 +139,34 @@ pub struct OperatorSettings {
 	pub delegation_acceptance: DelegationAcceptance,
 }
 
+/// A delegator's live relations, keyed by operator, to their max bid pledged to that operator.
+///
+/// A delegator may hold relations to multiple operators simultaneously; the sum of all their
+/// max bids is capped at the delegator's funding balance (enforced by `delegate`/
+/// `delegate_multi`). Never stored with an empty `operators` map -- the storage key is removed
+/// entirely once a delegator's last relation is undelegated.
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub struct DelegatorRelations<Account: Ord, Amount> {
+	pub operators: BTreeMap<Account, Amount>,
+}
+
+impl<Account: Ord, Amount> Default for DelegatorRelations<Account, Amount> {
+	fn default() -> Self {
+		Self { operators: BTreeMap::new() }
+	}
+}
+
 /// A snapshot of delegations to an operator for a specific epoch, including all
 /// necessary information for reward distribution.
 #[derive(

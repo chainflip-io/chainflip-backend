@@ -72,6 +72,50 @@ pub fn into_current_offences<T>(entries: Vec<(Offence, T)>) -> Vec<(super::Offen
 		.collect()
 }
 
+// Decode-only intermediate (converted to the current type via `From`); no serde needed.
+//
+// A delegator used to be able to delegate to at most one operator at a time, so
+// `current_delegation_status`/`upcoming_delegation_status` were a single optional
+// `DelegationInfo { operator, bid }` rather than a map of every operator it delegates to.
+#[derive(Encode, Decode, TypeInfo, Clone, Default, Debug)]
+pub struct RpcAccountInfoCommonItems<Balance> {
+	pub account_id: Option<AccountId32>,
+	pub vanity_name: VanityName,
+	pub flip_balance: Balance,
+	pub asset_balances: cf_chains::assets::any::AssetMap<Balance>,
+	pub bond: Balance,
+	pub estimated_redeemable_balance: Balance,
+	pub bound_redeem_address: Option<EvmAddress>,
+	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
+	pub current_delegation_status: Option<DelegationInfo<Balance>>,
+	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
+}
+
+impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCommonItems<B> {
+	fn from(value: RpcAccountInfoCommonItems<B>) -> Self {
+		Self {
+			account_id: value.account_id,
+			vanity_name: value.vanity_name,
+			flip_balance: value.flip_balance,
+			asset_balances: value.asset_balances,
+			bond: value.bond,
+			estimated_redeemable_balance: value.estimated_redeemable_balance,
+			bound_redeem_address: value.bound_redeem_address,
+			restricted_balances: value.restricted_balances,
+			current_delegation_status: value
+				.current_delegation_status
+				.into_iter()
+				.map(|d| (d.operator, d.bid))
+				.collect(),
+			upcoming_delegation_status: value
+				.upcoming_delegation_status
+				.into_iter()
+				.map(|d| (d.operator, d.bid))
+				.collect(),
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
