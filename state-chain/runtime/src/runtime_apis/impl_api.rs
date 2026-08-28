@@ -813,12 +813,24 @@ impl_runtime_apis! {
 			should_sweep: ShouldSweep,
 		) -> RpcAccountInfoCommonItems<FlipBalance> {
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
-			let upcoming_delegation_status = pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
-				.map(|(operator, max_bid)| DelegationInfo { operator, bid: core::cmp::min(flip_account.total(), max_bid) });
-			let current_delegation_status = pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix(Validator::current_epoch())
-				.find_map(|(operator, snapshot)| snapshot.delegators.get(account_id).map(|&bid|
-					DelegationInfo { operator, bid }
-				));
+			// Operator -> bid, for every operator this account currently delegates to (a
+			// delegator may hold relations to multiple operators simultaneously).
+			let upcoming_delegation_status: BTreeMap<AccountId, FlipBalance> =
+				pallet_cf_validator::DelegationChoices::<Runtime>::get(account_id)
+					.map(|relations| {
+						relations
+							.operators
+							.into_iter()
+							.map(|(operator, max_bid)| (operator, core::cmp::min(flip_account.total(), max_bid)))
+							.collect()
+					})
+					.unwrap_or_default();
+			// Operator -> bid, for every operator whose current-epoch snapshot counts this
+			// account as one of its delegators.
+			let current_delegation_status: BTreeMap<AccountId, FlipBalance> =
+				pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix(Validator::current_epoch())
+					.filter_map(|(operator, snapshot)| snapshot.delegators.get(account_id).map(|&bid| (operator, bid)))
+					.collect();
 
 			// Call optimized version if we know that we don't have to sweep
 			let asset_balances = match should_sweep {
@@ -997,9 +1009,10 @@ impl_runtime_apis! {
 								bond: Flip::bond(account),
 								reward: reward_of(account),
 								role,
-								// `Validator`-role accounts can't hold a `DelegationChoice`
-								// (`delegate` rejects Validator/Operator callers), so a Validator
-								// here can only be demoted from this same operator's own set.
+								// `Validator`-role accounts can't hold a `DelegationChoices` entry
+								// (`delegate`/`delegate_multi` reject Validator/Operator callers),
+								// so a Validator here can only be demoted from this same
+								// operator's own set.
 								managed_by: (role == AccountRole::Validator).then(|| operator.clone()),
 								delegated_to: Some(operator.clone()),
 							});
@@ -2200,7 +2213,9 @@ impl_runtime_apis! {
 			let caller_id = EthereumAccount(caller).into_account_id();
 			let required_deposit = match call {
 				EthereumSCApi::Delegation { call: DelegationApi::Delegate { increase: DelegationAmount::Some(ref increase), .. } } => {
-					pallet_cf_validator::DelegationChoice::<Runtime>::get(&caller_id).map(|(_, bid)| bid).unwrap_or_default()
+					pallet_cf_validator::DelegationChoices::<Runtime>::get(&caller_id)
+						.map(|relations| relations.operators.values().copied().sum::<FlipBalance>())
+						.unwrap_or_default()
 						.saturating_add(*increase)
 						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id))
 				},

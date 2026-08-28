@@ -2376,6 +2376,14 @@ where
 						ShouldSweep::Yes,
 					)?
 					.into()
+				} else if api_version < 21 {
+					#[expect(deprecated)]
+					api.cf_common_account_info_before_version_21(
+						hash,
+						&account_id,
+						ShouldSweep::Yes,
+					)?
+					.into()
 				} else {
 					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}
