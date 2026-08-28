@@ -37,8 +37,9 @@ use anyhow::{anyhow, Result};
 // https://github.com/bitcoin/bitcoin/blob/fb7b5293844ea6adc5dcf5ad0a0c5890b4495939/src/rpc/protocol.h#L58
 const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;
 
-/// How much of an unexpected response body to keep for reporting. Enough to identify the source
-/// of a proxy error page without flooding the logs.
+/// How much of a response body to quote when reporting it as [`Error::BadResponse`]. Applies only
+/// to a body that failed to parse, never to one we return: enough to identify the source of a proxy
+/// error page without flooding the logs.
 const MAX_REPORTED_BODY_LEN: usize = 512;
 
 // From jsonrpc crate
