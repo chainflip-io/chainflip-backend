@@ -20,7 +20,8 @@ use sp_std::vec::Vec;
 use crate::{
 	migrations::{
 		basics::{vCurrent, Migration, Version},
-		with_all_runtime_migrations, HasChangelog, HasGenericVariant, IsHistoricalType,
+		with_all_runtime_migrations, AllVersions, ChangelogDetails, HasChangelog,
+		HasGenericVariant, IsHistoricalType,
 	},
 	never::Never,
 	type_introspection::HasTypeIntrospection,
@@ -84,6 +85,15 @@ macro_rules! impl_changelog_for_bounded_vec {
             $(
                 type $migration = MapMigration<(X::$migration,)>;
             )*
+
+            fn details() -> ChangelogDetails<Self> {
+                let a = X::details();
+                AllVersions {
+                    $(
+                        $migration: ( a.$migration, ),
+                    )*
+                }
+            }
         }
     };
 }

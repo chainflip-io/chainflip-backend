@@ -21,8 +21,8 @@ use sp_std::{boxed::Box, collections::btree_map::BTreeMap, marker::PhantomData, 
 use crate::{
 	migrations::{
 		basics::{vCurrent, IdentityMigration, Migration, Version},
-		with_all_runtime_migrations, HasChangelog, HasGenericVariant, IsHistoricalType,
-		OrdMigrations,
+		with_all_runtime_migrations, AllVersions, ChangelogDetails, HasChangelog,
+		HasGenericVariant, IsHistoricalType, OrdMigrations,
 	},
 	never::{IsEmptyType, Never},
 	type_introspection::HasTypeIntrospection,
@@ -46,6 +46,10 @@ macro_rules! impl_identity_migrations {
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
         impl $crate::migrations::HasChangelog for Type {
             type if_unspecified = $crate::migrations::basics::IdentityMigration;
+
+            fn details() -> $crate::migrations::ChangelogDetails<Self> {
+                $crate::migrations::AllVersions::default()
+            }
         }
     };
 }
@@ -69,6 +73,10 @@ impl<T> HasGenericVariant for PhantomData<T> {
 
 impl<T> HasChangelog for PhantomData<T> {
 	type if_unspecified = IdentityMigration;
+
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 // ----------- wrapped types -------------
@@ -121,6 +129,9 @@ macro_rules! impl_identity_migrations_with_wrapper {
 		}
 		impl $crate::migrations::HasChangelog for $Ty {
 			type if_unspecified = $crate::migrations::basics::IdentityMigration;
+            fn details() -> ChangelogDetails<Self> {
+                AllVersions::default()
+            }
 		}
 
 		$(
@@ -281,6 +292,17 @@ macro_rules! impl_migrations_for_container {
                     $$(
                         type $$migration = MapMigration<( $($ty::$$migration, )+ )>;
                     )*
+
+                    fn details() -> ChangelogDetails<Self> {
+                        $(
+                            let $var_M = <$ty as HasChangelog>::details();
+                        )*
+                        AllVersions {
+                            $$(
+                                $$migration: ( $( $var_M.$$migration, )* ),
+                            )*
+                        }
+                    }
                 }
             }
         }
@@ -509,6 +531,16 @@ macro_rules! impl_changelog_for_btreemap {
             $(
                 type $migration = MapMigration<(A::$migration, B::$migration)>;
             )*
+
+            fn details() -> ChangelogDetails<Self> {
+                let a = A::details();
+                let b = B::details();
+                AllVersions {
+                    $(
+                        $migration: ( a.$migration, b.$migration ),
+                    )*
+                }
+            }
         }
     };
 }

@@ -72,6 +72,7 @@ macro_rules! generate_module {
 
                         #[derive(Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen, Default)]
                         #[derive_where::derive_where(Debug; $(Ty::$field: sp_std::fmt::Debug),*)]
+                        #[derive_where(Default; $(Ty::$field: Default),*)]
                         #[derive_where(Copy; $(Ty::$field: Copy),*)]
                         #[derive_where(Clone; $(Ty::$field: Clone),*)]
                         #[derive_where(PartialEq; $(Ty::$field: PartialEq),*)]
@@ -388,7 +389,7 @@ macro_rules! generate_module {
                             )*
                         }
 
-                        #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+                        #[derive(Copy, Clone, PartialEq, Eq, Hash, Default)]
                         #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
                         #[derive(cf_proc_macros::HasTypeIntrospection)]
                         pub struct Struct {
@@ -770,6 +771,9 @@ macro_rules! generate_module {
                                         $( $( $variant_field_ty: $crate::migrations::HasChangelog, )* )?
                                     {
                                         type if_unspecified = variant_mod::see_field_changelogs;
+                                        fn details() -> $crate::migrations::ChangelogDetails<Self> {
+                                            todo!()
+                                        }
                                     }
                                 }
                             )*

@@ -28,7 +28,10 @@
 //!
 //! Primitive types to be used across Chainflip's various crates.
 
-use cf_utilities::impl_identity_migrations;
+use cf_utilities::{
+	impl_identity_migrations,
+	migrations::{AllVersions, ChangelogDetails},
+};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -354,6 +357,10 @@ pub enum AccountRole {
 
 impl cf_utilities::migrations::HasChangelog for AccountRole {
 	type if_unspecified = _AccountRole::see_variant_changelogs;
+
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

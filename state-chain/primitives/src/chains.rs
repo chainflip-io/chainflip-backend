@@ -167,6 +167,9 @@ impl HasChangelog for ForeignChain {
 		_ForeignChain::see_variant_changelogs_and_also<_ForeignChain::variant::Tron::Added>;
 	type in_20300 =
 		_ForeignChain::see_variant_changelogs_and_also<_ForeignChain::variant::Bsc::Added>;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[test]
