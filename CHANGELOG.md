@@ -2,10 +2,17 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [2.3] - 2026-08-18
+## [2.3.0] - 2026-08-18
 
 ### Features
 
+- Include Chain in FailedToBroadcastTransaction ([#6810](https://github.com/chainflip-io/chainflip-backend/issues/6810))
+- Add `validator rotate-keys` subcommand ([#6806](https://github.com/chainflip-io/chainflip-backend/issues/6806))
+- Circuit breaker for fee price estimates ([#6821](https://github.com/chainflip-io/chainflip-backend/issues/6821))
+- Ensure broadcasts are retried a minimum number of times ([#6808](https://github.com/chainflip-io/chainflip-backend/issues/6808))
+- Auto deregister lp when redeem all ([#6809](https://github.com/chainflip-io/chainflip-backend/issues/6809))
+- Bouncer advanced commands ([#6722](https://github.com/chainflip-io/chainflip-backend/issues/6722))
+- Runtime profiling feature ([#6801](https://github.com/chainflip-io/chainflip-backend/issues/6801))
 - Add fee rewards activation script ([#6764](https://github.com/chainflip-io/chainflip-backend/issues/6764))
 - Extrinsic for moving funds from vault to native balance ([#6789](https://github.com/chainflip-io/chainflip-backend/issues/6789))
 - Update bsc gas estimation constants ([#6784](https://github.com/chainflip-io/chainflip-backend/issues/6784))
@@ -39,6 +46,10 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Fixes
 
+- Only treat AlreadyImported as broadcast-submit success on Assethub ([#6807](https://github.com/chainflip-io/chainflip-backend/issues/6807))
+- Ensure Flip is credited to account when opening channel with FLIP ([#6790](https://github.com/chainflip-io/chainflip-backend/issues/6790))
+- Enforce withdrawal safe mode on affiliate withdrawals ([#6773](https://github.com/chainflip-io/chainflip-backend/issues/6773))
+- Redemption edge case ([#6787](https://github.com/chainflip-io/chainflip-backend/issues/6787))
 - Further ceremony hardening.
 - Bouncer resubmit assethub txs that fail to be included ([#6782](https://github.com/chainflip-io/chainflip-backend/issues/6782))
 - Solana nonce test flakiness ([#6788](https://github.com/chainflip-io/chainflip-backend/issues/6788))
