@@ -1,4 +1,4 @@
-use cf_utilities::migrations::HasChangelog;
+use cf_utilities::migrations::{AllVersions, ChangelogDetails, HasChangelog};
 
 // Copyright 2025 Chainflip Labs GmbH
 //
@@ -47,6 +47,9 @@ pub struct InterestRateConfiguration {
 }
 impl HasChangelog for InterestRateConfiguration {
 	type if_unspecified = _InterestRateConfiguration::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 impl InterestRateConfiguration {
@@ -87,6 +90,9 @@ pub struct LendingPoolConfiguration {
 }
 impl HasChangelog for LendingPoolConfiguration {
 	type if_unspecified = _LendingPoolConfiguration::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[derive(

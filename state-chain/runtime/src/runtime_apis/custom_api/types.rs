@@ -39,11 +39,11 @@ use cf_primitives::{
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
-		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
-		IsHistoricalType, Migration, NewFieldWithDefault, OverrideMigrationWith,
+		vCurrent, Func, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion,
+		IdentityMigration, IsHistoricalType, Migration, NewFieldWithDefault, OverrideMigrationWith,
 	},
 	primitives::NewTypeWithDefault,
-	v20100, v20200, v20300, HasChangelog,
+	v20100, v20200, v20300, AllVersions, ChangelogDetails, HasChangelog,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -109,6 +109,9 @@ pub struct LendingPosition<Amount> {
 }
 impl<Amount: HasChangelog> HasChangelog for LendingPosition<Amount> {
 	type if_unspecified = _LendingPosition::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 pub type VanityName = Vec<u8>;
@@ -244,6 +247,9 @@ impl HasChangelog for ValidatorInfo {
 		_ValidatorInfo::field::bid::Added,
 		_ValidatorInfo::field::max_bid::Added,
 	)>;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[cf_proc_macros::generate_module]
@@ -262,6 +268,9 @@ pub struct OperatorInfo<Amount> {
 }
 impl<Amount: HasChangelog> HasChangelog for OperatorInfo<Amount> {
 	type if_unspecified = _OperatorInfo::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[cf_proc_macros::generate_module]
@@ -273,6 +282,9 @@ pub struct DelegationInfo<Amount> {
 
 impl<Amount: HasChangelog> HasChangelog for DelegationInfo<Amount> {
 	type if_unspecified = _DelegationInfo::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 impl<Amount> DelegationInfo<Amount> {
@@ -498,6 +510,9 @@ pub struct LiquidityProviderBoostPoolInfo {
 
 impl HasChangelog for LiquidityProviderBoostPoolInfo {
 	type if_unspecified = _LiquidityProviderBoostPoolInfo::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[cf_proc_macros::generate_module]
@@ -513,6 +528,9 @@ pub struct LiquidityProviderInfo {
 
 impl HasChangelog for LiquidityProviderInfo {
 	type if_unspecified = _LiquidityProviderInfo::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[derive_n_functor]
@@ -530,6 +548,9 @@ impl<BtcAddress: HasChangelog> HasChangelog for BrokerInfo<BtcAddress> {
 	type in_20100 = _BrokerInfo::see_field_changelogs_and_also<
 		_BrokerInfo::field::bound_fee_withdrawal_address::Added,
 	>;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
@@ -710,6 +731,9 @@ impl HasChangelog for VaultAddresses {
 	type in_20300 = _VaultAddresses::see_field_changelogs_and_also<
 		_VaultAddresses::field::bsc::CustomMigration<NewBscEncodedAddress>,
 	>;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 // Currently the migrations have to be specified in a verbose form,
 // because `EncodedAddress` doesn't have a default() implementation.
@@ -718,6 +742,7 @@ impl Migration<<EncodedAddress as HasVersion<v20300>>::HistoricalType, v20300>
 	for NewBscEncodedAddress
 {
 	type From = ();
+	type Close<P: Func<Self::Details, Input = ()>> = Self;
 	fn try_forwards(
 		_x: Self::From,
 		_details: &(),
@@ -736,6 +761,7 @@ impl Migration<<EncodedAddress as HasVersion<v20200>>::HistoricalType, v20200>
 	for NewTronEncodedAddress
 {
 	type From = ();
+	type Close<P: Func<Self::Details, Input = ()>> = Self;
 	fn try_forwards(
 		_x: Self::From,
 		_details: &(),
@@ -754,6 +780,7 @@ impl Migration<<EncodedAddress as HasVersion<v20100>>::HistoricalType, v20100>
 	for NewSolEncodedAddress
 {
 	type From = ();
+	type Close<P: Func<Self::Details, Input = ()>> = Self;
 	fn try_forwards(
 		_x: Self::From,
 		_details: &(),
@@ -785,6 +812,9 @@ pub struct TradingStrategyLimits {
 
 impl HasChangelog for TradingStrategyLimits {
 	type if_unspecified = _TradingStrategyLimits::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[cf_proc_macros::generate_module]
@@ -795,6 +825,9 @@ pub struct NetworkFeeDetails {
 }
 impl HasChangelog for NetworkFeeDetails {
 	type if_unspecified = _NetworkFeeDetails::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[cf_proc_macros::generate_module]
@@ -805,6 +838,9 @@ pub struct NetworkFees {
 }
 impl HasChangelog for NetworkFees {
 	type if_unspecified = _NetworkFees::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 mod serialize_vanity_name {
@@ -970,6 +1006,9 @@ where
 	type in_20200 = _RpcAccountInfoCommonItems::see_field_changelogs_and_also<
 		_RpcAccountInfoCommonItems::field::account_id::Added,
 	>;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 impl<A> RpcAccountInfoCommonItems<A> {
@@ -1010,6 +1049,9 @@ pub struct RuntimeApiAccountInfoWrapper {
 }
 impl HasChangelog for RuntimeApiAccountInfoWrapper {
 	type if_unspecified = _RuntimeApiAccountInfoWrapper::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[cf_proc_macros::generate_module]
@@ -1023,6 +1065,9 @@ pub enum RuntimeApiAccountInfo {
 }
 impl HasChangelog for RuntimeApiAccountInfo {
 	type if_unspecified = _RuntimeApiAccountInfo::see_variant_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[derive(
@@ -1041,6 +1086,9 @@ pub enum ShouldSweep {
 impl HasChangelog for ShouldSweep {
 	type if_unspecified = IdentityMigration;
 	type in_20200 = NewTypeWithDefault;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 impl HasGenericVariant for ShouldSweep {
 	type GenericType = Self;

@@ -29,7 +29,7 @@ use cf_primitives::{
 	chains::{Arbitrum, Assethub, Bitcoin, Bsc, Ethereum, Polkadot, Solana, Tron},
 	ChannelId, ForeignChain, NetworkEnvironment,
 };
-use cf_utilities::migrations::HasChangelog;
+use cf_utilities::migrations::{AllVersions, ChangelogDetails, HasChangelog};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -101,6 +101,9 @@ impl HasChangelog for ForeignChainAddress {
 	type in_20300 = _ForeignChainAddress::see_variant_changelogs_and_also<
 		_ForeignChainAddress::variant::Bsc::Added,
 	>;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 impl ForeignChainAddress {
@@ -165,6 +168,9 @@ impl HasChangelog for EncodedAddress {
 		_EncodedAddress::see_variant_changelogs_and_also<_EncodedAddress::variant::Tron::Added>;
 	type in_20300 =
 		_EncodedAddress::see_variant_changelogs_and_also<_EncodedAddress::variant::Bsc::Added>;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 pub trait AddressConverter: Sized {

@@ -19,7 +19,7 @@ use crate::{
 };
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
-use cf_utilities::migrations::{HasChangelog, OrdMigrations};
+use cf_utilities::migrations::{AllVersions, ChangelogDetails, HasChangelog, OrdMigrations};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
@@ -121,6 +121,9 @@ pub enum DelegationAcceptance {
 }
 impl HasChangelog for DelegationAcceptance {
 	type if_unspecified = _DelegationAcceptance::see_variant_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 /// Parameters for validator delegation preferences
@@ -146,6 +149,9 @@ pub struct OperatorSettings {
 }
 impl HasChangelog for OperatorSettings {
 	type if_unspecified = _OperatorSettings::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 /// A snapshot of delegations to an operator for a specific epoch, including all
@@ -177,6 +183,9 @@ impl<Account: OrdMigrations + Ord, Bid: HasChangelog> HasChangelog
 	for DelegationSnapshot<Account, Bid>
 {
 	type if_unspecified = _DelegationSnapshot::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 impl<Account: Ord + Clone + FullCodec + 'static, Bid: FullCodec + 'static>

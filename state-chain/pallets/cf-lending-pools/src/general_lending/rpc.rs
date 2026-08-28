@@ -18,7 +18,7 @@ use cf_primitives::{AssetAmount, AssetAndAmount, Beneficiary, SwapRequestId};
 use cf_traits::lending::LoanId;
 use cf_utilities::migrations::{
 	basics::{HasVersion, Migration, RemovedFieldWithDefault},
-	v20200, HasChangelog,
+	v20200, AllVersions, ChangelogDetails, HasChangelog,
 };
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
@@ -69,6 +69,9 @@ where
 	type in_20300 = _RpcLendingPool::see_field_changelogs_and_also<
 		_RpcLendingPool::field::owed_to_network::Removed<Amount>,
 	>;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 /// Total amount of funds (of some asset) owed by a lending pool to account `lp_id`.
