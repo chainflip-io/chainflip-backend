@@ -112,7 +112,11 @@ decl_runtime_apis!(
 		#[changed_in(7)]
 		fn cf_operator_info();
 		fn cf_operator_info(account_id: &AccountId32) -> OperatorInfo<FlipBalance>;
+		#[changed_in(21)]
+		fn cf_penalties() -> Vec<(before_version_21::Offence, RuntimeApiPenalty)>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
+		#[changed_in(21)]
+		fn cf_suspensions() -> Vec<(before_version_21::Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		#[changed_in(5)]

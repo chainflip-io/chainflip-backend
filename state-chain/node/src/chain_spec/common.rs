@@ -78,7 +78,38 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::ParticipateKeygenFailed, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::ParticipateSigningFailed, (REPUTATION_PENALTY_MEDIUM, MINUTES / 2)),
 	(Offence::MissedAuthorshipSlot, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::FailedToBroadcastTransaction, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
+	(
+		Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Ethereum),
+		(REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL),
+	),
+	(
+		Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Polkadot),
+		(REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL),
+	),
+	(
+		Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Bitcoin),
+		(REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL),
+	),
+	(
+		Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Arbitrum),
+		(REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL),
+	),
+	(
+		Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Solana),
+		(REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL),
+	),
+	(
+		Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Assethub),
+		(REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL),
+	),
+	(
+		Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Tron),
+		(REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL),
+	),
+	(
+		Offence::FailedToBroadcastTransaction(cf_chains::ForeignChain::Bsc),
+		(REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL),
+	),
 	(Offence::GrandpaEquivocation, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL * 5)),
 	(
 		Offence::FailedLivenessCheck(cf_chains::ForeignChain::Solana),

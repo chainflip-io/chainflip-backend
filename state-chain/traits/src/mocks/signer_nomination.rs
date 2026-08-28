@@ -14,7 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use frame_support::parameter_types;
+use cf_primitives::ForeignChain;
+use frame_support::{parameter_types, traits::Get};
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{BroadcastNomination, EpochIndex, EpochInfo, ThresholdSignerNomination};
@@ -31,7 +32,7 @@ impl BroadcastNomination for MockNominator {
 
 	/// Nominates the lowest-numbered nominee that is not excluded, or `None` if they are all
 	/// excluded.
-	fn nominate_broadcaster<S>(
+	fn nominate_broadcaster<C: Get<ForeignChain>, S>(
 		_seed: S,
 		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId> {

@@ -634,7 +634,10 @@ fn asset_map_serialization() {
 #[test]
 fn suspensions_serialization() {
 	let val = vec![
-		(Offence::FailedToBroadcastTransaction, vec![(1u32, ID_1), (2u32, ID_2)]),
+		(
+			Offence::FailedToBroadcastTransaction(ForeignChain::Ethereum),
+			vec![(1u32, ID_1), (2u32, ID_2)],
+		),
 		(Offence::ParticipateKeyHandoverFailed, vec![(3u32, ID_1)]),
 		(Offence::ParticipateSigningFailed, vec![(4u32, ID_2)]),
 	];

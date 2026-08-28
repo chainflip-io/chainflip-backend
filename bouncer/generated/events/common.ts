@@ -552,7 +552,10 @@ export const palletCfTokenholderGovernanceProposal = z.discriminatedUnion('__kin
 export const stateChainRuntimeChainflipOffencesOffence = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('ParticipateSigningFailed') }),
   z.object({ __kind: z.literal('ParticipateKeygenFailed') }),
-  z.object({ __kind: z.literal('FailedToBroadcastTransaction') }),
+  z.object({
+    __kind: z.literal('FailedToBroadcastTransaction'),
+    value: cfPrimitivesChainsForeignChain,
+  }),
   z.object({ __kind: z.literal('MissedAuthorshipSlot') }),
   z.object({ __kind: z.literal('MissedHeartbeat') }),
   z.object({ __kind: z.literal('GrandpaEquivocation') }),

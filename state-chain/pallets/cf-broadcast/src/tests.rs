@@ -461,7 +461,7 @@ fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 		witness_broadcast(SIG1);
 
 		MockOffenceReporter::assert_reported(
-			PalletOffence::FailedToBroadcastTransaction,
+			PalletOffence::FailedToBroadcastTransaction(ForeignChain::Ethereum),
 			failed_authorities,
 		);
 	});

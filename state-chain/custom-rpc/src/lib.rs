@@ -98,16 +98,16 @@ use state_chain_runtime::{
 		custom_api::CustomRuntimeApi,
 		elections_api::ElectoralRuntimeApi,
 		types::{
-			AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts, DelegationSnapshot,
-			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
-			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, IngressEvents,
-			LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-			NonceOrAccount, OpenedDepositChannels, OperatorInfo, RewardDistributionEstimate,
-			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo,
-			RuntimeApiPenalty, ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
-			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
-			VaultAddresses, VaultSwapDetails, WhitelistDestination, WhitelistUpdate,
-			WithdrawalRestrictions,
+			before_version_21, AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts,
+			DelegationSnapshot, DispatchErrorWithMessage, EncodedNonNativeCall,
+			EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators,
+			FeeTypes, IngressEvents, LendingPosition, LiquidityProviderBoostPoolInfo,
+			LiquidityProviderInfo, NetworkFees, NonceOrAccount, OpenedDepositChannels,
+			OperatorInfo, RewardDistributionEstimate, RpcAccountInfoCommonItems, RpcLendingConfig,
+			RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty, ShouldSweep,
+			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+			VaultSwapDetails, WhitelistDestination, WhitelistUpdate, WithdrawalRestrictions,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -1879,19 +1879,6 @@ where
 				})
 				.collect()
 		}],
-		cf_penalties() -> Vec<(Offence, RpcPenalty)> [map: |penalties| {
-			penalties
-				.into_iter()
-				.map(|(offence, RuntimeApiPenalty {reputation_points,suspension_duration_blocks})| (
-					offence,
-					RpcPenalty {
-						reputation_points,
-						suspension_duration_blocks,
-					})
-				)
-				.collect()
-		}],
-		cf_suspensions() -> RpcSuspensions,
 		cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash,
 		cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as Chain>::Transaction>,
 		cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>,
@@ -1902,6 +1889,47 @@ where
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
+	}
+
+	fn cf_penalties(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(Offence, RpcPenalty)>> {
+		self.rpc_backend
+			.with_versioned_runtime_api(at, |api, hash, api_version| {
+				if api_version < 21 {
+					#[expect(deprecated)]
+					api.cf_penalties_before_version_21(hash)
+						.map(before_version_21::into_current_offences)
+				} else {
+					api.cf_penalties(hash)
+				}
+			})
+			.map(|penalties| {
+				penalties
+					.into_iter()
+					.map(
+						|(
+							offence,
+							RuntimeApiPenalty { reputation_points, suspension_duration_blocks },
+						)| {
+							(offence, RpcPenalty { reputation_points, suspension_duration_blocks })
+						},
+					)
+					.collect()
+			})
+	}
+
+	fn cf_suspensions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcSuspensions> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+			if api_version < 21 {
+				#[expect(deprecated)]
+				api.cf_suspensions_before_version_21(hash)
+					.map(before_version_21::into_current_offences)
+			} else {
+				api.cf_suspensions(hash)
+			}
+		})
 	}
 
 	pass_through_and_flatten! {

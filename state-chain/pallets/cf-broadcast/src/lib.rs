@@ -29,7 +29,7 @@ use cf_chains::{
 	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
 	RequiresSignatureRefresh, RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, ForeignChain, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination,
 	BroadcastOutcomeHandler, Broadcaster, CfeBroadcastRequest, Chainflip, ChainflipWithTargetChain,
@@ -78,7 +78,7 @@ pub type AttemptCount = u32;
 	MaxEncodedLen,
 )]
 pub enum PalletOffence {
-	FailedToBroadcastTransaction,
+	FailedToBroadcastTransaction(ForeignChain),
 }
 
 #[derive(
@@ -883,7 +883,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
 		if !failed_broadcasters.is_empty() {
 			T::OffenceReporter::report_many(
-				PalletOffence::FailedToBroadcastTransaction,
+				PalletOffence::FailedToBroadcastTransaction(T::TargetChain::get()),
 				failed_broadcasters,
 			);
 		}
@@ -1019,10 +1019,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		// Pass in the current block number as part of the seed to achieve pseudo-randomness.
-		if let Some(nominated_signer) = T::BroadcastSignerNomination::nominate_broadcaster(
-			(broadcast_id, frame_system::Pallet::<T>::block_number()),
-			FailedBroadcasters::<T, I>::get(broadcast_id),
-		) {
+		if let Some(nominated_signer) =
+			T::BroadcastSignerNomination::nominate_broadcaster::<T::TargetChain, _>(
+				(broadcast_id, frame_system::Pallet::<T>::block_number()),
+				FailedBroadcasters::<T, I>::get(broadcast_id),
+			) {
 			// Overwrite the old entry with updated broadcast data.
 			broadcast_data.nominee = Some(nominated_signer.clone());
 			AwaitingBroadcast::<T, I>::insert(broadcast_id, broadcast_data.clone());
