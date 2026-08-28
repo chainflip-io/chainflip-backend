@@ -42,13 +42,14 @@ export async function initiateSwap(
   destAsset: Asset,
   functionCall: typeof testSwap | typeof testVaultSwap,
   ccmSwap: boolean = false,
+  rng: () => number = Math.random,
 ): Promise<SwapParams | VaultSwapParams> {
   let ccmSwapMetadata;
   if (ccmSwap) {
     ccmSwapMetadata =
       functionCall === testSwap
-        ? await newCcmMetadata(destAsset)
-        : await newVaultSwapCcmMetadata(sourceAsset, destAsset);
+        ? await newCcmMetadata(destAsset, undefined, undefined, rng)
+        : await newVaultSwapCcmMetadata(sourceAsset, destAsset, undefined, undefined, rng);
   }
 
   if (destAsset === 'Btc') {
@@ -57,7 +58,7 @@ export async function initiateSwap(
       cf,
       sourceAsset,
       destAsset,
-      btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
+      btcAddressTypesArray[Math.floor(rng() * btcAddressTypesArray.length)],
       ccmSwapMetadata,
       testContext.swapContext,
     );
@@ -249,12 +250,22 @@ export function testAllSwaps(timeoutPerSwap: number, thoroughlyTestedAssets: Ass
     ccmSwap: boolean = false,
   ) {
     allSwapsCount++;
+    const swapNumber = allSwapsCount;
     const swapType = functionCall === testSwap ? 'Swap' : 'VaultSwap';
     allSwaps.push({
-      name: `Swap ${allSwapsCount}: ${sourceAsset} to ${destAsset} (${ccmSwap ? 'CCM ' : ''}${swapType})`,
+      name: `Swap ${swapNumber}: ${sourceAsset} to ${destAsset} (${ccmSwap ? 'CCM ' : ''}${swapType})`,
       test: async (context) => {
         const cf = await newChainflipIO(context.logger, [] as []);
-        await initiateSwap(cf, context, sourceAsset, destAsset, functionCall, ccmSwap);
+        // Deterministic per-swap seed derived from the AllSwaps seed, so CCM generation is reproducible
+        await initiateSwap(
+          cf,
+          context,
+          sourceAsset,
+          destAsset,
+          functionCall,
+          ccmSwap,
+          seededRng(GENERATE_SWAPS_SEED + swapNumber),
+        );
       },
     });
   }
