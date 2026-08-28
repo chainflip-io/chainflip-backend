@@ -765,7 +765,7 @@ impl_runtime_apis! {
 		fn cf_free_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
 			AssetBalances::free_balances(&account_id)
 		}
-		fn cf_withdrawal_whitelist(account_id: AccountId) -> WithdrawalWhitelistInfo {
+		fn cf_withdrawal_restrictions(account_id: AccountId) -> WithdrawalRestrictions {
 			use pallet_cf_asset_balances::whitelist::{PendingChange, WhitelistChange};
 
 			fn to_destination(
@@ -784,7 +784,7 @@ impl_runtime_apis! {
 
 			let network_environment = Environment::network_environment();
 
-			let active = pallet_cf_asset_balances::WithdrawalWhitelists::<Runtime>::get(&account_id)
+			let whitelist = pallet_cf_asset_balances::WithdrawalWhitelists::<Runtime>::get(&account_id)
 				.map(|whitelist| ActiveWithdrawalWhitelist {
 					timelock_secs: whitelist.timelock(),
 					allowed: whitelist
@@ -826,7 +826,28 @@ impl_runtime_apis! {
 				}
 			}
 
-			WithdrawalWhitelistInfo { active, pending }
+			// Registered refund addresses and a bound broker withdrawal address are consulted by
+			// `ensure_withdrawal_allowed_to` independently of the whitelist, so a caller asking
+			// where an account may withdraw to needs them too.
+			let refund_addresses = pallet_cf_asset_balances::RefundAddresses::<Runtime>::iter_prefix(
+				&account_id,
+			)
+			.map(|(chain, address)| (chain, address.to_encoded_address(network_environment)))
+			.collect();
+
+			let bound_broker_withdrawal_address =
+				pallet_cf_asset_balances::BoundBrokerWithdrawalAddress::<Runtime>::get(&account_id)
+					.map(|address| {
+						ForeignChainAddress::Eth(address).to_encoded_address(network_environment)
+					});
+
+			WithdrawalRestrictions {
+				account_role: Self::cf_account_role(account_id),
+				whitelist,
+				pending,
+				refund_addresses,
+				bound_broker_withdrawal_address,
+			}
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
 			let free_balances = AssetBalances::free_balances(&account_id);

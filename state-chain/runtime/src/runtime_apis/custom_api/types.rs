@@ -611,14 +611,24 @@ pub struct ChainAccounts {
 	pub chain_accounts: Vec<(EncodedAddress, Asset)>,
 }
 
-/// An account's withdrawal whitelist: its active state plus the timelocked updates that have been
-/// submitted but not yet applied.
+/// Everything that constrains where an account may withdraw to, mirroring the checks in
+/// `pallet_cf_asset_balances::Pallet::ensure_withdrawal_allowed_to`. The whitelist alone doesn't
+/// answer "where can I withdraw to?": a refund address is allowed without being whitelisted, and a
+/// bound broker withdrawal address restricts Ethereum withdrawals whatever the whitelist says.
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub struct WithdrawalWhitelistInfo {
-	/// `None` if the account has no whitelist configured, in which case withdrawals to any
-	/// destination are allowed.
-	pub active: Option<ActiveWithdrawalWhitelist>,
+pub struct WithdrawalRestrictions {
+	/// Determines which of the restrictions below can apply: refund addresses are registered by
+	/// liquidity providers, a bound withdrawal address by brokers.
+	pub account_role: Option<AccountRole>,
+	/// `None` if the account has no whitelist configured, in which case the whitelist places no
+	/// restriction of its own.
+	pub whitelist: Option<ActiveWithdrawalWhitelist>,
+	/// Timelocked whitelist updates that have been submitted but not yet applied.
 	pub pending: Vec<PendingWhitelistUpdate>,
+	/// Registered refund addresses, per chain. These are allowed without being whitelisted.
+	pub refund_addresses: Vec<(ForeignChain, EncodedAddress)>,
+	/// If set, Ethereum withdrawals to any other destination are rejected, whitelisted or not.
+	pub bound_broker_withdrawal_address: Option<EncodedAddress>,
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]

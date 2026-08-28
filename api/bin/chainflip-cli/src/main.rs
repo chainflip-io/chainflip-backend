@@ -35,8 +35,8 @@ use chainflip_api::{
 };
 use clap::Parser;
 use custom_rpc::{
-	RpcActiveWithdrawalWhitelist, RpcPendingWhitelistUpdate, RpcWhitelistUpdate,
-	RpcWithdrawalWhitelist,
+	RpcActiveWithdrawalWhitelist, RpcPendingWhitelistUpdate, RpcRefundAddress, RpcWhitelistUpdate,
+	RpcWithdrawalRestrictions,
 };
 use futures::FutureExt;
 use serde::Serialize;
@@ -159,9 +159,6 @@ async fn run_cli() -> Result<()> {
 						let tx_hash = api.lp_api().update_whitelist(change).await?;
 						println!("Withdrawal whitelist updated. Tx hash: {tx_hash}");
 					},
-					LiquidityProviderSubcommands::GetWhitelist => {
-						get_withdrawal_whitelist(api.query_api()).await?;
-					},
 					LiquidityProviderSubcommands::RegisterAccount => {
 						api.lp_api().register_account().await?;
 						println!("Liquidity provider account successfully registered.");
@@ -230,6 +227,9 @@ async fn run_cli() -> Result<()> {
 				},
 				BindExecutorAddress { eth_address } => {
 					bind_executor_address(api.operator_api(), &eth_address).await?;
+				},
+				GetWithdrawalRestrictions => {
+					get_withdrawal_restrictions(api.query_api()).await?;
 				},
 				GetBoundRedeemAddress => {
 					get_bound_redeem_address(api.query_api()).await?;
@@ -450,13 +450,26 @@ fn describe_destination(destination: &WhitelistDestinationRpc) -> String {
 	}
 }
 
-async fn get_withdrawal_whitelist(api: QueryApi) -> Result<()> {
-	let RpcWithdrawalWhitelist { active, pending } =
-		api.get_withdrawal_whitelist(None, None).await?;
+async fn get_withdrawal_restrictions(api: QueryApi) -> Result<()> {
+	let RpcWithdrawalRestrictions {
+		account_role,
+		whitelist,
+		pending,
+		refund_addresses,
+		bound_broker_withdrawal_address,
+	} = api.get_withdrawal_restrictions(None, None).await?;
 
-	match active {
+	println!(
+		"Account role: {}",
+		match account_role {
+			Some(role) => format!("{role:?}"),
+			None => "unregistered".to_string(),
+		}
+	);
+
+	match whitelist {
 		Some(RpcActiveWithdrawalWhitelist { timelock_secs, allowed }) => {
-			println!("Withdrawal whitelist timelock: {timelock_secs} seconds.");
+			println!("\nWithdrawal whitelist timelock: {timelock_secs} seconds.");
 			if allowed.is_empty() {
 				println!("The whitelist is empty.");
 			} else {
@@ -466,11 +479,11 @@ async fn get_withdrawal_whitelist(api: QueryApi) -> Result<()> {
 				}
 			}
 		},
-		None => println!("No withdrawal whitelist is set for this account."),
+		None => println!("\nNo withdrawal whitelist is set, so it restricts nothing."),
 	}
 
 	if !pending.is_empty() {
-		println!("Timelocked updates that have not been applied yet:");
+		println!("Timelocked whitelist updates that have not been applied yet:");
 		for RpcPendingWhitelistUpdate { activates_at, update } in &pending {
 			let update = match update {
 				RpcWhitelistUpdate::Allow(destination) =>
@@ -484,13 +497,23 @@ async fn get_withdrawal_whitelist(api: QueryApi) -> Result<()> {
 		}
 	}
 
-	// The whitelist is not the only thing that decides a withdrawal, so don't let the output above
-	// be read as the full set of allowed destinations.
-	println!(
-		"\nNote: this reports the whitelist only. A registered refund address is also allowed \
-		 without being whitelisted, and a bound broker withdrawal address blocks Ethereum \
-		 withdrawals to anywhere else, whitelisted or not."
-	);
+	if refund_addresses.is_empty() {
+		println!("\nNo refund addresses are registered.");
+	} else {
+		println!("\nRefund addresses, allowed without being whitelisted:");
+		for RpcRefundAddress { chain, address } in &refund_addresses {
+			println!("  {chain} address {address}");
+		}
+	}
+
+	// This one is a restriction rather than an allowance, and it overrides the whitelist, so it
+	// would be misleading to list it alongside the allowed destinations above.
+	if let Some(address) = bound_broker_withdrawal_address {
+		println!(
+			"\nThis account is bound to Ethereum withdrawal address {address}. Ethereum \
+			 withdrawals to any other destination are rejected, whitelisted or not."
+		);
+	}
 
 	Ok(())
 }

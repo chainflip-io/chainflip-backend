@@ -131,9 +131,6 @@ pub enum LiquidityProviderSubcommands {
 	/// Add or remove a destination from the withdrawal whitelist.
 	#[clap(subcommand)]
 	UpdateWhitelist(WhitelistSubcommands),
-	/// Show the withdrawal whitelist: the destinations withdrawals are currently allowed to, plus
-	/// any timelocked updates that have not been applied yet.
-	GetWhitelist,
 	/// Register this account as a liquidity provider account.
 	RegisterAccount,
 	/// De-register this liquidity provider account.
@@ -233,6 +230,10 @@ pub enum CliCommand {
 		#[clap(help = "The Ethereum address you wish to bind your account to")]
 		eth_address: String,
 	},
+	#[clap(
+		about = "Shows what restricts where this account can withdraw to: the withdrawal whitelist, 		         any registered refund addresses, and a bound broker withdrawal address"
+	)]
+	GetWithdrawalRestrictions,
 	#[clap(about = "Shows the redeem address your account is bound to")]
 	GetBoundRedeemAddress,
 	#[clap(about = "Shows the executor address your account is bound to")]
@@ -479,13 +480,12 @@ mod tests {
 			other => panic!("unexpected command: {other:?}"),
 		}
 
-		// `lp get-whitelist`
-		let opts = CLICommandLineOptions::try_parse_from(["chainflip-cli", "lp", "get-whitelist"])
-			.unwrap();
-		assert!(matches!(
-			opts.cmd,
-			CliCommand::LiquidityProvider(LiquidityProviderSubcommands::GetWhitelist)
-		));
+		// `get-withdrawal-restrictions` is deliberately not under `lp`: brokers have withdrawal
+		// restrictions too.
+		let opts =
+			CLICommandLineOptions::try_parse_from(["chainflip-cli", "get-withdrawal-restrictions"])
+				.unwrap();
+		assert!(matches!(opts.cmd, CliCommand::GetWithdrawalRestrictions));
 
 		// `lp update-whitelist remove-account <ss58>`
 		let opts = CLICommandLineOptions::try_parse_from([

@@ -107,7 +107,7 @@ use state_chain_runtime::{
 			RuntimeApiPenalty, ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
 			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
 			VaultAddresses, VaultSwapDetails, WhitelistDestination, WhitelistUpdate,
-			WithdrawalWhitelistInfo,
+			WithdrawalRestrictions,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -838,13 +838,25 @@ pub use ingress_egress_tracker::{
 	RpcTransactionRef, RpcVaultDepositWitnessInfo, RpcWitnessedEventsResponse,
 };
 
-/// An account's withdrawal whitelist, with addresses rendered in their human-readable form.
+/// Everything restricting where an account may withdraw to, with addresses rendered in their
+/// human-readable form.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct RpcWithdrawalWhitelist {
-	/// `None` if the account has no whitelist configured, in which case withdrawals to any
-	/// destination are allowed.
-	pub active: Option<RpcActiveWithdrawalWhitelist>,
+pub struct RpcWithdrawalRestrictions {
+	pub account_role: Option<AccountRole>,
+	/// `None` if the account has no whitelist configured, in which case the whitelist places no
+	/// restriction of its own.
+	pub whitelist: Option<RpcActiveWithdrawalWhitelist>,
 	pub pending: Vec<RpcPendingWhitelistUpdate>,
+	/// Allowed without being whitelisted.
+	pub refund_addresses: Vec<RpcRefundAddress>,
+	/// If set, Ethereum withdrawals to any other destination are rejected, whitelisted or not.
+	pub bound_broker_withdrawal_address: Option<AddressString>,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct RpcRefundAddress {
+	pub chain: ForeignChain,
+	pub address: AddressString,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -895,10 +907,23 @@ impl From<WhitelistUpdate> for RpcWhitelistUpdate {
 	}
 }
 
-impl From<WithdrawalWhitelistInfo> for RpcWithdrawalWhitelist {
-	fn from(info: WithdrawalWhitelistInfo) -> Self {
-		RpcWithdrawalWhitelist {
-			active: info.active.map(|active| RpcActiveWithdrawalWhitelist {
+impl From<WithdrawalRestrictions> for RpcWithdrawalRestrictions {
+	fn from(info: WithdrawalRestrictions) -> Self {
+		RpcWithdrawalRestrictions {
+			account_role: info.account_role,
+			refund_addresses: info
+				.refund_addresses
+				.iter()
+				.map(|(chain, address)| RpcRefundAddress {
+					chain: *chain,
+					address: AddressString::from_encoded_address(address),
+				})
+				.collect(),
+			bound_broker_withdrawal_address: info
+				.bound_broker_withdrawal_address
+				.as_ref()
+				.map(AddressString::from_encoded_address),
+			whitelist: info.whitelist.map(|active| RpcActiveWithdrawalWhitelist {
 				timelock_secs: active.timelock_secs,
 				allowed: active.allowed.into_iter().map(destination_to_rpc).collect(),
 			}),
@@ -1003,12 +1028,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<any::AssetMap<U256>>;
-	#[method(name = "withdrawal_whitelist")]
-	fn cf_withdrawal_whitelist(
+	#[method(name = "withdrawal_restrictions")]
+	fn cf_withdrawal_restrictions(
 		&self,
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcWithdrawalWhitelist>;
+	) -> RpcResult<RpcWithdrawalRestrictions>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -1970,22 +1995,22 @@ where
 		})
 	}
 
-	fn cf_withdrawal_whitelist(
+	fn cf_withdrawal_restrictions(
 		&self,
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcWithdrawalWhitelist> {
+	) -> RpcResult<RpcWithdrawalRestrictions> {
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
-			// The withdrawal whitelist itself only exists from version 21 onwards, so there is
-			// nothing sensible to return for older blocks.
+			// These restrictions only exist from version 21 onwards, so there is nothing sensible
+			// to return for older blocks.
 			if version < 21 {
 				Err(CfApiError::ErrorObject(call_error(
-					"cf_withdrawal_whitelist is not supported at this block",
+					"cf_withdrawal_restrictions is not supported at this block",
 					CfErrorCode::UnsupportedRuntimeApiVersion,
 				)))
 			} else {
-				api.cf_withdrawal_whitelist(hash, account_id)
-					.map(RpcWithdrawalWhitelist::from)
+				api.cf_withdrawal_restrictions(hash, account_id)
+					.map(RpcWithdrawalRestrictions::from)
 					.map_err(CfApiError::from)
 			}
 		})

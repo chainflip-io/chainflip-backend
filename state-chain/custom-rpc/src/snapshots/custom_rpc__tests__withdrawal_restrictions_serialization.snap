@@ -3,7 +3,8 @@ source: state-chain/custom-rpc/src/tests.rs
 expression: val
 ---
 {
-  "active": {
+  "account_role": "LiquidityProvider",
+  "whitelist": {
     "timelock_secs": 86400,
     "allowed": [
       {
@@ -43,5 +44,16 @@ expression: val
         "Timelock": 0
       }
     }
-  ]
+  ],
+  "refund_addresses": [
+    {
+      "chain": "Ethereum",
+      "address": "0xabababababababababababababababababababab"
+    },
+    {
+      "chain": "Bitcoin",
+      "address": "bc1qrefund"
+    }
+  ],
+  "bound_broker_withdrawal_address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 }

@@ -20,7 +20,7 @@ use cf_primitives::{AssetAmount, EpochIndex, FlipBalance};
 use cf_rpc_types::SwapChannelInfo;
 use cf_utilities::task_scope;
 use codec::Decode;
-use custom_rpc::{CustomApiClient, RpcWithdrawalWhitelist};
+use custom_rpc::{CustomApiClient, RpcWithdrawalRestrictions};
 use engine_sc_client::{chain_api::ChainApi, storage_api::StorageApi};
 use frame_support::sp_runtime::DigestItem;
 use jsonrpsee::core::ClientError;
@@ -181,11 +181,11 @@ impl QueryApi {
 			.await?)
 	}
 
-	pub async fn get_withdrawal_whitelist(
+	pub async fn get_withdrawal_restrictions(
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
 		account_id: Option<state_chain_runtime::AccountId>,
-	) -> Result<RpcWithdrawalWhitelist, anyhow::Error> {
+	) -> Result<RpcWithdrawalRestrictions, anyhow::Error> {
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
@@ -194,7 +194,7 @@ impl QueryApi {
 			.state_chain_client
 			.base_rpc_client
 			.raw_rpc_client
-			.cf_withdrawal_whitelist(account_id, Some(block_hash))
+			.cf_withdrawal_restrictions(account_id, Some(block_hash))
 			.await?)
 	}
 

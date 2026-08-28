@@ -42,6 +42,7 @@ use pallet_cf_swapping::FeeRateAndMinimum;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use state_chain_runtime::runtime_apis::types::{
 	ActiveWithdrawalWhitelist, PendingWhitelistUpdate, WhitelistDestination, WhitelistUpdate,
+	WithdrawalRestrictions,
 };
 
 use cf_chains::{
@@ -452,9 +453,10 @@ fn test_environment_serialization() {
 }
 
 #[test]
-fn test_withdrawal_whitelist_serialization() {
-	let val = RpcWithdrawalWhitelist::from(WithdrawalWhitelistInfo {
-		active: Some(ActiveWithdrawalWhitelist {
+fn test_withdrawal_restrictions_serialization() {
+	let val = RpcWithdrawalRestrictions::from(WithdrawalRestrictions {
+		account_role: Some(AccountRole::LiquidityProvider),
+		whitelist: Some(ActiveWithdrawalWhitelist {
 			timelock_secs: 86_400,
 			allowed: vec![
 				WhitelistDestination::ExternalAddress(EncodedAddress::Eth([0xcf; 20])),
@@ -477,6 +479,11 @@ fn test_withdrawal_whitelist_serialization() {
 				update: WhitelistUpdate::Timelock(0),
 			},
 		],
+		refund_addresses: vec![
+			(ForeignChain::Ethereum, EncodedAddress::Eth([0xab; 20])),
+			(ForeignChain::Bitcoin, EncodedAddress::Btc(b"bc1qrefund".to_vec())),
+		],
+		bound_broker_withdrawal_address: Some(EncodedAddress::Eth([0xbb; 20])),
 	});
 	insta::assert_json_snapshot!(val);
 }
