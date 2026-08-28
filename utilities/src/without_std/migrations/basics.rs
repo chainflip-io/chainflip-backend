@@ -32,37 +32,99 @@ pub trait Migration<To, V: Version> {
 	type ForwardsError = Never;
 	type BackwardsError = Never;
 	type Details = ();
+	type Close<P: Func<Self::Details, Input = ()>>: Migration<
+		To,
+		V,
+		From = Self::From,
+		ForwardsError = Self::ForwardsError,
+		BackwardsError = Self::BackwardsError,
+		Details: Default,
+	>;
 	fn try_forwards(_x: Self::From, _details: &Self::Details) -> Result<To, Self::ForwardsError>;
 	fn try_backwards(_x: To, _details: &Self::Details) -> Result<Self::From, Self::BackwardsError>;
 }
 
+// -------- working with functions on the type level --------
+
+pub trait Func<Output> {
+	type Input;
+	fn apply(a: &Self::Input) -> Output;
+}
+pub struct Fst<X, Y>(X, Y);
+impl<A, B, P: Func<(A, B)>> Func<A> for Fst<P, (A, B)> {
+	type Input = P::Input;
+
+	fn apply(x: &Self::Input) -> A {
+		P::apply(x).0
+	}
+}
+
+pub struct Snd<X, Y>(X, Y);
+impl<A, B, P: Func<(A, B)>> Func<B> for Snd<P, (A, B)> {
+	type Input = P::Input;
+
+	fn apply(x: &Self::Input) -> B {
+		P::apply(x).1
+	}
+}
+
+pub struct Seq<F, G>(F, G);
+impl<A, F: Func<A>, G: Func<F::Input>> Func<A> for Seq<F, G> {
+	type Input = G::Input;
+
+	fn apply(a: &Self::Input) -> A {
+		F::apply(&G::apply(a))
+	}
+}
+
+pub trait ClosedMigration<To, V: Version> = Migration<To, V, Details: Default>;
+
+// pub struct MapMigration<P: Func<M::Details>, M: Migration<To, V>, To, V: Version>(To, V, M, P);
+pub struct MapMigration<F, M>(F, M);
+
+impl<To, V: Version, M: Migration<To, V>, P: Func<M::Details>> Migration<To, V>
+	for MapMigration<P, M>
+{
+	type From = M::From;
+	type ForwardsError = M::ForwardsError;
+	type BackwardsError = M::BackwardsError;
+	type Details = P::Input;
+	type Close<P2: Func<P::Input, Input = ()>> = MapMigration<Seq<P, P2>, M>;
+
+	fn try_forwards(x: Self::From, details: &Self::Details) -> Result<To, Self::ForwardsError> {
+		M::try_forwards(x, &P::apply(details))
+	}
+
+	fn try_backwards(x: To, details: &Self::Details) -> Result<Self::From, Self::BackwardsError> {
+		M::try_backwards(x, &P::apply(details))
+	}
+}
+
 pub trait HasVersion<V: Version>: Sized {
 	type HistoricalType;
-	type HistoricalMigration: Migration<Self::HistoricalType, V>;
-	type MigrationToCurrent: Migration<Self, vCurrent, From = Self::HistoricalType>;
-	fn details_for_migration_to_current(
-	) -> <Self::MigrationToCurrent as Migration<Self, vCurrent>>::Details;
+	type HistoricalMigration: ClosedMigration<Self::HistoricalType, V>;
+	type MigrationToCurrent: ClosedMigration<Self, vCurrent, From = Self::HistoricalType>;
 }
 
 pub fn try_migrate_from_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X::HistoricalType,
 ) -> Result<X, <X::MigrationToCurrent as Migration<X, vCurrent>>::ForwardsError> {
-	X::MigrationToCurrent::try_forwards(x, &X::details_for_migration_to_current())
+	X::MigrationToCurrent::try_forwards(x, &Default::default())
 }
 
 pub fn try_migrate_to_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X,
 ) -> Result<X::HistoricalType, <X::MigrationToCurrent as Migration<X, vCurrent>>::BackwardsError> {
-	X::MigrationToCurrent::try_backwards(x, &X::details_for_migration_to_current())
+	X::MigrationToCurrent::try_backwards(x, &Default::default())
 }
 
 pub fn migrate_from_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X::HistoricalType) -> X
 where
 	<X::MigrationToCurrent as Migration<X, vCurrent>>::ForwardsError: IsEmptyType,
 {
-	match X::MigrationToCurrent::try_forwards(x, &X::details_for_migration_to_current()) {
+	match X::MigrationToCurrent::try_forwards(x, &Default::default()) {
 		Ok(x) => x,
 		#[allow(unreachable_code)]
 		Err(empty) => match empty.as_never() {},
@@ -73,7 +135,7 @@ pub fn migrate_to_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X) -> 
 where
 	<X::MigrationToCurrent as Migration<X, vCurrent>>::BackwardsError: IsEmptyType,
 {
-	match X::MigrationToCurrent::try_backwards(x, &X::details_for_migration_to_current()) {
+	match X::MigrationToCurrent::try_backwards(x, &Default::default()) {
 		Ok(x) => x,
 		#[allow(unreachable_code)]
 		Err(empty) => match empty.as_never() {},
@@ -84,6 +146,7 @@ pub struct IdentityMigration;
 
 impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 	type From = X;
+	type Close<P: Func<Self::Details, Input = ()>> = Self;
 
 	fn try_forwards(x: Self::From, _details: &()) -> Result<X, Self::ForwardsError> {
 		Ok(x)
@@ -117,6 +180,8 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 	type ForwardsError = ComposedMigrationFailed<A::ForwardsError, B::ForwardsError>;
 	type BackwardsError = ComposedMigrationFailed<A::BackwardsError, B::BackwardsError>;
 	type Details = (A::Details, B::Details);
+	type Close<P: Func<Self::Details, Input = ()>> =
+		(A::Close<Fst<P, Self::Details>>, W, B::Close<Snd<P, Self::Details>>);
 
 	fn try_forwards(
 		x: Self::From,
@@ -140,6 +205,7 @@ impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Mi
 pub struct NewFieldWithDefault;
 impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 	type From = ();
+	type Close<P: Func<Self::Details, Input = ()>> = Self;
 
 	fn try_forwards(_x: Self::From, _details: &()) -> Result<T, Self::ForwardsError> {
 		Ok(Default::default())
@@ -160,6 +226,7 @@ pub struct NewVariantBackwardsError;
 impl<T, V: Version> Migration<T, V> for NewVariant {
 	type From = Never;
 	type BackwardsError = NewVariantBackwardsError;
+	type Close<P: Func<Self::Details, Input = ()>> = Self;
 
 	fn try_forwards(x: Self::From, _details: &()) -> Result<T, Self::ForwardsError> {
 		match x {}
@@ -178,6 +245,7 @@ where
 	<T::HistoricalMigration as Migration<T::HistoricalType, V>>::From: Default,
 {
 	type From = <T::HistoricalMigration as Migration<T::HistoricalType, V>>::From;
+	type Close<P: Func<Self::Details, Input = ()>> = Self;
 
 	fn try_forwards(_x: Self::From, _details: &()) -> Result<(), Self::ForwardsError> {
 		Ok(())

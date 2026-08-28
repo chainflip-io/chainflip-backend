@@ -133,6 +133,14 @@ impl HasChangelog for Asset {
 		_Asset::variant::Cbbtc::Added,
 	)>;
 	fn details() -> ChangelogDetails<Self> {
-		AllVersions::default()
+		AllVersions {
+			in_11000: todo!(),
+			in_11100: todo!(),
+			in_11200: todo!(),
+			in_20000: todo!(),
+			in_20100: todo!(),
+			in_20200: todo!(),
+			in_20300: Default::default(),
+		}
 	}
 }

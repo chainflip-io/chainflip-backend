@@ -70,7 +70,7 @@ macro_rules! generate_module {
                 mod $( $( ($T $(: $TBound)?) )+ )? {
                     mod (Ty: Types) {
 
-                        #[derive(Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen, Default)]
+                        #[derive(Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen)]
                         #[derive_where::derive_where(Debug; $(Ty::$field: sp_std::fmt::Debug),*)]
                         #[derive_where(Default; $(Ty::$field: Default),*)]
                         #[derive_where(Copy; $(Ty::$field: Copy),*)]
@@ -126,6 +126,7 @@ macro_rules! generate_module {
                         )>;
                         type ForwardsError = cf_utilities::never::Never;
                         type BackwardsError = cf_utilities::never::Never;
+                        type Close<P: Func<(), Input = ()>> = Self;
 
                         fn try_forwards(x: Self::From, _details: &()) -> Result<$struct $(< $($T,)+ >)?, Self::ForwardsError> {
                             Ok(
@@ -245,6 +246,7 @@ macro_rules! generate_module {
                                     type ForwardsError = StructForwardsError;
                                     type BackwardsError = StructBackwardsError;
 									type Details = FieldCustomMigrationDetails;
+	                                type Close<P: Func<Self::Details, Input = ()>> = MapMigration<P, Self>;
 
                                     type From = StructWithT<TyFrom>;
 
@@ -389,8 +391,9 @@ macro_rules! generate_module {
                             )*
                         }
 
-                        #[derive(Copy, Clone, PartialEq, Eq, Hash, Default)]
+                        #[derive(Copy, Clone, PartialEq, Eq, Hash)]
                         #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
+                        #[derive_where(Default; $(Ty::$variant: Default),*)]
                         #[derive(cf_proc_macros::HasTypeIntrospection)]
                         pub struct Struct {
                             $(
@@ -696,6 +699,7 @@ macro_rules! generate_module {
                                     type ForwardsError = EnumForwardsError;
                                     type BackwardsError = EnumBackwardsError;
 									type Details = VariantCustomMigrationDetails;
+	                                type Close<P: Func<Self::Details, Input = ()>> = MapMigration<P, Self>;
 
                                     fn try_forwards(x: Self::From, details: &Self::Details) -> Result<EnumWithT<To>, Self::ForwardsError> {
                                         Ok(match x {
@@ -854,6 +858,7 @@ macro_rules! generate_module {
                         )>;
                         type ForwardsError = cf_utilities::never::Never;
                         type BackwardsError = cf_utilities::never::Never;
+                        type Close<P: Func<(), Input = ()>> = Self;
 
                         fn try_forwards(x: Self::From, _details: &()) -> Result<RealEnum, Self::ForwardsError> {
                             Ok(

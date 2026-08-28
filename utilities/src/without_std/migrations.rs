@@ -21,7 +21,7 @@ pub mod bounded_vec;
 pub mod primitives;
 
 use self::basics::*;
-use crate::migrations::basics::Version;
+use crate::migrations::basics::{Func, Version};
 use CanonicalPatchVersion::*;
 
 macro_rules! define_all_runtime_versions {
@@ -148,14 +148,32 @@ macro_rules! define_all_runtime_versions {
         $(
             impl<X: HasChangelog> HasVersion<$version> for X {
                 type HistoricalType = migration_helpers::$version::TypeAtThisVersion<X>;
-                type HistoricalMigration = X::$Migration;
-                type MigrationToCurrent = migration_helpers::$version::MigrationFromThisToCurrent<X>;
+                type HistoricalMigration =
+                    <
+                        X::$Migration
+                        as
+                        Migration<migration_helpers::$version::TypeAtThisVersion<X>, $version>
+                    >::Close<DetailsToHistorical<X, $version>>;
 
-	            fn details_for_migration_to_current() -> <Self::MigrationToCurrent as Migration<Self, vCurrent>>::Details {
-                    migration_helpers::$version::details_for_migration_to_current::<X>()
-                }
+                type MigrationToCurrent =
+                    <
+                        migration_helpers::$version::MigrationFromThisToCurrent<X>
+                        as
+                        Migration<X, vCurrent>
+                    >::Close<DetailsToCurrent<X, $version>>;
+
+                // MapMigration<
+                //     migration_helpers::$version::MigrationFromThisToCurrent<X>
+                // >;
+
+	            // fn details_for_migration_to_current() -> <Self::MigrationToCurrent as Migration<Self, vCurrent>>::Details {
+                //     migration_helpers::$version::details_for_migration_to_current::<X>()
+                // }
             }
         )*
+
+        pub struct DetailsToCurrent<X: HasChangelog, V: Version>(X, V);
+        pub struct DetailsToHistorical<X: HasChangelog, V: Version>(X, V);
 
         pub trait VersionTypes {
             $(
@@ -173,7 +191,7 @@ macro_rules! define_all_runtime_versions {
 
         pub struct AllVersions<T: VersionTypes> {
             $(
-                $Migration: T::$Migration,
+                pub $Migration: T::$Migration,
             )*
         }
 
@@ -226,10 +244,18 @@ macro_rules! generate_migration_helpers {
         #[allow(nonstandard_style)]
         pub mod $old {
             use super::{HasChangelog, Migration, vCurrent};
+            use $crate::migrations::{DetailsToCurrent, DetailsToHistorical, Func};
 
             pub type TypeAtThisVersion<M: HasChangelog> = <M::$NewMigration as Migration<super::$new::TypeAtThisVersion<M>, super::super::$new>>::From;
 
             pub type MigrationFromThisToCurrent<M: HasChangelog> = (M::$NewMigration, super::super::$new, super::$new::MigrationFromThisToCurrent<M>);
+
+            pub type DetailsForMigrationToThis<M: HasChangelog> =
+                <
+                    M::$OldMigration
+                    as
+                    Migration<TypeAtThisVersion<M>, super::super::$old>
+                >::Details;
 
             pub type DetailsForMigrationFromThisToCurrent<M: HasChangelog> = (
                 <
@@ -250,6 +276,22 @@ macro_rules! generate_migration_helpers {
                     super::$new::details_for_migration_to_current::<M>(),
                 )
             }
+
+            impl<M: HasChangelog> Func<DetailsForMigrationToThis<M>> for DetailsToHistorical<M, super::super::$old> {
+                type Input = ();
+
+                fn apply(a: &Self::Input) -> DetailsForMigrationToThis<M> {
+                    M::details().$OldMigration
+                }
+            }
+
+            impl<M: HasChangelog> Func<DetailsForMigrationFromThisToCurrent<M>> for DetailsToCurrent<M, super::super::$old> {
+                type Input = ();
+
+                fn apply(a: &Self::Input) -> DetailsForMigrationFromThisToCurrent<M> {
+                    details_for_migration_to_current::<M>()
+                }
+            }
         }
 
         generate_migration_helpers!{ $new => $NewMigration, $($rest)*}
@@ -261,15 +303,34 @@ macro_rules! generate_migration_helpers {
         #[allow(nonstandard_style)]
         pub mod $new {
             use super::{HasChangelog, Migration, vCurrent};
+            use $crate::migrations::{DetailsToCurrent, Func, DetailsToHistorical};
 
             pub type TypeAtThisVersion<M: HasChangelog> = <M::MigrationFromGeneric as Migration<M, vCurrent>>::From;
 
             pub type MigrationFromThisToCurrent<M: HasChangelog> = M::MigrationFromGeneric;
 
+            pub type DetailsForMigrationToThis<M: HasChangelog> = <M::$NewMigration as Migration<TypeAtThisVersion<M>, super::super::$new>>::Details;
+
             pub type DetailsForMigrationFromThisToCurrent<M: HasChangelog> = <M::MigrationFromGeneric as Migration<M, vCurrent>>::Details;
 
             pub fn details_for_migration_to_current<M: HasChangelog>() -> DetailsForMigrationFromThisToCurrent<M> {
                 ()
+            }
+
+            impl<M: HasChangelog> Func<DetailsForMigrationToThis<M>> for DetailsToHistorical<M, super::super::$new> {
+                type Input = ();
+
+                fn apply(a: &Self::Input) -> DetailsForMigrationToThis<M> {
+                    M::details().$NewMigration
+                }
+            }
+
+            impl<M: HasChangelog> Func<DetailsForMigrationFromThisToCurrent<M>> for DetailsToCurrent<M, super::super::$new> {
+                type Input = ();
+
+                fn apply(a: &Self::Input) -> DetailsForMigrationFromThisToCurrent<M> {
+                    ()
+                }
             }
         }
     }
