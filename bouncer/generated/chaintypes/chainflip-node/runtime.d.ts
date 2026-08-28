@@ -79,7 +79,7 @@ import type {
   StateChainRuntimeRuntimeApisCustomApiTypesBrokerInfo,
   CfPrimitivesAccountRole,
   CfPrimitivesChainsAssetsAnyAssetMap,
-  StateChainRuntimeRuntimeApisCustomApiTypesWithdrawalWhitelistInfo,
+  StateChainRuntimeRuntimeApisCustomApiTypesWithdrawalRestrictions,
   CfPrimitivesNetworkEnvironment,
   CfChainsEvmTransaction,
   CfChainsTronTronTransaction,
@@ -1427,13 +1427,13 @@ export interface RuntimeApis extends GenericRuntimeApis {
 
     /**
      *
-     * @callname: CustomRuntimeApi_cf_withdrawal_whitelist
+     * @callname: CustomRuntimeApi_cf_withdrawal_restrictions
      * @param {AccountId32Like} account_id
      **/
-    cfWithdrawalWhitelist: GenericRuntimeApiMethod<
+    cfWithdrawalRestrictions: GenericRuntimeApiMethod<
       (
         accountId: AccountId32Like,
-      ) => Promise<StateChainRuntimeRuntimeApisCustomApiTypesWithdrawalWhitelistInfo>
+      ) => Promise<StateChainRuntimeRuntimeApisCustomApiTypesWithdrawalRestrictions>
     >;
 
     /**

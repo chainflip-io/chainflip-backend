@@ -22449,9 +22449,12 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesBrokerInfo = {
   boundFeeWithdrawalAddress?: H160 | undefined;
 };
 
-export type StateChainRuntimeRuntimeApisCustomApiTypesWithdrawalWhitelistInfo = {
-  active?: StateChainRuntimeRuntimeApisCustomApiTypesActiveWithdrawalWhitelist | undefined;
+export type StateChainRuntimeRuntimeApisCustomApiTypesWithdrawalRestrictions = {
+  accountRole?: CfPrimitivesAccountRole | undefined;
+  whitelist?: StateChainRuntimeRuntimeApisCustomApiTypesActiveWithdrawalWhitelist | undefined;
   pending: Array<StateChainRuntimeRuntimeApisCustomApiTypesPendingWhitelistUpdate>;
+  refundAddresses: Array<[CfPrimitivesChainsForeignChain, CfChainsAddressEncodedAddress]>;
+  boundBrokerWithdrawalAddress?: CfChainsAddressEncodedAddress | undefined;
 };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesActiveWithdrawalWhitelist = {

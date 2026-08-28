@@ -20,8 +20,10 @@ use crate::settings::{
 };
 use anyhow::{Context, Result};
 use api::{
-	lp::LpApi, primitives::EpochIndex, queries::QueryApi, AccountId32, GovernanceApi, KeyPair,
-	OperatorApi, StateChainApi, ValidatorApi,
+	lp::LpApi,
+	primitives::{AccountRole, EpochIndex},
+	queries::QueryApi,
+	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
 use cf_chains::evm::Address as EthereumAddress;
@@ -463,11 +465,16 @@ async fn get_withdrawal_restrictions(api: QueryApi) -> Result<()> {
 		bound_broker_withdrawal_address,
 	} = api.get_withdrawal_restrictions(None, None).await?;
 
+	// Matched exhaustively on purpose: a new role should force a decision about its label here
+	// rather than silently printing something unhelpful.
 	println!(
 		"Account role: {}",
 		match account_role {
-			Some(role) => format!("{role:?}"),
-			None => "unregistered".to_string(),
+			Some(AccountRole::LiquidityProvider) => "liquidity provider",
+			Some(AccountRole::Broker) => "broker",
+			Some(AccountRole::Validator) => "validator",
+			Some(AccountRole::Operator) => "operator",
+			Some(AccountRole::Unregistered) | None => "unregistered",
 		}
 	);
 
