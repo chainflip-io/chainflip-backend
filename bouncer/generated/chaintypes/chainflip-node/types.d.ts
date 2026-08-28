@@ -2029,7 +2029,7 @@ export type PalletCfReputationCallLike =
 export type StateChainRuntimeChainflipOffencesOffence =
   | { type: 'ParticipateSigningFailed' }
   | { type: 'ParticipateKeygenFailed' }
-  | { type: 'FailedToBroadcastTransaction' }
+  | { type: 'FailedToBroadcastTransaction'; value: CfPrimitivesChainsForeignChain }
   | { type: 'MissedAuthorshipSlot' }
   | { type: 'MissedHeartbeat' }
   | { type: 'GrandpaEquivocation' }

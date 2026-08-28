@@ -46,7 +46,7 @@ pub enum Offence {
 	/// There was a failure in participation during a key generation ceremony.
 	ParticipateKeygenFailed,
 	/// An authority did not broadcast a transaction.
-	FailedToBroadcastTransaction,
+	FailedToBroadcastTransaction(ForeignChain),
 	/// An authority missed their authorship slot.
 	MissedAuthorshipSlot,
 	/// A node has missed a heartbeat submission.
@@ -74,8 +74,8 @@ impl OffenceList<Runtime> for KeygenExclusionOffences {
 impl From<pallet_cf_broadcast::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_broadcast::PalletOffence) -> Self {
 		match offences {
-			pallet_cf_broadcast::PalletOffence::FailedToBroadcastTransaction =>
-				Self::FailedToBroadcastTransaction,
+			pallet_cf_broadcast::PalletOffence::FailedToBroadcastTransaction(chain) =>
+				Self::FailedToBroadcastTransaction(chain),
 		}
 	}
 }

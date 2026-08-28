@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::chainflip::Offence;
+use crate::{chainflip::Offence, runtime_apis::custom_api::types::before_version_21};
 use cf_chains::{
 	dot::PolkadotAccountId,
 	sol::{api::DurableNonceAndAccount, SolAddress, SolSignature},
@@ -158,7 +158,7 @@ pub mod before_monitoring_v3 {
 		pub fee_imbalance: FeeImbalance<AssetAmount>,
 		pub authorities: super::AuthoritiesInfo,
 		pub build_version: super::LastRuntimeUpgradeInfo,
-		pub suspended_validators: Vec<(Offence, u32)>,
+		pub suspended_validators: Vec<(before_version_21::Offence, u32)>,
 		pub pending_swaps: u32,
 		pub dot_aggkey: PolkadotAccountId,
 		pub flip_supply: super::FlipSupply,
@@ -181,7 +181,11 @@ pub mod before_monitoring_v3 {
 				fee_imbalance: new.fee_imbalance.into(),
 				authorities: new.authorities,
 				build_version: new.build_version,
-				suspended_validators: new.suspended_validators,
+				suspended_validators: new
+					.suspended_validators
+					.into_iter()
+					.map(|(offence, count)| (offence.into(), count))
+					.collect(),
 				pending_swaps: new.pending_swaps,
 				dot_aggkey: new.dot_aggkey,
 				flip_supply: new.flip_supply,
@@ -189,6 +193,190 @@ pub mod before_monitoring_v3 {
 				sol_onchain_key: new.sol_onchain_key,
 				sol_nonces: new.sol_nonces,
 				activating_key_broadcast_ids: new.activating_key_broadcast_ids.into(),
+			}
+		}
+	}
+
+	impl From<ExternalChainsBlockHeight> for super::ExternalChainsBlockHeight {
+		fn from(old: ExternalChainsBlockHeight) -> Self {
+			Self {
+				bitcoin: old.bitcoin,
+				ethereum: old.ethereum,
+				polkadot: old.polkadot,
+				solana: old.solana,
+				arbitrum: old.arbitrum,
+				assethub: old.assethub,
+				tron: 0,
+				bsc: 0,
+			}
+		}
+	}
+
+	impl From<PendingBroadcasts> for super::PendingBroadcasts {
+		fn from(old: PendingBroadcasts) -> Self {
+			Self {
+				ethereum: old.ethereum,
+				bitcoin: old.bitcoin,
+				polkadot: old.polkadot,
+				arbitrum: old.arbitrum,
+				solana: old.solana,
+				assethub: old.assethub,
+				tron: 0,
+				bsc: 0,
+			}
+		}
+	}
+
+	impl From<OpenDepositChannels> for super::OpenDepositChannels {
+		fn from(old: OpenDepositChannels) -> Self {
+			Self {
+				ethereum: old.ethereum,
+				bitcoin: old.bitcoin,
+				polkadot: old.polkadot,
+				arbitrum: old.arbitrum,
+				solana: old.solana,
+				assethub: old.assethub,
+				tron: 0,
+				bsc: 0,
+			}
+		}
+	}
+
+	impl<A: Default> From<FeeImbalance<A>> for super::FeeImbalance<A> {
+		fn from(old: FeeImbalance<A>) -> Self {
+			Self {
+				ethereum: old.ethereum,
+				polkadot: old.polkadot,
+				arbitrum: old.arbitrum,
+				bitcoin: old.bitcoin,
+				solana: old.solana,
+				assethub: old.assethub,
+				tron: VaultImbalance::Surplus(Default::default()),
+				bsc: VaultImbalance::Surplus(Default::default()),
+			}
+		}
+	}
+
+	impl From<ActivateKeysBroadcastIds> for super::ActivateKeysBroadcastIds {
+		fn from(old: ActivateKeysBroadcastIds) -> Self {
+			Self {
+				ethereum: old.ethereum,
+				bitcoin: old.bitcoin,
+				polkadot: old.polkadot,
+				arbitrum: old.arbitrum,
+				solana: old.solana,
+				assethub: old.assethub,
+				tron: None,
+				bsc: None,
+			}
+		}
+	}
+
+	impl From<MonitoringDataV2> for super::MonitoringDataV2 {
+		fn from(old: MonitoringDataV2) -> Self {
+			Self {
+				external_chains_height: old.external_chains_height.into(),
+				btc_utxos: old.btc_utxos,
+				epoch: old.epoch,
+				pending_redemptions: old.pending_redemptions,
+				pending_broadcasts: old.pending_broadcasts.into(),
+				pending_tss: old.pending_tss,
+				open_deposit_channels: old.open_deposit_channels.into(),
+				fee_imbalance: old.fee_imbalance.into(),
+				authorities: old.authorities,
+				build_version: old.build_version,
+				suspended_validators: before_version_21::into_current_offences(
+					old.suspended_validators,
+				),
+				pending_swaps: old.pending_swaps,
+				dot_aggkey: old.dot_aggkey,
+				flip_supply: old.flip_supply,
+				sol_aggkey: old.sol_aggkey,
+				sol_onchain_key: old.sol_onchain_key,
+				sol_nonces: old.sol_nonces,
+				activating_key_broadcast_ids: old.activating_key_broadcast_ids.into(),
+			}
+		}
+	}
+}
+
+pub mod before_monitoring_v5 {
+	use super::*;
+
+	#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+	pub struct MonitoringDataV2 {
+		pub external_chains_height: super::ExternalChainsBlockHeight,
+		pub btc_utxos: super::BtcUtxos,
+		pub epoch: super::EpochState,
+		pub pending_redemptions: super::RedemptionsInfo,
+		pub pending_broadcasts: super::PendingBroadcasts,
+		pub pending_tss: super::PendingTssCeremonies,
+		pub open_deposit_channels: super::OpenDepositChannels,
+		pub fee_imbalance: super::FeeImbalance<AssetAmount>,
+		pub authorities: super::AuthoritiesInfo,
+		pub build_version: super::LastRuntimeUpgradeInfo,
+		pub suspended_validators: Vec<(before_version_21::Offence, u32)>,
+		pub pending_swaps: u32,
+		pub dot_aggkey: PolkadotAccountId,
+		pub flip_supply: super::FlipSupply,
+		pub sol_aggkey: SolAddress,
+		pub sol_onchain_key: SolAddress,
+		pub sol_nonces: super::SolanaNonces,
+		pub activating_key_broadcast_ids: super::ActivateKeysBroadcastIds,
+	}
+
+	impl From<super::MonitoringDataV2> for MonitoringDataV2 {
+		fn from(new: super::MonitoringDataV2) -> Self {
+			Self {
+				external_chains_height: new.external_chains_height,
+				btc_utxos: new.btc_utxos,
+				epoch: new.epoch,
+				pending_redemptions: new.pending_redemptions,
+				pending_broadcasts: new.pending_broadcasts,
+				pending_tss: new.pending_tss,
+				open_deposit_channels: new.open_deposit_channels,
+				fee_imbalance: new.fee_imbalance,
+				authorities: new.authorities,
+				build_version: new.build_version,
+				suspended_validators: new
+					.suspended_validators
+					.into_iter()
+					.map(|(offence, count)| (offence.into(), count))
+					.collect(),
+				pending_swaps: new.pending_swaps,
+				dot_aggkey: new.dot_aggkey,
+				flip_supply: new.flip_supply,
+				sol_aggkey: new.sol_aggkey,
+				sol_onchain_key: new.sol_onchain_key,
+				sol_nonces: new.sol_nonces,
+				activating_key_broadcast_ids: new.activating_key_broadcast_ids,
+			}
+		}
+	}
+
+	impl From<MonitoringDataV2> for super::MonitoringDataV2 {
+		fn from(old: MonitoringDataV2) -> Self {
+			Self {
+				external_chains_height: old.external_chains_height,
+				btc_utxos: old.btc_utxos,
+				epoch: old.epoch,
+				pending_redemptions: old.pending_redemptions,
+				pending_broadcasts: old.pending_broadcasts,
+				pending_tss: old.pending_tss,
+				open_deposit_channels: old.open_deposit_channels,
+				fee_imbalance: old.fee_imbalance,
+				authorities: old.authorities,
+				build_version: old.build_version,
+				suspended_validators: before_version_21::into_current_offences(
+					old.suspended_validators,
+				),
+				pending_swaps: old.pending_swaps,
+				dot_aggkey: old.dot_aggkey,
+				flip_supply: old.flip_supply,
+				sol_aggkey: old.sol_aggkey,
+				sol_onchain_key: old.sol_onchain_key,
+				sol_nonces: old.sol_nonces,
+				activating_key_broadcast_ids: old.activating_key_broadcast_ids,
 			}
 		}
 	}
