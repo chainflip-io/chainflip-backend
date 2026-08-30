@@ -33,16 +33,52 @@ pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
 pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 
 // Sometimes we need to adapt arguments between the new and old versions while both CFEs can be run
-// by the upgrade runner. The old engine (OLD_VERSION) and the new engine (NEW_VERSION) currently
-// share the same CLI argument schema, so this is a passthrough. If a future version bump changes
-// the engine's arguments, adapt them here so the old engine still parses them during the upgrade
-// fallback path.
-pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
-	let mut compatible_args = args;
+// by the upgrade runner. Arguments unsupported by the old engine are listed below and filtered so
+// the fallback engine can still parse the command line.
+struct IncompatibleArg {
+	name: &'static str,
+	takes_value: bool,
+}
 
-	compatible_args.retain(|arg| !arg.starts_with("--bsc."));
+const INCOMPATIBLE_WITH_OLD: &[IncompatibleArg] = &[
+	IncompatibleArg { name: "--bsc.rpc.http_endpoint", takes_value: true },
+	IncompatibleArg { name: "--bsc.backup_rpc.http_endpoint", takes_value: true },
+	IncompatibleArg { name: "--bsc.private_key_file", takes_value: true },
+];
+
+fn filter_incompatible_args(
+	args: Vec<String>,
+	incompatible_args: &[IncompatibleArg],
+) -> Vec<String> {
+	let mut args = args.into_iter();
+	let mut compatible_args = Vec::new();
+
+	while let Some(arg) = args.next() {
+		let (name, has_inline_value) = match arg.split_once('=') {
+			Some((name, _)) => (name, true),
+			None => (arg.as_str(), false),
+		};
+
+		if let Some(incompatible_arg) =
+			incompatible_args.iter().find(|incompatible_arg| incompatible_arg.name == name)
+		{
+			if incompatible_arg.takes_value && !has_inline_value {
+				// The new engine has already parsed these arguments before fallback,
+				// so a split value-taking option is known to have a following value.
+				let _ = args.next();
+			}
+
+			continue;
+		}
+
+		compatible_args.push(arg);
+	}
 
 	compatible_args
+}
+
+pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
+	filter_incompatible_args(args, INCOMPATIBLE_WITH_OLD)
 }
 
 pub use std::ffi::c_char;
@@ -168,9 +204,7 @@ fn test_c_str_array_with_args() {
 }
 
 #[test]
-fn test_args_compatible_with_old_is_passthrough() {
-	// The old and new engines currently share the same CLI argument schema, so the
-	// arguments are passed through unchanged.
+fn preserves_compatible_args() {
 	let args = vec![
 		"chainflip-engine".to_string(),
 		"--hub.rpc.ws_endpoint=wss://hub-rpc.example.com/secret".to_string(),
@@ -178,4 +212,56 @@ fn test_args_compatible_with_old_is_passthrough() {
 	];
 
 	assert_eq!(args_compatible_with_old(args.clone()), args);
+}
+
+#[test]
+fn filters_split_args() {
+	let args = vec![
+		"chainflip-engine".to_string(),
+		"--eth.rpc.http_endpoint=http://localhost:8545".to_string(),
+		"--bsc.rpc.http_endpoint".to_string(),
+		"http://localhost:9545".to_string(),
+		"--logging.span_lifecycle".to_string(),
+	];
+
+	let expected = vec![
+		"chainflip-engine".to_string(),
+		"--eth.rpc.http_endpoint=http://localhost:8545".to_string(),
+		"--logging.span_lifecycle".to_string(),
+	];
+
+	assert_eq!(args_compatible_with_old(args), expected);
+}
+
+#[test]
+fn filters_inline_args() {
+	let args = vec![
+		"chainflip-engine".to_string(),
+		"--eth.rpc.http_endpoint=http://localhost:8545".to_string(),
+		"--bsc.rpc.http_endpoint=http://localhost:9545".to_string(),
+		"--logging.span_lifecycle".to_string(),
+	];
+
+	let expected = vec![
+		"chainflip-engine".to_string(),
+		"--eth.rpc.http_endpoint=http://localhost:8545".to_string(),
+		"--logging.span_lifecycle".to_string(),
+	];
+
+	assert_eq!(args_compatible_with_old(args), expected);
+}
+
+#[test]
+fn filters_valueless_flags() {
+	let args = vec![
+		"chainflip-engine".to_string(),
+		"--future.feature".to_string(),
+		"--logging.span_lifecycle".to_string(),
+	];
+
+	let incompatible_args = &[IncompatibleArg { name: "--future.feature", takes_value: false }];
+
+	let expected = vec!["chainflip-engine".to_string(), "--logging.span_lifecycle".to_string()];
+
+	assert_eq!(filter_incompatible_args(args, incompatible_args), expected);
 }
