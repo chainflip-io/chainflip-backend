@@ -55,7 +55,7 @@ jobs:
         run: envsubst < RELEASE_TEMPLATE.md > RELEASE.md
 
       - name: Release 🚀
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           name: Chainflip ${{ inputs.network }}:${{ github.ref_name }}
           generate_release_notes: false
