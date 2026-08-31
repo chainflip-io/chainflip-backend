@@ -2129,6 +2129,7 @@ dependencies = [
  "cf-chains",
  "cf-node-client",
  "cf-primitives",
+ "cf-traits",
  "chrono",
  "clap",
  "config",
