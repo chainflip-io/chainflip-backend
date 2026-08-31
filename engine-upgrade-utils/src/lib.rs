@@ -207,65 +207,49 @@ fn test_c_str_array_with_args() {
 	assert_eq!(c_args.to_rust_strings(), args);
 }
 
-#[test]
-fn preserves_compatible_args() {
-	let args = vec![
-		"chainflip-engine".to_string(),
-		"--hub.rpc.ws_endpoint=wss://hub-rpc.example.com/secret".to_string(),
-		"--tron.rpc.http_endpoint=http://tron.example.com".to_string(),
+#[cfg(test)]
+mod filter_args_tests {
+	use super::*;
+
+	// Stand-ins for the real INCOMPATIBLE_WITH_OLD list, which changes with every release.
+	const INCOMPATIBLE: &[IncompatibleArg] = &[
+		IncompatibleArg { name: "--incompatible.option", takes_value: true },
+		IncompatibleArg { name: "--incompatible.flag", takes_value: false },
 	];
 
-	assert_eq!(args_compatible_with_old(args.clone()), args);
-}
+	fn filter(args: &[&str]) -> Vec<String> {
+		filter_incompatible_args(args.iter().map(|arg| arg.to_string()).collect(), INCOMPATIBLE)
+	}
 
-#[test]
-fn filters_split_args() {
-	let args = vec![
-		"chainflip-engine".to_string(),
-		"--eth.rpc.http_endpoint=http://localhost:8545".to_string(),
-		"--bsc.rpc.http_endpoint".to_string(),
-		"http://localhost:9545".to_string(),
-		"--logging.span_lifecycle".to_string(),
-	];
+	#[test]
+	fn compatible_args_are_preserved() {
+		assert_eq!(
+			filter(&["chainflip-engine", "--compatible.option=value", "--compatible.flag"]),
+			vec!["chainflip-engine", "--compatible.option=value", "--compatible.flag"],
+		);
+	}
 
-	let expected = vec![
-		"chainflip-engine".to_string(),
-		"--eth.rpc.http_endpoint=http://localhost:8545".to_string(),
-		"--logging.span_lifecycle".to_string(),
-	];
+	#[test]
+	fn inline_value_is_dropped_with_its_option() {
+		assert_eq!(
+			filter(&["chainflip-engine", "--incompatible.option=value", "--compatible.flag"]),
+			vec!["chainflip-engine", "--compatible.flag"],
+		);
+	}
 
-	assert_eq!(args_compatible_with_old(args), expected);
-}
+	#[test]
+	fn split_value_is_dropped_with_its_option() {
+		assert_eq!(
+			filter(&["chainflip-engine", "--incompatible.option", "value", "--compatible.flag"]),
+			vec!["chainflip-engine", "--compatible.flag"],
+		);
+	}
 
-#[test]
-fn filters_inline_args() {
-	let args = vec![
-		"chainflip-engine".to_string(),
-		"--eth.rpc.http_endpoint=http://localhost:8545".to_string(),
-		"--bsc.rpc.http_endpoint=http://localhost:9545".to_string(),
-		"--logging.span_lifecycle".to_string(),
-	];
-
-	let expected = vec![
-		"chainflip-engine".to_string(),
-		"--eth.rpc.http_endpoint=http://localhost:8545".to_string(),
-		"--logging.span_lifecycle".to_string(),
-	];
-
-	assert_eq!(args_compatible_with_old(args), expected);
-}
-
-#[test]
-fn filters_valueless_flags() {
-	let args = vec![
-		"chainflip-engine".to_string(),
-		"--future.feature".to_string(),
-		"--logging.span_lifecycle".to_string(),
-	];
-
-	let incompatible_args = &[IncompatibleArg { name: "--future.feature", takes_value: false }];
-
-	let expected = vec!["chainflip-engine".to_string(), "--logging.span_lifecycle".to_string()];
-
-	assert_eq!(filter_incompatible_args(args, incompatible_args), expected);
+	#[test]
+	fn valueless_flag_does_not_consume_the_next_arg() {
+		assert_eq!(
+			filter(&["chainflip-engine", "--incompatible.flag", "--compatible.option", "value"]),
+			vec!["chainflip-engine", "--compatible.option", "value"],
+		);
+	}
 }
