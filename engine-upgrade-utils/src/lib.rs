@@ -33,16 +33,56 @@ pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
 pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 
 // Sometimes we need to adapt arguments between the new and old versions while both CFEs can be run
-// by the upgrade runner. The old engine (OLD_VERSION) and the new engine (NEW_VERSION) currently
-// share the same CLI argument schema, so this is a passthrough. If a future version bump changes
-// the engine's arguments, adapt them here so the old engine still parses them during the upgrade
-// fallback path.
-pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
-	let mut compatible_args = args;
+// by the upgrade runner. Arguments unsupported by the old engine are listed below and filtered so
+// the fallback engine can still parse the command line.
+struct IncompatibleArg {
+	name: &'static str,
+	takes_value: bool,
+}
 
-	compatible_args.retain(|arg| !arg.starts_with("--bsc."));
+/// Arguments that OLD_VERSION cannot parse.
+///
+/// This list must be reviewed whenever OLD_VERSION or NEW_VERSION changes so it
+/// reflects only the CLI differences between the two engine versions.
+const INCOMPATIBLE_WITH_OLD: &[IncompatibleArg] = &[
+	IncompatibleArg { name: "--bsc.rpc.http_endpoint", takes_value: true },
+	IncompatibleArg { name: "--bsc.backup_rpc.http_endpoint", takes_value: true },
+	IncompatibleArg { name: "--bsc.private_key_file", takes_value: true },
+];
+
+fn filter_incompatible_args(
+	args: Vec<String>,
+	incompatible_args: &[IncompatibleArg],
+) -> Vec<String> {
+	let mut args = args.into_iter();
+	let mut compatible_args = Vec::new();
+
+	while let Some(arg) = args.next() {
+		let (name, has_inline_value) = match arg.split_once('=') {
+			Some((name, _)) => (name, true),
+			None => (arg.as_str(), false),
+		};
+
+		if let Some(incompatible_arg) =
+			incompatible_args.iter().find(|incompatible_arg| incompatible_arg.name == name)
+		{
+			if incompatible_arg.takes_value && !has_inline_value {
+				// The new engine has already parsed these arguments before fallback,
+				// so a split value-taking option is known to have a following value.
+				let _ = args.next();
+			}
+
+			continue;
+		}
+
+		compatible_args.push(arg);
+	}
 
 	compatible_args
+}
+
+pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
+	filter_incompatible_args(args, INCOMPATIBLE_WITH_OLD)
 }
 
 pub use std::ffi::c_char;
@@ -167,15 +207,80 @@ fn test_c_str_array_with_args() {
 	assert_eq!(c_args.to_rust_strings(), args);
 }
 
-#[test]
-fn test_args_compatible_with_old_is_passthrough() {
-	// The old and new engines currently share the same CLI argument schema, so the
-	// arguments are passed through unchanged.
-	let args = vec![
-		"chainflip-engine".to_string(),
-		"--hub.rpc.ws_endpoint=wss://hub-rpc.example.com/secret".to_string(),
-		"--tron.rpc.http_endpoint=http://tron.example.com".to_string(),
+#[cfg(test)]
+mod filter_args_tests {
+	use super::*;
+
+	// Stand-ins for the real INCOMPATIBLE_WITH_OLD list, which changes with every release.
+	const INCOMPATIBLE: &[IncompatibleArg] = &[
+		IncompatibleArg { name: "--incompatible.option", takes_value: true },
+		IncompatibleArg { name: "--incompatible.flag", takes_value: false },
 	];
 
-	assert_eq!(args_compatible_with_old(args.clone()), args);
+	fn filter(args: &[&str]) -> Vec<String> {
+		filter_incompatible_args(args.iter().map(|arg| arg.to_string()).collect(), INCOMPATIBLE)
+	}
+
+	#[test]
+	fn compatible_args_are_preserved() {
+		assert_eq!(
+			filter(&["chainflip-engine", "--compatible.option=value", "--compatible.flag"]),
+			vec!["chainflip-engine", "--compatible.option=value", "--compatible.flag"],
+		);
+	}
+
+	#[test]
+	fn inline_value_is_dropped_with_its_option() {
+		assert_eq!(
+			filter(&["chainflip-engine", "--incompatible.option=value", "--compatible.flag"]),
+			vec!["chainflip-engine", "--compatible.flag"],
+		);
+	}
+
+	#[test]
+	fn split_value_is_dropped_with_its_option() {
+		assert_eq!(
+			filter(&["chainflip-engine", "--incompatible.option", "value", "--compatible.flag"]),
+			vec!["chainflip-engine", "--compatible.flag"],
+		);
+	}
+
+	#[test]
+	fn values_may_contain_equals_signs() {
+		// Only the first `=` separates the option name from its value, so query strings survive.
+		assert_eq!(
+			filter(&[
+				"chainflip-engine",
+				"--incompatible.option=https://rpc.example.com/?apikey=secret",
+				"--compatible.option=https://rpc.example.com/?apikey=secret",
+			]),
+			vec!["chainflip-engine", "--compatible.option=https://rpc.example.com/?apikey=secret"],
+		);
+	}
+
+	#[test]
+	fn split_value_may_contain_equals_signs() {
+		assert_eq!(
+			filter(&[
+				"chainflip-engine",
+				"--incompatible.option",
+				"https://rpc.example.com/?apikey=secret",
+				"--compatible.option",
+				"https://rpc.example.com/?apikey=secret",
+			]),
+			vec![
+				"chainflip-engine",
+				"--compatible.option",
+				"https://rpc.example.com/?apikey=secret"
+			],
+		);
+	}
+
+	#[test]
+	fn valueless_flag_does_not_consume_the_next_arg() {
+		assert_eq!(
+			filter(&["chainflip-engine", "--incompatible.flag", "--compatible.option", "value"]),
+			vec!["chainflip-engine", "--compatible.option", "value"],
+		);
+	}
 }
