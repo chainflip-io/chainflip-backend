@@ -554,6 +554,12 @@ export interface ChainErrors extends GenericChainErrors {
     StillDelegating: GenericPalletError;
 
     /**
+     * `delegate`/`undelegate` only support a delegator with at most one existing relation.
+     * Use `delegate_multi` and specify the full plan explicitly.
+     **/
+    MultiOperatorDelegator: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
