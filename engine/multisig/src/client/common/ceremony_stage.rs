@@ -73,7 +73,17 @@ pub trait CeremonyStage<C: CeremonyTrait> {
 	fn get_stage_name(&self) -> C::CeremonyStageName;
 
 	fn ceremony_common(&self) -> &CeremonyCommon;
+
+	/// The context needed to size check messages addressed to this stage, derived from the
+	/// stage's own state so that it cannot drift from the data the stage actually processes.
+	fn size_context(&self) -> SizeContextOf<C>;
 }
+
+/// Whatever `C`'s messages need, on top of the participant count, in order to be size checked.
+/// See [`PreProcessStageDataCheck::SizeContext`].
+pub type SizeContextOf<C> = <<C as CeremonyTrait>::Data as PreProcessStageDataCheck<
+	<C as CeremonyTrait>::CeremonyStageName,
+>>::SizeContext;
 
 /// Data useful during any stage of a ceremony
 #[derive(Clone)]
@@ -86,7 +96,6 @@ pub struct CeremonyCommon {
 	pub outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	pub validator_mapping: Arc<PartyIdxMapping>,
 	pub rng: Rng,
-	pub number_of_signing_payloads: Option<usize>,
 }
 
 impl CeremonyCommon {
@@ -96,11 +105,17 @@ impl CeremonyCommon {
 }
 
 pub trait PreProcessStageDataCheck<CeremonyStageName> {
+	/// Whatever is needed, on top of the participant count, to size check a message of this
+	/// ceremony type: the number of payloads for signing, `()` for keygen. Keeps the payload
+	/// count out of ceremonies that have no payloads, rather than passing an `Option` that only
+	/// one implementation can ever populate. Supplied by [`CeremonyStage::size_context`].
+	type SizeContext: Copy + Send + Sync + 'static;
+
 	/// Check that the number of elements in the data is correct
 	fn is_data_size_valid<Chain: ChainSigning>(
 		&self,
 		num_of_parties: AuthorityCount,
-		num_of_payloads: Option<usize>,
+		size_context: Self::SizeContext,
 	) -> bool;
 
 	/// Check that the number of elements in the data is within expected bounds.

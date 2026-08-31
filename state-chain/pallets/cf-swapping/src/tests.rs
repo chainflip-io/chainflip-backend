@@ -50,8 +50,8 @@ use cf_traits::{
 		pool_price_api::MockPoolPriceApi,
 		price_feed_api::MockPriceFeedApi,
 	},
-	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode, SwapExecutionProgress,
-	INITIAL_FLIP_FUNDING,
+	AccountRoleRegistry, AssetConverter, Chainflip, FundingSource, SetSafeMode,
+	SwapExecutionProgress, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	assert_noop, assert_ok,
@@ -2206,7 +2206,12 @@ mod credit_flip_and_transfer {
 					MockFundingInfo::<Test>::balance(&LP_ACCOUNT),
 					EXPECTED_OUTPUT_AMOUNT.saturating_sub(INITIAL_FLIP_FUNDING)
 				);
-				assert_eq!(FlipToBeSentToGateway::<Test>::get(), EXPECTED_OUTPUT_AMOUNT);
+				// The earmark is keyed off the funding source by the funding pallet, which is
+				// mocked out here. See `every_source_but_a_gateway_deposit_is_earmarked`.
+				assert_eq!(
+					MockFundingInfo::<Test>::last_funding_source(),
+					Some(FundingSource::Swap { swap_request_id: SWAP_REQUEST_ID })
+				);
 			});
 	}
 
@@ -2280,7 +2285,9 @@ mod credit_flip_and_transfer {
 							.unwrap()
 					)
 				);
-				assert_eq!(FlipToBeSentToGateway::<Test>::get(), INITIAL_FLIP_FUNDING);
+				// The deficit path never funds the account, so no earmark originates here - the
+				// account's initial funding was already earmarked when the deposit was credited.
+				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
 			});
 	}
 }

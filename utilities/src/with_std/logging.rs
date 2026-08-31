@@ -128,7 +128,7 @@ pub async fn init_json_logger(settings: LoggingSettings) -> DefaultGuard {
 		const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
 
 		let change_filter = warp::post()
-			.and(warp::path(PATH))
+			.and(warp::path(PATH.to_string()))
 			.and(warp::path::end())
 			.and(warp::body::content_length_limit(MAX_CONTENT_LENGTH))
 			.and(warp::body::json())
@@ -158,18 +158,24 @@ pub async fn init_json_logger(settings: LoggingSettings) -> DefaultGuard {
 				}
 			});
 
-		let get_filter = warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
-			futures::future::ready({
-				let (status, message) =
-					match reload_handle.with_current(|env_filter| env_filter.to_string()) {
-						Ok(reply) => (warp::http::StatusCode::OK, reply),
-						Err(error) =>
-							(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
-					};
+		let get_filter =
+			warp::get()
+				.and(warp::path(PATH.to_string()))
+				.and(warp::path::end())
+				.then(move || {
+					futures::future::ready({
+						let (status, message) = match reload_handle
+							.with_current(|env_filter| env_filter.to_string())
+						{
+							Ok(reply) => (warp::http::StatusCode::OK, reply),
+							Err(error) =>
+								(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+						};
 
-				warp::reply::with_status(warp::reply::json(&message), status).into_response()
-			})
-		});
+						warp::reply::with_status(warp::reply::json(&message), status)
+							.into_response()
+					})
+				});
 
 		warp::serve(change_filter.or(get_filter))
 			.run((std::net::Ipv4Addr::LOCALHOST, settings.command_server_port))

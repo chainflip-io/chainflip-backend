@@ -15,9 +15,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Reputation, Runtime, Validator};
-use cf_primitives::EpochIndex;
+use cf_primitives::{EpochIndex, ForeignChain};
 use cf_traits::{Chainflip, EpochInfo};
-use frame_support::Hashable;
+use frame_support::{traits::Get, Hashable};
 use nanorand::{Rng, WyRand};
 use pallet_cf_validator::HistoricalAuthorities;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
@@ -89,12 +89,12 @@ pub struct RandomSignerNomination;
 impl cf_traits::BroadcastNomination for RandomSignerNomination {
 	type BroadcasterId = <Runtime as Chainflip>::ValidatorId;
 
-	fn nominate_broadcaster<H: Hashable>(
+	fn nominate_broadcaster<C: Get<ForeignChain>, H: Hashable>(
 		seed: H,
 		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId> {
 		let mut all_excludes = Reputation::validators_suspended_for(&[
-			Offence::FailedToBroadcastTransaction,
+			Offence::FailedToBroadcastTransaction(C::get()),
 			Offence::MissedHeartbeat,
 		]);
 		all_excludes.extend(exclude_ids);

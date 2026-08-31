@@ -14,14 +14,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use frame_support::parameter_types;
+use cf_primitives::ForeignChain;
+use frame_support::{parameter_types, traits::Get};
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{BroadcastNomination, EpochIndex, EpochInfo, ThresholdSignerNomination};
 
 parameter_types! {
 	pub storage ThresholdNominees: Option<BTreeSet<u64>> = None;
-	pub storage LastNominatedIndex: Option<u32> = None;
+	pub storage LastNominee: Option<u64> = None;
 }
 
 pub struct MockNominator;
@@ -29,18 +30,21 @@ pub struct MockNominator;
 impl BroadcastNomination for MockNominator {
 	type BroadcasterId = u64;
 
-	fn nominate_broadcaster<S>(
+	/// Nominates the lowest-numbered nominee that is not excluded, or `None` if they are all
+	/// excluded.
+	fn nominate_broadcaster<C: Get<ForeignChain>, S>(
 		_seed: S,
-		_exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
+		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId> {
-		let next_nomination_index = LastNominatedIndex::get().map(|n| n + 1).unwrap_or_default();
-		LastNominatedIndex::set(&Some(next_nomination_index));
-
-		Self::get_nominees()
+		let excluded = BTreeSet::from_iter(exclude_ids);
+		let nominee = Self::get_nominees()
 			.unwrap()
-			.iter()
-			.nth(next_nomination_index as usize)
-			.copied()
+			.into_iter()
+			.find(|nominee| !excluded.contains(nominee));
+
+		LastNominee::set(&nominee);
+
+		nominee
 	}
 }
 
@@ -69,20 +73,12 @@ impl MockNominator {
 		ThresholdNominees::get()
 	}
 
-	pub fn reset_last_nominee() {
-		LastNominatedIndex::set(&None);
-	}
-
 	pub fn set_nominees(nominees: Option<BTreeSet<u64>>) {
 		ThresholdNominees::set(&nominees);
 	}
 
 	pub fn get_last_nominee() -> Option<u64> {
-		Self::get_nominees()
-			.unwrap()
-			.iter()
-			.nth(LastNominatedIndex::get().expect("No one nominated yet") as usize)
-			.copied()
+		LastNominee::get()
 	}
 
 	pub fn use_current_authorities_as_nominees<

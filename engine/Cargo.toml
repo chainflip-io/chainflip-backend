@@ -59,7 +59,6 @@ derive-where = { workspace = true }
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
 cf-node-client = { workspace = true }
-chainflip-node = { workspace = true }
 engine-upgrade-utils = { workspace = true }
 multisig = { workspace = true }
 engine-p2p = { workspace = true }

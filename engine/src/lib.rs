@@ -64,8 +64,7 @@ use self::{
 };
 use anyhow::Context;
 use cf_chains::{evm::U256, Chain};
-use cf_primitives::AccountRole;
-use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
+use cf_primitives::{use_chainflip_account_id_encoding, AccountRole};
 use clap::Parser;
 use engine_upgrade_utils::{ExitStatus, ERROR_READING_SETTINGS, NO_START_FROM, SUCCESS};
 

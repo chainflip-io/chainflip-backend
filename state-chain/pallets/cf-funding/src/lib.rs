@@ -34,7 +34,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, AccountRole, AssetAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	FundAccount, Funding, FundingSource, GetMinimumFunding, MoveFlipToGateway, RedemptionCheck,
@@ -92,6 +92,9 @@ pub struct Redemption<T: Config> {
 	pub account_id: T::AccountId,
 	/// The Ethereum address to take into account for any redemption restrictions.
 	pub redemption_address: Option<EthereumAddress>,
+	/// Whether this redemption would leave the account with a zero balance, in which case the
+	/// account's role needs to be deregistered before the funds can leave it.
+	pub empties_account: bool,
 }
 
 impl<T: Config> Redemption<T> {
@@ -108,7 +111,6 @@ impl<T: Config> Redemption<T> {
 			&RestrictedBalances::<T>::get(account_id),
 			Some(redemption_address),
 			MinimumFunding::<T>::get(),
-			true,
 		)
 	}
 	pub fn for_rebalance(
@@ -124,7 +126,6 @@ impl<T: Config> Redemption<T> {
 			&RestrictedBalances::<T>::get(source_account_id),
 			redemption_address.as_ref(),
 			MinimumFunding::<T>::get(),
-			true,
 		)
 	}
 	pub fn for_rpc(account_id: &T::AccountId) -> Result<Self, Error<T>> {
@@ -136,7 +137,6 @@ impl<T: Config> Redemption<T> {
 			&RestrictedBalances::<T>::get(account_id),
 			None,
 			MinimumFunding::<T>::get(),
-			false,
 		)
 	}
 
@@ -149,7 +149,6 @@ impl<T: Config> Redemption<T> {
 		restricted_balances: &BTreeMap<EthereumAddress, FlipBalance<T>>,
 		bound_redeem_address: Option<&EthereumAddress>,
 		minimum_funding: FlipBalance<T>,
-		require_deregistration: bool,
 	) -> Result<Self, Error<T>> {
 		if let Some(address) = redemption_address {
 			if let Some(bound_address) = bound_redeem_address {
@@ -234,16 +233,6 @@ impl<T: Config> Redemption<T> {
 			remaining_balance == Zero::zero() || remaining_balance >= minimum_funding,
 			Error::<T>::BelowMinimumFunding
 		);
-		if require_deregistration && account_balance == debit_amount {
-			ensure!(
-				T::AccountRoleRegistry::is_unregistered(account_id),
-				Error::<T>::AccountMustBeUnregistered
-			);
-			ensure!(
-				frame_system::Pallet::<T>::can_dec_provider(account_id),
-				Error::<T>::AccountHasRemainingConsumers
-			);
-		}
 
 		Ok(Redemption {
 			redeem_amount,
@@ -251,7 +240,30 @@ impl<T: Config> Redemption<T> {
 			restricted_redeem_amount: restricted_debit_amount.saturating_sub(applied_fee),
 			account_id: account_id.clone(),
 			redemption_address: redemption_address.cloned(),
+			empties_account: remaining_balance.is_zero(),
 		})
+	}
+
+	/// Deregisters the account's role if this redemption would empty it, so that the account can be
+	/// reaped once the redemption settles.
+	pub fn deregister_account_if_emptied(&self) -> DispatchResult {
+		if !self.empties_account {
+			return Ok(())
+		}
+
+		match T::AccountRoleRegistry::account_role(&self.account_id) {
+			AccountRole::Unregistered => {},
+			AccountRole::LiquidityProvider =>
+				T::AccountRoleRegistry::deregister_as_liquidity_provider(&self.account_id)?,
+			_ => return Err(Error::<T>::AccountMustBeUnregistered.into()),
+		}
+
+		ensure!(
+			frame_system::Pallet::<T>::can_dec_provider(&self.account_id),
+			Error::<T>::AccountHasRemainingConsumers
+		);
+
+		Ok(())
 	}
 
 	/// Returns the total debit amount, which is the sum of the redeem amount and the redemption
@@ -696,6 +708,8 @@ pub mod pallet {
 				redemption.total_debit_amount(),
 			)?;
 
+			redemption.deregister_account_if_emptied()?;
+
 			redemption.take_fee()?;
 			redemption.update_restricted_balances(None)?;
 
@@ -730,6 +744,8 @@ pub mod pallet {
 					expiry_time: contract_expiry,
 				});
 			} else {
+				// The fee may have emptied the account, in which case it needs reaping here
+				Self::kill_account_if_zero_balance(&account_id);
 				Self::deposit_event(Event::RedemptionAmountZero { account_id })
 			}
 
@@ -883,6 +899,7 @@ pub mod pallet {
 
 			let redemption =
 				Redemption::<T>::for_rebalance(&source_account_id, amount, redemption_address)?;
+			redemption.deregister_account_if_emptied()?;
 			redemption.take_fee()?;
 			redemption.update_restricted_balances(Some(&recipient_account_id))?;
 
@@ -1195,6 +1212,7 @@ impl<T: Config> FundAccount for Pallet<T> {
 	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, source: FundingSource) {
 		let total_balance = Self::add_funds_to_account(&account_id, amount);
 		match source {
+			// Deposited directly into the Gateway, so these funds are already backed.
 			FundingSource::EthTransaction { funder, .. } =>
 				if RestrictedAddresses::<T>::contains_key(funder) {
 					RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
@@ -1203,11 +1221,12 @@ impl<T: Config> FundAccount for Pallet<T> {
 							.or_insert(amount);
 					});
 				},
-			// These funds are backed by Flip in the Vault rather than in the Gateway, so an
-			// equivalent amount must be moved across to keep the Gateway fully backed.
-			FundingSource::FreeBalance =>
+			// Every other source credits Flip that is held in the Vault, so an equivalent amount
+			// must be moved across to keep the Gateway fully backed.
+			FundingSource::FreeBalance |
+			FundingSource::Swap { .. } |
+			FundingSource::InitialFunding { .. } =>
 				T::MoveFlipToGateway::add_flip_to_be_sent_to_gateway(amount.into()),
-			FundingSource::Swap { .. } | FundingSource::InitialFunding { .. } => {},
 		}
 
 		Self::deposit_event(Event::Funded {

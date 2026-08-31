@@ -66,8 +66,9 @@ use cf_traits::{
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BalanceApi, BroadcastOutcomeHandler,
 	DepositApi, EgressApi, EpochInfo,
 	ExpiryBehaviour::RefundIfExpires,
-	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, PriceLimitsAndExpiry, SafeMode,
-	ScheduledEgressDetails, SwapOutputAction, SwapRequestType, INITIAL_FLIP_FUNDING,
+	FetchesTransfersLimitProvider, FundingInfo, FundingSource, GetBlockHeight,
+	PriceLimitsAndExpiry, SafeMode, ScheduledEgressDetails, SwapOutputAction, SwapRequestType,
+	INITIAL_FLIP_FUNDING,
 };
 use std::collections::{BTreeMap, HashSet};
 
@@ -3247,6 +3248,68 @@ fn additional_action_correctly_prefund_and_create_account() {
 		));
 		assert_eq!(frame_system::Pallet::<Test>::account_nonce(NEW_ACCOUNT), 1);
 		assert_eq!(MockFundingInfo::<Test>::balance(&NEW_ACCOUNT), INITIAL_FLIP_FUNDING);
+
+		// These funds come from the Vault, so the source must identify them as such - the funding
+		// pallet keys the Vault -> Gateway earmark off it. The rest of the swap output is
+		// earmarked separately when the swap completes and funds the account again.
+		assert_eq!(
+			MockFundingInfo::<Test>::last_funding_source(),
+			Some(FundingSource::InitialFunding { channel_id: Some(0), asset: Asset::Eth }),
+		);
+	});
+}
+
+#[test]
+fn additional_action_prefunds_from_a_flip_deposit_without_swapping() {
+	const DEPOSIT_AMOUNT: AssetAmount = FLIPPERINOS_PER_FLIP * 100;
+	const FLIP_TO_CREDIT: AssetAmount = FLIPPERINOS_PER_FLIP * 10;
+	const NEW_ACCOUNT: u64 = 0;
+
+	let full_witness = || {
+		EthereumIngressEgress::process_full_witness_deposit_inner(
+			None,
+			EthAsset::Flip,
+			DEPOSIT_AMOUNT,
+			Default::default(),
+			BoostStatus::NotBoosted,
+			0,
+			None,
+			ChannelAction::LiquidityProvision {
+				lp_account: NEW_ACCOUNT,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+				additional_action: Some(AdditionalDepositAction::FundFlip {
+					flip_amount_to_credit: FLIP_TO_CREDIT,
+				}),
+			},
+			0,
+			DepositOrigin::DepositChannel {
+				deposit_address: Default::default(),
+				channel_id: 0,
+				deposit_block_height: 0,
+				broker_id: BROKER,
+			},
+		)
+	};
+
+	new_test_ext().execute_with(|| {
+		assert!(full_witness().is_ok());
+
+		// The deposit is already Flip, so it is credited directly rather than swapped.
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+		assert_eq!(MockFundingInfo::<Test>::balance(&NEW_ACCOUNT), FLIP_TO_CREDIT);
+
+		// These funds come straight from the Vault, so the source must identify them as such -
+		// the funding pallet keys the Vault -> Gateway earmark off it.
+		assert_eq!(
+			MockFundingInfo::<Test>::last_funding_source(),
+			Some(FundingSource::InitialFunding { channel_id: Some(0), asset: Asset::Flip }),
+		);
+
+		// Whatever is left over lands in the free balance.
+		assert_eq!(
+			MockBalance::get_balance(&NEW_ACCOUNT, Asset::Flip),
+			DEPOSIT_AMOUNT - FLIP_TO_CREDIT
+		);
 	});
 }
 
@@ -3254,17 +3317,18 @@ fn additional_action_correctly_prefund_and_create_account() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		RefundFailureReason, ScheduledTransactionsForRejection, TransactionRejectionDetails,
-		TransactionRejectionStatus, TransactionsMarkedForRejection,
+		RefundFailureReason, ReportExpiresAt, ScheduledTransactionsForRejection,
+		TransactionRejectionDetails, TransactionRejectionStatus, TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::Hash as EvmHash, ChannelLifecycleHooks,
-		DepositDetailsToTransactionInId, Ethereum, FetchForRejection,
+		DepositDetailsToTransactionInId, Ethereum, FetchForRejection, TransferForRejection,
 	};
 	use cf_traits::{
 		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
 	};
 	use mocks::lending_pools::MockBoostApi;
+	use sp_runtime::traits::Zero;
 	use std::str::FromStr;
 
 	const ETH: EthAsset = EthAsset::Eth;
@@ -3440,6 +3504,117 @@ mod evm_transaction_rejection {
 	}
 
 	#[test]
+	fn ccm_rejection_refund_does_not_finalise_fetch() {
+		new_test_ext().execute_with(|| {
+			let (_, deposit_address, block, _) =
+				EthereumIngressEgress::request_swap_deposit_address(
+					ETH,
+					Asset::Flip,
+					ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+					Default::default(),
+					BROKER,
+					None,
+					0,
+					ChannelRefundParametersForChain::<Ethereum> {
+						retry_duration: 0,
+						refund_address: ALICE_ETH_ADDRESS,
+						min_price: Price::zero(),
+						refund_ccm_metadata: Some(CcmChannelMetadataUnchecked {
+							message: vec![0x01].try_into().unwrap(),
+							gas_budget: 1_000,
+							ccm_additional_data: Default::default(),
+						}),
+						max_oracle_price_slippage: None,
+					},
+					None,
+				)
+				.unwrap();
+			let deposit_address: <Ethereum as Chain>::ChainAccount =
+				deposit_address.try_into().unwrap();
+
+			assert_ok!(EthereumIngressEgress::mark_deposit_channel_for_rejection(
+				OriginTrait::signed(BROKER),
+				deposit_address,
+			));
+
+			EthereumIngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
+					deposit_address,
+					asset: ETH,
+					amount: 10_000,
+					deposit_details: DepositDetails { tx_hashes: None },
+				},
+				block,
+			);
+			EthereumIngressEgress::on_finalize(2);
+
+			let pending_api_calls = MockEgressBroadcasterEth::get_pending_api_calls();
+			assert_eq!(pending_api_calls.len(), 2);
+			assert_matches!(
+				pending_api_calls.first(),
+				Some(MockEthereumApiCall::RejectCall {
+					fetch: FetchForRejection::Fetch {
+						deposit_fetch_id: EvmFetchId::DeployAndFetch(_),
+					},
+					transfer: TransferForRejection::TransferWillBeCcmCallAndIsHandledSeparately,
+					..
+				})
+			);
+			assert_matches!(
+				pending_api_calls.get(1),
+				Some(MockEthereumApiCall::ExecutexSwapAndCall(_))
+			);
+
+			let refund_broadcast_id = System::events()
+				.into_iter()
+				.find_map(|record| match record.event {
+					RuntimeEvent::EthereumIngressEgress(
+						PalletEvent::TransactionRejectedByBroker { broadcast_id, .. },
+					) => Some(broadcast_id),
+					_ => None,
+				})
+				.expect("expected a rejected transaction event");
+
+			let finalise_fetch_actions = BroadcastActions::<Test, Instance1>::iter()
+				.filter_map(|(broadcast_id, action)| match action {
+					BroadcastAction::FinaliseFetch(addresses) => Some((broadcast_id, addresses)),
+					BroadcastAction::CcmBroadcast => None,
+				})
+				.collect::<Vec<_>>();
+			assert_eq!(finalise_fetch_actions.len(), 1);
+			let (fetch_broadcast_id, addresses) = &finalise_fetch_actions[0];
+			assert_ne!(*fetch_broadcast_id, refund_broadcast_id);
+			assert_eq!(addresses, &vec![deposit_address]);
+
+			assert_eq!(
+				DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+					.unwrap()
+					.deposit_channel
+					.state,
+				cf_chains::evm::DeploymentStatus::Pending
+			);
+
+			EthereumIngressEgress::on_broadcast_success(refund_broadcast_id, 41);
+			assert_eq!(
+				DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+					.unwrap()
+					.deposit_channel
+					.state,
+				cf_chains::evm::DeploymentStatus::Pending
+			);
+
+			EthereumIngressEgress::on_broadcast_success(*fetch_broadcast_id, 42);
+			assert_eq!(
+				DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+					.unwrap()
+					.deposit_channel
+					.state,
+				cf_chains::evm::DeploymentStatus::Deployed { at_block_height: 42 }
+			);
+		});
+	}
+
+	#[test]
 	fn refund_below_dust_limit_is_dropped() {
 		new_test_ext().execute_with(|| {
 			// Set the egress dust limit above the deposit amount so the refund (deposit minus
@@ -3507,6 +3682,60 @@ mod evm_transaction_rejection {
 	}
 
 	#[test]
+	fn rejects_multiple_deposits_sharing_the_same_transaction() {
+		new_test_ext().execute_with(|| {
+			let tx_id = EvmHash::repeat_byte(0xaa);
+			let request_deposit_address = || {
+				let (_, deposit_address, block, _) =
+					EthereumIngressEgress::request_liquidity_deposit_address(
+						BROKER,
+						BROKER,
+						ETH,
+						0,
+						ForeignChainAddress::Eth(Default::default()),
+						None,
+					)
+					.unwrap();
+
+				let deposit_address: <Ethereum as Chain>::ChainAccount =
+					deposit_address.try_into().unwrap();
+				(deposit_address, block)
+			};
+
+			let (first_deposit_address, first_block) = request_deposit_address();
+			let (second_deposit_address, second_block) = request_deposit_address();
+			assert_ne!(first_deposit_address, second_deposit_address);
+
+			assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+			for (deposit_address, block) in
+				[(first_deposit_address, first_block), (second_deposit_address, second_block)]
+			{
+				EthereumIngressEgress::process_channel_deposit_full_witness(
+					DepositWitness {
+						deposit_address,
+						asset: ETH,
+						amount: DEFAULT_DEPOSIT_AMOUNT,
+						deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
+					},
+					block,
+				);
+			}
+
+			assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::decode_len(), Some(2));
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+			assert!(TransactionsMarkedForRejection::<Test, Instance1>::get(BROKER, tx_id)
+				.is_some_and(|status| status.expires_at.is_zero()));
+			assert_eq!(
+				ReportExpiresAt::<Test, Instance1>::get(System::block_number() + 1),
+				vec![(BROKER, tx_id)],
+			);
+		});
+	}
+
+	#[test]
 	fn whitelisted_broker_can_mark_tx_for_rejection_for_lp() {
 		new_test_ext().execute_with(|| {
 			let tx_id = EvmHash::from_str(
@@ -3564,9 +3793,17 @@ mod evm_transaction_rejection {
 				}) if deposit_details.deposit_ids().unwrap().contains(&tx_id)
 			);
 
-			assert!(TransactionsMarkedForRejection::<Test, Instance1>::get(SCREENING_ID, tx_id).is_none());
-
+			assert!(TransactionsMarkedForRejection::<Test, Instance1>::get(SCREENING_ID, tx_id).is_some_and(|status| status.expires_at.is_zero()));
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+			tx_id
+		})
+		.then_process_blocks(1)
+		.then_execute_with(|tx_id| {
+			assert!(!TransactionsMarkedForRejection::<Test, Instance1>::contains_key(
+				SCREENING_ID,
+				tx_id,
+			));
 		});
 	}
 

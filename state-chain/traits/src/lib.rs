@@ -468,7 +468,7 @@ pub trait BroadcastNomination {
 
 	/// Returns a random broadcaster id, excluding particular provided ids. The seed value is used
 	/// as a source of randomness. Returns None if no signers are live.
-	fn nominate_broadcaster<H: Hashable>(
+	fn nominate_broadcaster<C: Get<ForeignChain>, H: Hashable>(
 		seed: H,
 		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId>;

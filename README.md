@@ -135,6 +135,103 @@ To build chainspec files for different networks, use the `build-chainspec.sh` sc
 
 The script will create both the regular and raw chainspec files in the `state-chain/node/chainspecs/` directory.
 
+### Profiling runtime execution
+
+The `runtime-tracing` feature enables `sp_tracing` span instrumentation
+(`on_initialize`/`on_finalize`/extrinsic dispatch) in the wasm runtime, so you can measure
+per-pallet and per-extrinsic execution time while replaying real blocks. It must never be
+enabled for a production build.
+
+It pulls in two upstream features, both required: `sp-tracing/with-tracing` makes the
+`enter_span!` macros non-noop in no_std, and `sp-io/with-tracing` compiles in the wasm-side
+subscriber that forwards spans to the host. With only the former the macros are live but no
+subscriber is set, which is the silent-degradation case described below.
+
+Build the instrumented runtime, then point the node at the resulting blob — a replayed block
+executes the runtime from chain state, so the locally built wasm is otherwise ignored:
+
+```bash
+cargo build --release -p chainflip-node --features runtime-tracing
+
+# Must list 4 imports. If empty, the feature did not reach the wasm build.
+strings -a target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
+  | grep -o 'ext_wasm_tracing_[a-z_0-9]*' | sort -u
+
+mkdir -p ~/runtime-overrides
+cp target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm \
+   ~/runtime-overrides/
+
+./target/release/chainflip-node benchmark block \
+  --chain state-chain/node/chainspecs/berghain.chainspec.raw.json \
+  --base-path <path-to-chaindata> \
+  --wasm-runtime-overrides ~/runtime-overrides \
+  --from <block> --to <block> --wasm-execution=compiled \
+  --tracing-targets="wasm_tracing=trace,cf_traits=trace,pallet=off,frame=off,state_chain_runtime=off" > trace.log 2>&1
+```
+
+Each captured span is logged as one line, tagged `wasm=true`:
+
+```text
+TRACE main sc_tracing: pallet_cf_elections::pallet: on_initialize, time: 667, id: 29, ...
+```
+
+Out of the box this only covers what FRAME instruments itself (block hooks and extrinsic
+dispatch, per pallet). To time a specific function, annotate it with
+`#[cf_runtime_utilities::instrument]`, which opens a span named after the function for the
+duration of its body. No feature or dependency plumbing is needed: the span compiles away
+entirely unless `sp-tracing/with-tracing` is on, which `runtime-tracing` turns on for the whole
+build.
+
+Span names are compile-time literals, so every instance of an instantiable pallet reports under
+the same name and target. Annotate with `#[cf_runtime_utilities::instrument(pallet)]` to tell
+them apart: it records the runtime's name for the instance as a span field, which is reported
+after the timing.
+
+```text
+TRACE main sc_tracing: pallet_cf_elections::pallet: on_finalize, time: 667, id: 29,
+  parent_id: Some(2), values: pallet="BitcoinElections"
+```
+
+#### Visualizing the results
+
+The log is one line per span and grows to tens of megabytes, so it is not meant to be read by hand.
+`./state-chain/scripts/spans-to-profile.py` rebuilds the span tree from it, prints summary
+tables, and writes a profile for [samply](https://github.com/mstange/samply)'s Firefox Profiler
+front-end (`cargo install --locked samply`):
+
+```bash
+./state-chain/scripts/spans-to-profile.py trace.log   # tables + spans.json
+samply load spans.json                                # flamegraph, times in ms
+```
+
+The tables cover the block's top-level structure, every pallet's `on_initialize`/`on_finalize`,
+each elections instance broken down into its electoral systems, and extrinsic dispatches. A table
+with no matching spans is skipped rather than shown empty, so a missing section means the log has
+nothing to put in it — usually because the code in question isn't annotated, or because its
+target isn't in `--tracing-targets`, which is a strict prefix allowlist.
+
+`benchmark block` replays each block `--repeat` times, so every figure is a mean per execution,
+and the first execution of each block is excluded: wasmtime compiles the runtime during that pass.
+Blocks are reported separately rather than averaged together; use `--block N` for just one.
+`--no-tables` skips the report and only writes the profile.
+
+#### Troubleshooting
+
+- **The override is ignored unless its `spec_name` *and* `spec_version` match the on-chain
+  runtime at that block.** A `spec_name` mismatch logs a warning, but a `spec_version` mismatch
+  logs nothing at all. Look for `INFO wasm_overrides: Found wasm override. version=...` at
+  startup, and temporarily set `spec_version` to the on-chain value if it differs. Keep only one
+  `.wasm` in the override directory — two blobs with the same `spec_version` is an error.
+- **Wasm spans reach the host under the `wasm_tracing` target**, not the pallet's own target
+  (the real target travels as a span field). So `wasm_tracing=trace` is what the log filter must
+  enable. Naming a pallet at `=trace` instead only unmutes its `log::debug!` calls — thousands of
+  lines of noise — because `--tracing-targets` is merged into the same filter that drives stderr
+  output. `=off` mutes those events while still capturing that pallet's spans, since the span
+  filter treats an unparseable level as `trace`.
+- **Without the instrumentation compiled in**, spans silently degrade to plain log lines with no
+  timing, e.g. `INFO frame_executive: apply_extrinsic; ext=...`. If you see those instead of
+  `sc_tracing:` lines, the runtime being executed is not instrumented.
+
 ## Localnet
 
 You can run a local single-node testnet (Localnet), in Docker. This will allow you to quickly iterate on a particular

@@ -19,7 +19,7 @@ use crate::{
 	PendingRedemptions, Redemption, RedemptionAmount, RedemptionTax, RestrictedAddresses,
 	RestrictedBalances,
 };
-use cf_primitives::FlipBalance;
+use cf_primitives::{AccountRole, Asset, FlipBalance, SwapRequestId};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
@@ -1872,6 +1872,90 @@ fn account_references_must_be_zero_for_full_redeem() {
 }
 
 #[test]
+fn full_redemption_deregisters_liquidity_provider() {
+	const FUNDING_AMOUNT: FlipBalance = 100;
+	const PARTIAL_AMOUNT: FlipBalance = 50;
+	new_test_ext().execute_with(|| {
+		Funding::fund_account(
+			ALICE,
+			FUNDING_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&ALICE
+			)
+		);
+
+		// A partial redemption leaves the account intact.
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			PARTIAL_AMOUNT.into(),
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(ALICE, PARTIAL_AMOUNT, TX_HASH));
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
+			&ALICE,
+			AccountRole::LiquidityProvider
+		));
+
+		// Redeeming the remaining balance deregisters the account, no prior deregistration
+		// required.
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(&ALICE));
+
+		assert_ok!(Funding::redeemed(
+			ALICE,
+			FUNDING_AMOUNT - PARTIAL_AMOUNT - REDEMPTION_TAX,
+			TX_HASH
+		));
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			0,
+			"Account should have been reaped on final redemption."
+		);
+	});
+}
+
+#[test]
+fn full_redemption_requires_explicit_deregistration_of_other_roles() {
+	const FUNDING_AMOUNT: FlipBalance = 100;
+	new_test_ext().execute_with(|| {
+		for (account_id, role) in [(ALICE, AccountRole::Broker), (BOB, AccountRole::Operator)] {
+			Funding::fund_account(
+				account_id.clone(),
+				FUNDING_AMOUNT,
+				FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+			);
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_account_role(
+					&account_id,
+					role,
+				)
+			);
+
+			// Roles whose deregistration cleans up state outside of the deregistration hooks
+			// have to be deregistered explicitly.
+			assert_noop!(
+				Funding::redeem(
+					OriginTrait::signed(account_id),
+					RedemptionAmount::Max,
+					ETH_DUMMY_ADDR,
+					Default::default()
+				),
+				Error::<Test>::AccountMustBeUnregistered,
+			);
+		}
+	});
+}
+
+#[test]
 fn only_governance_can_update_settings() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
@@ -2170,6 +2254,37 @@ pub mod rebalancing {
 				AMOUNT + MIN_FUNDING,
 				"Total balance to be correct."
 			);
+		});
+	}
+
+	#[test]
+	fn rebalancing_all_funds_deregisters_liquidity_provider() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE)
+						.with_balance(AMOUNT, None)
+						.with_role(AccountRole::LiquidityProvider),
+					AccountSetup::new(BOB),
+				],
+				vec![]
+			));
+
+			// Moving the entire balance away empties the account, so its role is deregistered.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				None,
+				RedemptionAmount::Max
+			));
+
+			assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(
+				&ALICE
+			));
+			assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
+			assert_eq!(Flip::total_balance_of(&BOB), AMOUNT + MIN_FUNDING);
 		});
 	}
 
@@ -2828,5 +2943,31 @@ fn funding_from_free_balance_earmarks_a_transfer_to_the_gateway() {
 
 		Funding::fund_account(BOB, AMOUNT * 2, FundingSource::FreeBalance);
 		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), AMOUNT * 3);
+	});
+}
+
+/// Only a deposit into the Gateway arrives already backed. Every other source credits Flip that
+/// is sitting in the Vault, so it must be earmarked for transfer to keep the Gateway whole.
+#[test]
+fn every_source_but_a_gateway_deposit_is_earmarked() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 1_000;
+
+		for (i, source) in [
+			FundingSource::InitialFunding { channel_id: Some(1), asset: Asset::Eth },
+			FundingSource::InitialFunding { channel_id: Some(2), asset: Asset::Flip },
+			FundingSource::Swap { swap_request_id: SwapRequestId(1) },
+			FundingSource::FreeBalance,
+		]
+		.into_iter()
+		.enumerate()
+		{
+			Funding::fund_account(ALICE, AMOUNT, source.clone());
+			assert_eq!(
+				MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(),
+				AMOUNT * (i as u128 + 1),
+				"expected {source:?} to be earmarked"
+			);
+		}
 	});
 }

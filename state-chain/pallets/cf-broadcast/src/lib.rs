@@ -29,7 +29,7 @@ use cf_chains::{
 	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
 	RequiresSignatureRefresh, RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, ForeignChain, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination,
 	BroadcastOutcomeHandler, Broadcaster, CfeBroadcastRequest, Chainflip, ChainflipWithTargetChain,
@@ -78,7 +78,7 @@ pub type AttemptCount = u32;
 	MaxEncodedLen,
 )]
 pub enum PalletOffence {
-	FailedToBroadcastTransaction,
+	FailedToBroadcastTransaction(ForeignChain),
 }
 
 #[derive(
@@ -310,6 +310,13 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FailedBroadcasters<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, BTreeSet<T::ValidatorId>, ValueQuery>;
+
+	/// The number of failed attempts for each broadcast. This is *not* the same as the size of
+	/// `FailedBroadcasters`, which is cleared each time all authorities have failed, so that they
+	/// all become eligible for nomination again.
+	#[pallet::storage]
+	pub type BroadcastAttemptCount<T, I = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, AttemptCount, ValueQuery>;
 
 	/// Live transaction broadcast requests.
 	#[pallet::storage]
@@ -876,7 +883,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
 		if !failed_broadcasters.is_empty() {
 			T::OffenceReporter::report_many(
-				PalletOffence::FailedToBroadcastTransaction,
+				PalletOffence::FailedToBroadcastTransaction(T::TargetChain::get()),
 				failed_broadcasters,
 			);
 		}
@@ -893,6 +900,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {
 		AwaitingBroadcast::<T, I>::remove(broadcast_id);
+		BroadcastAttemptCount::<T, I>::remove(broadcast_id);
 		TransactionMetadata::<T, I>::remove(broadcast_id);
 		for transaction_out_id in BroadcastIdToTransactionOutIds::<T, I>::take(broadcast_id) {
 			TransactionOutIdToBroadcastId::<T, I>::remove(transaction_out_id);
@@ -1011,10 +1019,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		// Pass in the current block number as part of the seed to achieve pseudo-randomness.
-		if let Some(nominated_signer) = T::BroadcastSignerNomination::nominate_broadcaster(
-			(broadcast_id, frame_system::Pallet::<T>::block_number()),
-			FailedBroadcasters::<T, I>::get(broadcast_id),
-		) {
+		if let Some(nominated_signer) =
+			T::BroadcastSignerNomination::nominate_broadcaster::<T::TargetChain, _>(
+				(broadcast_id, frame_system::Pallet::<T>::block_number()),
+				FailedBroadcasters::<T, I>::get(broadcast_id),
+			) {
 			// Overwrite the old entry with updated broadcast data.
 			broadcast_data.nominee = Some(nominated_signer.clone());
 			AwaitingBroadcast::<T, I>::insert(broadcast_id, broadcast_data.clone());
@@ -1073,16 +1082,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Handles a broadcast failure. The reporter is added to a list of FailedBroadcasters to be
 	/// slashed later. If no reporter is given, the Nominated broadcast is used instead.
 	/// The broadcast will then be retried.
+	///
+	/// Retry behaviour:
+	/// We retry until all validators have failed to broadcast, and if at that point we have *not*
+	/// reached at least `MIN_RETRY_ATTEMPTS` attempts, we clear the list of failed broadcasters
+	/// and repeat. So with a minimum of 10 and 8 validators, we would retry 16 times before
+	/// aborting. Note that clearing the list also discards the offences accrued so far: only the
+	/// failures of the final round are reported if the broadcast eventually succeeds.
 	fn handle_broadcast_failure(
 		broadcast_id: BroadcastId,
 		failed_broadcaster: T::ValidatorId,
 	) -> DispatchResult {
+		const MIN_RETRY_ATTEMPTS: AttemptCount = 10;
 		ensure!(
 			PendingBroadcasts::<T, I>::get().contains(&broadcast_id),
 			Error::<T, I>::InvalidBroadcastId
 		);
 
-		if let Ok(attempt_count) =
+		if let Ok(failure_count) =
 			FailedBroadcasters::<T, I>::try_mutate(broadcast_id, |failed_broadcasters| {
 				if failed_broadcasters.insert(failed_broadcaster.clone()) {
 					Ok(failed_broadcasters.len())
@@ -1090,10 +1107,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Err(())
 				}
 			}) {
-			// Abort the broadcast if all validators reported failure, Retry otherwise.
-			if attempt_count >= T::EpochInfo::current_authority_count() as usize {
+			let attempt_count = BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |count| {
+				*count = count.saturating_add(1);
+				*count
+			});
+			let all_validators_failed =
+				failure_count >= T::EpochInfo::current_authority_count() as usize;
+
+			// Abort the broadcast if all validators reported failure and we have tried
+			// at least MIN_RETRY_ATTEMPTS times. Retry otherwise.
+			if all_validators_failed && attempt_count >= MIN_RETRY_ATTEMPTS {
 				Self::abort_broadcast(broadcast_id);
 			} else {
+				if all_validators_failed {
+					// All validators have tried and failed, but we haven't reached the minimum
+					// retry attempts yet. Clear the list to give everyone a clean slate.
+					FailedBroadcasters::<T, I>::remove(broadcast_id);
+				}
 				Self::schedule_for_retry::<T::BroadcastFailureRetryPolicy>(broadcast_id);
 			}
 		} else {
@@ -1117,9 +1147,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			broadcast_id
 		);
 
-		// We want to keep the broadcast details, but we don't need the list of failed
-		// broadcasters any more.
+		// We want to keep the broadcast details, but we don't need the failed broadcasters or the
+		// attempt count any more.
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
+		BroadcastAttemptCount::<T, I>::remove(broadcast_id);
 
 		T::BroadcastOutcomeHandler::on_broadcast_aborted(broadcast_id);
 
@@ -1129,9 +1160,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn attempt_count(broadcast_id: BroadcastId) -> AttemptCount {
-		// NOTE: decode_non_dedup_len is correct here only as long as we *don't* use `append` to
-		// insert items.
-		FailedBroadcasters::<T, I>::decode_non_dedup_len(broadcast_id).unwrap_or_default() as u32
+		BroadcastAttemptCount::<T, I>::get(broadcast_id)
 	}
 
 	/// Returns the ApiCall from a `transaction_out_id`.

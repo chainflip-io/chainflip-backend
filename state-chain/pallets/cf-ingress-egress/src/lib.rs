@@ -170,6 +170,7 @@ pub struct PendingPrewitnessedDeposit<T: Config<I>, I: 'static> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct TransactionRejectionStatus<BlockNumber> {
+	/// expire_at == 0 means "rejected, awaiting cleanup"
 	expires_at: BlockNumber,
 	/// We can't expire if the rejected tx has been prewitnessed. We need to wait until the
 	/// rejection is processed.
@@ -1368,6 +1369,9 @@ pub mod pallet {
 						&account_id,
 						&tx_id,
 						|status| match status.take() {
+							Some(TransactionRejectionStatus { expires_at, .. })
+								if expires_at.is_zero() =>
+								Ok(()),
 							Some(TransactionRejectionStatus { prewitnessed, expires_at })
 								if !prewitnessed && expires_at <= now =>
 							{
@@ -1832,6 +1836,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&lookup_id,
 			&tx_id,
 			|opt| match opt {
+				Some(status) if status.expires_at.is_zero() => Ok(false),
 				Some(status) => {
 					ensure!(!status.prewitnessed, Error::<T, I>::TransactionAlreadyPrewitnessed);
 					status.expires_at = expires_at;
@@ -2026,9 +2031,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Err(RecordFailureAndAbortRefund(RefundFailureReason::BelowDustLimit))
 		}
 
-		// this is the function we use to broadcast, used multiple times below
-		let broadcast_and_finalise_fetch = |api_call| {
+		let broadcast = |api_call| {
 			let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
+			broadcast_id
+		};
+
+		// Only a call containing the fetch can prove that the channel was deployed.
+		let broadcast_and_finalise_fetch = |api_call| {
+			let broadcast_id = broadcast(api_call);
 			if let Some(deposit_address) = tx.deposit_address.clone() {
 				let addresses =
 					Self::addresses_requiring_fetch_completion_action(vec![deposit_address]);
@@ -2106,7 +2116,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ccm_refund_metadata.channel_metadata.ccm_additional_data.clone(),
 				)
 				.map_err(|err| RecordFailureAndAbortRefund(RefundFailureReason::FailedToBuildExecutexSwapAndCall(err)))
-				.map(broadcast_and_finalise_fetch)
+				.map(broadcast)
 			},
 		}
 	}
@@ -3030,16 +3040,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								// (screening_id) or, by the channel owner if the owner is not
 								// whitelisted.
 								let screening_id = T::ScreeningBrokerId::get();
-								match (
-									TransactionsMarkedForRejection::<T, I>::take(
-										&screening_id,
+								let check_rejection = |id: &AccountIdFor<T>| -> bool {
+									TransactionsMarkedForRejection::<T, I>::mutate(
+										id,
 										tx_id,
-									),
-									TransactionsMarkedForRejection::<T, I>::take(broker_id, tx_id),
-								) {
-									(None, None) => None,
-									_ => Some(()),
+										|status| match status {
+											Some(status) => {
+												// If expires_at == 0 we know we've already rejected
+												// a deposit for the same tx_id
+												// avoid creating a duplicate expiry entry for it
+												if !status.expires_at.is_zero() {
+													ReportExpiresAt::<T, I>::append(
+														<frame_system::Pallet<T>>::block_number()
+															.saturating_add(One::one()),
+														(id.clone(), tx_id),
+													);
+													status.expires_at = Zero::zero();
+												}
+												true
+											},
+											None => false,
+										},
+									)
+								};
+
+								let screening_broker_found = check_rejection(&screening_id);
+								let broker_found = check_rejection(broker_id);
+
+								if screening_broker_found || broker_found {
+									return Some(())
 								}
+								None
 							})
 							// Collect to ensure that the iterator is fully consumed.
 							.collect::<Vec<_>>()

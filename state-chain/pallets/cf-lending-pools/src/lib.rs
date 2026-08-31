@@ -62,7 +62,8 @@ use cf_primitives::{
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
 	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationHooks, PoolApi, PriceFeedApi,
-	RefundAddressRegistry, SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	RefundAddressRegistry, SafeMode, SafeModeSet, SwapOutputAction, SwapRequestHandler,
+	SwapRequestType,
 };
 use frame_support::{
 	fail,
@@ -117,7 +118,6 @@ pub struct BoostConfiguration {
 	PartialEq,
 	Eq,
 	RuntimeDebug,
-	Default,
 )]
 pub struct PalletSafeMode {
 	pub add_boost_funds_enabled: bool,
@@ -132,7 +132,13 @@ pub struct PalletSafeMode {
 	pub liquidations_enabled: bool,
 }
 
-impl cf_traits::SafeMode for PalletSafeMode {
+impl Default for PalletSafeMode {
+	fn default() -> Self {
+		Self::code_green()
+	}
+}
+
+impl SafeMode for PalletSafeMode {
 	fn code_red() -> Self {
 		Self {
 			add_boost_funds_enabled: false,
