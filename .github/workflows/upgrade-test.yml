@@ -27,9 +27,8 @@ env:
   CHAIN: "dev"
   # Chains and assets introduced in the current release, consumed by bouncer/tests/rpc_tests.ts
   # to skip unknown assets to the old runtime at upgrade boundaries.
-  # TODO: set to "" after 2.3 release
-  NEW_RELEASED_CHAINS: "Bsc"
-  NEW_RELEASED_ASSETS: "Ethereum:CBBTC"
+  NEW_RELEASED_CHAINS: ""
+  NEW_RELEASED_ASSETS: ""
 
 permissions:
   packages: read
@@ -214,21 +213,6 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
 
-          # Remove after 2.3 release
-          # This makes the deposit monitor uses the broker rpc 2.0 not the broker binary
-          sed -i 's/CFDM_BROKER_API_URL=${CFDM_BROKER_API_URL}/CFDM_BROKER_API_URL=${CFDM_CHAINFLIP_RPC_URL}/' localnet/docker-compose.yml
-
-          # Remove after 2.3 release
-          # Use the new solana start script (with current ledger size limit) for the pre-upgrade localnet.
-          git show ${{ github.sha }}:localnet/init/scripts/start-solana.sh > localnet/init/scripts/start-solana.sh
-
-          # Remove after 2.3 release
-          # The old localnet's EVM images (v1.4.1) don't have the cbBTC token contract deployed,
-          # but the cbBTC runtime migration registers its address at upgrade. Start the
-          # pre-upgrade localnet with the new EVM images instead. The old runtime ignores the
-          # extra token, and all pre-existing contract addresses are unchanged.
-          sed -i 's|\(ghcr.io/chainflip-io/chainflip-eth-contracts/[^:]*:\)v[^ ]*|\1v1.5.1-rc2-${NODE_COUNT}|g' localnet/docker-compose.yml
-
           ./localnet/manage.sh
           git reset --hard
 
@@ -264,53 +248,9 @@ jobs:
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
-
-          # These patches rewrite the OLD bouncer checkout, so their patterns go stale whenever
-          # OLD_BIN_COMMIT_HASH moves — and `sed -i` exits 0 whether or not it substituted
-          # anything. Fail loudly instead: a silently skipped patch reintroduces the exact
-          # failure it was added to prevent, and does so in a way that is hard to spot.
-          patch_old_bouncer() {
-            local file=$1 expr=$2 desc=$3
-            cp "$file" "$file.pre-patch"
-            sed -i "$expr" "$file"
-            if cmp -s "$file" "$file.pre-patch"; then
-              echo "::error::Pre-upgrade patch did not apply: ${desc}. Its pattern no longer matches ${{ env.OLD_BIN_COMMIT_HASH }} ($file). Update the pattern, or drop the patch if the old checkout no longer needs it."
-              exit 1
-            fi
-            rm "$file.pre-patch"
-          }
-
-          # Remove after 2.3 release.
-          # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc and
-          # Ethereum cbBTC are the unreleased assets now, so retarget the filter to exclude
-          # them instead.
-          patch_old_bouncer bouncer/tests/rpc_tests.ts \
-            "s/a.chain !== 'Tron'/a.chain !== 'Bsc' \&\& !(a.chain === 'Ethereum' \&\& a.asset === 'CBBTC')/" \
-            "rpc_tests unreleased-asset filter"
-
-          # Apply the current Solana nonce timeout to the pre-upgrade bouncer checkout.
-          # Patched to an absolute value: the old checkout's `ciTimeoutFactor` differs from the
-          # current one, so a factor-scaled patch lands below the check's own ~60s poll budget and
-          # the timeout fires before the check can report the actual nonce count.
-          patch_old_bouncer bouncer/tests/fast_bouncer.test.ts \
-            "/'CheckAvailabilityAllSolanaNonces'/,/^  );$/ s/[0-9][0-9]* \* ciTimeoutFactor/90/" \
-            "Solana nonce check timeout"
-
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
-          git reset --hard
-
-      # TODO: This is a temporary workaround to setup Bsc in the upgrade test.
-      # To remove after BSC is released.
-      - name: Start Bsc containers 🌞
-        if: inputs.run-job
-        run: |
-          git checkout ${{ github.sha }}
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up bsc --quiet-pull -d
-          source localnet/helper.sh
-          echo "🌞 Waiting for BSC node to start"
-          check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8645
           git reset --hard
 
       - name: Upgrade runtime 🚀
@@ -325,17 +265,6 @@ jobs:
           ./commands/submit_runtime_upgrade.ts \
             --runtime ./../upgrade-to-runtime/state_chain_runtime.compact.compressed.wasm \
             --try_runtime
-
-          # TODO: Remove after 2.3. Old engines cannot read the oversized runtime-upgrade block.
-          pkill -x engine-runner || true
-          while pgrep -x engine-runner > /dev/null; do sleep 1; done
-          INIT_RUN=false \
-            LOG_SUFFIX=-runtime-upgrade-restart \
-            SELECTED_NODES=bashful \
-            LOCALNET_INIT_DIR=./../localnet/init \
-            BINARY_ROOT_PATH=./../upgrade-to-bins \
-            ./../localnet/init/scripts/start-all-engines.sh
-          sleep 7
 
           ./commands/start_dm_localnet_apis.ts \
             --bins ./../upgrade-to-bins \
@@ -352,12 +281,6 @@ jobs:
           cd bouncer
           ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
-          # TODO: This is a temporary workaround to setup BSC.
-          # To remove after BSC is released.
-          ./commands/setup_new_bsc_chain.ts
-          # TODO: This is a temporary workaround to setup the new cbBTC asset.
-          # To remove after 2.3 release.
-          ./commands/setup_new_cbbtc_asset.ts
           ./test_commands/all_cuncurrent_tests.sh
 
       # Globbed so that engines restarted mid-run are included. The binary upgrade writes to

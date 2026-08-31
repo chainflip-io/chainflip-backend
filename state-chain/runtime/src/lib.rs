@@ -434,7 +434,7 @@ pub type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	MigrationsForV2_3,
+	MigrationsForV2_4,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -540,18 +540,7 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-pub type MigrationsForV2_3 = (
-	migrations::failed_broadcast_chain::Migration,
-	migrations::safe_mode::SafeModeMigration,
-	migrations::assethub_deposit_details::Migration,
-	migrations::assethub_elections::AssethubElectionsInit,
-	migrations::bsc_integration::BscElectionsInit,
-	migrations::bsc_integration::BscIngressEgressInit,
-	migrations::bsc_integration::BscChainstate,
-	migrations::bsc_integration::BscBroadcasterInit,
-	migrations::broker_withdrawal_addresses_to_asset_balances::Migration,
-	migrations::refund_addresses_to_asset_balances::Migration,
-);
+pub type MigrationsForV2_4 = ();
 
 #[cfg(test)]
 mod test {
