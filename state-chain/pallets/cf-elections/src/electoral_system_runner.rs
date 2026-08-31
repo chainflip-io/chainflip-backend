@@ -22,6 +22,7 @@ use crate::{
 		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectoralSystemTypes, PartialVoteOf,
 		VoteOf, VotePropertiesOf,
 	},
+	vote_storage::ComponentStorageKind,
 	CorruptStorageError, ElectionIdentifier,
 };
 
@@ -115,6 +116,15 @@ pub trait ElectoralSystemRunner:
 		election_identifier: ElectionIdentifierOf<Self>,
 		partial_vote: &PartialVoteOf<Self>,
 	) -> Result<(), DispatchError>;
+
+	/// Which vote-component storages this election can occupy, so that the pallet can skip
+	/// reading and writing one a vote can never be in.
+	///
+	/// The identifier names the electoral system, so this is exact where the composite's own
+	/// `VoteStorage::component_storage_kind` has to cover both.
+	fn election_component_storage_kind(
+		election_identifier: ElectionIdentifierOf<Self>,
+	) -> ComponentStorageKind;
 }
 
 use crate::UniqueMonotonicIdentifier;
