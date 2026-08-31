@@ -36,6 +36,7 @@ import type {
   PalletCfValidatorPalletConfigUpdate,
   PalletCfValidatorDelegationOperatorSettings,
   PalletCfValidatorDelegationChange,
+  PalletCfValidatorDelegationDelegatorRelations,
   CfPrimitivesWitnessingTaskName,
   SpConsensusGrandpaAppPublic,
   PalletCfGovernanceGovernanceCouncil,
@@ -899,6 +900,17 @@ export interface ChainEvents extends GenericChainEvents {
       'Validator',
       'MaxBidUpdated',
       { delegator: AccountId32; change: PalletCfValidatorDelegationChange }
+    >;
+
+    /**
+     * A delegator submitted a new full delegation plan via `delegate_multi`. `plan` is the
+     * resulting set of relations that was actually stored (after dropping zero-amount
+     * entries and prorating down to fit the delegator's balance, if it was oversubscribed).
+     **/
+    DelegationPlanUpdated: GenericPalletEvent<
+      'Validator',
+      'DelegationPlanUpdated',
+      { delegator: AccountId32; plan: PalletCfValidatorDelegationDelegatorRelations }
     >;
 
     /**
