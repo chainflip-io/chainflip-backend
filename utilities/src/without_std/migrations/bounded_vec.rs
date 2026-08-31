@@ -106,7 +106,7 @@ impl<X, S: sp_core::Get<u32>, V: Version, M: Migration<X, V>> Migration<WrappedB
 	type ForwardsError = VecMigrationFailed<M::ForwardsError>;
 	type BackwardsError = VecMigrationFailed<M::BackwardsError>;
 	type Details = M::Details;
-	type Close<P: super::basics::Func<Self::Details, Input = ()>> = MapMigration<(M::Close<P>,)>;
+	// type Close<P: super::basics::Func<Self::Details, Input = ()>> = MapMigration<(M::Close<P>,)>;
 
 	fn try_forwards(
 		x: Self::From,
@@ -146,7 +146,7 @@ impl<
 	> Migration<BoundedVec<X, S>, vCurrent> for GenericMapMigration<(M,)>
 {
 	type From = WrappedBoundedVec<M::From, S>;
-	type Close<P: super::basics::Func<Self::Details, Input = ()>> = Self;
+	// type Close<P: super::basics::Func<Self::Details, Input = ()>> = Self;
 
 	fn try_forwards(x: Self::From, _details: &()) -> Result<BoundedVec<X, S>, Self::ForwardsError> {
 		let result =

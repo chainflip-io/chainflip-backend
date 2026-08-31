@@ -110,7 +110,7 @@ macro_rules! impl_identity_migrations_with_wrapper {
 
 		impl $crate::migrations::basics::Migration<$Ty, $crate::migrations::basics::vCurrent> for $crate::migrations::primitives::WrapMigration {
 			type From = $Wrapper;
-            type Close<P: $crate::migrations::basics::Func<(), Input = ()>> = Self;
+            // type Close<P: $crate::migrations::basics::Func<(), Input = ()>> = Self;
 
 			fn try_forwards(x: Self::From, _details: &()) -> Result<$Ty, Self::ForwardsError> {
 				Ok(x.0)
@@ -207,7 +207,7 @@ impl<T: HasGenericVariant + HasChangelog> IsHistoricalType for HistoricalEmptyPl
 pub struct NewTypeWithDefault;
 impl<V: Version, T: HasChangelog + Default> Migration<T, V> for NewTypeWithDefault {
 	type From = HistoricalEmptyPlaceholder<T>;
-	type Close<P: Func<(), Input = ()>> = Self;
+	// type Close<P: Func<(), Input = ()>> = Self;
 
 	fn try_forwards(_: Self::From, _details: &()) -> Result<T, Self::ForwardsError> {
 		Ok(Default::default())
@@ -317,7 +317,7 @@ macro_rules! impl_migrations_for_container {
 			type ForwardsError = $forwards_error;
 			type BackwardsError = $backwards_error;
 			type Details = ($($var_M::Details),+);
-	        type Close<$var_P: Func<Self::Details, Input = ()>> = $close;
+	        // type Close<$var_P: Func<Self::Details, Input = ()>> = $close;
 
 			fn try_forwards($var_try_f: Self::From, $var_details_f: &Self::Details) -> Result<$container<$($ty),+>, Self::ForwardsError> {
 				$expr_try_f
@@ -330,7 +330,7 @@ macro_rules! impl_migrations_for_container {
 
 		impl<$($ty $(: $($ty_path)* )? ,)+ $($var_M: Migration<$ty, vCurrent, ForwardsError = Never, BackwardsError = Never, Details = () $(, From: $($from_path)*)?>),+> Migration<$container<$($ty),+>, vCurrent> for GenericMapMigration<($($var_M, )+)> {
 			type From = $container<$($var_M::From),+>;
-	        type Close<P2: Func<Self::Details, Input = ()>> = Self;
+	        // type Close<P2: Func<Self::Details, Input = ()>> = Self;
 
 			fn try_forwards($var_generic_try_f: Self::From, _details: &()) -> Result<$container<$($ty),+>, Self::ForwardsError> {
 				$expr_generic_try_f
@@ -568,8 +568,8 @@ impl<
 	type ForwardsError = BTreeMapMigrationFailed<M1::ForwardsError, M2::ForwardsError>;
 	type BackwardsError = BTreeMapMigrationFailed<M1::BackwardsError, M2::BackwardsError>;
 	type Details = (M1::Details, M2::Details);
-	type Close<P: Func<Self::Details, Input = ()>> =
-		MapMigration<(M1::Close<Fst<P, Self::Details>>, M2::Close<Snd<P, Self::Details>>)>;
+	// type Close<P: Func<Self::Details, Input = ()>> =
+	// 	MapMigration<(M1::Close<Fst<P, Self::Details>>, M2::Close<Snd<P, Self::Details>>)>;
 
 	fn try_forwards(
 		x: Self::From,
@@ -623,7 +623,7 @@ impl<
 	> Migration<BTreeMap<A, B>, vCurrent> for GenericMapMigration<(M1, M2)>
 {
 	type From = BTreeMap<M1::From, M2::From>;
-	type Close<P: Func<Self::Details, Input = ()>> = Self;
+	// type Close<P: Func<Self::Details, Input = ()>> = Self;
 
 	fn try_forwards(x: Self::From, _details: &()) -> Result<BTreeMap<A, B>, Self::ForwardsError> {
 		let mut result = BTreeMap::new();

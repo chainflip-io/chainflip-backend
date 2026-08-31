@@ -126,7 +126,7 @@ macro_rules! generate_module {
                         )>;
                         type ForwardsError = cf_utilities::never::Never;
                         type BackwardsError = cf_utilities::never::Never;
-                        type Close<P: Func<(), Input = ()>> = Self;
+                        // type Close<P: Func<(), Input = ()>> = Self;
 
                         fn try_forwards(x: Self::From, _details: &()) -> Result<$struct $(< $($T,)+ >)?, Self::ForwardsError> {
                             Ok(
@@ -246,7 +246,7 @@ macro_rules! generate_module {
                                     type ForwardsError = StructForwardsError;
                                     type BackwardsError = StructBackwardsError;
 									type Details = FieldCustomMigrationDetails;
-	                                type Close<P: Func<Self::Details, Input = ()>> = MapMigration<P, Self>;
+	                                // type Close<P: Func<Self::Details, Input = ()>> = MapMigration<P, Self>;
 
                                     type From = StructWithT<TyFrom>;
 
@@ -699,7 +699,7 @@ macro_rules! generate_module {
                                     type ForwardsError = EnumForwardsError;
                                     type BackwardsError = EnumBackwardsError;
 									type Details = VariantCustomMigrationDetails;
-	                                type Close<P: Func<Self::Details, Input = ()>> = MapMigration<P, Self>;
+	                                // type Close<P: Func<Self::Details, Input = ()>> = MapMigration<P, Self>;
 
                                     fn try_forwards(x: Self::From, details: &Self::Details) -> Result<EnumWithT<To>, Self::ForwardsError> {
                                         Ok(match x {
@@ -858,7 +858,7 @@ macro_rules! generate_module {
                         )>;
                         type ForwardsError = cf_utilities::never::Never;
                         type BackwardsError = cf_utilities::never::Never;
-                        type Close<P: Func<(), Input = ()>> = Self;
+                        // type Close<P: Func<(), Input = ()>> = Self;
 
                         fn try_forwards(x: Self::From, _details: &()) -> Result<RealEnum, Self::ForwardsError> {
                             Ok(

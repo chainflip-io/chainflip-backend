@@ -742,7 +742,7 @@ impl Migration<<EncodedAddress as HasVersion<v20300>>::HistoricalType, v20300>
 	for NewBscEncodedAddress
 {
 	type From = ();
-	type Close<P: Func<Self::Details, Input = ()>> = Self;
+	// type Close<P: Func<Self::Details, Input = ()>> = Self;
 	fn try_forwards(
 		_x: Self::From,
 		_details: &(),
@@ -761,7 +761,7 @@ impl Migration<<EncodedAddress as HasVersion<v20200>>::HistoricalType, v20200>
 	for NewTronEncodedAddress
 {
 	type From = ();
-	type Close<P: Func<Self::Details, Input = ()>> = Self;
+	// type Close<P: Func<Self::Details, Input = ()>> = Self;
 	fn try_forwards(
 		_x: Self::From,
 		_details: &(),
@@ -780,7 +780,7 @@ impl Migration<<EncodedAddress as HasVersion<v20100>>::HistoricalType, v20100>
 	for NewSolEncodedAddress
 {
 	type From = ();
-	type Close<P: Func<Self::Details, Input = ()>> = Self;
+	// type Close<P: Func<Self::Details, Input = ()>> = Self;
 	fn try_forwards(
 		_x: Self::From,
 		_details: &(),

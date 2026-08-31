@@ -149,22 +149,28 @@ macro_rules! define_all_runtime_versions {
             impl<X: HasChangelog> HasVersion<$version> for X {
                 type HistoricalType = migration_helpers::$version::TypeAtThisVersion<X>;
                 type HistoricalMigration =
-                    <
+                    // <
+                    //     X::$Migration
+                    //     as
+                    //     Migration<migration_helpers::$version::TypeAtThisVersion<X>, $version>
+                    // >::Close<DetailsToHistorical<X, $version>>;
+                    MapMigration<
+                        DetailsToHistorical<X, $version>,
                         X::$Migration
-                        as
-                        Migration<migration_helpers::$version::TypeAtThisVersion<X>, $version>
-                    >::Close<DetailsToHistorical<X, $version>>;
+                    // migration_helpers::$version::MigrationFromThisToCurrent<X>,
+                >;
 
                 type MigrationToCurrent =
-                    <
-                        migration_helpers::$version::MigrationFromThisToCurrent<X>
-                        as
-                        Migration<X, vCurrent>
-                    >::Close<DetailsToCurrent<X, $version>>;
+                    // <
+                    //     migration_helpers::$version::MigrationFromThisToCurrent<X>
+                    //     as
+                    //     Migration<X, vCurrent>
+                    // >::Close<DetailsToCurrent<X, $version>>;
 
-                // MapMigration<
-                //     migration_helpers::$version::MigrationFromThisToCurrent<X>
-                // >;
+                    MapMigration<
+                    DetailsToCurrent<X, $version>,
+                    migration_helpers::$version::MigrationFromThisToCurrent<X>,
+                >;
 
 	            // fn details_for_migration_to_current() -> <Self::MigrationToCurrent as Migration<Self, vCurrent>>::Details {
                 //     migration_helpers::$version::details_for_migration_to_current::<X>()
