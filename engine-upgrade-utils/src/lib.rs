@@ -246,6 +246,37 @@ mod filter_args_tests {
 	}
 
 	#[test]
+	fn values_may_contain_equals_signs() {
+		// Only the first `=` separates the option name from its value, so query strings survive.
+		assert_eq!(
+			filter(&[
+				"chainflip-engine",
+				"--incompatible.option=https://rpc.example.com/?apikey=secret",
+				"--compatible.option=https://rpc.example.com/?apikey=secret",
+			]),
+			vec!["chainflip-engine", "--compatible.option=https://rpc.example.com/?apikey=secret"],
+		);
+	}
+
+	#[test]
+	fn split_value_may_contain_equals_signs() {
+		assert_eq!(
+			filter(&[
+				"chainflip-engine",
+				"--incompatible.option",
+				"https://rpc.example.com/?apikey=secret",
+				"--compatible.option",
+				"https://rpc.example.com/?apikey=secret",
+			]),
+			vec![
+				"chainflip-engine",
+				"--compatible.option",
+				"https://rpc.example.com/?apikey=secret"
+			],
+		);
+	}
+
+	#[test]
 	fn valueless_flag_does_not_consume_the_next_arg() {
 		assert_eq!(
 			filter(&["chainflip-engine", "--incompatible.flag", "--compatible.option", "value"]),
