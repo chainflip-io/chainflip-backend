@@ -35,10 +35,11 @@ jobs:
       count: ${{ steps.collect.outputs.count }}
     steps:
       - name: Checkout main
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Collect commits to forward-port
         id: collect
@@ -94,10 +95,11 @@ jobs:
         commit: ${{ fromJSON(needs.prepare.outputs.commits) }}
     steps:
       - name: Checkout main
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Git 🛠️
         uses: ./.github/actions/setup-git
@@ -114,7 +116,7 @@ jobs:
           git cherry-pick -x "${{ matrix.commit.sha }}"
 
       - name: Create Pull Request 🐂
-        uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38
+        uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38 # v5.0.2
         with:
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           commit-message: "forward-port: ${{ matrix.commit.sha }} to main"
