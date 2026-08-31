@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.3.1] - 2026-08-31
+
+## Fixes
+
+- Support for splitting Engine runner args with equal sign.
+
 ## [2.3.0] - 2026-08-28
 
 ### Features
