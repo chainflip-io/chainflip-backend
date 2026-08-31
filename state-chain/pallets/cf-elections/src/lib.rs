@@ -1381,6 +1381,7 @@ pub mod pallet {
 			T::WeightInfo::authorise_voter()
 		}
 
+		#[cf_runtime_utilities::instrument(pallet)]
 		pub fn do_vote(
 			context: &VoterContext<T>,
 			authority_votes: AuthorityVotes<T, I>,
