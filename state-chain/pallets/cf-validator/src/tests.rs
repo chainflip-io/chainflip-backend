@@ -3554,9 +3554,7 @@ mod delegation {
 			assert_noop!(
 				ValidatorPallet::delegate_multi(
 					OriginTrait::signed(DELEGATOR),
-					DelegatorRelations {
-						operators: BTreeMap::from([(OPERATOR_A, half_of_min)])
-					}
+					DelegatorRelations { operators: BTreeMap::from([(OPERATOR_A, half_of_min)]) }
 				),
 				Error::<Test>::DelegationAmountBelowMinimum
 			);
@@ -3613,10 +3611,14 @@ mod delegation {
 				DelegationChoices::<Test>::get(DELEGATOR).unwrap().operators,
 				BTreeMap::from([(OPERATOR_B, BID_TO_B)])
 			);
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::DelegationPlanUpdated {
-				delegator: DELEGATOR,
-				plan: DelegatorRelations { operators: BTreeMap::from([(OPERATOR_B, BID_TO_B)]) },
-			}));
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(
+				Event::DelegationPlanUpdated {
+					delegator: DELEGATOR,
+					plan: DelegatorRelations {
+						operators: BTreeMap::from([(OPERATOR_B, BID_TO_B)]),
+					},
+				},
+			));
 			assert!(<Roles as AccountRoleRegistry<Test>>::has_account_role(
 				&DELEGATOR,
 				AccountRole::LiquidityProvider
