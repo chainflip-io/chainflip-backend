@@ -69,7 +69,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 },
                 electoral_system_runner::{ElectoralSystemRunner, RunnerStorageAccessTrait},
                 electoral_system::{AuthorityVoteOf, VotePropertiesOf},
-                vote_storage::AuthorityVote,
+                vote_storage::{AuthorityVote, ComponentStorageKind, VoteStorage},
                 ElectionIdentifier,
             };
             use crate::vote_storage::composite::$module::{CompositeVoteProperties, CompositeVote, CompositePartialVote};
@@ -277,6 +277,16 @@ macro_rules! generate_electoral_system_tuple_impls {
                         // If election ID and vote are not belonging to the same electoral system
                         #[allow(unreachable_patterns)]
                         _ => Err(DispatchError::Other("VoteMismatch")),
+                    }
+                }
+
+                fn election_component_storage_kind(
+                    election_identifier: ElectionIdentifierOf<Self>,
+                ) -> ComponentStorageKind {
+                    match *election_identifier.extra() {
+                        $(CompositeElectionIdentifierExtra::$electoral_system(_) => {
+                            <<$electoral_system as ElectoralSystemTypes>::VoteStorage as VoteStorage>::component_storage_kind()
+                        },)*
                     }
                 }
 

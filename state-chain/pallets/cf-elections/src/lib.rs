@@ -857,17 +857,26 @@ pub mod pallet {
 							.try_into()
 							.map_err(|_| CorruptStorageError::new())?;
 
+						let component_storage_kind =
+							T::ElectoralSystemRunner::election_component_storage_kind(
+								election_identifier,
+							);
+
 						let bitmap_components = ElectionBitmapComponents::<T, I>::with(
 							epoch_index,
 							*unique_monotonic_identifier,
-							ComponentStorageKind::Both,
+							component_storage_kind,
 							|election_bitmap_components| {
 								election_bitmap_components.get_all(&current_authorities)
 							},
 						)?;
-						let mut individual_components =
+						// Skips searching for keys this election can never have.
+						let mut individual_components = if component_storage_kind.has_individual() {
 							IndividualComponents::<T, I>::iter_prefix(unique_monotonic_identifier)
-								.collect::<BTreeMap<_, _>>();
+								.collect::<BTreeMap<_, _>>()
+						} else {
+							BTreeMap::new()
+						};
 
 						let mut shared_data_cache = BTreeMap::new();
 
@@ -1422,8 +1431,8 @@ pub mod pallet {
 				}
 
 				let component_storage_kind =
-					VoteStorageOf::<T::ElectoralSystemRunner>::component_storage_kind(
-						&partial_vote,
+					<T::ElectoralSystemRunner as ElectoralSystemRunner>::election_component_storage_kind(
+						election_identifier,
 					);
 
 				Self::handle_corrupt_storage(Self::take_vote_and_then(
@@ -1546,7 +1555,9 @@ pub mod pallet {
 				&authority,
 				authority_index,
 				ContributingAuthorities::<T, I>::contains_key(&authority),
-				ComponentStorageKind::Both, // Make no assumptions about what is stored.
+				<T::ElectoralSystemRunner as ElectoralSystemRunner>::election_component_storage_kind(
+					election_identifier,
+				),
 				|_, _| Ok(()),
 			))?;
 			Ok(())
@@ -2186,6 +2197,7 @@ pub mod pallet {
 					bitmap_component: ElectionBitmapComponents::<T, I>::with(
 						epoch_index,
 						unique_monotonic_identifier,
+						// No election identifier here to narrow the kind.
 						ComponentStorageKind::Both,
 						|election_bitmap_components| {
 							election_bitmap_components.get(authority_index)

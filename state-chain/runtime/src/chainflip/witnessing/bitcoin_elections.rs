@@ -623,3 +623,53 @@ impl pallet_cf_elections::ElectoralSystemConfiguration for BitcoinElectoralSyste
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use pallet_cf_elections::{
+		electoral_system_runner::ElectoralSystemRunner,
+		electoral_systems::composite::tuple_6_impls::CompositeElectionIdentifierExtra,
+		vote_storage::ComponentStorageKind, ElectionIdentifier, UniqueMonotonicIdentifier,
+	};
+
+	/// The pallet skips a vote-component storage on the strength of this, so a member reported as
+	/// bitmap-only whose votes are stored individually - or the reverse - drops those votes from
+	/// the consensus tally. Bitcoin is the useful instance to pin: it mixes both kinds.
+	#[test]
+	fn component_storage_kind_matches_each_electoral_system() {
+		let kind_of = |extra| {
+			BitcoinElectoralSystemRunner::election_component_storage_kind(ElectionIdentifier::new(
+				UniqueMonotonicIdentifier::from(0u64),
+				extra,
+			))
+		};
+
+		// The block height witnesser and the three block witnessers all use bitmap storage.
+		assert_eq!(
+			kind_of(CompositeElectionIdentifierExtra::A(())),
+			ComponentStorageKind::BitmapOnly
+		);
+		assert_eq!(
+			kind_of(CompositeElectionIdentifierExtra::B(())),
+			ComponentStorageKind::BitmapOnly
+		);
+		assert_eq!(
+			kind_of(CompositeElectionIdentifierExtra::C(())),
+			ComponentStorageKind::BitmapOnly
+		);
+		assert_eq!(
+			kind_of(CompositeElectionIdentifierExtra::D(())),
+			ComponentStorageKind::BitmapOnly
+		);
+		// Fee tracking is the one individual-only member, and liveness is bitmap again.
+		assert_eq!(
+			kind_of(CompositeElectionIdentifierExtra::EE(())),
+			ComponentStorageKind::IndividualOnly
+		);
+		assert_eq!(
+			kind_of(CompositeElectionIdentifierExtra::FF(())),
+			ComponentStorageKind::BitmapOnly
+		);
+	}
+}
