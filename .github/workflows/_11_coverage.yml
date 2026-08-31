@@ -34,7 +34,7 @@ jobs:
 
       - name: Set up Rust cache 🦀💰
         if: contains(inputs.ci-runner, 'no-cache') == false
-        uses: namespacelabs/nscloud-cache-action@v1
+        uses: namespacelabs/nscloud-cache-action@c5f8dab7560444c4bf8dbc64f1b203431873c547 # v1.6.1
         with:
           cache: rust
 
@@ -72,7 +72,7 @@ jobs:
 
       - name: Set up Rust cache 🦀💰
         if: contains(inputs.ci-runner, 'no-cache') == false
-        uses: namespacelabs/nscloud-cache-action@v1
+        uses: namespacelabs/nscloud-cache-action@c5f8dab7560444c4bf8dbc64f1b203431873c547 # v1.6.1
         with:
           cache: rust
 
