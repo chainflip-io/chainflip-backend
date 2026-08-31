@@ -44,7 +44,7 @@ jobs:
       - name: Install Bun Runtime
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: "latest"
+          bun-version: "1.4.0"
 
       - name: Build TypeScript Signer for Ethereum EIP712 tests
         working-directory: state-chain/ethereum-eip712/ts-signer
