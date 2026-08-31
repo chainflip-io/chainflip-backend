@@ -40,6 +40,10 @@ struct IncompatibleArg {
 	takes_value: bool,
 }
 
+/// Arguments that OLD_VERSION cannot parse.
+///
+/// This list must be reviewed whenever OLD_VERSION or NEW_VERSION changes so it
+/// reflects only the CLI differences between the two engine versions.
 const INCOMPATIBLE_WITH_OLD: &[IncompatibleArg] = &[
 	IncompatibleArg { name: "--bsc.rpc.http_endpoint", takes_value: true },
 	IncompatibleArg { name: "--bsc.backup_rpc.http_endpoint", takes_value: true },
