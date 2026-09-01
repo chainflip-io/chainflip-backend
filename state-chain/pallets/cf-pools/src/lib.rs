@@ -18,14 +18,13 @@
 
 use cf_amm::{
 	common::{AskBidMap, AssetPair, LimitOrder, PoolPairsMap, Side},
-	limit_orders::{self, Collected, PositionInfo},
+	limit_orders::{self, PositionInfo},
 	math::{Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
-use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationHooks,
 	LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
@@ -63,14 +62,6 @@ mod mock;
 mod tests;
 
 impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_update_enabled);
-
-type SweepingThresholds = BoundedBTreeMap<Asset, AssetAmount, ConstU32<100>>;
-pub struct StablecoinDefaults<const N: u128>;
-impl<const N: u128> Get<SweepingThresholds> for StablecoinDefaults<N> {
-	fn get() -> SweepingThresholds {
-		cf_primitives::StablecoinDefaults::<N>::get().try_into().unwrap()
-	}
-}
 
 // Limit on how far in the future an LP can schedule a limit order update/close.
 const SCHEDULE_OPEN_LIMIT_BLOCKS: u32 = 2;
@@ -171,7 +162,9 @@ impl<T: Config> LimitOrderUpdate<T> {
 					None, // Dispatch now
 				);
 				let result = if let Err(err) = result {
-					if err == Error::<T>::OrderDoesNotExist.into() {
+					if err == Error::<T>::OrderDoesNotExist.into() ||
+						err == Error::<T>::UnspecifiedOrderPrice.into()
+					{
 						// Ignore the error if the order doesn't exist, as this is expected.
 						Ok(())
 					} else {
@@ -213,7 +206,10 @@ impl<T: Config> LimitOrderUpdate<T> {
 				{
 					*scheduled_order = self;
 				} else {
-					ensure!(*count < MAX_SCHEDULED_UPDATES, Error::<T>::SheduledUpdateLimitReached);
+					ensure!(
+						*count < MAX_SCHEDULED_UPDATES,
+						Error::<T>::ScheduledUpdateLimitReached
+					);
 					*count += 1;
 					orders.push(self);
 				}
@@ -283,21 +279,18 @@ impl<T: Config> LimitOrderUpdate<T> {
 	MaxEncodedLen,
 )]
 pub enum PalletConfigUpdate {
-	LimitOrderAutoSweepingThreshold {
-		asset: Asset,
-		amount: AssetAmount,
-	},
 	/// Set the per-asset minimum amount required for a limit order to be created or to
 	/// remain open. The minimum applies to the asset being sold (`base_asset` for
 	/// `Side::Sell`, `quote_asset` for `Side::Buy`). Set to `0` to disable the check
 	/// for an asset.
-	SetMinimumLimitOrderAmount {
-		asset: Asset,
-		amount: AssetAmount,
-	},
+	///
+	/// The index is pinned because this type is reachable from the un-versioned `cf_lp_events`
+	/// runtime api.
+	#[codec(index = 1)]
+	SetMinimumLimitOrderAmount { asset: Asset, amount: AssetAmount },
 }
 
-pub const STORAGE_VERSION_U16: u16 = 9;
+pub const STORAGE_VERSION_U16: u16 = 10;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[frame_support::pallet]
@@ -425,13 +418,6 @@ pub mod pallet {
 	pub(super) type MaximumPriceImpact<T: Config> =
 		StorageMap<_, Twox64Concat, AssetPair, u32, OptionQuery>;
 
-	/// Stores thresholds for each asset used in auto-sweeping: if after a swap the amount
-	/// collectable from a limit order reaches/exceeds the threshold, the order it automatically
-	/// swept
-	#[pallet::storage]
-	pub(super) type LimitOrderAutoSweepingThresholds<T: Config> =
-		StorageValue<_, SweepingThresholds, ValueQuery, StablecoinDefaults<1_000>>; // $1000 USD
-
 	/// Minimum amount of the sold asset that a limit order may hold. Set per asset by
 	/// governance. A value of `0` disables the check for that asset.
 	#[pallet::storage]
@@ -447,8 +433,6 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
-
-			Self::auto_sweep_limit_orders();
 
 			for update in ScheduledLimitOrderUpdates::<T>::take(current_block) {
 				let lp = update.lp.clone();
@@ -517,11 +501,13 @@ pub mod pallet {
 		/// The range order size is invalid.
 		InvalidSize,
 		/// The scheduled update limit has been reached.
-		SheduledUpdateLimitReached,
+		ScheduledUpdateLimitReached,
 		/// The account still has open orders.
 		OpenOrdersRemaining,
 		/// The resulting limit order amount is below the configured per-asset minimum.
 		BelowMinimumOrderAmount,
+		/// The swap would move the pool's price further than the pool's configured limit.
+		PriceImpactLimitExceeded,
 	}
 
 	#[pallet::event]
@@ -600,6 +586,23 @@ pub mod pallet {
 		},
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
+		},
+		/// A swap bought into a limit order. The proceeds have been credited to the LP as part of
+		/// the swap.
+		LimitOrderFilled {
+			lp: T::AccountId,
+			base_asset: Asset,
+			quote_asset: Asset,
+			side: Side,
+			id: OrderId,
+			tick: Tick,
+			/// The amount of the order's liquidity that the swap bought.
+			sold_amount: AssetAmount,
+			/// The proceeds credited to the LP in exchange for it.
+			bought_amount: AssetAmount,
+			/// The amount left in the order. Zero means the order was filled in its entirety and
+			/// no longer exists.
+			remaining_amount: AssetAmount,
 		},
 	}
 
@@ -1082,11 +1085,6 @@ pub mod pallet {
 
 			for update in updates {
 				match update {
-					PalletConfigUpdate::LimitOrderAutoSweepingThreshold { asset, amount } => {
-						LimitOrderAutoSweepingThresholds::<T>::mutate(|thresholds| {
-							thresholds.try_insert(asset, amount).expect("Every asset will fit");
-						});
-					},
 					PalletConfigUpdate::SetMinimumLimitOrderAmount { asset, amount } => {
 						MinimumLimitOrderAmount::<T>::set(asset, amount);
 					},
@@ -1106,7 +1104,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		to: any::Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
-		let (asset_pair, order) =
+		let (asset_pair, side) =
 			AssetPair::from_swap(from, to).ok_or(Error::<T>::PoolDoesNotExist)?;
 		Self::try_mutate_pool(asset_pair, |_asset_pair, pool| {
 			let output_amount = if input_amount == 0 {
@@ -1114,21 +1112,27 @@ impl<T: Config> SwappingApi for Pallet<T> {
 			} else {
 				let input_amount: Amount = input_amount.into();
 
-				let tick_before = pool
-					.pool_state
-					.current_price(order)
-					.ok_or(Error::<T>::InsufficientLiquidity)?
-					.2;
-				let (output_amount, _remaining_amount) =
-					pool.pool_state.swap(order, input_amount, None);
-				let tick_after = pool
-					.pool_state
-					.current_price(order)
-					.ok_or(Error::<T>::InsufficientLiquidity)?
-					.2;
+				let tick_before =
+					pool.pool_state.current_price(side).ok_or(Error::<T>::InsufficientLiquidity)?.2;
+				let cf_amm::SwapOutcome {
+					output_amount,
+					remaining_input_amount,
+					limit_order_fills,
+				} = pool.pool_state.swap(side, input_amount, None);
+
+				// Any leftover amount means we ran out of liquidity. It'a all or nothing at this
+				// point.
+				ensure!(remaining_input_amount.is_zero(), Error::<T>::InsufficientLiquidity);
+
+				// The pool doesn't hold the proceeds of the limit orders it just bought into, so
+				// they have to be paid out as part of the swap.
+				Self::process_limit_order_fills(pool, &asset_pair, side, limit_order_fills)?;
+
+				let tick_after =
+					pool.pool_state.current_price(side).ok_or(Error::<T>::InsufficientLiquidity)?.2;
 
 				let swap_tick = PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
-					order,
+					side,
 					input_amount,
 					output_amount,
 				)
@@ -1145,7 +1149,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 						bounded_swap_tick.abs_diff(tick_before),
 					) > maximum_price_impact
 					{
-						return Err(Error::<T>::InsufficientLiquidity.into());
+						return Err(Error::<T>::PriceImpactLimitExceeded.into());
 					}
 				}
 
@@ -1172,8 +1176,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 		who: &Self::AccountId,
 		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
-		let pool_orders =
-			Self::pool_orders_for_account(asset_pair.base, asset_pair.quote, who, true)?;
+		let pool_orders = Self::pool_orders_for_account(asset_pair.base, asset_pair.quote, who)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
@@ -1184,7 +1187,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 		quote_asset: Asset,
 		accounts: &BTreeSet<Self::AccountId>,
 	) -> Result<AskBidMap<Vec<LimitOrder<Self::AccountId>>>, DispatchError> {
-		Self::pool_orders(base_asset, quote_asset, accounts, true)
+		Self::pool_orders(base_asset, quote_asset, accounts)
 			.map(|pool| AskBidMap { asks: pool.limit_orders.asks, bids: pool.limit_orders.bids })
 	}
 
@@ -1192,11 +1195,10 @@ impl<T: Config> PoolApi for Pallet<T> {
 		let mut result: AssetMap<AssetAmount> = AssetMap::from_fn(|_| 0);
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
-			let pool_orders =
-				match Self::pool_orders_for_account(base_asset, Asset::Usdc, who, false) {
-					Ok(orders) => orders,
-					Err(_) => continue,
-				};
+			let pool_orders = match Self::pool_orders_for_account(base_asset, Asset::Usdc, who) {
+				Ok(orders) => orders,
+				Err(_) => continue,
+			};
 			for ask in pool_orders.limit_orders.asks {
 				result[base_asset] = result[base_asset]
 					.saturating_add(ask.sell_amount.saturated_into::<AssetAmount>());
@@ -1608,30 +1610,7 @@ impl<T: Config> Pallet<T> {
 				}
 			}
 
-			for (lp, assets, limit_orders_cache) in pool
-				.limit_orders_cache
-				.clone()
-				.as_ref()
-				.into_iter()
-				.flat_map(|(assets, limit_orders_cache)| {
-					lp_accounts
-						.select_values_from_btree_map(limit_orders_cache)
-						.map(move |(lp, limit_orders_cache)| (lp, assets, limit_orders_cache))
-				})
-				.collect::<Vec<_>>()
-			{
-				for (id, tick) in limit_orders_cache {
-					pool_possibly_mutated = true;
-					Self::sweep_limit_order(
-						&mut pool,
-						lp,
-						&asset_pair,
-						assets.sell_order(),
-						*id,
-						*tick,
-					)?;
-				}
-			}
+			// Limit orders have nothing to sweep: a swap pays their proceeds out as it fills them.
 
 			// Only write back if the pool was indeed referenced by at least one order.
 			if pool_possibly_mutated {
@@ -1642,7 +1621,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn collect_and_mint_limit_order_with_dispatch_error(
+	fn mint_limit_order_with_dispatch_error(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
 		side: Side,
@@ -1650,13 +1629,8 @@ impl<T: Config> Pallet<T> {
 		tick: Tick,
 		sold_amount: Amount,
 		noop_status: NoOpStatus,
-	) -> Result<(Collected, PositionInfo), DispatchError> {
-		let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
-			&(lp.clone(), id),
-			side,
-			tick,
-			sold_amount,
-		) {
+	) -> Result<PositionInfo, DispatchError> {
+		match pool.pool_state.mint_limit_order(&(lp.clone(), id), side, tick, sold_amount) {
 			Ok(ok) => Ok(ok),
 			Err(error) => Err(match error {
 				limit_orders::PositionError::NonExistent =>
@@ -1668,13 +1642,9 @@ impl<T: Config> Pallet<T> {
 				limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
 				limit_orders::PositionError::Other(limit_orders::MintError::MaximumLiquidity) =>
 					Error::<T>::MaximumGrossLiquidity,
-				limit_orders::PositionError::Other(
-					limit_orders::MintError::MaximumPoolInstances,
-				) => Error::<T>::MaximumPoolInstances,
-			}),
-		}?;
-
-		Ok((collected, position_info))
+			}
+			.into()),
+		}
 	}
 
 	/// Enforce the per-asset minimum on the remaining amount of a limit order. The remaining amount
@@ -1820,34 +1790,6 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn sweep_limit_order(
-		pool: &mut Pool<T>,
-		lp: &T::AccountId,
-		asset_pair: &AssetPair,
-		side: Side,
-		id: OrderId,
-		tick: Tick,
-	) -> DispatchResult {
-		let (sold_amount_change, _) = Self::inner_update_limit_order_at_tick(
-			pool,
-			lp,
-			asset_pair,
-			side,
-			id,
-			tick,
-			IncreaseOrDecrease::Decrease(Default::default()),
-			NoOpStatus::Error,
-		)?;
-
-		// We requested no change in the amount we "sell" (sweeping only collects
-		// funds in the amount we "buy"), so that's the outcome we expect:
-		if sold_amount_change != 0 {
-			log_or_panic!("Unexpected sold amount change after sweeping");
-		}
-
-		Ok(())
-	}
-
 	/// Updates limit order assuming that tick stays the same.
 	///
 	/// Returns `(sold_amount_change, resulting_position_amount)`: the absolute change in the sold
@@ -1862,18 +1804,17 @@ impl<T: Config> Pallet<T> {
 		sold_amount_change: IncreaseOrDecrease<Amount>,
 		noop_status: NoOpStatus,
 	) -> Result<(AssetAmount, AssetAmount), DispatchError> {
-		let (sold_amount_change, position_info, collected) = match sold_amount_change {
+		let (sold_amount_change, position_info) = match sold_amount_change {
 			IncreaseOrDecrease::Increase(sold_amount) => {
-				let (collected, position_info) =
-					Self::collect_and_mint_limit_order_with_dispatch_error(
-						pool,
-						lp,
-						side,
-						id,
-						tick,
-						sold_amount,
-						noop_status,
-					)?;
+				let position_info = Self::mint_limit_order_with_dispatch_error(
+					pool,
+					lp,
+					side,
+					id,
+					tick,
+					sold_amount,
+					noop_status,
+				)?;
 
 				let debited_amount: AssetAmount = sold_amount.try_into()?;
 				T::LpBalance::try_debit_account(
@@ -1882,13 +1823,15 @@ impl<T: Config> Pallet<T> {
 					debited_amount,
 				)?;
 
-				(IncreaseOrDecrease::Increase(debited_amount), position_info, collected)
+				(IncreaseOrDecrease::Increase(debited_amount), position_info)
 			},
 			IncreaseOrDecrease::Decrease(sold_amount) => {
-				let (sold_amount, collected, position_info) = match pool
-					.pool_state
-					.collect_and_burn_limit_order(&(lp.clone(), id), side, tick, sold_amount)
-				{
+				let (sold_amount, position_info) = match pool.pool_state.burn_limit_order(
+					&(lp.clone(), id),
+					side,
+					tick,
+					sold_amount,
+				) {
 					Ok(ok) => Ok(ok),
 					Err(error) => Err(match error {
 						limit_orders::PositionError::NonExistent =>
@@ -1909,7 +1852,7 @@ impl<T: Config> Pallet<T> {
 					withdrawn_amount,
 				);
 
-				(IncreaseOrDecrease::Decrease(withdrawn_amount), position_info, collected)
+				(IncreaseOrDecrease::Decrease(withdrawn_amount), position_info)
 			},
 		};
 
@@ -1923,7 +1866,6 @@ impl<T: Config> Pallet<T> {
 			side,
 			id,
 			tick,
-			collected,
 			position_info,
 			sold_amount_change,
 		)?;
@@ -2101,7 +2043,7 @@ impl<T: Config> Pallet<T> {
 		sell_amount: Amount,
 	) -> Result<(), DispatchError> {
 		Self::try_mutate_pool(asset_pair_try_from::<T>(base_asset, quote_asset)?, |_, pool| {
-			Self::collect_and_mint_limit_order_with_dispatch_error(
+			Self::mint_limit_order_with_dispatch_error(
 				pool,
 				account_id,
 				side,
@@ -2127,22 +2069,6 @@ impl<T: Config> Pallet<T> {
 			let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 			f(&asset_pair, pool)
 		})
-	}
-
-	fn try_mutate_pools<
-		E: From<pallet::Error<T>>,
-		F: FnMut(&AssetPair, &mut Pool<T>) -> Result<(), E>,
-	>(
-		mut f: F,
-	) {
-		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
-			let _ = Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
-				let pool =
-					maybe_pool.as_mut().expect("Pools must exist since we are iterating over them");
-
-				f(&asset_pair, pool)
-			});
-		}
 	}
 
 	fn try_mutate_order<R, F: FnOnce(&AssetPair, &mut Pool<T>) -> Result<R, DispatchError>>(
@@ -2224,8 +2150,11 @@ impl<T: Config> Pallet<T> {
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
-						let (sold_base_amount, remaining_quote_amount) =
-							pool_state.swap(Side::Buy, Amount::MAX, Some(sqrt_price));
+						let cf_amm::SwapOutcome {
+							output_amount: sold_base_amount,
+							remaining_input_amount: remaining_quote_amount,
+							..
+						} = pool_state.swap(Side::Buy, Amount::MAX, Some(sqrt_price));
 
 						let bought_quote_amount = Amount::MAX - remaining_quote_amount;
 
@@ -2250,8 +2179,11 @@ impl<T: Config> Pallet<T> {
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
-						let (sold_quote_amount, remaining_base_amount) =
-							pool_state.swap(Side::Sell, Amount::MAX, Some(sqrt_price));
+						let cf_amm::SwapOutcome {
+							output_amount: sold_quote_amount,
+							remaining_input_amount: remaining_base_amount,
+							..
+						} = pool_state.swap(Side::Sell, Amount::MAX, Some(sqrt_price));
 
 						let bought_base_amount = Amount::MAX - remaining_base_amount;
 
@@ -2347,14 +2279,8 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		account: &T::AccountId,
-		filled_orders: bool,
 	) -> Result<PoolOrders<T::AccountId>, DispatchError> {
-		Self::pool_orders(
-			base_asset,
-			quote_asset,
-			&BTreeSet::from([account.clone()]),
-			filled_orders,
-		)
+		Self::pool_orders(base_asset, quote_asset, &BTreeSet::from([account.clone()]))
 	}
 
 	/// Returns the limit and range orders for a given Liquidity Providers within the given pool.
@@ -2363,7 +2289,6 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		accounts: &BTreeSet<T::AccountId>,
-		filled_orders: bool,
 	) -> Result<PoolOrders<T::AccountId>, DispatchError> {
 		let pool = Pools::<T>::get(asset_pair_try_from::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
@@ -2388,18 +2313,18 @@ impl<T: Config> Pallet<T> {
 						},
 					)
 					.filter_map(|(lp, id, tick): (T::AccountId, OrderId, Tick)| {
-						let (collected, position_info) = pool
+						let position_info = pool
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
 							.unwrap();
-						if filled_orders || !position_info.amount.is_zero() {
+						if !position_info.amount.is_zero() {
 							Some(LimitOrder {
 								lp: lp.clone(),
 								id: id.into(),
 								tick,
 								sell_amount: position_info.amount,
 								fees_earned: Default::default(),
-								original_sell_amount: collected.original_amount,
+								original_sell_amount: position_info.original_amount,
 							})
 						} else {
 							None
@@ -2465,7 +2390,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Process changes to limit order:
-	/// - Payout collected `fee` and `bought_amount`
 	/// - Update cache storage for Pool
 	/// - Deposit the correct event.
 	fn process_limit_order_update(
@@ -2475,30 +2399,98 @@ impl<T: Config> Pallet<T> {
 		order: Side,
 		id: OrderId,
 		tick: Tick,
-		collected: Collected,
 		position_info: PositionInfo,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
-		let bought_asset = asset_pair.assets()[!order.to_sold_pair()];
-		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
+		Self::update_limit_orders_cache(pool, lp, order, id, tick, position_info.amount);
 
-		if !bought_amount.is_zero() {
-			T::LpBalance::try_credit_account(lp, bought_asset, bought_amount)?;
+		let zero_change = *amount_change.abs() == 0;
 
-			// LpStats amounts are always in USD
-			T::LpStats::on_limit_order_filled(
+		if !zero_change {
+			Self::deposit_event(Event::<T>::LimitOrderUpdated {
+				lp: lp.clone(),
+				base_asset: asset_pair.base(),
+				quote_asset: asset_pair.quote(),
+				side: order,
+				id,
+				tick,
+				sell_amount_change: Some(amount_change),
+				sell_amount_total: position_info.amount.try_into()?,
+				collected_fees: 0,
+				bought_amount: 0,
+			});
+		}
+		Ok(())
+	}
+
+	/// Pays out the proceeds of the limit orders a swap bought into. The pool does not hold on to
+	/// them, so this must be called for every swap.
+	fn process_limit_order_fills(
+		pool: &mut Pool<T>,
+		asset_pair: &AssetPair,
+		swap_side: Side,
+		fills: Vec<limit_orders::Fill<(T::AccountId, OrderId)>>,
+	) -> DispatchResult {
+		// The orders that fill are the ones selling what the swap is buying.
+		let sold_pair = !swap_side.to_sold_pair();
+		let order_side = sold_pair.sell_order();
+		let bought_asset = asset_pair.assets()[!sold_pair];
+
+		for limit_orders::Fill {
+			lp: (lp, id),
+			tick,
+			sold_amount,
+			bought_amount,
+			remaining_amount,
+		} in fills
+		{
+			let bought_amount: AssetAmount = bought_amount.try_into()?;
+
+			if !bought_amount.is_zero() {
+				T::LpBalance::try_credit_account(&lp, bought_asset, bought_amount)?;
+
+				// LpStats amounts are always in USD
+				T::LpStats::on_limit_order_filled(
+					&lp,
+					&bought_asset,
+					if bought_asset == STABLE_ASSET {
+						bought_amount
+					} else {
+						sold_amount.try_into()?
+					},
+				);
+			}
+
+			Self::update_limit_orders_cache(pool, &lp, order_side, id, tick, remaining_amount);
+
+			Self::deposit_event(Event::<T>::LimitOrderFilled {
 				lp,
-				&bought_asset,
-				if bought_asset == STABLE_ASSET {
-					bought_amount
-				} else {
-					collected.sold_amount.try_into()?
-				},
-			);
+				base_asset: asset_pair.base(),
+				quote_asset: asset_pair.quote(),
+				side: order_side,
+				id,
+				tick,
+				sold_amount: sold_amount.try_into()?,
+				bought_amount,
+				remaining_amount: remaining_amount.try_into()?,
+			});
 		}
 
+		Ok(())
+	}
+
+	/// Keeps the pool's index of open limit orders in step with the order's remaining amount. An
+	/// order with nothing left to sell no longer exists in the pool.
+	fn update_limit_orders_cache(
+		pool: &mut Pool<T>,
+		lp: &T::AccountId,
+		order: Side,
+		id: OrderId,
+		tick: Tick,
+		remaining_amount: Amount,
+	) {
 		let limit_orders = &mut pool.limit_orders_cache[order.to_sold_pair()];
-		if position_info.amount.is_zero() {
+		if remaining_amount.is_zero() {
 			if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
 				lp_limit_orders.remove(&id);
 				if lp_limit_orders.is_empty() {
@@ -2508,70 +2500,6 @@ impl<T: Config> Pallet<T> {
 		} else {
 			limit_orders.entry(lp.clone()).or_default().insert(id, tick);
 		}
-
-		let zero_change = *amount_change.abs() == 0;
-
-		if !zero_change || bought_amount != Default::default() {
-			Self::deposit_event(Event::<T>::LimitOrderUpdated {
-				lp: lp.clone(),
-				base_asset: asset_pair.base(),
-				quote_asset: asset_pair.quote(),
-				side: order,
-				id,
-				tick,
-				sell_amount_change: {
-					if zero_change {
-						None
-					} else {
-						Some(amount_change)
-					}
-				},
-				sell_amount_total: position_info.amount.try_into()?,
-				collected_fees: 0,
-				bought_amount,
-			});
-		}
-		Ok(())
-	}
-
-	fn auto_sweep_limit_orders() {
-		// Auto-sweeping limit orders in case collected amount reaches a threshold:
-		let autosweeping_thresholds = LimitOrderAutoSweepingThresholds::<T>::get();
-
-		Self::try_mutate_pools(|asset_pair, pool| {
-			let collected_orders = {
-				// Clone pool since we don't actually want to make changes
-				// to it yet:
-				let mut pool_state = pool.pool_state.clone();
-				pool_state.collect_all_limit_orders()
-			};
-
-			for (base_or_quote, results_for_order) in collected_orders {
-				for ((lp, order_id), tick, collected, _pos_info) in results_for_order {
-					let asset_to_collect = asset_pair.assets()[!base_or_quote];
-
-					let threshold = autosweeping_thresholds
-						.get(&asset_to_collect)
-						.copied()
-						// Default to not sweeping
-						.unwrap_or(AssetAmount::MAX)
-						.into();
-
-					if collected.bought_amount >= threshold {
-						Self::sweep_limit_order(
-							pool,
-							&lp,
-							asset_pair,
-							base_or_quote.sell_order(),
-							order_id,
-							tick,
-						)?;
-					}
-				}
-			}
-
-			Ok::<_, DispatchError>(())
-		});
 	}
 }
 
