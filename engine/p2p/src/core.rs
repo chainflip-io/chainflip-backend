@@ -58,6 +58,21 @@ use socket::{
 	RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX,
 };
 
+/// Spawn an OS thread that keeps the current `tracing` subscriber.
+pub(crate) fn spawn_with_tracing<F>(name: &str, f: F) -> std::thread::JoinHandle<()>
+where
+	F: FnOnce() + Send + 'static,
+{
+	let dispatch = tracing::dispatcher::get_default(|dispatch| dispatch.clone());
+	std::thread::Builder::new()
+		.name(name.to_owned())
+		.spawn(move || {
+			let _guard = tracing::dispatcher::set_default(&dispatch);
+			f()
+		})
+		.expect("failed to spawn p2p thread")
+}
+
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep
 /// this somewhat short to mitigate some attacks where clients
@@ -690,7 +705,7 @@ impl P2PContext {
 
 		// This OS thread is for incoming messages
 		// TODO: combine this with the authentication thread?
-		std::thread::spawn(move || loop {
+		spawn_with_tracing("p2p-incoming", move || loop {
 			if stop_thread.load(Ordering::Relaxed) {
 				break
 			}
