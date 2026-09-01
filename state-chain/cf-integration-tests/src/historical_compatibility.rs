@@ -26,7 +26,7 @@ use cf_utilities::{
 	for_each_runtime_version,
 	migrations::{
 		basics::{CanonicalPatchVersion, Version},
-		v20000, v20100, v20200, v20300,
+		v20000, v20100, v20200, v20300, v20400,
 	},
 };
 use frame_support::sp_runtime::AccountId32;

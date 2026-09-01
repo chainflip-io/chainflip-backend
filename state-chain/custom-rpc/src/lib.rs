@@ -50,7 +50,7 @@ use cf_rpc_apis::{
 use cf_utilities::{
 	migrations::{
 		basics::{migrate_from_historical_type, try_migrate_from_historical_type},
-		v20000, v20100,
+		v20000, v20100, v20200, v20300,
 	},
 	rpc::NumberOrHex,
 };
@@ -2128,8 +2128,15 @@ where
 						#[expect(deprecated)]
 						api.cf_all_account_infos_before_version_19(hash, roles)?
 							.into_iter()
-							.map(Into::into)
-							.collect::<Vec<_>>()
+							.map(TryInto::try_into)
+							.collect::<Result<Vec<_>, _>>()
+							.map_err(|_err| {
+								CfApiError::ErrorObject(ErrorObject::owned(
+									ErrorCode::InternalError.code(),
+									"Error when migrating runtime api reply",
+									None::<()>,
+								))
+							})?
 					} else {
 						api.cf_all_account_infos(hash, roles)?
 					};
@@ -2370,20 +2377,38 @@ where
 					})?
 				} else if api_version < 19 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_19(
-						hash,
-						&account_id,
-						ShouldSweep::Yes,
-					)?
-					.into()
+					try_migrate_from_historical_type(
+						v20200,
+						api.cf_common_account_info_before_version_19(
+							hash,
+							&account_id,
+							ShouldSweep::Yes,
+						)?,
+					)
+					.map_err(|_err| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InternalError.code(),
+							"Error when migrating runtime api reply",
+							None::<()>,
+						))
+					})?
 				} else if api_version < 21 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_21(
-						hash,
-						&account_id,
-						ShouldSweep::Yes,
-					)?
-					.into()
+					try_migrate_from_historical_type(
+						v20300,
+						api.cf_common_account_info_before_version_21(
+							hash,
+							&account_id,
+							ShouldSweep::Yes,
+						)?,
+					)
+					.map_err(|_err| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InternalError.code(),
+							"Error when migrating runtime api reply",
+							None::<()>,
+						))
+					})?
 				} else {
 					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}
