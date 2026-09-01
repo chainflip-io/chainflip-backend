@@ -17,17 +17,16 @@
 use super::*;
 
 #[derive(
-	Encode,
-	Decode,
-	TypeInfo,
-	Clone,
-	PartialEq,
-	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
-	Default,
+	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
 )]
 pub struct EmissionsSafeMode {
 	pub emissions_sync_enabled: bool,
+}
+
+impl Default for EmissionsSafeMode {
+	fn default() -> Self {
+		Self { emissions_sync_enabled: true }
+	}
 }
 
 // The v20 ValidatorInfo, with apy_bp: emissions (and therefore APY) no longer exist as of v21.
