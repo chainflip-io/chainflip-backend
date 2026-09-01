@@ -48,8 +48,8 @@ export async function initiateSwap(
   if (ccmSwap) {
     ccmSwapMetadata =
       functionCall === testSwap
-        ? await newCcmMetadata(destAsset, undefined, undefined, rng)
-        : await newVaultSwapCcmMetadata(sourceAsset, destAsset, undefined, undefined, rng);
+        ? await newCcmMetadata(destAsset, { rng })
+        : await newVaultSwapCcmMetadata(sourceAsset, destAsset, { rng });
   }
 
   if (destAsset === 'Btc') {
