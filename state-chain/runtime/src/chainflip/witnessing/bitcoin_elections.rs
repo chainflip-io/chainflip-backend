@@ -633,9 +633,6 @@ mod tests {
 		vote_storage::ComponentStorageKind, ElectionIdentifier, UniqueMonotonicIdentifier,
 	};
 
-	/// The pallet skips a vote-component storage on the strength of this, so a member reported as
-	/// bitmap-only whose votes are stored individually - or the reverse - drops those votes from
-	/// the consensus tally. Bitcoin is the useful instance to pin: it mixes both kinds.
 	#[test]
 	fn component_storage_kind_matches_each_electoral_system() {
 		let kind_of = |extra| {
