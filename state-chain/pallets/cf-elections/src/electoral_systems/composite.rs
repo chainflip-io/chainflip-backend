@@ -411,7 +411,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 StorageAccess::set_election_state(*self.id.unique_monotonic(), CompositeElectionState::$current(state))
             }
             fn clear_votes(&self) {
-                StorageAccess::clear_election_votes(*self.id.unique_monotonic());
+                StorageAccess::clear_election_votes(self.id.with_extra(CompositeElectionIdentifierExtra::$current(*self.id.extra())));
             }
             fn delete(self) {
                 StorageAccess::delete_election(self.id.with_extra(CompositeElectionIdentifierExtra::$current(*self.id.extra())));

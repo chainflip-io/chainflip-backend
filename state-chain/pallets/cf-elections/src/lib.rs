@@ -788,16 +788,28 @@ pub mod pallet {
 
 				Ok(())
 			}
-			fn clear_election_votes(unique_monotonic_identifier: UniqueMonotonicIdentifier) {
-				ElectionBitmapComponents::<T, I>::clear(unique_monotonic_identifier);
-				for (_, (_, individual_component)) in
-					IndividualComponents::<T, I>::drain_prefix(unique_monotonic_identifier)
-				{
-					<<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as
-				VoteStorage>::visit_shared_data_references_in_individual_component(&
-				individual_component, |shared_data_hash| { 		Pallet::<T,
-				I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier);
-					});
+			fn clear_election_votes(
+				composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
+			) {
+				let unique_monotonic_identifier = *composite_election_identifier.unique_monotonic();
+				let component_storage_kind =
+					<T::ElectoralSystemRunner as ElectoralSystemRunner>::election_component_storage_kind(
+						composite_election_identifier,
+					);
+
+				if component_storage_kind.has_bitmap() {
+					ElectionBitmapComponents::<T, I>::clear(unique_monotonic_identifier);
+				}
+				// Skips searching the trie for keys this election can never have.
+				if component_storage_kind.has_individual() {
+					for (_, (_, individual_component)) in
+						IndividualComponents::<T, I>::drain_prefix(unique_monotonic_identifier)
+					{
+						<<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::visit_shared_data_references_in_individual_component(
+							&individual_component,
+							|shared_data_hash| Pallet::<T, I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier),
+						);
+					}
 				}
 				ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
 			}
@@ -805,7 +817,7 @@ pub mod pallet {
 				composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
 			) {
 				let unique_monotonic_identifier = composite_election_identifier.unique_monotonic();
-				Self::clear_election_votes(*unique_monotonic_identifier);
+				Self::clear_election_votes(composite_election_identifier);
 				ElectionProperties::<T, I>::remove(composite_election_identifier);
 				ElectionState::<T, I>::remove(unique_monotonic_identifier);
 				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
@@ -1628,9 +1640,7 @@ pub mod pallet {
 				Self::ensure_election_exists(election_identifier)?;
 			}
 
-			RunnerStorageAccess::<T, I>::clear_election_votes(
-				*election_identifier.unique_monotonic(),
-			);
+			RunnerStorageAccess::<T, I>::clear_election_votes(election_identifier);
 
 			Ok(())
 		}
