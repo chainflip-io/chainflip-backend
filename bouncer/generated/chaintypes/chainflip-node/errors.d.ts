@@ -1482,11 +1482,6 @@ export interface ChainErrors extends GenericChainErrors {
     FlipTransferToOnChainBalanceDisabled: GenericPalletError;
 
     /**
-     * Transfers to the on-chain balance are only available once Flip 2.1 is active.
-     **/
-    FlipTransferToOnChainBalanceUnavailable: GenericPalletError;
-
-    /**
      * The transferred amount is below the minimum funding amount.
      **/
     BelowMinimumFunding: GenericPalletError;
