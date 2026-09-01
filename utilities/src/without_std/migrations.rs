@@ -233,4 +233,9 @@ define_all_runtime_versions! {
 		canonical_patch: Unreleased,
 		changelog_entry: in_20300,
 	},
+	{
+		release: v20400,
+		canonical_patch: Unreleased,
+		changelog_entry: in_20400,
+	},
 }
