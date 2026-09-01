@@ -158,7 +158,9 @@ pub trait RunnerStorageAccessTrait {
 	) -> Result<(), CorruptStorageError>;
 
 	// Clear the votes of a particular election
-	fn clear_election_votes(unique_monotonic_identifier: UniqueMonotonicIdentifier);
+	fn clear_election_votes(
+		composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
+	);
 
 	fn delete_election(
 		composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
