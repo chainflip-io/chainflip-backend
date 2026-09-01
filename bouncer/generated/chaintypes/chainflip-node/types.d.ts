@@ -4838,15 +4838,10 @@ export type PalletCfPoolsCloseOrder =
       };
     };
 
-export type PalletCfPoolsPalletConfigUpdate =
-  | {
-      type: 'LimitOrderAutoSweepingThreshold';
-      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
-    }
-  | {
-      type: 'SetMinimumLimitOrderAmount';
-      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
-    };
+export type PalletCfPoolsPalletConfigUpdate = {
+  type: 'SetMinimumLimitOrderAmount';
+  value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
+};
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -15723,7 +15718,38 @@ export type PalletCfPoolsEvent =
    * An order wasn't deleted (order not found)
    **/
   | { name: 'OrderDeletionFailed'; data: { order: PalletCfPoolsCloseOrder } }
-  | { name: 'PalletConfigUpdated'; data: { update: PalletCfPoolsPalletConfigUpdate } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfPoolsPalletConfigUpdate } }
+  /**
+   * A swap bought into a limit order. The proceeds have been credited to the LP as part of
+   * the swap.
+   **/
+  | {
+      name: 'LimitOrderFilled';
+      data: {
+        lp: AccountId32;
+        baseAsset: CfPrimitivesChainsAssetsAnyAsset;
+        quoteAsset: CfPrimitivesChainsAssetsAnyAsset;
+        side: CfAmmCommonSide;
+        id: bigint;
+        tick: number;
+
+        /**
+         * The amount of the order's liquidity that the swap bought.
+         **/
+        soldAmount: bigint;
+
+        /**
+         * The proceeds credited to the LP in exchange for it.
+         **/
+        boughtAmount: bigint;
+
+        /**
+         * The amount left in the order. Zero means the order was filled in its entirety and
+         * no longer exists.
+         **/
+        remainingAmount: bigint;
+      };
+    };
 
 export type CfTraitsLiquidityIncreaseOrDecreaseRangeOrderChange =
   | { type: 'Increase'; value: PalletCfPoolsRangeOrderChange }
@@ -19739,42 +19765,19 @@ export type CfAmmPoolState = {
 };
 
 export type CfAmmLimitOrdersPoolState = {
-  nextPoolInstance: bigint;
-  fixedPools: CfAmmCommonPoolPairsMap004;
-  positions: CfAmmCommonPoolPairsMap005;
+  orders: CfAmmCommonPoolPairsMap004;
   totalSwapInputs: CfAmmCommonPoolPairsMapU256;
   totalSwapOutputs: CfAmmCommonPoolPairsMapU256;
 };
 
 export type CfAmmCommonPoolPairsMap004 = {
-  base: Array<[CfAmmMathSqrtPrice, CfAmmLimitOrdersFixedPool]>;
-  quote: Array<[CfAmmMathSqrtPrice, CfAmmLimitOrdersFixedPool]>;
+  base: Array<[CfAmmMathSqrtPrice, Array<[[AccountId32, bigint], CfAmmLimitOrdersPosition]>]>;
+  quote: Array<[CfAmmMathSqrtPrice, Array<[[AccountId32, bigint], CfAmmLimitOrdersPosition]>]>;
 };
 
 export type CfAmmMathSqrtPrice = U256;
 
-export type CfAmmLimitOrdersFixedPool = {
-  poolInstance: bigint;
-  available: U256;
-  percentRemaining: CfAmmLimitOrdersFloatBetweenZeroAndOne;
-};
-
-export type CfAmmLimitOrdersFloatBetweenZeroAndOne = {
-  normalisedMantissa: U256;
-  negativeExponent: U256;
-};
-
-export type CfAmmCommonPoolPairsMap005 = {
-  base: Array<[[CfAmmMathSqrtPrice, [AccountId32, bigint]], CfAmmLimitOrdersPosition]>;
-  quote: Array<[[CfAmmMathSqrtPrice, [AccountId32, bigint]], CfAmmLimitOrdersPosition]>;
-};
-
-export type CfAmmLimitOrdersPosition = {
-  poolInstance: bigint;
-  amount: U256;
-  lastPercentRemaining: CfAmmLimitOrdersFloatBetweenZeroAndOne;
-  originalAmount: U256;
-};
+export type CfAmmLimitOrdersPosition = { amount: U256; originalAmount: U256 };
 
 export type CfAmmCommonPoolPairsMapU256 = { base: U256; quote: U256 };
 
@@ -19923,7 +19926,7 @@ export type PalletCfPoolsError =
   /**
    * The scheduled update limit has been reached.
    **/
-  | 'SheduledUpdateLimitReached'
+  | 'ScheduledUpdateLimitReached'
   /**
    * The account still has open orders.
    **/
@@ -19931,7 +19934,11 @@ export type PalletCfPoolsError =
   /**
    * The resulting limit order amount is below the configured per-asset minimum.
    **/
-  | 'BelowMinimumOrderAmount';
+  | 'BelowMinimumOrderAmount'
+  /**
+   * The swap would move the pool's price further than the pool's configured limit.
+   **/
+  | 'PriceImpactLimitExceeded';
 
 export type CfeEventsCfeEvent =
   | { type: 'EvmThresholdSignatureRequest'; value: CfeEventsThresholdSignatureRequest }
