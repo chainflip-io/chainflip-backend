@@ -1031,7 +1031,6 @@ pub trait CustomApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		lp: Option<state_chain_runtime::AccountId>,
-		filled_orders: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::AccountId>>;
 	#[method(name = "pool_range_order_liquidity_value")]
@@ -2090,11 +2089,17 @@ where
 		base_asset: Asset,
 		quote_asset: Asset,
 		lp: Option<state_chain_runtime::AccountId>,
-		filled_orders: Option<bool>,
 		at: Option<Hash>,
 	) -> RpcResult<PoolOrders<state_chain_runtime::AccountId>> {
-		flatten_into_error(self.rpc_backend.with_runtime_api(at, |api, hash| {
-			api.cf_pool_orders(hash, base_asset, quote_asset, lp, filled_orders.unwrap_or_default())
+		flatten_into_error(self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 21 {
+				// Filled orders no longer exist as of version 21, so the flag the older runtimes
+				// take is passed as `false`: report only orders with liquidity left to sell.
+				#[expect(deprecated)]
+				api.cf_pool_orders_before_version_21(hash, base_asset, quote_asset, lp, false)
+			} else {
+				api.cf_pool_orders(hash, base_asset, quote_asset, lp)
+			}
 		}))
 	}
 	fn cf_pool_price_v2(

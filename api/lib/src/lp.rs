@@ -103,6 +103,7 @@ fn filter_orders(
 			id: id.into(),
 			tick,
 			sell_amount_total: sell_amount_total.into(),
+			// Collected fees is always 0 here. See LimitOrderFilled events instead.
 			collected_fees: collected_fees.into(),
 			bought_amount: bought_amount.into(),
 			sell_amount_change: sell_amount_change

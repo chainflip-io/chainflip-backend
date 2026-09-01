@@ -368,7 +368,6 @@ impl LpRpcApiServer for RpcServerImpl {
 					pool.quote,
 					Some(self.api.state_chain_client.account_id()),
 					None,
-					None,
 				)
 				.await?;
 			for order in orders.range_orders {
