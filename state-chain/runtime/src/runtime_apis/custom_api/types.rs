@@ -43,7 +43,7 @@ use cf_utilities::migrations::{
 		IsHistoricalType, Migration, NewFieldWithDefault, OverrideMigrationWith, Version,
 	},
 	primitives::{NewTypeWithDefault, WrappedAccountId32},
-	v20300, HasChangelog,
+	v20400, HasChangelog,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -913,14 +913,14 @@ impl HasChangelog for RpcAccountInfoCommonItems<FlipBalance> {
 	type in_20200 = _RpcAccountInfoCommonItems::see_field_changelogs_and_also<
 		_RpcAccountInfoCommonItems::field::account_id::Added,
 	>;
-	// Before the v20300 cycle, a delegator could only delegate to a single operator at a time,
+	// Before the v20400 cycle, a delegator could only delegate to a single operator at a time,
 	// so these fields were `Option<DelegationInfo<Balance>>` rather than a map of every operator
 	// it delegates to.
-	type in_20300 =
+	type in_20400 =
 		_RpcAccountInfoCommonItems::see_field_changelogs_and_also<DelegationStatusFieldsBecameMaps>;
 }
 
-/// Historically (before v20300) `current_delegation_status`/`upcoming_delegation_status` were a
+/// Historically (before v20400) `current_delegation_status`/`upcoming_delegation_status` were a
 /// single optional `DelegationInfo { operator, bid }`, since a delegator could only delegate to
 /// one operator at a time. `try_backwards` is lossy if there's more than one relation -- there's
 /// no way to represent that in the old shape, so it errors instead of silently dropping data.
@@ -935,7 +935,7 @@ pub struct DelegationStatusMigration;
 #[derive(Debug)]
 pub struct TooManyDelegationsForHistoricalStatus;
 
-impl Migration<BTreeMap<WrappedAccountId32, FlipBalance>, v20300> for DelegationStatusMigration {
+impl Migration<BTreeMap<WrappedAccountId32, FlipBalance>, v20400> for DelegationStatusMigration {
 	type From = Option<(WrappedAccountId32, FlipBalance)>;
 	type BackwardsError = TooManyDelegationsForHistoricalStatus;
 
@@ -962,10 +962,10 @@ impl Migration<BTreeMap<WrappedAccountId32, FlipBalance>, v20300> for Delegation
 
 pub struct DelegationStatusFieldsBecameMaps;
 
-impl<To> _RpcAccountInfoCommonItems::FieldCustomMigration<To, v20300>
+impl<To> _RpcAccountInfoCommonItems::FieldCustomMigration<To, v20400>
 	for DelegationStatusFieldsBecameMaps
 where
-	To: _RpcAccountInfoCommonItems::HistoricalTypesAt<v20300>
+	To: _RpcAccountInfoCommonItems::HistoricalTypesAt<v20400>
 		+ _RpcAccountInfoCommonItems::Types<
 			current_delegation_status = BTreeMap<WrappedAccountId32, FlipBalance>,
 			upcoming_delegation_status = BTreeMap<WrappedAccountId32, FlipBalance>,
