@@ -66,9 +66,9 @@ pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAsse
 		any::Asset::Flip => None,
 		any::Asset::Usdc => Some(UsdcUsd),
 		any::Asset::Usdt => Some(UsdtUsd),
-		any::Asset::Wbtc => None,
-		any::Asset::Cbbtc => None,
-		any::Asset::Dot => None,
+		any::Asset::Wbtc => Some(WbtcUsd),
+		any::Asset::Cbbtc => Some(CbBtcUsd),
+		any::Asset::Dot => Some(DotUsd),
 		any::Asset::Btc => Some(BtcUsd),
 		any::Asset::ArbEth => Some(EthUsd),
 		any::Asset::ArbUsdc => Some(UsdcUsd),
@@ -76,12 +76,12 @@ pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAsse
 		any::Asset::Sol => Some(SolUsd),
 		any::Asset::SolUsdc => Some(UsdcUsd),
 		any::Asset::SolUsdt => Some(UsdtUsd),
-		any::Asset::HubDot => None,
+		any::Asset::HubDot => Some(DotUsd),
 		any::Asset::HubUsdt => Some(UsdtUsd),
 		any::Asset::HubUsdc => Some(UsdcUsd),
-		any::Asset::Trx => None,
+		any::Asset::Trx => Some(TrxUsd),
 		any::Asset::TrxUsdt => Some(UsdtUsd),
-		any::Asset::Bnb => None,
+		any::Asset::Bnb => Some(BnbUsd),
 		any::Asset::BscUsdt => None,
 	}
 }
@@ -114,30 +114,34 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Opti
 
 derive_common_traits! {
 	#[derive(TypeInfo)]
-	pub struct ChainlinkOraclePriceSettings<C: Container = VectorContainer> {
+	pub struct ChainlinkOraclePriceSettings<
+		Ca: Container = VectorContainer,
+		Ce: Container = VectorContainer,
+		Cb: Container = VectorContainer,
+	> {
 		pub arb_address_checker: H160,
-		pub arb_oracle_feeds: C::Of<H160>,
+		pub arb_oracle_feeds: Ca::Of<H160>,
 		pub eth_address_checker: H160,
-		pub eth_oracle_feeds: C::Of<H160>
+		pub eth_oracle_feeds: Ce::Of<H160>,
+		pub bsc_address_checker: H160,
+		pub bsc_oracle_feeds: Cb::Of<H160>
 	}
 }
 
-impl<F: Container> ChainlinkOraclePriceSettings<F> {
-	pub fn convert<G: Container>(
+impl<Ca: Container, Ce: Container, Cb: Container> ChainlinkOraclePriceSettings<Ca, Ce, Cb> {
+	pub fn convert<Na: Container, Ne: Container, Nb: Container>(
 		self,
-		t: impl Transformation<F, G>,
-	) -> ChainlinkOraclePriceSettings<G> {
-		let ChainlinkOraclePriceSettings {
-			arb_address_checker,
-			arb_oracle_feeds,
-			eth_address_checker,
-			eth_oracle_feeds,
-		} = self;
+		ta: impl Transformation<Ca, Na>,
+		te: impl Transformation<Ce, Ne>,
+		tb: impl Transformation<Cb, Nb>,
+	) -> ChainlinkOraclePriceSettings<Na, Ne, Nb> {
 		ChainlinkOraclePriceSettings {
-			arb_address_checker,
-			arb_oracle_feeds: t.at(arb_oracle_feeds),
-			eth_address_checker,
-			eth_oracle_feeds: t.at(eth_oracle_feeds),
+			arb_address_checker: self.arb_address_checker,
+			arb_oracle_feeds: ta.at(self.arb_oracle_feeds),
+			eth_address_checker: self.eth_address_checker,
+			eth_oracle_feeds: te.at(self.eth_oracle_feeds),
+			bsc_address_checker: self.bsc_address_checker,
+			bsc_oracle_feeds: tb.at(self.bsc_oracle_feeds),
 		}
 	}
 }
@@ -285,19 +289,26 @@ pub fn initial_state(
 	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings,
 ) -> InitialStateOf<Runtime, ()> {
 	// The prices for usdc and usdt are considered up-to-date
-	// if they have been updated at least once every 25 hours.
+	// if they have been updated at least once every 300 seconds.
 	let up_to_date_timeout_overrides: BTreeMap<_, _> = [
-		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 60 * 25)),
-		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 60 * 25)),
+		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 5)),
+		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 5)),
+		(ChainlinkAssetpair::SolUsd, Seconds(60 * 11)),
+		(ChainlinkAssetpair::TrxUsd, Seconds(60 * 11)),
+		(ChainlinkAssetpair::DotUsd, Seconds(60 * 11)),
+		//TODO: do we want cbBtc as well??
 	]
 	.into();
 
-	// There is an additionaly 5 minute window during which we
+	// There is an additionaly 1 minute window during which we
 	// ask the engines to submit any latest price information that
 	// they have. Once this is over, the price is marked as stale.
 	let maybe_stale_timeout_overrides: BTreeMap<_, _> = [
-		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 5)),
-		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 5)),
+		(ChainlinkAssetpair::UsdcUsd, Seconds(60)),
+		(ChainlinkAssetpair::UsdtUsd, Seconds(60)),
+		(ChainlinkAssetpair::SolUsd, Seconds(60)),
+		(ChainlinkAssetpair::TrxUsd, Seconds(60)),
+		(ChainlinkAssetpair::DotUsd, Seconds(60)),
 	]
 	.into();
 
@@ -306,6 +317,7 @@ pub fn initial_state(
 			chain_states: ExternalChainStates {
 				arbitrum: ExternalChainState { price: Default::default() },
 				ethereum: ExternalChainState { price: Default::default() },
+				bsc: ExternalChainState { price: Default::default() },
 			},
 			get_time: Default::default(),
 			safe_mode_enabled: Default::default(),
@@ -321,6 +333,13 @@ pub fn initial_state(
 				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
 			},
 			ethereum: ExternalChainSettings {
+				up_to_date_timeout: Seconds(60),
+				maybe_stale_timeout: Seconds(30),
+				minimal_price_deviation: BasisPoints(10),
+				up_to_date_timeout_overrides: up_to_date_timeout_overrides.clone(),
+				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
+			},
+			bsc: ExternalChainSettings {
 				up_to_date_timeout: Seconds(60),
 				maybe_stale_timeout: Seconds(30),
 				minimal_price_deviation: BasisPoints(10),

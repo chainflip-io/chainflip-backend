@@ -396,21 +396,62 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		arb_address_checker: H160(hex_literal::hex!("69c700a0debab9e349dd1f52ed62eb253a3c9892")),
 		arb_oracle_feeds: Array {
 			array: [
+				//Btc
 				H160(hex_literal::hex!("6ce185860a4963106506C203335A2910413708e9")),
+				//Eth
 				H160(hex_literal::hex!("639Fe6ab55C921f74e7fac1ee960C0B6293ba612")),
+				//Sol
 				H160(hex_literal::hex!("24ceA4b8ce57cdA5058b924B9B9987992450590c")),
+				//Usdc
 				H160(hex_literal::hex!("50834F3163758fcC1Df9973b6e91f0F0F0434aD3")),
+				//Usdt
 				H160(hex_literal::hex!("3f3f5dF88dC9F13eac63DF89EC16ef6e7E25DdE7")),
+				//Wbtc
+				H160(hex_literal::hex!("d0C7101eACbB49F3deCcCc166d238410D6D46d57")),
+				//Bnb
+				H160(hex_literal::hex!("6970460aabF80C5BE983C6b74e5D06dEDCA95D4A")),
+				//Dot
+				H160(hex_literal::hex!("a6bC5bAF2000424e90434bA7104ee399dEe80DEc")),
 			],
 		},
 		eth_address_checker: H160(hex_literal::hex!("1562Ad6bb0e68980A3111F24531c964c7e155611")),
 		eth_oracle_feeds: Array {
 			array: [
+				//Btc
 				H160(hex_literal::hex!("F4030086522a5bEEa4988F8cA5B36dbC97BeE88c")),
+				//Eth
 				H160(hex_literal::hex!("5f4eC3Df9cbd43714FE2740f5E3616155c5b8419")),
+				//Sol
 				H160(hex_literal::hex!("4ffC43a60e009B551865A93d232E33Fce9f01507")),
+				//Usdc
 				H160(hex_literal::hex!("8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6")),
+				//Usdt
 				H160(hex_literal::hex!("3E7d1eAB13ad0104d2750B8863b489D65364e32D")),
+				//CbBtc
+				H160(hex_literal::hex!("2665701293fCbEB223D11A08D826563EDcCE423A")),
+				//Bnb
+				H160(hex_literal::hex!("14e613AC84a31f709eadbdF89C6CC390fDc9540A")),
+			],
+		},
+		bsc_address_checker: H160(hex_literal::hex!("c1B12993f760B654897F0257573202fba13D5481")),
+		bsc_oracle_feeds: Array {
+			array: [
+				//Btc
+				H160(hex_literal::hex!("264990fbd0A4796A3E3d8E37C4d5F87a3aCa5Ebf")),
+				//Eth
+				H160(hex_literal::hex!("9ef1B8c0E4F7dc8bF5719Ea496883DC6401d5b2e")),
+				//Sol
+				H160(hex_literal::hex!("0E8a53DD9c13589df6382F13dA6B3Ec8F919B323")),
+				//Usdc
+				H160(hex_literal::hex!("51597f405303C4377E36123cBc172b13269EA163")),
+				//Usdt
+				H160(hex_literal::hex!("B97Ad0E74fa7d920791E90258A6E2085088b4320")),
+				//Trx
+				H160(hex_literal::hex!("F4C5e535756D11994fCBB12Ba8adD0192D9b88be")),
+				//Bnb
+				H160(hex_literal::hex!("0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE")),
+				//Dot
+				H160(hex_literal::hex!("C333eb0086309a16aa7c8308DfD32c8BBA0a2592")),
 			],
 		},
 	},
