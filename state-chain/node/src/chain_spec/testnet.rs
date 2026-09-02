@@ -406,16 +406,44 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 				H160(hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F")),
 				H160(hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef")),
 				H160(hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d")),
+				H160(hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f")),
+				H160(hex_literal::hex!("4A679253410272dd5232B3Ff7cF5dbB88f295319")),
+				H160(hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F")),
 			],
 		},
 		eth_address_checker: H160(hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512")),
-		eth_oracle_feeds: Array{ array:[
-			H160(hex_literal::hex!("322813Fd9A801c5507c9de605d63CEA4f2CE6c44")),
-			H160(hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f")),
-			H160(hex_literal::hex!("4A679253410272dd5232B3Ff7cF5dbB88f295319")),
-			H160(hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F")),
-			H160(hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef")),
-		]},
+		eth_oracle_feeds: Array {
+			array: [
+				H160(hex_literal::hex!("322813Fd9A801c5507c9de605d63CEA4f2CE6c44")),
+				H160(hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f")),
+				H160(hex_literal::hex!("4A679253410272dd5232B3Ff7cF5dbB88f295319")),
+				H160(hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F")),
+				H160(hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef")),
+				H160(hex_literal::hex!("322813Fd9A801c5507c9de605d63CEA4f2CE6c44")),
+				H160(hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f")),
+			],
+		},
+		bsc_address_checker: H160(hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0")),
+		bsc_oracle_feeds: Array {
+			array: [
+				// Btc
+				H160(hex_literal::hex!("5FC8d32690cc91D4c39d9d3abcBD16989F875707")),
+				// Eth
+				H160(hex_literal::hex!("0165878A594ca255338adfa4d48449f69242Eb8F")),
+				// Sol
+				H160(hex_literal::hex!("a513E6E4b8f2a923D98304ec87F64353C4D5C853")),
+				// Usdc
+				H160(hex_literal::hex!("2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6")),
+				// Usdt
+				H160(hex_literal::hex!("8A791620dd6260079BF849Dc5567aDC3F2FdC318")),
+				// Trx
+				H160(hex_literal::hex!("610178dA211FEF7D417bC0e6FeD39F05609AD788")),
+				// Bnb
+				H160(hex_literal::hex!("B7f8BC63BbcaD18155201308C8f3540b07f84F5e")),
+				// Dot
+				H160(hex_literal::hex!("A51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0")),
+			],
+		},
 	},
 };
 

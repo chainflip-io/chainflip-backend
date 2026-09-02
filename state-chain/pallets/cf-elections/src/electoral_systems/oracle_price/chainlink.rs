@@ -33,7 +33,12 @@ derive_common_traits! {
 		EthUsd,
 		SolUsd,
 		UsdcUsd,
-		UsdtUsd
+		UsdtUsd,
+		WbtcUsd,
+		CbBtcUsd,
+		DotUsd,
+		TrxUsd,
+		BnbUsd
 	}
 }
 
@@ -48,6 +53,11 @@ impl ChainlinkAssetpair {
 			(PriceAsset::Sol, PriceAsset::Usd) => Some(ChainlinkAssetpair::SolUsd),
 			(PriceAsset::Usdc, PriceAsset::Usd) => Some(ChainlinkAssetpair::UsdcUsd),
 			(PriceAsset::Usdt, PriceAsset::Usd) => Some(ChainlinkAssetpair::UsdtUsd),
+			(PriceAsset::Wbtc, PriceAsset::Usd) => Some(ChainlinkAssetpair::WbtcUsd),
+			(PriceAsset::CbBtc, PriceAsset::Usd) => Some(ChainlinkAssetpair::CbBtcUsd),
+			(PriceAsset::Trx, PriceAsset::Usd) => Some(ChainlinkAssetpair::TrxUsd),
+			(PriceAsset::Bnb, PriceAsset::Usd) => Some(ChainlinkAssetpair::BnbUsd),
+			(PriceAsset::Dot, PriceAsset::Usd) => Some(ChainlinkAssetpair::DotUsd),
 			_ => None,
 		}
 	}
@@ -63,6 +73,11 @@ impl AssetPairTrait for ChainlinkAssetpair {
 			SolUsd => Sol,
 			UsdcUsd => Usdc,
 			UsdtUsd => Usdt,
+			WbtcUsd => Wbtc,
+			CbBtcUsd => CbBtc,
+			TrxUsd => Trx,
+			BnbUsd => Bnb,
+			DotUsd => Dot,
 		};
 		PriceUnit { base_asset, quote_asset: PriceAsset::Usd }
 	}
