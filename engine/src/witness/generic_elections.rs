@@ -55,6 +55,11 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 		"SOL / USD" => Some(SolUsd),
 		"USDT / USD" => Some(UsdtUsd),
 		"USDC / USD" => Some(UsdcUsd),
+		"BNB / USD" => Some(BnbUsd),
+		"TRX / USD" => Some(TrxUsd),
+		"WBTC / USD" => Some(WbtcUsd),
+		"cbBTC / USD" => Some(CbBtcUsd),
+		"DOT / USD" => Some(DotUsd),
 		_ => None,
 	}
 }
@@ -63,6 +68,7 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 struct OraclePriceVoter {
 	arb_client: EvmCachingClient<EvmRpcSigningClient>,
 	eth_client: EvmCachingClient<EvmRpcSigningClient>,
+	bsc_client: EvmCachingClient<EvmRpcSigningClient>,
 }
 
 #[derive(Debug, Clone)]
@@ -129,6 +135,21 @@ impl VoterApi<ChainlinkOraclePriceES> for OraclePriceVoter {
 					.query_price_feeds(
 						settings.eth_address_checker,
 						settings.eth_oracle_feeds.clone(),
+					)
+					.await?;
+				price_feeds
+					.into_iter()
+					.filter_map(|data| {
+						data.try_into().inspect_err(|err| tracing::warn!("{err}")).ok()
+					})
+					.collect::<Vec<PriceData>>()
+			},
+			ExternalPriceChain::Bsc => {
+				let (_, _, price_feeds) = self
+					.bsc_client
+					.query_price_feeds(
+						settings.bsc_address_checker,
+						settings.bsc_oracle_feeds.clone(),
 					)
 					.await?;
 				price_feeds
@@ -208,6 +229,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	arb_client: EvmCachingClient<EvmRpcSigningClient>,
 	eth_client: EvmCachingClient<EvmRpcSigningClient>,
+	bsc_client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
 	vote_submitter: VoteSubmitter<StateChainClient>,
 ) -> Result<()>
@@ -222,6 +244,7 @@ where
 		move || {
 			let arb_client = arb_client.clone();
 			let eth_client = eth_client.clone();
+			let bsc_client = bsc_client.clone();
 			let state_chain_client = state_chain_client.clone();
 			let vote_submitter = vote_submitter.clone();
 			async move {
@@ -234,6 +257,7 @@ where
 								OraclePriceVoter {
 									arb_client: arb_client.clone(),
 									eth_client: eth_client.clone(),
+									bsc_client: bsc_client.clone(),
 								},
 							)),
 							None,

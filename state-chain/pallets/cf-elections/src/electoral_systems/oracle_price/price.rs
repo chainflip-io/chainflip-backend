@@ -49,6 +49,11 @@ derive_common_traits! {
 		Usdt,
 		Usd,
 		Fine,
+		Wbtc,
+		CbBtc,
+		Dot,
+		Trx,
+		Bnb,
 	}
 }
 
@@ -63,6 +68,10 @@ impl PriceAsset {
 			Usdt => 6,
 			Usd => 6,
 			Fine => 0,
+			Wbtc | CbBtc => 8,
+			Trx => 6,
+			Bnb => 18,
+			Dot => 10,
 		}
 	}
 }

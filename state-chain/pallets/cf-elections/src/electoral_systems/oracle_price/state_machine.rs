@@ -101,7 +101,8 @@ derive_common_traits! {
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum ExternalPriceChain {
 		Arbitrum,
-		Ethereum
+		Ethereum,
+		Bsc
 	}
 }
 
@@ -237,6 +238,7 @@ derive_common_traits! {
 	pub struct ExternalChainStates<T: OPTypes> {
 		pub arbitrum: ExternalChainState<T>,
 		pub ethereum: ExternalChainState<T>,
+		pub bsc: ExternalChainState<T>,
 	}
 }
 
@@ -263,6 +265,7 @@ impl<T: OPTypes> Index<ExternalPriceChain> for ExternalChainStates<T> {
 		match index {
 			ExternalPriceChain::Arbitrum => &self.arbitrum,
 			ExternalPriceChain::Ethereum => &self.ethereum,
+			ExternalPriceChain::Bsc => &self.bsc,
 		}
 	}
 }
@@ -272,6 +275,7 @@ impl<T: OPTypes> IndexMut<ExternalPriceChain> for ExternalChainStates<T> {
 		match index {
 			ExternalPriceChain::Arbitrum => &mut self.arbitrum,
 			ExternalPriceChain::Ethereum => &mut self.ethereum,
+			ExternalPriceChain::Bsc => &mut self.bsc,
 		}
 	}
 }
@@ -307,6 +311,7 @@ derive_common_traits! {
 	pub struct OraclePriceSettings<T: OPTypes> {
 		pub arbitrum: ExternalChainSettings<T>,
 		pub ethereum: ExternalChainSettings<T>,
+		pub bsc: ExternalChainSettings<T>,
 	}
 }
 
@@ -317,6 +322,7 @@ impl<T: OPTypes> Index<ExternalPriceChain> for OraclePriceSettings<T> {
 		match index {
 			ExternalPriceChain::Arbitrum => &self.arbitrum,
 			ExternalPriceChain::Ethereum => &self.ethereum,
+			ExternalPriceChain::Bsc => &self.bsc,
 		}
 	}
 }
@@ -390,7 +396,7 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 			all::<ExternalPriceChain>()
 				.filter(|chain| {
 					match chain {
-						ExternalPriceChain::Arbitrum => true,
+						ExternalPriceChain::Arbitrum | ExternalPriceChain::Bsc => true,
 						ExternalPriceChain::Ethereum => {
 							// only query every second block for ethereum
 							state.get_statechain_block_height.run(()) % 2u32.into() == 0u32.into()
