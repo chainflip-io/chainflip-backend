@@ -1667,7 +1667,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[transactional]
-	pub fn inner_set_limit_order(
+	fn inner_set_limit_order(
 		lp: &T::AccountId,
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
@@ -1854,20 +1854,24 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
+		Self::update_limit_orders_cache(pool, lp, side, id, tick, position_info.amount);
+
+		if *sold_amount_change.abs() != 0 {
+			Self::deposit_event(Event::<T>::LimitOrderUpdated {
+				lp: lp.clone(),
+				base_asset: asset_pair.base(),
+				quote_asset: asset_pair.quote(),
+				side,
+				id,
+				tick,
+				sell_amount_change: Some(sold_amount_change),
+				sell_amount_total: position_info.amount.try_into()?,
+				collected_fees: 0,
+				bought_amount: 0,
+			});
+		}
+
 		let remaining_amount: AssetAmount = position_info.amount.saturated_into();
-
-		// Process the update
-		Self::process_limit_order_update(
-			pool,
-			asset_pair,
-			lp,
-			side,
-			id,
-			tick,
-			position_info,
-			sold_amount_change,
-		)?;
-
 		Ok((*sold_amount_change.abs(), remaining_amount))
 	}
 
@@ -2315,18 +2319,14 @@ impl<T: Config> Pallet<T> {
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
 							.unwrap();
-						if !position_info.amount.is_zero() {
-							Some(LimitOrder {
-								lp: lp.clone(),
-								id: id.into(),
-								tick,
-								sell_amount: position_info.amount,
-								fees_earned: Default::default(),
-								original_sell_amount: position_info.original_amount,
-							})
-						} else {
-							None
-						}
+						Some(LimitOrder {
+							lp: lp.clone(),
+							id: id.into(),
+							tick,
+							sell_amount: position_info.amount,
+							fees_earned: Default::default(),
+							original_sell_amount: position_info.original_amount,
+						})
 					})
 					.collect()
 				},
@@ -2385,40 +2385,6 @@ impl<T: Config> Pallet<T> {
 				}
 				.into()
 			})
-	}
-
-	/// Process changes to limit order:
-	/// - Update cache storage for Pool
-	/// - Deposit the correct event.
-	fn process_limit_order_update(
-		pool: &mut Pool<T>,
-		asset_pair: &AssetPair,
-		lp: &T::AccountId,
-		order: Side,
-		id: OrderId,
-		tick: Tick,
-		position_info: PositionInfo,
-		amount_change: IncreaseOrDecrease<AssetAmount>,
-	) -> DispatchResult {
-		Self::update_limit_orders_cache(pool, lp, order, id, tick, position_info.amount);
-
-		let zero_change = *amount_change.abs() == 0;
-
-		if !zero_change {
-			Self::deposit_event(Event::<T>::LimitOrderUpdated {
-				lp: lp.clone(),
-				base_asset: asset_pair.base(),
-				quote_asset: asset_pair.quote(),
-				side: order,
-				id,
-				tick,
-				sell_amount_change: Some(amount_change),
-				sell_amount_total: position_info.amount.try_into()?,
-				collected_fees: 0,
-				bought_amount: 0,
-			});
-		}
-		Ok(())
 	}
 
 	/// Pays out the proceeds of the limit orders a swap bought into. The pool does not hold on to

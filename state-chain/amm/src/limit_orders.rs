@@ -49,8 +49,7 @@ use sp_std::vec::Vec;
 use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase};
 use cf_amm_math::{is_tick_valid, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
 
-/// All the orders selling at a single price. Grouping them is only a way of finding them; the
-/// liquidity they provide is whatever they currently hold, it is not tracked separately.
+/// All the orders selling at a single price.
 pub(super) type Orders<LiquidityProvider> = BTreeMap<LiquidityProvider, Position>;
 
 pub(super) trait SwapDirection: crate::common::SwapDirection {
