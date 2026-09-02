@@ -88,8 +88,13 @@ where
 
 	let start_tron = super::tron_elections::start(scope, tron_client, state_chain_client.clone());
 
-	let start_generic_elections =
-		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
+	let start_generic_elections = super::generic_elections::start(
+		scope,
+		arb_client,
+		eth_client,
+		bsc_client,
+		state_chain_client,
+	);
 
 	try_join!(
 		start_eth,
