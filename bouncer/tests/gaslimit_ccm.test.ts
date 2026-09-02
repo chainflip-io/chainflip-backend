@@ -236,10 +236,9 @@ async function testGasLimitSwapToEvm<A = []>(
 
   const gasConsumption = getRandomGasConsumption(chainFromAsset(destAsset));
 
-  const ccmMetadata = await newCcmMetadata(
-    destAsset,
-    web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
-  );
+  const ccmMetadata = await newCcmMetadata(destAsset, {
+    message: web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
+  });
 
   // Estimating gas separately. We can't rely on the default gas estimation in `newCcmMetadata()`
   // because the CF tester gas consumption depends on the gas limit, making this a circular calculation.
@@ -378,10 +377,9 @@ async function testTronInsufficientGas<A = []>(
 
   // No need to override the gasBudget since the numberOfStores will make sure the energy
   // consumption is higher than the budget.
-  const ccmMetadata = await newCcmMetadata(
-    destAsset,
-    tronWeb.utils.abi.encodeParams(['string', 'uint256'], ['GasTest', numberOfStores]),
-  );
+  const ccmMetadata = await newCcmMetadata(destAsset, {
+    message: tronWeb.utils.abi.encodeParams(['string', 'uint256'], ['GasTest', numberOfStores]),
+  });
 
   const { tag, destAddress, broadcastId, gasLimitBudget } = await executeAndTrackCcmSwap(
     cf,

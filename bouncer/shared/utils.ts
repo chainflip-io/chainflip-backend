@@ -349,7 +349,7 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'Bnb':
       return '5';
     case 'HubDot':
-      return '50';
+      return '200';
     case 'Usdc':
     case 'Usdt':
     case 'ArbUsdc':
