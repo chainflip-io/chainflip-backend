@@ -158,6 +158,7 @@ macro_rules! define_all_runtime_versions {
 		#[macro_export]
 		macro_rules! for_each_runtime_version {
 			($$macro_name:ident) => {
+				use $crate::migrations::{$( $version ),*};
 				$(
 					$$macro_name!{ $version }
 				)*
