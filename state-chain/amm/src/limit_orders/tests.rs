@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{limit_orders, range_orders};
-use cf_amm_math::{MAX_SQRT_PRICE, MAX_TICK, MIN_SQRT_PRICE, MIN_TICK};
+use cf_amm_math::{MAX_TICK, MIN_TICK};
 
 use super::*;
 
@@ -33,6 +33,14 @@ fn total_of(
 	f: impl Fn(&Fill<LiquidityProvider>) -> Amount,
 ) -> Amount {
 	fills.iter().fold(Amount::zero(), |total, fill| total + f(fill))
+}
+
+/// A uniformly random `Amount` in `1..=max`. `rand` only ranges over primitives, and the sizes
+/// worth testing here run past `u128`, so draw the whole `U256` and fold it into the range.
+fn random_amount(rng: &mut impl rand::Rng, max: Amount) -> Amount {
+	let mut bytes = [0u8; 32];
+	rng.fill(&mut bytes[..]);
+	Amount::from_little_endian(&bytes) % max + Amount::one()
 }
 
 /// Performs a swap, checking the invariants.
@@ -58,22 +66,49 @@ fn swap<SD: SwapDirection>(
 	(output_amount, remaining_amount, fills)
 }
 
-/// The amounts used as parameters to input/output amount function are
-/// guaranteed to be <= MAX_LIQUIDITY_PER_PRICE. This test checks that MAX_LIQUIDITY_PER_PRICE is
-/// set low enough that those calculations don't overflow.
+/// Orders far larger than the swap split it between them and keep the rest. The share arithmetic
+/// is bounded by its `U512` intermediates, not by the size of the orders.
 #[test]
-fn max_liquidity() {
-	fn checks<SD: SwapDirection>(price: Price) {
-		// Overflow will return None
-		assert!(SD::input_amount_floor(MAX_LIQUIDITY_PER_PRICE, price).is_some());
-		assert!(SD::input_amount_ceil(MAX_LIQUIDITY_PER_PRICE, price).is_some());
-		assert!(SD::output_amount_floor(MAX_LIQUIDITY_PER_PRICE, price).is_some());
-		assert!(SD::output_amount_ceil(MAX_LIQUIDITY_PER_PRICE, price).is_some());
+fn huge_orders_are_partially_filled_pro_rata() {
+	fn inner<SD: SwapDirection + limit_orders::SwapDirection>() {
+		let quarter = Amount::MAX / 4;
+		let mut pool_state = PoolState::new();
+		assert_ok!(pool_state.mint::<SD>(&lp(0), 0, quarter));
+		assert_ok!(pool_state.mint::<SD>(&lp(1), 0, quarter));
+
+		// Tick zero prices one for one, and the orders are equal, so the swap buys what it pays
+		// in and the two split it evenly.
+		let (output, remaining, fills) = swap::<SD>(&mut pool_state, 1_000_000.into(), None);
+
+		assert_eq!(output, 1_000_000.into());
+		assert!(remaining.is_zero());
+		assert_eq!(fills.len(), 2);
+		assert!(fills.iter().all(|fill| fill.sold_amount == 500_000.into()));
+		assert_eq!(pool_state.liquidity::<SD>(), vec![(0, quarter * 2 - output)]);
 	}
 
-	for price in [MIN_SQRT_PRICE, MAX_SQRT_PRICE].map(Price::from) {
-		checks::<BaseToQuote>(price);
-		checks::<QuoteToBase>(price);
+	inner::<BaseToQuote>();
+	inner::<QuoteToBase>();
+}
+
+/// At the extreme prices, converting a price's whole liquidity overflows in one direction and
+/// floors to nothing in the other. Neither may panic, and neither may hand out more than the price
+/// holds.
+#[test]
+fn extreme_prices_do_not_panic_however_large_the_order() {
+	fn inner<SD: SwapDirection + limit_orders::SwapDirection>(tick: Tick) {
+		let mut pool_state = PoolState::new();
+		let minted = Amount::MAX / 2;
+		assert_ok!(pool_state.mint::<SD>(&lp(0), tick, minted));
+
+		let (output, _remaining, _fills) = swap::<SD>(&mut pool_state, Amount::MAX / 2, None);
+
+		assert!(output <= minted, "a swap cannot buy more than the price holds");
+	}
+
+	for tick in [MIN_TICK, MAX_TICK] {
+		inner::<BaseToQuote>(tick);
+		inner::<QuoteToBase>(tick);
 	}
 }
 
@@ -96,39 +131,10 @@ fn mint() {
 			);
 		}
 
-		for good in [MAX_LIQUIDITY_PER_PRICE, MAX_LIQUIDITY_PER_PRICE - 1, 1.into()] {
+		// No amount is too large to mint: an invalid tick is the only way minting fails.
+		for good in [Amount::one(), Amount::MAX / 2, Amount::MAX] {
 			let mut pool_state = PoolState::new();
 			assert_eq!(assert_ok!(pool_state.mint::<SD>(&lp(0), 0, good)), PositionInfo::new(good));
-		}
-
-		for bad in [MAX_LIQUIDITY_PER_PRICE + 1, MAX_LIQUIDITY_PER_PRICE + 2] {
-			let mut pool_state = PoolState::new();
-			assert_matches!(
-				pool_state.mint::<SD>(&lp(0), 0, bad),
-				Err(PositionError::Other(MintError::MaximumLiquidity))
-			);
-		}
-
-		// The maximum is per price, over every lp's orders combined.
-		{
-			let mut pool_state = PoolState::new();
-			assert_ok!(pool_state.mint::<SD>(&lp(0), 0, MAX_LIQUIDITY_PER_PRICE - 1));
-			assert_ok!(pool_state.mint::<SD>(&lp(1), 0, 1.into()));
-			assert_matches!(
-				pool_state.mint::<SD>(&lp(2), 0, 1.into()),
-				Err(PositionError::Other(MintError::MaximumLiquidity))
-			);
-		}
-
-		// A failed mint leaves nothing behind.
-		{
-			let mut pool_state = PoolState::new();
-			assert_matches!(
-				pool_state.mint::<SD>(&lp(0), 0, MAX_LIQUIDITY_PER_PRICE + 1),
-				Err(PositionError::Other(MintError::MaximumLiquidity))
-			);
-			assert_matches!(pool_state.position::<SD>(&lp(0), 0), Err(PositionError::NonExistent));
-			assert!(pool_state.liquidity::<SD>().is_empty());
 		}
 
 		// Minting nothing reports the existing order, and errors if there isn't one.
@@ -435,17 +441,26 @@ fn fills_conserve_liquidity_for_arbitrary_books() {
 	for _ in 0..256 {
 		let mut pool_state = PoolState::new();
 		let mut minted = Amount::zero();
-		let mut tick: Tick = 0;
+		// Start anywhere in the valid range rather than always at zero
+		let mut tick: Tick = rng.gen_range(MIN_TICK..(MAX_TICK - 4 * 600));
 
-		// Order sizes span whole orders of magnitude. Tiny ones matter most: they are what make a
-		// share floor to zero, which is the case that decides whether an order that takes nothing
-		// still gives up its claim on the rest.
-		let scale = [1u128, 2, 5, 100, 1_000_000, 1_000_000_000][rng.gen_range(0..6)];
+		// Order sizes span whole orders of magnitude
+		let scale = [
+			Amount::from(1u128),
+			Amount::from(2u128),
+			Amount::from(5u128),
+			Amount::from(100u128),
+			Amount::from(1_000_000u128),
+			Amount::from(1_000_000_000u128),
+			Amount::from(u128::MAX),
+			// Divided so that a whole book of these still fits a `U256`.
+			Amount::MAX / 128,
+		][rng.gen_range(0..8)];
 
 		for _ in 0..rng.gen_range(1..5) {
 			// Distinct ids at a price, so no two orders merge into one position.
 			for id in 0..rng.gen_range(1u8..20) {
-				let amount = Amount::from(rng.gen_range(1u128..=scale));
+				let amount = random_amount(&mut rng, scale);
 				assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), tick, amount));
 				minted += amount;
 			}
@@ -454,11 +469,14 @@ fn fills_conserve_liquidity_for_arbitrary_books() {
 
 		// Half the time a swap that could take the book several times over, half the time one too
 		// small to give every order a whole unit.
-		let swapped = Amount::from(if rng.gen() {
-			rng.gen_range(1..=minted.as_u128().saturating_mul(2).max(2))
+		let swapped = if rng.gen() {
+			random_amount(
+				&mut rng,
+				minted.saturating_mul(Amount::from(2u128)).max(Amount::from(2u128)),
+			)
 		} else {
-			rng.gen_range(1..=16u128)
-		});
+			Amount::from(rng.gen_range(1u128..=16u128))
+		};
 		let (_output, _remaining, fills) = swap::<BaseToQuote>(&mut pool_state, swapped, None);
 
 		let sold = total_of(&fills, |fill| fill.sold_amount);
@@ -556,18 +574,22 @@ fn boundary_tick_limit_order_consumed_without_price_limit() {
 
 #[cfg(feature = "slow-tests")]
 #[test]
-fn maximum_liquidity_swap() {
+fn every_price_in_the_range_can_be_swapped_out() {
+	// A realistic ceiling for one price, and low enough that the totals stay below the point
+	// where the conversions saturate.
+	const LIQUIDITY_PER_PRICE: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* little endian */);
+
 	let mut pool_state = PoolState::new();
 
 	for tick in MIN_TICK..=MAX_TICK {
 		assert_eq!(
-			pool_state.mint::<BaseToQuote>(&lp(0), tick, MAX_LIQUIDITY_PER_PRICE).unwrap(),
-			PositionInfo::new(MAX_LIQUIDITY_PER_PRICE)
+			pool_state.mint::<BaseToQuote>(&lp(0), tick, LIQUIDITY_PER_PRICE).unwrap(),
+			PositionInfo::new(LIQUIDITY_PER_PRICE)
 		);
 	}
 
 	assert_eq!(
-		MAX_LIQUIDITY_PER_PRICE * (1 + MAX_TICK - MIN_TICK),
+		LIQUIDITY_PER_PRICE * (1 + MAX_TICK - MIN_TICK),
 		std::iter::repeat_with(|| { pool_state.swap::<BaseToQuote>(Amount::MAX, None, 0).0 })
 			.take_while(|x| !x.is_zero())
 			.fold(Amount::zero(), |acc, x| acc + x)

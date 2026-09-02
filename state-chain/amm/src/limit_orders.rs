@@ -38,8 +38,6 @@
 #[cfg(test)]
 mod tests;
 
-use core::convert::Infallible;
-
 use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_map::{BTreeMap, OccupiedEntry};
 
@@ -50,14 +48,6 @@ use sp_std::vec::Vec;
 
 use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase};
 use cf_amm_math::{is_tick_valid, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
-
-// This is the maximum liquidity/amount of an asset that can be sold at a single tick/price. If an
-// LP attempts to add more liquidity that would increase the total at the tick past this value, the
-// minting operation will error. Note this maximum is for all lps combined, and not a single lp,
-// therefore it is possible for an LP to "consume" a tick by filling it up to the maximum, and
-// thereby not allowing other LPs to mint at that price (But the maximum is high enough that this is
-// not feasible).
-const MAX_LIQUIDITY_PER_PRICE: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* little endian */);
 
 /// All the orders selling at a single price. Grouping them is only a way of finding them; the
 /// liquidity they provide is whatever they currently hold, it is not tracked separately.
@@ -137,22 +127,12 @@ pub enum DepthError {
 }
 
 #[derive(Debug)]
-pub enum MintError {
-	/// One of the start/end ticks of the range reached its maximum gross liquidity
-	MaximumLiquidity,
-}
-
-#[derive(Debug)]
-pub enum PositionError<T> {
+pub enum PositionError {
 	/// Invalid Price
 	InvalidTick,
 	/// Position referenced does not exist
 	NonExistent,
-	Other(T),
 }
-
-#[derive(Debug)]
-pub enum BurnError {}
 
 /// A swap buying into a single limit order. The proceeds are owed to the LP as of the swap, the
 /// pool does not hold on to them.
@@ -294,22 +274,20 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let available = liquidity_of(orders);
 
 			let price = Price::from(sqrt_price);
-			let amount_required_to_consume_orders = SD::input_amount_ceil(available, price)
-				.expect("Amount and price are assumed to be valid");
 
 			// Either the input buys all the liquidity at this price, and the swap moves on to the
 			// next best price, or the input runs out here and buys as much as it can.
-			let (sold_amount, bought_amount) = if amount >= amount_required_to_consume_orders {
-				(available, amount_required_to_consume_orders)
-			} else {
-				(
+			let (sold_amount, bought_amount) = match SD::input_amount_ceil(available, price) {
+				Some(required_to_consume) if amount >= required_to_consume =>
+					(available, required_to_consume),
+				// An overflowing output would exceed `available`, which bounds it regardless.
+				_ => (
 					core::cmp::min(
-						SD::output_amount_floor(amount, price)
-							.expect("Amount and price are assumed to be valid"),
+						SD::output_amount_floor(amount, price).unwrap_or(available),
 						available,
 					),
 					amount,
-				)
+				),
 			};
 
 			// Cannot underflow as swapped_amount is bounded by amount in both cases above.
@@ -343,7 +321,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<PositionInfo, PositionError<MintError>> {
+	) -> Result<PositionInfo, PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		let orders = &mut self.orders[!SD::INPUT_SIDE];
 
@@ -355,12 +333,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.ok_or(PositionError::NonExistent)
 		}
 
-		// The maximum is checked before anything is mutated, so that a failed mint is a no-op.
-		let available = orders.get(&sqrt_price).map_or(Amount::zero(), liquidity_of);
-		if available.saturating_add(amount) > MAX_LIQUIDITY_PER_PRICE {
-			return Err(PositionError::Other(MintError::MaximumLiquidity))
-		}
-
 		let position = orders.entry(sqrt_price).or_default().entry(lp.clone()).or_default();
 		position.amount = position.amount.saturating_add(amount);
 		position.original_amount = position.amount;
@@ -368,7 +340,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Ok(PositionInfo::from(&*position))
 	}
 
-	fn validate_tick<T>(tick: Tick) -> Result<SqrtPrice, PositionError<T>> {
+	fn validate_tick(tick: Tick) -> Result<SqrtPrice, PositionError> {
 		is_tick_valid(tick)
 			.then(|| SqrtPrice::from_tick(tick))
 			.ok_or(PositionError::InvalidTick)
@@ -384,7 +356,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(Amount, PositionInfo), PositionError<BurnError>> {
+	) -> Result<(Amount, PositionInfo), PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
 
 		let all_orders = &mut self.orders[!SD::INPUT_SIDE];
@@ -417,7 +389,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<PositionInfo, PositionError<Infallible>> {
+	) -> Result<PositionInfo, PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
 
 		self.orders[!SD::INPUT_SIDE]
@@ -444,10 +416,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		range: core::ops::Range<Tick>,
 	) -> Result<Amount, DepthError> {
-		let start =
-			Self::validate_tick::<Infallible>(range.start).map_err(|_| DepthError::InvalidTick)?;
-		let end =
-			Self::validate_tick::<Infallible>(range.end).map_err(|_| DepthError::InvalidTick)?;
+		let start = Self::validate_tick(range.start).map_err(|_| DepthError::InvalidTick)?;
+		let end = Self::validate_tick(range.end).map_err(|_| DepthError::InvalidTick)?;
 		if start <= end {
 			Ok(self.orders[!SD::INPUT_SIDE]
 				.range(start..end)

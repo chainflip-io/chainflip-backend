@@ -1640,8 +1640,6 @@ impl<T: Config> Pallet<T> {
 						Error::<T>::OrderDoesNotExist
 					},
 				limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
-				limit_orders::PositionError::Other(limit_orders::MintError::MaximumLiquidity) =>
-					Error::<T>::MaximumGrossLiquidity,
 			}
 			.into()),
 		}
@@ -1668,6 +1666,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	#[transactional]
 	pub fn inner_set_limit_order(
 		lp: &T::AccountId,
 		base_asset: any::Asset,
@@ -1841,7 +1840,6 @@ impl<T: Config> Pallet<T> {
 								Error::<T>::OrderDoesNotExist
 							},
 						limit_orders::PositionError::InvalidTick => Error::InvalidTick,
-						limit_orders::PositionError::Other(error) => match error {},
 					}),
 				}?;
 

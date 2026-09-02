@@ -347,7 +347,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
-	) -> Result<limit_orders::PositionInfo, limit_orders::PositionError<limit_orders::MintError>> {
+	) -> Result<limit_orders::PositionInfo, limit_orders::PositionError> {
 		match order.to_sold_pair() {
 			Pairs::Base => self.limit_orders.mint::<QuoteToBase>(lp, tick, sold_amount),
 			Pairs::Quote => self.limit_orders.mint::<BaseToQuote>(lp, tick, sold_amount),
@@ -360,10 +360,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
-	) -> Result<
-		(Amount, limit_orders::PositionInfo),
-		limit_orders::PositionError<limit_orders::BurnError>,
-	> {
+	) -> Result<(Amount, limit_orders::PositionInfo), limit_orders::PositionError> {
 		match order.to_sold_pair() {
 			Pairs::Base => self.limit_orders.burn::<QuoteToBase>(lp, tick, sold_amount),
 			Pairs::Quote => self.limit_orders.burn::<BaseToQuote>(lp, tick, sold_amount),
@@ -456,7 +453,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		order: Side,
 		tick: Tick,
-	) -> Result<limit_orders::PositionInfo, limit_orders::PositionError<Infallible>> {
+	) -> Result<limit_orders::PositionInfo, limit_orders::PositionError> {
 		match order {
 			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
 			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),
