@@ -42,10 +42,10 @@ jobs:
         run: echo "Docker Image Tag output ${{ steps.image_tags.outputs.image_tag }}"
 
       - name: Install and configure Namespace CLI 📟
-        uses: namespacelabs/nscloud-setup@v0
+        uses: namespacelabs/nscloud-setup@df198f982fcecfb8264bea3f1274b56a61b6dfdc # v0.0.12
 
       - name: Set up Namespace Buildx 👷
-        uses: namespacelabs/nscloud-setup-buildx-action@v0
+        uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd # v0.0.23
 
       - name: Docker meta 🔖
         id: meta
