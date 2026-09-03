@@ -344,9 +344,6 @@ fn can_calculate_account_apy_for_validator_with_delegation() {
 		});
 }
 
-/// Unlike `setup_delegation`, drives `delegate_multi` so a single delegator can be tested
-/// against more than one operator at once -- `setup_delegation`'s legacy `delegate` call and its
-/// hard assertion that the delegator set is disjoint per-operator can't express that.
 #[test]
 fn delegator_can_split_stake_across_two_operators() {
 	const EPOCH_DURATION_BLOCKS: u32 = 200;
