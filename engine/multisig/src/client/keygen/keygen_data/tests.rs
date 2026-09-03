@@ -334,3 +334,26 @@ fn should_delay_correct_data_for_stage() {
 		}
 	}
 }
+
+#[test]
+fn pubkey_shares0_deserialization_is_bounded_by_max_authorities() {
+	let mut rng = Rng::from_seed([0; 32]);
+
+	let pubkey_shares = |count: AuthorityCount, rng: &mut Rng| {
+		PubkeyShares0::<Point>((1..=count).map(|i| (i, Point::random(rng))).collect())
+	};
+
+	// A map of exactly MAX_AUTHORITIES entries is within bounds and round-trips unchanged.
+	let within_limit = pubkey_shares(MAX_AUTHORITIES, &mut rng);
+	let bytes = bincode::serialize(&within_limit).expect("serialization can't fail");
+	assert_eq!(
+		bincode::deserialize::<PubkeyShares0<Point>>(&bytes).expect("within-limit map decodes"),
+		within_limit,
+	);
+
+	// One entry beyond the limit is rejected by the size-bounded deserializer, even though the
+	// (unbounded) derived serializer will happily produce it.
+	let over_limit = pubkey_shares(MAX_AUTHORITIES + 1, &mut rng);
+	let bytes = bincode::serialize(&over_limit).expect("serialization can't fail");
+	assert!(bincode::deserialize::<PubkeyShares0<Point>>(&bytes).is_err());
+}
