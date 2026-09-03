@@ -118,12 +118,22 @@ impl<AccountId: Ord + Clone> WithdrawalWhitelist<AccountId> {
 		}
 	}
 
-	pub(crate) fn timelock(&self) -> Seconds {
+	pub fn timelock(&self) -> Seconds {
 		self.timelock
 	}
 
 	pub(crate) fn set_timelock(&mut self, timelock: Seconds) {
 		self.timelock = timelock;
+	}
+
+	/// The active external destinations, grouped by chain.
+	pub fn external(&self) -> &BTreeMap<ForeignChain, BTreeSet<ForeignChainAddress>> {
+		&self.external
+	}
+
+	/// The active internal (account) destinations.
+	pub fn internal(&self) -> &BTreeSet<AccountId> {
+		&self.internal
 	}
 
 	/// Applies a single change to the active whitelists, pruning a chain's set once it empties.
@@ -268,6 +278,24 @@ mod tests {
 		w.apply_change(&remove(eth(1)), max_entries).unwrap();
 		w.apply_change(&allow(arb(1)), max_entries).unwrap();
 		assert!(w.is_allowed(to_address(&arb(1))));
+	}
+
+	#[test]
+	fn accessors_expose_the_active_entries() {
+		let mut w = Whitelist::default();
+		w.apply_change(&allow(eth(1)), MAX_ENTRIES).unwrap();
+		w.apply_change(&allow(arb(1)), MAX_ENTRIES).unwrap();
+		w.apply_change(&allow_account(7), MAX_ENTRIES).unwrap();
+		w.set_timelock(DAY);
+
+		assert_eq!(w.external().get(&ForeignChain::Ethereum), Some(&BTreeSet::from([eth(1)])));
+		assert_eq!(w.external().get(&ForeignChain::Arbitrum), Some(&BTreeSet::from([arb(1)])));
+		assert_eq!(w.internal(), &BTreeSet::from([7]));
+		assert_eq!(w.timelock(), DAY);
+
+		// An emptied chain is pruned rather than reported as an empty set.
+		w.apply_change(&remove(eth(1)), MAX_ENTRIES).unwrap();
+		assert!(!w.external().contains_key(&ForeignChain::Ethereum));
 	}
 
 	#[test]

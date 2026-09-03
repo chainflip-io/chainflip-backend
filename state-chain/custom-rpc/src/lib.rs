@@ -44,8 +44,9 @@ use cf_rpc_apis::{
 		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc, RpcBytes,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc,
 	},
-	call_error, internal_error, CfErrorCode, NotificationBehaviour, OrderFills,
-	RefundParametersRpc, RpcApiError, RpcResult,
+	call_error, internal_error,
+	lp::WhitelistDestinationRpc,
+	CfErrorCode, NotificationBehaviour, OrderFills, RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::{
 	migrations::{
@@ -106,7 +107,7 @@ use state_chain_runtime::{
 			RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty, ShouldSweep,
 			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
 			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-			VaultSwapDetails,
+			VaultSwapDetails, WhitelistDestination, WhitelistUpdate, WithdrawalRestrictions,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -837,6 +838,107 @@ pub use ingress_egress_tracker::{
 	RpcTransactionRef, RpcVaultDepositWitnessInfo, RpcWitnessedEventsResponse,
 };
 
+/// Everything restricting where an account may withdraw to, with addresses rendered in their
+/// human-readable form.
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct RpcWithdrawalRestrictions {
+	pub account_role: Option<AccountRole>,
+	/// `None` if the account has no whitelist configured, in which case the whitelist places no
+	/// restriction of its own.
+	pub whitelist: Option<RpcActiveWithdrawalWhitelist>,
+	pub pending: Vec<RpcPendingWhitelistUpdate>,
+	/// Allowed without being whitelisted.
+	pub refund_addresses: Vec<RpcRefundAddress>,
+	/// If set, Ethereum withdrawals to any other destination are rejected, whitelisted or not.
+	pub bound_broker_withdrawal_address: Option<AddressString>,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct RpcRefundAddress {
+	pub chain: ForeignChain,
+	pub address: AddressString,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct RpcActiveWithdrawalWhitelist {
+	/// The delay applied to whitelist updates, in seconds. Zero means updates apply immediately.
+	pub timelock_secs: u64,
+	pub allowed: Vec<WhitelistDestinationRpc>,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct RpcPendingWhitelistUpdate {
+	/// Wall-clock time (unix seconds) at which the update is applied.
+	pub activates_at: u64,
+	pub update: RpcWhitelistUpdate,
+}
+
+/// Mirrors the pallet's `WhitelistUpdate`. Distinct from `WhitelistChangeRpc`, which mirrors
+/// `WhitelistChange` and so has no timelock variant.
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+pub enum RpcWhitelistUpdate {
+	Allow(WhitelistDestinationRpc),
+	Remove(WhitelistDestinationRpc),
+	Timelock(u64),
+}
+
+/// Both types are foreign to this crate, so this can't be a `From` impl.
+fn destination_to_rpc(destination: WhitelistDestination) -> WhitelistDestinationRpc {
+	match destination {
+		WhitelistDestination::InternalAccount(account) =>
+			WhitelistDestinationRpc::InternalAccount(account),
+		WhitelistDestination::ExternalAddress(address) =>
+			WhitelistDestinationRpc::ExternalAddress {
+				chain: address.chain(),
+				address: AddressString::from_encoded_address(&address),
+			},
+	}
+}
+
+impl From<WhitelistUpdate> for RpcWhitelistUpdate {
+	fn from(update: WhitelistUpdate) -> Self {
+		match update {
+			WhitelistUpdate::Allow(destination) =>
+				RpcWhitelistUpdate::Allow(destination_to_rpc(destination)),
+			WhitelistUpdate::Remove(destination) =>
+				RpcWhitelistUpdate::Remove(destination_to_rpc(destination)),
+			WhitelistUpdate::Timelock(timelock) => RpcWhitelistUpdate::Timelock(timelock),
+		}
+	}
+}
+
+impl From<WithdrawalRestrictions> for RpcWithdrawalRestrictions {
+	fn from(info: WithdrawalRestrictions) -> Self {
+		RpcWithdrawalRestrictions {
+			account_role: info.account_role,
+			refund_addresses: info
+				.refund_addresses
+				.iter()
+				.map(|(chain, address)| RpcRefundAddress {
+					chain: *chain,
+					address: AddressString::from_encoded_address(address),
+				})
+				.collect(),
+			bound_broker_withdrawal_address: info
+				.bound_broker_withdrawal_address
+				.as_ref()
+				.map(AddressString::from_encoded_address),
+			whitelist: info.whitelist.map(|active| RpcActiveWithdrawalWhitelist {
+				timelock_secs: active.timelock_secs,
+				allowed: active.allowed.into_iter().map(destination_to_rpc).collect(),
+			}),
+			pending: info
+				.pending
+				.into_iter()
+				.map(|update| RpcPendingWhitelistUpdate {
+					activates_at: update.activates_at,
+					update: update.update.into(),
+				})
+				.collect(),
+		}
+	}
+}
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -926,6 +1028,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<any::AssetMap<U256>>;
+	#[method(name = "withdrawal_restrictions")]
+	fn cf_withdrawal_restrictions(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWithdrawalRestrictions>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -1912,6 +2020,27 @@ where
 				api.cf_lp_total_balances(hash, account_id)
 			}
 			.map(|balances| balances.map(Into::into))
+		})
+	}
+
+	fn cf_withdrawal_restrictions(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWithdrawalRestrictions> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			// These restrictions only exist from version 21 onwards, so there is nothing sensible
+			// to return for older blocks.
+			if version < 21 {
+				Err(CfApiError::ErrorObject(call_error(
+					"cf_withdrawal_restrictions is not supported at this block",
+					CfErrorCode::UnsupportedRuntimeApiVersion,
+				)))
+			} else {
+				api.cf_withdrawal_restrictions(hash, account_id)
+					.map(RpcWithdrawalRestrictions::from)
+					.map_err(CfApiError::from)
+			}
 		})
 	}
 
