@@ -63,7 +63,7 @@ fn test_basic_swaps() {
 					0,
 					amount
 				)),
-				limit_orders::PositionInfo::new(amount)
+				limit_orders::Position::new(amount)
 			);
 
 			assert_eq!(swap(&mut pool_state, order, 0.into()), (0.into(), 0.into()));
@@ -147,7 +147,7 @@ fn test_basic_swaps() {
 					0,
 					limit_order_liquidity
 				)),
-				limit_orders::PositionInfo::new(limit_order_liquidity)
+				limit_orders::Position::new(limit_order_liquidity)
 			);
 
 			assert_eq!(swap(&mut pool_state, order, 0.into()), (0.into(), 0.into()));
@@ -207,7 +207,7 @@ fn test_basic_swaps() {
 					0,
 					limit_order_liquidity
 				)),
-				limit_orders::PositionInfo::new(limit_order_liquidity)
+				limit_orders::Position::new(limit_order_liquidity)
 			);
 
 			assert_eq!(swap(&mut pool_state, order, 0.into()), (0.into(), 0.into()));

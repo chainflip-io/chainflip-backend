@@ -119,7 +119,7 @@ fn mint() {
 			let mut pool_state = PoolState::new();
 			assert_eq!(
 				assert_ok!(pool_state.mint::<SD>(&lp(0), good, 1000.into())),
-				PositionInfo::new(1000.into())
+				Position::new(1000.into())
 			);
 		}
 
@@ -134,7 +134,7 @@ fn mint() {
 		// No amount is too large to mint: an invalid tick is the only way minting fails.
 		for good in [Amount::one(), Amount::MAX / 2, Amount::MAX] {
 			let mut pool_state = PoolState::new();
-			assert_eq!(assert_ok!(pool_state.mint::<SD>(&lp(0), 0, good)), PositionInfo::new(good));
+			assert_eq!(assert_ok!(pool_state.mint::<SD>(&lp(0), 0, good)), Position::new(good));
 		}
 
 		// Minting nothing reports the existing order, and errors if there isn't one.
@@ -147,7 +147,7 @@ fn mint() {
 			assert_ok!(pool_state.mint::<SD>(&lp(0), 0, 1000.into()));
 			assert_eq!(
 				assert_ok!(pool_state.mint::<SD>(&lp(0), 0, Amount::zero())),
-				PositionInfo::new(1000.into())
+				Position::new(1000.into())
 			);
 		}
 	}
@@ -183,11 +183,11 @@ fn burn() {
 			let amount = U256::from(1000);
 			assert_eq!(
 				assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount)),
-				PositionInfo::new(amount)
+				Position::new(amount)
 			);
 			assert_eq!(
 				assert_ok!(pool_state.burn::<SD>(&lp(0), tick, amount)),
-				(amount, PositionInfo::default())
+				(amount, Position::default())
 			);
 			// Burning an order in its entirety removes it.
 			assert_matches!(
@@ -203,12 +203,12 @@ fn burn() {
 			assert_ok!(pool_state.mint::<SD>(&lp(1), tick, 56.into()));
 			assert_eq!(
 				assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount)),
-				PositionInfo::new(amount)
+				Position::new(amount)
 			);
 			assert_ok!(pool_state.mint::<SD>(&lp(2), tick, 16.into()));
 			assert_eq!(
 				assert_ok!(pool_state.burn::<SD>(&lp(0), tick, amount)),
-				(amount, PositionInfo::default())
+				(amount, Position::default())
 			);
 			assert_eq!(pool_state.liquidity::<SD>(), vec![(tick, (56 + 16).into())]);
 		}
@@ -261,7 +261,7 @@ fn burn() {
 
 			assert_eq!(
 				assert_ok!(pool_state.burn::<SD>(&lp(0), tick, amount)),
-				(amount - swapped, PositionInfo::default())
+				(amount - swapped, Position::default())
 			);
 		}
 	}
@@ -584,7 +584,7 @@ fn every_price_in_the_range_can_be_swapped_out() {
 	for tick in MIN_TICK..=MAX_TICK {
 		assert_eq!(
 			pool_state.mint::<BaseToQuote>(&lp(0), tick, LIQUIDITY_PER_PRICE).unwrap(),
-			PositionInfo::new(LIQUIDITY_PER_PRICE)
+			Position::new(LIQUIDITY_PER_PRICE)
 		);
 	}
 

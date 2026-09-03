@@ -148,27 +148,7 @@ pub struct Fill<LiquidityProvider> {
 	pub remaining_amount: Amount,
 }
 
-#[derive(
-	Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen,
-)]
-pub struct PositionInfo {
-	/// The amount of liquidity in the position after the operation.
-	pub amount: Amount,
-	/// The amount of liquidity in the position as of the last non-zero mint or burn.
-	pub original_amount: Amount,
-}
-impl PositionInfo {
-	pub fn new(amount: Amount) -> Self {
-		Self { amount, original_amount: amount }
-	}
-}
-impl<'a> From<&'a Position> for PositionInfo {
-	fn from(value: &'a Position) -> Self {
-		Self { amount: value.amount, original_amount: value.original_amount }
-	}
-}
-
-/// Represents a single LP position, i.e. a limit order with liquidity left to sell.
+/// A single LP position, i.e. a limit order with liquidity left to sell.
 #[derive(
 	Clone,
 	Debug,
@@ -181,14 +161,19 @@ impl<'a> From<&'a Position> for PositionInfo {
 	Serialize,
 	Deserialize,
 	PartialEq,
+	Eq,
 )]
 pub struct Position {
-	/// The amount of liquidity provided by this position that has not been bought yet. Never
-	/// zero, a position with nothing left to sell is removed from the pool.
-	amount: Amount,
-	/// This is the original amount of liquidity provider by this position as of its creation. This
-	/// value is updated if a non-zero mint or burn is performed on the position.
-	original_amount: Amount,
+	/// The liquidity this position provides that has not been bought yet. Never zero; a position
+	/// with nothing left to sell is removed from the pool.
+	pub amount: Amount,
+	/// The liquidity this position provided as of its last non-zero mint or burn.
+	pub original_amount: Amount,
+}
+impl Position {
+	pub fn new(amount: Amount) -> Self {
+		Self { amount, original_amount: amount }
+	}
 }
 
 #[derive(
@@ -223,11 +208,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics.
 	pub(super) fn positions<SD: SwapDirection>(
 		&self,
-	) -> impl '_ + Iterator<Item = (LiquidityProvider, Tick, PositionInfo)> {
+	) -> impl '_ + Iterator<Item = (LiquidityProvider, Tick, Position)> {
 		self.orders[!SD::INPUT_SIDE].iter().flat_map(|(sqrt_price, orders)| {
-			orders.iter().map(move |(lp, position)| {
-				(lp.clone(), sqrt_price.to_tick(), PositionInfo::from(position))
-			})
+			orders
+				.iter()
+				.map(move |(lp, position)| (lp.clone(), sqrt_price.to_tick(), position.clone()))
 		})
 	}
 
@@ -289,8 +274,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				),
 			};
 
-			// Cannot underflow as swapped_amount is bounded by amount in both cases above.
-			amount -= bought_amount;
+			amount = amount.saturating_sub(bought_amount);
 
 			fill_orders(orders, sqrt_price, available, sold_amount, bought_amount, &mut fills);
 
@@ -320,7 +304,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<PositionInfo, PositionError> {
+	) -> Result<Position, PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		let orders = &mut self.orders[!SD::INPUT_SIDE];
 
@@ -328,7 +312,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			return orders
 				.get(&sqrt_price)
 				.and_then(|orders| orders.get(lp))
-				.map(PositionInfo::from)
+				.cloned()
 				.ok_or(PositionError::NonExistent)
 		}
 
@@ -336,7 +320,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		position.amount = position.amount.saturating_add(amount);
 		position.original_amount = position.amount;
 
-		Ok(PositionInfo::from(&*position))
+		Ok(position.clone())
 	}
 
 	fn validate_tick(tick: Tick) -> Result<SqrtPrice, PositionError> {
@@ -355,21 +339,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(Amount, PositionInfo), PositionError> {
+	) -> Result<(Amount, Position), PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
 
 		let all_orders = &mut self.orders[!SD::INPUT_SIDE];
 		let orders = all_orders.get_mut(&sqrt_price).ok_or(PositionError::NonExistent)?;
 		let position = orders.get_mut(lp).ok_or(PositionError::NonExistent)?;
 		if amount.is_zero() {
-			return Ok((Amount::zero(), PositionInfo::from(&*position)))
+			return Ok((Amount::zero(), position.clone()))
 		}
 
 		let burnt_amount = core::cmp::min(position.amount, amount);
 		// Cannot underflow, the burn is capped by the position's liquidity.
 		position.amount -= burnt_amount;
 		position.original_amount = position.amount;
-		let position_info = PositionInfo::from(&*position);
+		let position_info = position.clone();
 
 		if position.amount.is_zero() {
 			orders.remove(lp);
@@ -388,13 +372,13 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<PositionInfo, PositionError> {
+	) -> Result<Position, PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
 
 		self.orders[!SD::INPUT_SIDE]
 			.get(&sqrt_price)
 			.and_then(|orders| orders.get(lp))
-			.map(PositionInfo::from)
+			.cloned()
 			.ok_or(PositionError::NonExistent)
 	}
 
@@ -1210,7 +1194,7 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 1000.into())]);
 		assert_eq!(
 			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
-			PositionInfo { amount: 1000.into(), original_amount: 1000.into() }
+			Position { amount: 1000.into(), original_amount: 1000.into() }
 		);
 	}
 
@@ -1250,11 +1234,11 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 375.into())]);
 		assert_eq!(
 			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
-			PositionInfo { amount: 125.into(), original_amount: 1000.into() }
+			Position { amount: 125.into(), original_amount: 1000.into() }
 		);
 		assert_eq!(
 			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
-			PositionInfo { amount: 250.into(), original_amount: 2000.into() }
+			Position { amount: 250.into(), original_amount: 2000.into() }
 		);
 	}
 
@@ -1307,7 +1291,7 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 400.into())]);
 		assert_eq!(
 			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
-			PositionInfo { amount: 400.into(), original_amount: 400.into() }
+			Position { amount: 400.into(), original_amount: 400.into() }
 		);
 	}
 

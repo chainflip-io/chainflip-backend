@@ -347,7 +347,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
-	) -> Result<limit_orders::PositionInfo, limit_orders::PositionError> {
+	) -> Result<limit_orders::Position, limit_orders::PositionError> {
 		match order.to_sold_pair() {
 			Pairs::Base => self.limit_orders.mint::<QuoteToBase>(lp, tick, sold_amount),
 			Pairs::Quote => self.limit_orders.mint::<BaseToQuote>(lp, tick, sold_amount),
@@ -360,7 +360,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
-	) -> Result<(Amount, limit_orders::PositionInfo), limit_orders::PositionError> {
+	) -> Result<(Amount, limit_orders::Position), limit_orders::PositionError> {
 		match order.to_sold_pair() {
 			Pairs::Base => self.limit_orders.burn::<QuoteToBase>(lp, tick, sold_amount),
 			Pairs::Quote => self.limit_orders.burn::<BaseToQuote>(lp, tick, sold_amount),
@@ -453,7 +453,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		order: Side,
 		tick: Tick,
-	) -> Result<limit_orders::PositionInfo, limit_orders::PositionError> {
+	) -> Result<limit_orders::Position, limit_orders::PositionError> {
 		match order {
 			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
 			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),
@@ -464,7 +464,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		order: Side,
 	) -> sp_std::boxed::Box<
-		dyn '_ + Iterator<Item = (LiquidityProvider, Tick, limit_orders::PositionInfo)>,
+		dyn '_ + Iterator<Item = (LiquidityProvider, Tick, limit_orders::Position)>,
 	> {
 		match order {
 			Side::Sell => sp_std::boxed::Box::new(self.limit_orders.positions::<QuoteToBase>()),

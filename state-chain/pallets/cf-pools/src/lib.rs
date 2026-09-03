@@ -18,7 +18,7 @@
 
 use cf_amm::{
 	common::{AskBidMap, AssetPair, LimitOrder, PoolPairsMap, Side},
-	limit_orders::{self, PositionInfo},
+	limit_orders::{self, Position},
 	math::{Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
 	PoolState,
@@ -166,6 +166,8 @@ impl<T: Config> LimitOrderUpdate<T> {
 						err == Error::<T>::UnspecifiedOrderPrice.into()
 					{
 						// Ignore the error if the order doesn't exist, as this is expected.
+						// UnspecifiedOrderPrice is expected if the order was fully filled and
+						// therefore removed but the order update did not specify a tick.
 						Ok(())
 					} else {
 						Err(err)
@@ -1165,11 +1167,11 @@ impl<T: Config> PoolApi for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	fn sweep(who: &T::AccountId) -> DispatchResult {
-		Self::inner_sweep(Select::Single(who))
+		Self::sweep_range_orders(Select::Single(who))
 	}
 
 	fn sweep_all() -> DispatchResult {
-		Self::inner_sweep(Select::All())
+		Self::sweep_range_orders(Select::All())
 	}
 
 	fn open_order_count(
@@ -1580,7 +1582,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn inner_sweep(lp_accounts: Select<T::AccountId>) -> DispatchResult {
+	fn sweep_range_orders(lp_accounts: Select<T::AccountId>) -> DispatchResult {
 		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation).
 		// Note that we read one pool at a time to optimise memory usage.
 		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
@@ -1610,8 +1612,6 @@ impl<T: Config> Pallet<T> {
 				}
 			}
 
-			// Limit orders have nothing to sweep: a swap pays their proceeds out as it fills them.
-
 			// Only write back if the pool was indeed referenced by at least one order.
 			if pool_possibly_mutated {
 				Pools::<T>::insert(asset_pair, pool);
@@ -1629,7 +1629,7 @@ impl<T: Config> Pallet<T> {
 		tick: Tick,
 		sold_amount: Amount,
 		noop_status: NoOpStatus,
-	) -> Result<PositionInfo, DispatchError> {
+	) -> Result<Position, DispatchError> {
 		match pool.pool_state.mint_limit_order(&(lp.clone(), id), side, tick, sold_amount) {
 			Ok(ok) => Ok(ok),
 			Err(error) => Err(match error {
@@ -1736,7 +1736,7 @@ impl<T: Config> Pallet<T> {
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
 		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
-		Self::inner_sweep(Select::Single(lp))?;
+		Self::sweep_range_orders(Select::Single(lp))?;
 		Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 			let existing_tick = pool.limit_orders_cache[side.to_sold_pair()]
 				.get(lp)
@@ -2080,7 +2080,7 @@ impl<T: Config> Pallet<T> {
 		f: F,
 	) -> Result<R, DispatchError> {
 		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
-		Self::inner_sweep(Select::Single(lp))?;
+		Self::sweep_range_orders(Select::Single(lp))?;
 		Self::try_mutate_pool(asset_pair, f)
 	}
 
@@ -2314,19 +2314,19 @@ impl<T: Config> Pallet<T> {
 							})
 						},
 					)
-					.filter_map(|(lp, id, tick): (T::AccountId, OrderId, Tick)| {
-						let position_info = pool
+					.map(|(lp, id, tick): (T::AccountId, OrderId, Tick)| {
+						let position = pool
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
-							.unwrap();
-						Some(LimitOrder {
+							.expect("Cache is always in sync with the pool");
+						LimitOrder {
 							lp: lp.clone(),
 							id: id.into(),
 							tick,
-							sell_amount: position_info.amount,
+							sell_amount: position.amount,
 							fees_earned: Default::default(),
-							original_sell_amount: position_info.original_amount,
-						})
+							original_sell_amount: position.original_amount,
+						}
 					})
 					.collect()
 				},
