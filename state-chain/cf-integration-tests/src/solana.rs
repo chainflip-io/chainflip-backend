@@ -200,7 +200,6 @@ fn vote_for_alt_election(
 	)
 	.unwrap();
 	Validator::current_authorities().into_iter().for_each(|id| {
-		assert_ok!(SolanaElections::stop_ignoring_my_votes(RuntimeOrigin::signed(id.clone()),));
 		assert_ok!(RuntimeCall::SolanaElections(pallet_cf_elections::Call::<
 			Runtime,
 			SolanaInstance,
@@ -1075,10 +1074,6 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			)]).try_into().unwrap();
 
 			for v in Validator::current_authorities() {
-				assert_ok!(SolanaElections::stop_ignoring_my_votes(
-					RuntimeOrigin::signed(v.clone()),
-				));
-
 				assert_ok!(SolanaElections::vote(
 					RuntimeOrigin::signed(v),
 					Box::new(vote.clone())

@@ -20,7 +20,7 @@ pub use crate::{self as pallet_cf_elections};
 use crate::{ElectoralSystemConfiguration, InitialStateOf, Pallet, UniqueMonotonicIdentifier};
 
 use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
-use frame_support::{assert_ok, derive_impl, instances::Instance1, traits::OriginTrait};
+use frame_support::{assert_ok, derive_impl, instances::Instance1};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -73,8 +73,7 @@ cf_test_utilities::impl_test_helpers! {
 #[derive(Clone, Debug)]
 pub struct TestSetup {
 	pub initial_state: InitialStateOf<Test, Instance1>,
-	pub num_contributing_authorities: u64,
-	pub num_non_contributing_authorities: u64,
+	pub num_authorities: u64,
 }
 
 impl Default for TestSetup {
@@ -86,29 +85,14 @@ impl Default for TestSetup {
 				settings: (),
 				shared_data_reference_lifetime: Default::default(),
 			},
-			num_contributing_authorities: 3,
-			num_non_contributing_authorities: 0,
+			num_authorities: 3,
 		}
 	}
 }
 
 impl TestSetup {
 	pub fn all_authorities(&self) -> Vec<u64> {
-		(0..self.num_contributing_authorities + self.num_non_contributing_authorities).collect()
-	}
-
-	pub fn contributing_authorities(&self) -> Vec<u64> {
-		self.all_authorities()
-			.into_iter()
-			.take(self.num_contributing_authorities as usize)
-			.collect()
-	}
-
-	pub fn non_contributing_authorities(&self) -> Vec<u64> {
-		self.all_authorities()
-			.into_iter()
-			.skip(self.num_contributing_authorities as usize)
-			.collect()
+		(0..self.num_authorities).collect()
 	}
 }
 
@@ -138,17 +122,6 @@ pub fn election_test_ext(test_setup: TestSetup) -> TestRunner<TestContext> {
 			Pallet::<Test, _>::do_try_state().expect("All try-state variants must hold");
 
 			test_setup
-		})
-		.then_apply_extrinsics(|test_setup| {
-			(0..test_setup.num_contributing_authorities)
-				.map(|id| {
-					(
-						OriginTrait::signed(id),
-						crate::Call::<Test, _>::stop_ignoring_my_votes {},
-						Ok(()),
-					)
-				})
-				.collect::<Vec<_>>()
 		})
 		.map_context(|test_setup| TestContext { setup: test_setup, umis: Vec::new() })
 }

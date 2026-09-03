@@ -6416,36 +6416,6 @@ export interface ChainTx<
 
     /**
      *
-     **/
-    ignoreMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'SolanaElections';
-          palletCall: {
-            name: 'IgnoreMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    stopIgnoringMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'SolanaElections';
-          palletCall: {
-            name: 'StopIgnoringMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
      * @param {PalletCfElectionsElectionIdentifier} electionIdentifier
      **/
     deleteVote: GenericTxCall<
@@ -7719,36 +7689,6 @@ export interface ChainTx<
 
     /**
      *
-     **/
-    ignoreMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'BitcoinElections';
-          palletCall: {
-            name: 'IgnoreMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    stopIgnoringMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'BitcoinElections';
-          palletCall: {
-            name: 'StopIgnoringMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
      * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
      **/
     deleteVote: GenericTxCall<
@@ -8081,36 +8021,6 @@ export interface ChainTx<
 
     /**
      *
-     **/
-    ignoreMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'GenericElections';
-          palletCall: {
-            name: 'IgnoreMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    stopIgnoringMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'GenericElections';
-          palletCall: {
-            name: 'StopIgnoringMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
      * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      **/
     deleteVote: GenericTxCall<
@@ -8396,36 +8306,6 @@ export interface ChainTx<
             params: {
               sharedData: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData;
             };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    ignoreMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'EthereumElections';
-          palletCall: {
-            name: 'IgnoreMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    stopIgnoringMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'EthereumElections';
-          palletCall: {
-            name: 'StopIgnoringMyVotes';
           };
         },
         ChainKnownTypes
@@ -8743,36 +8623,6 @@ export interface ChainTx<
             params: {
               sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum;
             };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    ignoreMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'ArbitrumElections';
-          palletCall: {
-            name: 'IgnoreMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    stopIgnoringMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'ArbitrumElections';
-          palletCall: {
-            name: 'StopIgnoringMyVotes';
           };
         },
         ChainKnownTypes
@@ -9591,36 +9441,6 @@ export interface ChainTx<
 
     /**
      *
-     **/
-    ignoreMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'TronElections';
-          palletCall: {
-            name: 'IgnoreMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    stopIgnoringMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'TronElections';
-          palletCall: {
-            name: 'StopIgnoringMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
      * @param {PalletCfElectionsElectionIdentifier005} electionIdentifier
      **/
     deleteVote: GenericTxCall<
@@ -10422,36 +10242,6 @@ export interface ChainTx<
 
     /**
      *
-     **/
-    ignoreMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'BscElections';
-          palletCall: {
-            name: 'IgnoreMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    stopIgnoringMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'BscElections';
-          palletCall: {
-            name: 'StopIgnoringMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
      * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
      **/
     deleteVote: GenericTxCall<
@@ -10761,36 +10551,6 @@ export interface ChainTx<
             params: {
               sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
             };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    ignoreMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'AssethubElections';
-          palletCall: {
-            name: 'IgnoreMyVotes';
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     *
-     **/
-    stopIgnoringMyVotes: GenericTxCall<
-      () => ChainSubmittableExtrinsic<
-        {
-          pallet: 'AssethubElections';
-          palletCall: {
-            name: 'StopIgnoringMyVotes';
           };
         },
         ChainKnownTypes
