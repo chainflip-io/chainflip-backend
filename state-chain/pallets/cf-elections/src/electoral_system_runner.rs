@@ -22,6 +22,7 @@ use crate::{
 		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectoralSystemTypes, PartialVoteOf,
 		VoteOf, VotePropertiesOf,
 	},
+	vote_storage::ComponentStorageKind,
 	CorruptStorageError, ElectionIdentifier,
 };
 
@@ -115,6 +116,10 @@ pub trait ElectoralSystemRunner:
 		election_identifier: ElectionIdentifierOf<Self>,
 		partial_vote: &PartialVoteOf<Self>,
 	) -> Result<(), DispatchError>;
+
+	fn election_component_storage_kind(
+		election_identifier: ElectionIdentifierOf<Self>,
+	) -> ComponentStorageKind;
 }
 
 use crate::UniqueMonotonicIdentifier;
@@ -153,7 +158,9 @@ pub trait RunnerStorageAccessTrait {
 	) -> Result<(), CorruptStorageError>;
 
 	// Clear the votes of a particular election
-	fn clear_election_votes(unique_monotonic_identifier: UniqueMonotonicIdentifier);
+	fn clear_election_votes(
+		composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
+	);
 
 	fn delete_election(
 		composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,

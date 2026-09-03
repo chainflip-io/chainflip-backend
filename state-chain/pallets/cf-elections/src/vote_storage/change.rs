@@ -57,7 +57,7 @@ impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for MonotonicChan
 			individual_component: Some(((), partial_vote.block)),
 		})
 	}
-	fn component_storage_kind(_partial_vote: &Self::PartialVote) -> ComponentStorageKind {
+	fn component_storage_kind() -> ComponentStorageKind {
 		ComponentStorageKind::Both
 	}
 	fn components_into_authority_vote<
