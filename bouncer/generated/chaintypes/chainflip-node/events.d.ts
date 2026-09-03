@@ -22,6 +22,7 @@ import type {
   SolPrimAddress,
   SolPrimDigest,
   CfChainsSolApiSolanaGovCall,
+  PalletCfEnvironmentPalletConfigUpdate,
   PalletCfFlipImbalancesImbalanceSource,
   PalletCfFlipPalletConfigUpdate,
   CfPrimitivesChainsForeignChain,
@@ -68,7 +69,7 @@ import type {
   PalletCfSwappingSwapRequestCompletionReason,
   CfChainsAddressEncodedAddress,
   CfChainsCcmChannelMetadataDecodedCcmAdditionalData,
-  CfChainsRefundParametersChannelRefundParameters,
+  CfChainsRefundParametersChannelRefundParametersEncodedAddress,
   CfPrimitivesSwapId,
   CfTraitsSwappingSwapType,
   PalletCfSwappingSwapFailureReason,
@@ -120,7 +121,7 @@ import type {
   PalletCfIngressEgressDepositFailedDetailsSolana,
   CfTraitsScheduledEgressDetailsSolana,
   PalletCfIngressEgressPalletConfigUpdateSolana,
-  PalletCfElectionsElectionIdentifier,
+  PalletCfElectionsElectionIdentifier004,
   CfChainsChainStateSolana,
   PalletCfAssetBalancesPalletConfigUpdate,
   PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress,
@@ -140,11 +141,11 @@ import type {
   PalletCfLendingPoolsGeneralLendingLiquidationType,
   PalletCfLendingPoolsGeneralLendingLiquidationCompletionReason,
   PalletCfLendingPoolsLoanRepaidActionType,
-  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-  StateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinElectoralEvents,
   PalletCfElectionsElectionIdentifier003,
+  StateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinElectoralEvents,
+  PalletCfElectionsElectionIdentifier,
   StateChainRuntimeChainflipWitnessingGenericElectionsGenericElectoralEvents,
-  PalletCfElectionsElectionIdentifier004,
+  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
   StateChainRuntimeChainflipWitnessingEthereumElectionsEthereumElectoralEvents,
   StateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumElectoralEvents,
   CfChainsChainStateTron,
@@ -367,6 +368,26 @@ export interface ChainEvents extends GenericChainEvents {
      * BSC Initialized: contract addresses have been set, first key activated
      **/
     BscInitialized: GenericPalletEvent<'Environment', 'BscInitialized', null>;
+
+    /**
+     * Votes submitted via [`Call::submit_elections_votes`] were rejected by one election
+     * instance. The other instances in the same call are unaffected. `instance` identifies
+     * which one, as defined by the runtime's `ElectionInstances`.
+     **/
+    ElectionInstanceVotesRejected: GenericPalletEvent<
+      'Environment',
+      'ElectionInstanceVotesRejected',
+      { instance: number; error: DispatchError }
+    >;
+
+    /**
+     * A configuration item for this pallet was updated by governance.
+     **/
+    PalletConfigUpdated: GenericPalletEvent<
+      'Environment',
+      'PalletConfigUpdated',
+      { update: PalletCfEnvironmentPalletConfigUpdate }
+    >;
 
     /**
      * Generic pallet event
@@ -2498,7 +2519,7 @@ export interface ChainEvents extends GenericChainEvents {
         boostFee: number;
         channelOpeningFee: bigint;
         affiliateFees: Array<CfPrimitivesBeneficiary>;
-        refundParameters: CfChainsRefundParametersChannelRefundParameters;
+        refundParameters: CfChainsRefundParametersChannelRefundParametersEncodedAddress;
         dcaParameters?: CfPrimitivesDcaParameters | undefined;
       }
     >;
@@ -4605,7 +4626,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'SolanaElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifier
+      PalletCfElectionsElectionIdentifier004
     >;
 
     /**
@@ -5362,7 +5383,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'BitcoinElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+      PalletCfElectionsElectionIdentifier003
     >;
 
     /**
@@ -5410,7 +5431,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'GenericElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifier003
+      PalletCfElectionsElectionIdentifier
     >;
 
     /**
@@ -5458,7 +5479,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'EthereumElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifier004
+      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
     >;
 
     /**
@@ -5506,7 +5527,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'ArbitrumElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+      PalletCfElectionsElectionIdentifier003
     >;
 
     /**
@@ -6380,7 +6401,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'BscElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+      PalletCfElectionsElectionIdentifier003
     >;
 
     /**

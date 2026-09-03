@@ -19,6 +19,7 @@ use std::sync::Arc;
 use crate::{
 	btc::cached_rpc::BtcCachingClient,
 	dot::cached_rpc::DotCachingClient,
+	elections::vote_batcher::VoteBatcher,
 	evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
 	tron::{
@@ -71,25 +72,57 @@ where
 		+ Send
 		+ Sync,
 {
-	let start_arb =
-		super::arb_elections::start(scope, arb_client.clone(), state_chain_client.clone());
+	// Shared by every elections instance, so that one extrinsic per block carries all of their
+	// votes instead of one extrinsic per instance.
+	let vote_batcher = VoteBatcher::start(scope, state_chain_client.clone());
 
-	let start_bsc =
-		super::bsc_elections::start(scope, bsc_client.clone(), state_chain_client.clone());
+	let start_arb = super::arb_elections::start(
+		scope,
+		arb_client.clone(),
+		state_chain_client.clone(),
+		vote_batcher.clone(),
+	);
+	let start_bsc = super::bsc_elections::start(
+		scope,
+		bsc_client.clone(),
+		state_chain_client.clone(),
+		vote_batcher.clone(),
+	);
 
-	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
+	let start_sol =
+		super::sol::start(scope, sol_client, state_chain_client.clone(), vote_batcher.clone());
 
-	let start_btc = super::btc::start(scope, btc_client, state_chain_client.clone());
+	let start_btc =
+		super::btc::start(scope, btc_client, state_chain_client.clone(), vote_batcher.clone());
 
-	let start_eth =
-		super::eth_elections::start(scope, eth_client.clone(), state_chain_client.clone());
+	let start_eth = super::eth_elections::start(
+		scope,
+		eth_client.clone(),
+		state_chain_client.clone(),
+		vote_batcher.clone(),
+	);
 
-	let start_hub = super::hub_elections::start(scope, hub_client, state_chain_client.clone());
+	let start_hub = super::hub_elections::start(
+		scope,
+		hub_client,
+		state_chain_client.clone(),
+		vote_batcher.clone(),
+	);
 
-	let start_tron = super::tron_elections::start(scope, tron_client, state_chain_client.clone());
+	let start_tron = super::tron_elections::start(
+		scope,
+		tron_client,
+		state_chain_client.clone(),
+		vote_batcher.clone(),
+	);
 
-	let start_generic_elections =
-		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
+	let start_generic_elections = super::generic_elections::start(
+		scope,
+		arb_client,
+		eth_client,
+		state_chain_client,
+		vote_batcher,
+	);
 
 	try_join!(
 		start_eth,

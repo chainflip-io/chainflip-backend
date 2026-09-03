@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
+	elections::{
+		vote_batcher::VoteBatcher,
+		voter_api::{CompositeVoter, VoterApi},
+	},
 	evm::{
 		cached_rpc::AddressCheckerRetryRpcApiWithResult,
 		rpc::{address_checker::PriceFeedData as EthPriceFeedData, EvmRpcSigningClient},
@@ -206,6 +209,7 @@ pub async fn start<StateChainClient>(
 	arb_client: EvmCachingClient<EvmRpcSigningClient>,
 	eth_client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
+	vote_batcher: VoteBatcher,
 ) -> Result<()>
 where
 	StateChainClient:
@@ -219,6 +223,7 @@ where
 			let arb_client = arb_client.clone();
 			let eth_client = eth_client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_batcher = vote_batcher.clone();
 			async move {
 				task_scope::task_scope(|scope| {
 					async {
@@ -233,6 +238,7 @@ where
 							)),
 							None,
 							"GenericElections",
+							vote_batcher,
 						)
 						.continuously_vote()
 						.await;

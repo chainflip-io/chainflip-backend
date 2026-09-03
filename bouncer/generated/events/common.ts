@@ -361,6 +361,11 @@ export const cfChainsSolApiSolanaGovCall = z.discriminatedUnion('__kind', [
   }),
 ]);
 
+export const palletCfEnvironmentPalletConfigUpdate = z.object({
+  __kind: z.literal('ElectionVoteBatching'),
+  disabled: z.boolean(),
+});
+
 export const palletCfFlipImbalancesInternalSource = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Account'), value: accountId }),
   z.object({ __kind: z.literal('Reserve'), value: hexString }),
