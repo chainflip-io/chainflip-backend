@@ -37,9 +37,9 @@ use frame_support::{
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
 use sp_consensus_grandpa::AuthoritySignature;
-use sp_std::vec;
+use sp_std::{collections::btree_map::BTreeMap, vec};
 
-use delegation::{DelegationAcceptance, OperatorSettings};
+use delegation::{DelegationAcceptance, DelegatorRelations, OperatorSettings};
 
 mod p2p_crypto {
 	use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
@@ -597,7 +597,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		delegate(RawOrigin::Signed(delegator.clone()), operator.clone(), DelegationAmount::Max);
 
-		assert!(DelegationChoice::<T>::get(delegator).is_some());
+		assert!(DelegationChoices::<T>::get(delegator).is_some());
 	}
 
 	#[benchmark]
@@ -624,7 +624,57 @@ mod benchmarks {
 		#[extrinsic_call]
 		undelegate(RawOrigin::Signed(delegator.clone()), DelegationAmount::Max);
 
-		assert!(DelegationChoice::<T>::get(&delegator).is_none());
+		assert!(DelegationChoices::<T>::get(&delegator).is_none());
+	}
+
+	#[benchmark]
+	fn delegate_multi() {
+		let accounts = <T as Chainflip>::AccountRoleRegistry::generate_whitelisted_callers(vec![
+			AccountRole::Operator,
+			AccountRole::Operator,
+			AccountRole::Unregistered,
+		])
+		.unwrap();
+		let (operator_a, operator_b, delegator) =
+			(accounts[0].clone(), accounts[1].clone(), accounts[2].clone());
+
+		fund_account::<T>(&delegator, 1000 * FLIPPERINOS_PER_FLIP);
+
+		for operator in [&operator_a, &operator_b] {
+			assert_ok!(Pallet::<T>::update_operator_settings(
+				RawOrigin::Signed(operator.clone()).into(),
+				OperatorSettings {
+					fee_bps: 2500,
+					delegation_acceptance: DelegationAcceptance::Allow
+				}
+			));
+		}
+
+		assert_ok!(Pallet::<T>::delegate_multi(
+			RawOrigin::Signed(delegator.clone()).into(),
+			DelegatorRelations {
+				operators: BTreeMap::from([(
+					operator_a.clone(),
+					(500 * FLIPPERINOS_PER_FLIP).into()
+				)])
+			},
+		));
+
+		#[extrinsic_call]
+		delegate_multi(
+			RawOrigin::Signed(delegator.clone()),
+			DelegatorRelations {
+				operators: BTreeMap::from([
+					(operator_a, (250 * FLIPPERINOS_PER_FLIP).into()),
+					(operator_b.clone(), (250 * FLIPPERINOS_PER_FLIP).into()),
+				]),
+			},
+		);
+
+		assert!(DelegationChoices::<T>::get(&delegator)
+			.unwrap()
+			.operators
+			.contains_key(&operator_b));
 	}
 
 	#[benchmark]

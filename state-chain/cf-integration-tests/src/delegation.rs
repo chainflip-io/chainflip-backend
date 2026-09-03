@@ -89,7 +89,7 @@ pub(crate) fn setup_delegation(
 	// Move to the next for delegation to take affect
 	testnet.move_to_the_next_epoch();
 
-	let actual_delegator_set = pallet_cf_validator::DelegationChoice::<Runtime>::iter()
+	let actual_delegator_set = pallet_cf_validator::DelegationChoices::<Runtime>::iter()
 		.map(|(d, _)| d)
 		.collect::<BTreeSet<_>>();
 	assert_eq!(actual_delegator_set, delegators.keys().cloned().collect());
@@ -341,5 +341,100 @@ fn can_calculate_account_apy_for_validator_with_delegation() {
 			};
 
 			assert_eq!(validator_apy, expected_apy_basis_point);
+		});
+}
+
+#[test]
+fn delegator_can_split_stake_across_two_operators() {
+	const EPOCH_DURATION_BLOCKS: u32 = 200;
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	let managed_validator_a: AccountId = AccountId::from([0xcf; 32]);
+	let managed_validator_b: AccountId = AccountId::from([0xce; 32]);
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_DURATION_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(managed_validator_a.clone(), AccountRole::Validator, GENESIS_BALANCE / 5),
+			(managed_validator_b.clone(), AccountRole::Validator, GENESIS_BALANCE / 5),
+		])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			testnet.move_to_the_next_epoch();
+
+			let operator_a = AccountId::from([0xe1; 32]);
+			let operator_b = AccountId::from([0xe2; 32]);
+			let delegator = AccountId::from([0xa0; 32]);
+
+			for (operator, validator) in [
+				(operator_a.clone(), managed_validator_a.clone()),
+				(operator_b.clone(), managed_validator_b.clone()),
+			] {
+				new_account(&operator, AccountRole::Operator);
+				assert_ok!(Validator::claim_validator(
+					RuntimeOrigin::signed(operator.clone()),
+					validator.clone()
+				));
+				assert_ok!(Validator::accept_operator(
+					RuntimeOrigin::signed(validator),
+					operator.clone(),
+				));
+				assert_ok!(Validator::update_operator_settings(
+					RuntimeOrigin::signed(operator),
+					OperatorSettings {
+						fee_bps: 2000,
+						delegation_acceptance: DelegationAcceptance::Allow,
+					},
+				));
+			}
+
+			const BID_TO_A: Balance = 2 * GENESIS_BALANCE;
+			const BID_TO_B: Balance = 3 * GENESIS_BALANCE;
+			Funding::fund_account(
+				delegator.clone(),
+				BID_TO_A + BID_TO_B,
+				FundingSource::EthTransaction {
+					tx_hash: Default::default(),
+					funder: Default::default(),
+				},
+			);
+			assert_ok!(Validator::delegate_multi(
+				RuntimeOrigin::signed(delegator.clone()),
+				pallet_cf_validator::DelegatorRelations {
+					operators: BTreeMap::from_iter([
+						(operator_a.clone(), BID_TO_A),
+						(operator_b.clone(), BID_TO_B),
+					]),
+				}
+			));
+
+			testnet.move_to_the_next_epoch();
+
+			let epoch_index = pallet_cf_validator::Pallet::<Runtime>::epoch_index();
+			let snapshot_a =
+				pallet_cf_validator::DelegationSnapshots::<Runtime>::get(epoch_index, &operator_a)
+					.expect("operator_a snapshot should be registered on new epoch");
+			let snapshot_b =
+				pallet_cf_validator::DelegationSnapshots::<Runtime>::get(epoch_index, &operator_b)
+					.expect("operator_b snapshot should be registered on new epoch");
+
+			// The delegator's stake must be split exactly as pledged across both operators, not
+			// dropped or double-counted.
+			assert_eq!(snapshot_a.delegators.get(&delegator), Some(&BID_TO_A));
+			assert_eq!(snapshot_b.delegators.get(&delegator), Some(&BID_TO_B));
+
+			assert_eq!(
+				pallet_cf_flip::Account::<Runtime>::get(&delegator).bond(),
+				BID_TO_A + BID_TO_B,
+				"delegator's bond should reflect the sum of both relations"
+			);
+
+			// The delegator should be rewarded from both operators' pools.
+			let delegator_pre_balance = Flip::balance(&delegator);
+			testnet.move_forward_blocks(
+				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_len()
+					.expect("at least one authority") as u32,
+			);
+			assert!(Flip::balance(&delegator) > delegator_pre_balance);
 		});
 }

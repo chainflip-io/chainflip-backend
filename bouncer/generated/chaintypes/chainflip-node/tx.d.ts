@@ -42,6 +42,7 @@ import type {
   CfPrimitivesSemVer,
   PalletCfValidatorDelegationOperatorSettings,
   PalletCfValidatorDelegationDelegationAmount,
+  PalletCfValidatorDelegationDelegatorRelations,
   CfPrimitivesWitnessingTaskName,
   SpConsensusGrandpaAppPublic,
   SpConsensusGrandpaAppSignature,
@@ -1672,6 +1673,13 @@ export interface ChainTx<
     >;
 
     /**
+     * Delegate to a single operator.
+     *
+     * This extrinsic pre-dates multi-operator delegation and keeps its original,
+     * implicit-switch behaviour: it is only valid for delegators with at most one existing
+     * relation. A delegator with relations to two or more operators (only reachable via
+     * [`Self::delegate_multi`]) must use `delegate_multi` instead, since "switch operator"
+     * is ambiguous once more than one relation exists.
      *
      * @param {AccountId32Like} operator
      * @param {PalletCfValidatorDelegationDelegationAmount} increase
@@ -1696,6 +1704,11 @@ export interface ChainTx<
     >;
 
     /**
+     * Undelegate from the sole operator a delegator currently delegates to.
+     *
+     * Only valid for delegators with at most one existing relation, mirroring `delegate`.
+     * A delegator with relations to two or more operators must use `delegate_multi` and
+     * submit a plan that omits the operator(s) to undelegate from.
      *
      * @param {PalletCfValidatorDelegationDelegationAmount} decrease
      **/
@@ -1706,6 +1719,36 @@ export interface ChainTx<
           palletCall: {
             name: 'Undelegate';
             params: { decrease: PalletCfValidatorDelegationDelegationAmount };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Sets `delegator`'s complete delegation plan across one or more operators in a single
+     * call: `plan` becomes their entire new set of relations, replacing whatever existed
+     * before. Any operator the delegator was previously delegating to but that's absent
+     * from `plan` is fully undelegated; an empty `plan` undelegates everything. Unlike
+     * `delegate`, the caller declares exact target amounts rather than an
+     * increase/decrease delta -- entries with a zero amount are treated the same as an
+     * absent entry.
+     *
+     * If `plan`'s amounts sum to more than the delegator's funding balance, every entry is
+     * scaled down proportionally so the total exactly matches the balance -- the sum of a
+     * delegator's relations can never exceed what they actually hold. The (possibly
+     * scaled-down) total must be at least the minimum funding amount if `plan` is
+     * non-empty; individual entries may be smaller, only the total is checked.
+     *
+     * @param {PalletCfValidatorDelegationDelegatorRelations} plan
+     **/
+    delegateMulti: GenericTxCall<
+      (plan: PalletCfValidatorDelegationDelegatorRelations) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Validator';
+          palletCall: {
+            name: 'DelegateMulti';
+            params: { plan: PalletCfValidatorDelegationDelegatorRelations };
           };
         },
         ChainKnownTypes

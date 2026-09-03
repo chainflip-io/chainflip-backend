@@ -53,7 +53,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
-		Percent, Permill,
+		Percent, Permill, Perquintill,
 	},
 	traits::{EstimateNextSessionRotation, OnKilledAccount},
 };
@@ -115,7 +115,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const STORAGE_VERSION_U16: u16 = 11;
+pub const STORAGE_VERSION_U16: u16 = 12;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
@@ -401,13 +401,17 @@ pub mod pallet {
 	pub type OperatorSettingsLookup<T: Config> =
 		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
 
-	/// Maps an delegator to an associated operator account and max bid.
-	///
-	/// The max bid determines how much of the delegator's balance can be used
-	/// used by the operator when bidding for an authority slot.
+	/// Maps a delegator to its live relations: the set of operators it delegates to and the max
+	/// bid pledged to each. The sum of all of a delegator's max bids is capped at its funding
+	/// balance. The key is always removed entirely once a delegator's relations become empty.
 	#[pallet::storage]
-	pub type DelegationChoice<T: Config> =
-		StorageMap<_, Identity, T::AccountId, (T::AccountId, T::Amount), OptionQuery>;
+	pub type DelegationChoices<T: Config> = StorageMap<
+		_,
+		Identity,
+		T::AccountId,
+		DelegatorRelations<T::AccountId, T::Amount>,
+		OptionQuery,
+	>;
 
 	/// Maps a validator to the operator that manages it.
 	#[pallet::storage]
@@ -487,6 +491,13 @@ pub mod pallet {
 		/// The maximum bit of an delegator was updated. If the value is None it means that the
 		/// max_bid has been removed entirly.
 		MaxBidUpdated { delegator: T::AccountId, change: Change<T::Amount> },
+		/// A delegator submitted a new full delegation plan via `delegate_multi`. `plan` is the
+		/// resulting set of relations that was actually stored (after dropping zero-amount
+		/// entries and prorating down to fit the delegator's balance, if it was oversubscribed).
+		DelegationPlanUpdated {
+			delegator: T::AccountId,
+			plan: DelegatorRelations<T::AccountId, T::Amount>,
+		},
 		/// A validator reported that a witnessing task crashed and was restarted.
 		WitnessingTaskRestarted {
 			task: cf_primitives::WitnessingTaskName,
@@ -579,6 +590,9 @@ pub mod pallet {
 		NotLiquidityProvider,
 		/// The account cannot deregister as a Liquidity Provider while actively delegating.
 		StillDelegating,
+		/// `delegate`/`undelegate` only support a delegator with at most one existing relation.
+		/// Use `delegate_multi` and specify the full plan explicitly.
+		MultiOperatorDelegator,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -923,7 +937,7 @@ pub mod pallet {
 				T::FundingInfo::total_balance_of(&account_id) >= MinimumValidatorStake::<T>::get(),
 				Error::<T>::NotEnoughFunds
 			);
-			ensure!(!DelegationChoice::<T>::contains_key(&account_id), Error::<T>::NotAuthorized);
+			ensure!(!DelegationChoices::<T>::contains_key(&account_id), Error::<T>::NotAuthorized);
 			T::AccountRoleRegistry::register_as_validator(&account_id)
 		}
 
@@ -1124,12 +1138,14 @@ pub mod pallet {
 						Exceptions::<T>::mutate(&operator, |allowed| {
 							allowed.clear();
 							// Any existing delegators need be added to the allowed list.
-							for (delegator, (assigned_operator, _)) in DelegationChoice::<T>::iter()
-							{
-								if assigned_operator == operator {
-									allowed.insert(delegator.clone());
-								}
-							}
+							allowed.extend(
+								Self::get_all_associations_by_operator(
+									&operator,
+									AssociationToOperator::Delegator,
+									|_, _| (),
+								)
+								.into_keys(),
+							);
 						});
 					},
 					(DelegationAcceptance::Deny, DelegationAcceptance::Allow) => {
@@ -1160,19 +1176,20 @@ pub mod pallet {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			// If the delegator is currently delegating to this operator, we need to
-			// undelegate them first.
-			let _ = DelegationChoice::<T>::try_mutate_exists(&delegator, |maybe_operator_choice| {
-				if let Some((assigned_operator, max_bid)) = maybe_operator_choice.take() {
-					if assigned_operator == operator {
+			// undelegate them from this operator (their other relations, if any, are untouched).
+			DelegationChoices::<T>::mutate_exists(&delegator, |maybe_relations| {
+				if let Some(relations) = maybe_relations {
+					if let Some(max_bid) = relations.operators.remove(&operator) {
 						Self::deposit_event(Event::Undelegated {
 							delegator: delegator.clone(),
 							operator: operator.clone(),
 							max_bid,
 						});
-						return Ok(());
+					}
+					if relations.operators.is_empty() {
+						*maybe_relations = None;
 					}
 				}
-				Err(())
 			});
 
 			match OperatorSettingsLookup::<T>::get(&operator)
@@ -1259,7 +1276,7 @@ pub mod pallet {
 				Error::<T>::OperatorFeeTooLow
 			);
 			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
-			ensure!(!DelegationChoice::<T>::contains_key(&account_id), Error::<T>::NotAuthorized);
+			ensure!(!DelegationChoices::<T>::contains_key(&account_id), Error::<T>::NotAuthorized);
 
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
 			T::AccountRoleRegistry::set_vanity_name(&account_id, vanity_name)?;
@@ -1290,13 +1307,20 @@ pub mod pallet {
 				AssociationToOperator::Delegator,
 				|_, _| (),
 			) {
-				if let Some((_, max_bid)) = DelegationChoice::<T>::take(&delegator) {
-					Self::deposit_event(Event::Undelegated {
-						delegator,
-						operator: operator.clone(),
-						max_bid,
-					});
-				}
+				DelegationChoices::<T>::mutate_exists(&delegator, |maybe_relations| {
+					if let Some(relations) = maybe_relations {
+						if let Some(max_bid) = relations.operators.remove(&operator) {
+							Self::deposit_event(Event::Undelegated {
+								delegator: delegator.clone(),
+								operator: operator.clone(),
+								max_bid,
+							});
+						}
+						if relations.operators.is_empty() {
+							*maybe_relations = None;
+						}
+					}
+				});
 			}
 
 			ManagedValidators::<T>::remove(&operator);
@@ -1308,6 +1332,13 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Delegate to a single operator.
+		///
+		/// This extrinsic pre-dates multi-operator delegation and keeps its original,
+		/// implicit-switch behaviour: it is only valid for delegators with at most one existing
+		/// relation. A delegator with relations to two or more operators (only reachable via
+		/// [`Self::delegate_multi`]) must use `delegate_multi` instead, since "switch operator"
+		/// is ambiguous once more than one relation exists.
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
 		pub fn delegate(
@@ -1317,79 +1348,43 @@ pub mod pallet {
 		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			// Delegation is only available to Liquidity Providers. Accounts that haven't yet
-			// registered a role (e.g. freshly-funded accounts delegating via the SC Utils EVM
-			// contract) are implicitly registered as Liquidity Providers on first delegation.
-			match T::AccountRoleRegistry::account_role(&delegator) {
-				AccountRole::Unregistered =>
-					T::AccountRoleRegistry::register_as_liquidity_provider(&delegator)?,
-				AccountRole::LiquidityProvider => {},
-				_ => return Err(Error::<T>::NotLiquidityProvider.into()),
-			}
-
-			ensure!(
-				T::AccountRoleRegistry::has_account_role(&operator, AccountRole::Operator),
-				Error::<T>::NotOperator
-			);
+			Self::ensure_delegator_role(&delegator)?;
+			Self::ensure_operator_accepts_delegator(&delegator, &operator)?;
 			ensure!(
 				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
 				Error::<T>::RotationInProgress
 			);
 
-			ensure!(
-				match OperatorSettingsLookup::<T>::get(&operator)
-					.expect(
-						"operator is forced to set valid preferences during account registration"
-					)
-					.delegation_acceptance
-				{
-					DelegationAcceptance::Allow =>
-						!Exceptions::<T>::get(&operator).contains(&delegator),
-					DelegationAcceptance::Deny =>
-						Exceptions::<T>::get(&operator).contains(&delegator),
-				},
-				Error::<T>::DelegatorBlocked
-			);
+			let mut operators =
+				DelegationChoices::<T>::get(&delegator).unwrap_or_default().operators;
+			ensure!(operators.len() <= 1, Error::<T>::MultiOperatorDelegator);
+			let (old_max_bid, switch_from) = match operators.pop_first() {
+				None => (T::Amount::zero(), None),
+				Some((op, amt)) if op == operator => (amt, None),
+				Some((op, amt)) => (amt, Some(op)),
+			};
 
 			let balance = T::FundingInfo::balance(&delegator);
-			let (to_remove, to_add, old_max_bid) =
-				if let Some((current_operator, current_max_bid)) =
-					DelegationChoice::<T>::get(&delegator)
-				{
-					if current_operator != operator {
-						(Some(current_operator), Some(operator.clone()), current_max_bid)
-					} else {
-						(None, None, current_max_bid)
-					}
-				} else {
-					(None, Some(operator.clone()), T::Amount::zero())
-				};
-
 			let new_max_bid = match increase {
 				DelegationAmount::Max => balance,
 				DelegationAmount::Some(inc) =>
 					core::cmp::min(old_max_bid.saturating_add(inc), balance),
 			};
 
-			if let Some(change) = match old_max_bid.cmp(&new_max_bid) {
-				core::cmp::Ordering::Less => Some(Change::Increase(new_max_bid - old_max_bid)),
-				core::cmp::Ordering::Greater => Some(Change::Decrease(old_max_bid - new_max_bid)),
-				core::cmp::Ordering::Equal => None,
-			} {
-				Self::deposit_event(Event::MaxBidUpdated { delegator: delegator.clone(), change });
-			}
+			Self::deposit_max_bid_update(&delegator, old_max_bid, new_max_bid);
 
-			if let Some(old_operator) = to_remove {
+			let is_new_relation = switch_from.is_some() || old_max_bid.is_zero();
+			if let Some(old_operator) = &switch_from {
 				Self::deposit_event(Event::Undelegated {
 					delegator: delegator.clone(),
-					operator: old_operator,
+					operator: old_operator.clone(),
 					max_bid: old_max_bid,
 				});
 			}
-			if let Some(new_operator) = to_add {
+			if is_new_relation {
 				Self::deposit_event(Event::Delegated {
 					delegator: delegator.clone(),
-					operator: new_operator,
+					operator: operator.clone(),
 					max_bid: new_max_bid,
 				});
 			}
@@ -1399,11 +1394,22 @@ pub mod pallet {
 				Error::<T>::DelegationAmountBelowMinimum
 			);
 
-			DelegationChoice::<T>::insert(&delegator, (operator.clone(), new_max_bid));
+			DelegationChoices::<T>::mutate(&delegator, |maybe_relations| {
+				let relations = maybe_relations.get_or_insert_with(Default::default);
+				if let Some(old_operator) = &switch_from {
+					relations.operators.remove(old_operator);
+				}
+				relations.operators.insert(operator.clone(), new_max_bid);
+			});
 
 			Ok(())
 		}
 
+		/// Undelegate from the sole operator a delegator currently delegates to.
+		///
+		/// Only valid for delegators with at most one existing relation, mirroring `delegate`.
+		/// A delegator with relations to two or more operators must use `delegate_multi` and
+		/// submit a plan that omits the operator(s) to undelegate from.
 		#[pallet::call_index(19)]
 		#[pallet::weight(T::ValidatorWeightInfo::undelegate())]
 		pub fn undelegate(
@@ -1412,8 +1418,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
+			let mut operators = DelegationChoices::<T>::get(&delegator)
+				.ok_or(Error::<T>::AccountIsNotDelegating)?
+				.operators;
+			ensure!(operators.len() <= 1, Error::<T>::MultiOperatorDelegator);
 			let (current_operator, current_max_bid) =
-				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
+				operators.pop_first().ok_or(Error::<T>::AccountIsNotDelegating)?;
 
 			ensure!(
 				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
@@ -1434,17 +1444,10 @@ pub mod pallet {
 				DelegationAmount::Max => T::Amount::zero(),
 			};
 
-			if let Some(change) = match current_max_bid.cmp(&new_max_bid) {
-				core::cmp::Ordering::Less => Some(Change::Increase(new_max_bid - current_max_bid)),
-				core::cmp::Ordering::Greater =>
-					Some(Change::Decrease(current_max_bid - new_max_bid)),
-				core::cmp::Ordering::Equal => None,
-			} {
-				Self::deposit_event(Event::MaxBidUpdated { delegator: delegator.clone(), change });
-			}
+			Self::deposit_max_bid_update(&delegator, current_max_bid, new_max_bid);
 
 			if new_max_bid.is_zero() {
-				DelegationChoice::<T>::remove(&delegator);
+				DelegationChoices::<T>::remove(&delegator);
 				Self::deposit_event(Event::Undelegated {
 					delegator: delegator.clone(),
 					operator: current_operator,
@@ -1456,12 +1459,92 @@ pub mod pallet {
 				// check and simply remain registered as a Liquidity Provider.
 				let _ = T::AccountRoleRegistry::deregister_as_liquidity_provider(&delegator);
 			} else {
-				DelegationChoice::<T>::mutate(&delegator, |choice| {
-					if let Some((_, ref mut max_bid)) = choice {
-						*max_bid = new_max_bid;
+				DelegationChoices::<T>::mutate(&delegator, |maybe_relations| {
+					if let Some(relations) = maybe_relations {
+						relations.operators.insert(current_operator, new_max_bid);
 					}
 				});
 			}
+
+			Ok(())
+		}
+
+		/// Sets `delegator`'s complete delegation plan across one or more operators in a single
+		/// call: `plan` becomes their entire new set of relations, replacing whatever existed
+		/// before. Any operator the delegator was previously delegating to but that's absent
+		/// from `plan` is fully undelegated; an empty `plan` undelegates everything. Unlike
+		/// `delegate`, the caller declares exact target amounts rather than an
+		/// increase/decrease delta -- entries with a zero amount are treated the same as an
+		/// absent entry.
+		///
+		/// If `plan`'s amounts sum to more than the delegator's funding balance, every entry is
+		/// scaled down proportionally so the total exactly matches the balance -- the sum of a
+		/// delegator's relations can never exceed what they actually hold. The (possibly
+		/// scaled-down) total must be at least the minimum funding amount if `plan` is
+		/// non-empty; individual entries may be smaller, only the total is checked.
+		#[pallet::call_index(24)]
+		#[pallet::weight(T::ValidatorWeightInfo::delegate_multi())]
+		pub fn delegate_multi(
+			origin: OriginFor<T>,
+			plan: DelegatorRelations<T::AccountId, T::Amount>,
+		) -> DispatchResult {
+			let delegator = ensure_signed(origin)?;
+
+			ensure!(
+				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
+				Error::<T>::RotationInProgress
+			);
+
+			let new_relations: BTreeMap<T::AccountId, T::Amount> =
+				plan.operators.into_iter().filter(|(_, amount)| !amount.is_zero()).collect();
+
+			let new_relations = if new_relations.is_empty() {
+				DelegationChoices::<T>::remove(&delegator);
+				// Mirrors the auto-registration above. Best-effort: accounts that also hold
+				// other LP state (open orders, balances, etc.) fail the deregistration check
+				// and simply remain registered as a Liquidity Provider.
+				let _ = T::AccountRoleRegistry::deregister_as_liquidity_provider(&delegator);
+				Default::default()
+			} else {
+				Self::ensure_delegator_role(&delegator)?;
+
+				for operator in new_relations.keys() {
+					Self::ensure_operator_accepts_delegator(&delegator, operator)?;
+				}
+
+				// The sum of a delegator's relations can never exceed what they actually hold --
+				// scale every entry down proportionally to fit, rather than rejecting the plan
+				// outright.
+				let raw_total: T::Amount = new_relations.values().copied().sum();
+				let balance = T::FundingInfo::balance(&delegator);
+				let new_relations: BTreeMap<T::AccountId, T::Amount> = if raw_total > balance {
+					new_relations
+						.into_iter()
+						.map(|(operator, amount)| {
+							(operator, Perquintill::from_rational(amount, raw_total) * balance)
+						})
+						.filter(|(_, amount)| !amount.is_zero())
+						.collect()
+				} else {
+					new_relations
+				};
+
+				let new_total: T::Amount = new_relations.values().copied().sum();
+				ensure!(
+					new_total.into() >= T::MinimumFunding::get_min_funding_amount(),
+					Error::<T>::DelegationAmountBelowMinimum
+				);
+				DelegationChoices::<T>::insert(
+					&delegator,
+					DelegatorRelations { operators: new_relations.clone() },
+				);
+				new_relations
+			};
+
+			Self::deposit_event(Event::DelegationPlanUpdated {
+				delegator: delegator.clone(),
+				plan: DelegatorRelations { operators: new_relations.clone() },
+			});
 
 			Ok(())
 		}
@@ -1818,7 +1901,15 @@ impl<T: Config> Pallet<T> {
 		let mut managed_validator_bonds = BTreeMap::new();
 		for (_, snapshot) in DelegationSnapshots::<T>::iter_prefix(new_epoch) {
 			managed_validator_bonds.extend(snapshot.validator_bond_distribution(new_bond));
-			new_delegator_bids.extend(snapshot.delegators.clone());
+			// A delegator can appear in multiple operators' snapshots simultaneously, so their
+			// bids must be summed across snapshots, not overwritten -- their bond should reflect
+			// their total committed stake, not just whichever snapshot was iterated last.
+			for (delegator, bid) in &snapshot.delegators {
+				new_delegator_bids
+					.entry(delegator.clone())
+					.and_modify(|total: &mut T::Amount| *total = (*total).saturating_add(*bid))
+					.or_insert(*bid);
+			}
 		}
 		let mut outgoing_delegators = BTreeSet::new();
 		for (_, snapshot) in DelegationSnapshots::<T>::iter_prefix(new_epoch - 1) {
@@ -2233,21 +2324,78 @@ impl<T: Config> Pallet<T> {
 		match association {
 			AssociationToOperator::Validator =>
 				ManagedValidators::<T>::get(operator).into_iter().map(apply_f).collect(),
-			AssociationToOperator::Delegator => DelegationChoice::<T>::iter()
-				.filter_map(|(account_id, (managing_operator, max_bid))| {
-					if managing_operator == *operator {
-						Some((account_id.clone(), f(&account_id, Some(max_bid))))
-					} else {
-						None
-					}
+			AssociationToOperator::Delegator => DelegationChoices::<T>::iter()
+				.filter_map(|(account_id, relations)| {
+					relations
+						.operators
+						.get(operator)
+						.map(|max_bid| (account_id.clone(), f(&account_id, Some(*max_bid))))
 				})
 				.collect(),
 		}
 	}
 
-	/// Only accounts without Validator or Operator roles can be sourced from `DelegationChoice`.
+	/// Only accounts without Validator or Operator roles can be sourced from `DelegationChoices`.
 	pub(crate) fn is_delegation_eligible(account_id: &T::AccountId) -> bool {
 		T::AccountRoleRegistry::has_account_role(account_id, AccountRole::LiquidityProvider)
+	}
+
+	/// Sum of a delegator's max bids across all of its live operator relations.
+	pub(crate) fn total_delegated(delegator: &T::AccountId) -> T::Amount {
+		DelegationChoices::<T>::get(delegator)
+			.map(|relations| relations.operators.values().copied().sum())
+			.unwrap_or_else(T::Amount::zero)
+	}
+
+	/// Emits `MaxBidUpdated` if `old` and `new` differ. Shared by `delegate` and `undelegate`.
+	fn deposit_max_bid_update(delegator: &T::AccountId, old: T::Amount, new: T::Amount) {
+		if let Some(change) = match old.cmp(&new) {
+			core::cmp::Ordering::Less => Some(Change::Increase(new - old)),
+			core::cmp::Ordering::Greater => Some(Change::Decrease(old - new)),
+			core::cmp::Ordering::Equal => None,
+		} {
+			Self::deposit_event(Event::MaxBidUpdated { delegator: delegator.clone(), change });
+		}
+	}
+
+	/// Auto-registers `Unregistered` accounts as Liquidity Providers, erroring for any other
+	/// incompatible role. Shared by `delegate` and `delegate_multi`.
+	fn ensure_delegator_role(delegator: &T::AccountId) -> DispatchResult {
+		// Delegation is only available to Liquidity Providers. Accounts that haven't yet
+		// registered a role (e.g. freshly-funded accounts delegating via the SC Utils EVM
+		// contract) are implicitly registered as Liquidity Providers on first delegation.
+		match T::AccountRoleRegistry::account_role(delegator) {
+			AccountRole::Unregistered =>
+				T::AccountRoleRegistry::register_as_liquidity_provider(delegator)?,
+			AccountRole::LiquidityProvider => {},
+			_ => return Err(Error::<T>::NotLiquidityProvider.into()),
+		}
+		Ok(())
+	}
+
+	/// Checks that `operator` is a registered Operator and that its delegation acceptance
+	/// policy currently permits `delegator`. Shared by `delegate` and `delegate_multi`.
+	fn ensure_operator_accepts_delegator(
+		delegator: &T::AccountId,
+		operator: &T::AccountId,
+	) -> DispatchResult {
+		ensure!(
+			T::AccountRoleRegistry::has_account_role(operator, AccountRole::Operator),
+			Error::<T>::NotOperator
+		);
+
+		ensure!(
+			match OperatorSettingsLookup::<T>::get(operator)
+				.expect("operator is forced to set valid preferences during account registration")
+				.delegation_acceptance
+			{
+				DelegationAcceptance::Allow => !Exceptions::<T>::get(operator).contains(delegator),
+				DelegationAcceptance::Deny => Exceptions::<T>::get(operator).contains(delegator),
+			},
+			Error::<T>::DelegatorBlocked
+		);
+
+		Ok(())
 	}
 
 	/// Builds the delegation snapshots for the next epoch.
@@ -2294,20 +2442,54 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		for (delegator, (operator, max_bid)) in DelegationChoice::<T>::iter() {
+		for (delegator, relations) in DelegationChoices::<T>::iter() {
 			if !Self::is_delegation_eligible(&delegator) {
 				log::info!(
 					target: "cf-validator",
-					"ignoring ineligible DelegationChoice entry while building delegation snapshots: delegator={:?}, operator={:?}",
+					"ignoring ineligible DelegationChoices entry while building delegation snapshots: delegator={:?}",
 					delegator,
-					operator,
 				);
 				continue;
 			}
-			if let Some(snapshot) = snapshots.get_mut(&operator) {
-				let bid = core::cmp::min(max_bid, T::FundingInfo::balance(&delegator));
-				if bid > Zero::zero() {
-					snapshot.delegators.insert(delegator.clone(), bid);
+
+			// Only relations to operators actually bidding this epoch count towards the
+			// delegator's committed total -- an operator with no qualified validators has no
+			// snapshot and can't claim any of the delegator's balance.
+			let live_relations: Vec<(T::AccountId, T::Amount)> = relations
+				.operators
+				.into_iter()
+				.filter(|(operator, _)| snapshots.contains_key(operator))
+				.collect();
+			if live_relations.is_empty() {
+				continue;
+			}
+
+			let total_committed: T::Amount =
+				live_relations.iter().map(|(_, max_bid)| *max_bid).sum();
+			let balance = T::FundingInfo::balance(&delegator);
+
+			// A delegator's relations are each capped at `balance` individually when written
+			// (see `delegate`/`delegate_multi`), so the only way their sum can exceed `balance`
+			// here is a balance reduction after the fact (e.g. slashing) -- in that case,
+			// prorate each relation's share of the shrunk balance proportionally to what it was
+			// pledged. This reduces to exactly `min(bid, balance)` when there's only one
+			// relation, matching pre-multi-operator behaviour precisely.
+			if total_committed <= balance {
+				for (operator, bid) in live_relations {
+					if bid > Zero::zero() {
+						if let Some(snapshot) = snapshots.get_mut(&operator) {
+							snapshot.delegators.insert(delegator.clone(), bid);
+						}
+					}
+				}
+			} else {
+				for (operator, bid) in live_relations {
+					let scaled_bid = Perquintill::from_rational(bid, total_committed) * balance;
+					if scaled_bid > Zero::zero() {
+						if let Some(snapshot) = snapshots.get_mut(&operator) {
+							snapshot.delegators.insert(delegator.clone(), scaled_bid);
+						}
+					}
 				}
 			}
 		}
@@ -2545,12 +2727,13 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 	) -> DispatchResult {
 		Self::ensure_not_active_bidder_during_auction(validator_id)?;
 		// A delegator may redeem from the portion of their balance that is not
-		// reserved by their stored max_bid — the amount visible to the auction
-		// (capped at max_bid) cannot drop, but funds the user never pledged
-		// remain freely redeemable.
-		if let Some((_, max_bid)) = DelegationChoice::<T>::get(validator_id.into_ref()) {
+		// reserved by the sum of their stored max_bids (across all of their operator relations)
+		// — the amount visible to the auction (capped at that sum) cannot drop, but funds the
+		// user never pledged remain freely redeemable.
+		let total_max_bid = Self::total_delegated(validator_id.into_ref());
+		if total_max_bid > Zero::zero() {
 			let balance = T::FundingInfo::balance(validator_id.into_ref());
-			ensure!(balance.saturating_sub(amount) >= max_bid, Error::<T>::StillBidding);
+			ensure!(balance.saturating_sub(amount) >= total_max_bid, Error::<T>::StillBidding);
 		}
 		Ok(())
 	}
@@ -2561,7 +2744,7 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 		// definition of "restricted". Additional checks (like balance checks) are
 		// outside the scope of this implementation.
 		ensure!(
-			!DelegationChoice::<T>::contains_key(source.into_ref()),
+			!DelegationChoices::<T>::contains_key(source.into_ref()),
 			Error::<T>::DelegatorTransferRestricted
 		);
 
@@ -2608,7 +2791,7 @@ impl<T: Config> DeregistrationHooks for DelegatorDeregistrationCheck<T> {
 	type Error = Error<T>;
 
 	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
-		ensure!(!DelegationChoice::<T>::contains_key(account_id), Error::<T>::StillDelegating);
+		ensure!(!DelegationChoices::<T>::contains_key(account_id), Error::<T>::StillDelegating);
 
 		Ok(())
 	}
@@ -2618,12 +2801,14 @@ pub struct DelegatedAccountCleanup<T>(PhantomData<T>);
 
 impl<T: Config> OnKilledAccount<T::AccountId> for DelegatedAccountCleanup<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((operator, max_bid)) = DelegationChoice::<T>::take(account_id) {
-			Pallet::<T>::deposit_event(Event::Undelegated {
-				delegator: account_id.clone(),
-				operator,
-				max_bid,
-			});
+		if let Some(relations) = DelegationChoices::<T>::take(account_id) {
+			for (operator, max_bid) in relations.operators {
+				Pallet::<T>::deposit_event(Event::Undelegated {
+					delegator: account_id.clone(),
+					operator,
+					max_bid,
+				});
+			}
 		}
 	}
 }

@@ -1400,11 +1400,43 @@ export type PalletCfValidatorCall =
    * Executed by an operator to deregister as an operator.
    **/
   | { name: 'DeregisterAsOperator' }
+  /**
+   * Delegate to a single operator.
+   *
+   * This extrinsic pre-dates multi-operator delegation and keeps its original,
+   * implicit-switch behaviour: it is only valid for delegators with at most one existing
+   * relation. A delegator with relations to two or more operators (only reachable via
+   * [`Self::delegate_multi`]) must use `delegate_multi` instead, since "switch operator"
+   * is ambiguous once more than one relation exists.
+   **/
   | {
       name: 'Delegate';
       params: { operator: AccountId32; increase: PalletCfValidatorDelegationDelegationAmount };
     }
+  /**
+   * Undelegate from the sole operator a delegator currently delegates to.
+   *
+   * Only valid for delegators with at most one existing relation, mirroring `delegate`.
+   * A delegator with relations to two or more operators must use `delegate_multi` and
+   * submit a plan that omits the operator(s) to undelegate from.
+   **/
   | { name: 'Undelegate'; params: { decrease: PalletCfValidatorDelegationDelegationAmount } }
+  /**
+   * Sets `delegator`'s complete delegation plan across one or more operators in a single
+   * call: `plan` becomes their entire new set of relations, replacing whatever existed
+   * before. Any operator the delegator was previously delegating to but that's absent
+   * from `plan` is fully undelegated; an empty `plan` undelegates everything. Unlike
+   * `delegate`, the caller declares exact target amounts rather than an
+   * increase/decrease delta -- entries with a zero amount are treated the same as an
+   * absent entry.
+   *
+   * If `plan`'s amounts sum to more than the delegator's funding balance, every entry is
+   * scaled down proportionally so the total exactly matches the balance -- the sum of a
+   * delegator's relations can never exceed what they actually hold. The (possibly
+   * scaled-down) total must be at least the minimum funding amount if `plan` is
+   * non-empty; individual entries may be smaller, only the total is checked.
+   **/
+  | { name: 'DelegateMulti'; params: { plan: PalletCfValidatorDelegationDelegatorRelations } }
   | { name: 'ReportWitnessingTaskRestart'; params: { task: CfPrimitivesWitnessingTaskName } }
   /**
    * Delegate this validator's GRANDPA vote to a delegate key.
@@ -1545,11 +1577,43 @@ export type PalletCfValidatorCallLike =
    * Executed by an operator to deregister as an operator.
    **/
   | { name: 'DeregisterAsOperator' }
+  /**
+   * Delegate to a single operator.
+   *
+   * This extrinsic pre-dates multi-operator delegation and keeps its original,
+   * implicit-switch behaviour: it is only valid for delegators with at most one existing
+   * relation. A delegator with relations to two or more operators (only reachable via
+   * [`Self::delegate_multi`]) must use `delegate_multi` instead, since "switch operator"
+   * is ambiguous once more than one relation exists.
+   **/
   | {
       name: 'Delegate';
       params: { operator: AccountId32Like; increase: PalletCfValidatorDelegationDelegationAmount };
     }
+  /**
+   * Undelegate from the sole operator a delegator currently delegates to.
+   *
+   * Only valid for delegators with at most one existing relation, mirroring `delegate`.
+   * A delegator with relations to two or more operators must use `delegate_multi` and
+   * submit a plan that omits the operator(s) to undelegate from.
+   **/
   | { name: 'Undelegate'; params: { decrease: PalletCfValidatorDelegationDelegationAmount } }
+  /**
+   * Sets `delegator`'s complete delegation plan across one or more operators in a single
+   * call: `plan` becomes their entire new set of relations, replacing whatever existed
+   * before. Any operator the delegator was previously delegating to but that's absent
+   * from `plan` is fully undelegated; an empty `plan` undelegates everything. Unlike
+   * `delegate`, the caller declares exact target amounts rather than an
+   * increase/decrease delta -- entries with a zero amount are treated the same as an
+   * absent entry.
+   *
+   * If `plan`'s amounts sum to more than the delegator's funding balance, every entry is
+   * scaled down proportionally so the total exactly matches the balance -- the sum of a
+   * delegator's relations can never exceed what they actually hold. The (possibly
+   * scaled-down) total must be at least the minimum funding amount if `plan` is
+   * non-empty; individual entries may be smaller, only the total is checked.
+   **/
+  | { name: 'DelegateMulti'; params: { plan: PalletCfValidatorDelegationDelegatorRelations } }
   | { name: 'ReportWitnessingTaskRestart'; params: { task: CfPrimitivesWitnessingTaskName } }
   /**
    * Delegate this validator's GRANDPA vote to a delegate key.
@@ -1608,6 +1672,10 @@ export type PalletCfValidatorDelegationDelegationAcceptance = 'Allow' | 'Deny';
 export type PalletCfValidatorDelegationDelegationAmount =
   | { type: 'Max' }
   | { type: 'Some'; value: bigint };
+
+export type PalletCfValidatorDelegationDelegatorRelations = {
+  operators: Array<[AccountId32, bigint]>;
+};
 
 export type CfPrimitivesWitnessingTaskName =
   | 'Ethereum'
@@ -13618,6 +13686,15 @@ export type PalletCfValidatorEvent =
       data: { delegator: AccountId32; change: PalletCfValidatorDelegationChange };
     }
   /**
+   * A delegator submitted a new full delegation plan via `delegate_multi`. `plan` is the
+   * resulting set of relations that was actually stored (after dropping zero-amount
+   * entries and prorating down to fit the delegator's balance, if it was oversubscribed).
+   **/
+  | {
+      name: 'DelegationPlanUpdated';
+      data: { delegator: AccountId32; plan: PalletCfValidatorDelegationDelegatorRelations };
+    }
+  /**
    * A validator reported that a witnessing task crashed and was restarted.
    **/
   | {
@@ -18174,7 +18251,12 @@ export type PalletCfValidatorError =
   /**
    * The account cannot deregister as a Liquidity Provider while actively delegating.
    **/
-  | 'StillDelegating';
+  | 'StillDelegating'
+  /**
+   * `delegate`/`undelegate` only support a delegator with at most one existing relation.
+   * Use `delegate_multi` and specify the full plan explicitly.
+   **/
+  | 'MultiOperatorDelegator';
 
 export type SpStakingOffenceOffenceSeverity = Perbill;
 
@@ -22860,13 +22942,8 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesRpcAccountInfoCommonItems 
   estimatedRedeemableBalance: bigint;
   boundRedeemAddress?: H160 | undefined;
   restrictedBalances: Array<[H160, bigint]>;
-  currentDelegationStatus?: StateChainRuntimeRuntimeApisCustomApiTypesDelegationInfo | undefined;
-  upcomingDelegationStatus?: StateChainRuntimeRuntimeApisCustomApiTypesDelegationInfo | undefined;
-};
-
-export type StateChainRuntimeRuntimeApisCustomApiTypesDelegationInfo = {
-  operator: AccountId32;
-  bid: bigint;
+  currentDelegationStatus: Array<[AccountId32, bigint]>;
+  upcomingDelegationStatus: Array<[AccountId32, bigint]>;
 };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesRuntimeApiAccountInfoWrapper = {

@@ -40,10 +40,10 @@ pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
 		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
-		IsHistoricalType, Migration, NewFieldWithDefault,
+		IsHistoricalType, Migration, NewFieldWithDefault, OverrideMigrationWith, Version,
 	},
-	primitives::NewTypeWithDefault,
-	v20100, v20200, v20300, HasChangelog,
+	primitives::{NewTypeWithDefault, WrappedAccountId32},
+	v20400, HasChangelog,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -892,23 +892,87 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	pub bound_redeem_address: Option<EvmAddress>,
 	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
 	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub current_delegation_status: Option<DelegationInfo<Balance>>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
+	/// Operator -> bid, for each operator this account currently delegates to.
+	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
+	pub current_delegation_status: BTreeMap<AccountId32, Balance>,
+	/// Operator -> bid, for each operator this account will delegate to next epoch.
+	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
+	pub upcoming_delegation_status: BTreeMap<AccountId32, Balance>,
 }
 
-impl<Balance: HasChangelog> HasChangelog for RpcAccountInfoCommonItems<Balance>
-where
-	Balance: Default,
-	<Balance as HasVersion<v20100>>::HistoricalType: Default,
-	<Balance as HasVersion<v20200>>::HistoricalType: Default,
-	<Balance as HasVersion<v20300>>::HistoricalType: Default,
-{
+// `HasChangelog` is only ever needed for `RpcAccountInfoCommonItems<FlipBalance>` -- that's the
+// only instantiation that appears on the wire (`cf_common_account_info`'s return type, and the
+// `before_version_*` snapshots derived from it). Pinning `Balance` to `FlipBalance` concretely
+// (rather than a generic `Balance: HasChangelog` impl) avoids having to reason generically about
+// an arbitrary `Balance`'s own historical/generic-variant representation below -- for the one
+// concrete type that's actually used, `FlipBalance = u128` is identity-migrated (its historical
+// and generic-variant types are just `u128` itself), which keeps the delegation-field migration
+// below straightforward.
+impl HasChangelog for RpcAccountInfoCommonItems<FlipBalance> {
 	type if_unspecified = _RpcAccountInfoCommonItems::see_field_changelogs;
 	type in_20200 = _RpcAccountInfoCommonItems::see_field_changelogs_and_also<
 		_RpcAccountInfoCommonItems::field::account_id::Added,
 	>;
+	// Before the v20400 cycle, a delegator could only delegate to a single operator at a time,
+	// so these fields were `Option<DelegationInfo<Balance>>` rather than a map of every operator
+	// it delegates to.
+	type in_20400 =
+		_RpcAccountInfoCommonItems::see_field_changelogs_and_also<DelegationStatusFieldsBecameMaps>;
+}
+
+/// Historically (before v20400) `current_delegation_status`/`upcoming_delegation_status` were a
+/// single optional `DelegationInfo { operator, bid }`, since a delegator could only delegate to
+/// one operator at a time. `try_backwards` is lossy if there's more than one relation -- there's
+/// no way to represent that in the old shape, so it errors instead of silently dropping data.
+///
+/// The historical shape is expressed as `Option<(WrappedAccountId32, FlipBalance)>` rather than
+/// `Option<DelegationInfo<FlipBalance>>` directly: `DelegationInfo` has no blanket
+/// `IsHistoricalType` impl, but a plain tuple does (via the framework's `TupleWith2Entries`
+/// blanket impl), and a struct's SCALE encoding is identical to a tuple of the same fields in the
+/// same order, so this round-trips against real historical data byte-for-byte.
+pub struct DelegationStatusMigration;
+
+#[derive(Debug)]
+pub struct TooManyDelegationsForHistoricalStatus;
+
+impl Migration<BTreeMap<WrappedAccountId32, FlipBalance>, v20400> for DelegationStatusMigration {
+	type From = Option<(WrappedAccountId32, FlipBalance)>;
+	type BackwardsError = TooManyDelegationsForHistoricalStatus;
+
+	fn try_forwards(
+		x: Self::From,
+	) -> Result<BTreeMap<WrappedAccountId32, FlipBalance>, Self::ForwardsError> {
+		Ok(match x {
+			None => BTreeMap::new(),
+			Some((operator, bid)) => BTreeMap::from([(operator, bid)]),
+		})
+	}
+
+	fn try_backwards(
+		x: BTreeMap<WrappedAccountId32, FlipBalance>,
+	) -> Result<Self::From, Self::BackwardsError> {
+		let mut entries = x.into_iter();
+		match (entries.next(), entries.next()) {
+			(None, _) => Ok(None),
+			(Some(entry), None) => Ok(Some(entry)),
+			(Some(_), Some(_)) => Err(TooManyDelegationsForHistoricalStatus),
+		}
+	}
+}
+
+pub struct DelegationStatusFieldsBecameMaps;
+
+impl<To> _RpcAccountInfoCommonItems::FieldCustomMigration<To, v20400>
+	for DelegationStatusFieldsBecameMaps
+where
+	To: _RpcAccountInfoCommonItems::HistoricalTypesAt<v20400>
+		+ _RpcAccountInfoCommonItems::Types<
+			current_delegation_status = BTreeMap<WrappedAccountId32, FlipBalance>,
+			upcoming_delegation_status = BTreeMap<WrappedAccountId32, FlipBalance>,
+		>,
+{
+	type current_delegation_status = OverrideMigrationWith<DelegationStatusMigration>;
+	type upcoming_delegation_status = OverrideMigrationWith<DelegationStatusMigration>;
 }
 
 impl<A> RpcAccountInfoCommonItems<A> {
@@ -931,12 +995,14 @@ impl<A> RpcAccountInfoCommonItems<A> {
 				.collect::<Result<_, E>>()?,
 			upcoming_delegation_status: self
 				.upcoming_delegation_status
-				.map(|d| d.try_map_bid(&f))
-				.transpose()?,
+				.into_iter()
+				.map(|(operator, bid)| Ok((operator, f(bid)?)))
+				.collect::<Result<_, E>>()?,
 			current_delegation_status: self
 				.current_delegation_status
-				.map(|d| d.try_map_bid(&f))
-				.transpose()?,
+				.into_iter()
+				.map(|(operator, bid)| Ok((operator, f(bid)?)))
+				.collect::<Result<_, E>>()?,
 		})
 	}
 }
