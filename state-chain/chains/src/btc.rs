@@ -36,7 +36,10 @@ use cf_primitives::{
 	VAULT_UTXO_SIZE_IN_BYTES,
 };
 use cf_runtime_utilities::log_or_panic;
-use cf_utilities::SliceToArray;
+use cf_utilities::{
+	migrations::{AllVersions, ChangelogDetails, HasChangelog},
+	SliceToArray,
+};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
@@ -641,6 +644,8 @@ const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
 	Serialize,
 	Deserialize,
 )]
+#[cf_proc_macros::generate_module]
+
 pub enum ScriptPubkey {
 	P2PKH([u8; 20]),
 	P2SH([u8; 20]),
@@ -648,6 +653,12 @@ pub enum ScriptPubkey {
 	P2WSH([u8; 32]),
 	Taproot([u8; 32]),
 	OtherSegwit { version: u8, program: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
+}
+impl HasChangelog for ScriptPubkey {
+	type if_unspecified = _ScriptPubkey::see_variant_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 impl SerializeBtc for ScriptPubkey {

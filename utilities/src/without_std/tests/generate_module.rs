@@ -16,7 +16,7 @@
 
 #![cfg(test)]
 
-use crate::migrations::HasChangelog;
+use crate::migrations::{AllVersions, ChangelogDetails, HasChangelog};
 
 #[cf_proc_macros::generate_module]
 pub struct MyS<T> {
@@ -25,6 +25,28 @@ pub struct MyS<T> {
 
 impl<T: HasChangelog> HasChangelog for MyS<T> {
 	type if_unspecified = _MyS::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
+}
+
+#[cf_proc_macros::generate_module]
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum EnumWithDefault {
+	Other,
+	#[default]
+	SomeDefault,
+}
+impl HasChangelog for EnumWithDefault {
+	type if_unspecified = _EnumWithDefault::see_variant_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
+}
+
+#[test]
+fn forwards_default_attributes() {
+	assert_eq!(EnumWithDefault::default(), EnumWithDefault::SomeDefault);
 }
 
 pub trait T1 {
@@ -75,7 +97,7 @@ mod enum3 {
 }
 
 mod enum4 {
-	use super::{HasChangelog, T1};
+	use super::{AllVersions, ChangelogDetails, HasChangelog, T1};
 	cf_utilities::generate_module! {
 	pub enum MyTestValues<T: T1> {
 		Variant1(_0: T::XY),
@@ -119,5 +141,8 @@ mod enum4 {
 		type if_unspecified = _MyTestValues::see_variant_changelogs;
 		type in_20100 =
 			_MyTestValues::see_variant_changelogs_and_also<_MyTestValues::variant::Variant2::Added>;
+		fn details() -> ChangelogDetails<Self> {
+			AllVersions::default()
+		}
 	}
 }

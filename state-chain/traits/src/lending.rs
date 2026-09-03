@@ -84,7 +84,7 @@ pub trait BoostApi {
 	fn process_deposit_as_lost(deposit_id: PrewitnessedDepositId, asset: Asset);
 }
 
-define_wrapper_type!(LoanId, u64, extra_derives: PartialOrd, Ord, Serialize, Deserialize);
+define_wrapper_type!(LoanId, u64, extra_derives: [PartialOrd, Ord, Serialize, Deserialize]);
 
 impl core::ops::Add<u64> for LoanId {
 	type Output = Self;

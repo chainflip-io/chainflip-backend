@@ -14,7 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_core::{bounded::BoundedVec, Get};
+use sp_std::{boxed::Box, collections::btree_map::BTreeMap, vec, vec::Vec};
 
 pub trait HasTypeIntrospection: Sized {
 	fn is_empty_type() -> bool;
@@ -23,7 +24,12 @@ pub trait HasTypeIntrospection: Sized {
 
 // -------------- primitives ---------------
 
-#[duplicate::duplicate_item(Type; [()]; [bool]; [u8]; [u16]; [u32]; [u64]; [u128])]
+#[duplicate::duplicate_item(
+    Type;
+    [u8]; [u16]; [u32]; [u64]; [u128];
+    [i8]; [i16]; [i32]; [i64]; [i128];
+    [()]; [bool]; [ [u8;20] ]; [ [u8;32] ]
+)]
 impl HasTypeIntrospection for Type {
 	fn is_empty_type() -> bool {
 		false
@@ -62,6 +68,30 @@ impl<A: HasTypeIntrospection> HasTypeIntrospection for Vec<A> {
 
 	fn sample_all_shapes() -> Vec<Self> {
 		A::sample_all_shapes().into_iter().map(|a| vec![a]).chain([vec![]]).collect()
+	}
+}
+
+impl<A: HasTypeIntrospection> HasTypeIntrospection for Box<A> {
+	fn is_empty_type() -> bool {
+		A::is_empty_type() // Box is constructible if the inner type is constructible
+	}
+
+	fn sample_all_shapes() -> Vec<Self> {
+		A::sample_all_shapes().into_iter().map(|a| Box::new(a)).collect()
+	}
+}
+
+impl<S: Get<u32>, A: HasTypeIntrospection> HasTypeIntrospection for BoundedVec<A, S> {
+	fn is_empty_type() -> bool {
+		false // because a vector is always constructible
+	}
+
+	fn sample_all_shapes() -> Vec<Self> {
+		A::sample_all_shapes()
+			.into_iter()
+			.map(|a| BoundedVec::truncate_from(vec![a]))
+			.chain([BoundedVec::new()])
+			.collect()
 	}
 }
 

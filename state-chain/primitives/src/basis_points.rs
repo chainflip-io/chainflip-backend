@@ -15,8 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
-define_wrapper_type!(SignedBasisPoints, i32, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
-define_wrapper_type!(SignedHundredthBasisPoints, i32, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+define_wrapper_type!(SignedBasisPoints, i32, extra_derives: [Serialize, Deserialize, PartialOrd, Ord]);
+define_wrapper_type!(SignedHundredthBasisPoints, i32, extra_derives: [Serialize, Deserialize, PartialOrd, Ord]);
 
 impl SignedBasisPoints {
 	pub const MAX: Self = SignedBasisPoints(u16::MAX as i32);

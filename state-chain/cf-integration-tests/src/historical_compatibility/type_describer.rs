@@ -161,12 +161,80 @@ fn push_named_child(
 	path: &mut Vec<u32>,
 	lines: &mut Vec<String>,
 ) {
-	let prefix = " ".repeat(indent);
 	let child_type = &registry.types[type_id as usize].ty;
+	match transparent_wrapper_kind(child_type) {
+		Some(TransparentWrapperKind::GeneratedEnumVariantPayload) => {
+			push_generated_enum_variant_payload(registry, &label, type_id, indent, path, lines);
+			return;
+		},
+		None => {},
+	}
+
+	let prefix = " ".repeat(indent);
 	lines.push(format!("{prefix}{label}: {}", type_path(child_type)));
 	if should_expand(child_type) {
 		push_type_body(registry, type_id, indent + 2, path, lines);
 	}
+}
+
+enum TransparentWrapperKind {
+	GeneratedEnumVariantPayload,
+}
+
+fn transparent_wrapper_kind(ty: &Type<PortableForm>) -> Option<TransparentWrapperKind> {
+	if matches!(ty.type_def, TypeDef::Composite(_)) &&
+		is_generated_enum_variant_payload_path(&ty.path.segments)
+	{
+		Some(TransparentWrapperKind::GeneratedEnumVariantPayload)
+	} else {
+		None
+	}
+}
+
+fn is_generated_enum_variant_payload_path(segments: &[String]) -> bool {
+	segments.len() >= 5 &&
+		segments[segments.len() - 5] == "variants" &&
+		segments[segments.len() - 4] == "__impls" &&
+		segments[segments.len() - 2] == "variant_mod" &&
+		segments[segments.len() - 1] == "Struct"
+}
+
+fn push_generated_enum_variant_payload(
+	registry: &PortableRegistry,
+	label: &str,
+	type_id: u32,
+	indent: usize,
+	path: &mut Vec<u32>,
+	lines: &mut Vec<String>,
+) {
+	if path.contains(&type_id) {
+		return;
+	}
+
+	path.push(type_id);
+
+	if let TypeDef::Composite(composite) = &registry.types[type_id as usize].ty.type_def {
+		let tuple_fields =
+			generated_tuple_fields(composite.fields.iter().map(|field| field.name.as_deref()));
+		for field in &composite.fields {
+			if is_unit_type(registry, field.ty.id) {
+				continue;
+			}
+			let field_label = match field.name.as_deref() {
+				Some(field_name) if !tuple_fields => format!(".{field_name}"),
+				_ => label.to_string(),
+			};
+			push_named_child(registry, field_label, field.ty.id, indent, path, lines);
+		}
+	}
+
+	path.pop();
+}
+
+fn generated_tuple_fields<'a>(field_names: impl Iterator<Item = Option<&'a str>>) -> bool {
+	field_names
+		.enumerate()
+		.all(|(index, field_name)| field_name == Some(format!("_{index}").as_str()))
 }
 
 fn should_expand(ty: &Type<PortableForm>) -> bool {
@@ -193,7 +261,9 @@ fn replace_type_name(type_name: String) -> String {
 
 	if segments.len() >= 2 {
 		let wrapper_index = segments.len() - 2;
-		if segments[segments.len() - 1] == "Struct" && segments[wrapper_index].starts_with('_') {
+		if matches!(segments[segments.len() - 1], "Enum" | "Struct") &&
+			segments[wrapper_index].starts_with('_')
+		{
 			segments[wrapper_index] = &segments[wrapper_index][1..];
 			segments.pop();
 			return segments.join("::");

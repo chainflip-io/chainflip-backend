@@ -15,10 +15,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::pass_through;
-use crate::{BTreeMap, BlockT, CustomRpc, RpcAccountInfoV2, RpcResult};
+use crate::{BTreeMap, BlockT, CfApiError, CustomRpc, RpcAccountInfoV2, RpcResult};
 use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
-use cf_utilities::rpc::NumberOrHex;
-use jsonrpsee::proc_macros::rpc;
+use cf_utilities::{
+	migrations::{basics::try_migrate_from_historical_type, v20200},
+	rpc::NumberOrHex,
+};
+use jsonrpsee::{
+	proc_macros::rpc,
+	types::{ErrorCode, ErrorObject},
+};
 use pallet_cf_validator::{AuctionOutcome, DelegationSnapshot};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
@@ -300,9 +306,24 @@ where
 				if api_version < 4 {
 					#[expect(deprecated)]
 					api.cf_accounts_info_before_version_4(hash, accounts)
-						.map(|accounts| accounts.into_iter().map(Into::into).collect())
+						.map_err(Into::into)
+						.and_then(|accounts| {
+							accounts
+								.into_iter()
+								.map(|historical| {
+									try_migrate_from_historical_type(v20200, historical)
+								})
+								.collect::<Result<Vec<_>, _>>()
+								.map_err(|_| {
+									CfApiError::ErrorObject(ErrorObject::owned(
+										ErrorCode::InternalError.code(),
+										"Error when migrating runtime api reply",
+										None::<()>,
+									))
+								})
+						})
 				} else {
-					api.cf_accounts_info(hash, accounts)
+					Ok::<_, CfApiError>(api.cf_accounts_info(hash, accounts)?)
 				}
 			})?;
 		Ok(accounts_info

@@ -157,7 +157,7 @@ type ScaledAmount = scaled_amount::ScaledAmount<1000>;
 /// High precision version of scaled amount
 pub type ScaledAmountHP = scaled_amount::ScaledAmount<1_000_000_000>;
 
-define_wrapper_type!(CoreLoanId, u64, extra_derives: Ord, PartialOrd);
+define_wrapper_type!(CoreLoanId, u64, extra_derives: [Ord, PartialOrd]);
 
 impl core::ops::Add<u64> for CoreLoanId {
 	type Output = Self;

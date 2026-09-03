@@ -1,3 +1,5 @@
+use cf_utilities::migrations::{AllVersions, ChangelogDetails, HasChangelog};
+
 // Copyright 2025 Chainflip Labs GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,11 +38,18 @@ pub const MAX_INTEREST_PAYMENT_INTERVAL_BLOCKS: u32 = BLOCKS_IN_YEAR;
 	Serialize,
 	Deserialize,
 )]
+#[cf_proc_macros::generate_module]
 pub struct InterestRateConfiguration {
 	pub interest_at_zero_utilisation: Permill,
 	pub junction_utilisation: Permill,
 	pub interest_at_junction_utilisation: Permill,
 	pub interest_at_max_utilisation: Permill,
+}
+impl HasChangelog for InterestRateConfiguration {
+	type if_unspecified = _InterestRateConfiguration::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 impl InterestRateConfiguration {
@@ -70,6 +79,7 @@ impl InterestRateConfiguration {
 	Serialize,
 	Deserialize,
 )]
+#[cf_proc_macros::generate_module]
 pub struct LendingPoolConfiguration {
 	pub origination_fee: Permill,
 	/// Portion of the amount of principal asset obtained via liquidation that's
@@ -77,6 +87,12 @@ pub struct LendingPoolConfiguration {
 	pub liquidation_fee: Permill,
 	/// Determines how interest rate is calculated based on the utilization rate.
 	pub interest_rate_curve: InterestRateConfiguration,
+}
+impl HasChangelog for LendingPoolConfiguration {
+	type if_unspecified = _LendingPoolConfiguration::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[derive(

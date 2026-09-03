@@ -28,6 +28,10 @@
 //!
 //! Primitive types to be used across Chainflip's various crates.
 
+use cf_utilities::{
+	impl_identity_migrations,
+	migrations::{AllVersions, ChangelogDetails},
+};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -47,7 +51,7 @@ pub mod chains;
 
 #[macro_export]
 macro_rules! define_wrapper_type {
-	($name: ident, $inner: ty $(, extra_derives: $( $extra_derive: ident ),*)? ) => {
+	($name: ident, $inner: ty $(, extra_derives: [$( $extra_derive:path ),*])? $(, extra_attributes: [$( #[ $( $extra_attribute:tt )*] ),*])?) => {
 
 		#[derive(
 			Clone,
@@ -63,6 +67,7 @@ macro_rules! define_wrapper_type {
 			Default,
 			$($( $extra_derive ),*)?
 		)]
+		$($(#[$($extra_attribute)*])*)?
 		pub struct $name(pub $inner);
 
 		impl sp_std::ops::Deref for $name {
@@ -141,15 +146,24 @@ pub type BroadcastId = u32;
 /// in units of asset One.
 pub type Tick = i32;
 
-define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+define_wrapper_type!(SwapId, u64, extra_derives: [Serialize, Deserialize, PartialOrd, Ord]);
 
-define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+define_wrapper_type!(SwapRequestId, u64, extra_derives: [Serialize, Deserialize, PartialOrd, Ord]);
 
-define_wrapper_type!(PrewitnessedDepositId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+define_wrapper_type!(PrewitnessedDepositId, u64, extra_derives: [Serialize, Deserialize, PartialOrd, Ord]);
 
 pub type BoostPoolTier = u16;
 
-define_wrapper_type!(AffiliateShortId, u8, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+define_wrapper_type!(
+	AffiliateShortId, u8,
+	extra_derives: [Serialize, Deserialize, PartialOrd, Ord, cf_proc_macros::HasTypeIntrospection],
+	extra_attributes: [#[cfg_attr(
+		any(test, all(feature = "proptest", feature = "std")),
+		derive(proptest_derive::Arbitrary)
+	)]]
+);
+
+impl_identity_migrations! {AffiliateShortId, }
 
 /// The type of the Id given to threshold signature requests. Note a single request may
 /// result in multiple ceremonies, but only one ceremony should succeed.
@@ -302,6 +316,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 ///
 /// Each account can only be associated with a single role, and the role can only be updated from
 /// the initial [AccountRole::Unregistered] state.
+#[cf_proc_macros::generate_module]
 #[derive(
 	PartialEq,
 	Eq,
@@ -338,6 +353,14 @@ pub enum AccountRole {
 	/// Operators are responsible for managing delegated stake and validators signed up to their
 	/// account.
 	Operator,
+}
+
+impl cf_utilities::migrations::HasChangelog for AccountRole {
+	type if_unspecified = _AccountRole::see_variant_changelogs;
+
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

@@ -46,7 +46,7 @@ use cf_traits::{
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
-	HasChangelog,
+	AllVersions, ChangelogDetails, HasChangelog,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -122,12 +122,19 @@ enum EgressType {
 	Refund { refund_fee: AssetAmount },
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(
 	Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Copy, Clone, Debug,
 )]
 pub struct AffiliateDetails {
 	pub short_id: AffiliateShortId,
 	pub withdrawal_address: EthereumAddress,
+}
+impl HasChangelog for AffiliateDetails {
+	type if_unspecified = _AffiliateDetails::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 /// Refund parameter used within the swapping pallet.
@@ -255,6 +262,9 @@ pub struct FeeRateAndMinimum {
 }
 impl HasChangelog for FeeRateAndMinimum {
 	type if_unspecified = _FeeRateAndMinimum::see_field_changelogs;
+	fn details() -> ChangelogDetails<Self> {
+		AllVersions::default()
+	}
 }
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]

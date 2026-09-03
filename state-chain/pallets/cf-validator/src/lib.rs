@@ -17,7 +17,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![feature(associated_type_defaults)]
 #![feature(iterator_try_collect)]
+#![feature(trait_alias)]
+#![feature(lazy_type_alias)]
+#![allow(incomplete_features)]
 
 mod mock;
 mod tests;
@@ -71,11 +75,11 @@ use crate::rotation_state::RotationState;
 pub use pallet_grandpa::GrandpaVoteDelegation;
 use sp_consensus_grandpa::AuthorityId as GrandpaAuthorityId;
 
-type SessionIndex = u32;
+pub type SessionIndex = u32;
 
-type Version = SemVer;
+pub type Version = SemVer;
 
-type Ed25519Signature = ed25519::Signature;
+pub type Ed25519Signature = ed25519::Signature;
 
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
@@ -112,8 +116,7 @@ pub enum PalletConfigUpdate {
 	},
 }
 
-type RuntimeRotationState<T> =
-	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
+pub type RuntimeRotationState<T: Chainflip> = RotationState<T::ValidatorId, T::Amount>;
 
 pub const STORAGE_VERSION_U16: u16 = 11;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
@@ -153,7 +156,7 @@ impl<T: pallet::Config> RotationPhase<T> {
 		}
 	}
 }
-type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
+pub type ValidatorIdOf<T: Chainflip> = T::ValidatorId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum RotationError {

@@ -21,17 +21,22 @@ pub mod type_describer;
 
 use std::collections::HashMap;
 
-use cf_primitives::{Asset, FlipBalance};
+use cf_chains::assets::any::AssetMap;
+use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, FlipBalance};
 use cf_utilities::{
 	for_each_runtime_version,
 	migrations::{
 		basics::{CanonicalPatchVersion, Version},
-		v20000, v20100, v20200, v20300,
+		v11000, v11100, v11200, v20000, v20100, v20200, v20300,
 	},
 };
 use frame_support::sp_runtime::AccountId32;
-use state_chain_runtime::runtime_apis::custom_api::types::{
-	NetworkFees, RpcAccountInfoCommonItems, ShouldSweep,
+use state_chain_runtime::runtime_apis::{
+	custom_api::types::{
+		NetworkFees, RpcAccountInfoCommonItems, RuntimeApiAccountInfoWrapper, ShouldSweep,
+		TradingStrategyLimits,
+	},
+	types::{BrokerInfo, LiquidityProviderInfo, OperatorInfo, ValidatorInfo},
 };
 
 use crate::historical_compatibility::{
@@ -61,6 +66,9 @@ pub fn online_test_historical_compatibility_of_runtime_api() -> Result<(), Strin
 	check_incompatibilities(test_all_historical_runtime_calls(
 		&mut OnlineNodeTester {
 			get_blockhash_from_spec_version: Box::new(|spec_version| match spec_version {
+				11001 => Some("0xb3699f16a767aee5f0123436ca19615636b0a992d4cdfd17898b98165d3cb810"),
+				11106 => Some("0x6f67b731db79184786c98a80d4bbd20a1b8926f772e66a67c68c6044c4b07fbf"),
+				11201 => Some("0x056284f56992e9e6b8dcb2a4dc18d9ea35be8a9844cbaf46b0396ba880a39a3b"),
 				20012 => Some("0xc2068ad859fc5c3b3c7c5ecb3bd84033f1b5a0ce60e8c3b52cab4d22840eec37"),
 				20119 => Some("0x2ad1dd83839b13039d1a4ee85932b439e041068bd3bb91acf43455db97d71bd0"),
 				20203 => Some("0xb7ac402940505ac776988b01c41a1154e6b38a46c9f839edf74939a2c2fc1c74"),
@@ -148,25 +156,66 @@ fn test_all_historical_runtime_calls(
 					.expect("Encountered `CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST = None` when trying to run compatibility tests for historical runtime.")
 			) {
                 let mut incompatibilities = Vec::new();
-                incompatibilities.append(
-                    &mut tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees")
-                );
-                incompatibilities.append(
-                    &mut tester
-                        .test_call::<$version, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>(
-                            $version,
-                            "CustomRuntimeApi",
-                            "cf_common_account_info",
-                        )
-                );
-                if match $version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST.unwrap() {
+				let release = match $version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST.unwrap() {
                     CanonicalPatchVersion::Released(v) => Some(v),
                     CanonicalPatchVersion::Unreleased => None,
-                }.unwrap() > 20200 {
-                    // the `cf_supported_assets` call only exists in versions >= 20200
+				}.unwrap();
+
+				if release >= 11000 {
+					incompatibilities.append(
+						&mut tester.test_call::<$version, AccountId32, ValidatorInfo>($version, "CustomRuntimeApi", "cf_validator_info")
+					);
+				}
+
+				if release >= 20000 {
+					incompatibilities.append(
+						&mut tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>($version, "CustomRuntimeApi", "cf_common_account_info")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, (AccountId32, ShouldSweep), LiquidityProviderInfo>($version, "CustomRuntimeApi", "cf_liquidity_provider_info")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, AccountId32, OperatorInfo<FlipBalance>>($version, "CustomRuntimeApi", "cf_operator_info")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, AccountId32, BrokerInfo<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>>($version, "CustomRuntimeApi", "cf_broker_info")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, AccountId32, AssetMap<AssetAmount>>($version, "CustomRuntimeApi", "cf_free_balances")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, AccountId32, AssetMap<AssetAmount>>($version, "CustomRuntimeApi", "cf_lp_total_balances")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, (), cf_rpc_types::broker::VaultAddresses>($version, "CustomRuntimeApi", "cf_vault_addresses")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, (), TradingStrategyLimits>($version, "CustomRuntimeApi", "cf_trading_strategy_limits")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, Option<Asset>, Vec<pallet_cf_lending_pools::RpcLendingPool<AssetAmount>>>($version, "CustomRuntimeApi", "cf_lending_pools")
+					);
+					incompatibilities.append(
+						&mut tester.test_call::<$version, frame_support::BoundedVec<AccountId32, sp_core::ConstU32<10>>, Vec<ValidatorInfo>>($version, "MonitoringRuntimeApi", "cf_accounts_info")
+					);
+				}
+
+				if release >= 20100 {
+					incompatibilities.append(
+						&mut tester.test_call::<$version, (), AssetMap<Option<BasisPoints>>>($version, "CustomRuntimeApi", "cf_default_oracle_price_protection")
+					);
+				}
+
+				if release >= 20200 {
                     incompatibilities.append(
                         &mut tester.test_call::<$version, (), Vec<Asset>>($version, "CustomRuntimeApi", "cf_supported_assets"),
                     );
+                    incompatibilities.append(
+						&mut tester.test_call::<$version, Option<Vec<AccountRole>>, Vec<RuntimeApiAccountInfoWrapper>>($version, "CustomRuntimeApi", "cf_all_account_infos")
+					);
                 }
 
                 all_incompatibilities.append(&mut incompatibilities);

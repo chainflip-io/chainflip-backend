@@ -24,7 +24,7 @@ pub mod benchmarking;
 pub mod serializable_address;
 
 use cf_runtime_utilities::log_or_panic;
-use cf_utilities::SliceToArray;
+use cf_utilities::{impl_identity_migrations, SliceToArray};
 #[cfg(feature = "std")]
 pub use serializable_address::*;
 
@@ -131,12 +131,15 @@ impl PolkadotPair {
 	MaxEncodedLen,
 	Serialize,
 	Deserialize,
+	cf_proc_macros::HasTypeIntrospection,
 )]
 #[cfg_attr(
 	feature = "std",
 	serde(try_from = "SubstrateNetworkAddress", into = "SubstrateNetworkAddress")
 )]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 pub struct PolkadotAccountId(pub [u8; 32]);
+impl_identity_migrations! { PolkadotAccountId, }
 
 impl TryFrom<Vec<u8>> for PolkadotAccountId {
 	type Error = ();

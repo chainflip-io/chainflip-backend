@@ -167,22 +167,16 @@ fn append_field_samples(fields: &Fields, constructor: TokenStream) -> TokenStrea
 		};
 	}
 
-	let count_idents: Vec<_> = (0..field_types.len())
-		.map(|index| format_ident!("__shape_count_{index}"))
-		.collect();
-	let index_idents: Vec<_> = (0..field_types.len())
-		.map(|index| format_ident!("__shape_index_{index}"))
-		.collect();
 	let value_idents: Vec<_> = (0..field_types.len())
 		.map(|index| format_ident!("__shape_value_{index}"))
 		.collect();
 
-	let push_sample = quote! {
+	let baseline_sample = quote! {
 		match (
 			#(
 				<#field_types as cf_utilities::type_introspection::HasTypeIntrospection>::sample_all_shapes()
 					.into_iter()
-					.nth(#index_idents),
+					.next(),
 			)*
 		) {
 			( #( Some(#value_idents), )* ) => __samples.push(#constructor),
@@ -190,23 +184,41 @@ fn append_field_samples(fields: &Fields, constructor: TokenStream) -> TokenStrea
 		}
 	};
 
-	let nested_loops = index_idents.iter().zip(count_idents.iter()).rfold(
-		push_sample,
-		|body, (index_ident, count_ident)| {
-			quote! {
-				for #index_ident in 0..#count_ident {
-					#body
+	let field_variations = field_types.iter().enumerate().map(|(field_index, field_type)| {
+		let varied_value_ident = &value_idents[field_index];
+		let other_field_types = field_types
+			.iter()
+			.enumerate()
+			.filter_map(|(index, ty)| (index != field_index).then_some(*ty));
+		let other_value_idents = value_idents
+			.iter()
+			.enumerate()
+			.filter_map(|(index, ident)| (index != field_index).then_some(ident));
+
+		quote! {
+			{
+				let mut __shape_iter = <#field_type as cf_utilities::type_introspection::HasTypeIntrospection>::sample_all_shapes().into_iter();
+				let _ = __shape_iter.next();
+				for #varied_value_ident in __shape_iter {
+					match (
+						#(
+							<#other_field_types as cf_utilities::type_introspection::HasTypeIntrospection>::sample_all_shapes()
+								.into_iter()
+								.next(),
+						)*
+					) {
+						( #( Some(#other_value_idents), )* ) => __samples.push(#constructor),
+						_ => {},
+					}
 				}
 			}
-		},
-	);
+		}
+	});
 
 	quote! {
 		{
-			#(
-				let #count_idents = <#field_types as cf_utilities::type_introspection::HasTypeIntrospection>::sample_all_shapes().len();
-			)*
-			#nested_loops
+			#baseline_sample
+			#( #field_variations )*
 		}
 	}
 }
