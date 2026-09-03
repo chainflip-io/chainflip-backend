@@ -300,7 +300,7 @@ services:
     command: -c /tron/config/config-peer.conf -d /tron/output-directory
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-7a628a24c5de496d344984b2153d760bca202d3e}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-dc9fec17be26a0af88da518184cd02d90103e6c8}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
@@ -386,6 +386,7 @@ services:
 
       - CFDM_TRON_ENABLE_DEPOSIT_MONITORING=true
       - CFDM_TRON_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300
+      - CFDM_TRON_RPC_HTTP_ENDPOINT=http://tron:8090
 
   postgres:
     image: postgres:15.3
