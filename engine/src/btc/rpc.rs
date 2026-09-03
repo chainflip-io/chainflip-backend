@@ -18,7 +18,7 @@ use cf_chains::btc::BitcoinNetwork;
 use futures_core::Future;
 use thiserror::Error;
 
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use serde;
@@ -37,6 +37,11 @@ use anyhow::{anyhow, Result};
 // https://github.com/bitcoin/bitcoin/blob/fb7b5293844ea6adc5dcf5ad0a0c5890b4495939/src/rpc/protocol.h#L58
 const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;
 
+/// How much of a response body to quote when reporting it as [`Error::BadResponse`]. Applies only
+/// to a body that failed to parse, never to one we return: enough to identify the source of a proxy
+/// error page without flooding the logs.
+const MAX_REPORTED_BODY_LEN: usize = 512;
+
 // From jsonrpc crate
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RpcError {
@@ -53,6 +58,12 @@ pub enum Error {
 	Transport(reqwest::Error),
 	Json(serde_json::Error),
 	Rpc(RpcError),
+	/// The endpoint replied with something that isn't a JSON-RPC response at all, for example a
+	/// `502 Bad Gateway` page from a proxy in front of the node.
+	BadResponse {
+		status: StatusCode,
+		body: String,
+	},
 }
 
 impl std::fmt::Display for Error {
@@ -61,6 +72,8 @@ impl std::fmt::Display for Error {
 			Error::Transport(ref e) => write!(f, "Transport error: {}", e),
 			Error::Json(ref e) => write!(f, "JSON decode error: {}", e),
 			Error::Rpc(ref e) => write!(f, "RPC error response: {:?}", e),
+			Error::BadResponse { status, ref body } =>
+				write!(f, "Unexpected response with status `{status}`: {body:?}"),
 		}
 	}
 }
@@ -172,45 +185,81 @@ async fn call_rpc_raw(
 		.await
 		.map_err(Error::Transport)?;
 
-	let response = response
-		.json::<Vec<serde_json::Value>>()
-		.await
-		.map_err(Error::Transport)
-		.and_then(|result| match params.clone() {
-			ReqParams::Batch(params) =>
-				if params.len() == result.len() {
-					// a bunch of json result values containing an error and a result field.
-					Ok(result)
-				} else {
-					Err(Error::Rpc(RpcError {
+	let status = response.status();
+	let body = response.bytes().await.map_err(Error::Transport)?;
+
+	parse_response(status, &body, method, &params)
+}
+
+/// Extracts the results from the response to a JSON-RPC (batch) request.
+///
+/// The status is only used for reporting: the node itself replies with an error status *and* a
+/// well-formed JSON-RPC body (a `400 Bad Request` carrying a parse error, for example), whereas
+/// anything sitting in front of it replies with a body we can't decode at all. Reporting the
+/// latter as [`Error::BadResponse`] keeps the status and the body of, say, a `502 Bad Gateway`
+/// page visible instead of reducing it to a decoding error.
+fn parse_response(
+	status: StatusCode,
+	body: &[u8],
+	method: &str,
+	params: &ReqParams,
+) -> Result<Vec<serde_json::Value>, Error> {
+	let bad_response = || Error::BadResponse {
+		status,
+		body: String::from_utf8_lossy(&body[..body.len().min(MAX_REPORTED_BODY_LEN)]).into_owned(),
+	};
+
+	match serde_json::from_slice::<serde_json::Value>(body) {
+		Ok(serde_json::Value::Array(replies)) => {
+			if let ReqParams::Batch(params) = params {
+				if params.len() != replies.len() {
+					return Err(Error::Rpc(RpcError {
 						code: -1,
 						message: "Incorrect response number for batch request".to_string(),
 						data: None,
 					}))
-				},
-			ReqParams::Empty => Ok(result),
-		})?;
-
-	response
-		.into_iter()
-		.map(|r| {
-			if r.is_object() {
-				let error = &r["error"];
-				if !error.is_null() {
-					Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
-				} else {
-					Ok(r["result"].to_owned())
 				}
-			} else {
-				tracing::warn!(
-					"The rpc response returned for {method:?} with params: {params:?}
-					was not a valid json object: {:?}",
-					r.clone()
-				);
-				Err(Error::Rpc(serde_json::from_value(r).map_err(Error::Json)?))
 			}
-		})
-		.collect::<Result<_, Error>>()
+			replies
+				.iter()
+				.map(|reply| match reply.as_object().and_then(result_from_reply) {
+					Some(result) => result,
+					None => {
+						tracing::warn!(
+							"The rpc response returned for {method:?} with params: {params:?} \
+							was not a valid json-rpc reply: {reply:?}"
+						);
+						Err(bad_response())
+					},
+				})
+				.collect()
+		},
+		// A single reply instead of a batch: the node rejected the request as a whole.
+		Ok(serde_json::Value::Object(reply)) => match result_from_reply(&reply) {
+			Some(result) => result.map(|result| vec![result]),
+			None => Err(bad_response()),
+		},
+		_ => Err(bad_response()),
+	}
+}
+
+/// The result of a single JSON-RPC reply, or the error it reported.
+///
+/// `None` for a reply carrying neither, which is not a JSON-RPC reply at all — the caller decides
+/// how to report that. Note that a `result` that is present but `null` is a valid result, which
+/// some methods do return.
+///
+/// A reply carrying *both* is malformed too, but is reported as the error it names: the node's own
+/// message says more about what went wrong than the raw body does.
+fn result_from_reply(
+	reply: &Map<String, serde_json::Value>,
+) -> Option<Result<serde_json::Value, Error>> {
+	match (reply.get("error"), reply.get("result")) {
+		(Some(error), _) if !error.is_null() =>
+			Some(Err(serde_json::from_value(error.clone()).map_or_else(Error::Json, Error::Rpc))),
+		(_, Some(result)) => Some(Ok(result.clone())),
+		_ => None,
+	}
 }
 
 /// Get the BitcoinNetwork by calling the `getblockchaininfo` RPC.
@@ -555,9 +604,111 @@ impl BtcRpcApi for BtcRpcClient {
 
 #[cfg(test)]
 mod tests {
-	use cf_utilities::assert_panics;
+	use cf_utilities::{assert_matches, assert_panics};
 
 	use super::*;
+
+	#[test]
+	fn proxy_error_page_reports_status_and_body() {
+		// A gateway in front of the node replies with html, which is not a JSON-RPC response.
+		let body = b"<html><head><title>502 Bad Gateway</title></head></html>";
+		assert_matches!(
+			parse_response(
+				StatusCode::BAD_GATEWAY,
+				body,
+				"getblockhash",
+				&ReqParams::Batch(vec![json!([json!(0)])]),
+			),
+			Err(Error::BadResponse { status, body })
+				if status == StatusCode::BAD_GATEWAY && body.contains("502 Bad Gateway")
+		);
+	}
+
+	#[test]
+	fn empty_response_reports_status() {
+		// For example the empty body of a `401 Unauthorized` from the node itself.
+		assert_matches!(
+			parse_response(StatusCode::UNAUTHORIZED, b"", "getblockhash", &ReqParams::Empty),
+			Err(Error::BadResponse { status, body }) if status == StatusCode::UNAUTHORIZED && body.is_empty()
+		);
+	}
+
+	#[test]
+	fn reported_body_is_truncated() {
+		let body = vec![b'x'; MAX_REPORTED_BODY_LEN * 2];
+		assert_matches!(
+			parse_response(StatusCode::BAD_GATEWAY, &body, "getblockhash", &ReqParams::Empty),
+			Err(Error::BadResponse { body, .. }) if body.len() == MAX_REPORTED_BODY_LEN
+		);
+	}
+
+	#[test]
+	fn rejected_request_reports_rpc_error() {
+		// The node rejects a malformed request as a whole, replying with a single JSON-RPC error
+		// object rather than a batch.
+		let body = br#"{"result":null,"error":{"code":-32700,"message":"Parse error"},"id":null}"#;
+		assert_matches!(
+			parse_response(
+				StatusCode::BAD_REQUEST,
+				body,
+				"getblockhash",
+				&ReqParams::Batch(vec![json!([json!(0)])]),
+			),
+			Err(Error::Rpc(RpcError { code: -32700, .. }))
+		);
+	}
+
+	#[test]
+	fn batch_replies_are_unwrapped() {
+		let body = br#"[{"result":1,"error":null,"id":0},{"result":2,"error":null,"id":1}]"#;
+		let params = ReqParams::Batch(vec![json!([json!(0)]), json!([json!(1)])]);
+		assert_eq!(
+			parse_response(StatusCode::OK, body, "getblockhash", &params).unwrap(),
+			vec![json!(1), json!(2)]
+		);
+	}
+
+	#[test]
+	fn batch_reply_error_is_reported() {
+		let body = br#"[{"result":null,"error":{"code":-8,"message":"Block height out of range"},"id":0}]"#;
+		let params = ReqParams::Batch(vec![json!([json!(0)])]);
+		assert_matches!(
+			parse_response(StatusCode::INTERNAL_SERVER_ERROR, body, "getblockhash", &params),
+			Err(Error::Rpc(RpcError { code: -8, .. }))
+		);
+	}
+
+	#[test]
+	fn reply_with_neither_result_nor_error_is_rejected() {
+		// A reply object carrying neither `result` nor `error` is not a JSON-RPC reply.
+		let body = br#"[{"id":0}]"#;
+		let params = ReqParams::Batch(vec![json!([json!(0)])]);
+		assert_matches!(
+			parse_response(StatusCode::OK, body, "getblockhash", &params),
+			Err(Error::BadResponse { .. })
+		);
+	}
+
+	#[test]
+	fn null_result_is_preserved() {
+		// A present-but-null `result` is a valid result that some methods return.
+		let body = br#"[{"result":null,"error":null,"id":0}]"#;
+		let params = ReqParams::Batch(vec![json!([json!(0)])]);
+		assert_eq!(
+			parse_response(StatusCode::OK, body, "getblockhash", &params).unwrap(),
+			vec![serde_json::Value::Null]
+		);
+	}
+
+	#[test]
+	fn incomplete_batch_reply_is_rejected() {
+		let body = br#"[{"result":1,"error":null,"id":0}]"#;
+		let params = ReqParams::Batch(vec![json!([json!(0)]), json!([json!(1)])]);
+		assert_matches!(
+			parse_response(StatusCode::OK, body, "getblockhash", &params),
+			Err(Error::Rpc(RpcError { code: -1, .. }))
+		);
+	}
 
 	#[test]
 	fn test_nonstandard_version_tx() {
