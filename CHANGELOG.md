@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.11] - 2026-09-03
+
+### Fixes
+
+- Limit Keygen complaints to 1/3 of shares
+- bound PublickeyShares0 to MAX_AUTHORITIES
+
 ## [2.2.10] - 2026-08-24
 
 ### Fixes
