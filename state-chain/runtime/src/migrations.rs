@@ -16,11 +16,6 @@
 
 //! Chainflip runtime storage migrations.
 
-pub mod assethub_deposit_details;
-pub mod assethub_elections;
-pub mod broker_withdrawal_addresses_to_asset_balances;
-pub mod bsc_integration;
-pub mod failed_broadcast_chain;
 pub mod housekeeping;
-pub mod refund_addresses_to_asset_balances;
+pub mod remove_emissions_storage;
 pub mod safe_mode;

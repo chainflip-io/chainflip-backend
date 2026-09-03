@@ -100,7 +100,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	impl_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 2_03_00,
+	spec_version: 2_04_00,
 	impl_version: 1,
 	apis: crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -127,8 +127,6 @@ mod runtime {
 	pub type Environment = pallet_cf_environment;
 	#[runtime::pallet_index(3)]
 	pub type Flip = pallet_cf_flip;
-	#[runtime::pallet_index(4)]
-	pub type Emissions = pallet_cf_emissions;
 
 	// AccountRoles after funding; since account creation comes first.
 	#[runtime::pallet_index(5)]
@@ -343,7 +341,6 @@ pub type PalletExecutionOrder = (
 	CfeInterface,
 	Environment,
 	Flip,
-	Emissions,
 	Funding,
 	AccountRoles,
 	TransactionPayment,
@@ -434,7 +431,7 @@ pub type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	MigrationsForV2_3,
+	MigrationsForV2_4,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -442,10 +439,10 @@ pub type AllMigrations = (
 /// replace with a dummy migration.
 pub type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
+	pallet_cf_flip::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
 	pallet_cf_validator::migrations::PalletMigration<Runtime>,
-	pallet_cf_emissions::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
@@ -540,18 +537,7 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-pub type MigrationsForV2_3 = (
-	migrations::failed_broadcast_chain::Migration,
-	migrations::safe_mode::SafeModeMigration,
-	migrations::assethub_deposit_details::Migration,
-	migrations::assethub_elections::AssethubElectionsInit,
-	migrations::bsc_integration::BscElectionsInit,
-	migrations::bsc_integration::BscIngressEgressInit,
-	migrations::bsc_integration::BscChainstate,
-	migrations::bsc_integration::BscBroadcasterInit,
-	migrations::broker_withdrawal_addresses_to_asset_balances::Migration,
-	migrations::refund_addresses_to_asset_balances::Migration,
-);
+pub type MigrationsForV2_4 = (migrations::remove_emissions_storage::RemoveEmissionsStorage,);
 
 #[cfg(test)]
 mod test {

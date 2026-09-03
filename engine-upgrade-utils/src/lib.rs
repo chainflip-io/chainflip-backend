@@ -26,8 +26,8 @@ pub mod build_helpers;
 // rest of the places the version needs changing on build using the build scripts in each of the
 // relevant crates.
 // Should also check that the compatibility function below `args_compatible_with_old` is correct.
-pub const OLD_VERSION: &str = "2.2.8";
-pub const NEW_VERSION: &str = "2.3.0";
+pub const OLD_VERSION: &str = "2.3.0";
+pub const NEW_VERSION: &str = "2.4.0";
 
 pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
 pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
@@ -44,11 +44,7 @@ struct IncompatibleArg {
 ///
 /// This list must be reviewed whenever OLD_VERSION or NEW_VERSION changes so it
 /// reflects only the CLI differences between the two engine versions.
-const INCOMPATIBLE_WITH_OLD: &[IncompatibleArg] = &[
-	IncompatibleArg { name: "--bsc.rpc.http_endpoint", takes_value: true },
-	IncompatibleArg { name: "--bsc.backup_rpc.http_endpoint", takes_value: true },
-	IncompatibleArg { name: "--bsc.private_key_file", takes_value: true },
-];
+const INCOMPATIBLE_WITH_OLD: &[IncompatibleArg] = &[];
 
 fn filter_incompatible_args(
 	args: Vec<String>,

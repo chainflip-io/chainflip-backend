@@ -366,44 +366,13 @@ pub trait AccountInfo {
 	fn liquid_funds(account_id: &Self::AccountId) -> Self::Amount;
 }
 
-/// Trait for managing token issuance.
-pub trait Issuance {
-	type AccountId;
-	type Balance;
-
-	/// Mint new funds.
-	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance);
-
-	/// Returns the total issuance.
-	fn total_issuance() -> Self::Balance;
-
-	/// Burn some funds that are off-chain (eg. in the StateChainGateway contract).
-	///
-	/// Use with care.
-	fn burn_offchain(amount: Self::Balance);
-
-	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
-	/// rather than burned.
-	fn is_flip_2_1_activated() -> bool;
-}
-
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	type Balance;
 	type AccountId;
 
-	/// Distribute some rewards accrued during `epoch_index`.
-	fn distribute(
-		epoch_index: EpochIndex,
-		amount: Self::Balance,
-		beneficiary: &Self::AccountId,
-		settle: impl FnMut(&Self::AccountId, Self::Balance),
-	);
-
 	/// Splits `total_amount` evenly across `epoch_index`'s complete set of reward recipients
 	/// (e.g. that epoch's full authority set), as determined by the implementation.
-	/// To settle a partial
-	/// set, call [Self::distribute] per beneficiary instead.
 	fn distribute_all(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
@@ -763,36 +732,25 @@ pub trait MissedAuthorshipSlots {
 	fn missed_slots() -> sp_std::ops::Range<u64>;
 }
 
-/// Allows accounts to pay for things by burning fees.
+/// Handles fee taking actions
 pub trait FeePayment {
 	type Amount;
 	type AccountId;
 	/// Helper function to mint FLIP to an account.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
+	fn credit_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
 		unimplemented!()
 	}
 
-	/// Helper function to activate FLIP 2.1 from the current epoch.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_flip_2_1() {
-		unimplemented!()
-	}
-
-	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
+	/// Takes fee equivalent to the amount, if the account has enough. Otherwise fails.
 	fn try_take_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 
 	/// Accumulate FLIP to be distributed off-chain (e.g. via the StateChainGateway).
 	fn add_to_offchain_flip_to_be_distributed(amount: i128);
 
-	/// Burns `amount` of off-chain funds (eg. in the StateChainGateway contract), unless FLIP 2.1
-	/// is active, in which case the funds are bridged in and reserved for distribution to
-	/// authorities instead.
-	fn burn_or_reserve_offchain(amount: Self::Amount);
-
-	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
-	/// rather than burned.
-	fn is_flip_2_1_activated() -> bool;
+	/// Bridges `amount` of off-chain funds (eg. in the StateChainGateway contract) in and
+	/// reserves it for distribution to authorities as fee rewards.
+	fn bridge_in_to_onchain_reserve(amount: Self::Amount);
 }
 
 /// Provides information about on-chain funds.
@@ -1072,16 +1030,6 @@ pub trait BroadcastAnyChainGovKey {
 pub trait CommKeyBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey);
 }
-
-/// Provides an interface to access the amount of Flip that is ready to be burned,
-/// moved to the state-chain-gateway or to be offsetted against the burn
-pub trait FlipBurnOrMoveInfo {
-	/// Takes the available Flip and returns it.
-	fn take_flip_to_burn() -> i128;
-
-	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
-}
-
 /// Allows Flip held in the Vault to be earmarked for transfer to the State Chain Gateway.
 ///
 /// Whenever Flip is credited to an on-chain balance without a corresponding Gateway deposit, the

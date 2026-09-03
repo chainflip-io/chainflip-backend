@@ -1081,10 +1081,7 @@ mod withdrawal_restriction {
 mod transfer_flip_to_on_chain_balance {
 	use super::*;
 	use cf_traits::{
-		mocks::{
-			fee_payment::MockFeePayment, funding_info::MockFundingInfo,
-			minimum_funding::MockMinimumFundingProvider,
-		},
+		mocks::{funding_info::MockFundingInfo, minimum_funding::MockMinimumFundingProvider},
 		FundingInfo, FundingSource, GetMinimumFunding,
 	};
 
@@ -1100,7 +1097,6 @@ mod transfer_flip_to_on_chain_balance {
 	}
 
 	fn setup(free_balance: AssetAmount) {
-		MockFeePayment::<Test>::set_flip_2_1_activated(true);
 		MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Flip, free_balance);
 	}
 
@@ -1147,19 +1143,6 @@ mod transfer_flip_to_on_chain_balance {
 	}
 
 	#[test]
-	fn cannot_transfer_before_flip_2_1_is_activated() {
-		new_test_ext().execute_with(|| {
-			setup(min_funding());
-			MockFeePayment::<Test>::set_flip_2_1_activated(false);
-
-			assert_noop!(
-				transfer(min_funding()),
-				Error::<Test>::FlipTransferToOnChainBalanceUnavailable
-			);
-		});
-	}
-
-	#[test]
 	fn safe_mode_prevents_transfers() {
 		new_test_ext().execute_with(|| {
 			setup(min_funding());
@@ -1185,7 +1168,6 @@ mod transfer_flip_to_on_chain_balance {
 	#[test]
 	fn only_liquidity_providers_can_transfer() {
 		new_test_ext().execute_with(|| {
-			MockFeePayment::<Test>::set_flip_2_1_activated(true);
 			MockBalanceApi::insert_balance(NON_LP_ACCOUNT, Asset::Flip, min_funding());
 
 			assert_noop!(

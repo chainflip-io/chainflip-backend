@@ -18,19 +18,22 @@
 
 use crate::{
 	benchmarking_value::BenchmarkValue,
-	evm::api::{EvmReplayProtection, EvmTransactionBuilder},
+	evm::{
+		api::{
+			set_agg_key_with_agg_key::SetAggKeyWithAggKey, EvmReplayProtection,
+			EvmTransactionBuilder,
+		},
+		AggKey,
+	},
 };
 
-use super::{
-	api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
-	EthereumTrackedData,
-};
+use super::{api::EthereumApi, EthereumTrackedData};
 
 impl<E> BenchmarkValue for EthereumApi<E> {
 	fn benchmark_value() -> Self {
 		EvmTransactionBuilder::new_unsigned(
 			EvmReplayProtection::default(),
-			UpdateFlipSupply::new(1000000u128, 1u64),
+			SetAggKeyWithAggKey::new(AggKey::from_pubkey_compressed([2u8; 33])),
 		)
 		.into()
 	}

@@ -917,51 +917,6 @@ export interface ChainStorage extends GenericChainStorage {
     flipToDistribute: GenericStorageQuery<() => bigint>;
 
     /**
-     * The epoch from which flip 2.1 activates.
-     * Defaults to u32::MAX (effectively disabled) until set via governance.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    feeRewardsActivationEpoch: GenericStorageQuery<() => number>;
-
-    /**
-     * Generic pallet storage query
-     **/
-    [storage: string]: GenericStorageQuery;
-  };
-  /**
-   * Pallet `Emissions`'s storage queries
-   **/
-  emissions: {
-    /**
-     * The block number at which we last updated supply to the Eth Chain.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    lastSupplyUpdateBlock: GenericStorageQuery<() => number>;
-
-    /**
-     * The amount of Flip we mint to validators per block.
-     *
-     * @param {Callback<bigint> =} callback
-     **/
-    currentAuthorityEmissionPerBlock: GenericStorageQuery<() => bigint>;
-
-    /**
-     * Inflation per `COMPOUNDING_INTERVAL` set aside for current authorities in parts per billion.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    currentAuthorityEmissionInflation: GenericStorageQuery<() => number>;
-
-    /**
-     * Mint interval in blocks
-     *
-     * @param {Callback<number> =} callback
-     **/
-    supplyUpdateInterval: GenericStorageQuery<() => number>;
-
-    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
@@ -3101,13 +3056,6 @@ export interface ChainStorage extends GenericChainStorage {
       (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint | undefined,
       CfPrimitivesChainsAssetsAnyAsset
     >;
-
-    /**
-     * FLIP ready to be burned.
-     *
-     * @param {Callback<bigint> =} callback
-     **/
-    flipToBurn: GenericStorageQuery<() => bigint>;
 
     /**
      * FLIP ready to be sent to gateway.

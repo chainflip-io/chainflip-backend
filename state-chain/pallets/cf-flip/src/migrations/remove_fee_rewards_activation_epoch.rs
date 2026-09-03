@@ -26,23 +26,21 @@ use frame_support::pallet_prelude::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
-/// The lending whitelist has been removed; this migration deletes the now-orphaned
-/// `Whitelist` storage value.
+/// FLIP 2.1's activation gate has been removed now that it is unconditionally active; this
+/// migration deletes the now-orphaned `FeeRewardsActivationEpoch` storage value.
 mod old {
 	use crate::{Config, Pallet};
 	use frame_support::storage_alias;
 
-	// The actual stored type is irrelevant for removal, so we use `()` to avoid depending on
-	// the deleted `WhitelistStatus` type. The storage prefix matches the original item.
 	#[storage_alias]
-	pub type Whitelist<T: Config> = StorageValue<Pallet<T>, ()>;
+	pub type FeeRewardsActivationEpoch<T: Config> = StorageValue<Pallet<T>, ()>;
 }
 
 pub struct Migration<T>(PhantomData<T>);
 
 impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
-		old::Whitelist::<T>::kill();
+		old::FeeRewardsActivationEpoch::<T>::kill();
 		T::DbWeight::get().writes(1)
 	}
 
@@ -54,8 +52,8 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		frame_support::ensure!(
-			!old::Whitelist::<T>::exists(),
-			"Whitelist storage should have been removed"
+			!old::FeeRewardsActivationEpoch::<T>::exists(),
+			"FeeRewardsActivationEpoch storage should have been removed"
 		);
 		Ok(())
 	}

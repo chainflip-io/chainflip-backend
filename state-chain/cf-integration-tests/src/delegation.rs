@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use chainflip_node::chain_spec::devnet::{HEARTBEAT_BLOCK_INTERVAL, YEAR};
+use chainflip_node::chain_spec::devnet::HEARTBEAT_BLOCK_INTERVAL;
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{
@@ -25,15 +25,12 @@ use crate::{
 	AccountId, AuthorityCount, RuntimeOrigin,
 };
 
-use cf_primitives::{AccountRole, AssetAmount, FlipBalance};
+use cf_primitives::{AccountRole, FlipBalance};
 use cf_traits::{AccountInfo, EpochInfo, FundAccount, FundingSource};
 use frame_support::assert_ok;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
-use sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, PerU16, Permill};
-use state_chain_runtime::{
-	chainflip::calculate_account_apy, Balance, Emissions, Flip, Funding, Runtime, RuntimeEvent,
-	System, Validator,
-};
+use sp_runtime::{traits::Zero, PerU16};
+use state_chain_runtime::{Balance, Flip, Funding, Runtime, RuntimeEvent, System, Validator};
 
 pub(crate) fn setup_delegation(
 	testnet: &mut Network,
@@ -102,6 +99,7 @@ pub(crate) fn setup_delegation(
 fn block_author_rewards_are_distributed_among_delegators() {
 	const EPOCH_DURATION_BLOCKS: u32 = 200;
 	const MAX_AUTHORITIES: AuthorityCount = 3;
+	const REWARD: u128 = 25_000_000_000_000_000_000_000; //25000 flip
 	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
 	super::genesis::with_test_defaults()
 		.epoch_duration(EPOCH_DURATION_BLOCKS)
@@ -160,11 +158,8 @@ fn block_author_rewards_are_distributed_among_delegators() {
 			let total_delegators_pre_balance: FlipBalance =
 				delegators.keys().map(Flip::balance).sum();
 
-			// Move forward through all authorities to ensure the reward is distributed once.
-			testnet.move_forward_blocks(
-				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_len()
-					.expect("at least one authority") as u32,
-			);
+			pallet_cf_flip::Reserve::<Runtime>::insert(*b"FEES", REWARD * MAX_AUTHORITIES as u128);
+			testnet.move_to_the_next_epoch();
 
 			let validator_post_balance = Flip::balance(&managed_validator);
 			let validator_cut = validator_post_balance - validator_pre_balance;
@@ -176,12 +171,8 @@ fn block_author_rewards_are_distributed_among_delegators() {
 				delegators.keys().map(Flip::balance).sum();
 			let delegators_cut = total_delegators_post_balance - total_delegators_pre_balance;
 
-			let block_reward =
-				pallet_cf_emissions::Pallet::<Runtime>::current_authority_emission_per_block();
+			let epsilon = REWARD / 10_000; // allow 0.01% error due to rounding
 
-			let epsilon = block_reward / 10_000; // allow 0.01% error due to rounding
-
-			assert!(block_reward > 0u128);
 			assert!(validator_cut > 0u128);
 			assert!(delegators_cut > 0u128);
 			assert!(operator_cut > 0u128);
@@ -189,7 +180,7 @@ fn block_author_rewards_are_distributed_among_delegators() {
 
 			// Verify that rewards are distributed according to portion of bond..
 			assert_eq!(
-				PerU16::from_rational(validator_cut, block_reward,),
+				PerU16::from_rational(validator_cut, REWARD,),
 				PerU16::from_rational(
 					validator_pre_balance,
 					pallet_cf_validator::Bond::<Runtime>::get(),
@@ -291,55 +282,5 @@ fn slashings_are_distributed_among_delegators() {
 					pallet_cf_validator::Bond::<Runtime>::get()
 				)
 			);
-		});
-}
-
-#[test]
-fn can_calculate_account_apy_for_validator_with_delegation() {
-	const EPOCH_BLOCKS: u32 = 1_000;
-	const MAX_AUTHORITIES: u32 = 10;
-	const NUM_BACKUPS: u32 = 20;
-
-	// Validator balance is lower than that of other nodes to make sure that it
-	// will be sharing rewards with the delegator.
-	const VALIDATOR_BALANCE: AssetAmount = GENESIS_BALANCE / 5;
-
-	let validator: AccountId = AccountId::from([0xaa; 32]);
-
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.with_additional_accounts(&[(validator.clone(), AccountRole::Validator, VALIDATOR_BALANCE)])
-		.build()
-		.execute_with(|| {
-			let (mut network, _, _) =
-				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
-
-			let operator = AccountId::from([0xe1; 32]);
-			let delegator = AccountId::from([0xA0; 32]);
-
-			crate::delegation::setup_delegation(
-				&mut network,
-				validator.clone(),
-				operator.clone(),
-				2500, // 25% operator fee
-				BTreeMap::from_iter([(delegator, GENESIS_BALANCE * 2)]),
-			);
-
-			let validator_apy = calculate_account_apy(&validator).unwrap();
-
-			let expected_apy_basis_point = {
-				let total_reward = Emissions::current_authority_emission_per_block() * YEAR as u128 /
-					MAX_AUTHORITIES as u128;
-				let validator_reward =
-					Permill::from_rational(VALIDATOR_BALANCE, GENESIS_BALANCE * 2) * total_reward;
-				let validator_balance = Flip::balance(&validator);
-
-				FixedU64::from_rational(validator_reward, validator_balance)
-					.checked_mul_int(10_000u32)
-					.unwrap()
-			};
-
-			assert_eq!(validator_apy, expected_apy_basis_point);
 		});
 }
