@@ -222,12 +222,12 @@ fn parse_response(
 			}
 			replies
 				.iter()
-				.map(|reply| match reply.as_object() {
-					Some(reply) => result_from_reply(reply, bad_response),
+				.map(|reply| match reply.as_object().and_then(result_from_reply) {
+					Some(result) => result,
 					None => {
 						tracing::warn!(
 							"The rpc response returned for {method:?} with params: {params:?} \
-							was not a valid json object: {reply:?}"
+							was not a valid json-rpc reply: {reply:?}"
 						);
 						Err(bad_response())
 					},
@@ -235,28 +235,30 @@ fn parse_response(
 				.collect()
 		},
 		// A single reply instead of a batch: the node rejected the request as a whole.
-		Ok(serde_json::Value::Object(reply)) =>
-			result_from_reply(&reply, bad_response).map(|result| vec![result]),
+		Ok(serde_json::Value::Object(reply)) => match result_from_reply(&reply) {
+			Some(result) => result.map(|result| vec![result]),
+			None => Err(bad_response()),
+		},
 		_ => Err(bad_response()),
 	}
 }
 
 /// The result of a single JSON-RPC reply, or the error it reported.
 ///
-/// A reply carrying neither is not a JSON-RPC reply, so it is reported through `bad_response`. Note
-/// that a `result` that is present but `null` is a valid result, which some methods do return.
+/// `None` for a reply carrying neither, which is not a JSON-RPC reply at all — the caller decides
+/// how to report that. Note that a `result` that is present but `null` is a valid result, which
+/// some methods do return.
 ///
-/// A reply carrying *both* is malformed too, but is reported as the error it names rather than as a
-/// `bad_response`: the node's own message says more about what went wrong than the raw body does.
+/// A reply carrying *both* is malformed too, but is reported as the error it names: the node's own
+/// message says more about what went wrong than the raw body does.
 fn result_from_reply(
 	reply: &Map<String, serde_json::Value>,
-	bad_response: impl Fn() -> Error,
-) -> Result<serde_json::Value, Error> {
+) -> Option<Result<serde_json::Value, Error>> {
 	match (reply.get("error"), reply.get("result")) {
 		(Some(error), _) if !error.is_null() =>
-			Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?)),
-		(_, Some(result)) => Ok(result.clone()),
-		_ => Err(bad_response()),
+			Some(Err(serde_json::from_value(error.clone()).map_or_else(Error::Json, Error::Rpc))),
+		(_, Some(result)) => Some(Ok(result.clone())),
+		_ => None,
 	}
 }
 
