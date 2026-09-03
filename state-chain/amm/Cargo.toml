@@ -30,6 +30,7 @@ cf-utilities = { workspace = true, features = ["std"] }
 [features]
 default = ["std"]
 slow-tests = []
+test = []
 std = [
 	"cf-amm-math/std",
 	"cf-primitives/std",
