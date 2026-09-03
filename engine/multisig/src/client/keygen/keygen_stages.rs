@@ -835,14 +835,11 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			return StageResult::Error(idxs_to_report, KeygenFailureReason::InvalidComplaint)
 		}
 
-		// No honest party reaches this: it takes `threshold + 1` complaints against
-		// one party, which is also the number needed to sign, so this cannot be
-		// used to evict a dealer more cheaply than owning the key outright. It
-		// caps the disclosure rather than preventing it - what keeps an honest
-		// dealer safe is that only corrupt parties ever complain about it.
+		// This ensures that disclosure is capped: oversharing may result in full key
+		// reconstruction, so it is safer to abort (even if this party ends up getting evicted).
 		let over_blamed = parties_blamed_beyond_disclosure_limit(
 			&verified_complaints,
-			self.keygen_common.sharing_params.key_params.threshold as usize,
+			disclosure_limit(self.keygen_common.sharing_params.key_params.threshold as usize),
 			&common.validator_mapping,
 		);
 
@@ -866,16 +863,28 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	}
 }
 
-/// Parties blamed by enough others that answering every complaint would expose
-/// their sharing polynomial.
+/// How many shares a party may be made to reveal in one blame round.
 ///
-/// A blame response carries one evaluation of the sender's polynomial per
-/// complainer, and `threshold + 1` evaluations determine a polynomial of degree
-/// `threshold`. Exposing it exposes the secret behind it, which during a key
-/// handover is that party's share of the live aggregate key.
+/// A blame response publishes one evaluation of the sender's polynomial per
+/// complainer, and `threshold + 1` of them determine a polynomial of degree
+/// `threshold`. Capping at `threshold` looks one short, but only to an observer
+/// with no share of its own: every participant already holds one evaluation, and
+/// one that declines to complain keeps it off the wire. Published plus held is
+/// then exactly enough, so a single node defeats that bound.
+///
+/// At `threshold / 2` an attacker needs `threshold + 1 - c` non-complainers, which
+/// is more than `n / 3` - no cheaper than breaking the Byzantine assumption
+/// outright. `disclosure_cost_exceeds_byzantine_bound` pins this across set sizes.
+pub(super) fn disclosure_limit(threshold: usize) -> usize {
+	threshold / 2
+}
+
+/// Parties blamed past [`disclosure_limit`], for whom answering every complaint
+/// would expose too much of their sharing polynomial - and with it the secret
+/// behind it, which during a key handover is their share of the live aggregate key.
 fn parties_blamed_beyond_disclosure_limit(
 	complaints: &BTreeMap<AuthorityCount, Complaints6>,
-	threshold: usize,
+	limit: usize,
 	validator_mapping: &PartyIdxMapping,
 ) -> BTreeSet<AuthorityCount> {
 	let mut blame_counts: BTreeMap<AuthorityCount, usize> = BTreeMap::new();
@@ -888,7 +897,7 @@ fn parties_blamed_beyond_disclosure_limit(
 
 	let over_blamed: BTreeSet<_> = blame_counts
 		.into_iter()
-		.filter_map(|(idx_blamed, count)| (count > threshold).then_some(idx_blamed))
+		.filter_map(|(idx_blamed, count)| (count > limit).then_some(idx_blamed))
 		.collect();
 
 	if !over_blamed.is_empty() {
@@ -1002,7 +1011,9 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		if !idxs_to_reveal.is_empty() {
 			warn!(
 				revealed = idxs_to_reveal.len(),
-				limit = self.keygen_common.sharing_params.key_params.threshold,
+				limit = disclosure_limit(
+					self.keygen_common.sharing_params.key_params.threshold as usize
+				),
 				"Revealing secret shares in response to complaints",
 			);
 		}
@@ -1216,17 +1227,46 @@ mod tests {
 	}
 
 	#[test]
-	fn disclosure_limit_is_exceeded_one_complaint_past_the_threshold() {
-		const THRESHOLD: usize = 3;
+	fn disclosure_limit_is_exceeded_one_complaint_past_the_limit() {
+		const LIMIT: usize = 3;
 
 		let at_limit = complaints(&[(1, &[9]), (2, &[9]), (3, &[9])]);
-		assert!(parties_blamed_beyond_disclosure_limit(&at_limit, THRESHOLD, &mapping()).is_empty());
+		assert!(parties_blamed_beyond_disclosure_limit(&at_limit, LIMIT, &mapping()).is_empty());
 
 		let over_limit = complaints(&[(1, &[9]), (2, &[9]), (3, &[9]), (4, &[9])]);
 		assert_eq!(
-			parties_blamed_beyond_disclosure_limit(&over_limit, THRESHOLD, &mapping()),
+			parties_blamed_beyond_disclosure_limit(&over_limit, LIMIT, &mapping()),
 			BTreeSet::from([9]),
 		);
+	}
+
+	/// The property the limit exists for. `c` evaluations are published and each
+	/// colluding non-complainer adds the one it was dealt, so extracting a
+	/// polynomial needs `threshold + 1 - c` of them - which must exceed `n / 3`.
+	#[test]
+	fn disclosure_cost_exceeds_byzantine_bound() {
+		for share_count in 1..=500u32 {
+			let threshold = cf_utilities::threshold_from_share_count(share_count) as usize;
+			let limit = disclosure_limit(threshold);
+
+			// Evaluations still needed once `limit` are public, i.e. colluding
+			// non-complainers required.
+			let coalition = threshold + 1 - limit;
+
+			assert!(
+				coalition * 3 > share_count as usize,
+				"n={share_count}: threshold={threshold} limit={limit} lets a coalition of \
+				 {coalition} extract a polynomial, which is not more than n/3",
+			);
+		}
+	}
+
+	/// At the mainnet authority count the limit is 49, down from 99.
+	#[test]
+	fn disclosure_limit_at_mainnet_set_size() {
+		let threshold = cf_utilities::threshold_from_share_count(150) as usize;
+		assert_eq!(threshold, 99);
+		assert_eq!(disclosure_limit(threshold), 49);
 	}
 
 	#[test]
