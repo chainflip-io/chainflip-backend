@@ -227,7 +227,7 @@ jobs:
           # but the cbBTC runtime migration registers its address at upgrade. Start the
           # pre-upgrade localnet with the new EVM images instead. The old runtime ignores the
           # extra token, and all pre-existing contract addresses are unchanged.
-          sed -i 's|\(ghcr.io/chainflip-io/chainflip-eth-contracts/[^:]*:\)v[^ ]*|\1v1.5.1-rc2-${NODE_COUNT}|g' localnet/docker-compose.yml
+          sed -i 's|ghcr.io/chainflip-io/chainflip-eth-contracts/\([^:]*\):[^ ]*|ghcr.io/chainflip-io/chainflip-eth-contracts/\1:v1.5.2-${NODE_COUNT}|g' localnet/docker-compose.yml
 
           ./localnet/manage.sh
           git reset --hard

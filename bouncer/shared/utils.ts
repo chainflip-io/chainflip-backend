@@ -283,6 +283,22 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return process.env.BSC_USDT_TOKEN_ADDRESS ?? '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9';
         case 'CFTESTER':
           return process.env.BSC_CF_TESTER_ADDRESS ?? '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
+        case 'PRICE_FEED_BTC':
+          return '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707';
+        case 'PRICE_FEED_ETH':
+          return '0x0165878A594ca255338adfa4d48449f69242Eb8F';
+        case 'PRICE_FEED_SOL':
+          return '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853';
+        case 'PRICE_FEED_USDC':
+          return '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
+        case 'PRICE_FEED_USDT':
+          return '0x8A791620dd6260079BF849Dc5567aDC3F2FdC318';
+        case 'PRICE_FEED_TRX':
+          return '0x610178dA211FEF7D417bC0e6FeD39F05609AD788';
+        case 'PRICE_FEED_BNB':
+          return '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e';
+        case 'PRICE_FEED_DOT':
+          return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
