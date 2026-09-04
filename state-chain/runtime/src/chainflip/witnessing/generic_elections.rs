@@ -290,17 +290,19 @@ pub fn initial_state(
 ) -> InitialStateOf<Runtime, ()> {
 	// The prices for usdc and usdt are considered up-to-date
 	// if they have been updated at least once every 300 seconds.
+	// Other prices have different overrides depending on the frequency the external chainlink feeds
+	// are updated
 	let up_to_date_timeout_overrides: BTreeMap<_, _> = [
 		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 5)),
 		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 5)),
 		(ChainlinkAssetpair::SolUsd, Seconds(60 * 11)),
 		(ChainlinkAssetpair::TrxUsd, Seconds(60 * 11)),
 		(ChainlinkAssetpair::DotUsd, Seconds(60 * 11)),
-		//TODO: do we want cbBtc as well??
+		(ChainlinkAssetpair::CbbtcUsd, Seconds(60 * 60 * 25)),
 	]
 	.into();
 
-	// There is an additionaly 1 minute window during which we
+	// There is an additionaly 1/5 minute window during which we
 	// ask the engines to submit any latest price information that
 	// they have. Once this is over, the price is marked as stale.
 	let maybe_stale_timeout_overrides: BTreeMap<_, _> = [
@@ -309,6 +311,7 @@ pub fn initial_state(
 		(ChainlinkAssetpair::SolUsd, Seconds(60)),
 		(ChainlinkAssetpair::TrxUsd, Seconds(60)),
 		(ChainlinkAssetpair::DotUsd, Seconds(60)),
+		(ChainlinkAssetpair::CbbtcUsd, Seconds(60 * 5)),
 	]
 	.into();
 
