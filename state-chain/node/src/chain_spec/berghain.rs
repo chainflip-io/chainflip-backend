@@ -427,7 +427,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 				H160(hex_literal::hex!("8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6")),
 				//Usdt
 				H160(hex_literal::hex!("3E7d1eAB13ad0104d2750B8863b489D65364e32D")),
-				//CbBtc
+				//Cbbtc
 				H160(hex_literal::hex!("2665701293fCbEB223D11A08D826563EDcCE423A")),
 				//Bnb
 				H160(hex_literal::hex!("14e613AC84a31f709eadbdF89C6CC390fDc9540A")),
