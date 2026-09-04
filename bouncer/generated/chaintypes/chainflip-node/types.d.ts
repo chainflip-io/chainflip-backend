@@ -984,7 +984,12 @@ export type PalletCfElectionsElectoralSystemsOraclePriceChainlinkChainlinkAssetp
   | 'EthUsd'
   | 'SolUsd'
   | 'UsdcUsd'
-  | 'UsdtUsd';
+  | 'UsdtUsd'
+  | 'WbtcUsd'
+  | 'CbbtcUsd'
+  | 'DotUsd'
+  | 'TrxUsd'
+  | 'BnbUsd';
 
 export type PalletCfElectionsElectoralSystemsOraclePricePrimitivesUnixTime = { seconds: bigint };
 
@@ -9751,6 +9756,7 @@ export type PalletCfElectionsElectoralSystemsOraclePriceStateMachineOraclePriceT
 export type PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalChainStates = {
   arbitrum: PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalChainState;
   ethereum: PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalChainState;
+  bsc: PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalChainState;
 };
 
 export type PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalChainState = {
@@ -9796,6 +9802,7 @@ export type PalletCfElectionsElectoralSystemsOraclePricePrimitivesBasisPoints = 
 export type PalletCfElectionsElectoralSystemsOraclePriceStateMachineOraclePriceSettings = {
   arbitrum: PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalChainSettings;
   ethereum: PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalChainSettings;
+  bsc: PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalChainSettings;
 };
 
 export type PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalChainSettings = {
@@ -9823,6 +9830,8 @@ export type StateChainRuntimeChainflipWitnessingGenericElectionsChainlinkOracleP
   arbOracleFeeds: Array<H160>;
   ethAddressChecker: H160;
   ethOracleFeeds: Array<H160>;
+  bscAddressChecker: H160;
+  bscOracleFeeds: Array<H160>;
 };
 
 export type PalletCfElectionsGenericToolsFunctorVectorContainer = {};
@@ -17129,7 +17138,12 @@ export type PalletCfElectionsElectoralSystemsOraclePricePricePriceAsset =
   | 'Usdc'
   | 'Usdt'
   | 'Usd'
-  | 'Fine';
+  | 'Fine'
+  | 'Wbtc'
+  | 'Cbbtc'
+  | 'Dot'
+  | 'Trx'
+  | 'Bnb';
 
 /**
  * The `Event` enum of this pallet
@@ -21012,7 +21026,8 @@ export type PalletCfElectionsElectoralSystemsOraclePriceStateMachinePriceQuery =
 
 export type PalletCfElectionsElectoralSystemsOraclePriceStateMachineExternalPriceChain =
   | 'Arbitrum'
-  | 'Ethereum';
+  | 'Ethereum'
+  | 'Bsc';
 
 export type PalletCfElectionsElectoralSystemsOraclePriceStateMachineVotingCondition =
   | {

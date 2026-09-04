@@ -2111,6 +2111,11 @@ export const palletCfElectionsElectoralSystemsOraclePricePricePriceAsset = simpl
   'Usdt',
   'Usd',
   'Fine',
+  'Wbtc',
+  'CbBtc',
+  'Dot',
+  'Trx',
+  'Bnb',
 ]);
 
 export const stateChainRuntimeChainflipWitnessingGenericElectionsOraclePriceUpdate = z.object({

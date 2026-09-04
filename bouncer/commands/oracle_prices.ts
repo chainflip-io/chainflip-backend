@@ -29,6 +29,8 @@ import { globalLogger } from 'shared/utils/logger';
 
 function priceAssetDecimals(priceAsset: string): number {
   if (priceAsset === 'Usd') return 6;
+  if (priceAsset === 'Fine') return 0;
+  if (priceAsset === 'Dot') return assetDecimals('HubDot');
   return assetDecimals(priceAsset as Asset);
 }
 
