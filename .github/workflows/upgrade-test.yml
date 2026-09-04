@@ -97,7 +97,7 @@ jobs:
 
       - name: Configure NodeJS 🛠️
         if: inputs.run-job
-        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
@@ -116,7 +116,7 @@ jobs:
 
       - name: Download try-runtime binary 📥
         if: inputs.run-job
-        uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4
+        uses: jaxxstorm/action-install-gh-release@25e24d2d23ae098373794ef1d6faecb48ee52da8
         with:
           repo: paritytech/try-runtime-cli
           tag: v0.8.0

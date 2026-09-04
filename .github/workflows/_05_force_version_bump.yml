@@ -19,14 +19,14 @@ jobs:
           version: 10
 
       - name: Configure NodeJS 🛠️
-        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
       - name: Download latest release binaries
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
+        uses: dawidd6/action-download-artifact@09f2f74827fd3a8607589e5ad7f9398816f540fe
         with:
           workflow: release-${{ inputs.network-to-check-against }}.yml
           name: chainflip-backend-bin
