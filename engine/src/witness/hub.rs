@@ -291,15 +291,17 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 								.participating(state_chain_client.account_id())
 								.await;
 
-						let unfinalised_source = HubUnfinalisedSource::new(hub_client.clone())
+						// Deposit witnessing uses finalised blocks, so chain tracking must use
+						// finalised blocks too. Otherwise a newly opened channel can have an
+						// `opened_at` height ahead of a deposit's finalised block.
+						let finalised_source = HubFinalisedSource::new(hub_client.clone())
 							.strictly_monotonic()
 							.then(|header| async move {
 								header.data.iter().filter_map(filter_map_events).collect()
 							})
 							.shared(scope);
 
-						unfinalised_source
-							.clone()
+						finalised_source
 							.chunk_by_time(epoch_source.clone(), scope)
 							.chain_tracking(state_chain_client.clone(), hub_client.clone())
 							.logging("chain tracking")
