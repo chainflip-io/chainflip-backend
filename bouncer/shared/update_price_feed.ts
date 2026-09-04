@@ -7,6 +7,33 @@ import { price as defaultPrice } from 'shared/setup_swaps';
 // All price feeds are using 8 decimals
 const PRICE_FEED_DECIMALS = 8;
 
+const PRICE_FEED_ASSETS = ['BTC', 'ETH', 'SOL', 'USDC', 'USDT', 'TRX', 'BNB', 'DOT'] as const;
+
+type PriceFeedAsset = (typeof PRICE_FEED_ASSETS)[number];
+
+export const PRICE_FEED_CHAINS_BY_ASSET: Record<PriceFeedAsset, readonly Chain[]> = {
+  BTC: ['Ethereum', 'Arbitrum', 'Bsc'],
+  ETH: ['Ethereum', 'Arbitrum', 'Bsc'],
+  SOL: ['Ethereum', 'Arbitrum', 'Bsc'],
+  USDC: ['Ethereum', 'Arbitrum', 'Bsc'],
+  USDT: ['Ethereum', 'Arbitrum', 'Bsc'],
+  TRX: ['Bsc'],
+  BNB: ['Bsc'],
+  DOT: ['Bsc'],
+};
+
+function isPriceFeedAsset(asset: Asset): asset is PriceFeedAsset {
+  return PRICE_FEED_ASSETS.includes(asset as PriceFeedAsset);
+}
+
+export function getPriceFeedChains(asset: Asset): readonly Chain[] {
+  if (!isPriceFeedAsset(asset)) {
+    throw new Error(`Unsupported price feed asset: ${asset}`);
+  }
+
+  return PRICE_FEED_CHAINS_BY_ASSET[asset];
+}
+
 async function updateEvmPriceFeed(logger: Logger, chain: Chain, asset: Asset, price: string) {
   const evmClient = getWeb3(chain);
   const priceFeedAddress = getContractAddress(chain, `PRICE_FEED_${asset}`);
@@ -91,13 +118,18 @@ async function updateEvmPriceFeed(logger: Logger, chain: Chain, asset: Asset, pr
 }
 
 export async function updatePriceFeed(logger: Logger, chain: Chain, asset: Asset, price: string) {
-  if (!new Set(['BTC', 'ETH', 'SOL', 'USDC', 'USDT']).has(asset)) {
-    throw new Error(`Unsupported price feed asset: ${asset}`);
+  const supportedSourceChains = getPriceFeedChains(asset);
+
+  if (!supportedSourceChains.includes(chain)) {
+    throw new Error(
+      `${asset} price feed is not configured on ${chain}. Configured source chains: ${supportedSourceChains.join(', ')}`,
+    );
   }
 
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Bsc':
       await updateEvmPriceFeed(logger, chain, asset, price);
       break;
     default:
@@ -117,6 +149,14 @@ export async function updateDefaultPriceFeeds(logger: Logger) {
     updatePriceFeed(logger, 'Arbitrum', 'SOL', defaultPrice.get('Sol')!.toString()),
     updatePriceFeed(logger, 'Arbitrum', 'USDC', defaultPrice.get('Usdc')!.toString()),
     updatePriceFeed(logger, 'Arbitrum', 'USDT', defaultPrice.get('Usdt')!.toString()),
+    updatePriceFeed(logger, 'Bsc', 'BTC', defaultPrice.get('Btc')!.toString()),
+    updatePriceFeed(logger, 'Bsc', 'ETH', defaultPrice.get('Eth')!.toString()),
+    updatePriceFeed(logger, 'Bsc', 'SOL', defaultPrice.get('Sol')!.toString()),
+    updatePriceFeed(logger, 'Bsc', 'USDC', defaultPrice.get('Usdc')!.toString()),
+    updatePriceFeed(logger, 'Bsc', 'USDT', defaultPrice.get('Usdt')!.toString()),
+    updatePriceFeed(logger, 'Bsc', 'TRX', defaultPrice.get('Trx')!.toString()),
+    updatePriceFeed(logger, 'Bsc', 'BNB', defaultPrice.get('Bnb')!.toString()),
+    updatePriceFeed(logger, 'Bsc', 'DOT', defaultPrice.get('HubDot')!.toString()),
   ]);
 
   logger.info('All price feeds updated');
