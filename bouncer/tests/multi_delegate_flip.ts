@@ -1,19 +1,55 @@
-import type { AccountId32 } from 'dedot/codecs';
-import { amountToFineAmountBigInt, defaultAssetAmounts } from 'shared/utils';
-import { getIsoTime } from 'shared/utils/logger';
+import type { SubmittableResult } from '@polkadot/api';
+// eslint-disable-next-line no-restricted-imports
+import type { KeyringPair } from '@polkadot/keyring/types';
 import { fundFlip } from 'shared/fund_flip';
 import { AccountRole, setupAccount } from 'shared/setup_account';
 import { newChainflipIO, partialAccountFromUri } from 'shared/utils/chainflip_io';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getIsoTime } from 'shared/utils/logger';
+import { amountToFineAmountBigInt, defaultAssetAmounts } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
-import { validatorDelegationPlanUpdatedEvent } from 'generated/events/validator/delegationPlanUpdated';
 
-// The generated `PalletCfValidatorDelegationDelegatorRelations` type is strict about
-// `AccountId32` (unlike top-level call params, which accept the more permissive
-// `AccountId32Like`), so SS58 addresses from a `KeyringPair` need this cast.
-const accountId = (address: string): AccountId32 => address as unknown as AccountId32;
+async function submitDelegateMulti(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  polkadotApi: any,
+  delegator: KeyringPair,
+  operators: Map<string, bigint>,
+) {
+  return new Promise<SubmittableResult['events']>((resolve, reject) => {
+    polkadotApi.tx.validator
+      .delegateMulti({ operators })
+      .signAndSend(delegator, (result: SubmittableResult) => {
+        if (result.dispatchError) {
+          reject(new Error(`delegateMulti: dispatch error ${result.dispatchError.toString()}`));
+        } else if (result.status.isInBlock || result.status.isFinalized) {
+          resolve(result.events);
+        }
+      })
+      .catch(reject);
+  });
+}
+
+function findEventData(events: SubmittableResult['events'], section: string, method: string) {
+  const found = events.find(({ event }) => event.section === section && event.method === method);
+  if (!found) {
+    throw new Error(`Event ${section}.${method} not found among: ${JSON.stringify(events)}`);
+  }
+  return found.event.data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function operatorsOf(planUpdatedEventData: any): [string, bigint][] {
+  const operators = planUpdatedEventData.plan.operators;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return [...operators.entries()].map(([account, amount]: [any, any]) => [
+    account.toString(),
+    amount.toBigInt(),
+  ]);
+}
 
 export async function testMultiDelegate(testContext: TestContext) {
   const cf = await newChainflipIO(testContext.logger, []);
+  await using polkadotApi = await getChainflipPolkadotApi();
 
   // Account names have to be unique across bouncer runs, since if the test is run a second
   // time for accounts that are already registered/funded, expected events won't be re-emitted.
@@ -29,71 +65,75 @@ export async function testMultiDelegate(testContext: TestContext) {
   const delegatorCf = cf.with({ account: partialAccountFromUri(delegatorUri) });
   const delegator = delegatorCf.requirements.account.keypair;
 
-  const totalAmount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
+  cf.info(`Funding delegator ${delegator.address} with Flip...`);
+  await fundFlip(delegatorCf, delegator.address, defaultAssetAmounts('Flip'));
+
+  const totalAmount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip') / 2n;
   const amountToOperatorA = totalAmount / 2n;
   const amountToOperatorB = totalAmount - amountToOperatorA;
-
-  cf.info(`Funding delegator ${delegator.address} with Flip...`);
-  await fundFlip(cf, delegator.address, defaultAssetAmounts('Flip'));
 
   cf.info(
     `Delegating ${amountToOperatorA} to ${operatorA.address} and ${amountToOperatorB} to ${operatorB.address}...`,
   );
-  const plan = await delegatorCf.submitExtrinsic({
-    extrinsic: (api) =>
-      api.tx.validator.delegateMulti({
-        operators: [
-          [accountId(operatorA.address), amountToOperatorA],
-          [accountId(operatorB.address), amountToOperatorB],
-        ],
-      }),
-    expectedEvent: validatorDelegationPlanUpdatedEvent.refine(
-      (event) => event.delegator === delegator.address,
+  // we use chainflipPolkadotApi for submitting this extrinsic since dedot has a bug when there is a BTreeMap in the arguments of the extrinsic.
+  const planUpdated = findEventData(
+    await submitDelegateMulti(
+      polkadotApi,
+      delegator,
+      new Map([
+        [operatorA.address, amountToOperatorA],
+        [operatorB.address, amountToOperatorB],
+      ]),
     ),
-  });
+    'validator',
+    'DelegationPlanUpdated',
+  );
 
+  const operators = operatorsOf(planUpdated);
   if (
-    plan.plan.operators.length !== 2 ||
-    !plan.plan.operators.some(
+    operators.length !== 2 ||
+    !operators.some(
       ([operator, amount]) => operator === operatorA.address && amount === amountToOperatorA,
     ) ||
-    !plan.plan.operators.some(
+    !operators.some(
       ([operator, amount]) => operator === operatorB.address && amount === amountToOperatorB,
     )
   ) {
-    throw new Error(`Unexpected delegation plan after delegate_multi: ${JSON.stringify(plan)}`);
+    throw new Error(
+      `Unexpected delegation plan after delegate_multi: ${JSON.stringify(operators)}`,
+    );
   }
 
   cf.info(`Updating delegation plan to only delegate to ${operatorA.address}...`);
-  const updatedPlan = await delegatorCf.submitExtrinsic({
-    extrinsic: (api) =>
-      api.tx.validator.delegateMulti({ operators: [[accountId(operatorA.address), totalAmount]] }),
-    expectedEvent: validatorDelegationPlanUpdatedEvent.refine(
-      (event) => event.delegator === delegator.address,
-    ),
-  });
+  const updatedPlanUpdated = findEventData(
+    await submitDelegateMulti(polkadotApi, delegator, new Map([[operatorA.address, totalAmount]])),
+    'validator',
+    'DelegationPlanUpdated',
+  );
 
+  const updatedOperators = operatorsOf(updatedPlanUpdated);
   if (
-    updatedPlan.plan.operators.length !== 1 ||
-    !updatedPlan.plan.operators.some(
+    updatedOperators.length !== 1 ||
+    !updatedOperators.some(
       ([operator, amount]) => operator === operatorA.address && amount === totalAmount,
     )
   ) {
     throw new Error(
-      `Unexpected delegation plan after switching to a single operator: ${JSON.stringify(updatedPlan)}`,
+      `Unexpected delegation plan after switching to a single operator: ${JSON.stringify(updatedOperators)}`,
     );
   }
 
   cf.info('Undelegating from all operators via an empty plan...');
-  const emptyPlan = await delegatorCf.submitExtrinsic({
-    extrinsic: (api) => api.tx.validator.delegateMulti({ operators: [] }),
-    expectedEvent: validatorDelegationPlanUpdatedEvent.refine(
-      (event) => event.delegator === delegator.address,
-    ),
-  });
+  const emptyPlanUpdated = findEventData(
+    await submitDelegateMulti(polkadotApi, delegator, new Map()),
+    'validator',
+    'DelegationPlanUpdated',
+  );
 
-  if (emptyPlan.plan.operators.length !== 0) {
-    throw new Error(`Expected an empty delegation plan, got: ${JSON.stringify(emptyPlan)}`);
+  if (operatorsOf(emptyPlanUpdated).length !== 0) {
+    throw new Error(
+      `Expected an empty delegation plan, got: ${JSON.stringify(operatorsOf(emptyPlanUpdated))}`,
+    );
   }
 
   cf.info('Multi-operator delegation test completed successfully!');
