@@ -16,8 +16,9 @@
 
 use cf_chains::{instances::ChainInstanceFor, Chain};
 use cf_utilities::task_scope::Scope;
+use num_traits::Bounded;
 use pallet_cf_ingress_egress::DepositChannelDetails;
-use std::sync::Arc;
+use std::{iter::Step, sync::Arc};
 
 use crate::witness::common::RuntimeHasChain;
 use engine_sc_client::{storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_CONNECTION};
@@ -88,7 +89,23 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							assert!(<Inner::Chain as Chain>::is_block_witness_root(
 								details.expires_at
 							));
-							details.opened_at <= index && index <= details.expires_at
+
+							//
+							// For assethub we currently have the problem that chain tracking
+							// is ahead when creating a deposit channel, which causes the deposit
+							// channel to have `opened_at` to be higher than the block a deposit
+							// ends up in.
+							//
+							// Since we have a safety margin before recycling a channel, there's
+							// no problem with starting to witness it a few blocks before its
+							// on-chain opened_at value.
+							//
+							let witness_from = Step::backward_checked(details.opened_at, 12)
+								.unwrap_or(
+									<<Inner as ChunkedByVault>::Index as Bounded>::min_value(),
+								);
+
+							witness_from <= index && index <= details.expires_at
 						})
 						.cloned()
 						.collect()
