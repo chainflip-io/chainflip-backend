@@ -67,7 +67,7 @@ pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAsse
 		any::Asset::Usdc => Some(UsdcUsd),
 		any::Asset::Usdt => Some(UsdtUsd),
 		any::Asset::Wbtc => Some(WbtcUsd),
-		any::Asset::Cbbtc => Some(CbBtcUsd),
+		any::Asset::Cbbtc => Some(CbbtcUsd),
 		any::Asset::Dot => Some(DotUsd),
 		any::Asset::Btc => Some(BtcUsd),
 		any::Asset::ArbEth => Some(EthUsd),
