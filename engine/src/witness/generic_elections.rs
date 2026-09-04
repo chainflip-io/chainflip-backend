@@ -55,7 +55,7 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 		"BNB / USD" => Some(BnbUsd),
 		"TRX / USD" => Some(TrxUsd),
 		"WBTC / USD" => Some(WbtcUsd),
-		"cbBTC / USD" => Some(CbBtcUsd),
+		"cbBTC / USD" => Some(CbbtcUsd),
 		"DOT / USD" => Some(DotUsd),
 		_ => None,
 	}
