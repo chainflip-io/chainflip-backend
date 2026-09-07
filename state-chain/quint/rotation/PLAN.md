@@ -700,7 +700,7 @@ git commit -m "feat: ceremony layer properties, seam and negative controls (PRO-
 
 **Interfaces:**
 - Consumes: `types.*`
-- Produces (all used by Task 5): types `Activation`, `Status`, `EpochKey`, `ChainState`, `Outer`, `Async`, `ActivationOutcome`, `ChainStep = { chain, panic: Option[str], logError: Option[str] }`; functions `newChain(spec, genesisKey)`, `chainStatus(c): Async`, `isPending(c)`, `consStatus(chains: Chain -> ChainState): Async`, `startKeygen(c, cands, epoch, freshKey): ChainStep`, `canApplyKeygenOutcome(c)`, `keygenCeremony(c)`, `applyKeygenOutcome(c, o)`, `canApplyVerification(c)`, `verificationParticipants(c)`, `applyVerification(c, isOk, off)`, `startHandover(c, sharing, receiving, epoch): ChainStep`, `canApplyHandoverOutcome(c)`, `handoverCeremony(c)`, `applyHandoverOutcome(c, o)`, `activateKeys(c, newEpoch, outcome): ChainStep`, `progressActivation(c)`, `canGovernanceActivate(c)`, `governanceActivate(c)`, `canSignatureReady(c)`, `signatureReady(c)`, `reset(c)`, `isFailedStatus(c)`, `statusOffenders(c)`, `isComplete(c)`.
+- Produces (all used by Task 5): types `Activation`, `Status`, `EpochKey`, `ChainState`, `Outer` (whose handover variant is `KeyHandoverCompleteOuter`), `Async`, `ActivationOutcome`, `ChainStep = { chain, panic: Option[str], logError: Option[str] }`; functions `newChain(spec, genesisKey)`, `chainStatus(c): Async`, `isPending(c)`, `consStatus(chains: Chain -> ChainState): Async`, `startKeygen(c, cands, epoch, freshKey): ChainStep`, `canApplyKeygenOutcome(c)`, `keygenCeremony(c)`, `applyKeygenOutcome(c, o)`, `canApplyVerification(c)`, `verificationParticipants(c)`, `applyVerification(c, isOk, off)`, `startHandover(c, sharing, receiving, epoch): ChainStep`, `canApplyHandoverOutcome(c)`, `handoverCeremony(c)`, `applyHandoverOutcome(c, o)`, `activateKeys(c, newEpoch, outcome): ChainStep`, `progressActivation(c)`, `canGovernanceActivate(c)`, `governanceActivate(c)`, `canSignatureReady(c)`, `signatureReady(c)`, `reset(c)`, `isFailedStatus(c)`, `statusOffenders(c)`, `isComplete(c)`.
 
 Granularity decision (spec "Scheduling"): the side effects the Rust performs inside `status()` on `AwaitingActivationSignatures` are a separate pure step, `progressActivation`, which the validator hook applies to every chain before reading `consStatus`.
 
@@ -750,7 +750,9 @@ module chain {
   }
 
   // KeyRotationStatusOuter inside AsyncResult, as the validator sees them.
-  type Outer = KeygenComplete | KeyHandoverComplete | RotationComplete | FailedOuter(Set[Validator])
+  // KeyHandoverCompleteOuter: variant tags share one namespace per module, so it
+  // cannot reuse Status's KeyHandoverComplete name.
+  type Outer = KeygenComplete | KeyHandoverCompleteOuter | RotationComplete | FailedOuter(Set[Validator])
   type Async = Void | Pending | Ready(Outer)
 
   // StartKeyActivationResult. FirstVault is folded into TxFailed (both wait
@@ -781,7 +783,7 @@ module chain {
     | KeygenVerificationComplete(_) => Ready(KeygenComplete)
     | AwaitingKeyHandover(_) => Pending
     | AwaitingKeyHandoverVerification(_) => Pending
-    | KeyHandoverComplete(_) => Ready(KeyHandoverComplete)
+    | KeyHandoverComplete(_) => Ready(KeyHandoverCompleteOuter)
     | AwaitingActivationSignatures =>
         if (c.activation == ActivationComplete) Ready(RotationComplete) else Pending
     | Complete => Ready(RotationComplete)
@@ -998,7 +1000,7 @@ module chain {
       assert(c4.handoverRan),
       assert(handoverCeremony(c4).participants == ALL4),
       assert(verificationParticipants(c5) == ALL4),
-      assert(chainStatus(c6) == Ready(KeyHandoverComplete)),
+      assert(chainStatus(c6) == Ready(KeyHandoverCompleteOuter)),
       assert(chainStatus(c7) == Pending),
       assert(c7.activeKey == Some({ epoch: 2, key: 7 })),
       assert(chainStatus(c8) == Ready(RotationComplete)),
@@ -1319,7 +1321,7 @@ module rotation {
     | KeyHandoversInProgress(rs) =>
         match st {
         | Ready(o) => match o {
-            | KeyHandoverComplete =>
+            | KeyHandoverCompleteOuter =>
                 val y = activateAll(x, rs.newEpoch, txFailed, notRequired)
                 { ...y, phase: ActivatingKeys(rs) }
             | FailedOuter(off) =>
