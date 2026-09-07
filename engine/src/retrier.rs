@@ -417,7 +417,9 @@ impl RetryLimitReturn for u32 {
 		inner: Result<RequestResponse, tokio::sync::oneshot::error::RecvError>,
 		log_message: String,
 	) -> Self::ReturnType<T> {
-		let result: BoxAny = inner.map_err(|_| anyhow::anyhow!("{log_message}"))??;
+		// The outer error only tells us the retrier dropped the channel without responding, which
+		// it shouldn't do. The error of the request itself comes through the inner result.
+		let result: BoxAny = inner.map_err(|e| anyhow::anyhow!("{log_message}: {e}"))??;
 		Ok(*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error."))
 	}
 }
@@ -581,7 +583,7 @@ where
 		let rx = self.send_request(specific_closure, request_log.clone(), retry_limit).await;
 		R::inner_to_return_type(
 			rx.await,
-			format!("Maximum attempt of `{retry_limit:?}` reached for request `{request_log}`."),
+			format!("Retrier dropped request `{request_log}` (limit `{retry_limit:?}`) without returning a result."),
 		)
 	}
 }
