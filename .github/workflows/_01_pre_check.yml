@@ -68,7 +68,7 @@ jobs:
           version: 10
 
       - name: Configure NodeJS 🛠️
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903
         with:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
@@ -147,6 +147,6 @@ jobs:
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
 
       - name: Lint 🐳🔬
-        uses: hadolint/hadolint-action@2a66e89f53d0771bb131a7fa31f3136336094aa6 # v3.4.0
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: ci/docker/${{ matrix.environment }}/${{ matrix.dockerfile }}.Dockerfile
