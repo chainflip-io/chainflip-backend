@@ -419,7 +419,127 @@ module rotation {
     }
   }
 
-  // Smoke witness for this task; the property set arrives in Task 6.
-  val wEpochAdvanced = w.hist.epochsAdvanced >= 1
-  val NoPanicsSmoke = w.panics == Set()
+  // ---------- properties (identifiers from DESIGN.md) ----------
+
+  pure def rsOf(p: Phase): Option[RotationState] =
+    match p {
+    | KeygensInProgress(rs) => Some(rs)
+    | KeyHandoversInProgress(rs) => Some(rs)
+    | ActivatingKeys(rs) => Some(rs)
+    | NewKeysActivated(rs) => Some(rs)
+    | _ => None
+    }
+
+  val activeChains: Set[Chain] = CHAIN_IDS.filter(id => w.chains.get(id).spec.vault == Active)
+
+  // R1: candidates never overlap the banned set (try_restart_keygen's
+  // debug_assert), and the queued and installed sets exclude everyone banned
+  // in the rotation that produced them.
+  val R1_BannedNeverAuthority = and {
+    match rsOf(w.phase) { | Some(rs) => rs.primary.intersect(rs.banned) == Set() | None => true },
+    match w.phase {
+    | SessionRotating(auths) =>
+        match w.hist.lastRs { | Some(rs) => auths.intersect(rs.banned) == Set() | None => false }
+    | _ => true
+    },
+    (w.phase == Idle) implies
+      (match w.hist.lastRs { | Some(rs) => w.authorities.intersect(rs.banned) == Set() | None => true }),
+  }
+
+  // R2: the queued set respects max(min_size, contraction floor of the OLD set).
+  val R2_SizeFloor = match w.phase {
+    | SessionRotating(auths) => auths.size() >= sizeFloor(w)
+    | _ => true
+  }
+
+  // R3: sharing participants are unbanned current authorities, at least the
+  // success threshold of the set at the time (recorded with the sharing set).
+  val R3_SharingSetValidity = match w.hist.lastSharing {
+    | None => true
+    | Some(s) => and {
+        s.sharing.subseteq(s.current),
+        s.current.intersect(s.banned) == Set(),
+        s.sharing.size() >= s.threshold,
+      }
+  }
+
+  // R4: the epoch never advances unless every chain is Complete, and the
+  // queued authorities are the final candidate set.
+  val R4_TransitionGating = match w.phase {
+    | SessionRotating(auths) => and {
+        CHAIN_IDS.forall(id => isComplete(w.chains.get(id))),
+        match w.hist.lastRs { | Some(rs) => auths == candidatesOf(rs) | None => false },
+      }
+    | _ => true
+  }
+
+  // R5: in Idle no active chain holds a key for a future epoch.
+  val R5_NoNextKeyAfterAbort = (w.phase == Idle) implies activeChains.forall(id =>
+    match w.chains.get(id).activeKey { | Some(ek) => ek.epoch <= w.epoch | None => true })
+
+  // R6: active chains agree on the current key epoch.
+  val R6_KeyEpochAgreement = activeChains.forall(a => activeChains.forall(b =>
+    match w.chains.get(a).activeKey {
+    | Some(ka) => match w.chains.get(b).activeKey { | Some(kb) => ka.epoch == kb.epoch | None => true }
+    | None => true
+    }))
+
+  // R7: no abort edge exists past ActivatingKeys (L3's safety half).
+  val R7_NoAbortAfterActivation =
+    w.hist.abortedFrom.intersect(Set("ActivatingKeys", "NewKeysActivated", "SessionRotating")) == Set()
+
+  // H2: a UTXO chain that has a key never reaches KeyHandoverComplete without
+  // running the handover ceremony. Assumes UTXO chains start with a key.
+  val H2_UtxoAlwaysHandsOver = CHAIN_IDS.forall(id =>
+    val c = w.chains.get(id)
+    (c.spec.kind == Utxo and c.activeKey != None
+      and (match c.status { | KeyHandoverComplete(_) => true | _ => false }))
+      implies c.handoverRan)
+
+  // H3: the next-epoch key exists only during activation and the session steps.
+  val H3_NextKeyOnlyAfterActivation = CHAIN_IDS.forall(id =>
+    match w.chains.get(id).activeKey {
+    | Some(ek) => ek.epoch <= w.epoch + 1 and ((ek.epoch == w.epoch + 1) implies isActivatingPhase(w.phase))
+    | None => true
+    })
+
+  // H4: a merged Failed comes from a failed chain and carries exactly their
+  // offenders. May fail by design for mixed Ready pairs (DESIGN.md).
+  val H4_ConsSoundness = match consStatus(w.chains) {
+    | Ready(o) => match o {
+        | FailedOuter(off) => and {
+            CHAIN_IDS.exists(id => isFailedStatus(w.chains.get(id))),
+            off == CHAIN_IDS.map(id => statusOffenders(w.chains.get(id))).flatten(),
+          }
+        | _ => true
+      }
+    | _ => true
+  }
+
+  // PF1-PF4: no assertion site in key_rotator.rs is reachable.
+  val PF_NoPanics = w.panics == Set()
+  // The log::error! sites on_initialize and activate_keys treat as impossible.
+  val NoUnexpectedLogErrors = w.logErrors == Set()
+
+  // NC3: every keygen restart or handover retry grows the banned set. Expected to FAIL.
+  val NC3_EveryRetryBans_MustFailHere = not(w.hist.retryWithoutBan)
+
+  // Liveness, as bounded invariants. Meaningful on the fair instance only.
+  val L1_Termination = (w.phase != Idle) implies (w.blocks - w.hist.rotationStartedAt <= K_BLOCKS)
+  val L2_Progress = w.hist.aborts == 0
+
+  // ---------- witnesses (must be reachable) ----------
+
+  val W1_FullRotationWithHandover =
+    w.hist.epochsAdvanced >= 1 and CHAIN_IDS.exists(id => w.chains.get(id).handoverRan)
+  val W2_RecoverFromKeygenFailure = w.hist.epochsAdvanced >= 1 and w.hist.keygenRestarts >= 1
+  val W3_AbortAtSizeFloor = w.hist.lastAbortReason == Some(NotEnoughCandidates)
+  val W4_CompleteDespiteSafeMode = w.hist.epochsAdvanced >= 1 and w.hist.safeModeOffWhileActivating
+  val W5_HandoverVerificationLivelock = and {
+    match w.phase { | KeyHandoversInProgress(_) => true | _ => false },
+    CHAIN_IDS.exists(id => w.chains.get(id).status == Failed(Set())),
+    w.panics.contains("handover_invalid_state"),
+  }
+  val W6_AbortSharingUnavailable = w.hist.lastAbortReason == Some(SharingUnavailable)
+  val W7_HandoverRetry = w.hist.handoverRetries >= 1
 }
