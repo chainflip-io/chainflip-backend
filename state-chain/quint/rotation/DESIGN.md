@@ -129,7 +129,7 @@ every resolved ceremony satisfies the contract.
 | `RotationState { primary_candidates, banned, bond, new_epoch_index }` | faithful minus `bond` |
 | `resolve_auction_iteratively` | abstract: winners are a nondeterministic subset of qualified unbanned bidders within `[min_size, max_size]`, or `AuctionFailed` |
 | `select_sharing_participants` (seeded shuffle) | same set semantics, nondeterministic choice instead of the shuffle |
-| `MaxAuthoritySetContractionPercentage` floor | faithful, as a constant |
+| `MaxAuthoritySetContractionPercentage` floor | faithful, as a constant; `Percent * u32` rounds to nearest (ties down), so 70% of 4 is 3 |
 | `KeyRotationStatus`, eleven variants | faithful |
 | `ResponseStatus` and `resolve_keygen_outcome` | faithful in `ceremony.qnt`; oracle above it |
 | `KeygenResponseTimeout` block clock | abstract timeout action, no clock |
@@ -288,17 +288,23 @@ Linear issue with the trace attached. If it does not, the README records why.
 
 | Instance | Validators | Chains | Purpose |
 | --- | --- | --- | --- |
-| `main` | n=4, one Byzantine | one UTXO active, one non-UTXO active | all safety properties, PF1–PF4, NC2, NC3, W1–W5 |
+| `ceremonyStrong` | n=4, one Byzantine | (ceremony layer only) | `C1`–`C3`, `SeamSound` |
+| `ceremonySplit` | as above, honest may split | (ceremony layer only) | `NC1` |
+| `ceremonyOutage` | as above, honest may time out | (ceremony layer only) | `NC2`: the failure-threshold drop is unreachable at n=4/f=1 unless honest nodes miss the timeout |
+| `main` | n=4, one Byzantine | one UTXO active, one non-UTXO active | all safety properties, PF1–PF4, NC3, W1, W2, W4–W7 |
 | `uninit` | as `main` | adds one non-UTXO uninitialised chain | `NotInitialised` activation path, `R6` exception |
-| `split` | as `main`, weak oracle | as `main` | `NC1` |
+| `split` | as `main`, weak oracle | as `main` | safety under the split, `W3`, honest-banned witness |
 | `fair` | as `main`, fair environment | as `main` | `L1`–`L3` as bounded invariants |
 
-At n=4 the size floor is 2 (`min_size = 2`, contraction 30 percent of 4),
-so `W3` needs three bans, which is reachable within one rotation.
+At n=4 the size floor is 3 (`min_size = 2`, and 70 percent of 4 rounds to
+3), so `W3` needs two bans. Under `StrongHonesty` with one Byzantine only one
+validator can ever be banned, so `W3` is expected on `split`, not `main`.
 
 ### Bounds and budget
 
 - `ceremony.qnt`: exhaustive at depth 6.
+- The handover key-mismatch branch (`Err(Default)`) is an unattributed
+  failure under the oracle, so it is exercised only at the ceremony layer.
 - `chain.qnt` and `validator.qnt` over the oracle: one rotation is about 20
   steps, one with a retry about 30. Simulation (`quint run`) at depth 40,
   20k samples. Exhaustive (`quint verify`) at depth 30.
