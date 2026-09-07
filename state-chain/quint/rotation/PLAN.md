@@ -33,7 +33,7 @@
 | `ceremony.qnt` | module `ceremony`: `ResponseStatus`, `addReport`, `resolve`, `dropAtFailureThreshold`, `resolveKeygen`; module `ceremonyCheck`: one-ceremony state machine, C1–C3, `SeamSound`, NC2 target, witnesses | 2, 3 |
 | `chain.qnt` | module `chain`: `ChainState`, `Status`, `chainStatus`, `consStatus`, all per-chain transitions returning `ChainStep` | 4 |
 | `validator.qnt` | module `rotation`: consts, `World`, hooks, environment actions, `step`, R1–R7, H2–H4, PF, NC3, L1/L2, W1–W6 | 5, 6 |
-| `harness.qnt` | instances `main`, `uninit`, `split`, `fair`, `ceremonyStrong`, `ceremonySplit`; NC aliases; deterministic `…Test` runs | 3, 6, 7 |
+| `harness.qnt` | instances `main`, `uninit`, `split`, `fair`, `main1`, `ceremonyStrong`, `ceremonySplit`, `ceremonyOutage`; NC aliases; deterministic `…Test` runs | 3, 6, 7, 7b |
 | `check.sh` | typecheck, tests, simulation, MUST_VIOLATE, `--verify` | 8 |
 | `README.md` | setup, running, status table, witness counts, gotchas, known gaps, findings | 1, 8, 9 |
 
@@ -1960,6 +1960,95 @@ Run `./check.sh`.
 git add state-chain/quint/rotation/harness.qnt state-chain/quint/rotation/check.sh
 git commit -m "feat: uninitialised, split and fair rotation instances with bounded liveness (PRO-3120)"
 ```
+
+---
+
+### Task 7b: Apalache tractability for the validator layer (time-boxed)
+
+**Why this task exists.** Task 6 found that `quint verify` on `main` is intractable as encoded: depth 1 takes about 72 s, depth 2 ran over two hours with no verdict, depth 8 exhausts Apalache's default 4 GB heap. The spec's first two levers (depth compression, fewer chains) do not address a per-transition encoding that is already too large at depth 2. This task tries the levers below in order, stops at the first that reaches depth 10 within 10 minutes per property, and records the outcome either way. Budget: at most three hours of wall-clock runs. Nothing here may weaken a property or shrink the reachable set of an instance that other tasks depend on.
+
+**Files:**
+- Modify: `state-chain/quint/rotation/validator.qnt` (lever A only, if adopted)
+- Modify: `state-chain/quint/rotation/harness.qnt` (lever B instance)
+- Create: `.superpowers/sdd/PLAN/findings/tractability.md` (scratch, not committed; Task 8 copies the table into the README)
+
+**Interfaces:**
+- Consumes: module `rotation` as of Task 7.
+- Produces: a table `lever | property | depth | verdict | seconds | notes`, and whichever code change (if any) made verification tractable, with tests and witnesses still passing.
+
+- [ ] **Step 1: Baseline with Apalache tuning only (lever C)**
+
+For `R2_SizeFloor` on `main`, run each of these with a 10-minute cap (`timeout 600`), recording verdict and time:
+
+```bash
+cd state-chain/quint/rotation
+JVM_ARGS="-Xmx8g" timeout 600 quint verify harness.qnt --main=main --invariant=R2_SizeFloor --max-steps=2
+JVM_ARGS="-Xmx8g" timeout 600 quint verify harness.qnt --main=main --invariant=R2_SizeFloor --max-steps=2 \
+  --apalache-config='{"checker":{"smt-encoding":"funArrays"}}'
+JVM_ARGS="-Xmx8g" timeout 600 quint verify harness.qnt --main=main --invariant=R2_SizeFloor --max-steps=2 \
+  --apalache-config='{"checker":{"smt-encoding":"arrays","tuning":{"search.invariant.mode":"after"}}}'
+```
+
+If any finishes, climb the depth ladder 4, 6, 10 with the same flags. Record the first configuration that reaches depth 10 under 10 minutes; if none, continue.
+
+- [ ] **Step 2: One-chain instance (lever B)**
+
+Append to `harness.qnt`:
+
+```quint
+// One UTXO chain only: the smallest instance that still exercises keygen,
+// handover, activation and the session steps. Used for exhaustive checks
+// when the two-chain instance does not fit.
+module main1 {
+  import types.* from "./types"
+  import chain.* from "./chain"
+  import rotation(
+    VALIDATORS = Set(1, 2, 3, 4),
+    BYZ = Set(4),
+    CHAINS = Map("btc" -> { kind: Utxo, vault: Active }),
+    MIN_SIZE = 2,
+    MAX_SIZE = 4,
+    CONTRACTION_PERCENT = 30,
+    STRONG = true,
+    FAIR = false,
+    K_BLOCKS = 40
+  ).* from "./validator"
+}
+```
+
+Run the same ladder (depths 2, 4, 6, 10, cap 10 minutes, best flags from Step 1) for `R2_SizeFloor`, then for `R4_TransitionGating` and `H3_NextKeyOnlyAfterActivation`. Record. Note that `H4_ConsSoundness` is trivial on one chain and must not be reported as verified from `main1`.
+
+- [ ] **Step 3: Per-phase block transitions (lever A), only if Steps 1–2 did not reach depth 10 on `main`**
+
+Refactor `rotation` so Apalache sees five small transitions instead of one large one, without changing the reachable set:
+
+1. Split `validatorHook` into `hookIdle(x)`, `hookKeygen(x, rs, ascending)`, `hookHandover(x, rs, txFailed, notRequired, ascending)`, `hookActivating(x, rs)`, each containing exactly the corresponding `match` arm's body from the current `validatorHook` (after `progressAll` and `consStatus`, which each one computes itself). Keep `validatorHook` as a thin dispatcher over the phase so `blockStep` and the existing tests are unchanged.
+2. Replace the `block` action's body with:
+
+```quint
+  action block(txFailed: Set[Chain], notRequired: Set[Chain], ascending: bool): bool = all {
+    not(FAIR and envPending),
+    any {
+      all { w.phase == Idle, w' = finishBlock(sessionHook(hookIdle(progressAll(w)))) },
+      all { isKeygenPhase(w.phase), w' = finishBlock(sessionHook(hookKeygen(progressAll(w), rsOfOrEmpty(w.phase), ascending))) },
+      all { isHandoverPhase(w.phase), w' = finishBlock(sessionHook(hookHandover(progressAll(w), rsOfOrEmpty(w.phase), if (FAIR) Set() else txFailed, notRequired, ascending))) },
+      all { isActivatingKeysPhase(w.phase), w' = finishBlock(sessionHook(hookActivating(progressAll(w), rsOfOrEmpty(w.phase)))) },
+      all { isSessionPhase(w.phase), w' = finishBlock(sessionHook(w)) },
+    },
+  }
+```
+
+with `finishBlock(x)` = the block-counter and `safeModeOffWhileActivating` bookkeeping currently at the end of `blockStep`, `rsOfOrEmpty(p)` = the `RotationState` carried by `p` or `{ primary: Set(), banned: Set(), newEpoch: 0 }`, and the four phase predicates as `pure def`s. The guards are mutually exclusive and exhaustive over `Phase`, so exactly one arm is enabled in every state, which is what makes this equivalent to the old `block`.
+3. `happyPathTest`, `fairRotationCompletesTest`, and every simulation in `check.sh` must still pass with the same verdicts; re-run `./check.sh` and record the witness counts before and after (they should move only by sampling noise).
+4. Re-run the ladder on `main` with the best flags. Record.
+
+- [ ] **Step 4: Symbolic simulation as a last resort (lever D)**
+
+If depth 10 is still out of reach on `main`, run `quint verify --random-transitions --max-steps=25` for each safety invariant on `main` with a 10-minute cap, and record the verdicts explicitly labelled "symbolic simulation, not exhaustive".
+
+- [ ] **Step 5: Record and commit**
+
+Write the table to the scratch file with one paragraph of conclusion: which instance and depth are exhaustively verified, which lever did it, what remains simulation-only. If lever A was adopted, commit `validator.qnt` (and `harness.qnt` if `main1` was added) as `refactor: per-phase block transitions for Apalache tractability (PRO-3120)`; otherwise commit only `harness.qnt` (`main1`) as `feat: one-chain instance for exhaustive checks (PRO-3120)`. Task 8 puts the table in the README and wires the tractable verify runs into `check.sh --verify`.
 
 ---
 
