@@ -53,7 +53,7 @@ jobs:
         run: |
           bun install
 
-      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # 2.87.7
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
           tool: nextest@0.9.92
 
