@@ -155,3 +155,145 @@ module ceremony {
     assert(resolveHandover(reportAll(newResponseStatus(C4), C4, SuccessVote(8)), 7) == Failure(Set())),
   }
 }
+
+// One ceremony driven to resolution by honest and Byzantine reports.
+// Verified standalone; SeamSound discharges the oracle contract the chain
+// and validator layers assume.
+module ceremonyCheck {
+  import types.* from "./types"
+  import ceremony.* from "./ceremony"
+
+  const CANDS: Set[Validator]
+  const BYZ: Set[Validator]
+  // StrongHonesty (DESIGN.md): every honest candidate reports the same outcome.
+  // false = the keygen model's split (some honest Agreed, others Failed).
+  const STRONG: bool
+  // false = honest nodes report before KeygenResponseTimeout (the default
+  // assumption). true = an outage: the timeout may fire with honest nodes
+  // still pending, which is what makes the failure-threshold drop reachable.
+  const HONEST_MAY_TIMEOUT: bool
+
+  pure val HONEST: Set[Validator] = CANDS.exclude(BYZ)
+  pure val FRESH_KEY: Key = 7
+  pure val OTHER_KEY: Key = 8
+
+  // What an honest node can report: the fresh key, or a failure blaming a
+  // subset of the Byzantine candidates (empty = unattributed). Keygen model K1/K3.
+  pure val HONEST_REPORTS: Set[Report] =
+    Set(SuccessVote(FRESH_KEY))
+      .union(BYZ.intersect(CANDS).powerset().map(b => FailureVote(b)))
+
+  var rs: ResponseStatus
+  var honestVerdict: Option[Report]
+  var result: Option[Outcome]
+
+  action init = all {
+    rs' = newResponseStatus(CANDS),
+    honestVerdict' = None,
+    result' = None,
+  }
+
+  action honestReport(v: Validator, drawn: Report): bool =
+    // Decode, don't constrain: under STRONG the first honest verdict binds the rest.
+    val r = if (STRONG) (match honestVerdict { | Some(r0) => r0 | None => drawn }) else drawn
+    all {
+      result == None,
+      HONEST.contains(v),
+      canReport(rs, v),
+      rs' = addReport(rs, v, r),
+      honestVerdict' = (match honestVerdict { | Some(r0) => Some(r0) | None => Some(r) }),
+      result' = None,
+    }
+
+  action byzReport(v: Validator, r: Report): bool = all {
+    result == None,
+    BYZ.contains(v),
+    canReport(rs, v),
+    rs' = addReport(rs, v, r),
+    honestVerdict' = honestVerdict,
+    result' = None,
+  }
+
+  // progress_rotation: resolve once every candidate has reported ...
+  action resolveAllReported = all {
+    result == None,
+    rs.remaining == Set(),
+    result' = Some(resolveKeygen(rs)),
+    rs' = rs,
+    honestVerdict' = honestVerdict,
+  }
+
+  // ... or when KeygenResponseTimeout elapses.
+  action timeoutResolve = all {
+    result == None,
+    rs.remaining != Set(),
+    HONEST_MAY_TIMEOUT or rs.remaining.intersect(HONEST) == Set(),
+    result' = Some(resolveKeygen(rs)),
+    rs' = rs,
+    honestVerdict' = honestVerdict,
+  }
+
+  action step = {
+    nondet v = CANDS.oneOf()
+    nondet h = HONEST_REPORTS.oneOf()
+    nondet k = Set(FRESH_KEY, OTHER_KEY).oneOf()
+    nondet blamed = CANDS.powerset().oneOf()
+    nondet asSuccess = Set(true, false).oneOf()
+    val b = if (asSuccess) SuccessVote(k) else FailureVote(blamed)
+    any {
+      honestReport(v, h),
+      byzReport(v, b),
+      resolveAllReported,
+      timeoutResolve,
+    }
+  }
+
+  pure def isFailure(o: Outcome): bool =
+    match o { | Failure(_) => true | Success(_) => false }
+  pure def offendersOfOutcome(o: Outcome): Set[Validator] =
+    match o { | Failure(off) => off | Success(_) => Set() }
+
+  val C1_AcceptanceUnanimity = match result {
+    | None => true
+    | Some(o) => match o {
+        | Success(k) => votersFor(rs, k) == CANDS
+        | Failure(_) => true
+      }
+  }
+
+  val C2_OffendersAreParticipants = match result {
+    | None => true
+    | Some(o) => offendersOfOutcome(o).subseteq(CANDS)
+  }
+
+  // Holds under STRONG with honest nodes reporting in time; fails under the
+  // split (NC1, ceremonySplit) and under an outage (ceremonyOutage).
+  val C3_HonestNeverOffender = match result {
+    | None => true
+    | Some(o) => offendersOfOutcome(o).intersect(HONEST) == Set()
+  }
+
+  // Every resolved outcome is one the oracle may return.
+  val SeamSound = match result {
+    | None => true
+    | Some(o) => oracleOutcomes(CANDS, FRESH_KEY, BYZ, STRONG and not(HONEST_MAY_TIMEOUT)).contains(o)
+  }
+
+  // NC2 target: offenders were non-empty before the drop and empty after it.
+  // Must FAIL on ceremonyOutage.
+  val NC2_DropNeverEmpties_MustFailHere = match result {
+    | None => true
+    | Some(o) => not(o == Failure(Set()) and offendersOfOutcome(resolve(rs)) != Set())
+  }
+
+  val wResolvedSuccess = result == Some(Success(FRESH_KEY))
+  val wResolvedFailure = match result { | None => false | Some(o) => isFailure(o) }
+  val wByzantinePunished = match result {
+    | None => false
+    | Some(o) => offendersOfOutcome(o).intersect(BYZ) != Set()
+  }
+  val wDropped = match result {
+    | None => false
+    | Some(o) => o == Failure(Set()) and offendersOfOutcome(resolve(rs)) != Set()
+  }
+}
