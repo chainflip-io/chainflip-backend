@@ -396,19 +396,26 @@ module rotation {
     nondet ascending = Set(true, false).oneOf()
     nondet flag = Set(true, false).oneOf()
     nondet drawnOff = VALIDATORS.powerset().oneOf()
+    // The grouping does not change the reachable states (an any-of-any is an any);
+    // it gives blocks, deliveries and environment churn equal sampling weight so a
+    // rotation is not derailed one action in twelve.
     any {
       block(txFailed, notRequired, ascending),
-      keygenOutcome(id, flag, drawnOff),
-      handoverOutcome(id, flag, drawnOff),
-      verificationResult(id, flag, drawnOff),
-      signatureReadyOn(id),
-      governanceActivateOn(id),
-      epochElapses,
-      toggleSafeMode,
-      toggleBroadcastsPending,
-      bidderLeaves(v),
-      bidderJoins(v),
-      forceRotation,
+      any {
+        keygenOutcome(id, flag, drawnOff),
+        handoverOutcome(id, flag, drawnOff),
+        verificationResult(id, flag, drawnOff),
+        signatureReadyOn(id),
+        governanceActivateOn(id),
+      },
+      any {
+        epochElapses,
+        toggleSafeMode,
+        toggleBroadcastsPending,
+        bidderLeaves(v),
+        bidderJoins(v),
+        forceRotation,
+      },
     }
   }
 
