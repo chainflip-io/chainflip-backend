@@ -1,7 +1,8 @@
-import { Keypair, PublicKey } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import { u8aToHex } from '@polkadot/util';
-import { randomAsHex } from 'polkadot/util-crypto';
 import { performSwap, performVaultSwap } from 'shared/perform_swap';
+import { seededHexBytes } from 'shared/utils/seeded_rng';
+import { seededSolanaKeypair } from 'shared/new_sol_address';
 import {
   chainFromAsset,
   getContractAddress,
@@ -42,15 +43,23 @@ const MAX_CCM_BYTES_USDT = 632;
 const SOLANA_BYTES_PER_ACCOUNT = 33;
 const BYTES_PER_ALT = 34; // 32 + 1 + 1 (for vector lengths)
 
-function newSolanaCcmAdditionalData(maxBytes: number) {
+// Options for the public CCM metadata builders. `rng` (defaulting to `Math.random`) seeds the
+// otherwise-random message/metadata generation so a run can be reproduced from a fixed seed.
+export type CcmMetadataOptions = {
+  message?: string;
+  additionalData?: string;
+  rng?: () => number;
+};
+
+function newSolanaCcmAdditionalData(maxBytes: number, rng: () => number) {
   // Test all combinations
-  const useLegacy = maxBytes < BYTES_PER_ALT || Math.random() < 0.5;
-  const useAlt = !useLegacy && Math.random() < 0.5;
+  const useLegacy = maxBytes < BYTES_PER_ALT || rng() < 0.5;
+  const useAlt = !useLegacy && rng() < 0.5;
   let bytesAvailable = maxBytes;
 
   const additionalAccounts = [];
   const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
-  const fallbackAddress = Keypair.generate().publicKey.toBytes();
+  const fallbackAddress = seededSolanaKeypair(rng).publicKey.toBytes();
 
   if (useAlt) {
     // We will only use one ALT
@@ -61,12 +70,12 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
   }
 
   const maxAccounts = Math.floor(bytesAvailable / SOLANA_BYTES_PER_ACCOUNT);
-  const numAdditionalAccounts = Math.floor(Math.random() * maxAccounts);
+  const numAdditionalAccounts = Math.floor(rng() * maxAccounts);
 
   for (let i = 0; i < numAdditionalAccounts; i++) {
     additionalAccounts.push({
-      pubkey: Keypair.generate().publicKey.toBytes(),
-      is_writable: Math.random() < 0.5,
+      pubkey: seededSolanaKeypair(rng).publicKey.toBytes(),
+      is_writable: rng() < 0.5,
     });
   }
 
@@ -107,13 +116,19 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
 
 // Generate random bytes. Setting a minimum length of 10 because very short messages can end up
 // with the SC returning an ASCII character in SwapDepositAddressReady.
-function newCcmArbitraryBytes(maxLength: number): string {
-  return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
+function newCcmArbitraryBytes(maxLength: number, rng: () => number): string {
+  const numBytes = Math.floor(rng() * Math.max(0, maxLength - 10)) + 10;
+  return seededHexBytes(numBytes, rng);
 }
 
 // For Solana the maximum number of extra accounts that can be passed is limited by the tx size
 // and therefore also depends on the message length.
-function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: number): string {
+function newCcmAdditionalData(
+  destAsset: Asset,
+  message: string,
+  rng: () => number,
+  maxLength?: number,
+): string {
   const destChain = chainFromAsset(destAsset);
 
   switch (destChain) {
@@ -138,7 +153,7 @@ function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: num
       if (maxLength !== undefined) {
         bytesAvailable = Math.min(bytesAvailable, maxLength);
       }
-      const ccmAdditionalData = newSolanaCcmAdditionalData(bytesAvailable);
+      const ccmAdditionalData = newSolanaCcmAdditionalData(bytesAvailable, rng);
       if (ccmAdditionalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
         throw new Error(`CCM additional data length exceeds limit: ${ccmAdditionalData.length}`);
       }
@@ -149,7 +164,7 @@ function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: num
   }
 }
 
-function newCcmMessage(destAsset: Asset, maxLength?: number): string {
+function newCcmMessage(destAsset: Asset, rng: () => number, maxLength?: number): string {
   const destChain = chainFromAsset(destAsset);
   let length: number;
 
@@ -181,7 +196,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
     length = Math.min(length, maxLength);
   }
 
-  return newCcmArbitraryBytes(length);
+  return newCcmArbitraryBytes(length, rng);
 }
 // Minimum overhead to ensure simple CCM transactions succeed
 const OVERHEAD_COMPUTE_UNITS = 30000;
@@ -189,11 +204,11 @@ const OVERHEAD_ENERGY = 20000;
 
 export async function newCcmMetadata(
   destAsset: Asset,
-  ccmMessage?: string,
-  ccmAdditionalDataArray?: string,
+  options: CcmMetadataOptions = {},
 ): Promise<CcmDepositMetadata> {
-  const message = ccmMessage ?? newCcmMessage(destAsset);
-  const ccmAdditionalData = ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message);
+  const rng = options.rng ?? Math.random;
+  const message = options.message ?? newCcmMessage(destAsset, rng);
+  const ccmAdditionalData = options.additionalData ?? newCcmAdditionalData(destAsset, message, rng);
   const destChain = chainFromAsset(destAsset);
 
   let userLogicGasBudget;
@@ -224,9 +239,10 @@ export async function newCcmMetadata(
 export async function newVaultSwapCcmMetadata(
   sourceAsset: Asset,
   destAsset: Asset,
-  ccmMessage?: string,
-  ccmAdditionalDataArray?: string,
+  options: CcmMetadataOptions = {},
 ): Promise<CcmDepositMetadata> {
+  const rng = options.rng ?? Math.random;
+  const { message: ccmMessage, additionalData: ccmAdditionalDataArray } = options;
   const sourceChain = chainFromAsset(sourceAsset);
   let messageMaxLength;
   let metadataMaxLength;
@@ -254,11 +270,11 @@ export async function newVaultSwapCcmMetadata(
     }
   }
 
-  const message = ccmMessage ?? newCcmMessage(destAsset, messageMaxLength);
+  const message = ccmMessage ?? newCcmMessage(destAsset, rng, messageMaxLength);
   // For now we only enforce empty ccmAdditionalData for Vault swaps, not deposit channels.
   const ccmAdditionalData =
-    ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message, metadataMaxLength);
-  return newCcmMetadata(destAsset, message, ccmAdditionalData);
+    ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message, rng, metadataMaxLength);
+  return newCcmMetadata(destAsset, { message, additionalData: ccmAdditionalData });
 }
 
 export async function prepareSwap(

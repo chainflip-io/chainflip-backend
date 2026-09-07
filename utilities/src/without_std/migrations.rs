@@ -158,6 +158,7 @@ macro_rules! define_all_runtime_versions {
 		#[macro_export]
 		macro_rules! for_each_runtime_version {
 			($$macro_name:ident) => {
+				use $crate::migrations::{$( $version ),*};
 				$(
 					$$macro_name!{ $version }
 				)*
@@ -232,5 +233,10 @@ define_all_runtime_versions! {
 		release: v20300,
 		canonical_patch: Unreleased,
 		changelog_entry: in_20300,
+	},
+	{
+		release: v20400,
+		canonical_patch: Unreleased,
+		changelog_entry: in_20400,
 	},
 }
