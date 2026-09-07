@@ -64,7 +64,9 @@ module ceremony {
     val sm = superMajority(rs)
     val unanimous = votedKeys(rs).filter(k => votersFor(rs, k).size() == n)
     if (unanimous != Set())
-      Success(unanimous.getOnlyElement())
+      // unanimous has at most one key (a single voter cannot vote for two keys);
+      // fold stands in for getOnlyElement, which Apalache cannot transpile.
+      Success(unanimous.fold(0, (acc, k) => k))
     else
       // At most one key can reach the super-majority (t + 1 > n / 2).
       val exemptKeys = votedKeys(rs).filter(k => votersFor(rs, k).size() >= sm)
