@@ -62,14 +62,14 @@ jobs:
       - name: Import prod GPG package signing key 🗝️
         id: import_gpg_prod
         if: inputs.environment == 'production'
-        uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd
         with:
           gpg_private_key: ${{ secrets.CF_PROD_PGP_KEY }}
 
       - name: Import dev GPG package signing key 🗝️
         id: import_gpg_dev
         if: inputs.environment == 'development'
-        uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd
         with:
           gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
 
