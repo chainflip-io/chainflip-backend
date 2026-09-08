@@ -252,8 +252,8 @@ fn alternating_range_and_limit_orders() {
 
 	pool.mint_limit_order(&LP, Side::Buy, 10, limit_order_amount).unwrap();
 
-	assert_eq!(pool.limit_order(&LP, Side::Buy, 0).unwrap().amount, limit_order_amount);
-	assert_eq!(pool.limit_order(&LP, Side::Buy, 10).unwrap().amount, limit_order_amount);
+	assert_eq!(pool.limit_order(&LP, Side::Buy, 0).unwrap().unwrap().amount, limit_order_amount);
+	assert_eq!(pool.limit_order(&LP, Side::Buy, 10).unwrap().unwrap().amount, limit_order_amount);
 	assert_eq!(pool.range_order(&LP, TICK_RANGE).unwrap().0.fees.base, 0.into());
 
 	let SwapOutcome { limit_order_fills, .. } = pool.swap(Side::Sell, 3_000_000.into(), None);

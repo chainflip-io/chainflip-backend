@@ -219,32 +219,40 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(old::Pools::<T>::iter()
-			.map(|(asset_pair, pool)| {
-				(
-					asset_pair,
-					PoolBefore::<T> {
-						available: pool.pool_state.limit_orders.available_by_price(),
-						orders: pool.pool_state.limit_orders.orders(),
-						range_orders: pool.pool_state.range_orders.encode(),
-					},
-				)
-			})
-			.collect::<Vec<_>>()
+		let count = old::Pools::<T>::iter_keys().count() as u32;
+		Ok((
+			count,
+			old::Pools::<T>::iter()
+				.map(|(asset_pair, pool)| {
+					(
+						asset_pair,
+						PoolBefore::<T> {
+							available: pool.pool_state.limit_orders.available_by_price(),
+							orders: pool.pool_state.limit_orders.orders(),
+							range_orders: pool.pool_state.range_orders.encode(),
+						},
+					)
+				})
+				.collect::<Vec<_>>(),
+		)
 			.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let before = <Vec<(AssetPair, PoolBefore<T>)>>::decode(&mut &state[..])
-			.map_err(|_| DispatchError::Other("Failed to decode the pre-upgrade state"))?;
+		use frame_support::ensure;
 
-		frame_support::ensure!(
+		let (count_before, before) =
+			<(u32, Vec<(AssetPair, PoolBefore<T>)>)>::decode(&mut &state[..])
+				.map_err(|_| DispatchError::Other("Failed to decode the pre-upgrade state"))?;
+
+		ensure!(
 			!old::LimitOrderAutoSweepingThresholds::<T>::exists(),
 			"The auto sweeping thresholds should have been removed"
 		);
-		frame_support::ensure!(
-			Pools::<T>::iter_keys().count() == before.len(),
+		ensure!(before.len() as u32 == count_before, "A pool was lost before the migration ran");
+		ensure!(
+			Pools::<T>::iter_keys().count() as u32 == count_before,
 			"Wrong number of pools after migration"
 		);
 
@@ -254,11 +262,11 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 
 			// The range order half is not this migration's business, so it must come through byte
 			// for byte.
-			frame_support::ensure!(
+			ensure!(
 				pool.pool_state.range_orders.encode() == before.range_orders,
 				"The range orders were altered by the migration"
 			);
-			frame_support::ensure!(
+			ensure!(
 				pool.limit_orders_cache == build_limit_orders_cache::<T>(&pool.pool_state),
 				"Limit order cache not updated"
 			);
@@ -278,15 +286,15 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 						.get(&(tick, lp))
 						.ok_or(DispatchError::Other("The migration invented an order"))?;
 
-					frame_support::ensure!(
+					ensure!(
 						!position_info.amount.is_zero(),
 						"An order with no liquidity left survived the migration"
 					);
-					frame_support::ensure!(
+					ensure!(
 						position_info.amount <= *amount_before,
 						"An order came out of the migration holding more than it went in with"
 					);
-					frame_support::ensure!(
+					ensure!(
 						position_info.original_amount == *original_before,
 						"An order's size as of its last update was not preserved"
 					);
@@ -298,7 +306,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 					before.available[sold_pair].iter().copied().collect::<BTreeMap<Tick, Amount>>();
 
 				for (tick, available_after) in pool.pool_state.limit_order_liquidity(side) {
-					frame_support::ensure!(
+					ensure!(
 						available_after <= available_before.get(&tick).copied().unwrap_or_default(),
 						"A price is offering more liquidity than it was before the migration"
 					);
@@ -336,7 +344,6 @@ mod tests {
 	};
 	use cf_primitives::{Asset, STABLE_ASSET};
 	use cf_traits::mocks::{balance_api::MockBalance, lp_stats_api::MockLpStatsApi};
-	use cf_utilities::assert_err;
 	use frame_support::assert_ok;
 	use sp_runtime::{traits::Zero, FixedU128};
 
@@ -348,8 +355,8 @@ mod tests {
 
 	type AccountId = <Test as frame_system::Config>::AccountId;
 
-	/// A price nothing has been bought from.
-	fn untouched() -> FloatBetweenZeroAndOne {
+	/// A fresh order at 100% remaining.
+	fn float_one() -> FloatBetweenZeroAndOne {
 		FloatBetweenZeroAndOne::one()
 	}
 
@@ -358,7 +365,7 @@ mod tests {
 	fn remaining_after(
 		fractions: impl IntoIterator<Item = (u128, u128)>,
 	) -> FloatBetweenZeroAndOne {
-		fractions.into_iter().fold(untouched(), |remaining, (numerator, denominator)| {
+		fractions.into_iter().fold(float_one(), |remaining, (numerator, denominator)| {
 			remaining.mul_div_ceil(numerator.into(), denominator.into())
 		})
 	}
@@ -488,7 +495,7 @@ mod tests {
 						lp: (BOB, BOB_ORDER),
 						pool_instance: 1,
 						amount: 800.into(),
-						last_percent_remaining: untouched(),
+						last_percent_remaining: float_one(),
 						original_amount: 800.into(),
 					},
 				],
@@ -504,7 +511,11 @@ mod tests {
 			// Tick zero is a price of one, so Alice is owed the 500 that was bought from her, and
 			// keeps the half that was not.
 			assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 500);
-			let alice = pool.pool_state.limit_order(&(ALICE, ALICE_ORDER), Side::Sell, 0).unwrap();
+			let alice = pool
+				.pool_state
+				.limit_order(&(ALICE, ALICE_ORDER), Side::Sell, 0)
+				.unwrap()
+				.unwrap();
 			assert_eq!(alice.amount, 500.into());
 			assert_eq!(alice.original_amount, 2500.into(),);
 
@@ -512,7 +523,11 @@ mod tests {
 			// Bob's order sold all 800 of it at tick 120, a price of 1.0001^120 ≈ 1.01207, so he is
 			// owed 809.66 rounded down.
 			assert_eq!(MockBalance::get_balance(&BOB, STABLE_ASSET), 809);
-			assert!(pool.pool_state.limit_order(&(BOB, BOB_ORDER), Side::Sell, 120).is_err());
+			assert!(pool
+				.pool_state
+				.limit_order(&(BOB, BOB_ORDER), Side::Sell, 120)
+				.unwrap()
+				.is_none());
 
 			// The index is rebuilt from what survived, so it holds Alice's order and not Bob's.
 			assert_eq!(pool.limit_orders_cache.base[&ALICE][&ALICE_ORDER], 0);
@@ -537,7 +552,7 @@ mod tests {
 					lp: (ALICE, ALICE_ORDER),
 					pool_instance: 0,
 					amount: 1000.into(),
-					last_percent_remaining: untouched(),
+					last_percent_remaining: float_one(),
 					original_amount: 1000.into(),
 				}],
 			);
@@ -568,7 +583,7 @@ mod tests {
 					tick: TICK,
 					pool_instance: 5,
 					available: 800.into(),
-					percent_remaining: untouched(),
+					percent_remaining: float_one(),
 				}],
 				vec![
 					// Minted into an earlier pool at this price, which was emptied and deleted.
@@ -578,7 +593,7 @@ mod tests {
 						lp: (ALICE, ALICE_ORDER),
 						pool_instance: 0,
 						amount: 1000.into(),
-						last_percent_remaining: untouched(),
+						last_percent_remaining: float_one(),
 						original_amount: 1000.into(),
 					},
 					// Minted into the pool that is still there, and nothing has been bought from
@@ -588,7 +603,7 @@ mod tests {
 						lp: (BOB, BOB_ORDER),
 						pool_instance: 5,
 						amount: 800.into(),
-						last_percent_remaining: untouched(),
+						last_percent_remaining: float_one(),
 						original_amount: 800.into(),
 					},
 				],
@@ -600,12 +615,20 @@ mod tests {
 
 			// Sold all 1000 at a price of 1.0001^120, so 1012 rounded down.
 			assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 1012);
-			assert_err!(pool.pool_state.limit_order(&(ALICE, ALICE_ORDER), Side::Sell, TICK));
+			assert!(pool
+				.pool_state
+				.limit_order(&(ALICE, ALICE_ORDER), Side::Sell, TICK)
+				.unwrap()
+				.is_none());
 			assert!(!pool.limit_orders_cache.base.contains_key(&ALICE));
 
 			// The price still has Bob's order on it, indexed as before.
 			assert_eq!(
-				pool.pool_state.limit_order(&(BOB, BOB_ORDER), Side::Sell, TICK).unwrap().amount,
+				pool.pool_state
+					.limit_order(&(BOB, BOB_ORDER), Side::Sell, TICK)
+					.unwrap()
+					.unwrap()
+					.amount,
 				800.into()
 			);
 			assert_eq!(pool.limit_orders_cache.base[&BOB][&BOB_ORDER], TICK);

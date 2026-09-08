@@ -190,10 +190,7 @@ fn burn() {
 				(amount, Position::default())
 			);
 			// Burning an order in its entirety removes it.
-			assert_matches!(
-				pool_state.position::<SD>(&lp(0), tick),
-				Err(PositionError::NonExistent)
-			);
+			assert_matches!(pool_state.position::<SD>(&lp(0), tick), Ok(None));
 		}
 		{
 			// Burning one lp's order leaves the others at that price alone.
@@ -391,14 +388,15 @@ fn swap_consumes_orders() {
 /// Orders at the same price are filled in proportion to the liquidity each of them provides.
 #[test]
 fn fills_are_split_pro_rata() {
-	let tick = 0;
+	// 1.0001^6932 ~ 2, so this input buys exactly twice as much as it pays in.
+	let tick = 6932;
 	let mut pool_state = PoolState::new();
 	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), tick, 1000.into()));
 	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(1), tick, 2000.into()));
 	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(2), tick, 7000.into()));
 
 	let (output, remaining, fills) = swap::<BaseToQuote>(&mut pool_state, 1000.into(), None);
-	assert_eq!((output, remaining), (1000.into(), Amount::zero()));
+	assert_eq!((output, remaining), (2000.into(), Amount::zero()));
 
 	assert_eq!(
 		fills,
@@ -406,23 +404,23 @@ fn fills_are_split_pro_rata() {
 			Fill {
 				lp: lp(0),
 				tick,
-				sold_amount: 100.into(),
+				sold_amount: 200.into(),
 				bought_amount: 100.into(),
-				remaining_amount: 900.into(),
+				remaining_amount: 800.into(),
 			},
 			Fill {
 				lp: lp(1),
 				tick,
-				sold_amount: 200.into(),
+				sold_amount: 400.into(),
 				bought_amount: 200.into(),
-				remaining_amount: 1800.into(),
+				remaining_amount: 1600.into(),
 			},
 			Fill {
 				lp: lp(2),
 				tick,
-				sold_amount: 700.into(),
+				sold_amount: 1400.into(),
 				bought_amount: 700.into(),
-				remaining_amount: 6300.into(),
+				remaining_amount: 5600.into(),
 			},
 		]
 	);
@@ -487,11 +485,9 @@ fn fills_conserve_liquidity_for_arbitrary_books() {
 		assert_eq!(sold + left, minted, "every unit is either still on the book or was bought");
 
 		for fill in &fills {
-			match pool_state.position::<BaseToQuote>(&fill.lp, fill.tick) {
-				Ok(position) => assert_eq!(position.amount, fill.remaining_amount),
-				Err(PositionError::NonExistent) =>
-					assert!(fill.remaining_amount.is_zero(), "a live order was dropped"),
-				Err(error) => panic!("unexpected {error:?}"),
+			match assert_ok!(pool_state.position::<BaseToQuote>(&fill.lp, fill.tick)) {
+				Some(position) => assert_eq!(position.amount, fill.remaining_amount),
+				None => assert!(fill.remaining_amount.is_zero(), "a live order was dropped"),
 			}
 		}
 	}
@@ -545,14 +541,8 @@ fn filled_orders_are_removed() {
 	assert_eq!(fills.len(), 2);
 	assert!(fills.iter().all(|fill| fill.remaining_amount.is_zero() && fill.tick == near));
 
-	assert_matches!(
-		pool_state.position::<QuoteToBase>(&lp(0), near),
-		Err(PositionError::NonExistent)
-	);
-	assert_matches!(
-		pool_state.position::<QuoteToBase>(&lp(1), near),
-		Err(PositionError::NonExistent)
-	);
+	assert_matches!(pool_state.position::<QuoteToBase>(&lp(0), near), Ok(None));
+	assert_matches!(pool_state.position::<QuoteToBase>(&lp(1), near), Ok(None));
 	assert_eq!(pool_state.liquidity::<QuoteToBase>(), vec![(far, 1000.into())]);
 	assert_eq!(pool_state.current_sqrt_price::<QuoteToBase>(), Some(SqrtPrice::from_tick(far)));
 }
@@ -577,21 +567,79 @@ fn boundary_tick_limit_order_consumed_without_price_limit() {
 fn every_price_in_the_range_can_be_swapped_out() {
 	// A realistic ceiling for one price, and low enough that the totals stay below the point
 	// where the conversions saturate.
-	const LIQUIDITY_PER_PRICE: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* little endian */);
+	let liquidity_per_price = Amount::from(u128::MAX);
 
 	let mut pool_state = PoolState::new();
 
 	for tick in MIN_TICK..=MAX_TICK {
 		assert_eq!(
-			pool_state.mint::<BaseToQuote>(&lp(0), tick, LIQUIDITY_PER_PRICE).unwrap(),
-			Position::new(LIQUIDITY_PER_PRICE)
+			pool_state.mint::<BaseToQuote>(&lp(0), tick, liquidity_per_price).unwrap(),
+			Position::new(liquidity_per_price)
 		);
 	}
 
 	assert_eq!(
-		LIQUIDITY_PER_PRICE * (1 + MAX_TICK - MIN_TICK),
+		liquidity_per_price * (1 + MAX_TICK - MIN_TICK),
 		std::iter::repeat_with(|| { pool_state.swap::<BaseToQuote>(Amount::MAX, None, 0).0 })
 			.take_while(|x| !x.is_zero())
 			.fold(Amount::zero(), |acc, x| acc + x)
 	);
+}
+
+// A zero-amount order is unreachable through minting, and a swap never fills an order for nothing,
+// but `fill_orders` divides by the liquidity it is given, so both cases must degrade gracefully
+// rather than panic if they ever arise.
+#[test]
+fn fill_orders_handles_zero_amounts() {
+	let sqrt_price = SqrtPrice::from_tick(0);
+	let tick = sqrt_price.to_tick();
+	let fill_orders = |orders: &mut Orders<LiquidityProvider>, sold: u128, bought: u128| {
+		let mut fills = Vec::new();
+		let available = liquidity_of(orders);
+		super::fill_orders(orders, sqrt_price, available, sold.into(), bought.into(), &mut fills);
+		fills
+	};
+
+	// A zero-amount order on its own: nothing to fill, and the order is dropped.
+	let mut orders = Orders::from([(lp(0), Position::new(Amount::zero()))]);
+	assert!(fill_orders(&mut orders, 0, 0).is_empty());
+	assert!(orders.is_empty());
+
+	// A zero-amount order alongside a real one must not affect what the real one is filled for.
+	let mut orders =
+		Orders::from([(lp(0), Position::new(Amount::zero())), (lp(1), Position::new(1000.into()))]);
+	assert_eq!(
+		fill_orders(&mut orders, 400, 800),
+		vec![Fill {
+			lp: lp(1),
+			tick,
+			sold_amount: 400.into(),
+			bought_amount: 800.into(),
+			remaining_amount: 600.into(),
+		}]
+	);
+	assert_eq!(
+		orders,
+		Orders::from([(lp(1), Position { amount: 600.into(), original_amount: 1000.into() })])
+	);
+
+	// The same, with the zero-amount order visited after the remaining liquidity has run out.
+	let mut orders =
+		Orders::from([(lp(0), Position::new(1000.into())), (lp(1), Position::new(Amount::zero()))]);
+	assert_eq!(
+		fill_orders(&mut orders, 1000, 2000),
+		vec![Fill {
+			lp: lp(0),
+			tick,
+			sold_amount: 1000.into(),
+			bought_amount: 2000.into(),
+			remaining_amount: Amount::zero(),
+		}]
+	);
+	assert!(orders.is_empty());
+
+	// A zero-amount fill leaves the orders as they were, and reports nothing.
+	let mut orders = Orders::from([(lp(0), Position::new(1000.into()))]);
+	assert!(fill_orders(&mut orders, 0, 0).is_empty());
+	assert_eq!(orders, Orders::from([(lp(0), Position::new(1000.into()))]));
 }

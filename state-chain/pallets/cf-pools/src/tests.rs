@@ -20,7 +20,9 @@ use cf_amm::{
 	math::Tick,
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
-use cf_test_utilities::{assert_events_match, assert_matching_event_count, last_event};
+use cf_test_utilities::{
+	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
+};
 use cf_traits::{
 	mocks::balance_api::MockBalance, BalanceApi, PoolApi, PoolOrdersManager, SwappingApi,
 };
@@ -1702,6 +1704,69 @@ fn test_limit_order_auto_close() {
 }
 
 #[test]
+fn cancel_all_limit_orders_for_account() {
+	const ASSET_1: Asset = Asset::Usdt;
+	const ASSET_2: Asset = Asset::Btc;
+	const ORDER_ID: u64 = 1;
+
+	new_test_ext().execute_with(|| {
+		for asset in [ASSET_1, ASSET_2] {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				asset,
+				STABLE_ASSET,
+				0,
+				Price::at_tick_zero(),
+			));
+		}
+
+		for (lp, base_asset, side) in [
+			(ALICE, ASSET_1, Side::Sell),
+			(ALICE, ASSET_1, Side::Buy),
+			(ALICE, ASSET_2, Side::Buy),
+			(BOB, ASSET_1, Side::Sell),
+		] {
+			const AMOUNT: AssetAmount = 1000;
+			MockBalance::credit_account(&lp, base_asset, AMOUNT);
+			MockBalance::credit_account(&lp, STABLE_ASSET, AMOUNT);
+
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(lp),
+				base_asset,
+				STABLE_ASSET,
+				side,
+				ORDER_ID,
+				Some(100),
+				AMOUNT,
+				None,
+				None,
+			));
+		}
+
+		let count_orders = |base_asset, lp| {
+			let orders = LiquidityPools::pool_orders_for_account(base_asset, STABLE_ASSET, &lp)
+				.unwrap()
+				.limit_orders;
+
+			(orders.asks.len(), orders.bids.len())
+		};
+
+		// Alice has two orders in asset_1 (in each direction) and one order in asset 2,
+		// Bob also has one order:
+		assert_eq!(count_orders(ASSET_1, ALICE), (1, 1));
+		assert_eq!(count_orders(ASSET_2, ALICE), (0, 1));
+		assert_eq!(count_orders(ASSET_1, BOB), (1, 0));
+
+		assert_ok!(LiquidityPools::cancel_all_limit_orders(&ALICE));
+
+		// All Alice's orders must be closed, Bob's order is untouched:
+		assert_eq!(count_orders(ASSET_1, ALICE), (0, 0));
+		assert_eq!(count_orders(ASSET_2, ALICE), (0, 0));
+		assert_eq!(count_orders(ASSET_1, BOB), (1, 0));
+	});
+}
+
+#[test]
 fn cancel_all_pool_positions() {
 	const BASE_ASSET: Asset = Asset::Dot;
 	const ORDER_ID: u64 = 1;
@@ -1821,6 +1886,60 @@ fn test_get_limit_orders() {
 	});
 }
 
+#[test]
+fn can_update_all_config_items() {
+	const NEW_MINIMUM_USDC: AssetAmount = 5_000 * 10u128.pow(6);
+	const NEW_MINIMUM_USDT: AssetAmount = 6_000 * 10u128.pow(6);
+
+	new_test_ext().execute_with(|| {
+		// Check that the default values are different from the new ones
+		assert_ne!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdc), NEW_MINIMUM_USDC);
+		assert_ne!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdt), NEW_MINIMUM_USDT);
+
+		// Update all config items at the same time
+		assert_ok!(LiquidityPools::update_pallet_config(
+			RuntimeOrigin::root(),
+			bounded_vec![
+				PalletConfigUpdate::SetMinimumLimitOrderAmount {
+					asset: Asset::Usdc,
+					amount: NEW_MINIMUM_USDC
+				},
+				PalletConfigUpdate::SetMinimumLimitOrderAmount {
+					asset: Asset::Usdt,
+					amount: NEW_MINIMUM_USDT
+				},
+			],
+		));
+
+		// Check that the new values were set
+		assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdc), NEW_MINIMUM_USDC);
+		assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdt), NEW_MINIMUM_USDT);
+
+		// Check that the events were emitted
+		assert_events_eq!(
+			Test,
+			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::SetMinimumLimitOrderAmount {
+					asset: Asset::Usdc,
+					amount: NEW_MINIMUM_USDC,
+				},
+			}),
+			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::SetMinimumLimitOrderAmount {
+					asset: Asset::Usdt,
+					amount: NEW_MINIMUM_USDT,
+				},
+			}),
+		);
+
+		// Make sure that only governance can update the config
+		assert_noop!(
+			LiquidityPools::update_pallet_config(RuntimeOrigin::signed(ALICE), bounded_vec![]),
+			sp_runtime::traits::BadOrigin
+		);
+	});
+}
+
 mod minimum_limit_order_amount {
 	use super::*;
 
@@ -1889,45 +2008,6 @@ mod minimum_limit_order_amount {
 				},
 			],
 		));
-	}
-
-	#[test]
-	fn minimum_limit_order_amount_config_governance_only_and_emits_event() {
-		new_test_ext().execute_with(|| {
-			// Non-governance origin is rejected.
-			assert_noop!(
-				LiquidityPools::update_pallet_config(
-					RuntimeOrigin::signed(ALICE),
-					bounded_vec![PalletConfigUpdate::SetMinimumLimitOrderAmount {
-						asset: Asset::Eth,
-						amount: MIN_ETH
-					}],
-				),
-				sp_runtime::traits::BadOrigin,
-			);
-
-			// Governance sets the configured minimums (and only those), one event each.
-			assert_ok!(LiquidityPools::update_pallet_config(
-				RuntimeOrigin::root(),
-				bounded_vec![
-					PalletConfigUpdate::SetMinimumLimitOrderAmount {
-						asset: Asset::Eth,
-						amount: MIN_ETH
-					},
-					PalletConfigUpdate::SetMinimumLimitOrderAmount {
-						asset: Asset::Usdc,
-						amount: MIN_USDC
-					},
-				],
-			));
-			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Eth), MIN_ETH);
-			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdc), MIN_USDC);
-			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Btc), 0);
-			assert_matching_event_count!(
-				Test,
-				RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated { update: PalletConfigUpdate::SetMinimumLimitOrderAmount { .. } }) => 2
-			);
-		});
 	}
 
 	#[test]

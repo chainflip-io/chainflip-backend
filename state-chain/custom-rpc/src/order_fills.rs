@@ -99,8 +99,7 @@ where
 	})
 }
 
-/// Limit order fills are reported by the pool as they happen, since a swap pays the proceeds out
-/// there and then rather than leaving them on the order to be collected.
+/// Limit order fills are reported by the pool after swap execution.
 fn limit_order_fills_from_events(
 	events: &[pallet_cf_pools::Event<Runtime>],
 ) -> impl Iterator<Item = OrderFilled> + '_ {

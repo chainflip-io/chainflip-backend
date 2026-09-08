@@ -25,6 +25,7 @@ use cf_amm::{
 };
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationHooks,
 	LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
@@ -162,12 +163,9 @@ impl<T: Config> LimitOrderUpdate<T> {
 					None, // Dispatch now
 				);
 				let result = if let Err(err) = result {
-					if err == Error::<T>::OrderDoesNotExist.into() ||
-						err == Error::<T>::UnspecifiedOrderPrice.into()
-					{
-						// Ignore the error if the order doesn't exist, as this is expected.
-						// UnspecifiedOrderPrice is expected if the order was fully filled and
-						// therefore removed but the order update did not specify a tick.
+					if err == Error::<T>::UnspecifiedOrderPrice.into() {
+						// Ignore the error if the order doesn't exist, as this is expected when an
+						// order has been fully filled and removed.
 						Ok(())
 					} else {
 						Err(err)
@@ -478,9 +476,6 @@ pub mod pallet {
 		MaximumGrossLiquidity,
 		/// The user's order does not exist.
 		OrderDoesNotExist,
-		/// It is no longer possible to mint limit orders due to reaching the maximum pool
-		/// instances, other than for ticks where a fixed pool currently exists.
-		MaximumPoolInstances,
 		/// The pool does not have enough liquidity left to process the swap.
 		InsufficientLiquidity,
 		/// The swap output is past the maximum allowed amount.
@@ -546,6 +541,8 @@ pub mod pallet {
 			tick: Tick,
 			sell_amount_change: Option<IncreaseOrDecrease<AssetAmount>>,
 			sell_amount_total: AssetAmount,
+			// collected_fees and bought_amount are no longer used. They are left here for
+			// backwards compatibility. They will always be 0.
 			collected_fees: AssetAmount,
 			bought_amount: AssetAmount,
 		},
@@ -1126,8 +1123,8 @@ impl<T: Config> SwappingApi for Pallet<T> {
 				// point.
 				ensure!(remaining_input_amount.is_zero(), Error::<T>::InsufficientLiquidity);
 
-				// The pool doesn't hold the proceeds of the limit orders it just bought into, so
-				// they have to be paid out as part of the swap.
+				// Process any limit order fills that occurred during the swap. This will credit the
+				// LPs with the proceeds of the swap.
 				Self::process_limit_order_fills(pool, &asset_pair, side, limit_order_fills)?;
 
 				let tick_after =
@@ -2314,19 +2311,29 @@ impl<T: Config> Pallet<T> {
 							})
 						},
 					)
-					.map(|(lp, id, tick): (T::AccountId, OrderId, Tick)| {
+					.filter_map(|(lp, id, tick): (T::AccountId, OrderId, Tick)| {
 						let position = pool
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
-							.expect("Cache is always in sync with the pool");
-						LimitOrder {
+							.ok()
+							.flatten()
+							.or_else(|| {
+								// The cache is expected to be in sync with the pool. Report and
+								// skip.
+								log_or_panic!(
+									"Limit order cache holds order {id} at tick {tick}, which the \
+									 pool does not have"
+								);
+								None
+							})?;
+						Some(LimitOrder {
 							lp: lp.clone(),
 							id: id.into(),
 							tick,
 							sell_amount: position.amount,
 							fees_earned: Default::default(),
 							original_sell_amount: position.original_amount,
-						}
+						})
 					})
 					.collect()
 				},

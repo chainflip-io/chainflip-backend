@@ -341,6 +341,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		(output_amount, remaining_amount)
 	}
 
+	/// Adds `sold_amount` to the lp's order at the given tick, creating it if it doesn't exist
+	/// yet, and returns the order as it stands afterwards. Minting nothing reports the existing
+	/// order, and errors if there is none.
 	pub fn mint_limit_order(
 		&mut self,
 		lp: &LiquidityProvider,
@@ -354,6 +357,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		}
 	}
 
+	/// Removes up to `sold_amount` from the lp's order at the given tick, and returns how much
+	/// was actually removed along with the order as it stands afterwards. An order with nothing
+	/// left is removed from the pool.
 	pub fn burn_limit_order(
 		&mut self,
 		lp: &LiquidityProvider,
@@ -453,7 +459,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		order: Side,
 		tick: Tick,
-	) -> Result<limit_orders::Position, limit_orders::PositionError> {
+	) -> Result<Option<limit_orders::Position>, limit_orders::PositionError> {
 		match order {
 			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
 			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),

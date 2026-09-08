@@ -133,8 +133,8 @@ pub enum PositionError {
 	NonExistent,
 }
 
-/// A swap buying into a single limit order. The proceeds are owed to the LP as of the swap, the
-/// pool does not hold on to them.
+/// A swap has bought a certain amount of an order's liquidity, the proceeds are owed to the LP
+/// and will need to be payed out immediately.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Fill<LiquidityProvider> {
 	pub lp: LiquidityProvider,
@@ -274,6 +274,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				),
 			};
 
+			// Cannot underflow as swapped_amount is bounded by amount in both cases above. Saturate
+			// defensively anyway.
 			amount = amount.saturating_sub(bought_amount);
 
 			fill_orders(orders, sqrt_price, available, sold_amount, bought_amount, &mut fills);
@@ -365,21 +367,20 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Ok((burnt_amount, position_info))
 	}
 
-	/// Returns the position for the given lp at the given tick.
+	/// Returns the position for the given lp at the given tick, or `None` if there isn't one.
 	///
 	/// This function never panics.
 	pub(super) fn position<SD: SwapDirection>(
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<Position, PositionError> {
+	) -> Result<Option<Position>, PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
 
-		self.orders[!SD::INPUT_SIDE]
+		Ok(self.orders[!SD::INPUT_SIDE]
 			.get(&sqrt_price)
 			.and_then(|orders| orders.get(lp))
-			.cloned()
-			.ok_or(PositionError::NonExistent)
+			.cloned())
 	}
 
 	/// Returns all the assets available for swaps in a given direction, grouped by tick.
@@ -444,9 +445,9 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 		// errors. The divisions cannot fail: every order holds a non-zero amount, so the
 		// remaining liquidity is non-zero for as long as there is an order left to fill.
 		let sold = mul_div_floor_checked(remaining_sold, position.amount, remaining_available)
-			.unwrap_or(remaining_sold);
+			.unwrap_or_default();
 		let bought = mul_div_floor_checked(remaining_bought, position.amount, remaining_available)
-			.unwrap_or(remaining_bought);
+			.unwrap_or_default();
 
 		// Cannot underflow: `remaining_sold` never exceeds `remaining_available`, which bounds
 		// an order's share of it by the liquidity that order provides.
@@ -1131,8 +1132,8 @@ mod migration_tests {
 		Lp::from([id; 32])
 	}
 
-	/// A price nothing has been bought from.
-	fn untouched() -> FloatBetweenZeroAndOne {
+	/// A fresh order at 100% remaining.
+	fn float_one() -> FloatBetweenZeroAndOne {
 		FloatBetweenZeroAndOne::one()
 	}
 
@@ -1142,7 +1143,7 @@ mod migration_tests {
 	fn remaining_after(
 		fractions: impl IntoIterator<Item = (u128, u128)>,
 	) -> FloatBetweenZeroAndOne {
-		fractions.into_iter().fold(untouched(), |remaining, (numerator, denominator)| {
+		fractions.into_iter().fold(float_one(), |remaining, (numerator, denominator)| {
 			remaining.mul_div_ceil(numerator.into(), denominator.into())
 		})
 	}
@@ -1185,8 +1186,8 @@ mod migration_tests {
 	#[test]
 	fn untouched_orders_survive_intact_and_earn_nothing() {
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
-			vec![(at_tick_zero(), 0, 1000.into(), untouched())],
-			vec![(at_tick_zero(), lp(1), 0, 1000.into(), untouched(), 1000.into())],
+			vec![(at_tick_zero(), 0, 1000.into(), float_one())],
+			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into())],
 		)
 		.migrate();
 
@@ -1194,7 +1195,7 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 1000.into())]);
 		assert_eq!(
 			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
-			Position { amount: 1000.into(), original_amount: 1000.into() }
+			Some(Position { amount: 1000.into(), original_amount: 1000.into() })
 		);
 	}
 
@@ -1206,8 +1207,8 @@ mod migration_tests {
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
 			vec![(at_tick_zero(), 0, 375.into(), remaining_after([(1, 8)]))],
 			vec![
-				(at_tick_zero(), lp(1), 0, 1000.into(), untouched(), 1000.into()),
-				(at_tick_zero(), lp(2), 0, 2000.into(), untouched(), 2000.into()),
+				(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into()),
+				(at_tick_zero(), lp(2), 0, 2000.into(), float_one(), 2000.into()),
 			],
 		)
 		.migrate();
@@ -1234,11 +1235,11 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 375.into())]);
 		assert_eq!(
 			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
-			Position { amount: 125.into(), original_amount: 1000.into() }
+			Some(Position { amount: 125.into(), original_amount: 1000.into() })
 		);
 		assert_eq!(
 			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
-			Position { amount: 250.into(), original_amount: 2000.into() }
+			Some(Position { amount: 250.into(), original_amount: 2000.into() })
 		);
 	}
 
@@ -1247,7 +1248,7 @@ mod migration_tests {
 		// No fixed pool at the price at all: the last of it was bought and the pool deleted.
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
 			vec![],
-			vec![(at_tick_zero(), lp(1), 0, 1000.into(), untouched(), 1000.into())],
+			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into())],
 		)
 		.migrate();
 
@@ -1261,7 +1262,7 @@ mod migration_tests {
 			}]
 		);
 		assert!(state.liquidity::<QuoteToBase>().is_empty());
-		assert_matches!(state.position::<QuoteToBase>(&lp(1), 0), Err(PositionError::NonExistent));
+		assert_matches!(state.position::<QuoteToBase>(&lp(1), 0), Ok(None));
 	}
 
 	#[test]
@@ -1269,10 +1270,10 @@ mod migration_tests {
 		// Liquidity returned to the price after the pool was emptied, so the pool exists again but
 		// under a new instance. The order belongs to the old one and was bought in full.
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
-			vec![(at_tick_zero(), 7, 400.into(), untouched())],
+			vec![(at_tick_zero(), 7, 400.into(), float_one())],
 			vec![
-				(at_tick_zero(), lp(1), 0, 1000.into(), untouched(), 1000.into()),
-				(at_tick_zero(), lp(2), 7, 400.into(), untouched(), 400.into()),
+				(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into()),
+				(at_tick_zero(), lp(2), 7, 400.into(), float_one(), 400.into()),
 			],
 		)
 		.migrate();
@@ -1291,7 +1292,7 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 400.into())]);
 		assert_eq!(
 			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
-			Position { amount: 400.into(), original_amount: 400.into() }
+			Some(Position { amount: 400.into(), original_amount: 400.into() })
 		);
 	}
 
@@ -1301,7 +1302,7 @@ mod migration_tests {
 		// for the floor of what went, so neither number is rounded up in their favour.
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
 			vec![(at_tick_zero(), 0, 501.into(), remaining_after([(1, 2)]))],
-			vec![(at_tick_zero(), lp(1), 0, 1001.into(), untouched(), 1001.into())],
+			vec![(at_tick_zero(), lp(1), 0, 1001.into(), float_one(), 1001.into())],
 		)
 		.migrate();
 
@@ -1323,12 +1324,12 @@ mod migration_tests {
 		let Migrated { pool_state: state, dropped_dust, .. } = old_state(
 			vec![
 				// Backed by the order below, but offering three units more than it holds.
-				(at_tick_zero(), 0, 1003.into(), untouched()),
+				(at_tick_zero(), 0, 1003.into(), float_one()),
 				// Entirely orphaned: every order that once backed this price is gone.
 				// A different price, so a different pool: one counter served them all.
-				(SqrtPrice::from_tick(orphaned_tick), 1, 47.into(), untouched()),
+				(SqrtPrice::from_tick(orphaned_tick), 1, 47.into(), float_one()),
 			],
-			vec![(at_tick_zero(), lp(1), 0, 1000.into(), untouched(), 1000.into())],
+			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into())],
 		)
 		.migrate();
 
@@ -1355,7 +1356,7 @@ mod migration_tests {
 
 			let Migrated { pool_state: state, proceeds, .. } = old_state(
 				vec![(at_tick_zero(), 0, expected, remaining_after([remaining]))],
-				vec![(at_tick_zero(), lp(1), 0, amount, untouched(), amount)],
+				vec![(at_tick_zero(), lp(1), 0, amount, float_one(), amount)],
 			)
 			.migrate();
 
@@ -1395,7 +1396,7 @@ mod migration_tests {
 
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
 			vec![(at_tick_zero(), 0, expected, remaining_after(swaps))],
-			vec![(at_tick_zero(), lp(1), 0, amount, untouched(), amount)],
+			vec![(at_tick_zero(), lp(1), 0, amount, float_one(), amount)],
 		)
 		.migrate();
 

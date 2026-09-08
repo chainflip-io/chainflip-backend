@@ -1025,12 +1025,16 @@ pub trait CustomApi {
 		quote_asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolLiquidity>;
+	/// `filled_orders` is deprecated and ignored: an order with nothing left to sell no longer
+	/// exists, so there are none to report. It is still accepted so that callers passing `at`
+	/// positionally after it keep working.
 	#[method(name = "pool_orders")]
 	fn cf_pool_orders(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
 		lp: Option<state_chain_runtime::AccountId>,
+		filled_orders: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::AccountId>>;
 	#[method(name = "pool_range_order_liquidity_value")]
@@ -2089,6 +2093,7 @@ where
 		base_asset: Asset,
 		quote_asset: Asset,
 		lp: Option<state_chain_runtime::AccountId>,
+		_filled_orders: Option<bool>,
 		at: Option<Hash>,
 	) -> RpcResult<PoolOrders<state_chain_runtime::AccountId>> {
 		flatten_into_error(self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
