@@ -40,8 +40,7 @@ use cf_traits::SwapLimits;
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::{
-	chainlink::{OraclePrice, OraclePriceLegacy},
-	price::PriceAsset,
+	chainlink::OraclePrice, price::PriceAsset,
 };
 pub use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
@@ -79,7 +78,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(24)]
+	#[api_version(25)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -414,8 +413,18 @@ decl_runtime_apis!(
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
 		#[changed_in(11)]
 		fn cf_oracle_prices(
-			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
-		) -> Vec<OraclePriceLegacy>;
+			base_and_quote_asset: Option<(
+				before_version_25::PriceAsset,
+				before_version_25::PriceAsset,
+			)>,
+		) -> Vec<before_version_25::OraclePriceLegacy>;
+		#[changed_in(25)]
+		fn cf_oracle_prices(
+			base_and_quote_asset: Option<(
+				before_version_25::PriceAsset,
+				before_version_25::PriceAsset,
+			)>,
+		) -> Vec<before_version_25::OraclePrice>;
 		fn cf_oracle_prices(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;

@@ -117,6 +117,8 @@ derive_common_traits! {
 	}
 }
 
+cf_utilities::impl_identity_migrations!(PriceStatus,);
+
 derive_common_traits! {
 	#[derive_where(Default;)]
 	#[derive(TypeInfo)]

@@ -463,6 +463,7 @@ pub mod before_version_19;
 pub mod before_version_21;
 pub mod before_version_22;
 pub mod before_version_23;
+pub mod before_version_25;
 pub mod before_version_3;
 pub mod before_version_9;
 

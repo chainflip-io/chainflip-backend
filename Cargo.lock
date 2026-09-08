@@ -1519,6 +1519,7 @@ dependencies = [
  "sp-arithmetic",
  "sp-core",
  "sp-std",
+ "utilities",
 ]
 
 [[package]]
