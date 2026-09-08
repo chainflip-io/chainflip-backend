@@ -312,29 +312,8 @@ pub async fn start(
 ) -> anyhow::Result<()> {
 	debug!("Our derived x25519 pubkey: {}", pk_to_string(&p2p_key.encryption_key.public_key));
 
-	let zmq_context = zmq::Context::new();
-
-	zmq_context.set_max_sockets(65536).expect("should update socket limit");
-
-	let authenticator = auth::start_authentication_thread(zmq_context.clone());
-
-	let (reconnect_sender, reconnect_receiver) = tokio::sync::mpsc::unbounded_channel();
-
-	let (monitor_handle, monitor_event_receiver) =
-		monitor::start_monitoring_thread(zmq_context.clone());
-
-	let mut context = P2PContext {
-		zmq_context,
-		key: p2p_key.encryption_key,
-		monitor_handle,
-		authenticator,
-		active_connections: ActiveConnectionWrapper::new(),
-		x25519_to_account_id: Default::default(),
-		reconnect_context: ReconnectContext::new(reconnect_sender),
-		incoming_message_sender,
-		our_account_id,
-		stop_thread: Arc::new(AtomicBool::new(false)),
-	};
+	let (mut context, monitor_event_receiver, reconnect_receiver) =
+		P2PContext::spawn(p2p_key.encryption_key, our_account_id, incoming_message_sender);
 
 	debug!("Registering peer info for {} peers", current_peers.len());
 	for peer_info in current_peers {
@@ -362,6 +341,40 @@ fn disconnect_socket(_socket: ConnectedOutgoingSocket) {
 }
 
 impl P2PContext {
+	/// Returns the context together with the receivers for monitor events and
+	/// reconnection requests, which are fed by the threads spawned here.
+	fn spawn(
+		key: X25519KeyPair,
+		our_account_id: AccountId,
+		incoming_message_sender: FairSender<AccountId, Vec<u8>>,
+	) -> (Self, UnboundedReceiver<MonitorEvent>, UnboundedReceiver<AccountId>) {
+		let zmq_context = zmq::Context::new();
+
+		zmq_context.set_max_sockets(65536).expect("should update socket limit");
+
+		let authenticator = auth::start_authentication_thread(zmq_context.clone());
+
+		let (reconnect_sender, reconnect_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+		let (monitor_handle, monitor_event_receiver) =
+			monitor::start_monitoring_thread(zmq_context.clone());
+
+		let context = P2PContext {
+			zmq_context,
+			key,
+			monitor_handle,
+			authenticator,
+			active_connections: ActiveConnectionWrapper::new(),
+			x25519_to_account_id: Default::default(),
+			reconnect_context: ReconnectContext::new(reconnect_sender),
+			incoming_message_sender,
+			our_account_id,
+			stop_thread: Arc::new(AtomicBool::new(false)),
+		};
+
+		(context, monitor_event_receiver, reconnect_receiver)
+	}
+
 	async fn control_loop(
 		mut self,
 		mut outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
@@ -532,34 +545,35 @@ impl P2PContext {
 	}
 
 	fn reconnect_to_peer(&mut self, account_id: &AccountId) {
-		if let Some(peer) = self.active_connections.remove(account_id) {
-			match peer.state {
-				ConnectionState::ReconnectionScheduled => {
-					info!("Reconnecting to peer: {account_id}");
-					self.connect_to_peer(peer.info.clone(), peer.last_activity.get());
-				},
-				ConnectionState::Connected(_) => {
-					// It is possible that while we were waiting to reconnect,
-					// we received a peer info update and created a new "connection".
-					// It is safe to drop the reconnection attempt even if this
-					// ZMQ connection is not "healthy" since reconnecting
-					// is now in ZMQ's hands, and it shouldn't be possible that we
-					// have missed any new `ConnectionFailure` event since we wouldn't
-					// be in `Connected` state now.
-					debug!(
-						"Reconnection attempt to {} cancelled: ZMQ socket already exists.",
-						account_id
-					);
-				},
-				ConnectionState::Stale => {
-					debug!(
-						"Reconnection attempt to {} cancelled: connection is stale.",
-						account_id
-					);
-				},
-			}
-		} else {
-			debug!("Will not reconnect to now deregistered peer: {}", account_id);
+		// By the time the reconnect timer fires, the peer might have moved to another state.
+		// The peer's entry in `active_connections` must only be replaced if the peer is still in
+		// the `ReconnectionScheduled` state (PRO-3119).
+		match self.active_connections.get(account_id).map(|peer| &peer.state) {
+			Some(ConnectionState::ReconnectionScheduled) => {
+				info!("Reconnecting to peer: {account_id}");
+				if let Some(peer) = self.active_connections.remove(account_id) {
+					self.connect_to_peer(peer.info, peer.last_activity.get());
+				}
+			},
+			Some(ConnectionState::Connected(_)) => {
+				// It is possible that while we were waiting to reconnect,
+				// we received a peer info update and created a new "connection".
+				// It is safe to drop the reconnection attempt even if this
+				// ZMQ connection is not "healthy" since reconnecting
+				// is now in ZMQ's hands, and it shouldn't be possible that we
+				// have missed any new `ConnectionFailure` event since we wouldn't
+				// be in `Connected` state now.
+				debug!(
+					"Reconnection attempt to {} cancelled: ZMQ socket already exists.",
+					account_id
+				);
+			},
+			Some(ConnectionState::Stale) => {
+				debug!("Reconnection attempt to {} cancelled: connection is stale.", account_id);
+			},
+			None => {
+				debug!("Will not reconnect to now deregistered peer: {}", account_id);
+			},
 		}
 	}
 
