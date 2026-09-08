@@ -2110,7 +2110,7 @@ export const palletCfElectionsElectoralSystemsOraclePricePricePriceAsset = simpl
   'Usd',
   'Fine',
   'Wbtc',
-  'CbBtc',
+  'Cbbtc',
   'Dot',
   'Trx',
   'Bnb',

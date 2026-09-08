@@ -49,8 +49,11 @@ use cf_rpc_apis::{
 };
 use cf_utilities::{
 	migrations::{
-		basics::{migrate_from_historical_type, try_migrate_from_historical_type},
-		v20000, v20100,
+		basics::{
+			migrate_from_historical_type, try_migrate_from_historical_type,
+			try_migrate_to_historical_type,
+		},
+		v20000, v20100, v20300,
 	},
 	rpc::NumberOrHex,
 };
@@ -67,7 +70,8 @@ use jsonrpsee::{
 	PendingSubscriptionSink,
 };
 use pallet_cf_elections::electoral_systems::oracle_price::{
-	chainlink::OraclePrice, price::PriceAsset,
+	chainlink::{OraclePrice, OraclePriceLegacy},
+	price::PriceAsset,
 };
 use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
@@ -3761,15 +3765,44 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<OraclePrice>> {
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version >= 22 {
+				return api.cf_oracle_prices(hash, base_and_quote_asset).map_err(CfApiError::from);
+			}
+
+			let historical_query = if let Some((base_asset, quote_asset)) = base_and_quote_asset {
+				let Ok(base_asset) = try_migrate_to_historical_type(v20300, base_asset) else {
+					return Ok(Vec::new());
+				};
+				let Ok(quote_asset) = try_migrate_to_historical_type(v20300, quote_asset) else {
+					return Ok(Vec::new());
+				};
+
+				Some((base_asset, quote_asset))
+			} else {
+				None
+			};
+
 			Ok::<_, CfApiError>(if version < 11 {
 				#[expect(deprecated)]
-				api.cf_oracle_prices_before_version_11(hash, base_and_quote_asset)
-					.map_err(CfApiError::from)?
+				let prices = api.cf_oracle_prices_before_version_11(hash, historical_query)
+					.map_err(CfApiError::from)?;
+
+				prices
 					.into_iter()
-					.map(Into::into)
+					.map(|price| {
+						let price: OraclePriceLegacy = migrate_from_historical_type(v20300, price);
+						price.into()
+					})
 					.collect()
 			} else {
-				api.cf_oracle_prices(hash, base_and_quote_asset).map_err(CfApiError::from)?
+				#[expect(deprecated)]
+				let prices = api.cf_oracle_prices_before_version_22(hash, historical_query)
+					.map_err(CfApiError::from)?;
+
+				prices
+					.into_iter()
+					.map(|price| migrate_from_historical_type(v20300, price))
+					.collect()
 			})
 		})
 	}

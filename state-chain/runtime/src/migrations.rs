@@ -22,5 +22,6 @@ pub mod broker_withdrawal_addresses_to_asset_balances;
 pub mod bsc_integration;
 pub mod failed_broadcast_chain;
 pub mod housekeeping;
+pub mod oracle_price_bsc;
 pub mod refund_addresses_to_asset_balances;
 pub mod safe_mode;

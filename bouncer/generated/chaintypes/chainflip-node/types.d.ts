@@ -9097,7 +9097,7 @@ export type PalletCfElectionsElectoralSystemsOraclePriceChainlinkChainlinkAssetp
   | 'UsdcUsd'
   | 'UsdtUsd'
   | 'WbtcUsd'
-  | 'CbBtcUsd'
+  | 'CbbtcUsd'
   | 'DotUsd'
   | 'TrxUsd'
   | 'BnbUsd';
@@ -17028,7 +17028,7 @@ export type PalletCfElectionsElectoralSystemsOraclePricePricePriceAsset =
   | 'Usd'
   | 'Fine'
   | 'Wbtc'
-  | 'CbBtc'
+  | 'Cbbtc'
   | 'Dot'
   | 'Trx'
   | 'Bnb';
