@@ -146,7 +146,7 @@ module fair {
   ).* from "./validator"
 
   // The longest fair rotation: Byzantine fails keygen (attributed), one
-  // restart with it banned, then a clean run. Nine blocks.
+  // restart with it banned, then a clean run. Six blocks.
   run fairRotationCompletesTest =
     init
       .then(epochElapses)

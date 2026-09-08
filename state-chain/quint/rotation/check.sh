@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run every Quint check for the rotation model.
-#   ./check.sh          simulation only
-#   ./check.sh --verify add exhaustive Apalache checks
+#   ./check.sh          typecheck, tests, simulation, negative controls (~3 min)
+#   ./check.sh --verify add exhaustive Apalache checks (~18 min in total)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -22,56 +22,19 @@ quint test chain.qnt
 quint test harness.qnt --main=main
 quint test harness.qnt --main=fair
 
-echo "== simulation (ceremony) =="
-CEREMONY_STEPS=6
-CEREMONY_SAMPLES=20000
-CEREMONY_INVARIANTS="C1_AcceptanceUnanimity C2_OffendersAreParticipants C3_HonestNeverOffender SeamSound"
-CEREMONY_WITNESSES="wResolvedSuccess wResolvedFailure wByzantinePunished"
-quint run harness.qnt --main=ceremonyStrong --invariants $CEREMONY_INVARIANTS \
-  --witnesses $CEREMONY_WITNESSES --max-steps=$CEREMONY_STEPS --max-samples=$CEREMONY_SAMPLES \
-  | grep -E '^\[(ok|violation)\]|witnessed in' | sed 's|^|    |'
-
-echo "== simulation (rotation, main) =="
-# Depth 80, not 40: a full rotation needs ~20 deliveries plus the blocks that
-# consume them, and at depth 40 only 0.15% of traces complete one (1.2% at 80).
-# The compound witnesses (W1/W2/W4) need that headroom to fire at all.
-MAIN_STEPS=80
-MAIN_SAMPLES=20000
-MAIN_INVARIANTS="R1_BannedNeverAuthority R2_SizeFloor R3_SharingSetValidity R4_TransitionGating \
-  R5_NoNextKeyAfterAbort R6_KeyEpochAgreement R7_NoAbortAfterActivation H2_UtxoAlwaysHandsOver \
-  H3_NextKeyOnlyAfterActivation H4_ConsSoundness NoUnexpectedLogErrors"
-# W5 and W6 are listed and printed, but neither is a required positive: W5
-# records a known livelock (see PF_NoPanics below) and W6 reads 0 on this
-# instance (under STRONG at n=4 only one validator can ever be banned).
-MAIN_WITNESSES="W1_FullRotationWithHandover W2_RecoverFromKeygenFailure W3_AbortAtSizeFloor \
-  W4_CompleteDespiteSafeMode W5_HandoverVerificationLivelock W6_AbortSharingUnavailable \
-  W7_HandoverRetry"
-quint run harness.qnt --main=main --invariants $MAIN_INVARIANTS \
-  --witnesses $MAIN_WITNESSES --max-steps=$MAIN_STEPS --max-samples=$MAIN_SAMPLES \
-  | grep -E '^\[(ok|violation)\]|witnessed in' | sed 's|^|    |'
-
-# PF_NoPanics is a KNOWN [violation] on `main`: the handover-verification
-# livelock (W5) reaches the handover_invalid_state assertion. Its verdict is a
-# finding recorded in README.md, not a regression, so it is reported here but
-# deliberately does not gate the script. Do not "fix" the model to make it pass.
-echo "== panic freedom (rotation, main) - REPORTED, NOT ENFORCED =="
-set +e
-pf_output=$(quint run harness.qnt --main=main --invariant=PF_NoPanics \
-  --max-steps=$MAIN_STEPS --max-samples=$MAIN_SAMPLES 2>&1)
-set -e
-printf '%s\n' "$pf_output" | grep -E '^\[(ok|violation)\]|--seed' | sed 's|^|    |'
-
-# The remaining validator-layer instances. quint exits non-zero on [violation]
-# so the verdict gates the script; the required witnesses are checked explicitly
-# because a witness that never fires is otherwise silent - a count of 0 means
-# the behaviour the instance exists to exercise has become unreachable, the same
-# kind of silent rot the negative controls below guard against.
+# Every simulated instance goes through this helper. quint exits non-zero on
+# [violation] so the verdict gates the script; the required witnesses are
+# checked explicitly because a witness that never fires is otherwise silent -
+# a count of 0 means the behaviour the instance exists to exercise has become
+# unreachable, the same kind of silent rot the negative controls below guard
+# against. Witnesses that are listed but NOT passed as required (W5, W6) are
+# printed only; their counts are findings recorded in README.md.
 run_instance() {
-  local main="$1" invariants="$2" witnesses="$3" required="$4" samples="$5" out rc wname
-  echo "== simulation (rotation, $main) =="
+  local main="$1" invariants="$2" witnesses="$3" required="$4" steps="$5" samples="$6" out rc wname
+  echo "== simulation ($main) =="
   set +e
   out=$(quint run harness.qnt --main="$main" --invariants $invariants \
-    --witnesses $witnesses --max-steps=$MAIN_STEPS --max-samples="$samples" 2>&1)
+    --witnesses $witnesses --max-steps="$steps" --max-samples="$samples" 2>&1)
   rc=$?
   set -e
   printf '%s\n' "$out" | grep -E '^\[(ok|violation)\]|witnessed in|--seed' | sed 's|^|    |'
@@ -89,6 +52,46 @@ run_instance() {
   done
 }
 
+CEREMONY_STEPS=6
+CEREMONY_SAMPLES=20000
+run_instance ceremonyStrong \
+  "C1_AcceptanceUnanimity C2_OffendersAreParticipants C3_HonestNeverOffender SeamSound" \
+  "wResolvedSuccess wResolvedFailure wByzantinePunished" \
+  "wResolvedSuccess wResolvedFailure wByzantinePunished" \
+  $CEREMONY_STEPS $CEREMONY_SAMPLES
+
+# Depth 80, not 40: a full rotation needs ~20 deliveries plus the blocks that
+# consume them, and at depth 40 only 0.15% of traces complete one (1.2% at 80).
+# The compound witnesses (W1/W2/W4) need that headroom to fire at all.
+MAIN_STEPS=80
+MAIN_SAMPLES=20000
+# W5 and W6 are listed and printed, but neither is a required positive: W5
+# records a known livelock (see PF_NoPanics below) and W6 reads 0 on this
+# instance (under STRONG at n=4 only one validator can ever be banned).
+run_instance main \
+  "R1_BannedNeverAuthority R2_SizeFloor R3_SharingSetValidity R4_TransitionGating \
+   R5_NoNextKeyAfterAbort R6_KeyEpochAgreement R7_NoAbortAfterActivation \
+   H2_UtxoAlwaysHandsOver H3_NextKeyOnlyAfterActivation H4_ConsSoundness \
+   NoUnexpectedLogErrors" \
+  "W1_FullRotationWithHandover W2_RecoverFromKeygenFailure W3_AbortAtSizeFloor \
+   W4_CompleteDespiteSafeMode W5_HandoverVerificationLivelock \
+   W6_AbortSharingUnavailable W7_HandoverRetry" \
+  "W1_FullRotationWithHandover W2_RecoverFromKeygenFailure \
+   W4_CompleteDespiteSafeMode W7_HandoverRetry" \
+  $MAIN_STEPS $MAIN_SAMPLES
+
+# PF_NoPanics is a KNOWN [violation] on `main`: the handover-verification
+# livelock (W5) reaches the handover_invalid_state assertion. Its verdict is a
+# finding recorded in README.md, not a regression, so it is reported here but
+# deliberately does not gate the script. Do not "fix" the model to make it pass.
+echo "== panic freedom (main) - REPORTED, NOT ENFORCED =="
+set +e
+pf_output=$(quint run harness.qnt --main=main --invariant=PF_NoPanics \
+  --witnesses W5_HandoverVerificationLivelock \
+  --max-steps=$MAIN_STEPS --max-samples=$MAIN_SAMPLES 2>&1)
+set -e
+printf '%s\n' "$pf_output" | grep -E '^\[(ok|violation)\]|witnessed in|--seed' | sed 's|^|    |'
+
 # `sol` is Uninitialised: activation completes on it with no key at all, so R6
 # has to tolerate a complete chain whose activeKey is None (W9).
 run_instance uninit \
@@ -96,7 +99,7 @@ run_instance uninit \
    H3_NextKeyOnlyAfterActivation NoUnexpectedLogErrors" \
   "W9_UninitialisedChainCompletesWithoutKey" \
   "W9_UninitialisedChainCompletesWithoutKey" \
-  $MAIN_SAMPLES
+  $MAIN_STEPS $MAIN_SAMPLES
 
 # STRONG = false: the keygen split, where honest nodes can be attributed and so
 # banned (W8). Every safety invariant must still hold; only C3 at the ceremony
@@ -107,7 +110,7 @@ run_instance split \
    H2_UtxoAlwaysHandsOver H3_NextKeyOnlyAfterActivation" \
   "W3_AbortAtSizeFloor W8_HonestBannedUnderSplit" \
   "W3_AbortAtSizeFloor W8_HonestBannedUnderSplit" \
-  $MAIN_SAMPLES
+  $MAIN_STEPS $MAIN_SAMPLES
 
 # FAIR = true: deliveries precede blocks and every ceremony an honest set can
 # finish does finish, so the two liveness properties become bounded invariants
@@ -123,7 +126,7 @@ run_instance fair \
   "L1_Termination L2_Progress R7_NoAbortAfterActivation PF_NoPanics" \
   "W1_FullRotationWithHandover W2_RecoverFromKeygenFailure" \
   "W1_FullRotationWithHandover W2_RecoverFromKeygenFailure" \
-  $FAIR_SAMPLES
+  $MAIN_STEPS $FAIR_SAMPLES
 
 # Negative controls: the model's proof that it can still see the bugs the Rust
 # already fixes. Both of these MUST report [violation] - an [ok] means the
@@ -172,18 +175,44 @@ done
 
 # Exhaustive (Apalache) checks, opt-in because they are slow and shallow.
 #
-# Only `fair` is verified, and only at depth 1. The depth ladder on
-# L1_Termination reads: depth 1 [ok] in 72 s, depth 2 dies with "Ran out of
-# heap memory: Java heap space" after 181 s against Apalache's 4 GiB default.
-# Verification on `main` is worse still (depth 1 alone takes 72 s and depth 2
-# runs for hours), so the exhaustive layer buys almost nothing as the model is
-# currently encoded; the simulation runs above are what actually cover it.
-# Raising this depth needs the state space cut down first, not a bigger heap.
+# Depths are per property, not global: each entry below sits at the deepest
+# rung that returned a verdict inside the budget (see README "Tractability").
+# The ceremony layer verifies at depth 6 in seconds; the validator layer is
+# exhaustive only at depth 1 on the two-chain `main`/`fair` instances and
+# depth 2 on the one-chain `main1`, neither of which reaches a completed
+# rotation. Raising those needs the state space cut down, not a bigger heap:
+# depth 2 on `main` was killed at 8138 s, and depth 3 on `main1` times out.
 if [ "${1:-}" = "--verify" ]; then
-  echo "== verify (rotation, fair) =="
-  for inv in L1_Termination L2_Progress; do
-    echo "  $inv at depth 1"
-    quint verify harness.qnt --main=fair --invariant=$inv --max-steps=1 \
-      | grep -E '^\[(ok|violation)\]' | sed 's|^|    |'
+  echo "== exhaustive verification (slow, ~15 min; runs are sequential: Apalache holds port 8822) =="
+  # macOS ships no `timeout`; perl's alarm is the portable stand-in. A capped
+  # run kills quint but not its Apalache JVM child - run `pkill -f apalache`
+  # after an interrupted --verify pass.
+  if command -v timeout >/dev/null; then CAP=(timeout 900)
+  elif command -v gtimeout >/dev/null; then CAP=(gtimeout 900)
+  else CAP=(perl -e 'alarm shift; exec @ARGV' 900); fi
+
+  verify() { # main invariant depth [extra flags...]
+    local main="$1" inv="$2" depth="$3"; shift 3
+    echo "  ${main}::${inv} depth ${depth} ..."
+    JVM_ARGS="-Xmx8g" "${CAP[@]}" quint verify harness.qnt --main="$main" \
+      --invariant="$inv" --max-steps="$depth" "$@" \
+      | grep -E '^\[(ok|violation)\]' | sed "s|^|  ${main}::${inv} |" \
+      || echo "  ${main}::${inv} NO VERDICT (timeout or error)"
+  }
+
+  # The ceremony layer is a one-shot model: once `result` is set every action in
+  # `step` is disabled, and without no-deadlocks Apalache reports that intended
+  # terminal state as a deadlock. The config is a FILE path - the inline-JSON
+  # form of --apalache-config is silently ignored.
+  for inv in C1_AcceptanceUnanimity C2_OffendersAreParticipants C3_HonestNeverOffender SeamSound; do
+    verify ceremonyStrong $inv 6 --apalache-config=apalache-no-deadlocks.json
+  done
+  # Validator layer: only these fit. Depth 1 on the two-chain instance and depth 2
+  # on the one-chain instance; neither reaches a completed rotation (README "Status").
+  for inv in L1_Termination L2_Progress; do verify fair $inv 1; done
+  # `fun-arrays` is what makes depth 2 reachable at all on main1; H4_ConsSoundness
+  # is trivially true on one chain and is deliberately not verified here.
+  for inv in R2_SizeFloor R4_TransitionGating H3_NextKeyOnlyAfterActivation; do
+    verify main1 $inv 2 --apalache-config=apalache-fun-arrays.json
   done
 fi

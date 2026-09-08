@@ -18,8 +18,8 @@ Apalache (for `quint verify`) and the Rust evaluator are downloaded into
 ## Running
 
 ```bash
-./check.sh            # typecheck, tests, simulation, negative controls (~1 min)
-./check.sh --verify   # add exhaustive Apalache checks (budget ~15 min)
+./check.sh            # typecheck, tests, simulation, negative controls (~3 min)
+./check.sh --verify   # add exhaustive Apalache checks (~18 min in total)
 ```
 
 Every module except `types.qnt` declares `const`s, so checks target an
@@ -30,9 +30,160 @@ quint run harness.qnt --main=main --invariant=PF_NoPanics --max-steps=40
 quint test harness.qnt --main=main
 ```
 
+## Source-file correspondence
+
+```text
+ceremony.qnt  <-> state-chain/pallets/cf-threshold-signature/src/response_status.rs, lib.rs (progress_rotation)
+chain.qnt     <-> state-chain/pallets/cf-threshold-signature/src/key_rotator.rs, lib.rs (on_key_verification_result, terminate_rotation),
+                  state-chain/pallets/cf-vaults/src/vault_activator.rs, state-chain/runtime/src/chainflip/cons_key_rotator.rs
+validator.qnt <-> state-chain/pallets/cf-validator/src/lib.rs (on_initialize, rotation helpers, session hooks), helpers.rs
+```
+
 ## Status
 
-(filled in by Task 8)
+Numbers below come from one `./check.sh` and one `./check.sh --verify` run on
+2026-09-08 (quint 0.32.0, Apalache 0.56.1, darwin 24.6.0, 48 GiB RAM), except
+where a row is marked as carried over from an earlier task report. Simulation
+draws a fresh seed on each run, so witness counts move by a few percent between
+runs; the verdicts do not. Verification times move too, and by more: the three
+`main1` entries took 166 s / 129 s / 422 s here against the 140 s / 248 s / 189 s
+measured in the Task 7b tractability study below. Only the verdicts are stable.
+The whole `--verify` pass took 17 m 33 s wall clock, of which about 15 minutes is
+the Apalache section.
+
+### Ceremony layer (`ceremony.qnt`)
+
+Instances: `ceremonyStrong` (n=4, f=1, `STRONG`), `ceremonySplit`,
+`ceremonyOutage`.
+
+| Property | Meaning | Simulated | Verified |
+|---|---|---|---|
+| `C1_AcceptanceUnanimity` | a key is accepted only when every candidate voted for it | `ceremonyStrong`, depth 6, 20000 samples, `[ok]` | `ceremonyStrong`, depth 6, `[ok]` in 9.1 s |
+| `C2_OffendersAreParticipants` | reported offenders are always drawn from the candidate set | `ceremonyStrong`, depth 6, 20000 samples, `[ok]` | `ceremonyStrong`, depth 6, `[ok]` in 6.7 s |
+| `C3_HonestNeverOffender` | under strong honesty an honest node is never attributed | `ceremonyStrong`, depth 6, 20000 samples, `[ok]` | `ceremonyStrong`, depth 6, `[ok]` in 6.8 s |
+| `SeamSound` | the ceremony result the chain layer consumes matches what the ceremony resolved | `ceremonyStrong`, depth 6, 20000 samples, `[ok]` | `ceremonyStrong`, depth 6, `[ok]` in 7.0 s |
+
+Verification of this layer needs `--apalache-config=apalache-no-deadlocks.json`:
+the ceremony is a one-shot model, so once `result` is set every action in `step`
+is disabled and Apalache reports that intended terminal state as a deadlock.
+`--apalache-config` takes a **file path**; the inline-JSON form is not accepted.
+
+### Chain and validator layers (`chain.qnt`, `validator.qnt`)
+
+Instances: `main` (two chains, one UTXO, `STRONG`, unfair), `uninit` (adds an
+uninitialised chain), `split` (`STRONG = false`), `fair` (fair scheduler,
+`K_BLOCKS = 14`), `main1` (one UTXO chain; exists only so that something on this
+layer verifies above depth 1).
+
+| Property | Meaning | Simulated (instance, depth, samples) | Verified |
+|---|---|---|---|
+| `R1_BannedNeverAuthority` | a banned node is never a primary candidate, never queued, never an authority in `Idle` | `main`, `split`; depth 80, 20000 | no |
+| `R2_SizeFloor` | the queued set respects `max(min_size, contraction floor)` | `main`, `split`; depth 80, 20000 | `main1`, depth 2, `[ok]` in 166 s |
+| `R3_SharingSetValidity` | sharing participants are unbanned current authorities, at least the success threshold | `main`, `split`; depth 80, 20000 | no |
+| `R4_TransitionGating` | the epoch advances only when every chain is `Complete`, with the final candidate set queued | `main`, `uninit`, `split`; depth 80, 20000 | `main1`, depth 2, `[ok]` in 129 s |
+| `R5_NoNextKeyAfterAbort` | in `Idle` no active chain holds a key for a future epoch | `main`, `uninit`, `split`; depth 80, 20000 | no |
+| `R6_KeyEpochAgreement` | active chains agree on the current key epoch | `main`, `uninit`, `split`; depth 80, 20000 | no |
+| `R7_NoAbortAfterActivation` | no abort edge exists past `ActivatingKeys` | `main`, `split`, `fair`; depth 80, 20000 (2000 on `fair`) | no |
+| `H2_UtxoAlwaysHandsOver` | a UTXO chain with a key never completes handover without running the ceremony | `main`, `split`; depth 80, 20000 | no |
+| `H3_NextKeyOnlyAfterActivation` | the next-epoch key exists only during activation and the session steps | `main`, `uninit`, `split`; depth 80, 20000 | `main1`, depth 2, `[ok]` in 422 s |
+| `H4_ConsSoundness` | a merged `Failed` comes from a failed chain and carries exactly its offenders | `main`, depth 80, 20000 | no — and *not* verifiable on `main1`, where it is trivially true on one chain |
+| `NoUnexpectedLogErrors` | no `log::error!` site that `on_initialize`/`activate_keys` treat as impossible is reached | `main`, `uninit`; depth 80, 20000 | no |
+| `PF_NoPanics` | no assertion site in `key_rotator.rs` is reachable | **`[violation]` on `main`** (depth 80, 20000; reported, not enforced); `[ok]` on `fair`, depth 80, 2000 | no |
+| `L1_Termination` | a started rotation finishes within `K_BLOCKS` | `fair`, depth 80, 2000 | `fair`, depth 1, `[ok]` in 78 s |
+| `L2_Progress` | no rotation aborts under a fair scheduler | `fair`, depth 80, 2000 | `fair`, depth 1, `[ok]` in 73 s |
+
+`PF_NoPanics` on `main` is a recorded finding, not a regression: the
+handover-verification livelock (`W5`) reaches the `handover_invalid_state`
+assertion. `check.sh` prints its verdict but does not gate on it.
+
+### Witness coverage
+
+Counts from the `./check.sh` run above. `W5` and `W6` are the only witnesses
+that are printed but not required-positive; every other witness listed here
+fails the script if it reads 0.
+
+| Witness | Instance | Count / samples | Required |
+|---|---|---|---|
+| `W1_FullRotationWithHandover` | `main` | 240 / 20000 (1.20%) | yes |
+| `W2_RecoverFromKeygenFailure` | `main` | 130 / 20000 (0.65%) | yes |
+| `W3_AbortAtSizeFloor` | `main` | 17704 / 20000 (88.52%) | no (required on `split`) |
+| `W4_CompleteDespiteSafeMode` | `main` | 172 / 20000 (0.86%) | yes |
+| `W5_HandoverVerificationLivelock` | `main` | 112 / 20000 (0.56%) | no — a finding, not coverage |
+| `W6_AbortSharingUnavailable` | `main` | **0 / 20000 (0.00%)** | no — unreachable here, see "Known gaps" |
+| `W7_HandoverRetry` | `main` | 543 / 20000 (2.71%) | yes |
+| `W9_UninitialisedChainCompletesWithoutKey` | `uninit` | 32 / 20000 (0.16%) | yes |
+| `W3_AbortAtSizeFloor` | `split` | 16734 / 20000 (83.67%) | yes |
+| `W8_HonestBannedUnderSplit` | `split` | 981 / 20000 (4.91%) | yes |
+| `W1_FullRotationWithHandover` | `fair` | 2000 / 2000 (100.00%) | yes |
+| `W2_RecoverFromKeygenFailure` | `fair` | 2000 / 2000 (100.00%) | yes |
+| `wResolvedSuccess` | `ceremonyStrong` | 1310 / 20000 (6.55%) | yes |
+| `wResolvedFailure` | `ceremonyStrong` | 18690 / 20000 (93.45%) | yes |
+| `wByzantinePunished` | `ceremonyStrong` | 16048 / 20000 (80.24%) | yes |
+
+### Negative controls
+
+Each must report `[violation]`; an `[ok]` fails `check.sh` loudly, because it
+means the model has lost the power to see that bug class.
+
+| Control | Instance | Observed |
+|---|---|---|
+| `NC1_HonestNeverOffender_MustFailHere` | `ceremonySplit` | `[violation]` — without strong honesty an honest node ends up in the resolved offender set |
+| `NC2_DropNeverEmpties_MustFailHere` | `ceremonyOutage` | `[violation]` — the failure-threshold drop empties a non-empty offender set to `Set()` |
+| `NC3_EveryRetryBans_MustFailHere` | `main` | `[violation]` — a retry with empty offenders reissues the ceremony without banning anyone |
+
+### Tractability
+
+Copied from the Task 7b investigation. `fun-arrays` means
+`--apalache-config` pointing at a file containing
+`{"checker": {"smt-encoding": {"type": "fun-arrays"}}}`. Heaps differ across
+sources: the Task 6 rows ran at 24 GiB, the Task 7 rows at Apalache's 4 GiB
+default, the Task 7b rows at 8 GiB (one at 24 GiB, marked). Runs made in
+Task 7b were capped at 600 s (one at 570 s, marked).
+
+| lever | source | instance | property | depth | flags | verdict | seconds | notes |
+|---|---|---|---|---|---|---|---|---|
+| — | Task 6 | main | R2_SizeFloor | 1 | `-Xmx24576m` (24 GiB), default encoding | [ok] | 72 | |
+| — | Task 6 | main | R2_SizeFloor | 2 | 24 GiB, default encoding | no verdict | 8138 (killed, 2 h 16 m) | |
+| — | Task 6 | main | R2_SizeFloor | 8 | 4 GiB (Apalache default) | Java heap space | 181 | evidence that the default heap OOMs |
+| — | Task 7 | fair | L1_Termination | 1 | 4 GiB default | [ok] | 76 | |
+| — | Task 7 | fair | L1_Termination | 2 | 4 GiB default | Java heap space | 181 | 181 s here is a coincidence, not the depth-8 figure above |
+| C tuning | Task 7b | main | R2_SizeFloor | 2 | 8 GiB, default encoding | timeout | 570 (cap) | heap alone is not the constraint |
+| C tuning | Task 7b | main | R2_SizeFloor | 2 | 8 GiB, inline-JSON config | tool error | 6 | one row for two attempts (deviation M1) |
+| C tuning | Task 7b | main | R2_SizeFloor | 1 | 8 GiB, fun-arrays | [ok] | 40 | vs 72 s at 24 GiB, default encoding — not heap-controlled |
+| C tuning | Task 7b | main | R2_SizeFloor | 2 | 8 GiB, fun-arrays | timeout | 600 (cap) | best lever-C configuration, still no verdict |
+| B one chain | Task 7b | main1 | R2_SizeFloor | 2 | 8 GiB, fun-arrays | **[ok]** | 140 | first depth-2 verdict on the validator layer |
+| B one chain | Task 7b | main1 | R4_TransitionGating | 2 | 8 GiB, fun-arrays | **[ok]** | 248 | |
+| B one chain | Task 7b | main1 | H3_NextKeyOnlyAfterActivation | 2 | 8 GiB, fun-arrays | **[ok]** | 189 | |
+| B one chain | Task 7b | main1 | R2_SizeFloor | 3 | 8 GiB, fun-arrays | timeout | 600 (cap) | extra probe (deviation M2) |
+| B one chain | Task 7b | main1 | R2_SizeFloor | 4 | 8 GiB, fun-arrays | timeout | 600 (cap) | |
+| A per-phase block | Task 7b | main | R2_SizeFloor | 2 | 8 GiB, fun-arrays | Java heap space | 219 | OOM where the unsplit model merely ran long |
+| A per-phase block | Task 7b | main | R2_SizeFloor | 2 | 24 GiB, fun-arrays | timeout | 600 (cap) | no verdict even with 24 GiB |
+| A+B | Task 7b | main1 | R2_SizeFloor | 2 | 8 GiB, fun-arrays | Java heap space | 165 | controlled comparison: [ok] in 140 s *without* the split, OOM *with* it |
+| D symbolic sim | Task 7b | main | all 11 safety invariants, conjoined | 25 | 8 GiB, fun-arrays, `--random-transitions` | timeout | 600 (cap) | one run, not one per invariant (deviation M3) |
+| D symbolic sim | Task 7b | main | R2_SizeFloor | 25 | 8 GiB, fun-arrays, `--random-transitions` | timeout | 600 (cap) | one invariant alone is no better |
+
+**The validator layer's exhaustive coverage — depth 1 on `main`/`fair` and
+depth 2 on `main1` — does not reach a completed rotation** (a rotation needs
+roughly twenty environment deliveries plus the blocks that consume them), so the
+evidence for that layer is the randomised simulation at depth 80, where about
+1.2% of `main` traces complete a rotation and every `fair` trace does. Read the
+`[ok]`s in the "Verified" column above as a two-step neighbourhood of the initial
+state, not as a proof over rotations. Only the ceremony layer is exhaustively
+covered end to end, at depth 6, which is the full length of a ceremony.
+
+### Not verified / deferred
+
+- **Temporal mode.** Not attempted. The validator layer does not fit
+  exhaustively at depth 2 on two chains, so temporal properties over it are out
+  of reach; `L1_Termination` and `L2_Progress` on the `fair` instance are the
+  bounded stand-in.
+- **n = 7.** Every instance is n = 4, f = 1. At n = 4 only one validator can
+  ever be banned under `STRONG`, which is why `W6_AbortSharingUnavailable` is
+  unreachable on `main`.
+- **Multiple vaults per chain.** One vault per chain throughout.
+- **Per-phase block transitions.** Tried in full in Task 7b (splitting `block`
+  into per-phase arms), measured strictly worse — on `main1` at depth 2 it turns
+  a 140 s `[ok]` into an out-of-memory failure at 165 s — and reverted.
 
 ## Gotchas
 
@@ -43,7 +194,53 @@ quint test harness.qnt --main=main
 - Without `--main`, quint picks the module named after the file, which is
   wrong for every multi-module file here.
 - `fail` is a built-in; do not name an action `fail`.
+- `getOnlyElement` crashes the Quint-to-Apalache IR converter; `ceremony.qnt`
+  folds over the singleton set instead. `chooseSome` is not an alternative —
+  the simulator does not implement it.
+- `--apalache-config` takes a file path. The inline-JSON form is not accepted
+  and the tuning is silently never applied.
+- `quint verify` leaves an Apalache server on port 8822, so verify runs must be
+  sequential; a second one launched against a busy server just blocks on the
+  port and its wall-clock time is meaningless.
+- Interrupting `quint run` orphans a `~/.quint/rust-evaluator-*/quint_evaluator`
+  child that spins at ~285% CPU and wrecks every subsequent measurement. Follow
+  any interrupt with `pkill -f quint_evaluator` (and `pkill -f apalache` after
+  an interrupted `--verify`).
+- macOS ships no `timeout`; `check.sh` falls back to
+  `perl -e 'alarm shift; exec @ARGV'`.
 
 ## Known gaps
 
-(filled in by Task 8)
+From `DESIGN.md`:
+
+- One vault per chain.
+- Auction economics, bids and delegation are abstract. Delegation has its own
+  proptests in `cf-validator/src/delegation.rs`.
+- Broadcast barriers and which key signs an in-flight transaction.
+- Reputation, slashing, offence accounting, epoch expiry, history cleanup.
+- No block clock: timeouts are events, not durations.
+- The session pallet is two deterministic steps; its internal queueing is not
+  represented.
+
+Discovered while building and checking the model:
+
+- UTXO chains are assumed to hold a genesis key. The bootstrap-without-key path
+  is exercised only by `utxoWithoutKeySkipsHandoverTest` in `chain.qnt`, not by
+  any instance simulation.
+- `W6_AbortSharingUnavailable` is unreachable on every instance here: the
+  `SharingUnavailable` abort needs the current authority set to fall below the
+  success threshold, which n = 4 with at most one ban cannot produce. The abort
+  edge therefore has no coverage.
+- `W3_AbortAtSizeFloor` fires in ~85% of traces, but for the ordinary
+  not-enough-qualified-bidders reason rather than the contraction floor it is
+  named for. It is a weak signal: it does not discriminate the two paths.
+- `H4_ConsSoundness` has no exhaustive coverage at all. It is trivially true on
+  the one-chain `main1` instance — the only one that verifies above depth 1 —
+  so `main1` must never be cited as evidence for it.
+- The `fair` instance runs at ~21-33 traces/s against ~2000-6000/s elsewhere,
+  because no trace aborts early; `check.sh` runs it at 2000 samples for that
+  reason.
+
+## Findings
+
+see Task 9
