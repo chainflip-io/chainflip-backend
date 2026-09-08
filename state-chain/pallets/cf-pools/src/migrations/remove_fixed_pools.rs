@@ -356,8 +356,8 @@ mod tests {
 	type AccountId = <Test as frame_system::Config>::AccountId;
 
 	/// A fresh order at 100% remaining.
-	fn float_one() -> FloatBetweenZeroAndOne {
-		FloatBetweenZeroAndOne::one()
+	fn float_max() -> FloatBetweenZeroAndOne {
+		FloatBetweenZeroAndOne::max()
 	}
 
 	/// A price that swaps have taken these fractions of, folded into the running product one at a
@@ -365,7 +365,7 @@ mod tests {
 	fn remaining_after(
 		fractions: impl IntoIterator<Item = (u128, u128)>,
 	) -> FloatBetweenZeroAndOne {
-		fractions.into_iter().fold(float_one(), |remaining, (numerator, denominator)| {
+		fractions.into_iter().fold(float_max(), |remaining, (numerator, denominator)| {
 			remaining.mul_div_ceil(numerator.into(), denominator.into())
 		})
 	}
@@ -495,7 +495,7 @@ mod tests {
 						lp: (BOB, BOB_ORDER),
 						pool_instance: 1,
 						amount: 800.into(),
-						last_percent_remaining: float_one(),
+						last_percent_remaining: float_max(),
 						original_amount: 800.into(),
 					},
 				],
@@ -552,7 +552,7 @@ mod tests {
 					lp: (ALICE, ALICE_ORDER),
 					pool_instance: 0,
 					amount: 1000.into(),
-					last_percent_remaining: float_one(),
+					last_percent_remaining: float_max(),
 					original_amount: 1000.into(),
 				}],
 			);
@@ -583,7 +583,7 @@ mod tests {
 					tick: TICK,
 					pool_instance: 5,
 					available: 800.into(),
-					percent_remaining: float_one(),
+					percent_remaining: float_max(),
 				}],
 				vec![
 					// Minted into an earlier pool at this price, which was emptied and deleted.
@@ -593,7 +593,7 @@ mod tests {
 						lp: (ALICE, ALICE_ORDER),
 						pool_instance: 0,
 						amount: 1000.into(),
-						last_percent_remaining: float_one(),
+						last_percent_remaining: float_max(),
 						original_amount: 1000.into(),
 					},
 					// Minted into the pool that is still there, and nothing has been bought from
@@ -603,7 +603,7 @@ mod tests {
 						lp: (BOB, BOB_ORDER),
 						pool_instance: 5,
 						amount: 800.into(),
-						last_percent_remaining: float_one(),
+						last_percent_remaining: float_max(),
 						original_amount: 800.into(),
 					},
 				],

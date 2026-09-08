@@ -43,11 +43,85 @@ use sp_std::collections::btree_map::{BTreeMap, OccupiedEntry};
 
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::U256;
+use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
 use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase};
 use cf_amm_math::{is_tick_valid, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
+
+/// TODO: remove FloatBetweenZeroAndOne and its unit tests once the fixed pool removal migration is
+/// complete.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct FloatBetweenZeroAndOne {
+	/// A fixed point number where the msb has a value of `0.5`,
+	/// therefore it cannot represent 1.0, only numbers inside
+	/// `0.0..1.0`, although note the mantissa will never be zero, and
+	/// this is enforced by the public functions of the type. We also
+	/// enforce that the top bit of the mantissa is always set, i.e.
+	/// the float point number is `normalised`. Therefore the mantissa
+	/// always has a value between `0.5..1.0`.
+	normalised_mantissa: U256,
+	/// As we are only interested in representing real numbers below 1,
+	/// the exponent is either 0 or negative.
+	negative_exponent: U256,
+}
+
+impl FloatBetweenZeroAndOne {
+	/// Rights shifts x by shift_bits bits, returning the result and the bits that were shifted
+	/// out/the remainder. You can think of this as a div_mod, but we are always dividing by powers
+	/// of 2.
+	fn right_shift_mod(x: U512, shift_bits: U256) -> (U512, U512) {
+		if shift_bits >= U256::from(512) {
+			(U512::zero(), x)
+		} else {
+			let shift_bits = shift_bits.as_u32();
+			(x >> shift_bits, x & (U512::MAX >> (512 - shift_bits)))
+		}
+	}
+
+	/// The floor and ceil of `x * numerator / denominator`.
+	///
+	/// Returns `None` rather than panicking on input the old representation could not have
+	/// produced, so that a corrupt entry cannot take the chain down mid-migration.
+	fn integer_mul_div(x: U256, numerator: &Self, denominator: &Self) -> Option<(U256, U256)> {
+		if !numerator.normalised_mantissa.bit(255) || !denominator.normalised_mantissa.bit(255) {
+			return None
+		}
+
+		let (y_shifted_floor, div_remainder) = U512::div_mod(
+			U256::full_mul(x, numerator.normalised_mantissa),
+			denominator.normalised_mantissa.into(),
+		);
+
+		// The numerator must be the smaller number: a price cannot have more left than when
+		// the order recorded its share of it. Because both mantissas are normalised, the
+		// exponents settle it unless they are equal, so the subtraction catches every case
+		// but that one.
+		let negative_exponent =
+			numerator.negative_exponent.checked_sub(denominator.negative_exponent)?;
+		if negative_exponent.is_zero() &&
+			numerator.normalised_mantissa > denominator.normalised_mantissa
+		{
+			return None
+		}
+
+		let (y_floor, shift_remainder) = Self::right_shift_mod(y_shifted_floor, negative_exponent);
+
+		// Cannot exceed `x` now that the numerator is known to be the smaller of the two, but
+		// the conversion stays checked rather than resting on that.
+		let y_floor = U256::try_from(y_floor).ok()?;
+
+		Some((
+			y_floor,
+			if div_remainder.is_zero() && shift_remainder.is_zero() {
+				y_floor
+			} else {
+				// Safe: for there to be a remainder, y_floor is at least one below x.
+				y_floor.saturating_add(U256::one())
+			},
+		))
+	}
+}
 
 /// All the orders selling at a single price.
 pub(super) type Orders<LiquidityProvider> = BTreeMap<LiquidityProvider, Position>;
@@ -493,73 +567,8 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 pub mod migration_support {
 	use super::*;
 	use crate::common::Pairs;
-	use sp_core::U512;
 
-	/// A number in `0.0..1.0`, as the old representation stored it: a normalised mantissa, so the
-	/// precision does not decay as the value shrinks, and a 256 bit negative exponent, so the
-	/// running product could shrink across effectively unbounded swaps.
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-	pub struct FloatBetweenZeroAndOne {
-		normalised_mantissa: U256,
-		negative_exponent: U256,
-	}
-
-	impl FloatBetweenZeroAndOne {
-		/// Right shifts `x` by `shift_bits`, returning the result and the bits shifted out.
-		fn right_shift_mod(x: U512, shift_bits: U256) -> (U512, U512) {
-			if shift_bits >= U256::from(512) {
-				(U512::zero(), x)
-			} else {
-				let shift_bits = shift_bits.as_u32();
-				(x >> shift_bits, x & (U512::MAX >> (512 - shift_bits)))
-			}
-		}
-
-		/// The floor and ceil of `x * numerator / denominator`.
-		///
-		/// Returns `None` rather than panicking on input the old representation could not have
-		/// produced, so that a corrupt entry cannot take the chain down mid-migration.
-		fn integer_mul_div(x: U256, numerator: &Self, denominator: &Self) -> Option<(U256, U256)> {
-			if !numerator.normalised_mantissa.bit(255) || !denominator.normalised_mantissa.bit(255)
-			{
-				return None
-			}
-
-			let (y_shifted_floor, div_remainder) = U512::div_mod(
-				U256::full_mul(x, numerator.normalised_mantissa),
-				denominator.normalised_mantissa.into(),
-			);
-
-			// The numerator must be the smaller number: a price cannot have more left than when
-			// the order recorded its share of it. Because both mantissas are normalised, the
-			// exponents settle it unless they are equal, so the subtraction catches every case
-			// but that one.
-			let negative_exponent =
-				numerator.negative_exponent.checked_sub(denominator.negative_exponent)?;
-			if negative_exponent.is_zero() &&
-				numerator.normalised_mantissa > denominator.normalised_mantissa
-			{
-				return None
-			}
-
-			let (y_floor, shift_remainder) =
-				Self::right_shift_mod(y_shifted_floor, negative_exponent);
-
-			// Cannot exceed `x` now that the numerator is known to be the smaller of the two, but
-			// the conversion stays checked rather than resting on that.
-			let y_floor = U256::try_from(y_floor).ok()?;
-
-			Some((
-				y_floor,
-				if div_remainder.is_zero() && shift_remainder.is_zero() {
-					y_floor
-				} else {
-					// Safe: for there to be a remainder, y_floor is at least one below x.
-					y_floor.saturating_add(U256::one())
-				},
-			))
-		}
-	}
+	pub use super::FloatBetweenZeroAndOne;
 
 	/// An order as it stood before the conversion.
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -778,207 +787,6 @@ pub mod migration_support {
 		}
 	}
 
-	#[cfg(test)]
-	mod float_tests {
-		use super::*;
-
-		/// The largest representable value, just under one. An untouched price held this.
-		fn one() -> FloatBetweenZeroAndOne {
-			FloatBetweenZeroAndOne::one()
-		}
-
-		/// `one()` halved `halvings` times.
-		fn halved(halvings: u32) -> FloatBetweenZeroAndOne {
-			FloatBetweenZeroAndOne::from_parts(U256::MAX, halvings.into())
-		}
-
-		#[test]
-		fn right_shift_mod_boundaries() {
-			use FloatBetweenZeroAndOne as F;
-
-			// A shift of zero is the case conversion hits most often, since an untouched order at
-			// an untouched price leaves the exponents equal. It relies on `U512::MAX >> 512`
-			// saturating to zero rather than panicking, so it is worth pinning.
-			assert_eq!(F::right_shift_mod(U512::MAX, U256::zero()), (U512::MAX, U512::zero()));
-			assert_eq!(
-				F::right_shift_mod(U512::MAX, 128.into()),
-				(U512::MAX >> 128, (U512::one() << 128) - 1)
-			);
-			assert_eq!(
-				F::right_shift_mod(U512::MAX, 255.into()),
-				(U512::MAX >> 255, (U256::MAX >> 1).into())
-			);
-			assert_eq!(
-				F::right_shift_mod(U512::MAX, 256.into()),
-				(U256::MAX.into(), U256::MAX.into())
-			);
-			assert_eq!(F::right_shift_mod(U512::MAX, 511.into()), (U512::one(), U512::MAX >> 1));
-
-			// At or past the width everything shifts out, and nothing is lost to a `512 - shift`
-			// that would otherwise underflow.
-			assert_eq!(F::right_shift_mod(U512::MAX, 512.into()), (U512::zero(), U512::MAX));
-			assert_eq!(F::right_shift_mod(U512::MAX, U256::MAX), (U512::zero(), U512::MAX));
-
-			for shift in [U256::zero(), 128.into(), 255.into(), 256.into(), 512.into(), U256::MAX] {
-				assert_eq!(
-					F::right_shift_mod(U512::zero(), shift),
-					(U512::zero(), U512::zero()),
-					"nothing to shift out of zero at {shift}"
-				);
-			}
-		}
-
-		#[test]
-		fn a_float_divided_by_itself_leaves_the_amount_untouched() {
-			for float in [one(), halved(1), halved(255)] {
-				for x in [U256::zero(), U256::one(), 1000.into(), U256::MAX] {
-					// An order at a price nothing has been bought from keeps all of it
-					assert_eq!(
-						FloatBetweenZeroAndOne::integer_mul_div(x, &float, &float),
-						Some((x, x)),
-					);
-				}
-			}
-		}
-
-		#[test]
-		fn halving_splits_the_amount_and_reports_both_roundings() {
-			// Exactly divisible: floor and ceil agree.
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(1000.into(), &halved(1), &one()),
-				Some((500.into(), 500.into()))
-			);
-			// Odd, so the two differ by one.
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(1001.into(), &halved(1), &one()),
-				Some((500.into(), 501.into()))
-			);
-			// A quarter left.
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(1000.into(), &halved(2), &one()),
-				Some((250.into(), 250.into()))
-			);
-		}
-
-		#[test]
-		fn shrinking_far_enough_leaves_nothing() {
-			// The ceil still reports one, so the amount counts as bought rather than vanishing.
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(1000.into(), &halved(255), &one()),
-				Some((U256::zero(), U256::one()))
-			);
-		}
-
-		/// Input the old representation could not have produced. Conversion has to refuse it
-		/// rather than panic, so that one corrupt entry cannot halt the chain mid-migration.
-		#[test]
-		fn malformed_input_is_refused_rather_than_panicking() {
-			let denormalised = FloatBetweenZeroAndOne::from_parts(U256::one(), U256::zero());
-
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(1000.into(), &denormalised, &one()),
-				None,
-				"a mantissa without its top bit set is not a float this ever produced"
-			);
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(1000.into(), &one(), &denormalised),
-				None
-			);
-
-			// A numerator larger than the denominator means a price with *more* left than when
-			// the order was minted, which cannot happen: `percent_remaining` only decreases.
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(1000.into(), &one(), &halved(1)),
-				None,
-				"caught by the exponent subtraction underflowing"
-			);
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(
-					1000.into(),
-					&FloatBetweenZeroAndOne::from_parts(U256::MAX, U256::one()),
-					&FloatBetweenZeroAndOne::from_parts(U256::MAX / 2 + U256::one(), U256::one()),
-				),
-				None,
-				"equal exponents slip past the subtraction, so the mantissas decide"
-			);
-			// One bit apart, which is as close to one as a ratio above it can be. Rounding would
-			// hide it, so only the mantissa comparison rejects this one.
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(
-					Amount::one(),
-					&FloatBetweenZeroAndOne::from_parts(
-						(U256::one() << 255) + U256::one(),
-						U256::one()
-					),
-					&FloatBetweenZeroAndOne::from_parts(U256::one() << 255, U256::one()),
-				),
-				None
-			);
-		}
-
-		/// Adjacent mantissas at the same exponent: a ratio as close to one as the representation
-		/// can express without being one. Conversion still has to round the position down rather
-		/// than hand back more than it held.
-		#[test]
-		fn a_ratio_barely_below_one_rounds_down() {
-			let before = one().mul_div_ceil(U256::one() << 255, U256::MAX);
-			let after = before.mul_div_ceil(U256::MAX >> 1, U256::one() << 255);
-
-			// Renormalisation moves the mantissa up even though the value went down, which is what
-			// makes this the awkward case.
-			assert!(before.normalised_mantissa < after.normalised_mantissa);
-			assert_eq!(
-				FloatBetweenZeroAndOne::integer_mul_div(U256::MAX, &after, &before),
-				Some((U256::MAX - 2, U256::MAX - 1))
-			);
-		}
-
-		/// A `percent_remaining` on chain is the product of one `mul_div_ceil` per swap that took
-		/// liquidity from its price — hundreds of arbitrary ratios, not the round halvings above.
-		/// Converting a position through such a float has to land between the floor and the ceil of
-		/// the same chain of ratios computed exactly.
-		#[test]
-		fn conversion_is_bracketed_by_exact_arithmetic() {
-			use cf_amm_math::{mul_div_ceil_checked, test_utilities::rng_u256_inclusive_bound};
-			use rand::{Rng, SeedableRng};
-
-			fn rng_u256(rng: &mut impl Rng) -> U256 {
-				U256([(); 4].map(|()| rng.gen()))
-			}
-
-			/// A ratio no greater than one, which is all a price's product was ever folded with.
-			fn rng_ratio(rng: &mut impl Rng) -> (U256, U256) {
-				let numerator = rng_u256(rng);
-				(numerator, rng_u256_inclusive_bound(rng, numerator..=U256::MAX))
-			}
-
-			let mut rng = rand::rngs::StdRng::from_seed([8u8; 32]);
-
-			for _ in 0..1024 {
-				let minted = rng_u256(&mut rng);
-
-				let (floor, ceil, percent_remaining) = (0..rng.gen_range(8..256))
-					.map(|_| rng_ratio(&mut rng))
-					.fold((minted, minted, one()), |(floor, ceil, float), (n, d)| {
-						(
-							mul_div_floor_checked(floor, n, d).unwrap(),
-							mul_div_ceil_checked(ceil, n, d).unwrap(),
-							float.mul_div_ceil(n, d),
-						)
-					});
-
-				let (remaining, _) =
-					FloatBetweenZeroAndOne::integer_mul_div(minted, &percent_remaining, &one())
-						.unwrap();
-
-				assert!(
-					floor <= remaining && remaining <= ceil,
-					"{remaining} outside {floor}..={ceil}"
-				);
-			}
-		}
-	}
-
 	#[cfg(any(test, feature = "test"))]
 	mod test_constructors {
 		use super::*;
@@ -988,9 +796,9 @@ pub mod migration_support {
 				Self { normalised_mantissa, negative_exponent }
 			}
 
-			/// The largest representable value, `1.0 - 2^-256`. A price nothing had been bought
-			/// from held exactly this.
-			pub fn one() -> Self {
+			/// Returns the largest possible value i.e. `1.0 - (2^-256)`. A price nothing had
+			/// been bought from held exactly this.
+			pub fn max() -> Self {
 				Self { normalised_mantissa: U256::max_value(), negative_exponent: U256::zero() }
 			}
 
@@ -1133,8 +941,8 @@ mod migration_tests {
 	}
 
 	/// A fresh order at 100% remaining.
-	fn float_one() -> FloatBetweenZeroAndOne {
-		FloatBetweenZeroAndOne::one()
+	fn float_max() -> FloatBetweenZeroAndOne {
+		FloatBetweenZeroAndOne::max()
 	}
 
 	/// A price that swaps have taken these fractions of, folded into the running product one at a
@@ -1143,7 +951,7 @@ mod migration_tests {
 	fn remaining_after(
 		fractions: impl IntoIterator<Item = (u128, u128)>,
 	) -> FloatBetweenZeroAndOne {
-		fractions.into_iter().fold(float_one(), |remaining, (numerator, denominator)| {
+		fractions.into_iter().fold(float_max(), |remaining, (numerator, denominator)| {
 			remaining.mul_div_ceil(numerator.into(), denominator.into())
 		})
 	}
@@ -1186,8 +994,8 @@ mod migration_tests {
 	#[test]
 	fn untouched_orders_survive_intact_and_earn_nothing() {
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
-			vec![(at_tick_zero(), 0, 1000.into(), float_one())],
-			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into())],
+			vec![(at_tick_zero(), 0, 1000.into(), float_max())],
+			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into())],
 		)
 		.migrate();
 
@@ -1207,8 +1015,8 @@ mod migration_tests {
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
 			vec![(at_tick_zero(), 0, 375.into(), remaining_after([(1, 8)]))],
 			vec![
-				(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into()),
-				(at_tick_zero(), lp(2), 0, 2000.into(), float_one(), 2000.into()),
+				(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into()),
+				(at_tick_zero(), lp(2), 0, 2000.into(), float_max(), 2000.into()),
 			],
 		)
 		.migrate();
@@ -1248,7 +1056,7 @@ mod migration_tests {
 		// No fixed pool at the price at all: the last of it was bought and the pool deleted.
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
 			vec![],
-			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into())],
+			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into())],
 		)
 		.migrate();
 
@@ -1270,10 +1078,10 @@ mod migration_tests {
 		// Liquidity returned to the price after the pool was emptied, so the pool exists again but
 		// under a new instance. The order belongs to the old one and was bought in full.
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
-			vec![(at_tick_zero(), 7, 400.into(), float_one())],
+			vec![(at_tick_zero(), 7, 400.into(), float_max())],
 			vec![
-				(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into()),
-				(at_tick_zero(), lp(2), 7, 400.into(), float_one(), 400.into()),
+				(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into()),
+				(at_tick_zero(), lp(2), 7, 400.into(), float_max(), 400.into()),
 			],
 		)
 		.migrate();
@@ -1302,7 +1110,7 @@ mod migration_tests {
 		// for the floor of what went, so neither number is rounded up in their favour.
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
 			vec![(at_tick_zero(), 0, 501.into(), remaining_after([(1, 2)]))],
-			vec![(at_tick_zero(), lp(1), 0, 1001.into(), float_one(), 1001.into())],
+			vec![(at_tick_zero(), lp(1), 0, 1001.into(), float_max(), 1001.into())],
 		)
 		.migrate();
 
@@ -1324,12 +1132,12 @@ mod migration_tests {
 		let Migrated { pool_state: state, dropped_dust, .. } = old_state(
 			vec![
 				// Backed by the order below, but offering three units more than it holds.
-				(at_tick_zero(), 0, 1003.into(), float_one()),
+				(at_tick_zero(), 0, 1003.into(), float_max()),
 				// Entirely orphaned: every order that once backed this price is gone.
 				// A different price, so a different pool: one counter served them all.
-				(SqrtPrice::from_tick(orphaned_tick), 1, 47.into(), float_one()),
+				(SqrtPrice::from_tick(orphaned_tick), 1, 47.into(), float_max()),
 			],
-			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_one(), 1000.into())],
+			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into())],
 		)
 		.migrate();
 
@@ -1356,7 +1164,7 @@ mod migration_tests {
 
 			let Migrated { pool_state: state, proceeds, .. } = old_state(
 				vec![(at_tick_zero(), 0, expected, remaining_after([remaining]))],
-				vec![(at_tick_zero(), lp(1), 0, amount, float_one(), amount)],
+				vec![(at_tick_zero(), lp(1), 0, amount, float_max(), amount)],
 			)
 			.migrate();
 
@@ -1396,7 +1204,7 @@ mod migration_tests {
 
 		let Migrated { pool_state: state, proceeds, .. } = old_state(
 			vec![(at_tick_zero(), 0, expected, remaining_after(swaps))],
-			vec![(at_tick_zero(), lp(1), 0, amount, float_one(), amount)],
+			vec![(at_tick_zero(), lp(1), 0, amount, float_max(), amount)],
 		)
 		.migrate();
 

@@ -15,14 +15,271 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{limit_orders, range_orders};
-use cf_amm_math::{MAX_TICK, MIN_TICK};
+use cf_amm_math::{
+	mul_div, mul_div_ceil_checked, mul_div_floor_checked, test_utilities::rng_u256_inclusive_bound,
+	MAX_TICK, MIN_TICK,
+};
 
 use super::*;
 
-use cf_utilities::{assert_matches, assert_ok};
+use cf_utilities::{assert_matches, assert_ok, assert_panics};
+use rand::{Rng, SeedableRng};
 
 type LiquidityProvider = cf_primitives::AccountId;
 type PoolState = super::PoolState<LiquidityProvider>;
+
+fn mul_div_ceil(a: U256, b: U256, c: U256) -> U256 {
+	mul_div_ceil_checked(a, b, c).unwrap()
+}
+
+fn mul_div_floor(a: U256, b: U256, c: U256) -> U256 {
+	mul_div_floor_checked(a, b, c).unwrap()
+}
+
+/// Only the `remove_fixed_pools` migration still reads a [FloatBetweenZeroAndOne]. Delete this
+/// along with that migration and the type itself.
+#[test]
+fn test_float() {
+	let mut rng = rand::rngs::StdRng::from_seed([8u8; 32]);
+
+	fn rng_u256(rng: &mut impl rand::Rng) -> U256 {
+		U256([(); 4].map(|()| rng.gen()))
+	}
+
+	fn rng_u256_numerator_denominator(rng: &mut impl rand::Rng) -> (U256, U256) {
+		let numerator = rng_u256(rng);
+		(numerator, rng_u256_inclusive_bound(rng, numerator..=U256::MAX))
+	}
+
+	for x in std::iter::repeat_n((), 16).map(|_| rng_u256(&mut rng)) {
+		assert_eq!(FloatBetweenZeroAndOne::max(), FloatBetweenZeroAndOne::max().mul_div_ceil(x, x));
+	}
+
+	for ((x, y), z) in std::iter::repeat_n((), 16)
+		.map(|_| (rng_u256_numerator_denominator(&mut rng), rng_u256(&mut rng)))
+	{
+		let f = FloatBetweenZeroAndOne::max().mul_div_ceil(x, y);
+
+		assert_eq!(Some((z, z)), FloatBetweenZeroAndOne::integer_mul_div(z, &f, &f));
+	}
+
+	for ((x, y), z) in
+		(0..16).map(|_| (rng_u256_numerator_denominator(&mut rng), rng_u256(&mut rng)))
+	{
+		let (floor, ceil) = FloatBetweenZeroAndOne::integer_mul_div(
+			z,
+			&FloatBetweenZeroAndOne::max().mul_div_ceil(x, y),
+			&FloatBetweenZeroAndOne::max(),
+		)
+		.unwrap();
+		let (bound_floor, bound_ceil) = mul_div(z, x, y);
+
+		assert!(floor >= bound_floor && ceil >= bound_ceil);
+	}
+
+	for _ in 0..1024 {
+		let initial_value = rng_u256(&mut rng);
+		let initial_float = FloatBetweenZeroAndOne::max();
+
+		let (final_value_floor, final_value_ceil, final_float) = (0..rng.gen_range(8..256))
+			.map(|_| rng_u256_numerator_denominator(&mut rng))
+			.fold(
+				(initial_value, initial_value, initial_float.clone()),
+				|(value_floor, value_ceil, float), (n, d)| {
+					(
+						mul_div_floor(value_floor, n, d),
+						mul_div_ceil(value_ceil, n, d),
+						float.mul_div_ceil(n, d),
+					)
+				},
+			);
+
+		let final_value_via_float =
+			FloatBetweenZeroAndOne::integer_mul_div(initial_value, &final_float, &initial_float)
+				.unwrap()
+				.0;
+
+		assert!(final_value_ceil >= final_value_via_float);
+		assert!(final_value_floor <= final_value_via_float);
+	}
+
+	{
+		let low_mantissa =
+			FloatBetweenZeroAndOne::max().mul_div_ceil(U256::one() << 255, U256::MAX);
+		let high_mantissa = low_mantissa.mul_div_ceil(U256::MAX >> 1, U256::one() << 255);
+
+		assert!(low_mantissa.normalised_mantissa < high_mantissa.normalised_mantissa);
+		assert_eq!(
+			FloatBetweenZeroAndOne::integer_mul_div(U256::MAX, &high_mantissa, &low_mantissa),
+			Some((U256::MAX - 2, U256::MAX - 1))
+		);
+	}
+
+	{
+		let min_mantissa =
+			FloatBetweenZeroAndOne::max().mul_div_ceil(U256::one() << 255, U256::MAX);
+
+		assert_eq!(min_mantissa.normalised_mantissa, U256::one() << 255);
+
+		let float = min_mantissa.mul_div_ceil(U256::one(), U256::MAX);
+
+		assert_eq!(float.negative_exponent, U256::from(256));
+		assert_eq!(float.normalised_mantissa, (U256::one() << 255) + U256::one());
+	}
+
+	{
+		assert_panics!(FloatBetweenZeroAndOne::max().mul_div_ceil(2.into(), 1.into()));
+		assert_panics!(
+			FloatBetweenZeroAndOne::max().mul_div_ceil(U256::MAX, U256::MAX / U256::from(2))
+		);
+		assert_panics!(FloatBetweenZeroAndOne::max().mul_div_ceil(0.into(), 1.into()));
+	}
+
+	{
+		// A numerator above the denominator means a price with more left than when the order
+		// recorded its share of it, which the old representation could not produce. Refused
+		// rather than panicking, so one corrupt entry cannot halt the chain mid-migration.
+		assert_eq!(
+			FloatBetweenZeroAndOne::integer_mul_div(
+				1.into(),
+				&FloatBetweenZeroAndOne::max(),
+				&FloatBetweenZeroAndOne::max().mul_div_ceil(1.into(), 2.into())
+			),
+			None
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::MAX,
+				&FloatBetweenZeroAndOne::max(),
+				&FloatBetweenZeroAndOne::max().mul_div_ceil(1.into(), 2.into())
+			),
+			None
+		);
+		// Nor could it produce a mantissa without its top bit set, i.e. one not normalised.
+		assert_eq!(
+			FloatBetweenZeroAndOne::integer_mul_div(
+				1000.into(),
+				&FloatBetweenZeroAndOne {
+					normalised_mantissa: U256::one(),
+					negative_exponent: U256::zero()
+				},
+				&FloatBetweenZeroAndOne::max()
+			),
+			None
+		);
+	}
+
+	fn min_float() -> FloatBetweenZeroAndOne {
+		FloatBetweenZeroAndOne {
+			negative_exponent: U256::MAX,
+			normalised_mantissa: U256::one() << 255,
+		}
+	}
+
+	{
+		assert_eq!(min_float(), min_float().mul_div_ceil(U256::one(), U256::from(256)));
+		assert_eq!(min_float(), min_float().mul_div_ceil(U256::MAX - 1, U256::MAX));
+	}
+
+	{
+		assert_eq!(
+			Some((U256::zero(), U256::one())),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::MAX,
+				&min_float(),
+				&FloatBetweenZeroAndOne::max()
+			)
+		);
+		assert_eq!(
+			Some((U256::zero(), U256::one())),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::one(),
+				&min_float(),
+				&FloatBetweenZeroAndOne::max()
+			)
+		);
+		assert_eq!(
+			Some((U256::MAX, U256::MAX)),
+			FloatBetweenZeroAndOne::integer_mul_div(U256::MAX, &min_float(), &min_float())
+		);
+		assert_eq!(
+			Some((U256::one() << 255, U256::one() << 255)),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::MAX,
+				&min_float(),
+				&FloatBetweenZeroAndOne {
+					normalised_mantissa: U256::MAX,
+					negative_exponent: U256::MAX
+				}
+			)
+		);
+		assert_eq!(
+			Some((U256::zero(), U256::zero())),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::zero(),
+				&min_float(),
+				&FloatBetweenZeroAndOne {
+					normalised_mantissa: U256::MAX,
+					negative_exponent: U256::MAX
+				}
+			)
+		);
+		assert_eq!(
+			Some((U256::zero(), U256::one())),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::one(),
+				&min_float(),
+				&FloatBetweenZeroAndOne {
+					normalised_mantissa: U256::MAX,
+					negative_exponent: U256::MAX
+				}
+			)
+		);
+	}
+
+	{
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, U256::MAX),
+			(U512::zero(), U512::MAX)
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, 512.into()),
+			(U512::zero(), U512::MAX)
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, 511.into()),
+			(U512::one(), U512::MAX >> 1)
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, 256.into()),
+			(U256::MAX.into(), U256::MAX.into())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, 255.into()),
+			(U512::MAX >> 255, (U256::MAX >> 1).into())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), U256::MAX),
+			(U512::zero(), U512::zero())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), 512.into()),
+			(U512::zero(), U512::zero())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), 511.into()),
+			(U512::zero(), U512::zero())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), 255.into()),
+			(U512::zero(), U512::zero())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), 128.into()),
+			(U512::zero(), U512::zero())
+		);
+	}
+}
 
 fn lp(id: u8) -> LiquidityProvider {
 	LiquidityProvider::from([id; 32])
@@ -432,8 +689,6 @@ fn fills_are_split_pro_rata() {
 /// lost is an lp's liquidity vanishing off the book.
 #[test]
 fn fills_conserve_liquidity_for_arbitrary_books() {
-	use rand::{Rng, SeedableRng};
-
 	let mut rng = rand::rngs::StdRng::from_seed([11u8; 32]);
 
 	for _ in 0..256 {
