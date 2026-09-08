@@ -112,7 +112,7 @@ reads 8069 / 20000 (40.34%) on `split`.
 | `W3_AbortAtSizeFloor` | `main` | 17704 / 20000 (88.52%) | no (required on `split`) |
 | `W4_CompleteDespiteSafeMode` | `main` | 172 / 20000 (0.86%) | yes |
 | `W5_HandoverVerificationLivelock` | `main` | 112 / 20000 (0.56%) | no — a finding, not coverage |
-| `W6_AbortSharingUnavailable` | `main` | **0 / 20000 (0.00%)** | no — unreachable here, see "Known gaps" |
+| `W6_AbortSharingUnavailable` | `main` | **0 / 20000 (0.00%)** | no — reads 0 on this instance, see "Known gaps" |
 | `W7_HandoverRetry` | `main` | 543 / 20000 (2.71%) | yes |
 | `W10_ForcedRotationWhileBroadcastsPending` | `main` | 6739 / 20000 (33.70%) | no — a finding, not coverage |
 | `W9_UninitialisedChainCompletesWithoutKey` | `uninit` | 32 / 20000 (0.16%) | yes |
@@ -181,9 +181,10 @@ covered end to end, at depth 6, which is the full length of a ceremony.
   exhaustively at depth 2 on two chains, so temporal properties over it are out
   of reach; `L1_Termination` and `L2_Progress` on the `fair` instance are the
   bounded stand-in.
-- **n = 7.** Every instance is n = 4, f = 1. At n = 4 only one validator can
-  ever be banned under `STRONG`, which is why `W6_AbortSharingUnavailable` is
-  unreachable on `main`.
+- **n = 7.** Every instance is n = 4, f = 1. At n = 4 the success threshold is
+  3 and only one validator can ever be banned under `STRONG`, so three unbanned
+  current authorities always remain and `W6_AbortSharingUnavailable` reads 0 on
+  this instance. Whether the edge is reachable at all is not settled here.
 - **Multiple vaults per chain.** One vault per chain throughout.
 - **Per-phase block transitions.** Tried in full in Task 7b (splitting `block`
   into per-phase arms), measured strictly worse — on `main1` at depth 2 it turns
@@ -266,7 +267,7 @@ When the *verification signing* that follows a successful key-handover ceremony
 fails, `on_key_verification_result` routes the error to `terminate_rotation`,
 which parks that chain in `KeyRotationStatus::Failed { offenders }` — not in
 `KeyHandoverFailed`, the variant `key_handover` knows how to resume from. The
-offender set can be empty: `ThresholdCeremonyContext::offenders()` returns an
+offender set can be empty: `CeremonyContext::<T, I>::offenders()` returns an
 empty `Vec` whenever the set it would report exceeds half the candidates, which
 is exactly the mass-unresponsiveness case. `ConsKeyRotator::status()` then folds
 that chain's `Ready(Failed(∅))` with the other chains' `Ready(KeyHandoverComplete)`
@@ -299,7 +300,7 @@ the `PF_NoPanics` violation at `--max-steps=80`.
 
 ### F2 — A retry that bans nobody re-runs the same ceremony
 
-**`NC3_EveryRetryBans_MustFailHere`. Classification: By design. Repro test: `nc3RetryWithoutBanReproTest`. No Linear issue.**
+**`NC3_EveryRetryBans_MustFailHere`. Classification: By design. Repro test: `nc3RetryWithoutBanReproTest`. Linear: none (by design).**
 
 `try_restart_keygen` calls `rotation_state.ban(offenders)` and re-resolves the
 auction excluding the banned set. With an empty offender set — again the
@@ -326,8 +327,14 @@ then calls the same `start_authority_rotation`. Governance can therefore start a
 rotation in exactly the state the hook declines to act on. The model reproduces
 this faithfully — `forceRotation` is guarded by `Idle` and `rotationEnabled`
 only — and `W10` reads 6739 / 20000 (33.70%) on `main` and 8069 / 20000 (40.34%)
-on `split` at depth 80. Every safety invariant still holds in those traces, but
-that is weak evidence: broadcast barriers and which key signs an in-flight
+on `split` at depth 80. **Read those percentages as reachability, not as
+frequency:** they measure how often the model's unconstrained
+`toggleBroadcastsPending` adversary action happens to be set when
+`forceRotation` fires, and are not an estimate of anything in production. They
+are also a lower bound on the bypass, because the flag is set only when the
+forced rotation gets past the auction — a forced rotation that aborts
+immediately is not counted. Every safety invariant still holds in those traces,
+but that is weak evidence: broadcast barriers and which key signs an in-flight
 transaction are explicitly out of scope (see "Known gaps"), so the model cannot
 see the consequence the hook's gate exists to prevent. Classified By design
 because `force_rotation` is a governance override and overriding is what it is
