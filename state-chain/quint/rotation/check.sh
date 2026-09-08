@@ -65,9 +65,11 @@ run_instance ceremonyStrong \
 # The compound witnesses (W1/W2/W4) need that headroom to fire at all.
 MAIN_STEPS=80
 MAIN_SAMPLES=20000
-# W5 and W6 are listed and printed, but neither is a required positive: W5
-# records a known livelock (see PF_NoPanics below) and W6 reads 0 on this
-# instance (under STRONG at n=4 only one validator can ever be banned).
+# W5, W6 and W10 are listed and printed, but none is a required positive: W5
+# records a known livelock (see PF_NoPanics below), W10 records force_rotation
+# bypassing the pending-broadcast gate (both are findings, see README
+# "Findings"), and W6 reads 0 on this instance (under STRONG at n=4 only one
+# validator can ever be banned).
 run_instance main \
   "R1_BannedNeverAuthority R2_SizeFloor R3_SharingSetValidity R4_TransitionGating \
    R5_NoNextKeyAfterAbort R6_KeyEpochAgreement R7_NoAbortAfterActivation \
@@ -75,7 +77,8 @@ run_instance main \
    NoUnexpectedLogErrors" \
   "W1_FullRotationWithHandover W2_RecoverFromKeygenFailure W3_AbortAtSizeFloor \
    W4_CompleteDespiteSafeMode W5_HandoverVerificationLivelock \
-   W6_AbortSharingUnavailable W7_HandoverRetry" \
+   W6_AbortSharingUnavailable W7_HandoverRetry \
+   W10_ForcedRotationWhileBroadcastsPending" \
   "W1_FullRotationWithHandover W2_RecoverFromKeygenFailure \
    W4_CompleteDespiteSafeMode W7_HandoverRetry" \
   $MAIN_STEPS $MAIN_SAMPLES

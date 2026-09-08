@@ -77,6 +77,95 @@ module main {
         w.chains.get("btc").activeKey == Some({ epoch: 2, key: 2 }),
         w.chains.get("btc").handoverRan,
       })
+
+  // W5, the handover-verification livelock, driven with concrete arguments.
+  // BTC's handover ceremony succeeds but the verification signing fails with an
+  // empty offender set (offenders() drops any set above half the candidates),
+  // so BTC lands in Failed(Set()) while EVM sits at KeyHandoverComplete. The
+  // combinator folds the mixed pair into FailedOuter(Set()); zero offenders
+  // intersect the candidates, so on_initialize takes the non-candidate branch,
+  // bans nobody, and calls try_start_key_handover, whose key_handover on a
+  // Failed chain hits log_or_panic!("Key handover initiated during invalid
+  // state"). Nothing changes, so the next block does it again.
+  run w5LivelockReproTest =
+    init
+      .then(epochElapses)
+      .then(block(Set(), Set(), true))
+      .expect(inKeygen(w.phase))
+      .then(keygenOutcome("btc", true, Set()))
+      .then(keygenOutcome("evm", true, Set()))
+      .then(verificationResult("btc", true, Set()))
+      .then(verificationResult("evm", true, Set()))
+      .then(block(Set(), Set(), true))
+      .expect(inHandover(w.phase))
+      .then(handoverOutcome("btc", true, Set()))
+      .then(verificationResult("btc", false, Set()))
+      .expect(all {
+        w.chains.get("btc").status == Failed(Set()),
+        w.chains.get("evm").status == KeyHandoverComplete(2),
+        consStatus(w.chains) == Ready(FailedOuter(Set())),
+        w.panics == Set(),
+      })
+      .then(block(Set(), Set(), true))
+      .expect(W5_HandoverVerificationLivelock)
+      // The second block reproduces the first exactly: this is a livelock, not
+      // a one-off assertion. Only the retry counter moves.
+      .then(block(Set(), Set(), true))
+      .expect(all {
+        W5_HandoverVerificationLivelock,
+        w.hist.handoverRetries == 2,
+        w.hist.retryWithoutBan,
+        // No escape edge: the phase never leaves KeyHandoversInProgress and the
+        // banned set never grows, so no abort and no restart is ever reached.
+        inHandover(w.phase),
+        w.hist.aborts == 0,
+        // Every safety invariant still holds here; the livelock is the whole bug.
+        H4_ConsSoundness,
+        NoUnexpectedLogErrors,
+      })
+
+  // NC3: a retry that bans nobody. Both chains' keygens fail with an empty
+  // offender set, so try_restart_keygen extends `banned` with nothing and
+  // re-runs the auction over the same candidates.
+  run nc3RetryWithoutBanReproTest =
+    init
+      .then(epochElapses)
+      .then(block(Set(), Set(), true))
+      .expect(inKeygen(w.phase))
+      .then(keygenOutcome("btc", false, Set()))
+      .then(keygenOutcome("evm", false, Set()))
+      .expect(all {
+        w.chains.get("btc").status == Failed(Set()),
+        consStatus(w.chains) == Ready(FailedOuter(Set())),
+        not(w.hist.retryWithoutBan),
+      })
+      .then(block(Set(), Set(), true))
+      .expect(all {
+        w.hist.retryWithoutBan,
+        w.hist.keygenRestarts == 1,
+        // Identical rotation state: same candidates, still nobody banned.
+        w.phase == KeygensInProgress({ primary: Set(1, 2, 3, 4), banned: Set(), newEpoch: 2 }),
+        not(NC3_EveryRetryBans_MustFailHere),
+      })
+
+  // W10: force_rotation ignores RotationBroadcastsPending. on_initialize's Idle
+  // arm refuses to start a rotation while broadcasts are pending; the extrinsic
+  // checks only Idle and safe mode, so the same block-height state that the hook
+  // declines to act on starts a rotation when governance asks.
+  run w10ForcedRotationBypassesBroadcastGateTest =
+    init
+      .then(toggleBroadcastsPending)
+      .then(epochElapses)
+      // The hook declines: epoch due, but broadcasts are pending.
+      .then(block(Set(), Set(), true))
+      .expect(all { w.phase == Idle, not(w.hist.forcedWhileBroadcastsPending) })
+      // Governance does not.
+      .then(forceRotation)
+      .expect(all {
+        inKeygen(w.phase),
+        w.broadcastsPending,
+        W10_ForcedRotationWhileBroadcastsPending,
+      })
 }
 
 // Adds an uninitialised chain: activation completes on it without a key

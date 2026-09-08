@@ -53,6 +53,8 @@ module rotation {
     safeModeOffWhileActivating: bool,
     epochsAdvanced: int,
     rotationStartedAt: int,
+    // W10: force_rotation started a rotation while RotationBroadcastsPending held.
+    forcedWhileBroadcastsPending: bool,
   }
 
   type World = {
@@ -292,6 +294,7 @@ module rotation {
         keygenRestarts: 0, handoverRetries: 0, aborts: 0, retryWithoutBan: false,
         abortedFrom: Set(), lastAbortReason: None, lastRs: None, lastSharing: None,
         safeModeOffWhileActivating: false, epochsAdvanced: 0, rotationStartedAt: 0,
+        forcedWhileBroadcastsPending: false,
       },
     }
   }
@@ -382,10 +385,16 @@ module rotation {
   }
 
   // force_rotation: governance, Idle, safe mode. It does NOT consult
-  // RotationBroadcastsPending (on_initialize does).
+  // RotationBroadcastsPending (on_initialize does). W10 records each time that
+  // gate is bypassed and a rotation actually gets under way.
+  pure def forceRotationStep(x: World): World =
+    val y = startAuthorityRotation(x)
+    { ...y, hist: { ...y.hist, forcedWhileBroadcastsPending:
+        y.hist.forcedWhileBroadcastsPending or (x.broadcastsPending and y.phase != Idle) } }
+
   action forceRotation = all {
     w.phase == Idle, w.rotationEnabled,
-    w' = startAuthorityRotation(w),
+    w' = forceRotationStep(w),
   }
 
   action step = {
@@ -542,4 +551,7 @@ module rotation {
   }
   val W6_AbortSharingUnavailable = w.hist.lastAbortReason == Some(SharingUnavailable)
   val W7_HandoverRetry = w.hist.handoverRetries >= 1
+  // W10: force_rotation ran while broadcasts from the previous rotation were
+  // still pending, a gate on_initialize's Idle arm enforces and this call does not.
+  val W10_ForcedRotationWhileBroadcastsPending = w.hist.forcedWhileBroadcastsPending
 }

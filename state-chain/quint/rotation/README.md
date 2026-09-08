@@ -94,13 +94,16 @@ layer verifies above depth 1).
 
 `PF_NoPanics` on `main` is a recorded finding, not a regression: the
 handover-verification livelock (`W5`) reaches the `handover_invalid_state`
-assertion. `check.sh` prints its verdict but does not gate on it.
+assertion. `check.sh` prints its verdict but does not gate on it. See
+"Findings" (F1) for the classification and the Rust path.
 
 ### Witness coverage
 
-Counts from the `./check.sh` run above. `W5` and `W6` are the only witnesses
-that are printed but not required-positive; every other witness listed here
-fails the script if it reads 0.
+Counts from the `./check.sh` run above. `W5`, `W6` and `W10` are the only
+witnesses that are printed but not required-positive; every other witness listed
+here fails the script if it reads 0. The `W10` figure comes from the Task 9
+triage run rather than the `./check.sh` run the rest of the table is from; it
+reads 8069 / 20000 (40.34%) on `split`.
 
 | Witness | Instance | Count / samples | Required |
 |---|---|---|---|
@@ -111,6 +114,7 @@ fails the script if it reads 0.
 | `W5_HandoverVerificationLivelock` | `main` | 112 / 20000 (0.56%) | no — a finding, not coverage |
 | `W6_AbortSharingUnavailable` | `main` | **0 / 20000 (0.00%)** | no — unreachable here, see "Known gaps" |
 | `W7_HandoverRetry` | `main` | 543 / 20000 (2.71%) | yes |
+| `W10_ForcedRotationWhileBroadcastsPending` | `main` | 6739 / 20000 (33.70%) | no — a finding, not coverage |
 | `W9_UninitialisedChainCompletesWithoutKey` | `uninit` | 32 / 20000 (0.16%) | yes |
 | `W3_AbortAtSizeFloor` | `split` | 16734 / 20000 (83.67%) | yes |
 | `W8_HonestBannedUnderSplit` | `split` | 981 / 20000 (4.91%) | yes |
@@ -227,10 +231,10 @@ Discovered while building and checking the model:
 - UTXO chains are assumed to hold a genesis key. The bootstrap-without-key path
   is exercised only by `utxoWithoutKeySkipsHandoverTest` in `chain.qnt`, not by
   any instance simulation.
-- `W6_AbortSharingUnavailable` is unreachable on every instance here: the
+- `W6_AbortSharingUnavailable` reads 0 on every instance here: the
   `SharingUnavailable` abort needs the current authority set to fall below the
   success threshold, which n = 4 with at most one ban cannot produce. The abort
-  edge therefore has no coverage.
+  edge therefore has no coverage. See "Findings", "Coverage gaps observed".
 - `W3_AbortAtSizeFloor` fires in ~85% of traces, but for the ordinary
   not-enough-qualified-bidders reason rather than the contraction floor it is
   named for. It is a weak signal: it does not discriminate the two paths.
@@ -243,4 +247,117 @@ Discovered while building and checking the model:
 
 ## Findings
 
-see Task 9
+Triage of every candidate the checking tasks raised: the `PF_NoPanics`
+violation on `main`, the `NC3` control, the `H4_ConsSoundness` non-observation,
+the zero `W6` count, and `force_rotation`'s missing broadcast gate. Each
+surviving item has a deterministic `run` in `harness.qnt` that drives the
+behaviour with concrete arguments — those are the model-side regression guards,
+and `quint test harness.qnt --main=main` (in `check.sh`) runs them.
+
+Nothing in this section changes any Rust. Where a finding is Real, the next
+step is a `cf-integration-tests/src/authorities.rs` regression test, tracked
+separately.
+
+### F1 — Handover-verification failure livelocks the rotation
+
+**`PF_NoPanics` / `W5_HandoverVerificationLivelock`. Classification: Real. Repro test: `w5LivelockReproTest`. Linear: pending.**
+
+When the *verification signing* that follows a successful key-handover ceremony
+fails, `on_key_verification_result` routes the error to `terminate_rotation`,
+which parks that chain in `KeyRotationStatus::Failed { offenders }` — not in
+`KeyHandoverFailed`, the variant `key_handover` knows how to resume from. The
+offender set can be empty: `ThresholdCeremonyContext::offenders()` returns an
+empty `Vec` whenever the set it would report exceeds half the candidates, which
+is exactly the mass-unresponsiveness case. `ConsKeyRotator::status()` then folds
+that chain's `Ready(Failed(∅))` with the other chains' `Ready(KeyHandoverComplete)`
+into `Ready(Failed(∅))`. Back in `on_initialize`'s `KeyHandoversInProgress` arm,
+`offenders.intersection(candidates).count()` is 0, so control takes the
+"Retrying with a new participant set" branch, extends `rotation_state.banned`
+with nothing, and calls `try_start_key_handover`, which calls
+`KeyRotator::key_handover` on every chain. On the `Failed` chain that reaches
+`log_or_panic!("Key handover initiated during invalid state")` and leaves the
+storage untouched; on the chains already at `KeyHandoverComplete` it logs "Key
+handover already complete" and does nothing. The phase stays
+`KeyHandoversInProgress`, no state changes, and the next block repeats the whole
+sequence. No abort edge applies (`try_start_key_handover` aborts only on safe
+mode or an unavailable sharing set) and `force_rotation` requires `Idle`, so the
+chain cannot leave the rotation. `log_or_panic!` panics in debug and test builds
+but only logs in release, so the production consequence is a **livelock — the
+rotation never completes and never aborts — not a chain halt**. The one
+operational escape found in both the model and the Rust is governance turning
+`SafeMode::authority_rotation_enabled` off: the next block's
+`try_start_key_handover` then aborts the rotation before it touches
+`key_handover`. Rust path: `cf-threshold-signature/src/lib.rs`
+(`offenders()`, `on_key_verification_result` → `terminate_rotation`) →
+`cf-threshold-signature/src/key_rotator.rs` (`status`, `key_handover`'s
+`other => log_or_panic!` arm) → `runtime/src/chainflip/cons_key_rotator.rs`
+(`status`) → `cf-validator/src/lib.rs` (`on_initialize`'s
+`KeyHandoversInProgress` arm, `try_start_key_handover`). Simulation reaches it
+in 0.56–0.60% of `main` traces at depth 80; seeds `0xed970f786a6883bf`,
+`0x46a667fb9d3075b`, `0x4fa4999ea5463ae4`, `0x87876582b1418c09` all reproduce
+the `PF_NoPanics` violation at `--max-steps=80`.
+
+### F2 — A retry that bans nobody re-runs the same ceremony
+
+**`NC3_EveryRetryBans_MustFailHere`. Classification: By design. Repro test: `nc3RetryWithoutBanReproTest`. No Linear issue.**
+
+`try_restart_keygen` calls `rotation_state.ban(offenders)` and re-resolves the
+auction excluding the banned set. With an empty offender set — again the
+`offenders()` liveness-threshold drop, or a chain that failed with nobody
+attributable — the banned set does not grow, the auction returns the same
+winners, and the identical keygen is reissued. The control asserts that this
+never happens precisely so that it *must* fail: an `[ok]` would mean the model
+had lost the ability to see unattributed-retry loops. This is the intended
+behaviour of the Rust — the alternative, aborting whenever a failure cannot be
+attributed, hands any single unattributable failure the power to cancel a
+rotation — and the retry is bounded in practice by the epoch continuing. The
+control stays in `check.sh`'s `MUST_VIOLATE` list. Note that F1 is the case
+where this same unattributed retry does *not* make progress; F2 on its own does.
+
+### F3 — `force_rotation` bypasses the pending-broadcast gate
+
+**`W10_ForcedRotationWhileBroadcastsPending`. Classification: By design; the divergence is undocumented and its consequence is outside this model. Repro test: `w10ForcedRotationBypassesBroadcastGateTest`. Linear: pending.**
+
+`on_initialize`'s `Idle` arm will not start a rotation while
+`T::RotationBroadcastsPending::rotation_broadcasts_pending()` holds: it emits
+`PreviousRotationStillPending` and waits. The `force_rotation` extrinsic checks
+only `CurrentRotationPhase == Idle` and `SafeMode::authority_rotation_enabled`,
+then calls the same `start_authority_rotation`. Governance can therefore start a
+rotation in exactly the state the hook declines to act on. The model reproduces
+this faithfully — `forceRotation` is guarded by `Idle` and `rotationEnabled`
+only — and `W10` reads 6739 / 20000 (33.70%) on `main` and 8069 / 20000 (40.34%)
+on `split` at depth 80. Every safety invariant still holds in those traces, but
+that is weak evidence: broadcast barriers and which key signs an in-flight
+transaction are explicitly out of scope (see "Known gaps"), so the model cannot
+see the consequence the hook's gate exists to prevent. Classified By design
+because `force_rotation` is a governance override and overriding is what it is
+for; the ticket is to record that intent in the code (the gate's absence reads
+as an oversight next to the hook) and to confirm the pending-broadcast case is
+one governance is willing to accept. Rust path: `cf-validator/src/lib.rs`,
+`force_rotation` against the `RotationPhase::Idle` arm of `on_initialize`.
+
+### Coverage gaps observed
+
+Neither of these is a finding; both are limits of the instances, recorded so
+that a future reader does not mistake a zero or an absence for evidence.
+
+- **`W6_AbortSharingUnavailable` reads 0 on `main` and on `split`.** The
+  `SharingUnavailable` abort fires when `select_sharing_participants` cannot
+  assemble the success threshold from the unbanned current authorities. Every
+  instance here is n = 4, so the threshold is 3, and under `STRONG` at most one
+  validator is ever banned — three unbanned current authorities always remain.
+  On `split` honest nodes can be banned too, but the same arithmetic still
+  leaves the abort out of reach at 20000 samples. The edge has **no coverage**;
+  reaching it needs n = 7, which is the "Not verified / deferred" item above.
+- **`H4_ConsSoundness` held in every sampled trace at depth 80 on `main`, and a
+  mixed-`Ready` empty failure was never observed outside the F1 path.** In the
+  F1 traces the `Failed(∅)` the combinator produces *does* come from a genuinely
+  failed chain carrying no offenders, so `H4` is satisfied there. The combinator
+  can in principle synthesise a `Failed(∅)` from two non-failed `Ready`
+  statuses — `consPairTest` in `chain.qnt` pins that behaviour, and the Rust's
+  own `all_ready_but_diff_statuses_is_failure` test does too — which would
+  violate `H4`. That state was **not observed**; it is **not** thereby
+  unreachable. `H4` has no exhaustive coverage either: it is trivially true on
+  the one-chain `main1` instance, the only one that verifies above depth 1, so
+  `main1` can never be cited for it. The property's status is "not falsified by
+  simulation", nothing stronger.
