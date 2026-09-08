@@ -81,7 +81,7 @@ jobs:
           esac
 
       - name: Fetch chainflip-node with benchmarks from ${{ inputs.commit_sha }}
-        uses: dawidd6/action-download-artifact@09f2f74827fd3a8607589e5ad7f9398816f540fe
+        uses: dawidd6/action-download-artifact@09f2f74827fd3a8607589e5ad7f9398816f540fe # v3.1.4
         with:
           workflow: ci-benchmarks-${{ steps.artefact-source.outputs.source }}.yml
           workflow_conclusion: completed

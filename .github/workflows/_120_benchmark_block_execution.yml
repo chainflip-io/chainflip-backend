@@ -102,7 +102,7 @@ jobs:
           echo "Using commit $FULL_SHA"
 
       - name: Fetch chainflip-node from ci-benchmarks-${{ inputs.binary_artefact_source }}.yml
-        uses: dawidd6/action-download-artifact@09f2f74827fd3a8607589e5ad7f9398816f540fe
+        uses: dawidd6/action-download-artifact@09f2f74827fd3a8607589e5ad7f9398816f540fe # v3.1.4
         with:
           workflow: ci-benchmarks-${{ inputs.binary_artefact_source }}.yml
           workflow_conclusion: completed
