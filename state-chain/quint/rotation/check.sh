@@ -191,13 +191,31 @@ if [ "${1:-}" = "--verify" ]; then
   elif command -v gtimeout >/dev/null; then CAP=(gtimeout 900)
   else CAP=(perl -e 'alarm shift; exec @ARGV' 900); fi
 
+  # Three outcomes, as in the MUST_VIOLATE loop, and only the first is a pass.
+  # The output is captured rather than piped straight into grep: quint verify
+  # exits non-zero on a real counterexample, pipefail propagates that, and a
+  # `... | grep ... || echo NO VERDICT` fallback would both mislabel the
+  # violation and hand the compound statement an exit status of 0 - so the
+  # script would exit 0 on a genuine Apalache counterexample.
+  VERIFY_FAILED=0
   verify() { # main invariant depth [extra flags...]
     local main="$1" inv="$2" depth="$3"; shift 3
     echo "  ${main}::${inv} depth ${depth} ..."
-    JVM_ARGS="-Xmx8g" "${CAP[@]}" quint verify harness.qnt --main="$main" \
-      --invariant="$inv" --max-steps="$depth" "$@" \
-      | grep -E '^\[(ok|violation)\]' | sed "s|^|  ${main}::${inv} |" \
-      || echo "  ${main}::${inv} NO VERDICT (timeout or error)"
+    local out result
+    set +e
+    out=$(JVM_ARGS="-Xmx8g" "${CAP[@]}" quint verify harness.qnt --main="$main" \
+      --invariant="$inv" --max-steps="$depth" "$@" 2>&1)
+    set -e
+    result="$(printf '%s\n' "$out" | grep -E '^\[(ok|violation)\]' | head -n 1 || true)"
+    if printf '%s\n' "$result" | grep -q '^\[ok\]'; then
+      echo "  ${main}::${inv} ${result}"
+    elif printf '%s\n' "$result" | grep -q '^\[violation\]'; then
+      echo "  ${main}::${inv} ${result}"
+      VERIFY_FAILED=1
+    else
+      echo "  ${main}::${inv} NO VERDICT (timeout or error)"
+      VERIFY_FAILED=1
+    fi
   }
 
   # The ceremony layer is a one-shot model: once `result` is set every action in
@@ -215,4 +233,9 @@ if [ "${1:-}" = "--verify" ]; then
   for inv in R2_SizeFloor R4_TransitionGating H3_NextKeyOnlyAfterActivation; do
     verify main1 $inv 2 --apalache-config=apalache-fun-arrays.json
   done
+
+  if [[ "${VERIFY_FAILED:-0}" == "1" ]]; then
+    echo "FATAL: exhaustive verification reported a violation or produced no verdict" >&2
+    exit 1
+  fi
 fi
