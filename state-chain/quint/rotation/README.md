@@ -261,7 +261,7 @@ separately.
 
 ### F1 — Handover-verification failure livelocks the rotation
 
-**`PF_NoPanics` / `W5_HandoverVerificationLivelock`. Classification: Real. Repro test: `w5LivelockReproTest`. Linear: pending.**
+**`PF_NoPanics` / `W5_HandoverVerificationLivelock`. Classification: Real. Repro test: `w5LivelockReproTest`. Linear: [PRO-3126](https://linear.app/chainflip/issue/PRO-3126).**
 
 When the *verification signing* that follows a successful key-handover ceremony
 fails, `on_key_verification_result` routes the error to `terminate_rotation`,
@@ -317,7 +317,7 @@ where this same unattributed retry does *not* make progress; F2 on its own does.
 
 ### F3 — `force_rotation` bypasses the pending-broadcast gate
 
-**`W10_ForcedRotationWhileBroadcastsPending`. Classification: By design; the divergence is undocumented and its consequence is outside this model. Repro test: `w10ForcedRotationBypassesBroadcastGateTest`. Linear: pending.**
+**`W10_ForcedRotationWhileBroadcastsPending`. Classification: By design; the divergence is undocumented and its consequence is outside this model. Repro test: `w10ForcedRotationBypassesBroadcastGateTest`. Linear: [PRO-3127](https://linear.app/chainflip/issue/PRO-3127).**
 
 `on_initialize`'s `Idle` arm will not start a rotation while
 `T::RotationBroadcastsPending::rotation_broadcasts_pending()` holds: it emits
