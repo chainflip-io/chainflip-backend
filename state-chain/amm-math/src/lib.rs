@@ -404,6 +404,8 @@ pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 /// bits.
 pub struct Price(U256);
 
+cf_utilities::impl_identity_migrations!(Price,);
+
 impl From<SqrtPrice> for Price {
 	fn from(sqrt_price: SqrtPrice) -> Self {
 		assert!(sqrt_price.is_valid());

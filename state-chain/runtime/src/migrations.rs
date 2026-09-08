@@ -17,4 +17,5 @@
 //! Chainflip runtime storage migrations.
 
 pub mod housekeeping;
+pub mod oracle_price_bsc;
 pub mod safe_mode;
