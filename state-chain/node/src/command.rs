@@ -18,7 +18,7 @@ use crate::{
 	benchmarking::{inherent_benchmark_data, RemarkBuilder},
 	chain_spec::{self, testnet, use_chainflip_account_id_encoding},
 	cli::{Cli, Subcommand},
-	service,
+	service, warp_sync_target,
 };
 use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE};
 use sc_cli::SubstrateCli;
@@ -203,19 +203,34 @@ pub fn run() -> sc_cli::Result<()> {
 			runner.sync_run(|config| cmd.run::<Block>(&config))
 		},
 		None => {
+			let warp_sync_target_block = cli.unsafe_warp_sync_target_block;
+			let warp_sync_target_rpc = cli.warp_sync_target_rpc.clone();
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
+				// Resolved before any of the node components are built, so that a bad target
+				// can't leave a half-built database behind.
+				let warp_sync_target = warp_sync_target::resolve(
+					&config,
+					warp_sync_target_block,
+					warp_sync_target_rpc,
+				)
+				.await?;
 				match config.network.network_backend {
 					sc_network::config::NetworkBackendType::Libp2p => service::new_full::<
 						sc_network::NetworkWorker<
 							state_chain_runtime::opaque::Block,
 							<state_chain_runtime::opaque::Block as sp_runtime::traits::Block>::Hash,
 						>,
-					>(config)
+					>(
+						config, warp_sync_target
+					)
 					.map_err(sc_cli::Error::Service),
-					sc_network::config::NetworkBackendType::Litep2p =>
-						service::new_full::<sc_network::Litep2pNetworkBackend>(config)
-							.map_err(sc_cli::Error::Service),
+					sc_network::config::NetworkBackendType::Litep2p => service::new_full::<
+						sc_network::Litep2pNetworkBackend,
+					>(
+						config, warp_sync_target
+					)
+					.map_err(sc_cli::Error::Service),
 				}
 			})
 		},

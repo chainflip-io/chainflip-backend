@@ -22,6 +22,7 @@ mod chain_spec;
 mod cli;
 mod command;
 mod service;
+mod warp_sync_target;
 
 #[expect(clippy::result_large_err)]
 fn main() -> sc_cli::Result<()> {

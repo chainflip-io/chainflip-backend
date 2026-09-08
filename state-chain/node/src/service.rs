@@ -161,6 +161,7 @@ pub fn new_full<
 	N: sc_network::NetworkBackend<Block, <Block as sp_runtime::traits::Block>::Hash>,
 >(
 	config: Configuration,
+	warp_sync_target: Option<state_chain_runtime::opaque::Header>,
 ) -> Result<TaskManager, ServiceError> {
 	use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
 
@@ -195,11 +196,21 @@ pub fn new_full<
 		);
 	net_config.add_notification_protocol(grandpa_protocol_config);
 
-	let warp_sync = Arc::new(sc_consensus_grandpa::warp_proof::NetworkProvider::new(
-		backend.clone(),
-		grandpa_link.shared_authority_set().clone(),
-		Vec::default(),
-	));
+	// If an explicit target header was resolved on startup we hand it straight to warp sync,
+	// skipping the warp proof download (and therefore the authority set verification that comes
+	// with it). Note that in that case the node doesn't serve warp proofs to its peers either,
+	// since substrate only registers the warp sync request handler for `WithProvider`.
+	// Otherwise this is the standard warp sync setup.
+	let warp_sync_config = match warp_sync_target {
+		Some(target_header) => WarpSyncConfig::WithTarget(target_header),
+		None => WarpSyncConfig::WithProvider(Arc::new(
+			sc_consensus_grandpa::warp_proof::NetworkProvider::new(
+				backend.clone(),
+				grandpa_link.shared_authority_set().clone(),
+				Vec::default(),
+			),
+		)),
+	};
 
 	let (network, system_rpc_tx, tx_handler_controller, sync_service) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -210,7 +221,7 @@ pub fn new_full<
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
 			block_announce_validator_builder: None,
-			warp_sync_config: Some(WarpSyncConfig::WithProvider(warp_sync)),
+			warp_sync_config: Some(warp_sync_config),
 			block_relay: None,
 			metrics,
 		})?;
