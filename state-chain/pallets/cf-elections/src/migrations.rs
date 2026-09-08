@@ -16,10 +16,19 @@
 
 use crate::{Pallet, STORAGE_VERSION_U16};
 use cf_runtime_utilities::{AlwaysRunMigration, PlaceholderMigration};
+use frame_support::migrations::VersionedMigration;
 
+mod remove_contributing_authorities;
 mod vote_storage_migration;
 
 pub type PalletMigration<T, I> = (
+	VersionedMigration<
+		9,
+		10,
+		remove_contributing_authorities::Migration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
 	PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T, I>>,
 	// NOTE: Keep this migration. It clears out old votes that may be invalid after the upgrade.
 	AlwaysRunMigration<vote_storage_migration::VoteStorageMigration<T, I>>,

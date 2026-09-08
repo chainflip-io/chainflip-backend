@@ -17,10 +17,11 @@
 #![cfg(test)]
 use crate::{mock::*, *};
 use cf_primitives::AuthorityCount;
+use cf_traits::{mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry};
 use electoral_system::ConsensusStatus;
 use electoral_system_runner::RunnerStorageAccessTrait;
 use electoral_systems::mock::{BehaviourUpdate, MockElectoralSystemRunner};
-use frame_support::traits::OriginTrait;
+use frame_support::{assert_ok, traits::OriginTrait};
 use mock::Test;
 use std::collections::BTreeMap;
 use vote_storage::AuthorityVote;
@@ -101,23 +102,29 @@ fn votes_not_provided_until_shared_data_is_provided() {
 #[test]
 fn ensure_can_vote() {
 	new_test_ext().then_execute_at_next_block(|()| {
-		let setup = TestSetup { num_non_contributing_authorities: 1, ..Default::default() };
+		let setup = TestSetup::default();
 
-		let initial_state = election_test_ext(setup.clone())
-			.new_election()
-			.submit_votes(
-				&setup.non_contributing_authorities()[..],
-				AuthorityVote::Vote(()),
-				Err(Error::NotContributing),
-			)
-			.snapshot();
+		let initial_state = election_test_ext(setup.clone()).new_election().snapshot();
 
-		// Contributing authorities can vote.
+		// Authorities can vote.
 		TestRunner::from_snapshot(initial_state.clone()).submit_votes(
-			&setup.contributing_authorities()[..],
+			&setup.all_authorities()[..],
 			AuthorityVote::Vote(()),
 			Ok(()),
 		);
+
+		// A registered validator that is not in the current authority set cannot vote.
+		const NON_AUTHORITY: u64 = 1000;
+		assert!(!setup.all_authorities().contains(&NON_AUTHORITY));
+		TestRunner::from_snapshot(initial_state.clone())
+			.then_execute_with_keep_context(|_| {
+				assert_ok!(
+					<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+						&NON_AUTHORITY,
+					)
+				);
+			})
+			.submit_votes(&[NON_AUTHORITY], AuthorityVote::Vote(()), Err(Error::Unauthorised));
 
 		// If governance pauses elections, no votes can be submitted.
 		TestRunner::from_snapshot(initial_state.clone())
@@ -262,7 +269,7 @@ impl ElectoralSystemRunnerTestExt for TestRunner<TestContext> {
 fn consensus_state_transitions() {
 	const VOTE: AuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
 
-	election_test_ext(TestSetup { num_non_contributing_authorities: 2, ..Default::default() })
+	election_test_ext(TestSetup { num_authorities: 5, ..Default::default() })
 		.new_election()
 		// Initial consensus state of the mock election system is `None`.
 		.expect_consensus(ConsensusStatus::None)
@@ -302,49 +309,47 @@ fn consensus_state_transitions() {
 		.submit_votes(&[2], VOTE, Ok(())) // Consensus is only updated if there is a vote.
 		.expect_consensus(ConsensusStatus::Gained { most_recent: Some(2), new: 3 })
 		.expect_consensus_after_next_block(ConsensusStatus::Unchanged { current: 3 })
-		// Non-contributing authorities do not affect consensus.
-		.submit_votes(&[3, 4], VOTE, Err(Error::<Test, _>::NotContributing))
-		.expect_consensus(ConsensusStatus::Unchanged { current: 3 })
-		.assert_calls_ok(&[3, 4], |_| Call::<Test, _>::stop_ignoring_my_votes {})
+		// The remaining authorities' votes are counted too.
 		.submit_votes(&[3, 4], VOTE, Ok(()))
 		.expect_consensus(ConsensusStatus::Changed { previous: 3, new: 5 });
 }
 
+/// Voters have no way to retract a vote, so replacing one in place is the only way a validator can
+/// correct itself. Re-voting must overwrite the stored components rather than accumulate them, and
+/// must not leak the shared data references held by the vote it replaces.
 #[test]
-fn authority_removes_and_re_adds_itself_from_contributing_set() {
+fn re_voting_replaces_the_existing_vote() {
 	const VOTE: AuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
+
+	#[track_caller]
+	fn assert_one_vote_per_authority(label: &str) {
+		assert_eq!(
+			IndividualComponents::<Test, _>::iter().count(),
+			3,
+			"{label}: expected exactly one component per authority, found: {:?}",
+			IndividualComponents::<Test, _>::iter().collect::<Vec<_>>(),
+		);
+		// All three vote the same value, so they share one hash whose count must track the
+		// number of live votes, not the number of times `vote` was called.
+		assert_eq!(
+			SharedDataReferenceCount::<Test, _>::iter()
+				.map(|(_hash, _umi, details)| details.count)
+				.sum::<u32>(),
+			3,
+			"{label}: shared data reference count leaked: {:?}",
+			SharedDataReferenceCount::<Test, _>::iter().collect::<Vec<_>>(),
+		);
+	}
 
 	election_test_ext(Default::default())
 		.new_election()
 		.assume_consensus()
 		.submit_votes(&[0, 1, 2], VOTE, Ok(()))
 		.expect_consensus(ConsensusStatus::Gained { most_recent: None, new: 3 })
-		.assert_calls_ok(&[1], |_| Call::<Test, _>::ignore_my_votes {})
-		.expect_consensus(ConsensusStatus::Changed { previous: 3, new: 2 })
-		.assert_calls_ok(&[1], |_| Call::<Test, _>::stop_ignoring_my_votes {})
-		.expect_consensus(ConsensusStatus::Changed { previous: 2, new: 3 })
-		// Validator 1 deletes its vote.
-		.then_apply_extrinsics(
-			#[track_caller]
-			|TestContext { umis, .. }| {
-				umis.iter()
-					.map(|umi| {
-						(
-							OriginTrait::signed(1),
-							Call::<Test, _>::delete_vote {
-								election_identifier: ElectionIdentifier::new(*umi, ()),
-							},
-							Ok(()),
-						)
-					})
-					.collect::<Vec<_>>()
-			},
-		)
-		.expect_consensus(ConsensusStatus::Changed { previous: 3, new: 2 })
-		.assert_calls_ok(&[1], |_| Call::<Test, _>::ignore_my_votes {})
-		.submit_votes(&[1], VOTE, Err(Error::<Test, _>::NotContributing))
-		.expect_consensus(ConsensusStatus::Unchanged { current: 2 })
-		.assert_calls_ok(&[1], |_| Call::<Test, _>::stop_ignoring_my_votes {})
-		.submit_votes(&[1], VOTE, Ok(()))
-		.expect_consensus(ConsensusStatus::Changed { previous: 2, new: 3 });
+		.then_execute_with_keep_context(|_| assert_one_vote_per_authority("after first vote"))
+		// Every authority votes again for the same election.
+		.submit_votes(&[0, 1, 2], VOTE, Ok(()))
+		// Consensus still counts three votes, not six.
+		.expect_consensus(ConsensusStatus::Unchanged { current: 3 })
+		.then_execute_with_keep_context(|_| assert_one_vote_per_authority("after re-vote"));
 }
