@@ -1569,20 +1569,22 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_settings())]
 		pub fn update_settings(
 			origin: OriginFor<T>,
-			unsynchronised_settings: Option<
+			unsynchronised_settings: Option<Box<
 				<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+			>>,
+			settings: Option<
+				Box<<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralSettings>,
 			>,
-			settings: Option<<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralSettings>,
 			ignore_corrupt_storage: CorruptStorageAdherance,
 		) -> DispatchResult {
 			Self::ensure_governance(origin, ignore_corrupt_storage)?;
 			if let Some(unsynchronised_settings) = unsynchronised_settings {
-				ElectoralUnsynchronisedSettings::<T, I>::put(unsynchronised_settings);
+				ElectoralUnsynchronisedSettings::<T, I>::put(*unsynchronised_settings);
 			}
 			if let Some(settings) = settings {
 				// This cannot effect settings of any election as all elections have IDs strictly
 				// lower than `NextElectionIdentifier`.
-				ElectoralSettings::<T, I>::insert(NextElectionIdentifier::<T, I>::get(), settings);
+				ElectoralSettings::<T, I>::insert(NextElectionIdentifier::<T, I>::get(), *settings);
 			}
 			Ok(())
 		}
