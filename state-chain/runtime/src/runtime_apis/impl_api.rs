@@ -896,7 +896,7 @@ impl_runtime_apis! {
 				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
 					account_id,
 					AssociationToOperator::Validator,
-					|account_id, _| pallet_cf_flip::Pallet::<Runtime>::balance(account_id)
+					|account_id, _| pallet_cf_validator::Pallet::<Runtime>::validator_bid(account_id)
 				),
 				settings,
 				allowed,

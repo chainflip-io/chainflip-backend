@@ -15,30 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::migrations::VersionedMigration;
 
 use crate::{Pallet, STORAGE_VERSION_U16};
 
-mod drop_owed_to_network;
-mod remove_whitelist;
-
-pub type PalletMigration<T> = (
-	VersionedMigration<
-		6,
-		7,
-		remove_whitelist::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	VersionedMigration<
-		7,
-		8,
-		drop_owed_to_network::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,
-);
+pub type PalletMigration<T> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,);
 
 #[cfg(test)]
 const _: u16 =

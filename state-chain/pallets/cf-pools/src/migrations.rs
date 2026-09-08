@@ -19,16 +19,8 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 mod remove_fixed_pools;
-mod set_minimum_limit_order_amounts;
 
 pub type PalletMigration<T> = (
-	VersionedMigration<
-		8,
-		9,
-		set_minimum_limit_order_amounts::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
 	VersionedMigration<
 		9,
 		10,

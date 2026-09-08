@@ -17,7 +17,7 @@
 use crate::genesis::GENESIS_BALANCE;
 
 use super::{genesis, network, *};
-use cf_primitives::{FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
+use cf_primitives::{AccountRole, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_test_utilities::TestExternalities;
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, EpochInfo};
 use mock_runtime::MIN_FUNDING;
@@ -199,6 +199,39 @@ fn validator_info_includes_bid_and_max_bid() {
 		let validator_info = Runtime::cf_validator_info(validator);
 		assert_eq!(validator_info.max_bid, Some(MAX_BID));
 		assert_eq!(validator_info.bid, MAX_BID);
+	});
+}
+
+#[test]
+fn operator_info_managed_validator_bid_respects_max_bid() {
+	use state_chain_runtime::runtime_apis::custom_api::runtime_decl_for_custom_runtime_api::CustomRuntimeApi;
+
+	const MAX_BID: FlipBalance = GENESIS_BALANCE / 2;
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let (_, _, new_validators) = crate::authorities::fund_authorities_and_join_auction(1);
+		let validator = new_validators.first().expect("a validator was created");
+		let operator = AccountId::from([0xee; 32]);
+		network::new_account(&operator, AccountRole::Operator);
+		assert_ok!(Validator::claim_validator(
+			RuntimeOrigin::signed(operator.clone()),
+			validator.clone()
+		));
+		assert_ok!(Validator::accept_operator(
+			RuntimeOrigin::signed(validator.clone()),
+			operator.clone(),
+		));
+
+		assert_ok!(Validator::set_validator_max_bid(
+			RuntimeOrigin::signed(validator.clone()),
+			Some(MAX_BID),
+		));
+		assert!(Flip::balance(validator) > MAX_BID);
+
+		assert_eq!(
+			Runtime::cf_operator_info(&operator).managed_validators.get(validator),
+			Some(&MAX_BID)
+		);
 	});
 }
 

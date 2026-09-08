@@ -19,7 +19,7 @@ use engine_upgrade_utils::{CStrArray, NEW_VERSION, OLD_VERSION};
 
 // Declare the entrypoints into each version of the engine
 mod old {
-	#[engine_proc_macros::link_engine_library_version("2.2.8")]
+	#[engine_proc_macros::link_engine_library_version("2.3.1")]
 	extern "C" {
 		pub fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,
@@ -29,7 +29,7 @@ mod old {
 }
 
 mod new {
-	#[engine_proc_macros::link_engine_library_version("2.3.0")]
+	#[engine_proc_macros::link_engine_library_version("2.4.0")]
 	extern "C" {
 		fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,
@@ -172,9 +172,12 @@ mod tests {
 			"--tron.backup_rpc.http_endpoint=http://localhost:8090/wallet".to_string(),
 			"--tron.backup_rpc.json_rpc_endpoint=http://localhost:8091/jsonrpc".to_string(),
 			// Bsc
-			format!("--bsc.private_key_file={some_file}"),
-			"--bsc.rpc.http_endpoint=http://localhost:8549".to_string(),
-			"--bsc.backup_rpc.http_endpoint=http://localhost:8550".to_string(),
+			"--bsc.private_key_file".to_string(),
+			some_file.to_string(),
+			"--bsc.rpc.http_endpoint".to_string(),
+			"http://localhost:8549".to_string(),
+			"--bsc.backup_rpc.http_endpoint".to_string(),
+			"http://localhost:8550".to_string(),
 			// p2p
 			format!("--p2p.node_key_file={some_file}"),
 			"--p2p.ip_address=0.1.2.3".to_string(),

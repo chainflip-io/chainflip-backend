@@ -200,7 +200,7 @@ export async function testCcmSwapFundAccount(testContext: TestContext) {
   }
 
   const ccmMessage = web3.eth.abi.encodeParameters(['address', 'bytes'], [scUtilsAddress, pubkey]);
-  const ccmMetadata = await newCcmMetadata('Flip', ccmMessage);
+  const ccmMetadata = await newCcmMetadata('Flip', { message: ccmMessage });
   // Override gas budget for this particular use case
   ccmMetadata.gasBudget = '1000000';
 
