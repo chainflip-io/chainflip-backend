@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download packages 📥
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: chainflip-backend-packages
           path: packages
@@ -62,14 +62,14 @@ jobs:
       - name: Import prod GPG package signing key 🗝️
         id: import_gpg_prod
         if: inputs.environment == 'production'
-        uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd
         with:
           gpg_private_key: ${{ secrets.CF_PROD_PGP_KEY }}
 
       - name: Import dev GPG package signing key 🗝️
         id: import_gpg_dev
         if: inputs.environment == 'development'
-        uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd
         with:
           gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
 
