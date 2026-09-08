@@ -176,3 +176,24 @@ module fair {
         w.hist.aborts == 0,
       })
 }
+
+// One UTXO chain only: the smallest instance that still exercises keygen,
+// handover, activation and the session steps. Used for exhaustive checks
+// when the two-chain instance does not fit. H4_ConsSoundness is trivial
+// here (a one-chain consensus status is the chain's own), so it must never
+// be reported as verified from this instance.
+module main1 {
+  import types.* from "./types"
+  import chain.* from "./chain"
+  import rotation(
+    VALIDATORS = Set(1, 2, 3, 4),
+    BYZ = Set(4),
+    CHAINS = Map("btc" -> { kind: Utxo, vault: Active }),
+    MIN_SIZE = 2,
+    MAX_SIZE = 4,
+    CONTRACTION_PERCENT = 30,
+    STRONG = true,
+    FAIR = false,
+    K_BLOCKS = 40
+  ).* from "./validator"
+}
