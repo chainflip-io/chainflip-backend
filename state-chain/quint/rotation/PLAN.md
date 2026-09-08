@@ -2057,9 +2057,15 @@ Write the table to the scratch file with one paragraph of conclusion: which inst
 **Files:**
 - Modify: `state-chain/quint/rotation/check.sh`
 - Modify: `state-chain/quint/rotation/README.md`
+- Modify: `state-chain/quint/rotation/harness.qnt` (comment fix only: `fairRotationCompletesTest` says "Nine blocks"; the run has six)
+- Create: `state-chain/quint/rotation/apalache-no-deadlocks.json` containing `{"checker":{"no-deadlocks":true}}`
 
 **Interfaces:**
-- Consumes: every instance, invariant, witness and control named in Tasks 3, 6 and 7.
+- Consumes: every instance, invariant, witness and control named in Tasks 3, 6, 7 and 7b, and the tractability table in `.superpowers/sdd/PLAN/findings/tractability.md`.
+
+**Reconcile with what Tasks 6–7 already put in `check.sh`.** The script already has `MAIN_STEPS=80`/`MAIN_SAMPLES=20000`, a `main` block, a non-enforced `PF_NoPanics` run, a `run_instance` helper (from Task 7) that fails the script when a required witness reads zero, blocks for `uninit`/`split`/`fair` (`fair` at 2000 samples with a comment), and a `--verify` section holding the ceremony invariants and depth-1 `fair` entries. Task 8 does not rewrite it from the sketch below; it (1) routes the `main` and `ceremonyStrong` simulations through the same required-witness helper so a dead `W1`/`W2`/`W4`/`W7` or ceremony witness fails the script, (2) rebuilds the `--verify` section as specified in Step 1, and (3) keeps every existing comment that explains a deviation.
+
+**Apalache facts from Task 7b that override the sketch below.** `--apalache-config` takes a file path, not inline JSON, so the "no-deadlocks" runs recorded by Tasks 3 and 6 ran on defaults and must be re-run with the config file created here; `checker.smt-encoding` is written `{"type":"fun-arrays"}`; the JVM heap is `JVM_ARGS=-Xmx8g`; `quint verify` leaves a server on port 8822, so verify runs are sequential; killing `quint` orphans `quint_evaluator` (kill it explicitly). The validator layer is exhaustively verifiable only at depth 1 on `main` and depth 2 on `main1` (three properties, ~140–250 s each with fun-arrays and 8 GiB), neither of which reaches a completed rotation; the README must say so plainly and present simulation as the evidence for that layer.
 - Produces: a `./check.sh` that exits non-zero on any typecheck failure, test failure, invariant violation outside the recorded-findings set, required witness at zero, or inert negative control; `./check.sh --verify` adds Apalache.
 
 - [ ] **Step 1: Finalise check.sh**
@@ -2155,11 +2161,24 @@ MUST_VIOLATE=(
 # ... three-outcome loop from engine/multisig/quint/check.sh, unchanged ...
 
 if [[ "${1:-}" == "--verify" ]]; then
-  echo "== exhaustive verification (slow) =="
-  verify() { echo "  $1::$2 ..."; quint verify harness.qnt --main="$1" --invariant="$2" --max-steps="$3" | grep -E '^\[(ok|violation)\]' | sed "s|^|  $1::$2 |"; }
-  for inv in C1_AcceptanceUnanimity C2_OffendersAreParticipants C3_HonestNeverOffender SeamSound; do verify ceremonyStrong $inv 6; done
-  for inv in R1_BannedNeverAuthority R2_SizeFloor R3_SharingSetValidity R4_TransitionGating R5_NoNextKeyAfterAbort R6_KeyEpochAgreement R7_NoAbortAfterActivation H2_UtxoAlwaysHandsOver H3_NextKeyOnlyAfterActivation H4_ConsSoundness NoUnexpectedLogErrors; do verify main $inv $VERIFY_STEPS; done
-  for inv in L1_Termination L2_Progress; do verify fair $inv 30; done
+  echo "== exhaustive verification (slow, ~13 min; runs are sequential: Apalache holds port 8822) =="
+  # The ceremony layer is a one-shot model: without no-deadlocks Apalache reports
+  # a deadlock once the ceremony resolves. Config is a FILE path.
+  verify() { # main invariant depth [extra flags...]
+    local main="$1" inv="$2" depth="$3"; shift 3
+    echo "  ${main}::${inv} depth ${depth} ..."
+    JVM_ARGS="-Xmx8g" timeout 900 quint verify harness.qnt --main="$main" --invariant="$inv" --max-steps="$depth" "$@" \
+      | grep -E '^\[(ok|violation)\]' | sed "s|^|  ${main}::${inv} |" || echo "  ${main}::${inv} NO VERDICT (timeout or error)"
+  }
+  for inv in C1_AcceptanceUnanimity C2_OffendersAreParticipants C3_HonestNeverOffender SeamSound; do
+    verify ceremonyStrong $inv 6 --apalache-config=apalache-no-deadlocks.json
+  done
+  # Validator layer: only these fit. Depth 1 on the two-chain instance and depth 2
+  # on the one-chain instance; neither reaches a completed rotation (README "Status").
+  for inv in L1_Termination L2_Progress; do verify fair $inv 1; done
+  for inv in R2_SizeFloor R4_TransitionGating H3_NextKeyOnlyAfterActivation; do
+    verify main1 $inv 2 --apalache-config=apalache-fun-arrays.json
+  done
 fi
 ```
 
@@ -2171,7 +2190,9 @@ Run: `./check.sh` then `time ./check.sh --verify`. Expected: simulation mode exi
 
 - [ ] **Step 3: Fill in README "Status", "Known gaps"**
 
-Status: one table per layer with columns Property | Meaning | Simulated | Verified (depth, time). A witness-coverage table with counts from the last `./check.sh`. A "Negative controls" table with the three controls and their observed `[violation]` traces in one line each. A "Not verified / deferred" list: temporal mode result, n=7, multi-vault.
+Status: one table per layer with columns Property | Meaning | Simulated (instance, depth, samples) | Verified (instance, depth, time, or "no"). A witness-coverage table with counts from the last `./check.sh`. A "Negative controls" table with the three controls and their observed `[violation]` traces in one line each. A "Tractability" subsection copying the table from `.superpowers/sdd/PLAN/findings/tractability.md` and stating in one sentence that the validator layer's exhaustive coverage (depth 1 on `main`, depth 2 on `main1`) does not reach a completed rotation, so the evidence for that layer is simulation at depth 80. A "Not verified / deferred" list: temporal mode (not attempted, intractable), n=7, multi-vault, per-phase block transitions (tried, worse, reverted).
+
+Also create `apalache-fun-arrays.json` containing `{"checker":{"smt-encoding":{"type":"fun-arrays"}}}` next to the no-deadlocks file, and fix the "Nine blocks" comment in `harness.qnt` to "Six blocks".
 
 Known gaps, copied from DESIGN.md "Known gaps" plus anything discovered (e.g. "UTXO chains are assumed to hold a genesis key; the bootstrap-without-key path is exercised only by `utxoWithoutKeySkipsHandoverTest`").
 
@@ -2187,7 +2208,7 @@ validator.qnt <-> state-chain/pallets/cf-validator/src/lib.rs (on_initialize, ro
 - [ ] **Step 4: Commit**
 
 ```bash
-git add state-chain/quint/rotation/check.sh state-chain/quint/rotation/README.md
+git add state-chain/quint/rotation/check.sh state-chain/quint/rotation/README.md state-chain/quint/rotation/harness.qnt state-chain/quint/rotation/apalache-no-deadlocks.json state-chain/quint/rotation/apalache-fun-arrays.json
 git commit -m "chore: complete rotation model check script and status (PRO-3120)"
 ```
 
