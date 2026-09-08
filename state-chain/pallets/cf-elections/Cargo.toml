@@ -25,6 +25,7 @@ cf-primitives = { workspace = true }
 
 # Utility deps
 cf-utilities = { workspace = true }
+cf-proc-macros = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 generic-typeinfo-derive = { workspace = true }
 
@@ -38,6 +39,8 @@ derive-where = { workspace = true }
 duplicate = { workspace = true }
 enum-iterator = { workspace = true }
 serde_arrays = "0.2.0"
+proptest = { workspace = true, optional = true, features = ["std"] }
+proptest-derive = { workspace = true, optional = true }
 
 # Parity deps
 codec = { workspace = true, features = ["derive", "bit-vec"] }
@@ -60,6 +63,7 @@ proptest-derive = { workspace = true }
 
 [features]
 default = ["std"]
+proptest = ["dep:proptest", "dep:proptest-derive", "cf-utilities/proptest"]
 std = [
 	"bitvec/std",
 	"cf-chains/std",
