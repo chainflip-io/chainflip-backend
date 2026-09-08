@@ -26,6 +26,7 @@ sp-std = { workspace = true }
 rand = { workspace = true, features = ["std"] }
 cf-amm-math = { workspace = true, features = ["slow-tests", "test"] }
 cf-utilities = { workspace = true, features = ["std"] }
+proptest = { workspace = true, features = ["std"] }
 
 [features]
 default = ["std"]

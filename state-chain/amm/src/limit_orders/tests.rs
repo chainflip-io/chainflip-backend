@@ -683,6 +683,118 @@ fn fills_are_split_pro_rata() {
 	);
 }
 
+// Tick 69081 is approximately 100,000 USDC/BTC with eight/six decimals. Five hundred
+// small orders ahead of a large one must not amplify its underpayment across swaps.
+fn check_fragmented_book_fills<SD: SwapDirection>(small_order_amount: u128, input: u128) {
+	let tick = 69_081;
+	let price = Price::from_tick(tick).unwrap();
+	let small_order_count = 500u16;
+	let order_lp = |id: u16| {
+		let mut account = [0u8; 32];
+		account[..2].copy_from_slice(&id.to_be_bytes());
+		LiquidityProvider::from(account)
+	};
+	let last_lp = order_lp(small_order_count);
+	let mut pool_state = PoolState::new();
+	let mut totals = BTreeMap::new();
+	for id in 0..=small_order_count {
+		let amount = Amount::from(small_order_amount) *
+			Amount::from(if id == small_order_count { small_order_count } else { 1 });
+		let lp = order_lp(id);
+		assert_ok!(pool_state.mint::<SD>(&lp, tick, amount));
+		totals.insert(lp, (amount, Amount::zero(), Amount::zero(), 0u64));
+	}
+
+	for _ in 0..50 {
+		let (output, remaining, fills) = swap::<SD>(&mut pool_state, input.into(), None);
+		assert!(!output.is_zero());
+		assert!(remaining.is_zero());
+		for fill in fills {
+			assert_eq!(fill.tick, tick);
+			assert!(
+				fill.bought_amount >= SD::input_amount_floor(fill.sold_amount, price).unwrap(),
+				"every order must receive at least its rounded-down limit value"
+			);
+			let paid = fill.bought_amount.full_mul(output);
+			let owed = fill.sold_amount.full_mul(input.into());
+			if fill.lp == last_lp {
+				assert!(paid >= owed);
+			} else {
+				assert!(paid <= owed);
+				assert!(owed - paid < U512::from(output));
+			}
+
+			let (original, sold, bought, count) = totals.get_mut(&fill.lp).unwrap();
+			*sold += fill.sold_amount;
+			*bought += fill.bought_amount;
+			*count += 1;
+			assert_eq!(fill.remaining_amount, *original - *sold);
+			match pool_state.position::<SD>(&fill.lp, tick).unwrap() {
+				Some(position) => {
+					assert_eq!(position.amount, fill.remaining_amount);
+					assert_eq!(position.original_amount, *original);
+				},
+				None => assert!(fill.remaining_amount.is_zero()),
+			}
+		}
+
+		// Each rounding can cost less than one proceeds unit; the cumulative allowance grows
+		// with the number of fills, even though no individual fill violates its rounded limit.
+		for (lp, (_, sold, bought, count)) in &totals {
+			if *count == 0 {
+				continue
+			}
+			let minimum = SD::input_amount_floor(*sold, price).unwrap();
+			assert!(*bought + Amount::from(*count) > minimum);
+			if *lp == last_lp {
+				assert!(*bought >= SD::input_amount_ceil(*sold, price).unwrap());
+			}
+		}
+	}
+}
+
+#[test]
+fn repeated_fragmented_btc_sales_respect_the_limit_price() {
+	// $10 of BTC per small order; each swap spends 100.50 USDC.
+	check_fragmented_book_fills::<QuoteToBase>(10_000, 100_500_000);
+}
+
+#[test]
+fn repeated_fragmented_usdc_sales_respect_the_limit_price() {
+	// $10 of USDC per small order; each swap spends 100,501 satoshis.
+	check_fragmented_book_fills::<BaseToQuote>(10_000_000, 100_501);
+}
+
+#[test]
+fn zero_output_swap_pays_only_the_last_order_without_consuming_liquidity() {
+	fn inner<SD: SwapDirection>(tick: Tick, order_amount: u128) {
+		let mut pool_state = PoolState::new();
+		for id in 0..3 {
+			assert_ok!(pool_state.mint::<SD>(&lp(id), tick, order_amount.into()));
+		}
+		let before = pool_state.orders.clone();
+
+		let (output, remaining, fills) = swap::<SD>(&mut pool_state, Amount::one(), None);
+		assert!(output.is_zero());
+		assert!(remaining.is_zero(), "the swap must consume its input and terminate");
+		assert_eq!(pool_state.orders, before);
+		assert_eq!(
+			fills,
+			vec![Fill {
+				lp: lp(2),
+				tick,
+				sold_amount: Amount::zero(),
+				bought_amount: Amount::one(),
+				remaining_amount: order_amount.into(),
+			}]
+		);
+	}
+
+	// One micro-USDC cannot buy a satoshi; one wei cannot buy a micro-USDC.
+	inner::<QuoteToBase>(69_081, 10_000);
+	inner::<BaseToQuote>(-196_256, 10_000_000);
+}
+
 /// The `swap` helper asserts that fills account for a swap exactly, but the books above are all
 /// hand-picked round numbers. Distribution is arithmetic over arbitrary sizes, so drive arbitrary
 /// ones through it: a unit conjured up is an lp paid for liquidity that never existed, and a unit
@@ -841,9 +953,8 @@ fn every_price_in_the_range_can_be_swapped_out() {
 	);
 }
 
-// A zero-amount order is unreachable through minting, and a swap never fills an order for nothing,
-// but `fill_orders` divides by the liquidity it is given, so both cases must degrade gracefully
-// rather than panic if they ever arise.
+// Zero-amount orders are unreachable through minting, but malformed liquidity must not cause
+// division by zero, and distributing zero on both sides must leave live orders untouched.
 #[test]
 fn fill_orders_handles_zero_amounts() {
 	let sqrt_price = SqrtPrice::from_tick(0);
@@ -897,4 +1008,125 @@ fn fill_orders_handles_zero_amounts() {
 	let mut orders = Orders::from([(lp(0), Position::new(1000.into()))]);
 	assert!(fill_orders(&mut orders, 0, 0).is_empty());
 	assert_eq!(orders, Orders::from([(lp(0), Position::new(1000.into()))]));
+}
+
+mod fill_proptests {
+	use super::*;
+	use proptest::prelude::*;
+	use std::collections::BTreeSet;
+
+	/// Order sizes spanning what matters: dust that floors to nothing, ordinary amounts, and sizes
+	/// large enough for the share arithmetic to leave `u128`. Capped so a whole book fits a `U256`.
+	fn amount() -> impl Strategy<Value = Amount> {
+		prop_oneof![
+			4 => (1..=16u128).prop_map(Amount::from),
+			3 => (1..=1_000_000_000u128).prop_map(Amount::from),
+			2 => (1..=u128::MAX).prop_map(Amount::from),
+			1 => (any::<u128>(), any::<u128>())
+				.prop_map(|(hi, lo)| ((Amount::from(hi) << 128) | Amount::from(lo)) >> 5)
+				.prop_map(|amount| amount.max(Amount::one())),
+		]
+	}
+
+	/// Anything from nothing to the whole book, with the edges and tiny amounts over-represented.
+	fn sold_amount(available: Amount) -> impl Strategy<Value = Amount> {
+		prop_oneof![
+			Just(Amount::zero()),
+			Just(available),
+			(1..=16u128).prop_map(move |sold| Amount::from(sold).min(available)),
+			any::<u128>().prop_map(move |fraction| {
+				mul_div_floor(available, fraction.into(), u128::MAX.into())
+			}),
+		]
+	}
+
+	fn fill_case() -> impl Strategy<Value = (Vec<Amount>, Amount, Amount)> {
+		prop::collection::vec(amount(), 1..=20).prop_flat_map(|amounts| {
+			let available = amounts
+				.iter()
+				.fold(Amount::zero(), |total, amount| total.saturating_add(*amount));
+			(Just(amounts), sold_amount(available), prop_oneof![Just(Amount::zero()), amount()])
+		})
+	}
+
+	proptest! {
+		#![proptest_config(ProptestConfig { cases: 2048, ..Default::default() })]
+
+		/// Allocations conserve assets and obey the supplied fill rate's rounding bounds. The
+		/// independently generated totals need not correspond to the tick's limit price.
+		#[test]
+		fn fills_conserve_assets_and_bound_rounding_at_the_fill_rate((amounts, sold, bought) in fill_case()) {
+			let sqrt_price = SqrtPrice::from_tick(0);
+			let before = amounts
+				.iter()
+				.enumerate()
+				.map(|(id, amount)| (lp(id as u8), Position::new(*amount)))
+				.collect::<Orders<LiquidityProvider>>();
+			let available = liquidity_of(&before);
+
+			let mut orders = before.clone();
+			let mut fills = Vec::new();
+			fill_orders(&mut orders, sqrt_price, available, sold, bought, &mut fills);
+
+			// Both sides are handed out in full: nothing conjured up, nothing lost.
+			prop_assert_eq!(total_of(&fills, |fill| fill.sold_amount), sold);
+			prop_assert_eq!(total_of(&fills, |fill| fill.bought_amount), bought);
+
+			// At most one fill per order, in book order.
+			prop_assert!(fills.windows(2).all(|pair| pair[0].lp < pair[1].lp));
+
+			let mut filled = BTreeSet::new();
+			for fill in &fills {
+				prop_assert!(!(fill.sold_amount.is_zero() && fill.bought_amount.is_zero()));
+				let position = before.get(&fill.lp).unwrap();
+				prop_assert!(fill.sold_amount <= position.amount);
+				prop_assert_eq!(fill.remaining_amount, position.amount - fill.sold_amount);
+				match orders.get(&fill.lp) {
+					Some(after) => {
+						prop_assert_eq!(after.amount, fill.remaining_amount);
+						prop_assert_eq!(after.original_amount, position.original_amount);
+					},
+					None => prop_assert!(fill.remaining_amount.is_zero(), "a live order was dropped"),
+				}
+				filled.insert(fill.lp.clone());
+			}
+
+			// Orders that got nothing are left exactly as they were.
+			for (lp, position) in before.iter() {
+				if !filled.contains(lp) {
+					prop_assert_eq!(orders.get(lp), Some(position));
+				}
+			}
+
+			let (last, last_position) = before.iter().next_back().unwrap();
+			if sold.is_zero() {
+				// Cross-multiplying by zero cannot constrain the payout policy.
+				prop_assert_eq!(&orders, &before);
+				if bought.is_zero() {
+					prop_assert!(fills.is_empty());
+				} else {
+					prop_assert_eq!(fills, vec![Fill {
+						lp: last.clone(),
+						tick: sqrt_price.to_tick(),
+						sold_amount: Amount::zero(),
+						bought_amount: bought,
+						remaining_amount: last_position.amount,
+					}]);
+				}
+			} else {
+				// Non-last orders lose less than one proceeds unit each; the last collects their dust.
+				for fill in &fills {
+					let paid = fill.bought_amount.full_mul(sold);
+					let owed = fill.sold_amount.full_mul(bought);
+					if &fill.lp == last {
+						prop_assert!(paid >= owed);
+						prop_assert!(paid - owed <= U512::from(before.len() - 1) * U512::from(sold));
+					} else {
+						prop_assert!(paid <= owed);
+						prop_assert!(owed - paid < U512::from(sold));
+					}
+				}
+			}
+		}
+	}
 }

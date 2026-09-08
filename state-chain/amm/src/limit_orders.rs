@@ -495,8 +495,14 @@ fn liquidity_of<LiquidityProvider: Ord>(orders: &Orders<LiquidityProvider>) -> A
 }
 
 /// Buys `sold_amount` of the orders' liquidity for `bought_amount` of the other asset, splitting
-/// both across them in proportion to the liquidity each of them provides, and appending the result
-/// to `fills`. Orders left with nothing to sell are removed.
+/// the liquidity bought across them in proportion to the liquidity each of them provides and paying
+/// each of them for it at the fill's rate, and appending the result to `fills`. Orders left with
+/// nothing to sell are removed.
+///
+/// For nonzero `sold_amount`, each order except the last is short by less than one bought-asset
+/// unit relative to the fill's rate. The last is never underpaid and receives up to `N - 1` extra
+/// units, where `N` is the order count. These bounds apply per fill, not cumulatively.
+/// If `sold_amount` is zero, the last order receives all proceeds and liquidity stays unchanged.
 ///
 /// `available` must be the total liquidity the orders provide, and `sold_amount` no more than it.
 fn fill_orders<LiquidityProvider: Ord + Clone>(
@@ -515,13 +521,20 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 	let mut remaining_bought = bought_amount;
 
 	orders.retain(|lp, position| {
-		// Calculate share against remaining amount instead of total amount to avoid rounding
-		// errors. The divisions cannot fail: every order holds a non-zero amount, so the
-		// remaining liquidity is non-zero for as long as there is an order left to fill.
+		// The share is taken against what is left rather than the total, so that rounding dust
+		// rolls forward and the last order takes exactly what remains. The division cannot fail:
+		// every order holds a non-zero amount, so the remaining liquidity is non-zero for as long
+		// as there is an order left to fill.
 		let sold = mul_div_floor_checked(remaining_sold, position.amount, remaining_available)
 			.unwrap_or_default();
-		let bought = mul_div_floor_checked(remaining_bought, position.amount, remaining_available)
-			.unwrap_or_default();
+		// Paying for the actual sale prevents rounding liquidity shares from amplifying an
+		// order's underpayment. Giving the last order the remainder conserves all proceeds,
+		// including when the swap's output rounds to zero.
+		let bought = if position.amount == remaining_available {
+			remaining_bought
+		} else {
+			mul_div_floor_checked(sold, bought_amount, sold_amount).unwrap_or_default()
+		};
 
 		// Cannot underflow: `remaining_sold` never exceeds `remaining_available`, which bounds
 		// an order's share of it by the liquidity that order provides.
