@@ -652,9 +652,9 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T>::delegate_multi(
 			RawOrigin::Signed(delegator.clone()).into(),
-			DelegationPlan::try_from_amounts(BTreeMap::from([(
+			DelegationPlan::try_from_map(BTreeMap::from([(
 				operator_a.clone(),
-				(500 * FLIPPERINOS_PER_FLIP).into()
+				DelegationAmount::Some((500 * FLIPPERINOS_PER_FLIP).into())
 			)]))
 			.unwrap(),
 		));
@@ -662,9 +662,9 @@ mod benchmarks {
 		#[extrinsic_call]
 		delegate_multi(
 			RawOrigin::Signed(delegator.clone()),
-			DelegationPlan::try_from_amounts(BTreeMap::from([
-				(operator_a, (250 * FLIPPERINOS_PER_FLIP).into()),
-				(operator_b.clone(), (250 * FLIPPERINOS_PER_FLIP).into()),
+			DelegationPlan::try_from_map(BTreeMap::from([
+				(operator_a, DelegationAmount::Some((250 * FLIPPERINOS_PER_FLIP).into())),
+				(operator_b.clone(), DelegationAmount::Some((250 * FLIPPERINOS_PER_FLIP).into())),
 			]))
 			.unwrap(),
 		);
