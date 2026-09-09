@@ -236,6 +236,7 @@ impl Config for Test {
 	type MinimumFunding = MockMinimumFundingProvider;
 	type CfePeerRegistration = MockCfeInterface;
 	type GrandpaDelegation = MockGrandpaDelegation;
+	type MaxOperatorsPerDelegator = ConstU32<20>;
 }
 
 /// Session pallet requires a set of validators at genesis.

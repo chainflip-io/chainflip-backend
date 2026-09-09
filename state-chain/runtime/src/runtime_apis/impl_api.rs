@@ -819,8 +819,21 @@ impl_runtime_apis! {
 				pallet_cf_validator::DelegationChoices::<Runtime>::get(account_id)
 					.map(|relations| {
 						relations
-							.operators
+							.into_map()
 							.into_iter()
+							.map(|(operator, max_bid)| {
+								let max_bid = match max_bid {
+									pallet_cf_validator::DelegationAmount::Some(max_bid) => max_bid,
+									pallet_cf_validator::DelegationAmount::Max => {
+										cf_runtime_utilities::log_or_panic!(
+											"DelegationChoices entry for {:?} contains an unresolved Max amount",
+											operator,
+										);
+										0
+									},
+								};
+								(operator, max_bid)
+							})
 							.map(|(operator, max_bid)| (operator, core::cmp::min(flip_account.total(), max_bid)))
 							.collect()
 					})
@@ -2214,7 +2227,21 @@ impl_runtime_apis! {
 			let required_deposit = match call {
 				EthereumSCApi::Delegation { call: DelegationApi::Delegate { increase: DelegationAmount::Some(ref increase), .. } } => {
 					pallet_cf_validator::DelegationChoices::<Runtime>::get(&caller_id)
-						.map(|relations| relations.operators.values().copied().sum::<FlipBalance>())
+						.map(|relations| {
+							relations
+								.into_map()
+								.into_values()
+								.map(|max_bid| match max_bid {
+									pallet_cf_validator::DelegationAmount::Some(max_bid) => max_bid,
+									pallet_cf_validator::DelegationAmount::Max => {
+										cf_runtime_utilities::log_or_panic!(
+											"DelegationChoices entry contains an unresolved Max amount",
+										);
+										0
+									},
+								})
+								.sum::<FlipBalance>()
+						})
 						.unwrap_or_default()
 						.saturating_add(*increase)
 						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id))
