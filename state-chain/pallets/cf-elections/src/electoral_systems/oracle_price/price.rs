@@ -74,7 +74,7 @@ pub enum PriceAsset {
 
 impl HasChangelog for PriceAsset {
 	type if_unspecified = _PriceAsset::see_variant_changelogs;
-	type in_20400 = _PriceAsset::see_variant_changelogs_and_also<(
+	type in_20300 = _PriceAsset::see_variant_changelogs_and_also<(
 		_PriceAsset::variant::Wbtc::Added,
 		(
 			_PriceAsset::variant::Cbbtc::Added,

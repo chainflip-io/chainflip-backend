@@ -14,17 +14,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_utilities::migrations::{basics::HasVersion, v20300};
+use cf_utilities::migrations::{basics::HasVersion, v20200};
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::{OraclePrice as CurrentOraclePrice, OraclePriceLegacy as CurrentOraclePriceLegacy},
 	price::PriceAsset as CurrentPriceAsset,
 };
 
-pub type PriceAsset = <CurrentPriceAsset as HasVersion<v20300>>::HistoricalType;
-pub type OraclePrice = <CurrentOraclePrice as HasVersion<v20300>>::HistoricalType;
+pub type PriceAsset = <CurrentPriceAsset as HasVersion<v20200>>::HistoricalType;
+pub type OraclePrice = <CurrentOraclePrice as HasVersion<v20200>>::HistoricalType;
 // The API v11 boundary predates the earliest canonical changelog snapshot. The distinct legacy
-// carrier models the missing price_status; v20300 supplies its pre-v22 nested asset shape.
-pub type OraclePriceLegacy = <CurrentOraclePriceLegacy as HasVersion<v20300>>::HistoricalType;
+// carrier models the missing price_status; v20200 supplies its pre-v22 nested asset shape.
+pub type OraclePriceLegacy = <CurrentOraclePriceLegacy as HasVersion<v20200>>::HistoricalType;
 
 #[cfg(test)]
 mod tests {
@@ -47,11 +47,11 @@ mod tests {
 			CurrentPriceAsset::Usd,
 			CurrentPriceAsset::Fine,
 		] {
-			let Ok(historical) = try_migrate_to_historical_type(v20300, current) else {
+			let Ok(historical) = try_migrate_to_historical_type(v20200, current) else {
 				panic!("pre-v22 price asset must migrate backwards")
 			};
 			assert_eq!(historical.encode(), current.encode());
-			let migrated: CurrentPriceAsset = migrate_from_historical_type(v20300, historical);
+			let migrated: CurrentPriceAsset = migrate_from_historical_type(v20200, historical);
 			assert_eq!(migrated, current);
 		}
 
@@ -62,7 +62,7 @@ mod tests {
 			CurrentPriceAsset::Trx,
 			CurrentPriceAsset::Bnb,
 		] {
-			assert!(try_migrate_to_historical_type(v20300, current).is_err());
+			assert!(try_migrate_to_historical_type(v20200, current).is_err());
 		}
 	}
 
@@ -76,12 +76,12 @@ mod tests {
 			quote_asset: CurrentPriceAsset::Usd,
 			price_status: PriceStatus::MaybeStale,
 		};
-		let Ok(historical) = try_migrate_to_historical_type(v20300, current.clone()) else {
+		let Ok(historical) = try_migrate_to_historical_type(v20200, current.clone()) else {
 			panic!("pre-v22 oracle price must migrate backwards")
 		};
 
 		assert_eq!(historical.encode(), current.encode());
-		let migrated: CurrentOraclePrice = migrate_from_historical_type(v20300, historical);
+		let migrated: CurrentOraclePrice = migrate_from_historical_type(v20200, historical);
 		assert_eq!(migrated.encode(), current.encode());
 	}
 
@@ -94,12 +94,12 @@ mod tests {
 			base_asset: CurrentPriceAsset::Btc,
 			quote_asset: CurrentPriceAsset::Usd,
 		};
-		let Ok(historical) = try_migrate_to_historical_type(v20300, current.clone()) else {
+		let Ok(historical) = try_migrate_to_historical_type(v20200, current.clone()) else {
 			panic!("pre-v11 oracle price must migrate backwards")
 		};
 
 		assert_eq!(historical.encode(), current.encode());
-		let migrated: CurrentOraclePriceLegacy = migrate_from_historical_type(v20300, historical);
+		let migrated: CurrentOraclePriceLegacy = migrate_from_historical_type(v20200, historical);
 		let converted: CurrentOraclePrice = migrated.into();
 		assert_eq!(converted.price_status, PriceStatus::Stale);
 		assert_eq!(

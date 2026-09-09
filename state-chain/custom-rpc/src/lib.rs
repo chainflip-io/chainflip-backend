@@ -53,7 +53,7 @@ use cf_utilities::{
 			migrate_from_historical_type, try_migrate_from_historical_type,
 			try_migrate_to_historical_type,
 		},
-		v20000, v20100, v20300,
+		v20000, v20100, v20200,
 	},
 	rpc::NumberOrHex,
 };
@@ -3770,10 +3770,10 @@ where
 			}
 
 			let historical_query = if let Some((base_asset, quote_asset)) = base_and_quote_asset {
-				let Ok(base_asset) = try_migrate_to_historical_type(v20300, base_asset) else {
+				let Ok(base_asset) = try_migrate_to_historical_type(v20200, base_asset) else {
 					return Ok(Vec::new());
 				};
-				let Ok(quote_asset) = try_migrate_to_historical_type(v20300, quote_asset) else {
+				let Ok(quote_asset) = try_migrate_to_historical_type(v20200, quote_asset) else {
 					return Ok(Vec::new());
 				};
 
@@ -3790,7 +3790,7 @@ where
 				prices
 					.into_iter()
 					.map(|price| {
-						let price: OraclePriceLegacy = migrate_from_historical_type(v20300, price);
+						let price: OraclePriceLegacy = migrate_from_historical_type(v20200, price);
 						price.into()
 					})
 					.collect()
@@ -3801,7 +3801,7 @@ where
 
 				prices
 					.into_iter()
-					.map(|price| migrate_from_historical_type(v20300, price))
+					.map(|price| migrate_from_historical_type(v20200, price))
 					.collect()
 			})
 		})
