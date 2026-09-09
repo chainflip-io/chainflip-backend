@@ -78,6 +78,52 @@ module main {
         w.chains.get("btc").handoverRan,
       })
 
+  // W4 within a SINGLE rotation. The witness itself is a conjunction over
+  // history counters, so a sampled trace may satisfy it across two rotations
+  // (safe mode off during the first, the epoch advancing in the second); this
+  // run pins the case the witness is named for: governance disables authority
+  // rotations while the rotation is already in ActivatingKeys, and it still
+  // completes, because no abort edge exists past that phase (R7).
+  run w4CompleteDespiteSafeModeTest =
+    init
+      .then(epochElapses)
+      .then(block(Set(), Set(), true))
+      .then(keygenOutcome("btc", true, Set()))
+      .then(keygenOutcome("evm", true, Set()))
+      .then(verificationResult("btc", true, Set()))
+      .then(verificationResult("evm", true, Set()))
+      .then(block(Set(), Set(), true))
+      .then(handoverOutcome("btc", true, Set()))
+      .then(verificationResult("btc", true, Set()))
+      .then(block(Set(), Set(), true))
+      .expect(all {
+        inActivating(w.phase),
+        w.rotationEnabled,
+        not(w.hist.safeModeOffWhileActivating),
+      })
+      // Governance turns authority rotations off mid-activation.
+      .then(toggleSafeMode)
+      .then(signatureReadyOn("btc"))
+      .then(signatureReadyOn("evm"))
+      .then(block(Set(), Set(), true))
+      .expect(all {
+        not(w.rotationEnabled),
+        inSessionRotating(w.phase),
+        w.hist.safeModeOffWhileActivating,
+        w.hist.aborts == 0,
+      })
+      .then(block(Set(), Set(), true))
+      .expect(all {
+        w.phase == Idle,
+        w.epoch == 2,
+        w.hist.epochsAdvanced == 1,
+        not(w.rotationEnabled),
+        W4_CompleteDespiteSafeMode,
+        R7_NoAbortAfterActivation,
+        w.panics == Set(),
+        w.logErrors == Set(),
+      })
+
   // W5, the handover-verification livelock, driven with concrete arguments.
   // BTC's handover ceremony succeeds but the verification signing fails with an
   // empty offender set (offenders() drops any set above half the candidates),

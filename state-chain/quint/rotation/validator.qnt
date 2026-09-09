@@ -267,6 +267,12 @@ module rotation {
     | _ => x
     }
 
+  // One block. Hook order mirrors the runtime: cf-validator's on_initialize
+  // (lib.rs `fn on_initialize`) runs first, then pallet_session's
+  // rotate_session, which calls new_session (NewKeysActivated -> SessionRotating,
+  // lib.rs `fn new_session`) and start_session (SessionRotating ->
+  // transition_to_next_epoch, lib.rs `fn start_session`). So a chain-layer
+  // change made in block n is first seen by the validator hook in block n + 1.
   pure def blockStep(x: World, txFailed: Set[Chain], notRequired: Set[Chain], ascending: bool): World =
     val y = sessionHook(validatorHook(x, txFailed, notRequired, ascending))
     { ...y, blocks: y.blocks + 1, hist: { ...y.hist,
@@ -463,6 +469,11 @@ module rotation {
 
   // R3: sharing participants are unbanned current authorities, at least the
   // success threshold of the set at the time (recorded with the sharing set).
+  // DESIGN.md's R3 has a third clause - every UTXO chain has an old key when
+  // handover is requested - which is not asserted here because it holds by
+  // construction: chain.qnt's startHandover only creates AwaitingKeyHandover
+  // when activeKey is Some, and otherwise skips straight to
+  // KeyHandoverComplete (key_rotator.rs's `_ =>` NoKeyHandover arm).
   val R3_SharingSetValidity = match w.hist.lastSharing {
     | None => true
     | Some(s) => and {

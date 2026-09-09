@@ -271,6 +271,20 @@ module chain {
     assert(consPair(Pending, Ready(KeygenComplete)) == Pending),
     assert(consPair(Void, Pending) == Void),
     assert(consPair(Ready(KeygenComplete), Void) == Void),
+    // consStatus folds consPair over an unordered map, so the fold order must
+    // not matter. Associativity on the two cases where it could: a mixed
+    // non-failed pair that becomes an EMPTY failure before absorbing a real
+    // offender set, and the Pending/Void precedence.
+    assert(
+      consPair(consPair(Ready(KeygenComplete), Ready(RotationComplete)), Ready(FailedOuter(Set(4))))
+        == consPair(Ready(KeygenComplete), consPair(Ready(RotationComplete), Ready(FailedOuter(Set(4)))))),
+    assert(
+      consPair(consPair(Ready(KeygenComplete), Ready(RotationComplete)), Ready(FailedOuter(Set(4))))
+        == Ready(FailedOuter(Set(4)))),
+    assert(
+      consPair(consPair(Ready(KeygenComplete), Pending), Void)
+        == consPair(Ready(KeygenComplete), consPair(Pending, Void))),
+    assert(consPair(consPair(Ready(KeygenComplete), Pending), Void) == Void),
   }
 
   run utxoHappyPathTest =
