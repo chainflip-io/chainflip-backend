@@ -1978,7 +1978,7 @@ fn should_expire_all_previous_epochs() {
 #[cfg(test)]
 fn single_relation(delegator: u64) -> Option<(u64, u128)> {
 	DelegationChoices::<Test>::get(delegator).map(|relations| {
-		let operators = ValidatorPallet::resolved_operators(relations);
+		let operators = relations.into_map();
 		assert_eq!(
 			operators.len(),
 			1,
@@ -1986,6 +1986,18 @@ fn single_relation(delegator: u64) -> Option<(u64, u128)> {
 		);
 		operators.into_iter().next().unwrap()
 	})
+}
+
+/// Builds a `delegate_multi` input plan from concrete (non-`Max`) per-operator amounts.
+#[cfg(test)]
+fn fixed_plan(entries: impl IntoIterator<Item = (u64, u128)>) -> RequestedDelegationPlanOf<Test> {
+	DelegationPlan::try_from_map(
+		entries
+			.into_iter()
+			.map(|(operator, amount)| (operator, DelegationAmount::Some(amount)))
+			.collect(),
+	)
+	.unwrap()
 }
 
 #[cfg(test)]
@@ -2524,11 +2536,11 @@ mod delegation {
 
 			DelegationChoices::<Test>::insert(
 				ALICE,
-				DelegationPlan::try_from_amounts(BTreeMap::from([(BOB, BID)])).unwrap(),
+				DelegationPlan::try_from_map(BTreeMap::from([(BOB, BID)])).unwrap(),
 			);
 			DelegationChoices::<Test>::insert(
 				INDEPENDENT_VALIDATOR,
-				DelegationPlan::try_from_amounts(BTreeMap::from([(BOB, BID)])).unwrap(),
+				DelegationPlan::try_from_map(BTreeMap::from([(BOB, BID)])).unwrap(),
 			);
 
 			let (snapshots, independent_bidders) = ValidatorPallet::build_delegation_snapshots::<
@@ -3440,17 +3452,11 @@ mod delegation {
 
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				DelegationPlan::try_from_amounts(BTreeMap::from([
-					(OPERATOR_A, BID_TO_A),
-					(OPERATOR_B, BID_TO_B)
-				]))
-				.unwrap()
+				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
 			));
 
 			assert_eq!(
-				ValidatorPallet::resolved_operators(
-					DelegationChoices::<Test>::get(DELEGATOR).unwrap()
-				),
+				DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
 			);
 
@@ -3496,17 +3502,11 @@ mod delegation {
 			// stake.
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				DelegationPlan::try_from_amounts(BTreeMap::from([
-					(OPERATOR_A, REQUESTED_TO_A),
-					(OPERATOR_B, REQUESTED_TO_B)
-				]))
-				.unwrap()
+				fixed_plan([(OPERATOR_A, REQUESTED_TO_A), (OPERATOR_B, REQUESTED_TO_B)])
 			));
 
 			let requested_total = REQUESTED_TO_A + REQUESTED_TO_B;
-			let stored = ValidatorPallet::resolved_operators(
-				DelegationChoices::<Test>::get(DELEGATOR).unwrap(),
-			);
+			let stored = DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map();
 			assert_eq!(stored.values().copied().sum::<u128>(), BALANCE);
 			// Proportional to the original 1400:600 (7:3) split.
 			assert_eq!(
@@ -3544,16 +3544,10 @@ mod delegation {
 			// must succeed, since only the aggregate is checked against the minimum.
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				DelegationPlan::try_from_amounts(BTreeMap::from([
-					(OPERATOR_A, half_of_min),
-					(OPERATOR_B, min_bid - half_of_min)
-				]))
-				.unwrap()
+				fixed_plan([(OPERATOR_A, half_of_min), (OPERATOR_B, min_bid - half_of_min)])
 			));
 			assert_eq!(
-				ValidatorPallet::resolved_operators(
-					DelegationChoices::<Test>::get(DELEGATOR).unwrap()
-				),
+				DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(OPERATOR_A, half_of_min), (OPERATOR_B, min_bid - half_of_min)])
 			);
 
@@ -3561,8 +3555,7 @@ mod delegation {
 			assert_noop!(
 				ValidatorPallet::delegate_multi(
 					OriginTrait::signed(DELEGATOR),
-					DelegationPlan::try_from_amounts(BTreeMap::from([(OPERATOR_A, half_of_min)]))
-						.unwrap()
+					fixed_plan([(OPERATOR_A, half_of_min)])
 				),
 				Error::<Test>::DelegationAmountBelowMinimum
 			);
@@ -3588,27 +3581,17 @@ mod delegation {
 			MockFlip::credit_funds(&DELEGATOR, BID_TO_A + BID_TO_B);
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				DelegationPlan::try_from_amounts(BTreeMap::from([
-					(OPERATOR_A, BID_TO_A),
-					(OPERATOR_B, BID_TO_B)
-				]))
-				.unwrap()
+				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
 			));
 
 			// Submitting a new plan that still includes OPERATOR_B unchanged, but reduces
 			// OPERATOR_A, leaves OPERATOR_B untouched.
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				DelegationPlan::try_from_amounts(BTreeMap::from([
-					(OPERATOR_A, BID_TO_A - 100),
-					(OPERATOR_B, BID_TO_B)
-				]))
-				.unwrap()
+				fixed_plan([(OPERATOR_A, BID_TO_A - 100), (OPERATOR_B, BID_TO_B)])
 			));
 			assert_eq!(
-				ValidatorPallet::resolved_operators(
-					DelegationChoices::<Test>::get(DELEGATOR).unwrap()
-				),
+				DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(OPERATOR_A, BID_TO_A - 100), (OPERATOR_B, BID_TO_B)])
 			);
 
@@ -3616,21 +3599,17 @@ mod delegation {
 			// still delegating (to OPERATOR_B) so the LP role must not be dropped.
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				DelegationPlan::try_from_amounts(BTreeMap::from([(OPERATOR_B, BID_TO_B)])).unwrap()
+				fixed_plan([(OPERATOR_B, BID_TO_B)])
 			));
 			assert_eq!(
-				ValidatorPallet::resolved_operators(
-					DelegationChoices::<Test>::get(DELEGATOR).unwrap()
-				),
+				DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(OPERATOR_B, BID_TO_B)])
 			);
 			System::assert_last_event(RuntimeEvent::ValidatorPallet(
 				Event::DelegationPlanUpdated {
 					delegator: DELEGATOR,
-					plan: DelegationPlan::try_from_amounts(BTreeMap::from([(
-						OPERATOR_B, BID_TO_B,
-					)]))
-					.unwrap(),
+					plan: DelegationPlan::try_from_map(BTreeMap::from([(OPERATOR_B, BID_TO_B)]))
+						.unwrap(),
 				},
 			));
 			assert!(<Roles as AccountRoleRegistry<Test>>::has_account_role(
@@ -3642,7 +3621,7 @@ mod delegation {
 			// mirroring `undelegate`'s behaviour.
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				DelegationPlan::try_from_amounts(Default::default()).unwrap()
+				fixed_plan([])
 			));
 			assert!(!DelegationChoices::<Test>::contains_key(DELEGATOR));
 			assert!(!<Roles as AccountRoleRegistry<Test>>::has_account_role(
@@ -3688,11 +3667,7 @@ mod delegation {
 			MockFlip::credit_funds(&DELEGATOR, BID_TO_A + BID_TO_B);
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				DelegationPlan::try_from_amounts(BTreeMap::from([
-					(OPERATOR_A, BID_TO_A),
-					(OPERATOR_B, BID_TO_B)
-				]))
-				.unwrap()
+				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
 			));
 
 			let (snapshots, _independent_bidders) = ValidatorPallet::build_delegation_snapshots::<
@@ -3746,11 +3721,7 @@ mod delegation {
 			MockFlip::credit_funds(&DELEGATOR, BID_TO_A + BID_TO_B);
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				DelegationPlan::try_from_amounts(BTreeMap::from([
-					(OPERATOR_A, BID_TO_A),
-					(OPERATOR_B, BID_TO_B)
-				]))
-				.unwrap()
+				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
 			));
 
 			// Simulate a slash: the delegator's balance drops below the sum of its two max
@@ -3798,11 +3769,7 @@ mod delegation {
 				MockFlip::credit_funds(&DELEGATOR, BID_TO_A + BID_TO_B);
 				assert_ok!(ValidatorPallet::delegate_multi(
 					OriginTrait::signed(DELEGATOR),
-					DelegationPlan::try_from_amounts(BTreeMap::from([
-						(OPERATOR_A, BID_TO_A),
-						(OPERATOR_B, BID_TO_B)
-					]))
-					.unwrap()
+					fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
 				));
 
 				// `WINNING_BIDS` accounts already hold the Validator role from genesis (see
