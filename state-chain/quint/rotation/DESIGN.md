@@ -1,18 +1,21 @@
 # Quint model of authority rotation stages
 
 **Date:** 2026-09-07
-**Status:** design approved, not yet implemented
+**Status:** implemented; see README.md Status. Deviations from this design are
+recorded under "Outcome and deviations" below.
 **Scope:** `state-chain/pallets/cf-validator` (rotation phases),
 `state-chain/pallets/cf-threshold-signature` (key rotator, ceremony response
 voting), `state-chain/pallets/cf-vaults` (vault activator),
 `state-chain/runtime/src/chainflip/cons_key_rotator.rs` (multi-chain
 combinator).
 **Linear:** PRO-3120, under Formal Protocol Verification, second item on
-the project's candidate list. Sequel to the keygen model (PRO-3084).
+the project's candidate list. Sequel to the keygen model (PRO-3084), which
+lives on branch `feat/multisig-quint-model` until it is merged.
 
 ## Motivation
 
-The keygen model (PRO-3084, `engine/multisig/quint/`) verifies that a single
+The keygen model (PRO-3084, `engine/multisig/quint/` on branch
+`feat/multisig-quint-model` until merged) verifies that a single
 ceremony attributes blame correctly. It stops at the point where each node
 reports an outcome to the State Chain. Everything after that is orchestration:
 the State Chain collects reports per chain, resolves an outcome, retries or
@@ -87,7 +90,8 @@ Five modules in this directory (`state-chain/quint/rotation/`), plus
 | `validator.qnt` | the six rotation phases, abstract auction, ban bookkeeping, size floor, sharing-set selection, safe mode, force rotation, broadcasts-pending gate, two session boundaries, epoch and authority sets |
 | `harness.qnt` | instances, invariants, negative controls, witnesses, deterministic run tests |
 
-The layering mirrors the keygen model: a concrete lower layer discharges an
+The layering mirrors the keygen model (PRO-3084, on branch
+`feat/multisig-quint-model` until merged): a concrete lower layer discharges an
 explicit oracle contract, and the upper layers are verified over the oracle so
 that vote sequences never enter their state space.
 
@@ -109,7 +113,8 @@ with one optional clause used only by the progress property:
                     then off ∩ honest = ∅
 ```
 
-`StrongHonesty` is deliberately stronger than what the keygen model proved.
+`StrongHonesty` is deliberately stronger than what the keygen model proved
+(PRO-3084, on branch `feat/multisig-quint-model` until merged).
 Its README records that a Byzantine party can equivocate so that some honest
 parties finish `Agreed` and others fail. In that split the State Chain's
 resolve rule bans the honest minority (their success or failure votes lose to
@@ -186,7 +191,10 @@ resolutions within a fixed universe of validators.
 
 ## Properties
 
-Identifiers are stable and used verbatim in `harness.qnt` and the README.
+Identifiers are stable and used verbatim in the model and the README. As
+shipped, invariants and witnesses are defined in `validator.qnt` (and
+`ceremony.qnt` for the ceremony layer); `harness.qnt` holds only the instances
+and the deterministic `run` tests.
 
 ### Ceremony layer (`ceremony.qnt`)
 
@@ -322,11 +330,13 @@ immediately), which turns each `L` property into a bounded invariant with a
 block counter: a rotation started at block `b` is `Idle` again by `b + K`.
 `K` is computed from the longest fair trace and recorded in the README. Happy
 paths also get deterministic `run` tests, checked by `quint test`, as the
-keygen model does for `Done`-reachability.
+keygen model (PRO-3084, on branch `feat/multisig-quint-model` until merged)
+does for `Done`-reachability.
 
 ### `check.sh`
 
-Same shape as `engine/multisig/quint/check.sh`: typecheck every module, run
+Same shape as the keygen model's `engine/multisig/quint/check.sh` (PRO-3084, on
+branch `feat/multisig-quint-model` until merged): typecheck every module, run
 `quint test`, simulate every invariant and witness with `--main` routing per
 instance, run the `MUST_VIOLATE` section with the exit condition inverted, and
 print witness counts so a vacuous pass is visible. `--verify` adds the Apalache
@@ -374,6 +384,41 @@ Recorded in the README from the first commit:
    and known gaps.
 7. Linear issues for any surviving violation, each with its trace and a
    matching integration test.
+
+## Outcome and deviations
+
+The model shipped. Where it departs from the design above, this is the record;
+`README.md` carries the measured status, witness counts and findings.
+
+- **H1 dropped.** `VerifiedImpliesUnanimousAndSigned` holds by construction —
+  the chain layer only reaches `KeygenVerificationComplete` through a `Success`
+  plus a signing `Ok` — so it is covered by `C1` and `happyPathTest` and has no
+  README row.
+- **H2 restated.** As specified ("`KeyHandoverComplete{k}` implies `k = k0`")
+  it was a spec defect: `KeyHandoverComplete { new_public_key }` carries the
+  *new* key (`key_rotator.rs:126-129`); old-key equality is
+  `handover_key_matches`, checked at the ceremony layer by `resolveHandover`.
+  The shipped `H2_UtxoAlwaysHandsOver` instead states that a UTXO chain with a
+  key never skips the handover ceremony.
+- **L3 split in two.** `PostHandoverCompletion` is delivered as
+  `R7_NoAbortAfterActivation` (the safety half) plus the `W4` witness (the
+  liveness half); the README names L3 in the `R7` row.
+- **PF1–PF4 collapsed** into a single `PF_NoPanics` over the `panics` set. PF3
+  holds by construction (`chain.qnt`'s `startHandover` only creates
+  `AwaitingKeyHandover` when `activeKey` is `Some`); its Rust site is the
+  `.expect` in `cf-threshold-signature/src/lib.rs` (handover progress), not
+  `key_rotator.rs`.
+- **Property placement.** Invariants and witnesses live in `validator.qnt`, not
+  `harness.qnt`; `harness.qnt` holds only the instances and the deterministic
+  `run` tests.
+- **Depths.** Simulation runs at depth 80, not 40 (at 40 only 0.15% of traces
+  complete a rotation). Exhaustive checking reaches depth 1 on `main`/`fair`
+  and depth 2 on the one-chain `main1`, not the planned 30; the validator layer
+  is therefore simulation-evidenced (README "Tractability").
+- **Witness numbering.** Shipped as `W1`–`W10`: the design listed `W1`–`W5`,
+  and `W6`–`W10` were added while checking. `NC2` needs its own
+  `ceremonyOutage` instance, and `W3_AbortAtSizeFloor` is required on `split`,
+  where honest nodes can be banned, rather than on `main`.
 
 ## Risks
 

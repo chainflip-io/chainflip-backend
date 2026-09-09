@@ -22,8 +22,11 @@ Apalache (for `quint verify`) and the Rust evaluator are downloaded into
 ./check.sh --verify   # add exhaustive Apalache checks (~18 min in total)
 ```
 
-Every module except `types.qnt` declares `const`s, so checks target an
-instance in `harness.qnt` via `--main`:
+The two parameterised modules — `ceremonyCheck` in `ceremony.qnt` and
+`rotation` in `validator.qnt` — declare `const`s and cannot run directly, so
+every check on those layers targets an instance in `harness.qnt` via `--main`.
+The unparameterised modules (`types`, `chain`, and `ceremony` itself) run on
+their own, which is how `check.sh` invokes their unit tests.
 
 ```bash
 quint run harness.qnt --main=main --invariant=PF_NoPanics --max-steps=40
@@ -83,12 +86,12 @@ layer verifies above depth 1).
 | `R4_TransitionGating` | the epoch advances only when every chain is `Complete`, with the final candidate set queued | `main`, `uninit`, `split`; depth 80, 20000 | `main1`, depth 2, `[ok]` in 129 s |
 | `R5_NoNextKeyAfterAbort` | in `Idle` no active chain holds a key for a future epoch | `main`, `uninit`, `split`; depth 80, 20000 | no |
 | `R6_KeyEpochAgreement` | active chains agree on the current key epoch | `main`, `uninit`, `split`; depth 80, 20000 | no |
-| `R7_NoAbortAfterActivation` | no abort edge exists past `ActivatingKeys` | `main`, `split`, `fair`; depth 80, 20000 (2000 on `fair`) | no |
+| `R7_NoAbortAfterActivation` | DESIGN.md's `L3 PostHandoverCompletion`, safety half: no abort edge exists past `ActivatingKeys` (the liveness half is the `W4` witness) | `main`, `split`, `fair`; depth 80, 20000 (2000 on `fair`) | no |
 | `H2_UtxoAlwaysHandsOver` | a UTXO chain with a key never completes handover without running the ceremony | `main`, `split`; depth 80, 20000 | no |
 | `H3_NextKeyOnlyAfterActivation` | the next-epoch key exists only during activation and the session steps | `main`, `uninit`, `split`; depth 80, 20000 | `main1`, depth 2, `[ok]` in 422 s |
 | `H4_ConsSoundness` | a merged `Failed` comes from a failed chain and carries exactly its offenders | `main`, depth 80, 20000 | no — and *not* verifiable on `main1`, where it is trivially true on one chain |
 | `NoUnexpectedLogErrors` | no `log::error!` site that `on_initialize`/`activate_keys` treat as impossible is reached | `main`, `uninit`; depth 80, 20000 | no |
-| `PF_NoPanics` | no assertion site in `key_rotator.rs` is reachable | **`[violation]` on `main`** (depth 80, 20000; reported, not enforced); `[ok]` on `fair`, depth 80, 2000 | no |
+| `PF_NoPanics` | DESIGN.md's `PF1`–`PF4` collapsed into one: no assertion site the model tracks is reachable. `PF3` is not among them — it holds by construction (`startHandover` only creates `AwaitingKeyHandover` when `activeKey` is `Some`) and its Rust site is the `.expect` in `cf-threshold-signature/src/lib.rs` (handover progress), not `key_rotator.rs` | **`[violation]` on `main`** (depth 80, 20000; reported, not enforced); `[ok]` on `fair`, depth 80, 2000 | no |
 | `L1_Termination` | a started rotation finishes within `K_BLOCKS` | `fair`, depth 80, 2000 | `fair`, depth 1, `[ok]` in 78 s |
 | `L2_Progress` | no rotation aborts under a fair scheduler | `fair`, depth 80, 2000 | `fair`, depth 1, `[ok]` in 73 s |
 
@@ -104,6 +107,15 @@ witnesses that are printed but not required-positive; every other witness listed
 here fails the script if it reads 0. The `W10` figure comes from the Task 9
 triage run rather than the `./check.sh` run the rest of the table is from; it
 reads 8069 / 20000 (40.34%) on `split`.
+
+`W2` and `W4` are conjunctions over history counters (`epochsAdvanced` with
+`keygenRestarts`, and `epochsAdvanced` with `safeModeOffWhileActivating`), so a
+trace can satisfy them across *two* rotations — the failure or the safe-mode
+window in the first, the completed epoch in the second — rather than in one.
+They are kept that way deliberately: they are reachability witnesses, and
+tightening them to a single rotation would make them harder to fire without
+adding coverage. The single-rotation reading of `W4` is pinned separately and
+deterministically by `w4CompleteDespiteSafeModeTest` in `harness.qnt`.
 
 | Witness | Instance | Count / samples | Required |
 |---|---|---|---|
@@ -242,6 +254,13 @@ Discovered while building and checking the model:
 - `H4_ConsSoundness` has no exhaustive coverage at all. It is trivially true on
   the one-chain `main1` instance — the only one that verifies above depth 1 —
   so `main1` must never be cited as evidence for it.
+- Honest signing liveness is not assumed. `StrongHonesty` constrains ceremony
+  *attribution* only, so `verificationResult` may return `isOk = false` with an
+  empty offender set no matter how many participants are honest. F1's
+  precondition — more than half the receiving participants failing one signing
+  ceremony — is therefore free in the model, while in production it needs a
+  real mass outage. Any liveness read off F1's trace frequency is an artefact of
+  this gap.
 - The `fair` instance runs at ~21-33 traces/s against ~2000-6000/s elsewhere,
   because no trace aborts early; `check.sh` runs it at 2000 samples for that
   reason.
@@ -269,7 +288,17 @@ which parks that chain in `KeyRotationStatus::Failed { offenders }` — not in
 `KeyHandoverFailed`, the variant `key_handover` knows how to resume from. The
 offender set can be empty: `CeremonyContext::<T, I>::offenders()` returns an
 empty `Vec` whenever the set it would report exceeds half the candidates, which
-is exactly the mass-unresponsiveness case. `ConsKeyRotator::status()` then folds
+is exactly the mass-unresponsiveness case. **That empty set is the whole
+precondition, and it is a strong one:** the handover-verification signers are
+exactly `receiving_participants`, i.e. the new authority candidates
+(`cf-threshold-signature/src/lib.rs:874-879`), so any *non-empty* offender set
+necessarily intersects the candidates and `on_initialize` takes the
+restart-keygen branch instead; reaching the livelock therefore needs strictly
+more than half of the new authority set non-responsive or heavily blamed within
+that single signing ceremony. The model reaches it under `STRONG` only because
+signing liveness is not part of `StrongHonesty` — `validator.qnt`'s
+`verificationResult` admits `isOk = false` with an empty offender set freely
+(see "Known gaps"). `ConsKeyRotator::status()` then folds
 that chain's `Ready(Failed(∅))` with the other chains' `Ready(KeyHandoverComplete)`
 into `Ready(Failed(∅))`. Back in `on_initialize`'s `KeyHandoversInProgress` arm,
 `offenders.intersection(candidates).count()` is 0, so control takes the
