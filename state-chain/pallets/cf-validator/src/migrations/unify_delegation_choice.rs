@@ -16,12 +16,12 @@
 
 //! `DelegationChoice: StorageMap<delegator, (operator, max_bid)>` only ever supported a single
 //! operator relation per delegator. To support multi-operator delegation, it's reshaped into
-//! `DelegationChoices: StorageMap<delegator, DelegatorRelations>`, where `DelegatorRelations`
-//! holds a full `operator -> max_bid` map instead of a single pair. This migration translates
-//! each pre-existing single-relation entry into the equivalent one-entry map, preserving all
+//! `DelegationChoices: StorageMap<delegator, DelegationPlan>`, where `DelegationPlan` holds a
+//! full `operator -> max_bid` set instead of a single pair. This migration translates each
+//! pre-existing single-relation entry into the equivalent one-entry plan, preserving all
 //! delegator/operator/max_bid data exactly.
 
-use crate::{Config, DelegationChoices, DelegatorRelations};
+use crate::{Config, DelegationChoices, DelegationPlan};
 use frame_support::{
 	pallet_prelude::Weight,
 	sp_runtime::Saturating,
@@ -61,7 +61,13 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		for (delegator, (operator, max_bid)) in old::DelegationChoice::<T>::drain() {
 			DelegationChoices::<T>::insert(
 				&delegator,
-				DelegatorRelations { operators: BTreeMap::from([(operator, max_bid)]) },
+				DelegationPlan::try_from_amounts(BTreeMap::from([(operator, max_bid)]))
+					.unwrap_or_else(|_| {
+						cf_runtime_utilities::log_or_panic!(
+							"migrated delegator relation exceeded MaxOperatorsPerDelegator"
+						);
+						Default::default()
+					}),
 			);
 			entries_migrated.saturating_accrue(1);
 		}
@@ -85,10 +91,10 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			Decode::decode(&mut &state[..]).map_err(|_| "failed to decode pre_upgrade state")?;
 
 		for (delegator, operator, max_bid) in entries {
-			let relations = DelegationChoices::<T>::get(&delegator)
+			let plan = DelegationChoices::<T>::get(&delegator)
 				.ok_or(DispatchError::Other("expected migrated DelegationChoices entry"))?;
 			frame_support::ensure!(
-				relations.operators.get(&operator) == Some(&max_bid),
+				plan.into_map().get(&operator) == Some(&crate::DelegationAmount::Some(max_bid)),
 				DispatchError::Other("migrated max_bid did not match its pre-upgrade value")
 			);
 		}
@@ -124,11 +130,15 @@ mod tests {
 			Migration::<Test>::post_upgrade(state).unwrap();
 
 			assert_eq!(
-				DelegationChoices::<Test>::get(ALICE).unwrap().operators,
+				crate::Pallet::<Test>::resolved_operators(
+					DelegationChoices::<Test>::get(ALICE).unwrap()
+				),
 				BTreeMap::from([(BOB, 1_000)])
 			);
 			assert_eq!(
-				DelegationChoices::<Test>::get(OTHER_DELEGATOR).unwrap().operators,
+				crate::Pallet::<Test>::resolved_operators(
+					DelegationChoices::<Test>::get(OTHER_DELEGATOR).unwrap()
+				),
 				BTreeMap::from([(BOB, 500)])
 			);
 			assert!(old::DelegationChoice::<Test>::iter().next().is_none());
