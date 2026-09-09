@@ -50,6 +50,7 @@ use cf_chains::{ForeignChain, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{SwapOutputAction, SwapRequestHandler, SwapRequestType};
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use hex_literal::hex;
 use pallet_cf_ingress_egress::{EgressIdCounter, FetchOrTransfer, ScheduledEgressFetchOrTransfer};
 use sp_core::{crypto::Ss58Codec, H160};
 use sp_runtime::AccountId32;
@@ -61,11 +62,12 @@ use sp_runtime::AccountId32;
 ///
 /// These are paid in full: no egress fee is deducted.
 const REFUNDS: &[(AssetAmount, [u8; 20])] = &[
-	// TODO Case COM-480 — pending.
-	//
-	// TODO Case COM-442 — pending.
-	//
-	// TODO Case COM-498 — pending.
+	// Case COM-480 — 251.630603 trxUSDT overcharged across three swaps.
+	(251_630_603, hex!("229218df4e574f9f30089f62ab4bd75e8dd97199")),
+	// Case COM-498 — 90.13 trxUSDT overcharged.
+	(90_130_000, hex!("b3f89c03b7db2886ca1b1ecfc243bcce54f8e805")),
+	// Case COM-442 — 71.60 trxUSDT overcharged.
+	(71_600_000, hex!("73bbb9d7396ae5b4838cb781806f3984a1fe995e")),
 ];
 
 /// TRX drawn out of the withheld surplus and swapped back to trxUSDT.
@@ -74,8 +76,11 @@ const REFUNDS: &[(AssetAmount, [u8; 20])] = &[
 /// optimistically scheduled transfers are covered without the migration having to price the swap.
 /// Any excess simply stays in the protocol's trxUSDT balance.
 ///
-/// TODO: size this once the refund total is known. Zero disables the swap.
-const TRX_TO_SWAP: AssetAmount = 0;
+/// The three entries above total 413.360603 trxUSDT, so 5,000 TRX covers them at any TRX price
+/// above ~$0.083. Anything left over stays in the protocol's trxUSDT balance.
+///
+/// TODO: sanity-check against the TRX price before shipping.
+const TRX_TO_SWAP: AssetAmount = 5_000_000_000;
 
 /// Internal account credited with the swapped trxUSDT, following the precedent set by the
 /// `deploy_stuck_eth_channels` migration.

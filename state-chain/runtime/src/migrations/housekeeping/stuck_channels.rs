@@ -16,38 +16,78 @@
 
 //! Recovery for deposits that are still sitting at a deposit channel rather than in a vault.
 //!
-//! These cannot be egressed directly: the channel has to be put back into
-//! `DepositChannelLookup`, a `Fetch` scheduled for it, and the amount credited before a refund
-//! egress can be scheduled. The reference implementation of that sequence is
-//! `deploy_stuck_eth_channels.rs`, added in #6529 (`978e225901`) and since removed; recover it
-//! with `git show
-//! 978e225901:state-chain/runtime/src/migrations/housekeeping/deploy_stuck_eth_channels.rs`.
+//! These cannot be egressed directly: the funds have to be fetched out of the channel first, and
+//! only then transferred on to the user.
 //!
-//! Two cases are queued for this release, both blocked on data:
+//! Currently covers COM-477 — DOT sent to Assethub channel 14661791-Assethub-14 via extrinsic
+//! 0xd9d24bc9de34c6d4a5eba986ecf9bcfc20027cb50086bfac428ef4225eab49df and never witnessed, because
+//! of the Assethub witnessing bug fixed in 2.3. The funds never left the channel, so a fetch plus
+//! an egress is all the recovery needs and it rides fine on 2.2.
 //!
-//! * COM-371 — 15.39031019 SOL sent to Solana channel 14120216-Solana-118758 (deposit address
-//!   9YJGWpYPdpGX5Yn3ycC5KuJRPTcsWehcw4Vk1baY1sYv) a day after it expired. Solana deposit channels
-//!   are not recycled and stay under our control across rotations, so a fetch in a runtime upgrade
-//!   is viable. Blocked on the destination: the user's sending address
-//!   4VemNMuieDGa3EGCxAakNdq4izUUQXiHBYxPE8fXWXEq or the channel's registered refund address
-//!   GEBjqmmVo2a8uGcXHuMi3PkCEA8aKUYmZ1F9uVgSXYs — to be confirmed with the counterparty.
-//!
-//! * COM-477 — DOT sent to Assethub channel 14661791-Assethub-14 and never witnessed, via extrinsic
-//!   0xd9d24bc9de34c6d4a5eba986ecf9bcfc20027cb50086bfac428ef4225eab49df. The underlying witnessing
-//!   bug is fixed in 2.3; the recovery itself is just credit + fetch + transfer and rides on 2.2.
-//!   Blocked on the exact amount (the deposit was a `balances.transfer_all`, so it is not recorded
-//!   anywhere) and on a destination address.
-//!
-//! Once both are filled in, this migration replaces the no-op body below with the per-chain
-//! channel reinstatement and fetch, and the refund egresses move into [`super::refunds`].
+//! COM-371 (15.39031019 SOL at expired Solana channel 14120216-Solana-118758) belongs here too and
+//! is still blocked on a destination address. Solana deposit channels are not recycled and stay
+//! under our control across rotations, so the same shape applies once that is confirmed.
 
+use crate::*;
+use cf_chains::{
+	assets::hub::Asset as HubAsset, dot::PolkadotAccountId, hub::calculate_derived_address,
+};
+use cf_traits::EgressApi;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use hex_literal::hex;
+use pallet_cf_ingress_egress::{FetchOrTransfer, ScheduledEgressFetchOrTransfer};
+
+/// The channel id. The deposit address is derived from it rather than hardcoded, so it cannot
+/// drift from what the protocol would compute.
+const COM_477_CHANNEL_ID: u64 = 14;
+
+/// Balance of the deposit channel net of the fee the `balances.transfer_all` paid, in Planck.
+const COM_477_AMOUNT: u128 = 19_999_691_329_918;
+
+/// The DOT refund address registered by the channel's LP,
+/// cFHsUq1uK5opJudRDcztAViXfhnskxZcR2kNHfe5KsD3Loq2y —
+/// 15DQWnuLk3QbeYnUE7R5d35u3JXgPt6VxoJtZxa2xYHcQZue.
+const COM_477_REFUND_ADDRESS: [u8; 32] =
+	hex!("ba67085bbd451dbe92af133bea17b84d5b14537d2cba1726d31cf7f0e701c25a");
 
 pub struct Migration;
 
 impl OnRuntimeUpgrade for Migration {
 	fn on_runtime_upgrade() -> Weight {
-		log::info!("📦 No stuck-channel recoveries configured; nothing to do.");
+		let Some(master_account) = Environment::assethub_vault_account() else {
+			log::error!("📦 No Assethub vault account set; cannot recover channel funds.");
+			return Weight::zero();
+		};
+
+		let deposit_address = calculate_derived_address(master_account, COM_477_CHANNEL_ID);
+
+		// Polkadot fetches take the whole channel balance, so the amount here is informational.
+		ScheduledEgressFetchOrTransfer::<Runtime, AssethubInstance>::append(FetchOrTransfer::<
+			cf_chains::Assethub,
+		>::Fetch {
+			asset: HubAsset::HubDot,
+			deposit_address,
+			deposit_fetch_id: Some(COM_477_CHANNEL_ID),
+			amount: COM_477_AMOUNT,
+		});
+
+		match <AssethubIngressEgress as EgressApi<_>>::schedule_egress(
+			HubAsset::HubDot,
+			COM_477_AMOUNT,
+			PolkadotAccountId::from_aliased(COM_477_REFUND_ADDRESS),
+			None,
+		) {
+			Ok(d) => log::info!(
+				"📦 COM-477: fetching channel {} and refunding {} Planck: egress_id={:?} after_fees={} fee={}",
+				COM_477_CHANNEL_ID,
+				COM_477_AMOUNT,
+				d.egress_id,
+				d.egress_amount,
+				d.fee_withheld,
+			),
+			Err(e) => log::error!("📦 COM-477: failed to schedule the DOT refund: {:?}", e),
+		}
+
 		Weight::zero()
 	}
 }

@@ -41,15 +41,13 @@ use sp_std::vec::Vec;
 const ETH_REFUNDS: &[(EthAsset, u128, [u8; 20])] = &[
 	// Case COM-413 — 1,000 USDC deposited to an expired channel, since swept into the vault.
 	(EthAsset::Usdc, 1_000_000_000, hex!("dcd7b6b98b24bba086ccb969aac21d4fb85e944a")),
-	// TODO Case COM-473 — pending.
-	//
-	// TODO COM-415 — ~$821 of ETH sent on Ethereum against an Arbitrum route. Blocked on the
-	// fund location (vault vs deposit address 0xda038d5cae4973d71c07dece709a51c710016c3d) and on
-	// a destination address.
-	//
-	// TODO COM-444 — 0.0574204408620121 ETH, wrong-asset send. Recoverability is doubtful: if the
-	// deposit contract was derived from the Arbitrum vault the Ethereum vault cannot fetch it.
-	// Do not add without on-chain confirmation.
+	// Case COM-473 — 0.325 ETH sent to a stale deposit address, owed to the integrator that
+	// already made the end user whole. ETH is swept to the vault automatically, so a plain
+	// egress suffices.
+	(EthAsset::Eth, 325_000_000_000_000_000, hex!("6696c3ba4dd13457e0fd3bc8546cecb8df98e2b7")),
+	// COM-415 and COM-444 are deliberately absent. Both sent ETH on Ethereum to what was an
+	// Arbitrum deposit address. EVM deposit contracts are per-chain, so those funds are not
+	// under our control on Ethereum and there is nothing to refund from.
 ];
 
 /// Tron's `ChainAccount` is an EVM-style `H160`. Base58 Tron addresses (`T...`) decode to
@@ -60,6 +58,9 @@ const TRON_REFUNDS: &[(TronAsset, u128, [u8; 20])] = &[
 	// The overcharged-gas cases (COM-480, COM-442, COM-498) are deliberately not listed here:
 	// those funds were converted to TRX and sit in `WithheldAssets`, so they are repaid via a
 	// swap rather than a direct egress. See [`super::overcharged_gas`].
+	//
+	// Amounts below are confirmed and the funds are in the vault; each is blocked only on a
+	// destination address.
 	//
 	// TODO Case COM-366 — pending.
 	//
