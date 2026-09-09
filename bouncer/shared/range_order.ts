@@ -5,7 +5,7 @@ import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 export async function rangeOrder<A extends WithLpAccount>(
   cf: ChainflipIO<A>,
   ccy: Asset,
-  amount: number,
+  amount: number | string,
   orderId = 0,
 ) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
