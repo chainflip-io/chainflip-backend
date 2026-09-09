@@ -39,7 +39,7 @@ use sp_application_crypto::RuntimeAppPublic;
 use sp_consensus_grandpa::AuthoritySignature;
 use sp_std::{collections::btree_map::BTreeMap, vec};
 
-use delegation::{DelegationAcceptance, DelegatorRelations, OperatorSettings};
+use delegation::{DelegationAcceptance, DelegationPlan, OperatorSettings};
 
 mod p2p_crypto {
 	use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
@@ -652,28 +652,26 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T>::delegate_multi(
 			RawOrigin::Signed(delegator.clone()).into(),
-			DelegatorRelations {
-				operators: BTreeMap::from([(
-					operator_a.clone(),
-					(500 * FLIPPERINOS_PER_FLIP).into()
-				)])
-			},
+			DelegationPlan::try_from_amounts(BTreeMap::from([(
+				operator_a.clone(),
+				(500 * FLIPPERINOS_PER_FLIP).into()
+			)]))
+			.unwrap(),
 		));
 
 		#[extrinsic_call]
 		delegate_multi(
 			RawOrigin::Signed(delegator.clone()),
-			DelegatorRelations {
-				operators: BTreeMap::from([
-					(operator_a, (250 * FLIPPERINOS_PER_FLIP).into()),
-					(operator_b.clone(), (250 * FLIPPERINOS_PER_FLIP).into()),
-				]),
-			},
+			DelegationPlan::try_from_amounts(BTreeMap::from([
+				(operator_a, (250 * FLIPPERINOS_PER_FLIP).into()),
+				(operator_b.clone(), (250 * FLIPPERINOS_PER_FLIP).into()),
+			]))
+			.unwrap(),
 		);
 
 		assert!(DelegationChoices::<T>::get(&delegator)
 			.unwrap()
-			.operators
+			.into_map()
 			.contains_key(&operator_b));
 	}
 

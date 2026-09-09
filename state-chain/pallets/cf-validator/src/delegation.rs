@@ -23,7 +23,8 @@ use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
 	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill, Saturating},
-	traits::IsType,
+	traits::{Get, IsType},
+	BoundedVec, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
@@ -74,6 +75,10 @@ impl<T> DelegationAmount<T> {
 			DelegationAmount::Max => Ok(DelegationAmount::Max),
 			DelegationAmount::Some(amount) => Ok(DelegationAmount::Some(f(amount)?)),
 		}
+	}
+
+	pub fn is_max(&self) -> bool {
+		matches!(self, DelegationAmount::Max)
 	}
 }
 
@@ -139,17 +144,15 @@ pub struct OperatorSettings {
 	pub delegation_acceptance: DelegationAcceptance,
 }
 
-/// A delegator's live relations, keyed by operator, to their max bid pledged to that operator.
-///
-/// A delegator may hold relations to multiple operators simultaneously; the sum of all their
-/// max bids is capped at the delegator's funding balance (enforced by `delegate`/
-/// `delegate_multi`). Never stored with an empty `operators` map -- the storage key is removed
+/// A delegator's live delegation plan: the set of operators it delegates to and the max bid
+/// pledged to each. The sum of all a delegator's max bids is capped at its funding balance
+/// (enforced by `delegate`/`delegate_multi`). Never stored empty -- the storage key is removed
 /// entirely once a delegator's last relation is undelegated.
 #[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	Debug,
+	CloneNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	DebugNoBound,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
@@ -157,13 +160,70 @@ pub struct OperatorSettings {
 	Serialize,
 	Deserialize,
 )]
-pub struct DelegatorRelations<Account: Ord, Amount> {
-	pub operators: BTreeMap<Account, Amount>,
+#[scale_info(skip_type_params(N))]
+#[serde(
+	bound = "Account: Serialize + for<'a> Deserialize<'a>, Amount: Serialize + for<'a> Deserialize<'a>"
+)]
+pub enum DelegationPlan<
+	Account: Clone + PartialEq + Eq + core::fmt::Debug,
+	Amount: Clone + PartialEq + Eq + core::fmt::Debug,
+	N: Get<u32>,
+> {
+	/// Absolute caps per operator. Σ ≤ balance. At most one entry may be `Max`.
+	Fixed(BoundedVec<(Account, DelegationAmount<Amount>), N>),
+	// v2, appended later:
+	// /// Proportional split of the whole balance. Σ = 100%. Auto-compounds.
+	// Proportional(BoundedVec<(Account, Perbill), N>),
 }
 
-impl<Account: Ord, Amount> Default for DelegatorRelations<Account, Amount> {
+impl<
+		Account: Clone + PartialEq + Eq + core::fmt::Debug,
+		Amount: Clone + PartialEq + Eq + core::fmt::Debug,
+		N: Get<u32>,
+	> Default for DelegationPlan<Account, Amount, N>
+{
 	fn default() -> Self {
-		Self { operators: BTreeMap::new() }
+		Self::Fixed(Default::default())
+	}
+}
+
+impl<
+		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
+		Amount: Clone + PartialEq + Eq + core::fmt::Debug,
+		N: Get<u32>,
+	> DelegationPlan<Account, Amount, N>
+{
+	pub fn len(&self) -> usize {
+		match self {
+			Self::Fixed(entries) => entries.len(),
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+
+	/// The raw `account -> requested amount` map backing this plan. Any `Max` entry is left
+	/// unresolved -- it's the caller's responsibility to resolve it against a balance before
+	/// treating the result as concrete amounts (see `try_from_amounts`, the counterpart used
+	/// once that resolution has happened).
+	pub fn into_map(self) -> BTreeMap<Account, DelegationAmount<Amount>> {
+		match self {
+			Self::Fixed(entries) => entries.into_iter().collect(),
+		}
+	}
+
+	/// Builds a `Fixed` plan from concrete per-operator amounts, i.e. once any `Max` entry has
+	/// already been resolved to a number. Fails if `entries` doesn't fit within the bound `N`.
+	pub fn try_from_amounts(entries: BTreeMap<Account, Amount>) -> Result<Self, ()> {
+		Ok(Self::Fixed(
+			entries
+				.into_iter()
+				.map(|(account, amount)| (account, DelegationAmount::Some(amount)))
+				.collect::<Vec<_>>()
+				.try_into()
+				.map_err(|_| ())?,
+		))
 	}
 }
 
