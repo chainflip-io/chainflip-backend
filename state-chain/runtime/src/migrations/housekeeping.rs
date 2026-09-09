@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use crate::Runtime;
+use crate::{Runtime, VERSION};
 use cf_runtime_utilities::genesis_hashes;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 #[cfg(feature = "try-runtime")]
@@ -22,8 +22,17 @@ use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 pub mod liveness_election_state;
+pub mod overcharged_gas;
 pub mod reap_old_accounts;
+pub mod refunds;
 pub mod solana_remove_unused_channels_state;
+pub mod stuck_channels;
+
+// One-shot gate for the batched refunds. Must equal the runtime's spec_version at the moment the
+// migration ships, so a release that forgets to remove it cannot pay the refunds out twice. Update
+// this in lock-step with VERSION.spec_version, and remove the constant along with the `refunds` and
+// `stuck_channels` modules in the release that follows.
+const REFUNDS_SPEC_VERSION: u32 = 2_02_13;
 
 pub type Migration = (
 	NetworkSpecificHousekeeping,
@@ -38,9 +47,21 @@ pub struct NetworkSpecificHousekeeping;
 impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
-			genesis_hashes::BERGHAIN => {
-				log::info!("🧹 No housekeeping required for Berghain.");
-			},
+			genesis_hashes::BERGHAIN =>
+				if VERSION.spec_version == REFUNDS_SPEC_VERSION {
+					// Must run first: it credits the recovered channel balances that the refund
+					// egresses below are paid out of.
+					stuck_channels::Migration::on_runtime_upgrade();
+					refunds::Migration::on_runtime_upgrade();
+					overcharged_gas::Migration::on_runtime_upgrade();
+					log::info!("🧹 Berghain: scheduled batched refunds.");
+				} else {
+					log::info!(
+						"🧹 Skipping refunds: spec_version is {} (expected {}).",
+						VERSION.spec_version,
+						REFUNDS_SPEC_VERSION,
+					);
+				},
 			genesis_hashes::PERSEVERANCE => {
 				log::info!("🧹 No housekeeping required for Perseverance.");
 			},
@@ -54,7 +75,23 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) &&
+			VERSION.spec_version == REFUNDS_SPEC_VERSION
+		{
+			refunds::Migration::pre_upgrade()
+		} else {
+			Ok(Default::default())
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) &&
+			VERSION.spec_version == REFUNDS_SPEC_VERSION
+		{
+			refunds::Migration::post_upgrade(state)?;
+		}
 		Ok(())
 	}
 }
