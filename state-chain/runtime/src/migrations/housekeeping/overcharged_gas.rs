@@ -16,7 +16,7 @@
 
 //! Repayment of Tron broadcast fees that were overcharged by the gas estimation bug.
 //!
-//! These are not stuck deposits, and cannot be refunded with a plain egress. The path the money
+//! These are not stuck deposits and cannot be refunded with a plain egress. The path the money
 //! took was:
 //!
 //! 1. `withhold_ingress_or_egress_fee` estimated the egress fee in the chain's gas asset (TRX). The
@@ -29,30 +29,38 @@
 //! 4. The broadcast then consumed far less TRX than was bought, leaving a surplus (~20k TRX).
 //!
 //! So the users' money is sitting in `WithheldAssets[Trx]` denominated in TRX, while what they are
-//! owed is denominated in trxUSDT. Repaying them means running step 3 in reverse: draw the TRX down
-//! out of `WithheldAssets` and swap it back, egressing the output to the user.
+//! owed is denominated in trxUSDT.
 //!
-//! `WithheldAssets` is netted against `Liabilities` during reconciliation — it is what pays
-//! validators back for the gas they front — so the draw-down below is not optional. Scheduling the
-//! egress without it would leave the surplus stranded in TRX and open a fresh vault deficit in the
-//! output asset.
+//! Repayment therefore runs step 3 in reverse, but the two halves are deliberately independent:
 //!
-//! Note that the output asset does not have to be a Tron asset: COM-480 may be paid in ethUSDT, in
-//! which case the swap is TRX -> ethUSDT and the egress lands on Ethereum. The table carries the
-//! output asset explicitly for that reason.
+//! * The transfers are scheduled directly onto `ScheduledEgressFetchOrTransfer`, bypassing
+//!   `schedule_egress`. That skips fee estimation entirely — which matters both because it is the
+//!   component that misbehaved in the first place, and because a withheld fee would leave the user
+//!   short of the exact amount we are trying to give back.
+//! * A single TRX draw-down and swap tops the protocol back up in trxUSDT. It is sized generously
+//!   rather than exactly, and nothing waits on it: the transfers above are scheduled optimistically
+//!   on the assumption that the Tron vault already holds enough trxUSDT to cover them.
+//!
+//! Note that an `IngressEgressFee` swap request cannot be used for the swap. Its completion
+//! handler `log_or_panic!`s unless the output asset is the chain's gas asset, so it only runs
+//! towards TRX, never away from it.
 
 use crate::*;
-use cf_chains::{address::ForeignChainAddress, ForeignChain, SwapOrigin};
+use cf_chains::{ForeignChain, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount};
-use cf_traits::{AssetConverter, SwapOutputAction, SwapRequestHandler, SwapRequestType};
+use cf_traits::{SwapOutputAction, SwapRequestHandler, SwapRequestType};
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
-use sp_core::H160;
+use pallet_cf_ingress_egress::{EgressIdCounter, FetchOrTransfer, ScheduledEgressFetchOrTransfer};
+use sp_core::{crypto::Ss58Codec, H160};
+use sp_runtime::AccountId32;
 
-/// (output asset, amount owed in that asset's base units, destination address)
+/// Exact amounts owed, in trxUSDT base units (1e-6), and the destination address.
 ///
-/// The destination is the 20-byte EVM/Tron address; Tron's base58 addresses (`T...`) decode to
+/// Tron's `ChainAccount` is an EVM-style `H160`. Base58 Tron addresses (`T...`) decode to
 /// `0x41 || <20-byte address>`, and it is that 20-byte tail which goes here.
-const OVERCHARGED_GAS_REFUNDS: &[(Asset, AssetAmount, [u8; 20])] = &[
+///
+/// These are paid in full: no egress fee is deducted.
+const REFUNDS: &[(AssetAmount, [u8; 20])] = &[
 	// TODO Case COM-480 — pending.
 	//
 	// TODO Case COM-442 — pending.
@@ -60,84 +68,95 @@ const OVERCHARGED_GAS_REFUNDS: &[(Asset, AssetAmount, [u8; 20])] = &[
 	// TODO Case COM-498 — pending.
 ];
 
+/// TRX drawn out of the withheld surplus and swapped back to trxUSDT.
+///
+/// Sized to comfortably exceed the total in `REFUNDS` at any plausible TRX/USDT price, so that the
+/// optimistically scheduled transfers are covered without the migration having to price the swap.
+/// Any excess simply stays in the protocol's trxUSDT balance.
+///
+/// TODO: size this once the refund total is known. Zero disables the swap.
+const TRX_TO_SWAP: AssetAmount = 0;
+
+/// Internal account credited with the swapped trxUSDT, following the precedent set by the
+/// `deploy_stuck_eth_channels` migration.
+///
+/// TODO: confirm which account this should be before shipping.
+const SWAP_OUTPUT_ACCOUNT: &str = "cFLW4PhasdivcJKuA2BGw9Y9dz7EFwks82K8Z6U3MfCk8WcNW";
+
 pub struct Migration;
 
 impl OnRuntimeUpgrade for Migration {
 	fn on_runtime_upgrade() -> Weight {
-		for (output_asset, output_amount, address) in OVERCHARGED_GAS_REFUNDS {
-			// Work backwards from what the user is owed to the TRX it costs us, mirroring the
-			// conversion that overcharged them in the first place.
-			let trx_input =
-				<Swapping as AssetConverter>::calculate_input_for_desired_output_or_default_to_zero(
-					Asset::Trx,
-					*output_asset,
-					*output_amount,
-					false, // no network fee on a goodwill refund
-					true,  // internal swap
-				);
+		// Scheduled first and unconditionally: the users are repaid whether or not the top-up
+		// swap below can be funded.
+		for (amount, address) in REFUNDS {
+			let egress_id = EgressIdCounter::<Runtime, TronInstance>::mutate(|id_counter| {
+				*id_counter = id_counter.saturating_add(1);
+				(ForeignChain::Tron, *id_counter)
+			});
 
-			if trx_input == 0 {
-				log::error!(
-					"⛽ Could not price {} of {:?} in TRX; skipping refund.",
-					output_amount,
-					output_asset,
-				);
-				continue;
-			}
+			ScheduledEgressFetchOrTransfer::<Runtime, TronInstance>::append(FetchOrTransfer::<
+				cf_chains::Tron,
+			>::Transfer {
+				egress_id,
+				asset: cf_chains::assets::tron::Asset::TrxUsdt,
+				destination_address: H160(*address),
+				amount: *amount,
+			});
 
-			// Draw the surplus down rather than opening a fresh vault deficit.
-			let drawn = pallet_cf_asset_balances::WithheldAssets::<Runtime>::mutate(
-				Asset::Trx,
-				|withheld| {
-					let drawn = (*withheld).min(trx_input);
-					*withheld = withheld.saturating_sub(drawn);
-					drawn
-				},
+			log::info!(
+				"⛽ Repaying {} trxUSDT of overcharged gas to 0x{} (egress {:?}), fee-free.",
+				amount,
+				hex::encode(address),
+				egress_id,
 			);
+		}
 
-			if drawn < trx_input {
-				log::error!(
-					"⛽ Only {} TRX withheld, needed {} to refund {} of {:?}; skipping.",
-					drawn,
-					trx_input,
-					output_amount,
-					output_asset,
-				);
-				continue;
-			}
+		if TRX_TO_SWAP == 0 {
+			log::warn!("⛽ No TRX top-up swap configured; the trxUSDT paid out is unbacked.");
+			return Weight::zero();
+		}
 
-			let destination = match ForeignChain::from(*output_asset) {
-				ForeignChain::Tron => ForeignChainAddress::Tron(H160(*address)),
-				ForeignChain::Ethereum => ForeignChainAddress::Eth(H160(*address)),
-				ForeignChain::Arbitrum => ForeignChainAddress::Arb(H160(*address)),
-				other => {
-					log::error!("⛽ Unsupported refund chain {:?}; skipping.", other);
-					continue;
-				},
-			};
+		let drawn =
+			pallet_cf_asset_balances::WithheldAssets::<Runtime>::mutate(Asset::Trx, |withheld| {
+				let drawn = (*withheld).min(TRX_TO_SWAP);
+				*withheld = withheld.saturating_sub(drawn);
+				drawn
+			});
 
+		if drawn < TRX_TO_SWAP {
+			log::error!(
+				"⛽ Only {} TRX withheld, wanted {} for the top-up swap; swapping what there is.",
+				drawn,
+				TRX_TO_SWAP,
+			);
+		}
+
+		let account_id = match AccountId32::from_ss58check(SWAP_OUTPUT_ACCOUNT) {
+			Ok(account_id) => account_id,
+			Err(e) => {
+				log::error!("⛽ Could not decode the swap output account: {e:?}");
+				return Weight::zero();
+			},
+		};
+
+		if drawn > 0 {
 			let request_id = <Swapping as SwapRequestHandler>::init_swap_request(
 				Asset::Trx,
 				drawn,
-				*output_asset,
+				Asset::TrxUsdt,
 				SwapRequestType::RegularNoNetworkFee {
-					output_action: SwapOutputAction::Egress {
-						ccm_deposit_metadata: None,
-						output_address: destination,
-					},
+					output_action: SwapOutputAction::CreditOnChain { account_id },
 				},
 				Default::default(), // no broker fees
-				None,               // no price limits: a delayed refund beats a failed one
+				None,               // no price limits: a delayed top-up beats a failed one
 				None,               // no DCA
 				SwapOrigin::Internal,
 			);
 
 			log::info!(
-				"⛽ Refunding overcharged gas: swapping {} TRX for ~{} of {:?} -> 0x{} (swap request {:?}).",
+				"⛽ Swapping {} TRX of surplus back to trxUSDT (swap request {:?}).",
 				drawn,
-				output_amount,
-				output_asset,
-				hex::encode(address),
 				request_id,
 			);
 		}
