@@ -61,13 +61,14 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		for (delegator, (operator, max_bid)) in old::DelegationChoice::<T>::drain() {
 			DelegationChoices::<T>::insert(
 				&delegator,
-				DelegationPlan::try_from_amounts(BTreeMap::from([(operator, max_bid)]))
-					.unwrap_or_else(|_| {
+				DelegationPlan::try_from_map(BTreeMap::from([(operator, max_bid)])).unwrap_or_else(
+					|_| {
 						cf_runtime_utilities::log_or_panic!(
 							"migrated delegator relation exceeded MaxOperatorsPerDelegator"
 						);
 						Default::default()
-					}),
+					},
+				),
 			);
 			entries_migrated.saturating_accrue(1);
 		}
@@ -94,7 +95,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			let plan = DelegationChoices::<T>::get(&delegator)
 				.ok_or(DispatchError::Other("expected migrated DelegationChoices entry"))?;
 			frame_support::ensure!(
-				plan.into_map().get(&operator) == Some(&crate::DelegationAmount::Some(max_bid)),
+				plan.into_map().get(&operator) == Some(&max_bid),
 				DispatchError::Other("migrated max_bid did not match its pre-upgrade value")
 			);
 		}
@@ -130,15 +131,11 @@ mod tests {
 			Migration::<Test>::post_upgrade(state).unwrap();
 
 			assert_eq!(
-				crate::Pallet::<Test>::resolved_operators(
-					DelegationChoices::<Test>::get(ALICE).unwrap()
-				),
+				DelegationChoices::<Test>::get(ALICE).unwrap().into_map(),
 				BTreeMap::from([(BOB, 1_000)])
 			);
 			assert_eq!(
-				crate::Pallet::<Test>::resolved_operators(
-					DelegationChoices::<Test>::get(OTHER_DELEGATOR).unwrap()
-				),
+				DelegationChoices::<Test>::get(OTHER_DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(BOB, 500)])
 			);
 			assert!(old::DelegationChoice::<Test>::iter().next().is_none());

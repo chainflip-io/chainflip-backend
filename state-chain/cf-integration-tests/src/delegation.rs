@@ -400,9 +400,9 @@ fn delegator_can_split_stake_across_two_operators() {
 			);
 			assert_ok!(Validator::delegate_multi(
 				RuntimeOrigin::signed(delegator.clone()),
-				pallet_cf_validator::DelegationPlan::try_from_amounts(BTreeMap::from_iter([
-					(operator_a.clone(), BID_TO_A),
-					(operator_b.clone(), BID_TO_B),
+				pallet_cf_validator::DelegationPlan::try_from_map(BTreeMap::from_iter([
+					(operator_a.clone(), pallet_cf_validator::DelegationAmount::Some(BID_TO_A)),
+					(operator_b.clone(), pallet_cf_validator::DelegationAmount::Some(BID_TO_B)),
 				]))
 				.unwrap()
 			));

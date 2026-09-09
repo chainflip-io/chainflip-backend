@@ -144,10 +144,14 @@ pub struct OperatorSettings {
 	pub delegation_acceptance: DelegationAcceptance,
 }
 
-/// A delegator's live delegation plan: the set of operators it delegates to and the max bid
-/// pledged to each. The sum of all a delegator's max bids is capped at its funding balance
-/// (enforced by `delegate`/`delegate_multi`). Never stored empty -- the storage key is removed
-/// entirely once a delegator's last relation is undelegated.
+/// A delegator's live delegation plan: the set of operators it delegates to and the value
+/// pledged to each. Generic over `Value` so the same shape serves two different points in a
+/// plan's life:
+/// - as `delegate_multi`'s input (`Value = DelegationAmount<Amount>`), where a cap may be given as
+///   `Max`, absorbing whatever of the balance isn't already claimed by the other, fixed entries --
+///   Σ of the `Some` entries ≤ balance, and at most one entry may be `Max`;
+/// - as the stored plan (`Value = Amount`), once any `Max` has already been resolved to a concrete
+///   number by `delegate_multi` and there's no more ambiguity left to represent.
 #[derive(
 	CloneNoBound,
 	PartialEqNoBound,
@@ -162,25 +166,23 @@ pub struct OperatorSettings {
 )]
 #[scale_info(skip_type_params(N))]
 #[serde(
-	bound = "Account: Serialize + for<'a> Deserialize<'a>, Amount: Serialize + for<'a> Deserialize<'a>"
+	bound = "Account: Serialize + for<'a> Deserialize<'a>, Value: Serialize + for<'a> Deserialize<'a>"
 )]
 pub enum DelegationPlan<
 	Account: Clone + PartialEq + Eq + core::fmt::Debug,
-	Amount: Clone + PartialEq + Eq + core::fmt::Debug,
+	Value: Clone + PartialEq + Eq + core::fmt::Debug,
 	N: Get<u32>,
 > {
-	/// Absolute caps per operator. Σ ≤ balance. At most one entry may be `Max`.
-	Fixed(BoundedVec<(Account, DelegationAmount<Amount>), N>),
+	Fixed(BoundedVec<(Account, Value), N>),
 	// v2, appended later:
-	// /// Proportional split of the whole balance. Σ = 100%. Auto-compounds.
 	// Proportional(BoundedVec<(Account, Perbill), N>),
 }
 
 impl<
 		Account: Clone + PartialEq + Eq + core::fmt::Debug,
-		Amount: Clone + PartialEq + Eq + core::fmt::Debug,
+		Value: Clone + PartialEq + Eq + core::fmt::Debug,
 		N: Get<u32>,
-	> Default for DelegationPlan<Account, Amount, N>
+	> Default for DelegationPlan<Account, Value, N>
 {
 	fn default() -> Self {
 		Self::Fixed(Default::default())
@@ -189,9 +191,9 @@ impl<
 
 impl<
 		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
-		Amount: Clone + PartialEq + Eq + core::fmt::Debug,
+		Value: Clone + PartialEq + Eq + core::fmt::Debug,
 		N: Get<u32>,
-	> DelegationPlan<Account, Amount, N>
+	> DelegationPlan<Account, Value, N>
 {
 	pub fn len(&self) -> usize {
 		match self {
@@ -203,27 +205,17 @@ impl<
 		self.len() == 0
 	}
 
-	/// The raw `account -> requested amount` map backing this plan. Any `Max` entry is left
-	/// unresolved -- it's the caller's responsibility to resolve it against a balance before
-	/// treating the result as concrete amounts (see `try_from_amounts`, the counterpart used
-	/// once that resolution has happened).
-	pub fn into_map(self) -> BTreeMap<Account, DelegationAmount<Amount>> {
+	/// The raw `account -> value` map backing this plan.
+	pub fn into_map(self) -> BTreeMap<Account, Value> {
 		match self {
 			Self::Fixed(entries) => entries.into_iter().collect(),
 		}
 	}
 
-	/// Builds a `Fixed` plan from concrete per-operator amounts, i.e. once any `Max` entry has
-	/// already been resolved to a number. Fails if `entries` doesn't fit within the bound `N`.
-	pub fn try_from_amounts(entries: BTreeMap<Account, Amount>) -> Result<Self, ()> {
-		Ok(Self::Fixed(
-			entries
-				.into_iter()
-				.map(|(account, amount)| (account, DelegationAmount::Some(amount)))
-				.collect::<Vec<_>>()
-				.try_into()
-				.map_err(|_| ())?,
-		))
+	/// Builds a `Fixed` plan directly from an `account -> value` map. Fails if `entries` doesn't
+	/// fit within the bound `N`.
+	pub fn try_from_map(entries: BTreeMap<Account, Value>) -> Result<Self, ()> {
+		Ok(Self::Fixed(entries.into_iter().collect::<Vec<_>>().try_into().map_err(|_| ())?))
 	}
 }
 
