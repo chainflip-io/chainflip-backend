@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Run every Quint check for the rotation model.
-#   ./check.sh          typecheck, tests, simulation, negative controls (~3 min)
-#   ./check.sh --verify add exhaustive Apalache checks (~18 min in total)
+#   ./check.sh          typecheck, tests, simulation, negative controls (~2 m 45 s)
+#   ./check.sh --verify add exhaustive Apalache checks (~17 m 30 s in total)
+# Measured 2 m 44 s and 17 m 33 s on 2026-09-08 (quint 0.32.0, Apalache 0.56.1,
+# darwin 24.6.0, 48 GiB RAM); see README.md "Status".
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -42,11 +44,22 @@ run_instance() {
     echo "FATAL: ${main} reported a violation (see the verdict above)." >&2
     exit 1
   fi
+  # A POSITIVE match is required, not the absence of a "witnessed in 0" line:
+  # a renamed witness, a typo in the required list, or a change to quint's
+  # output format all make that line vanish entirely, and the absence test
+  # would pass every one of them silently.
+  #
+  # Here-string, not `printf | grep -q`: grep -q exits on the first match, the
+  # writer takes SIGPIPE, and under `set -o pipefail` that 141 becomes the
+  # pipeline's status - so a matched witness intermittently reads as a miss.
   for wname in $required; do
-    if printf '%s\n' "$out" | grep -q "^${wname} was witnessed in 0 trace"; then
-      echo "FATAL: required witness ${wname} was never witnessed on ${main}." >&2
-      echo "       The instance no longer reaches the behaviour it exists to" >&2
-      echo "       cover; this is a regression, not a passing check." >&2
+    if ! grep -qE "^${wname} was witnessed in [1-9]" <<< "$out"; then
+      echo "FATAL: required witness ${wname} was never witnessed on ${main}" >&2
+      echo "       (count 0, or no line for it in quint's output at all)." >&2
+      echo "       Either the instance no longer reaches the behaviour the" >&2
+      echo "       witness exists to cover, or the witness name is wrong." >&2
+      echo "       Raw output:" >&2
+      printf '%s\n' "$out" >&2
       exit 1
     fi
   done
@@ -160,9 +173,9 @@ for entry in "${MUST_VIOLATE[@]}"; do
   # Three outcomes, not two. Collapsing the last two into "reported [ok]" sends
   # whoever reads the FATAL hunting for a weakened model when the real cause may
   # be a renamed invariant, a bad --main, or a toolchain error.
-  if printf '%s\n' "$result" | grep -q '^\[violation\]'; then
+  if grep -q '^\[violation\]' <<< "$result"; then
     : # the control fired, as it must
-  elif printf '%s\n' "$result" | grep -q '^\[ok\]'; then
+  elif grep -q '^\[ok\]' <<< "$result"; then
     echo "FATAL: negative control ${file}::${main}::${inv} reported [ok]." >&2
     echo "       This negative control has gone INERT - the model can no" >&2
     echo "       longer detect the bug class it exists to catch. Do not" >&2
@@ -186,7 +199,7 @@ done
 # rotation. Raising those needs the state space cut down, not a bigger heap:
 # depth 2 on `main` was killed at 8138 s, and depth 3 on `main1` times out.
 if [ "${1:-}" = "--verify" ]; then
-  echo "== exhaustive verification (slow, ~15 min; runs are sequential: Apalache holds port 8822) =="
+  echo "== exhaustive verification (slow, ~14 m 45 s on top of the ~2 m 45 s above; runs are sequential: Apalache holds port 8822) =="
   # macOS ships no `timeout`; perl's alarm is the portable stand-in. A capped
   # run kills quint but not its Apalache JVM child - run `pkill -f apalache`
   # after an interrupted --verify pass.
@@ -210,13 +223,16 @@ if [ "${1:-}" = "--verify" ]; then
       --invariant="$inv" --max-steps="$depth" "$@" 2>&1)
     set -e
     result="$(printf '%s\n' "$out" | grep -E '^\[(ok|violation)\]' | head -n 1 || true)"
-    if printf '%s\n' "$result" | grep -q '^\[ok\]'; then
+    if grep -q '^\[ok\]' <<< "$result"; then
       echo "  ${main}::${inv} ${result}"
-    elif printf '%s\n' "$result" | grep -q '^\[violation\]'; then
+    elif grep -q '^\[violation\]' <<< "$result"; then
       echo "  ${main}::${inv} ${result}"
       VERIFY_FAILED=1
     else
-      echo "  ${main}::${inv} NO VERDICT (timeout or error)"
+      # Dump the captured output, as the MUST_VIOLATE branch does: a timeout
+      # and a tool error look identical from the verdict line alone.
+      echo "  ${main}::${inv} NO VERDICT (timeout or error). Raw output:" >&2
+      printf '%s\n' "$out" >&2
       VERIFY_FAILED=1
     fi
   }
