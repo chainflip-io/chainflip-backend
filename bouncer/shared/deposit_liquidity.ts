@@ -2,6 +2,7 @@ import {
   newAssetAddress,
   decodeDotAddressForContract,
   amountToFineAmountBigInt,
+  fineAmountToAmount,
   chainFromAsset,
   decodeSolAddress,
   assetDecimals,
@@ -92,7 +93,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
     `sending liquidity ${amount} ${ccy}.`,
   );
 
-  await cf.stepUntilEvent(
+  const depositFinalisedEvent = await cf.stepUntilEvent(
     ingressEgressDepositFinalisedEvent[chainFromAsset(ccy)].refine(
       (event) =>
         event.channelId === depositAddressReadyEvent.channelId &&
@@ -103,6 +104,10 @@ export async function depositLiquidity<A extends WithLpAccount>(
     ),
   );
 
-  cf.info(`Liquidity deposited to ${ingressAddress} (${givenAmount} ${ccy})`);
-  return txHash;
+  const amountCredited = depositFinalisedEvent.amount - depositFinalisedEvent.ingressFee;
+  const creditedAmount = fineAmountToAmount(amountCredited.toString(), assetDecimals(ccy));
+  cf.info(
+    `Liquidity deposited to ${ingressAddress} (input amount: ${amount} ${ccy}, credited amount: ${creditedAmount} ${ccy})`,
+  );
+  return { txHash, amountCredited };
 }
