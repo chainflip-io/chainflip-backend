@@ -695,18 +695,24 @@ fn check_fragmented_book_fills<SD: SwapDirection>(small_order_amount: u128, inpu
 		LiquidityProvider::from(account)
 	};
 	let last_lp = order_lp(small_order_count);
+
 	let mut pool_state = PoolState::new();
 	let mut totals = BTreeMap::new();
+
+	// Build the list of small orders of amount 1 and make the last one 500.
 	for id in 0..=small_order_count {
-		let amount = Amount::from(small_order_amount) *
-			Amount::from(if id == small_order_count { small_order_count } else { 1 });
 		let lp = order_lp(id);
+		let amount = Amount::from(small_order_amount) *
+			Amount::from(if lp == last_lp { small_order_count } else { 1 });
 		assert_ok!(pool_state.mint::<SD>(&lp, tick, amount));
 		totals.insert(lp, (amount, Amount::zero(), Amount::zero(), 0u64));
 	}
 
+	// One fill's rounding is bounded by construction. What matters is that fifty of them do not
+	// add up to a shortfall on the lp they all land on.
 	for _ in 0..50 {
 		let (output, remaining, fills) = swap::<SD>(&mut pool_state, input.into(), None);
+		// Each swap has to execute in full
 		assert!(!output.is_zero());
 		assert!(remaining.is_zero());
 		for fill in fills {
@@ -715,15 +721,22 @@ fn check_fragmented_book_fills<SD: SwapDirection>(small_order_amount: u128, inpu
 				fill.bought_amount >= SD::input_amount_floor(fill.sold_amount, price).unwrap(),
 				"every order must receive at least its rounded-down limit value"
 			);
+
+			// Compare the cross-multiplication of the fill's sold and bought amounts to avoid
+			// rounding errors.
 			let paid = fill.bought_amount.full_mul(output);
 			let owed = fill.sold_amount.full_mul(input.into());
 			if fill.lp == last_lp {
+				// It is handed the remainder, so it can come out ahead.
 				assert!(paid >= owed);
 			} else {
+				// Everyone else is short, but by less than one unit of what they are paid in.
+				// (owed − paid) / output  <  1
 				assert!(paid <= owed);
 				assert!(owed - paid < U512::from(output));
 			}
 
+			// The fill's account of the order has to match the order the pool is left holding.
 			let (original, sold, bought, count) = totals.get_mut(&fill.lp).unwrap();
 			*sold += fill.sold_amount;
 			*bought += fill.bought_amount;
@@ -738,16 +751,19 @@ fn check_fragmented_book_fills<SD: SwapDirection>(small_order_amount: u128, inpu
 			}
 		}
 
-		// Each rounding can cost less than one proceeds unit; the cumulative allowance grows
-		// with the number of fills, even though no individual fill violates its rounded limit.
+		// Each rounding can cost a non-last order less than one proceeds unit, so its allowance
+		// grows with the number of fills, even though no individual fill violates its rounded
+		// limit. The last order collects that dust, so it is never short at all.
 		for (lp, (_, sold, bought, count)) in &totals {
 			if *count == 0 {
 				continue
 			}
-			let minimum = SD::input_amount_floor(*sold, price).unwrap();
-			assert!(*bought + Amount::from(*count) > minimum);
 			if *lp == last_lp {
 				assert!(*bought >= SD::input_amount_ceil(*sold, price).unwrap());
+			} else {
+				assert!(
+					*bought + Amount::from(*count) > SD::input_amount_floor(*sold, price).unwrap()
+				);
 			}
 		}
 	}
