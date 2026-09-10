@@ -219,17 +219,17 @@ where
 				"Broadcast delivery gaps",
 			);
 		}
-	}
 
-	// Same as above, but with more info relevant to our node (prints exact nodes we couldn't
-	// reach).
-	let missed_us = reporters_missing_our_broadcast(&verification_messages, own_idx);
-	if !missed_us.is_empty() {
-		debug!(
-			reporters = verification_messages.len(),
-			missed_by = format!("{missed_us:?}"),
-			"Our broadcast did not reach every party",
-		);
+		// Same as above, but with more info relevant to our node (prints exact nodes we couldn't
+		// reach).
+		let missed_us = reporters_missing_our_broadcast(&verification_messages, own_idx);
+		if !missed_us.is_empty() {
+			debug!(
+				reporters = verification_messages.len(),
+				missed_by = format!("{missed_us:?}"),
+				"Our broadcast did not reach every party",
+			);
+		}
 	}
 
 	// NOTE: ideally we wouldn't need to serialize the messages again here, but
