@@ -62,10 +62,9 @@ use cf_primitives::{
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
-	error::BadOrigin,
 	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+		traits::{AtLeast32BitUnsigned, BadOrigin, Bounded, MaybeSerializeDeserialize},
 		BoundedVec, DispatchError, DispatchResult, FixedPointNumber, FixedPointOperand, FixedU128,
 		Percent,
 	},
