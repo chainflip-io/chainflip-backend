@@ -29,7 +29,7 @@ pub use weights::WeightInfo;
 pub mod migrations;
 
 mod auction_resolver;
-mod benchmarking;
+pub mod benchmarking;
 mod delegation;
 mod rotation_state;
 
