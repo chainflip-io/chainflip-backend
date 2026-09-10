@@ -49,6 +49,8 @@ use cf_amm::common::AssetPair;
 #[cfg(feature = "try-runtime")]
 use cf_amm::limit_orders::migration_support::OrderBefore;
 #[cfg(feature = "try-runtime")]
+use cf_amm::math::Price;
+#[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
 #[cfg(any(test, feature = "try-runtime"))]
 use frame_support::{pallet_prelude::OptionQuery, Twox64Concat};
@@ -220,31 +222,52 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let count = old::Pools::<T>::iter_keys().count() as u32;
-		Ok((
-			count,
-			old::Pools::<T>::iter()
-				.map(|(asset_pair, pool)| {
-					(
-						asset_pair,
-						PoolBefore::<T> {
-							available: pool.pool_state.limit_orders.available_by_price(),
-							orders: pool.pool_state.limit_orders.orders(),
-							range_orders: pool.pool_state.range_orders.encode(),
-						},
-					)
+
+		let pools = old::Pools::<T>::iter()
+			.map(|(asset_pair, pool)| {
+				(
+					asset_pair,
+					PoolBefore::<T> {
+						available: pool.pool_state.limit_orders.available_by_price(),
+						orders: pool.pool_state.limit_orders.orders(),
+						range_orders: pool.pool_state.range_orders.encode(),
+					},
+				)
+			})
+			.collect::<Vec<_>>();
+
+		// Every balance the migration could pay into, so that `post_upgrade` can hold what each
+		// order gave up against what its lp was credited for it.
+		let balances = pools
+			.iter()
+			.flat_map(|(asset_pair, before)| {
+				let assets = asset_pair.assets();
+				[Pairs::Base, Pairs::Quote].into_iter().flat_map(move |sold_pair| {
+					before.orders[sold_pair].iter().map(move |order| {
+						let (account, _) = &order.lp;
+						let asset = assets[!sold_pair];
+						((account.clone(), asset), T::LpBalance::get_balance(account, asset))
+					})
 				})
-				.collect::<Vec<_>>(),
-		)
-			.encode())
+			})
+			.collect::<BTreeMap<_, _>>();
+
+		Ok((count, pools, balances).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		use frame_support::ensure;
 
-		let (count_before, before) =
-			<(u32, Vec<(AssetPair, PoolBefore<T>)>)>::decode(&mut &state[..])
+		type BalancesBefore<T> =
+			BTreeMap<(<T as frame_system::Config>::AccountId, Asset), AssetAmount>;
+
+		let (count_before, before, balances_before) =
+			<(u32, Vec<(AssetPair, PoolBefore<T>)>, BalancesBefore<T>)>::decode(&mut &state[..])
 				.map_err(|_| DispatchError::Other("Failed to decode the pre-upgrade state"))?;
+
+		// What each lp is owed for the liquidity its orders gave up
+		let mut owed = BTreeMap::<(T::AccountId, Asset), (Amount, Amount)>::new();
 
 		ensure!(
 			!old::LimitOrderAutoSweepingThresholds::<T>::exists(),
@@ -300,6 +323,42 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 					);
 				}
 
+				// Value what each order gave up at its own price, so that the payouts can be held
+				// against it below.
+				let orders_after = pool
+					.pool_state
+					.limit_orders(side)
+					.map(|(lp, tick, position)| ((tick, lp), position.amount))
+					.collect::<BTreeMap<_, _>>();
+
+				for order in &before.orders[sold_pair] {
+					// An order that is gone was bought in its entirety.
+					let after = orders_after
+						.get(&(order.tick, order.lp.clone()))
+						.copied()
+						.unwrap_or_default();
+					let sold_at_most = order.amount.saturating_sub(after);
+					let sold_at_least = sold_at_most.saturating_sub(Amount::one());
+
+					let price = Price::from_tick(order.tick)
+						.ok_or(DispatchError::Other("An order survived at an invalid price"))?;
+					// Valued as the payout values it: at the order's price, rounded down, and
+					// nothing at all where it does not fit.
+					let earned = |sold: Amount| {
+						match sold_pair {
+							Pairs::Base => price.output_amount_floor(sold),
+							Pairs::Quote => price.input_amount_floor(sold),
+						}
+						.unwrap_or_default()
+					};
+
+					let (account, _) = &order.lp;
+					let (least, most) =
+						owed.entry((account.clone(), asset_pair.assets()[!sold_pair])).or_default();
+					*least = least.saturating_add(earned(sold_at_least));
+					*most = most.saturating_add(earned(sold_at_most));
+				}
+
 				// Per price rather than per pool: liquidity may be dropped where no order backed
 				// it, but a price must never end up offering more than it was.
 				let available_before =
@@ -312,6 +371,19 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 					);
 				}
 			}
+		}
+
+		for ((account, asset), balance_before) in balances_before {
+			let balance_after = T::LpBalance::get_balance(&account, asset);
+			ensure!(
+				balance_after >= balance_before,
+				"An lp's balance was reduced by the migration"
+			);
+
+			let (least, most) = owed.get(&(account, asset)).copied().unwrap_or_default();
+			let paid = Amount::from(balance_after.saturating_sub(balance_before));
+			ensure!(paid >= least, "An lp was paid less than its orders gave up");
+			ensure!(paid <= most, "An lp was paid more than its orders gave up");
 		}
 
 		Ok(())
@@ -352,6 +424,8 @@ mod tests {
 	/// Order ids, which only have to be distinct per lp.
 	const ALICE_ORDER: OrderId = 1;
 	const BOB_ORDER: OrderId = 2;
+	#[cfg(feature = "try-runtime")]
+	const CHARLIE_ORDER: OrderId = 3;
 
 	type AccountId = <Test as frame_system::Config>::AccountId;
 
@@ -532,6 +606,63 @@ mod tests {
 			// The index is rebuilt from what survived, so it holds Alice's order and not Bob's.
 			assert_eq!(pool.limit_orders_cache.base[&ALICE][&ALICE_ORDER], 0);
 			assert!(!pool.limit_orders_cache.base.contains_key(&BOB));
+		});
+	}
+
+	/// The `try-runtime` checks are not reachable from a normal test run, so exercise the whole
+	/// cycle once. The book holds an order that was partly bought, one that was bought outright,
+	/// and one nothing has touched, the last under an lp of its own so that an lp owed nothing is
+	/// covered as well as one owed something.
+	#[cfg(feature = "try-runtime")]
+	#[test]
+	fn the_try_runtime_checks_pass() {
+		new_test_ext().execute_with(|| {
+			put_old_pool(
+				vec![
+					OldFixedPool {
+						tick: 0,
+						pool_instance: 0,
+						available: 500.into(),
+						percent_remaining: remaining_after([(2, 5), (1, 2)]),
+					},
+					OldFixedPool {
+						tick: 120,
+						pool_instance: 2,
+						available: 700.into(),
+						percent_remaining: float_max(),
+					},
+				],
+				vec![
+					OldOrder {
+						tick: 0,
+						lp: (ALICE, ALICE_ORDER),
+						pool_instance: 0,
+						amount: 1000.into(),
+						last_percent_remaining: remaining_after([(2, 5)]),
+						original_amount: 2500.into(),
+					},
+					OldOrder {
+						tick: 120,
+						lp: (BOB, BOB_ORDER),
+						pool_instance: 1,
+						amount: 800.into(),
+						last_percent_remaining: float_max(),
+						original_amount: 800.into(),
+					},
+					OldOrder {
+						tick: 120,
+						lp: (crate::mock::CHARLIE, CHARLIE_ORDER),
+						pool_instance: 2,
+						amount: 700.into(),
+						last_percent_remaining: float_max(),
+						original_amount: 700.into(),
+					},
+				],
+			);
+
+			let state = Migration::<Test>::pre_upgrade().unwrap();
+			Migration::<Test>::on_runtime_upgrade();
+			assert_ok!(Migration::<Test>::post_upgrade(state));
 		});
 	}
 
