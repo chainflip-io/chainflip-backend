@@ -25,10 +25,7 @@ use cf_traits::{AccountInfo, WaivedFees};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
-	sp_runtime::{
-		traits::{DispatchInfoOf, Zero},
-		RuntimeDebug,
-	},
+	sp_runtime::traits::{DispatchInfoOf, Zero},
 	traits::Imbalance,
 };
 use frame_system::Config;
@@ -184,7 +181,7 @@ impl<Call> CallIndexer<Call> for () {
 	Copy,
 	PartialEq,
 	Eq,
-	RuntimeDebug,
+	Debug,
 	Default,
 )]
 pub enum FeeScalingRateConfig {
