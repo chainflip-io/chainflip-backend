@@ -10,6 +10,10 @@ env:
   FORCE_COLOR: 1
 
 jobs:
+  sfw-check:
+    if: inputs.network != 'sisyphos'
+    uses: ./.github/workflows/_00_sfw_check.yml
+
   check-version:
     runs-on: namespace-profile-default-light
     strategy:
@@ -24,10 +28,12 @@ jobs:
           - state-chain/runtime/Cargo.toml
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Install Rust 🦀
-        uses: dtolnay/rust-toolchain@7b1c307e0dcbda6122208f10795a713336a9b35a
+        uses: dtolnay/rust-toolchain@7b1c307e0dcbda6122208f10795a713336a9b35a # master
         with:
           toolchain: stable
 
@@ -41,28 +47,34 @@ jobs:
         shell: bash
         if: inputs.network != 'sisyphos'
         run: |
-          if [[ "${{ github.ref_name }}" != "${{ steps.cargo.outputs.version }}" ]]; then
-            echo "Tag version (${{ github.ref_name }}) does not match version (${{ steps.cargo.outputs.version }}) in ${{ matrix.manifest }}"
+          if [[ "${GITHUB_REF_NAME}" != "${STEPS_CARGO_OUTPUTS_VERSION}" ]]; then
+            echo "Tag version (${GITHUB_REF_NAME}) does not match version (${STEPS_CARGO_OUTPUTS_VERSION}) in ${{ matrix.manifest }}"
             exit 1
           fi
+        env:
+          STEPS_CARGO_OUTPUTS_VERSION: ${{ steps.cargo.outputs.version }}
 
   check-changelog:
     runs-on: namespace-profile-default-light
     if: inputs.network != 'sisyphos'
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Check changelog 📝
         shell: bash
-        run: ./ci/scripts/check_changelog.sh ${{ github.ref_name }}
+        run: ./ci/scripts/check_changelog.sh ${GITHUB_REF_NAME}
 
   check-runtime-spec-version:
     runs-on: namespace-profile-default-light
     continue-on-error: true
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Check runtime spec version against Berghain 🕵️‍♂️
         shell: bash
@@ -72,15 +84,16 @@ jobs:
     runs-on: namespace-profile-default-light
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check tag points to a commit on the release branch 🔍
         if: github.ref_type == 'tag'
         shell: bash
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${GITHUB_REF_NAME}"
           COMMIT="${{ github.sha }}"
 
           # Acceptable release branches for a tag like 2.0.9:

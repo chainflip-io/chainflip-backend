@@ -16,10 +16,11 @@ jobs:
     runs-on: namespace-profile-default-light
     steps:
       - name: Checkout branch
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Git 🛠️
         uses: ./.github/actions/setup-git
