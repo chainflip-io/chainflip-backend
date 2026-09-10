@@ -331,14 +331,15 @@ impl DotRpcApi for DotRpcClient {
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
 		let tx = subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
 			self.online_client.clone(),
-			encoded_bytes,
+			encoded_bytes.clone(),
 		);
-		match tx.submit().await {
-			// The pool already holds this exact transaction; treat the resubmission as a success.
-			Err(subxt::Error::Rpc(RpcError::ClientError(subxt_rpcs::Error::User(user_error))))
+		//we need to use `author_submit_extrinsic` because despite its name, Subxt 0.42’s submit()
+		// uses a subscription to wait for the first transaction status.
+		match self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await {
+			Err( subxt_rpcs::Error::User(user_error) )//subxt::Error::Rpc(RpcError::ClientError(subxt_rpcs::Error::User(user_error))))
 				if user_error.code == POOL_ALREADY_IMPORTED =>
 				Ok(tx.hash()),
-			result => Ok(result?),
+			result => Ok(result?)
 		}
 	}
 
