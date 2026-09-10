@@ -51,9 +51,12 @@ mod p2p_crypto {
 #[storage_alias]
 type LastSeenSlot = StorageValue<AuraSlotExtraction, u64>;
 
-pub trait RuntimeConfig: Config + FundingConfig + SessionConfig + ReputationConfig {}
-
-impl<T: Config + FundingConfig + SessionConfig + ReputationConfig> RuntimeConfig for T {}
+pub trait RuntimeConfig: Config + FundingConfig + SessionConfig + ReputationConfig {
+	/// Session keys together with a proof that `owner` holds their private keys.
+	fn generate_session_keys_and_proof(
+		owner: <Self as frame_system::Config>::AccountId,
+	) -> (<Self as SessionConfig>::Keys, Vec<u8>);
+}
 
 pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>, I: Into<u32>>(
 	size: I,
@@ -99,14 +102,8 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 			signature.into(),
 		));
 
-		// Reuse the random peer id for the session keys, we don't need real ones.
-		let fake_key = public_key.to_raw_vec().repeat(4);
-		assert_ok!(pallet_session::Pallet::<T>::set_keys(
-			bidder_origin.clone(),
-			// Public key is 32 bytes, we need 128 bytes.
-			T::Keys::decode(&mut &fake_key[..]).unwrap(),
-			vec![],
-		));
+		let (keys, proof) = T::generate_session_keys_and_proof(bidder.clone());
+		assert_ok!(pallet_session::Pallet::<T>::set_keys(bidder_origin.clone(), keys, proof));
 
 		assert_ok!(pallet_cf_reputation::Pallet::<T>::heartbeat(bidder_origin.clone(),));
 	}
@@ -137,13 +134,11 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 fn register_grandpa_key<T: RuntimeConfig>(account: &T::AccountId) -> GrandpaAuthorityId {
 	use frame_support::sp_runtime::traits::OpaqueKeys;
 
-	let session_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
-	// Session keys are 128 bytes (four 32-byte keys); reuse the same key for all of them.
-	let keys = T::Keys::decode(&mut &session_key.to_raw_vec().repeat(4)[..]).unwrap();
+	let (keys, proof) = T::generate_session_keys_and_proof(account.clone());
 	assert_ok!(pallet_session::Pallet::<T>::set_keys(
 		RawOrigin::Signed(account.clone()).into(),
 		keys.clone(),
-		vec![],
+		proof,
 	));
 
 	GrandpaAuthorityId::decode(&mut keys.get_raw(sp_consensus_grandpa::KEY_TYPE))
