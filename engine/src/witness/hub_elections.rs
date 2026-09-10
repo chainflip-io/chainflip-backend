@@ -13,6 +13,8 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
+use std::collections::BTreeSet;
+
 use crate::{
 	dot::cached_rpc::{DotCachingClient, DotRetryRpcApiWithResult},
 	witness::{
@@ -240,7 +242,7 @@ impl WitnessClientForBlockData<AssethubChain, Vec<DepositWitness<Assethub>>> for
 		block_headers: &Self::BlockQuery,
 	) -> Result<Vec<DepositWitness<Assethub>>> {
 		// sanity check the deposit channel data
-		let addresses: Vec<_> = deposit_channels
+		let addresses: BTreeSet<_> = deposit_channels
 			.iter()
 			.map(|deposit_channel| {
 				assert!(
