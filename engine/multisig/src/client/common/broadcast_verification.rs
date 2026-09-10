@@ -21,7 +21,7 @@ use std::{
 
 use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
-use tracing::warn;
+use tracing::{debug, enabled, warn, Level};
 
 use crate::client::utils::{find_frequent_element, threshold_for_broadcast_verification};
 
@@ -112,6 +112,41 @@ fn claim_distribution<T: Ord, Iter: Iterator<Item = Option<T>>>(iter: Iter) -> (
 	(no_value, counts.into_values().collect())
 }
 
+/// For each party, how many reporters received nothing from them this stage.
+///
+/// Parties whose broadcast reached everyone are omitted, so an empty map means nothing
+/// was lost. Counts non-receipt only: values are assumed to be echoed correctly and thus not
+/// counted.
+fn delivery_gaps<T: Clone>(
+	verification_messages: &BTreeMap<AuthorityCount, BroadcastVerificationMessage<T>>,
+) -> BTreeMap<AuthorityCount, usize> {
+	let mut gaps = BTreeMap::new();
+
+	for message in verification_messages.values() {
+		for (idx, claim) in &message.data {
+			if claim.is_none() {
+				*gaps.entry(*idx).or_insert(0) += 1;
+			}
+		}
+	}
+
+	gaps
+}
+
+/// Which reporters did not receive *our own* broadcast this stage (the counterpart of keygen's "We
+/// are blamed by").
+fn reporters_missing_our_broadcast<T: Clone>(
+	verification_messages: &BTreeMap<AuthorityCount, BroadcastVerificationMessage<T>>,
+	own_idx: AuthorityCount,
+) -> BTreeSet<AuthorityCount> {
+	verification_messages
+		.iter()
+		// `matches!` rather than indexing: a logging path must not be able to panic.
+		.filter(|(_, message)| matches!(message.data.get(&own_idx), Some(None)))
+		.map(|(reporter, _)| *reporter)
+		.collect()
+}
+
 /// Decide, for each party, what they are deemed to have broadcast, using a 2/3 quorum over
 /// what the *reporters* claim (see `threshold_for_broadcast_verification`).
 ///
@@ -126,6 +161,7 @@ fn claim_distribution<T: Ord, Iter: Iterator<Item = Option<T>>>(iter: Iter) -> (
 /// ceremony.
 fn verify_broadcasts<T>(
 	verification_messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<T>>>,
+	own_idx: AuthorityCount,
 ) -> Result<BTreeMap<AuthorityCount, T>, (BTreeSet<AuthorityCount>, BroadcastFailureReason)>
 where
 	T: Clone + std::fmt::Debug + Ord,
@@ -168,6 +204,33 @@ where
 
 	// This should not panic due to the check above (`check_verification_message_indexes`)
 	assert!(verification_messages.iter().all(|(_, m)| m.data.len() == num_parties));
+
+	// A broadcast that still reaches quorum is recovered below without a trace, so a party
+	// can fail to deliver to nearly a third of the network every ceremony unnoticed. These
+	// counts are the only record of it, and at debug level this can give us an idea of the
+	// network's reachability matrix (only computed if it will actually be emitted).
+	if enabled!(Level::DEBUG) {
+		let gaps = delivery_gaps(&verification_messages);
+		if !gaps.is_empty() {
+			debug!(
+				reporters = verification_messages.len(),
+				quorum_threshold = threshold,
+				gaps = format!("{gaps:?}"),
+				"Broadcast delivery gaps",
+			);
+		}
+	}
+
+	// Same as above, but with more info relevant to our node (prints exact nodes we couldn't
+	// reach).
+	let missed_us = reporters_missing_our_broadcast(&verification_messages, own_idx);
+	if !missed_us.is_empty() {
+		debug!(
+			reporters = verification_messages.len(),
+			missed_by = format!("{missed_us:?}"),
+			"Our broadcast did not reach every party",
+		);
+	}
 
 	// NOTE: ideally we wouldn't need to serialize the messages again here, but
 	// we can't use T as key directly (in our case it holds third-party structs)
@@ -236,18 +299,24 @@ where
 
 pub async fn verify_broadcasts_non_blocking<T>(
 	verification_messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<T>>>,
+	own_idx: AuthorityCount,
 ) -> Result<BTreeMap<AuthorityCount, T>, (BTreeSet<AuthorityCount>, BroadcastFailureReason)>
 where
 	T: Clone + std::fmt::Debug + Ord + Send + 'static,
 {
-	cf_utilities::task_scope::without_blocking(move || verify_broadcasts(verification_messages))
-		.await
+	cf_utilities::task_scope::without_blocking(move || {
+		verify_broadcasts(verification_messages, own_idx)
+	})
+	.await
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use std::collections::BTreeSet;
+
+	/// Which party we pretend to be. Only reached by logging, so any participant will do.
+	const OWN_IDX: AuthorityCount = 1;
 
 	/// Transforms the (more concise) test data into the expected "shape";
 	fn to_broadcast_verification_messages(
@@ -282,7 +351,8 @@ mod tests {
 	) {
 		let expected = expected.map(|values| values.into_iter().collect::<BTreeMap<_, _>>());
 
-		assert_eq!(verify_broadcasts(verification_messages), expected);
+		// `own_idx` only affects logging, never the returned outcome.
+		assert_eq!(verify_broadcasts(verification_messages, OWN_IDX), expected);
 	}
 
 	#[test]
@@ -485,5 +555,61 @@ mod tests {
 
 		// Expect all to agree on the following values:
 		check_broadcast_verification(all_messages, Ok(vec![(1, 1), (2, 1), (3, 1), (4, 1)]));
+	}
+
+	/// Strip the `Option` wrapper the way `verify_broadcasts` does before the quorum loop.
+	fn received_only(
+		messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<i32>>>,
+	) -> BTreeMap<AuthorityCount, BroadcastVerificationMessage<i32>> {
+		messages.into_iter().filter_map(|(idx, m)| m.map(|m| (idx, m))).collect()
+	}
+
+	#[test]
+	fn delivery_gaps_counts_non_receipt_per_party() {
+		// Reporter 1 received nothing from parties 2 and 3, reporter 3 nothing from party 2.
+		let messages = received_only(to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(1), None, None])),
+			(2, Some(vec![Some(1), Some(1), Some(1)])),
+			(3, Some(vec![Some(1), None, Some(1)])),
+		]));
+
+		// Party 1 reached everyone and so is absent, rather than present with a zero.
+		assert_eq!(delivery_gaps(&messages), BTreeMap::from([(2, 2), (3, 1)]));
+	}
+
+	#[test]
+	fn reporters_missing_our_broadcast_names_only_those_who_missed_us() {
+		// We are party 2. Reporters 1 and 3 did not receive us; reporter 2 (ourselves) did.
+		let messages = received_only(to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(1), None, Some(1)])),
+			(2, Some(vec![Some(1), Some(1), Some(1)])),
+			(3, Some(vec![Some(1), None, Some(1)])),
+		]));
+
+		assert_eq!(reporters_missing_our_broadcast(&messages, 2), BTreeSet::from([1, 3]));
+		// Party 3 reached everyone, so nobody is named for them.
+		assert!(reporters_missing_our_broadcast(&messages, 3).is_empty());
+	}
+
+	#[test]
+	fn reporters_missing_our_broadcast_ignores_malformed_messages() {
+		// A message with no entry for us at all must not panic or be counted as non-receipt.
+		let mut messages = received_only(to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(1), Some(1)])),
+			(2, Some(vec![Some(1), Some(1)])),
+		]));
+		messages.get_mut(&1).unwrap().data.remove(&2);
+
+		assert!(reporters_missing_our_broadcast(&messages, 2).is_empty());
+	}
+
+	#[test]
+	fn delivery_gaps_is_empty_when_every_broadcast_landed() {
+		let messages = received_only(to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(1), Some(1)])),
+			(2, Some(vec![Some(1), Some(1)])),
+		]));
+
+		assert!(delivery_gaps(&messages).is_empty());
 	}
 }
