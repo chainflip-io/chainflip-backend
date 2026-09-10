@@ -34,7 +34,7 @@ use subxt::{
 		},
 		rpc::{RawRpcFuture, RawRpcSubscription, RawValue, RpcClient, RpcClientT},
 	},
-	error::{BlockError, RpcError},
+	error::BlockError,
 	events::{Events, EventsClient},
 	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
@@ -84,11 +84,8 @@ impl RpcClientT for PolkadotHttpClient {
 		params: Option<Box<RawValue>>,
 	) -> RawRpcFuture<'a, Box<RawValue>> {
 		Box::pin(async move {
-			let res = self
-				.0
-				.request(method, Params(params))
-				.await
-				.map_err(|e| subxt_rpcs::Error::Client(Box::new(e)))?;
+			let res =
+				self.0.request(method, Params(params)).await.map_err(subxt_rpcs::Error::from)?;
 			Ok(res)
 		})
 	}
@@ -329,17 +326,17 @@ impl DotRpcApi for DotRpcClient {
 	/// Submits a raw encoded extrinsic, returning its hash once it is accepted into the
 	/// transaction pool.
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		let tx = subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
-			self.online_client.clone(),
-			encoded_bytes.clone(),
-		);
 		//we need to use `author_submit_extrinsic` because despite its name, Subxt 0.42’s submit()
 		// uses a subscription to wait for the first transaction status.
 		match self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await {
-			Err( subxt_rpcs::Error::User(user_error) )//subxt::Error::Rpc(RpcError::ClientError(subxt_rpcs::Error::User(user_error))))
+			Err(subxt_rpcs::Error::User(user_error))
 				if user_error.code == POOL_ALREADY_IMPORTED =>
-				Ok(tx.hash()),
-			result => Ok(result?)
+				Ok(subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
+					self.online_client.clone(),
+					encoded_bytes,
+				)
+				.hash()),
+			result => Ok(result?),
 		}
 	}
 

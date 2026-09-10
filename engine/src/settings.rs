@@ -1058,6 +1058,8 @@ pub mod tests {
 	fn all_settings_tests() {
 		hub_settings_do_not_require_websocket_endpoints();
 
+		hub_settings_tolerate_legacy_websocket_endpoints();
+
 		settings_valid_if_only_all_the_environment_set();
 
 		test_init_config_with_testing_config();
@@ -1074,6 +1076,34 @@ pub mod tests {
 		}))
 		.unwrap();
 
+		assert_ok!(hub.validate_settings());
+	}
+
+	/// 2.2 engines require `ws_endpoint` and share a settings file with 2.3 for the duration of the
+	/// upgrade, so the key must load without error rather than be rejected as unknown.
+	fn hub_settings_tolerate_legacy_websocket_endpoints() {
+		let hub: Hub = Config::builder()
+			.add_source(File::from_str(
+				r#"
+				[rpc]
+				ws_endpoint = "wss://primary.example.com"
+				http_endpoint = "https://primary.example.com"
+
+				[backup_rpc]
+				ws_endpoint = "wss://backup.example.com"
+				http_endpoint = "https://backup.example.com"
+				"#,
+				config::FileFormat::Toml,
+			))
+			.build()
+			.and_then(Config::try_deserialize)
+			.expect("legacy ws_endpoint should be ignored, not rejected");
+
+		assert_eq!(hub.nodes.primary.http_endpoint.as_ref(), "https://primary.example.com");
+		assert_eq!(
+			hub.nodes.backup.as_ref().unwrap().http_endpoint.as_ref(),
+			"https://backup.example.com"
+		);
 		assert_ok!(hub.validate_settings());
 	}
 
