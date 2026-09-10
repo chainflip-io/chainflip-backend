@@ -96,15 +96,7 @@ type SignatureNonce = u64;
 pub const MAX_FAILED_DEPOSIT_RECOVERIES: u32 = 50;
 
 #[derive(
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	MaxEncodedLen,
-	TypeInfo,
-	Clone,
-	RuntimeDebug,
-	PartialEq,
-	Eq,
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, Debug, PartialEq, Eq,
 )]
 pub struct FailedDepositRecoveryRequest<AccountId> {
 	/// The broker the failed deposit is attributed to.
@@ -122,7 +114,7 @@ pub struct FailedDepositRecoveryRequest<AccountId> {
 	MaxEncodedLen,
 	TypeInfo,
 	Clone,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEq,
 	Eq,
 	Default,

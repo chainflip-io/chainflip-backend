@@ -38,7 +38,7 @@ use cf_traits::{
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
-	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
+	pallet_prelude::{ensure, DispatchResult},
 	sp_runtime::{
 		traits::{One, Saturating},
 		DispatchError,
@@ -142,14 +142,7 @@ pub mod pallet {
 
 	/// All data contained in a Broadcast
 	#[derive(
-		RuntimeDebug,
-		PartialEq,
-		Eq,
-		Encode,
-		Decode,
-		DecodeWithMemTracking,
-		GenericTypeInfo,
-		CloneNoBound,
+		Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo, CloneNoBound,
 	)]
 	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct BroadcastData<T: Config<I>, I: 'static> {
@@ -287,7 +280,7 @@ pub mod pallet {
 		Eq,
 		Copy,
 		Clone,
-		RuntimeDebug,
+		Debug,
 		Encode,
 		Decode,
 		DecodeWithMemTracking,
