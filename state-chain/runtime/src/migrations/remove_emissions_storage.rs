@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use frame_support::{traits::OnRuntimeUpgrade, weights::Weight, StorageHasher, Twox128};
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
@@ -55,7 +55,7 @@ pub struct RemoveEmissionsStorage;
 impl OnRuntimeUpgrade for RemoveEmissionsStorage {
 	fn on_runtime_upgrade() -> Weight {
 		let _ = frame_support::storage::unhashed::clear_prefix(
-			&sp_core::hashing::twox_128(b"Emissions"),
+			&Twox128::hash(b"Emissions"),
 			None,
 			None,
 		);
@@ -66,18 +66,15 @@ impl OnRuntimeUpgrade for RemoveEmissionsStorage {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		use codec::Encode;
-		let had_emissions_storage = frame_support::storage::unhashed::contains_prefixed_key(
-			&sp_core::hashing::twox_128(b"Emissions"),
-		);
+		let had_emissions_storage =
+			frame_support::storage::unhashed::contains_prefixed_key(&Twox128::hash(b"Emissions"));
 		Ok(had_emissions_storage.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		ensure!(
-			!frame_support::storage::unhashed::contains_prefixed_key(&sp_core::hashing::twox_128(
-				b"Emissions"
-			)),
+			!frame_support::storage::unhashed::contains_prefixed_key(&Twox128::hash(b"Emissions")),
 			"Emissions storage prefix not cleared"
 		);
 		Ok(())
