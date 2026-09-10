@@ -186,7 +186,10 @@ where
 		&self,
 		block_hash: Hash,
 	) -> Result<impl Deref<Target = RuntimeDecoder> + '_, PoolClientError> {
-		let block_spec_version = self.client.runtime_version_at(block_hash)?.spec_version;
+		let block_spec_version = self
+			.client
+			.runtime_version_at(block_hash, sp_api::CallContext::Offchain)?
+			.spec_version;
 
 		// Acquire a read guard for the runtime_decoders map
 		let decoders_read_guard = self.runtime_decoders.read().await;
