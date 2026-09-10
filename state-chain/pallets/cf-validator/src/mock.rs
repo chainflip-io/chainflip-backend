@@ -76,6 +76,11 @@ impl From<UintAuthorityId> for MockSessionKeys {
 	}
 }
 
+/// Proof that `owner` holds the private keys of `keys`, as `pallet_session::set_keys` requires.
+pub fn create_set_keys_proof(owner: ValidatorId, keys: &MockSessionKeys) -> Vec<u8> {
+	keys.clone().create_ownership_proof(&owner.encode()).unwrap().encode()
+}
+
 impl pallet_cf_flip::Config for Test {
 	type Balance = FlipBalance;
 	type BlocksPerDay = sp_core::ConstU64<14400>;

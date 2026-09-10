@@ -365,7 +365,21 @@ impl_runtime_apis! {
 			use cf_session_benchmarking::Pallet as SessionBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 
-			impl cf_session_benchmarking::Config for Runtime {}
+			impl cf_session_benchmarking::Config for Runtime {
+				fn generate_session_keys_and_proof(
+					owner: crate::AccountId,
+				) -> (opaque::SessionKeys, Vec<u8>) {
+					let keys = opaque::SessionKeys::generate(&owner.encode(), None);
+					(keys.keys, keys.proof.encode())
+				}
+			}
+			impl pallet_cf_validator::benchmarking::RuntimeConfig for Runtime {
+				fn generate_session_keys_and_proof(
+					owner: crate::AccountId,
+				) -> (opaque::SessionKeys, Vec<u8>) {
+					<Runtime as cf_session_benchmarking::Config>::generate_session_keys_and_proof(owner)
+				}
+			}
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 

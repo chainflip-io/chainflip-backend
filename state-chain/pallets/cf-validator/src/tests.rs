@@ -1352,10 +1352,11 @@ fn validator_registration_and_deregistration() {
 		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
 		assert_ok!(frame_system::Provider::<Test>::created(&ALICE)); // session keys requires a provider ref.
 		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+		let keys = MockSessionKeys::from(UintAuthorityId(ALICE));
 		assert_ok!(ValidatorPallet::set_keys(
 			RuntimeOrigin::signed(ALICE),
-			MockSessionKeys::from(UintAuthorityId(ALICE)),
-			Default::default(),
+			keys.clone(),
+			create_set_keys_proof(ALICE, &keys),
 		));
 
 		assert!(pallet_session::NextKeys::<Test>::contains_key(ALICE));
@@ -4655,11 +4656,12 @@ mod grandpa_delegation {
 		new_test_ext().then_execute_with_checks(|| {
 			// Use a WINNING_BID account — small id so arithmetic is safe.
 			let authority = WINNING_BIDS[0].bidder_id;
-			let new_keys = UintAuthorityId(authority + 100).into();
+			let new_keys: MockSessionKeys = UintAuthorityId(authority + 100).into();
+			let proof = create_set_keys_proof(authority, &new_keys);
 			assert_ok!(ValidatorPallet::set_keys(
 				RuntimeOrigin::signed(authority),
 				new_keys,
-				vec![],
+				proof
 			));
 		});
 	}
