@@ -60,7 +60,6 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
 use sp_core::{Decode, Encode, Get};
-use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
 pub type AssethubElectoralSystemRunner = CompositeRunner<
@@ -91,7 +90,7 @@ impl ChainTypes for AssethubChain {
 pub const ASSETHUB_MAINNET_SAFETY_BUFFER: u32 = 1; // we witness finalized blocks so we don't need a safety buffer
 pub const ASSETHUB_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, Debug, TypeInfo)]
 pub enum AssethubElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<AssethubWitnessBatchNumber> },
 }

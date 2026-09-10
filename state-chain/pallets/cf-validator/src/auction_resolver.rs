@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	Default,
 	PartialEq,
 	Eq,
@@ -41,7 +41,7 @@ pub struct SetSizeMaximisingAuctionResolver {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	Default,
 	PartialEq,
 	Eq,
@@ -62,7 +62,7 @@ pub struct SetSizeParameters {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,
@@ -89,7 +89,7 @@ pub enum AuctionError {
 	Decode,
 	DecodeWithMemTracking,
 	TypeInfo,
-	RuntimeDebug,
+	Debug,
 	Serialize,
 	Deserialize,
 )]

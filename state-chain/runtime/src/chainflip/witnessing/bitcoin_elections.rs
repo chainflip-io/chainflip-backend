@@ -70,7 +70,6 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
 use scale_info::TypeInfo;
 use sp_core::{Decode, Encode, Get};
-use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
@@ -95,7 +94,7 @@ impl ChainTypes for BitcoinChain {
 	const NAME: &'static str = "Bitcoin";
 }
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, Debug, TypeInfo)]
 pub enum BitcoinElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<btc::BlockNumber> },
 }

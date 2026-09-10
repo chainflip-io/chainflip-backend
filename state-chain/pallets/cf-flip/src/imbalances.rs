@@ -22,17 +22,14 @@
 use crate::{self as Flip, Config, ReserveId};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
-	sp_runtime::{
-		traits::{CheckedAdd, CheckedSub, Saturating, Zero},
-		RuntimeDebug,
-	},
+	sp_runtime::traits::{CheckedAdd, CheckedSub, Saturating, Zero},
 	traits::{tokens::imbalance::TryMerge, Imbalance, SameOrOther, TryDrop},
 };
 use scale_info::TypeInfo;
 use sp_std::{cmp, mem, result};
 
 /// Internal sources of funds.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum InternalSource<AccountId> {
 	/// A user account.
 	Account(AccountId),
@@ -43,7 +40,7 @@ pub enum InternalSource<AccountId> {
 }
 
 /// The origin of an imbalance.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ImbalanceSource<AccountId> {
 	/// External, aka. off-chain.
 	External,
@@ -73,7 +70,7 @@ impl<AccountId> ImbalanceSource<AccountId> {
 /// been added from *somewhere*, and that we need to account for this by cancelling it against a
 /// corresponding [Deficit].
 #[must_use = "This surplus needs to be reconciled - if not any remaining imblance will be reverted."]
-#[derive(RuntimeDebug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Surplus<T: Config> {
 	amount: T::Balance,
 	pub(super) source: ImbalanceSource<T::AccountId>,
@@ -196,7 +193,7 @@ impl<T: Config> Surplus<T> {
 /// been removed to *somewhere*, and that we need to account for this by cancelling it against a
 /// corresponding [Surplus].
 #[must_use = "This deficit needs to be reconciled - if not any remaining imbalance will be reverted."]
-#[derive(RuntimeDebug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Deficit<T: Config> {
 	amount: T::Balance,
 	pub(super) source: ImbalanceSource<T::AccountId>,

@@ -67,7 +67,7 @@ use frame_support::{
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		BoundedVec, DispatchError, DispatchResult, FixedPointNumber, FixedPointOperand, FixedU128,
-		Percent, RuntimeDebug,
+		Percent,
 	},
 	traits::{ConstU32, EnsureOrigin, Get, IsType, UnfilteredDispatchable},
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
@@ -191,15 +191,7 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 }
 
 #[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	RuntimeDebug,
+	PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Debug,
 )]
 pub struct Bid<Id, Amount> {
 	pub bidder_id: Id,
@@ -415,9 +407,7 @@ pub trait RewardsDistribution {
 ///
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
-#[derive(
-	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default,
-)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId> {
 	/// Those nodes that are considered offline
 	pub offline: Vec<ValidatorId>,
@@ -1008,7 +998,7 @@ impl<
 	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
-	RuntimeDebug,
+	Debug,
 )]
 pub struct ScheduledEgressDetails<C: Chain> {
 	pub egress_id: EgressId,

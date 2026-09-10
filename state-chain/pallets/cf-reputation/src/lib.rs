@@ -96,7 +96,7 @@ impl<T: Config> Default for Penalty<T> {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,
