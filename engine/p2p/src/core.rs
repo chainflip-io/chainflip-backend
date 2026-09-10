@@ -67,8 +67,7 @@ where
 	std::thread::Builder::new()
 		.name(name.to_owned())
 		.spawn(move || {
-			let _guard = tracing::dispatcher::set_default(&dispatch);
-			f()
+			tracing::dispatcher::with_default(&dispatch, f);
 		})
 		.expect("failed to spawn p2p thread")
 }
