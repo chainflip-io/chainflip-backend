@@ -67,6 +67,9 @@ pub struct SwapOutcome<LiquidityProvider> {
 	/// The limit orders the swap bought into. Their proceeds are owed to the LPs and must be paid
 	/// out by the caller; the pool does not hold on to them.
 	pub limit_order_fills: Vec<limit_orders::Fill<LiquidityProvider>>,
+	/// Consumed input left over after rounding limit-order proceeds. The caller must account for
+	/// it as protocol-owned surplus; it is not owed to an LP or available for another swap.
+	pub limit_order_input_dust: Amount,
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
@@ -254,6 +257,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	) -> SwapOutcome<LiquidityProvider> {
 		let mut total_output_amount = Amount::zero();
 		let mut limit_order_fills = Vec::new();
+		let mut limit_order_input_dust = Amount::zero();
 
 		let range_orders_fee = self.range_orders.fee_hundredth_pips;
 
@@ -304,6 +308,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 								Some(range_orders_sqrt_price),
 								range_orders_fee,
 								&mut limit_order_fills,
+								&mut limit_order_input_dust,
 							)
 						}
 					},
@@ -312,6 +317,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						sqrt_price_limit,
 						range_orders_fee,
 						&mut limit_order_fills,
+						&mut limit_order_input_dust,
 					),
 					(None, Some(_)) => self.range_orders.swap::<SD>(amount, sqrt_price_limit),
 					(None, None) => break,
@@ -325,6 +331,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			output_amount: total_output_amount,
 			remaining_input_amount: amount,
 			limit_order_fills,
+			limit_order_input_dust,
 		}
 	}
 
@@ -334,11 +341,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		sqrt_price_limit: Option<SqrtPrice>,
 		range_orders_fee: u32,
 		fills: &mut Vec<limit_orders::Fill<LiquidityProvider>>,
+		input_dust: &mut Amount,
 	) -> (Amount, Amount) {
-		let (output_amount, remaining_amount, new_fills) =
-			self.limit_orders.swap::<SD>(amount, sqrt_price_limit, range_orders_fee);
-		fills.extend(new_fills);
-		(output_amount, remaining_amount)
+		let outcome = self.limit_orders.swap::<SD>(amount, sqrt_price_limit, range_orders_fee);
+		fills.extend(outcome.limit_order_fills);
+		*input_dust = input_dust.saturating_add(outcome.limit_order_input_dust);
+		(outcome.output_amount, outcome.remaining_input_amount)
 	}
 
 	/// Adds `sold_amount` to the lp's order at the given tick, creating it if it doesn't exist

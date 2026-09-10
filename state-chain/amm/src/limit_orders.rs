@@ -298,9 +298,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Swaps the specified Amount into the other currency until sqrt_price_limit is reached (If
-	/// Some), and returns the resulting Amount, the remaining input Amount, and the orders that
-	/// were bought into. The direction of the swap is controlled by the generic type parameter
-	/// `SD`, by setting it to `BaseToQuote` or `QuoteToBase`. Note sqrt_price_limit is inclusive.
+	/// Some), reporting the output, unspent input, LP fills, and undistributed input dust. The
+	/// direction is controlled by `SD`: `BaseToQuote` or `QuoteToBase`. The price limit is
+	/// inclusive.
 	///
 	/// This function never panics
 	pub(super) fn swap<SD: SwapDirection>(
@@ -308,9 +308,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
 		range_orders_pool_fee_hundredth_pips: u32,
-	) -> (Amount, Amount, Vec<Fill<LiquidityProvider>>) {
+	) -> crate::SwapOutcome<LiquidityProvider> {
 		let mut total_output_amount = U256::zero();
 		let mut fills = Vec::new();
+		let mut input_dust = Amount::zero();
 
 		while let Some((sqrt_price, mut orders_entry)) = (!amount.is_zero())
 			.then_some(())
@@ -352,7 +353,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			// defensively anyway.
 			amount = amount.saturating_sub(bought_amount);
 
-			fill_orders(orders, sqrt_price, available, sold_amount, bought_amount, &mut fills);
+			input_dust = input_dust.saturating_add(fill_orders(
+				orders,
+				sqrt_price,
+				available,
+				sold_amount,
+				bought_amount,
+				&mut fills,
+			));
 
 			if orders.is_empty() {
 				orders_entry.remove();
@@ -367,7 +375,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		self.total_swap_outputs[!SD::INPUT_SIDE] =
 			self.total_swap_outputs[!SD::INPUT_SIDE].saturating_add(total_output_amount);
 
-		(total_output_amount, amount, fills)
+		crate::SwapOutcome {
+			output_amount: total_output_amount,
+			remaining_input_amount: amount,
+			limit_order_fills: fills,
+			limit_order_input_dust: input_dust,
+		}
 	}
 
 	/// Adds liquidity to the position at the given tick, creating it if it doesn't exist yet. The
@@ -499,10 +512,10 @@ fn liquidity_of<LiquidityProvider: Ord>(orders: &Orders<LiquidityProvider>) -> A
 /// each of them for it at the fill's rate, and appending the result to `fills`. Orders left with
 /// nothing to sell are removed.
 ///
-/// For nonzero `sold_amount`, each order except the last is short by less than one bought-asset
-/// unit relative to the fill's rate. The last is never underpaid and receives up to `N - 1` extra
-/// units, where `N` is the order count. These bounds apply per fill, not cumulatively.
-/// If `sold_amount` is zero, the last order receives all proceeds and liquidity stays unchanged.
+/// For nonzero `sold_amount`, every order is short by less than one bought-asset unit relative to
+/// the fill's rate. This bound applies per fill, not cumulatively. Undistributed proceeds are
+/// returned as protocol surplus. If `sold_amount` is zero, all proceeds are surplus and no order
+/// changes or receives a fill.
 ///
 /// `available` must be the total liquidity the orders provide, and `sold_amount` no more than it.
 fn fill_orders<LiquidityProvider: Ord + Clone>(
@@ -512,7 +525,7 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 	sold_amount: Amount,
 	bought_amount: Amount,
 	fills: &mut Vec<Fill<LiquidityProvider>>,
-) {
+) -> Amount {
 	debug_assert!(sold_amount <= available);
 
 	let tick = sqrt_price.to_tick();
@@ -527,14 +540,9 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 		// as there is an order left to fill.
 		let sold = mul_div_floor_checked(remaining_sold, position.amount, remaining_available)
 			.unwrap_or_default();
-		// Paying for the actual sale prevents rounding liquidity shares from amplifying an
-		// order's underpayment. Giving the last order the remainder conserves all proceeds,
-		// including when the swap's output rounds to zero.
-		let bought = if position.amount == remaining_available {
-			remaining_bought
-		} else {
-			mul_div_floor_checked(sold, bought_amount, sold_amount).unwrap_or_default()
-		};
+		// Paying only for the actual sale bounds underpayment and prevents any order from
+		// collecting another order's rounding dust. A zero-output swap pays no LP.
+		let bought = mul_div_floor_checked(sold, bought_amount, sold_amount).unwrap_or_default();
 
 		// Cannot underflow: `remaining_sold` never exceeds `remaining_available`, which bounds
 		// an order's share of it by the liquidity that order provides.
@@ -559,6 +567,7 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 		// by the pool.
 		!position.amount.is_zero()
 	});
+	remaining_bought
 }
 
 /// Decoding and conversion of the limit order state as it was before fixed pools were removed.

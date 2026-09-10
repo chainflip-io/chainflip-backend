@@ -27,8 +27,8 @@ use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationHooks,
-	LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
+	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
+	DeregistrationHooks, LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
 use cf_utilities::select::Select;
 use sp_runtime::Saturating;
@@ -377,6 +377,9 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// Access to the account balances.
 		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
+
+		/// Accounts for undistributed swap proceeds as protocol-owned assets.
+		type AssetWithholding: AssetWithholding;
 
 		/// Access to the LP stats api.
 		type LpStats: LpStatsApi<AccountId = Self::AccountId>;
@@ -1117,6 +1120,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					output_amount,
 					remaining_input_amount,
 					limit_order_fills,
+					limit_order_input_dust,
 				} = pool.pool_state.swap(side, input_amount, None);
 
 				// Any leftover amount means we ran out of liquidity. It'a all or nothing at this
@@ -1126,6 +1130,9 @@ impl<T: Config> SwappingApi for Pallet<T> {
 				// Process any limit order fills that occurred during the swap. This will credit the
 				// LPs with the proceeds of the swap.
 				Self::process_limit_order_fills(pool, &asset_pair, side, limit_order_fills)?;
+				if !limit_order_input_dust.is_zero() {
+					T::AssetWithholding::withhold_assets(from, limit_order_input_dust.try_into()?);
+				}
 
 				let tick_after =
 					pool.pool_state.current_price(side).ok_or(Error::<T>::InsufficientLiquidity)?.2;

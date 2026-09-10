@@ -267,6 +267,25 @@ fn alternating_range_and_limit_orders() {
 }
 
 #[test]
+fn limit_order_dust_is_accumulated_across_prices() {
+	let mut pool = PoolState::new(0, Price::from_tick(69_082).unwrap()).unwrap();
+	for tick in [69_082, 69_083] {
+		for id in [0u8, 1] {
+			pool.mint_limit_order(&AccountId32::new([id; 32]), Side::Sell, tick, 1.into())
+				.unwrap();
+		}
+	}
+
+	// Each tick sells two satoshis for 2,001 micro-USDC. Each LP receives 1,000.
+	let outcome = pool.swap(Side::Buy, 4_002.into(), None);
+	assert_eq!(outcome.output_amount, 4.into());
+	assert!(outcome.remaining_input_amount.is_zero());
+	assert_eq!(outcome.limit_order_input_dust, 2.into());
+	assert_eq!(outcome.limit_order_fills.len(), 4);
+	assert!(outcome.limit_order_fills.iter().all(|fill| fill.bought_amount == 1_000.into()));
+}
+
+#[test]
 fn check_price_adjustment_by_pool_fee() {
 	use limit_orders::SwapDirection;
 	use sp_core::U256;

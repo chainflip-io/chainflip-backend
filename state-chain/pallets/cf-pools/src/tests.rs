@@ -24,7 +24,8 @@ use cf_test_utilities::{
 	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
 };
 use cf_traits::{
-	mocks::balance_api::MockBalance, BalanceApi, PoolApi, PoolOrdersManager, SwappingApi,
+	mocks::{asset_withholding::MockAssetWithholding, balance_api::MockBalance},
+	BalanceApi, PoolApi, PoolOrdersManager, SwappingApi,
 };
 use frame_support::{assert_noop, assert_ok};
 use sp_core::bounded_vec;
@@ -1421,6 +1422,108 @@ fn limit_order_proceeds_credited_on_fill() {
 		));
 		assert_eq!(get_balance(&ALICE), (0, 20_000));
 		assert_eq!(limit_order_amounts::<Test>(ASSET, Side::Sell), vec![(ALICE, 1, 6_666)]);
+	});
+}
+
+#[test]
+fn limit_order_dust_is_withheld_in_the_input_asset() {
+	for (side, order_amount, input, proceeds) in [
+		(Side::Sell, 10_000, 100_001, 50_000),
+		(Side::Buy, 10_000_000, 101, 50),
+		(Side::Sell, 10_000, 1, 0),
+	] {
+		new_test_ext().execute_with(|| {
+			let tick = 69_081;
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Btc,
+				STABLE_ASSET,
+				0,
+				Price::from_tick(tick).unwrap(),
+			));
+			let (sold_asset, bought_asset) = match side {
+				Side::Sell => (Asset::Btc, STABLE_ASSET),
+				Side::Buy => (STABLE_ASSET, Asset::Btc),
+			};
+			for lp in [ALICE, BOB] {
+				MockBalance::credit_account(&lp, sold_asset, order_amount);
+				assert_ok!(LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(lp),
+					Asset::Btc,
+					STABLE_ASSET,
+					side,
+					0,
+					Some(tick),
+					order_amount,
+					None,
+					None,
+				));
+			}
+
+			let output = LiquidityPools::swap_single_leg(bought_asset, sold_asset, input).unwrap();
+			assert_eq!(MockBalance::get_balance(&ALICE, bought_asset), proceeds);
+			assert_eq!(MockBalance::get_balance(&BOB, bought_asset), proceeds);
+			assert_eq!(MockAssetWithholding::withheld_assets(bought_asset), 1);
+			assert_eq!(MockAssetWithholding::withheld_assets(sold_asset), 0);
+			assert_eq!(2 * proceeds + MockAssetWithholding::withheld_assets(bought_asset), input);
+			if proceeds == 0 {
+				assert_eq!(output, 0);
+				assert_eq!(
+					limit_order_amounts::<Test>(Asset::Btc, side),
+					vec![(ALICE, 0, order_amount), (BOB, 0, order_amount)]
+				);
+				assert!(!System::events().iter().any(|record| matches!(
+					&record.event,
+					RuntimeEvent::LiquidityPools(Event::LimitOrderFilled { .. })
+				)));
+			}
+		});
+	}
+}
+
+#[test]
+fn failed_swap_does_not_withhold_rounding_dust() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Btc,
+			STABLE_ASSET,
+			0,
+			Price::from_tick(69_082).unwrap(),
+		));
+		for (lp, id, tick, amount) in
+			[(ALICE, 0, 69_082, 1), (BOB, 0, 69_082, 1), (ALICE, 1, 70_000, 1_000)]
+		{
+			MockBalance::credit_account(&lp, Asset::Btc, amount);
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(lp),
+				Asset::Btc,
+				STABLE_ASSET,
+				Side::Sell,
+				id,
+				Some(tick),
+				amount,
+				None,
+				None,
+			));
+		}
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(Asset::Btc, Some(0))]
+		));
+		assert_noop!(
+			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Btc, 3_100),
+			Error::<Test>::PriceImpactLimitExceeded
+		);
+		assert_eq!(MockAssetWithholding::withheld_assets(STABLE_ASSET), 0);
+
+		// The same fill with an unrestricted price impact really does leave a remainder.
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(Asset::Btc, None)]
+		));
+		assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Btc, 3_100));
+		assert_eq!(MockAssetWithholding::withheld_assets(STABLE_ASSET), 1);
 	});
 }
 
