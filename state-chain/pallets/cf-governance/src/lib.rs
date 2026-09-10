@@ -71,8 +71,8 @@ pub mod pallet {
 	use codec::Encode;
 	use frame_support::{
 		dispatch::GetDispatchInfo,
-		error::BadOrigin,
 		pallet_prelude::*,
+		sp_runtime::traits::BadOrigin,
 		traits::{UnfilteredDispatchable, UnixTime},
 		DefaultNoBound,
 	};
