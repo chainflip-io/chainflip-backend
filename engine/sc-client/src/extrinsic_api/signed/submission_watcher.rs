@@ -339,7 +339,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 			let tx_hash: H256 = {
 				let encoded = signed_extrinsic.encode();
-				sp_core::blake2_256(&encoded).into()
+				sp_crypto_hashing::blake2_256(&encoded).into()
 			};
 
 			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic.clone()).await {
