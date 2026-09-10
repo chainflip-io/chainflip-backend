@@ -348,7 +348,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	Clone,
 	PartialEq,
 	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
+	Debug,
 )]
 pub struct WitnesserCallPermission {
 	pub governance: bool,
@@ -423,9 +423,7 @@ impl From<WitnesserCallPermission> for crate::safe_mode::WitnesserCallPermission
 }
 
 // The liquidity provider safe mode before `flip_to_on_chain_balance_enabled` was added.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct LiquidityProviderSafeMode {
 	pub deposit_enabled: bool,
 	pub withdrawal_enabled: bool,
@@ -450,16 +448,7 @@ impl From<LiquidityProviderSafeMode> for pallet_cf_lp::PalletSafeMode {
 	}
 }
 
-#[derive(
-	Encode,
-	Decode,
-	TypeInfo,
-	Default,
-	Clone,
-	PartialEq,
-	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Default, Clone, PartialEq, Eq, Debug)]
 pub struct RuntimeSafeMode {
 	pub emissions: pallet_cf_emissions::PalletSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,

@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_set::BTreeSet;
@@ -70,11 +69,10 @@ macro_rules! impl_runtime_safe_mode {
 			use frame_support::{
 				storage::StorageValue,
 				traits::Get,
-				pallet_prelude::RuntimeDebug,
 			};
 			use scale_info::TypeInfo;
 
-			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Debug)]
 			pub struct $runtime_safe_mode {
 				$( pub $name: $pallet_safe_mode ),*
 			}
@@ -162,7 +160,7 @@ macro_rules! impl_pallet_safe_mode {
 	(
 		$pallet_safe_mode:ident; $($flag:ident),+ $(,)?
 	) => {
-		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, Debug)]
 		pub struct $pallet_safe_mode {
 			$(
 				pub $flag: bool,
@@ -197,7 +195,7 @@ macro_rules! impl_pallet_safe_mode {
 	(
 		$pallet_safe_mode:ident<$generic:ident>; $($flag:ident),+ $(,)?
 	) => {
-		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, Debug)]
 		#[scale_info(skip_type_params($generic))]
 		pub struct $pallet_safe_mode<$generic: 'static> {
 			$(
@@ -247,7 +245,7 @@ macro_rules! impl_pallet_safe_mode {
 	Clone,
 	PartialEq,
 	Eq,
-	RuntimeDebug,
+	Debug,
 	Default,
 )]
 pub enum SafeModeSet<T: Ord> {

@@ -120,15 +120,7 @@ pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	Default,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	RuntimeDebugNoBound,
+	Clone, PartialEq, Eq, Default, Encode, Decode, DecodeWithMemTracking, TypeInfo, DebugNoBound,
 )]
 #[scale_info(skip_type_params(T))]
 pub enum RotationPhase<T: Config> {
