@@ -48,9 +48,9 @@ where
 
 	/// Returns true iff, for this offender, we have already recorded another offence with the
 	/// current or a later time slot.
-	fn is_time_slot_stale(offender: &T::ValidatorId, time_slot: &O::TimeSlot) -> bool {
+	fn is_time_slot_stale(offender: &T::ValidatorId, time_slot: &O::Slot) -> bool {
 		OffenceTimeSlotTracker::<T>::get(Self::report_id(offender))
-			.and_then(|bytes| O::TimeSlot::decode(&mut &bytes[..]).ok())
+			.and_then(|bytes| O::Slot::decode(&mut &bytes[..]).ok())
 			.map(|last_reported_time_slot| time_slot <= &last_reported_time_slot)
 			.unwrap_or_default()
 	}
@@ -91,14 +91,11 @@ where
 		let offender = offence.offenders().pop().expect("len == 1; qed");
 
 		ensure!(
-			!Self::is_time_slot_stale(&offender, &offence.time_slot()),
+			!Self::is_time_slot_stale(&offender, &offence.slot()),
 			sp_staking::offence::OffenceError::DuplicateReport
 		);
 
-		OffenceTimeSlotTracker::<T>::insert(
-			Self::report_id(&offender),
-			offence.time_slot().encode(),
-		);
+		OffenceTimeSlotTracker::<T>::insert(Self::report_id(&offender), offence.slot().encode());
 
 		// TODO: Reconsider the slashing rate here. For now we assume we are reporting the node
 		// for equivocation, and that each report corresponds to 1 FLIP.
@@ -114,7 +111,7 @@ where
 	/// This implementation assumes that it's not possible to submit a report for a *future* time
 	/// slot. Hence we can simply check if the reported slot is not later than the latest one seen
 	/// for this offender.
-	fn is_known_offence(offenders: &[T::ValidatorId], time_slot: &O::TimeSlot) -> bool {
+	fn is_known_offence(offenders: &[T::ValidatorId], time_slot: &O::Slot) -> bool {
 		offenders.iter().any(|offender| Self::is_time_slot_stale(offender, time_slot))
 	}
 }

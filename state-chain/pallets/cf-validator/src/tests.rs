@@ -33,7 +33,7 @@ use cf_traits::{
 use cf_utilities::{assert_matches, success_threshold_from_share_count};
 use frame_support::{
 	assert_noop, assert_ok,
-	error::BadOrigin,
+	sp_runtime::traits::BadOrigin,
 	traits::{HandleLifetime, OriginTrait},
 };
 use frame_system::RawOrigin;
