@@ -65,12 +65,6 @@ impl StateChain {
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct WsHttpEndpoints {
-	pub ws_endpoint: SecretUrl,
-	pub http_endpoint: SecretUrl,
-}
-
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct HttpEndpoint {
 	pub http_endpoint: SecretUrl,
 }
@@ -85,19 +79,8 @@ pub trait ValidateSettings {
 	fn validate(&self) -> Result<(), ConfigError>;
 }
 
-impl ValidateSettings for WsHttpEndpoints {
-	/// Ensure the endpoints are valid HTTP and WS endpoints.
-	fn validate(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(self.ws_endpoint.clone())
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		validate_http_endpoint(self.http_endpoint.clone())
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		Ok(())
-	}
-}
-
 impl ValidateSettings for HttpEndpoint {
-	/// Ensure the endpoints are valid HTTP and WS endpoints.
+	/// Ensure the endpoint is a valid HTTP endpoint.
 	fn validate(&self) -> Result<(), ConfigError> {
 		validate_http_endpoint(self.http_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
@@ -191,7 +174,7 @@ impl Sol {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Hub {
 	#[serde(flatten)]
-	pub nodes: NodeContainer<WsHttpEndpoints>,
+	pub nodes: NodeContainer<HttpEndpoint>,
 }
 
 impl Hub {
@@ -310,12 +293,13 @@ pub struct SolOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct HubOptions {
-	#[clap(long = "hub.rpc.ws_endpoint")]
+	// Kept for shared 2.2/2.3 command lines during the upgrade window.
+	#[clap(long = "hub.rpc.ws_endpoint", hide = true)]
 	pub hub_ws_endpoint: Option<String>,
 	#[clap(long = "hub.rpc.http_endpoint")]
 	pub hub_http_endpoint: Option<String>,
 
-	#[clap(long = "hub.backup_rpc.ws_endpoint")]
+	#[clap(long = "hub.backup_rpc.ws_endpoint", hide = true)]
 	pub hub_backup_ws_endpoint: Option<String>,
 	#[clap(long = "hub.backup_rpc.http_endpoint")]
 	pub hub_backup_http_endpoint: Option<String>,
@@ -1072,6 +1056,8 @@ pub mod tests {
 	// interfere with tests running in parallel.
 	#[test]
 	fn all_settings_tests() {
+		hub_settings_do_not_require_websocket_endpoints();
+
 		settings_valid_if_only_all_the_environment_set();
 
 		test_init_config_with_testing_config();
@@ -1081,7 +1067,18 @@ pub mod tests {
 		test_all_command_line_options();
 	}
 
+	fn hub_settings_do_not_require_websocket_endpoints() {
+		let hub: Hub = serde_json::from_value(serde_json::json!({
+			"rpc": { "http_endpoint": "https://primary.example.com" },
+			"backup_rpc": { "http_endpoint": "https://backup.example.com" }
+		}))
+		.unwrap();
+
+		assert_ok!(hub.validate_settings());
+	}
+
 	fn settings_valid_if_only_all_the_environment_set() {
+		// Legacy WS variables remain accepted while 2.2 and 2.3 engines share settings.
 		let _guard = TestEnvironment::default();
 
 		let settings = Settings::new(CommandLineOptions::default())
@@ -1093,8 +1090,8 @@ pub mod tests {
 		assert_eq!(settings.bsc.nodes.primary.http_endpoint.as_ref(), "http://localhost:8549");
 		assert_eq!(settings.sol.nodes.primary.http_endpoint.as_ref(), "http://localhost:8899");
 		assert_eq!(
-			settings.hub.nodes.primary.ws_endpoint.as_ref(),
-			"wss://my_fake_assethub_rpc:443/<secret_key>"
+			settings.hub.nodes.primary.http_endpoint.as_ref(),
+			"https://my_fake_assethub_rpc:443/<secret_key>"
 		);
 		assert_eq!(
 			settings.tron.nodes.primary.http_endpoint.as_ref(),
@@ -1121,8 +1118,8 @@ pub mod tests {
 			"http://second.localhost:8899"
 		);
 		assert_eq!(
-			settings.hub.nodes.backup.unwrap().ws_endpoint.as_ref(),
-			"wss://second.my_fake_assethub_rpc:443/<secret_key>"
+			settings.hub.nodes.backup.unwrap().http_endpoint.as_ref(),
+			"https://second.my_fake_assethub_rpc:443/<secret_key>"
 		);
 		assert_eq!(
 			settings.tron.nodes.backup.clone().unwrap().http_endpoint.as_ref(),
@@ -1224,6 +1221,7 @@ pub mod tests {
 				sol_backup_http_endpoint: Some("http://second.sol-endpoint:4321".to_owned()),
 			},
 			hub_opts: HubOptions {
+				// Legacy flags remain accepted while 2.2 and 2.3 engines share arguments.
 				hub_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
 				hub_http_endpoint: Some("http://endpoint:4321".to_owned()),
 
@@ -1328,19 +1326,11 @@ pub mod tests {
 		);
 
 		assert_eq!(
-			opts.hub_opts.hub_ws_endpoint.unwrap(),
-			settings.hub.nodes.primary.ws_endpoint.as_ref()
-		);
-		assert_eq!(
 			opts.hub_opts.hub_http_endpoint.unwrap(),
 			settings.hub.nodes.primary.http_endpoint.as_ref()
 		);
 
 		let hub_backup_node = settings.hub.nodes.backup.unwrap();
-		assert_eq!(
-			opts.hub_opts.hub_backup_ws_endpoint.unwrap(),
-			hub_backup_node.ws_endpoint.as_ref()
-		);
 		assert_eq!(
 			opts.hub_opts.hub_backup_http_endpoint.unwrap(),
 			hub_backup_node.http_endpoint.as_ref()
