@@ -141,6 +141,28 @@ The `runtime-tracing` feature enables `sp_tracing` span instrumentation
 per-pallet and per-extrinsic execution time while replaying real blocks. It must never be
 enabled for a production build.
 
+#### Getting a chain database
+
+Replaying a block needs a database holding the state its parent left behind.
+`state-chain/scripts/fetch-benchmark-chaindata.sh` builds a minimal one in minutes, where a full
+sync would take days:
+
+```bash
+./state-chain/scripts/fetch-benchmark-chaindata.sh --from 14716810 --to 14716811
+```
+
+It warp syncs straight to the state at `--from` minus one — `--unsafe-warp-sync-target-block`,
+resolved against a trusted archive RPC, so no warp proofs are downloaded and the target header is
+believed unconditionally — lets the block sync that follows bring in the blocks to replay, stops
+the node, and then checks the result by replaying the first block once. The database lands in
+`./chaindata/<network>-<from>[-<to>]`. `--help` covers the other networks, which need a
+`--target-rpc` since only Berghain's archive endpoint is built in.
+
+Stopping the node promptly is the point: state pruning keeps the last 256 states, so a database
+left syncing eventually drops the one the replay starts from. For the same reason the script
+refuses ranges longer than 200 blocks — to profile something wider, copy a database from an
+archive node.
+
 Build the instrumented runtime, then point the node at the resulting blob — a replayed block
 executes the runtime from chain state, so the locally built wasm is otherwise ignored:
 
@@ -151,14 +173,15 @@ cargo build --release -p chainflip-node --features runtime-tracing
 strings -a target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
   | grep -o 'ext_wasm_tracing_[a-z_0-9]*' | sort -u
 
-mkdir -p ~/runtime-overrides
+# The override directory must hold exactly one .wasm, so don't point at wbuild itself.
+mkdir -p /tmp/runtime-overrides
 cp target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm \
-   ~/runtime-overrides/
+   /tmp/runtime-overrides/
 
 ./target/release/chainflip-node benchmark block \
   --chain state-chain/node/chainspecs/berghain.chainspec.raw.json \
   --base-path <path-to-chaindata> \
-  --wasm-runtime-overrides ~/runtime-overrides \
+  --wasm-runtime-overrides /tmp/runtime-overrides \
   --from <block> --to <block> --wasm-execution=compiled \
   --tracing-targets="wasm_tracing=trace,pallet_cf_elections=off" > trace.log 2>&1
 ```

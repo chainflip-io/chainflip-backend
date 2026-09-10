@@ -49,3 +49,4 @@ tfplan
 
 node_modules
 /spans.json
+/chaindata
