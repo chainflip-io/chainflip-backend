@@ -58,17 +58,14 @@ use socket::{
 	RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX,
 };
 
-/// Spawn an OS thread that keeps the current `tracing` subscriber.
-pub(crate) fn spawn_with_tracing<F>(name: &str, f: F) -> std::thread::JoinHandle<()>
+/// Spawn a named OS thread.
+pub(crate) fn spawn_named<F>(name: &str, f: F) -> std::thread::JoinHandle<()>
 where
 	F: FnOnce() + Send + 'static,
 {
-	let dispatch = tracing::dispatcher::get_default(|dispatch| dispatch.clone());
 	std::thread::Builder::new()
 		.name(name.to_owned())
-		.spawn(move || {
-			tracing::dispatcher::with_default(&dispatch, f);
-		})
+		.spawn(f)
 		.expect("failed to spawn p2p thread")
 }
 
@@ -704,7 +701,7 @@ impl P2PContext {
 
 		// This OS thread is for incoming messages
 		// TODO: combine this with the authentication thread?
-		spawn_with_tracing("p2p-incoming", move || loop {
+		spawn_named("p2p-incoming", move || loop {
 			if stop_thread.load(Ordering::Relaxed) {
 				break
 			}

@@ -122,7 +122,7 @@ pub fn start_monitoring_thread(
 	let (monitor_event_sender, monitor_event_receiver) =
 		tokio::sync::mpsc::unbounded_channel::<MonitorEvent>();
 
-	super::spawn_with_tracing("p2p-monitor", move || {
+	super::spawn_named("p2p-monitor", move || {
 		let span = info_span!("p2p");
 		let _entered = span.enter();
 

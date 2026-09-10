@@ -760,9 +760,7 @@ impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 
 /// Allows async code to run sync/blocking code without blocking the runtime.
 pub async fn without_blocking<C: FnOnce() -> R + Send + 'static, R: Send + 'static>(c: C) -> R {
-	let dispatch = tracing::dispatcher::get_default(|d| d.clone());
-	match tokio::task::spawn_blocking(move || tracing::dispatcher::with_default(&dispatch, c)).await
-	{
+	match tokio::task::spawn_blocking(c).await {
 		Ok(r) => r,
 		Err(join_error) =>
 			if let Ok(panic) = join_error.try_into_panic() {

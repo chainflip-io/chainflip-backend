@@ -155,7 +155,7 @@ pub fn start_authentication_thread(context: zmq::Context) -> Arc<Authenticator> 
 
 	let authenticator_clone = authenticator.clone();
 
-	super::spawn_with_tracing("p2p-auth", move || {
+	super::spawn_named("p2p-auth", move || {
 		authenticator.run(zap_socket);
 	});
 
