@@ -96,7 +96,7 @@ type SignatureNonce = u64;
 	MaxEncodedLen,
 	TypeInfo,
 	Clone,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEq,
 	Eq,
 	Default,

@@ -19,13 +19,12 @@ use crate::address::ForeignChainAddress;
 use cf_primitives::ForeignChain;
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use ethabi::Token;
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'ExecutexSwapAndCall'
 /// function.
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub struct ExecutexSwapAndCall {
 	/// A single transfer that need to be made to given addresses.
 	pub transfer_param: EncodableTransferAssetParams,

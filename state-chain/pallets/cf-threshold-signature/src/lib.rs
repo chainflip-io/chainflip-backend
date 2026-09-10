@@ -46,13 +46,10 @@ use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
-	sp_runtime::{
-		traits::{BlockNumberProvider, Saturating},
-		RuntimeDebug,
-	},
+	sp_runtime::traits::{BlockNumberProvider, Saturating},
 	traits::{DefensiveOption, EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable},
 	weights::Weight,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 };
 use response_status::ResponseStatus;
 use scale_info::TypeInfo;
@@ -121,7 +118,7 @@ pub enum PalletOffence {
 	FailedKeyHandover,
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum RequestType<Key, Participants> {
 	/// Uses the provided key and selects new participants from the provided epoch.
 	/// This signing request will be retried until success.
@@ -142,9 +139,7 @@ pub enum RequestType<Key, Participants> {
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
-#[derive(
-	Clone, Copy, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ThresholdCeremonyType<Participants> {
 	Standard,
 	KeygenVerification,
@@ -157,15 +152,7 @@ pub enum ThresholdCeremonyType<Participants> {
 }
 
 #[derive(
-	Clone,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	GenericTypeInfo,
-	PartialEq,
-	Eq,
-	Default,
-	RuntimeDebug,
+	Clone, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo, PartialEq, Eq, Default, Debug,
 )]
 #[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
@@ -174,9 +161,7 @@ pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
 }
 
 /// The current status of a key rotation.
-#[derive(
-	PartialEq, Eq, Clone, Encode, Decode, GenericTypeInfo, EnumVariant, RuntimeDebugNoBound,
-)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, GenericTypeInfo, EnumVariant, DebugNoBound)]
 #[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
@@ -316,7 +301,7 @@ pub mod pallet {
 	use frame_system::ensure_none;
 	/// Context for tracking the progress of a threshold signature ceremony.
 	#[derive(
-		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
+		Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
 	)]
 	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
@@ -341,7 +326,7 @@ pub mod pallet {
 	}
 
 	#[derive(
-		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
+		Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
 	)]
 	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
@@ -357,7 +342,7 @@ pub mod pallet {
 	}
 
 	#[derive(
-		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
+		Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
 	)]
 	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
@@ -1037,7 +1022,7 @@ pub mod pallet {
 		Eq,
 		Copy,
 		Clone,
-		RuntimeDebug,
+		Debug,
 		Encode,
 		Decode,
 		DecodeWithMemTracking,
