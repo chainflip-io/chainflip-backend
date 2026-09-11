@@ -33,9 +33,11 @@ use cf_chains::{
 	},
 	Arbitrum, Assethub, Bitcoin, Bsc, Chain, ChainEnvironment, Polkadot, Solana, Tron,
 };
-use cf_primitives::{AuthorityCount, BroadcastId, SemVer, ThresholdSignatureRequestId};
+use cf_primitives::{
+	AuthorityCount, BroadcastId, ForeignChain, SemVer, ThresholdSignatureRequestId,
+};
 use cf_traits::{
-	elections::{ElectionInstancesVoting, VoterContext},
+	elections::{ElectionInstance, ElectionInstancesVoting, VoterContext},
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
 	mocks::key_provider::MockKeyProvider,
 	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
@@ -341,6 +343,15 @@ const RECORDED_VOTES: &[u8] = b"MockElectionInstances::RecordedVotes";
 
 pub const INSTANCE_REJECTED: DispatchError = DispatchError::Other("instance rejected the votes");
 
+/// Which instance each position in the mock's vote list stands for, so a test can name the
+/// instance a rejection is reported under. Positions past the table report `Generic`.
+pub const MOCK_INSTANCES: [ElectionInstance; 4] = [
+	ElectionInstance::Generic,
+	ElectionInstance::Chain(ForeignChain::Ethereum),
+	ElectionInstance::Chain(ForeignChain::Bitcoin),
+	ElectionInstance::Chain(ForeignChain::Solana),
+];
+
 impl<T: cf_traits::Chainflip> MockElectionInstances<T> {
 	/// `(instance index, vote count, voter's authority index)` for every instance reached, in
 	/// the order reached.
@@ -367,15 +378,22 @@ impl<T: cf_traits::Chainflip> ElectionInstancesVoting<T> for MockElectionInstanc
 		Weight::from_parts(votes.iter().map(|v| v.count as u64).sum(), 0)
 	}
 
-	fn vote_all(context: &VoterContext<T>, votes: Self::Votes) -> Vec<(u32, DispatchError)> {
+	fn vote_all(
+		context: &VoterContext<T>,
+		votes: Self::Votes,
+	) -> Vec<(ElectionInstance, DispatchError)> {
 		votes
 			.into_iter()
 			.enumerate()
 			.filter_map(|(index, instance)| {
-				let index = index as u32;
 				// Recorded before the outcome is decided, so a rejecting instance still shows up.
-				Self::record(index, instance.count, context.authority_index);
-				instance.reject.then_some((index, INSTANCE_REJECTED))
+				Self::record(index as u32, instance.count, context.authority_index);
+				instance.reject.then(|| {
+					(
+						MOCK_INSTANCES.get(index).copied().unwrap_or(ElectionInstance::Generic),
+						INSTANCE_REJECTED,
+					)
+				})
 			})
 			.collect()
 	}

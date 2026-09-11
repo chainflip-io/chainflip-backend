@@ -15,13 +15,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{AccountRoleRegistry, Chainflip, EpochInfo};
-use cf_primitives::{AuthorityCount, EpochIndex};
+use cf_primitives::{AuthorityCount, EpochIndex, ForeignChain};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{DispatchError, Member},
 	weights::Weight,
 	Parameter,
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
+use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
 /// Everything recording a vote needs about the caller that does *not* depend on which elections
@@ -31,6 +33,24 @@ pub struct VoterContext<T: Chainflip> {
 	pub authority: <T as Chainflip>::ValidatorId,
 	pub authority_index: AuthorityCount,
 	pub block_number: BlockNumberFor<T>,
+}
+
+/// Names one `pallet-cf-elections` instance: the chain-agnostic one, or the one for a chain.
+#[derive(
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+pub enum ElectionInstance {
+	Generic,
+	Chain(ForeignChain),
 }
 
 /// Check that the origin is a validator, and gather the parts of [`VoterContext`] that are shared
@@ -68,9 +88,12 @@ pub trait ElectionInstancesVoting<T: Chainflip> {
 	///
 	/// Instances are independent: one failing must neither abort the rest nor roll back their
 	/// storage, which is what a caller submitting a separate extrinsic per instance gets today.
-	/// Returns the failures - each paired with an implementation-defined index identifying the
-	/// instance - for the caller to report, rather than failing the whole call.
-	fn vote_all(context: &VoterContext<T>, votes: Self::Votes) -> Vec<(u32, DispatchError)>;
+	/// Returns the failures - each paired with the instance that rejected them - for the caller
+	/// to report, rather than failing the whole call.
+	fn vote_all(
+		context: &VoterContext<T>,
+		votes: Self::Votes,
+	) -> Vec<(ElectionInstance, DispatchError)>;
 }
 
 /// No elections instances to vote in - for mock runtimes that do not include the elections
@@ -86,7 +109,10 @@ impl<T: Chainflip> ElectionInstancesVoting<T> for () {
 		Weight::zero()
 	}
 
-	fn vote_all(_context: &VoterContext<T>, _votes: Self::Votes) -> Vec<(u32, DispatchError)> {
+	fn vote_all(
+		_context: &VoterContext<T>,
+		_votes: Self::Votes,
+	) -> Vec<(ElectionInstance, DispatchError)> {
 		Vec::new()
 	}
 }

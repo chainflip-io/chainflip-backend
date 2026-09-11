@@ -52,7 +52,7 @@ use cf_primitives::{
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
-	elections::{authorise_voter, ElectionInstancesVoting},
+	elections::{authorise_voter, ElectionInstance, ElectionInstancesVoting},
 	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
 	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
@@ -508,10 +508,9 @@ pub mod pallet {
 		/// BSC Initialized: contract addresses have been set, first key activated
 		BscInitialized,
 		/// Votes submitted via [`Call::submit_elections_votes`] were rejected by one election
-		/// instance. The other instances in the same call are unaffected. `instance` identifies
-		/// which one, as defined by the runtime's `ElectionInstances`.
+		/// instance. The other instances in the same call are unaffected.
 		ElectionInstanceVotesRejected {
-			instance: u32,
+			instance: ElectionInstance,
 			error: DispatchError,
 		},
 		/// A configuration item for this pallet was updated by governance.

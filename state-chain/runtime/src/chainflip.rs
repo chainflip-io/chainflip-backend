@@ -105,7 +105,7 @@ use cf_primitives::{
 	ChannelId, DcaParameters, ONE_AS_BASIS_POINTS,
 };
 use cf_traits::{
-	elections::{ElectionInstancesVoting, VoterContext},
+	elections::{ElectionInstance, ElectionInstancesVoting, VoterContext},
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
 	Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	FeeMultiplierProvider, FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider,
@@ -1342,6 +1342,9 @@ pub trait BatchedInstance: Sized + 'static
 where
 	Runtime: pallet_cf_elections::Config<Self>,
 {
+	/// Which instance this is, for reporting it outside the runtime.
+	const INSTANCE: ElectionInstance;
+
 	/// This instance's votes, as a batch carrying only them.
 	fn votes(
 		votes: pallet_cf_elections::AuthorityVotes<Runtime, Self>,
@@ -1355,9 +1358,11 @@ where
 /// those aliases are themselves projections (`<Ethereum as PalletInstanceAlias>::Instance`),
 /// which coherence cannot tell apart either.
 macro_rules! election_instances {
-	($( $field:ident => $instance:ty ),+ $(,)?) => {
+	($( $field:ident => $instance:ty = $election_instance:expr ),+ $(,)?) => {
 		$(
 			impl BatchedInstance for $instance {
+				const INSTANCE: ElectionInstance = $election_instance;
+
 				fn votes(
 					votes: pallet_cf_elections::AuthorityVotes<Runtime, Self>,
 				) -> AllElectionInstancesVotes {
@@ -1394,14 +1399,14 @@ macro_rules! election_instances {
 }
 
 election_instances! {
-	ethereum => Instance1,
-	bitcoin => Instance3,
-	arbitrum => Instance4,
-	solana => Instance5,
-	assethub => Instance6,
-	tron => Instance7,
-	bsc => Instance8,
-	generic => (),
+	ethereum => Instance1 = ElectionInstance::Chain(ForeignChain::Ethereum),
+	bitcoin => Instance3 = ElectionInstance::Chain(ForeignChain::Bitcoin),
+	arbitrum => Instance4 = ElectionInstance::Chain(ForeignChain::Arbitrum),
+	solana => Instance5 = ElectionInstance::Chain(ForeignChain::Solana),
+	assethub => Instance6 = ElectionInstance::Chain(ForeignChain::Assethub),
+	tron => Instance7 = ElectionInstance::Chain(ForeignChain::Tron),
+	bsc => Instance8 = ElectionInstance::Chain(ForeignChain::Bsc),
+	generic => () = ElectionInstance::Generic,
 }
 
 pub struct AllElectionInstances;
@@ -1435,34 +1440,31 @@ impl ElectionInstancesVoting<Runtime> for AllElectionInstances {
 	fn vote_all(
 		context: &VoterContext<Runtime>,
 		votes: Self::Votes,
-	) -> sp_std::vec::Vec<(u32, DispatchError)> {
+	) -> sp_std::vec::Vec<(ElectionInstance, DispatchError)> {
 		let mut failures = sp_std::vec::Vec::new();
 
 		// Each instance gets its own storage layer, so one rejecting its votes neither aborts
 		// the others nor rolls back what they already wrote. `do_vote` is a plain function, so
 		// unlike a dispatchable it gets no such layer automatically.
-		// A failure is reported under the voted instance's `ForeignChain` index, so the index is
-		// stable as chains are added, and `0` - not a valid `ForeignChain` - is the chain-agnostic
-		// generic instance.
 		macro_rules! vote_in {
-			($index:expr, $field:ident, $instance:ty) => {
+			($field:ident, $instance:ty) => {
 				if let Some(votes) = votes.$field {
 					if let Err(error) = frame_support::storage::with_storage_layer(|| {
 						pallet_cf_elections::Pallet::<Runtime, $instance>::do_vote(context, *votes)
 					}) {
-						failures.push(($index, error));
+						failures.push((<$instance as BatchedInstance>::INSTANCE, error));
 					}
 				}
 			};
 		}
-		vote_in!(0, generic, ());
-		vote_in!(ForeignChain::Ethereum as u32, ethereum, EthereumInstance);
-		vote_in!(ForeignChain::Bitcoin as u32, bitcoin, BitcoinInstance);
-		vote_in!(ForeignChain::Arbitrum as u32, arbitrum, ArbitrumInstance);
-		vote_in!(ForeignChain::Solana as u32, solana, SolanaInstance);
-		vote_in!(ForeignChain::Assethub as u32, assethub, AssethubInstance);
-		vote_in!(ForeignChain::Tron as u32, tron, TronInstance);
-		vote_in!(ForeignChain::Bsc as u32, bsc, BscInstance);
+		vote_in!(generic, ());
+		vote_in!(ethereum, EthereumInstance);
+		vote_in!(bitcoin, BitcoinInstance);
+		vote_in!(arbitrum, ArbitrumInstance);
+		vote_in!(solana, SolanaInstance);
+		vote_in!(assethub, AssethubInstance);
+		vote_in!(tron, TronInstance);
+		vote_in!(bsc, BscInstance);
 
 		failures
 	}
