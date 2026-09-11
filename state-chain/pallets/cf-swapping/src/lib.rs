@@ -2883,7 +2883,10 @@ pub mod pallet {
 			side: Side,
 		) -> Price {
 			const ESTIMATION_AMOUNT_USDC: u128 = 20_000_000; // 20 USDC
-			match side {
+
+			let fallback_price = utilities::hard_coded_price_for_asset(asset);
+
+			let simulated_price = match side {
 				// Buy means we buy Asset and sell USDC
 				Side::Buy => {
 					// Estimated Asset amount
@@ -2900,11 +2903,10 @@ pub mod pallet {
 					.and_then(|estimation_output| {
 						Price::from_amounts(ESTIMATION_AMOUNT_USDC.into(), estimation_output.into())
 					})
-					.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
 				},
 				// Sell means we sell Asset and buy USDC
 				Side::Sell => {
-					let estimated_input = utilities::hard_coded_price_for_asset(asset) // USD / Asset
+					let estimated_input = fallback_price // USD / Asset
 						// How much input is required for the output?
 						.input_amount_floor(ESTIMATION_AMOUNT_USDC) // Asset
 						.saturated_into();
@@ -2921,8 +2923,24 @@ pub mod pallet {
 					.and_then(|estimation_output| {
 						Price::from_amounts(estimation_output.into(), estimated_input.into())
 					})
-					.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
 				},
+			};
+
+			match simulated_price {
+				Some(price)
+					if price.is_within_factor_of(
+						&fallback_price,
+						utilities::MAX_PRICE_ESTIMATE_DEVIATION_FACTOR,
+					) =>
+					price,
+				Some(implausible_price) => {
+					log::debug!(
+						"Simulated {side:?} price for {asset:?} deviates from the hard-coded price by more than {}x, falling back to the hard-coded price. Simulated: {implausible_price:?}, hard-coded: {fallback_price:?}",
+						utilities::MAX_PRICE_ESTIMATE_DEVIATION_FACTOR,
+					);
+					fallback_price
+				},
+				None => fallback_price,
 			}
 		}
 
@@ -3573,6 +3591,15 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 pub mod utilities {
 	use super::*;
 
+	/// A pool-derived price estimate is discarded if it deviates from the hard-coded price by
+	/// more than this factor in either direction, since that implies a manipulated or illiquid
+	/// pool rather than a real move.
+	///
+	/// Note this bounds estimates against a manually maintained constant: if a real price moves
+	/// by more than this factor before [`hard_coded_price_for_asset`] is refreshed, sound
+	/// estimates will be rejected in favour of a stale one.
+	pub const MAX_PRICE_ESTIMATE_DEVIATION_FACTOR: u32 = 4;
+
 	/// Provides a static price that can be used as a fallback when estimating fees/gas.
 	/// These prices are rough approximations of real market prices and should be updated
 	/// occasionally if the prices move significantly.
@@ -3588,11 +3615,11 @@ pub mod utilities {
 			Asset::HubUsdt |
 			Asset::TrxUsdt => 100, // $1
 			Asset::Flip => 40,                     // ~$0.40
-			Asset::Eth | Asset::ArbEth => 280_000, // ~$2,800
-			Asset::Dot | Asset::HubDot => 200,     // ~$2
-			Asset::Btc | Asset::Wbtc => 8_650_000, // ~$86,500
-			Asset::Sol => 12_700,                  // ~$127
-			Asset::Trx => 30,                      // ~$0.3
+			Asset::Eth | Asset::ArbEth => 250_000, // ~$2,500
+			Asset::Dot | Asset::HubDot => 100,     // ~$1
+			Asset::Btc | Asset::Wbtc => 8_000_000, // ~$80,000
+			Asset::Sol => 10_000,                  // ~$100
+			Asset::Trx => 30,                      // ~$0.30
 		};
 
 		Price::from_usd_cents(asset, price_usd_cents)
