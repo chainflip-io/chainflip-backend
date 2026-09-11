@@ -7,7 +7,18 @@ import { price as defaultPrice } from 'shared/setup_swaps';
 // All price feeds are using 8 decimals
 const PRICE_FEED_DECIMALS = 8;
 
-const PRICE_FEED_ASSETS = ['BTC', 'ETH', 'SOL', 'USDC', 'USDT', 'TRX', 'BNB', 'DOT'] as const;
+const PRICE_FEED_ASSETS = [
+  'BTC',
+  'ETH',
+  'SOL',
+  'USDC',
+  'USDT',
+  'WBTC',
+  'CBBTC',
+  'TRX',
+  'BNB',
+  'DOT',
+] as const;
 
 type PriceFeedAsset = (typeof PRICE_FEED_ASSETS)[number];
 
@@ -17,9 +28,11 @@ export const PRICE_FEED_CHAINS_BY_ASSET: Record<PriceFeedAsset, readonly Chain[]
   SOL: ['Ethereum', 'Arbitrum', 'Bsc'],
   USDC: ['Ethereum', 'Arbitrum', 'Bsc'],
   USDT: ['Ethereum', 'Arbitrum', 'Bsc'],
+  WBTC: ['Arbitrum'],
+  CBBTC: ['Ethereum'],
   TRX: ['Bsc'],
-  BNB: ['Bsc'],
-  DOT: ['Bsc'],
+  BNB: ['Ethereum', 'Arbitrum', 'Bsc'],
+  DOT: ['Arbitrum', 'Bsc'],
 };
 
 function isPriceFeedAsset(asset: Asset): asset is PriceFeedAsset {
@@ -144,11 +157,16 @@ export async function updateDefaultPriceFeeds(logger: Logger) {
     updatePriceFeed(logger, 'Ethereum', 'SOL', defaultPrice.get('Sol')!.toString()),
     updatePriceFeed(logger, 'Ethereum', 'USDC', defaultPrice.get('Usdc')!.toString()),
     updatePriceFeed(logger, 'Ethereum', 'USDT', defaultPrice.get('Usdt')!.toString()),
+    updatePriceFeed(logger, 'Ethereum', 'CBBTC', defaultPrice.get('Cbbtc')!.toString()),
+    updatePriceFeed(logger, 'Ethereum', 'BNB', defaultPrice.get('Bnb')!.toString()),
     updatePriceFeed(logger, 'Arbitrum', 'BTC', defaultPrice.get('Btc')!.toString()),
     updatePriceFeed(logger, 'Arbitrum', 'ETH', defaultPrice.get('Eth')!.toString()),
     updatePriceFeed(logger, 'Arbitrum', 'SOL', defaultPrice.get('Sol')!.toString()),
     updatePriceFeed(logger, 'Arbitrum', 'USDC', defaultPrice.get('Usdc')!.toString()),
     updatePriceFeed(logger, 'Arbitrum', 'USDT', defaultPrice.get('Usdt')!.toString()),
+    updatePriceFeed(logger, 'Arbitrum', 'WBTC', defaultPrice.get('Wbtc')!.toString()),
+    updatePriceFeed(logger, 'Arbitrum', 'BNB', defaultPrice.get('Bnb')!.toString()),
+    updatePriceFeed(logger, 'Arbitrum', 'DOT', defaultPrice.get('HubDot')!.toString()),
     updatePriceFeed(logger, 'Bsc', 'BTC', defaultPrice.get('Btc')!.toString()),
     updatePriceFeed(logger, 'Bsc', 'ETH', defaultPrice.get('Eth')!.toString()),
     updatePriceFeed(logger, 'Bsc', 'SOL', defaultPrice.get('Sol')!.toString()),

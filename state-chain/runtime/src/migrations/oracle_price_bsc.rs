@@ -217,12 +217,12 @@ fn oracle_feeds(network: ChainflipNetwork) -> OracleFeeds {
 				H160(hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef")),
 				// Usdt
 				H160(hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d")),
-				// Wbtc (BTC feed)
-				H160(hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f")),
-				// Bnb (ETH feed)
-				H160(hex_literal::hex!("4A679253410272dd5232B3Ff7cF5dbB88f295319")),
-				// Dot (SOL feed)
-				H160(hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F")),
+				// Wbtc
+				H160(hex_literal::hex!("c3e53F4d16Ae77Db1c982e75a937B9f60FE63690")),
+				// Bnb
+				H160(hex_literal::hex!("84eA74d481Ee0A5332c457a4d796187F6Ba67fEB")),
+				// Dot
+				H160(hex_literal::hex!("9E545E3C0baAB3E08CdfD552C960A1050f373042")),
 			],
 			ethereum: [
 				// Btc
@@ -235,10 +235,10 @@ fn oracle_feeds(network: ChainflipNetwork) -> OracleFeeds {
 				H160(hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F")),
 				// Usdt
 				H160(hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef")),
-				// Cbbtc (BTC feed)
-				H160(hex_literal::hex!("322813Fd9A801c5507c9de605d63CEA4f2CE6c44")),
-				// Bnb (ETH feed)
-				H160(hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f")),
+				// Cbbtc
+				H160(hex_literal::hex!("c3e53F4d16Ae77Db1c982e75a937B9f60FE63690")),
+				// Bnb
+				H160(hex_literal::hex!("84eA74d481Ee0A5332c457a4d796187F6Ba67fEB")),
 			],
 			bsc: [
 				// Btc
