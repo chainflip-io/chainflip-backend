@@ -21,7 +21,8 @@ use crate::{
 	},
 	electoral_system_runner::{ElectoralSystemRunner, RunnerStorageAccessTrait},
 	mock::Test,
-	vote_storage, CorruptStorageError, RunnerStorageAccess, UniqueMonotonicIdentifier,
+	vote_storage::{self, ComponentStorageKind, VoteStorage},
+	CorruptStorageError, RunnerStorageAccess, UniqueMonotonicIdentifier,
 };
 use cf_primitives::AuthorityCount;
 use cf_traits::Chainflip;
@@ -209,5 +210,11 @@ impl ElectoralSystemRunner for MockElectoralSystemRunner {
 		_partial_vote: &PartialVoteOf<Self>,
 	) -> Result<(), sp_runtime::DispatchError> {
 		Ok(())
+	}
+
+	fn election_component_storage_kind(
+		_election_identifier: ElectionIdentifierOf<Self>,
+	) -> ComponentStorageKind {
+		<<Self as ElectoralSystemTypes>::VoteStorage as VoteStorage>::component_storage_kind()
 	}
 }

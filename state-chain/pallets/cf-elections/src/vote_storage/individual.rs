@@ -55,7 +55,7 @@ impl<P: Parameter + Member, T: IndividualVoteStorage> VoteStorage for Individual
 			individual_component: Some((properties, partial_vote)),
 		})
 	}
-	fn component_storage_kind(_partial_vote: &Self::PartialVote) -> ComponentStorageKind {
+	fn component_storage_kind() -> ComponentStorageKind {
 		ComponentStorageKind::IndividualOnly
 	}
 	fn components_into_authority_vote<

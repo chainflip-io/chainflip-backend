@@ -120,9 +120,9 @@ pub trait VoteStorage: private::Sealed + Sized {
 		partial_vote: Self::PartialVote,
 	) -> Result<VoteComponents<Self>, CorruptStorageError>;
 
-	/// Which components `partial_vote_into_components` can populate for this partial vote. See
+	/// Which components `partial_vote_into_components` can populate. See
 	/// [`ComponentStorageKind`] for the over/under-reporting contract.
-	fn component_storage_kind(partial_vote: &Self::PartialVote) -> ComponentStorageKind;
+	fn component_storage_kind() -> ComponentStorageKind;
 
 	/// Note: If all components are `None` this *MUST* always return `None`.
 	#[expect(clippy::type_complexity)]
@@ -171,18 +171,29 @@ mod tests {
 	/// `component_storage_kind` is what allows the pallet to skip reading and writing a component
 	/// storage, so it must never report a component as unusable while
 	/// `partial_vote_into_components` still produces one. Over-reporting is merely slower, and so
-	/// is allowed - but each impl below is exact today, and the equality assertions pin that down.
+	/// is allowed - which is what `assert_covers_produced_components` is for.
 	fn assert_component_storage_kind<VS: VoteStorage>(
 		expected: ComponentStorageKind,
 		properties: VS::Properties,
 		partial_vote: VS::PartialVote,
 	) {
-		let declared = VS::component_storage_kind(&partial_vote);
-		assert_eq!(declared, expected);
+		assert_eq!(VS::component_storage_kind(), expected);
 
 		let produced = VS::partial_vote_into_components(properties, partial_vote).unwrap();
-		assert_eq!(produced.bitmap_component.is_some(), declared.has_bitmap());
-		assert_eq!(produced.individual_component.is_some(), declared.has_individual());
+		assert_eq!(produced.bitmap_component.is_some(), expected.has_bitmap());
+		assert_eq!(produced.individual_component.is_some(), expected.has_individual());
+	}
+
+	/// The weaker form, for a storage that over-reports: whatever the vote produces has to be
+	/// covered, but the declared kind may be wider.
+	fn assert_covers_produced_components<VS: VoteStorage>(
+		properties: VS::Properties,
+		partial_vote: VS::PartialVote,
+	) {
+		let declared = VS::component_storage_kind();
+		let produced = VS::partial_vote_into_components(properties, partial_vote).unwrap();
+		assert!(produced.bitmap_component.is_none() || declared.has_bitmap());
+		assert!(produced.individual_component.is_none() || declared.has_individual());
 	}
 
 	#[test]
@@ -209,8 +220,12 @@ mod tests {
 		);
 	}
 
+	/// The composite cannot narrow to a member - the identifier names it, not the storage - so it
+	/// has to cover both, and every member's components must fall inside that. The narrowing is
+	/// tested against the real runtime composites in
+	/// `state_chain_runtime::chainflip::witnessing::bitcoin_elections`.
 	#[test]
-	fn composite_component_storage_kind_follows_the_voted_variant() {
+	fn composite_component_storage_kind_covers_every_member() {
 		type Composite = (
 			Bitmap<u64>,
 			BitmapNoHash<u64>,
@@ -219,24 +234,24 @@ mod tests {
 			Bitmap<u32>,
 		);
 
-		// Each variant must report its own electoral system's components, not the first one's.
-		assert_component_storage_kind::<Composite>(
-			ComponentStorageKind::BitmapOnly,
+		assert_eq!(
+			<Composite as VoteStorage>::component_storage_kind(),
+			ComponentStorageKind::Both
+		);
+
+		assert_covers_produced_components::<Composite>(
 			CompositeVoteProperties::A(()),
 			CompositePartialVote::A(SharedDataHash::of(&7u64)),
 		);
-		assert_component_storage_kind::<Composite>(
-			ComponentStorageKind::BitmapOnly,
+		assert_covers_produced_components::<Composite>(
 			CompositeVoteProperties::B(()),
 			CompositePartialVote::B(7u64),
 		);
-		assert_component_storage_kind::<Composite>(
-			ComponentStorageKind::IndividualOnly,
+		assert_covers_produced_components::<Composite>(
 			CompositeVoteProperties::C(()),
 			CompositePartialVote::C(7u64),
 		);
-		assert_component_storage_kind::<Composite>(
-			ComponentStorageKind::Both,
+		assert_covers_produced_components::<Composite>(
 			CompositeVoteProperties::D(()),
 			CompositePartialVote::D(MonotonicChangeVote {
 				value: SharedDataHash::of(&7u64),
