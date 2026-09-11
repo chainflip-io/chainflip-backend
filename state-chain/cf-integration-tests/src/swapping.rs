@@ -1038,6 +1038,18 @@ fn order_fills_subscription() {
 			assert_eq!(
 				order_fills.fills,
 				vec![
+					OrderFilled::LimitOrder {
+						lp: DORIS,
+						base_asset: Asset::Flip,
+						quote_asset: Asset::Usdc,
+						side: cf_traits::Side::Sell,
+						id: 0.into(),
+						tick: 0,
+						sold: (500_000 * DECIMALS).into(),
+						bought: (500_000 * DECIMALS).into(),
+						fees: 0.into(),
+						remaining: (500_000 * DECIMALS).into()
+					},
 					OrderFilled::RangeOrder {
 						lp: DORIS,
 						base_asset: Asset::Eth,
@@ -1056,18 +1068,6 @@ fn order_fills_subscription() {
 						.map(Into::into),
 						liquidity: LIQUIDITY.into(),
 					},
-					OrderFilled::LimitOrder {
-						lp: DORIS,
-						base_asset: Asset::Flip,
-						quote_asset: Asset::Usdc,
-						side: cf_traits::Side::Sell,
-						id: 0.into(),
-						tick: 0,
-						sold: (500_000 * DECIMALS).into(),
-						bought: (500_000 * DECIMALS).into(),
-						fees: 0.into(),
-						remaining: (500_000 * DECIMALS).into()
-					}
 				]
 			);
 		});
@@ -1119,8 +1119,7 @@ mod swap_simulation {
 					simulated_swap.ingress_fee +
 					simulated_swap.network_fee +
 					simulated_swap.broker_fee,
-				// Small rounding error
-				AMOUNT - 2
+				AMOUNT
 			);
 			assert!(simulated_swap.output > 0);
 
@@ -1131,12 +1130,8 @@ mod swap_simulation {
 				broker_fee_rate * (AMOUNT - simulated_swap.ingress_fee - expected_network_fee);
 			assert_eq!(simulated_swap.broker_fee, expected_broker_fee);
 
-			// Small rounding error
-			let expected_intermediate_amount = AMOUNT -
-				expected_network_fee -
-				expected_broker_fee -
-				simulated_swap.ingress_fee -
-				1;
+			let expected_intermediate_amount =
+				AMOUNT - expected_network_fee - expected_broker_fee - simulated_swap.ingress_fee;
 			assert_eq!(simulated_swap.intermediary, Some(expected_intermediate_amount));
 		});
 	}

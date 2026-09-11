@@ -29,6 +29,14 @@ impl MockPallet for MockLpStatsApi {
 
 const LP_DELTA_USD_VOLUME: &[u8] = b"LP_DELTA_USD_VOLUME";
 
+impl MockLpStatsApi {
+	/// The usd volume recorded against an lp for an asset.
+	pub fn delta_usd_volume(lp: &AccountId, asset: &Asset) -> FixedU128 {
+		Self::get_storage::<(AccountId, Asset), FixedU128>(LP_DELTA_USD_VOLUME, (*lp, *asset))
+			.unwrap_or_else(FixedU128::zero)
+	}
+}
+
 impl LpStatsApi for MockLpStatsApi {
 	type AccountId = AccountId;
 

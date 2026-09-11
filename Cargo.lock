@@ -1577,6 +1577,7 @@ dependencies = [
  "cf-amm-math",
  "cf-primitives",
  "parity-scale-codec",
+ "proptest",
  "rand 0.8.5",
  "scale-info",
  "serde",
