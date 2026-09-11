@@ -38,24 +38,6 @@ use std::{
 };
 use tokio::sync::mpsc;
 
-/// Hard cap on how long a batch is held after its first votes arrive.
-///
-/// Bounded on purpose: an instance whose `filter_votes` request is slow or hung must delay only
-/// its own votes by a block, not every other chain's. Late votes ride the next batch.
-const BATCHING_WINDOW: Duration = Duration::from_millis(MILLISECONDS_PER_BLOCK / 5);
-
-/// How long to wait after the most recent votes before deciding no more are coming.
-///
-/// Every voter ticks off the same block stream at the same offset, so their votes arrive within
-/// a few milliseconds of each other and a short quiet period is enough to catch the whole set.
-/// This is what keeps the common case fast: the voters submit half a block in, timed to land in
-/// the next block, so holding a batch for the full window would eat into that. A quiet period
-/// also adapts to however many instances have something to say, which is not always all of them.
-///
-/// Derived from the block time, like [`BATCHING_WINDOW`], so the two keep their 8:1 ratio if the
-/// block time changes
-const QUIET_PERIOD: Duration = Duration::from_millis(MILLISECONDS_PER_BLOCK / 40);
-
 /// Enough room that a voter is never blocked by the batcher; if it ever fills, votes are dropped
 /// rather than stalling the voter, and the election is simply voted in again next block.
 const CHANNEL_CAPACITY: usize = 64;
@@ -129,10 +111,44 @@ impl VoteBatcher {
 #[derive(Default)]
 struct PendingBatches {
 	batches: Vec<AllElectionInstancesVotes>,
-	/// When the batches go out regardless, set by the first votes gathered.
-	hard_cap: Option<tokio::time::Instant>,
-	/// When to send: `QUIET_PERIOD` after the latest votes, but never past `hard_cap`.
-	deadline: Option<tokio::time::Instant>,
+	/// Present only while batches are gathered.
+	timing: Option<BatchTiming>,
+}
+
+/// When the batches being gathered should go out.
+struct BatchTiming {
+	/// When they go out regardless, set by the first votes gathered.
+	hard_cap: tokio::time::Instant,
+	/// When to send: a quiet period after the latest votes, but never past `hard_cap`.
+	deadline: tokio::time::Instant,
+}
+
+impl BatchTiming {
+	/// Hard cap on how long a batch is held after its first votes arrive.
+	///
+	/// Bounded on purpose: an instance whose `filter_votes` request is slow or hung must delay
+	/// only its own votes by a block, not every other chain's. Late votes ride the next batch.
+	const BATCHING_WINDOW_MILLIS: u64 = MILLISECONDS_PER_BLOCK / 5;
+
+	/// How long to wait after the most recent votes before deciding no more are coming.
+	///
+	/// Every voter ticks off the same block stream at the same offset, so a short quiet period
+	/// catches the whole set. Waiting the full window instead would eat into the half block the
+	/// voters leave for the extrinsic to land.
+	const QUIET_PERIOD_MILLIS: u64 = Self::BATCHING_WINDOW_MILLIS / 8;
+
+	/// Timing for a batch whose first votes arrived at `now`.
+	fn with_default_cap(now: tokio::time::Instant) -> Self {
+		Self {
+			hard_cap: now + Duration::from_millis(Self::BATCHING_WINDOW_MILLIS),
+			deadline: now + Duration::from_millis(Self::QUIET_PERIOD_MILLIS),
+		}
+	}
+
+	/// Move the send to a quiet period after `now`, but no further than the hard cap.
+	fn adjust_deadline(&mut self, now: tokio::time::Instant) {
+		self.deadline = self.hard_cap.min(now + Duration::from_millis(Self::QUIET_PERIOD_MILLIS));
+	}
 }
 
 impl PendingBatches {
@@ -154,18 +170,18 @@ impl PendingBatches {
 			self.batches.push(votes);
 		}
 
-		let cap = *self.hard_cap.get_or_insert(now + BATCHING_WINDOW);
-		self.deadline = Some(cap.min(now + QUIET_PERIOD));
+		self.timing
+			.get_or_insert_with(|| BatchTiming::with_default_cap(now))
+			.adjust_deadline(now);
 	}
 
 	fn deadline(&self) -> Option<tokio::time::Instant> {
-		self.deadline
+		self.timing.as_ref().map(|timing| timing.deadline)
 	}
 
 	/// Take everything gathered and start afresh.
 	fn take(&mut self) -> Vec<AllElectionInstancesVotes> {
-		self.hard_cap = None;
-		self.deadline = None;
+		self.timing = None;
 		core::mem::take(&mut self.batches)
 	}
 }
@@ -287,13 +303,19 @@ mod tests {
 		let mut pending = PendingBatches::default();
 
 		pending.insert(bitcoin_votes(), start);
-		assert_eq!(pending.deadline(), Some(start + QUIET_PERIOD));
+		assert_eq!(
+			pending.deadline(),
+			Some(start + Duration::from_millis(BatchTiming::QUIET_PERIOD_MILLIS))
+		);
 
 		// A second instance reporting later pushes the send out, so batches go only once the
 		// voters have gone quiet - not a fixed time after the first of them.
 		let later = start + Duration::from_millis(50);
 		pending.insert(solana_votes(), later);
-		assert_eq!(pending.deadline(), Some(later + QUIET_PERIOD));
+		assert_eq!(
+			pending.deadline(),
+			Some(later + Duration::from_millis(BatchTiming::QUIET_PERIOD_MILLIS))
+		);
 
 		// Different instances share one batch, so this is still a single extrinsic.
 		let batches = pending.take();
@@ -309,9 +331,13 @@ mod tests {
 
 		// Votes arriving just before the window closes must not extend it: the batch is capped
 		// from when it started, so one slow instance delays only itself.
-		let nearly_up = start + BATCHING_WINDOW - Duration::from_millis(10);
+		let nearly_up = start + Duration::from_millis(BatchTiming::BATCHING_WINDOW_MILLIS) -
+			Duration::from_millis(10);
 		pending.insert(solana_votes(), nearly_up);
-		assert_eq!(pending.deadline(), Some(start + BATCHING_WINDOW));
+		assert_eq!(
+			pending.deadline(),
+			Some(start + Duration::from_millis(BatchTiming::BATCHING_WINDOW_MILLIS))
+		);
 	}
 
 	#[tokio::test]
