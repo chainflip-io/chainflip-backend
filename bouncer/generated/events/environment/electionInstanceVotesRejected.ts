@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { spRuntimeDispatchError } from '../common';
+import { cfTraitsElectionsElectionInstance, spRuntimeDispatchError } from '../common';
 import { defineEvent } from '@chainflip/processor/event';
 
 export const environmentElectionInstanceVotesRejected = z.object({
-  instance: z.number(),
+  instance: cfTraitsElectionsElectionInstance,
   error: spRuntimeDispatchError,
 });
 

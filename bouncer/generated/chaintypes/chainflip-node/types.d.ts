@@ -470,7 +470,7 @@ export type PalletCfEnvironmentCall =
    **/
   | {
       name: 'SubmitElectionsVotes';
-      params: { votes: StateChainRuntimeChainflipAllElectionInstancesVotes };
+      params: { votes: StateChainRuntimeChainflipElectionsAllElectionInstancesVotes };
     }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -593,7 +593,7 @@ export type PalletCfEnvironmentCallLike =
    **/
   | {
       name: 'SubmitElectionsVotes';
-      params: { votes: StateChainRuntimeChainflipAllElectionInstancesVotes };
+      params: { votes: StateChainRuntimeChainflipElectionsAllElectionInstancesVotes };
     }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -875,7 +875,7 @@ export type PalletCfEnvironmentSubmitRuntimeCallSolEncodingType = 'Domain';
 
 export type PalletCfEnvironmentSubmitRuntimeCallEthEncodingType = 'PersonalSign' | 'Eip712';
 
-export type StateChainRuntimeChainflipAllElectionInstancesVotes = {
+export type StateChainRuntimeChainflipElectionsAllElectionInstancesVotes = {
   generic?:
     | Array<[PalletCfElectionsElectionIdentifier, PalletCfElectionsVoteStorageAuthorityVote]>
     | undefined;
@@ -13283,14 +13283,20 @@ export type PalletCfEnvironmentEvent =
   | { name: 'BscInitialized' }
   /**
    * Votes submitted via [`Call::submit_elections_votes`] were rejected by one election
-   * instance. The other instances in the same call are unaffected. `instance` identifies
-   * which one, as defined by the runtime's `ElectionInstances`.
+   * instance. The other instances in the same call are unaffected.
    **/
-  | { name: 'ElectionInstanceVotesRejected'; data: { instance: number; error: DispatchError } }
+  | {
+      name: 'ElectionInstanceVotesRejected';
+      data: { instance: CfTraitsElectionsElectionInstance; error: DispatchError };
+    }
   /**
    * A configuration item for this pallet was updated by governance.
    **/
   | { name: 'PalletConfigUpdated'; data: { update: PalletCfEnvironmentPalletConfigUpdate } };
+
+export type CfTraitsElectionsElectionInstance =
+  | { type: 'Generic' }
+  | { type: 'Chain'; value: CfPrimitivesChainsForeignChain };
 
 /**
  * The `Event` enum of this pallet
