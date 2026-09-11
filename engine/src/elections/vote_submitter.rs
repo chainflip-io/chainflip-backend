@@ -115,6 +115,8 @@ impl<StateChainClient> VoteSubmitter<StateChainClient> {
 				tracing::warn!("Dropping votes, vote batching task is not keeping up: {error}");
 			}
 		} else {
+			// TODO: Use block hash you got this vote tasks details from as the based of the mortal
+			// of the extrinsic
 			self.state_chain_client
 				.submit_signed_extrinsic::<RuntimeCall>(
 					pallet_cf_elections::Call::<Runtime, Instance>::vote {
