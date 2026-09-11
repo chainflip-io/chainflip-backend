@@ -285,6 +285,8 @@ macro_rules! handle_key_ceremony_report {
 }
 
 #[frame_support::pallet]
+// The `#[pallet::validate_unsigned]` deprecation warning expands to a unit `let` binding.
+#[expect(clippy::let_unit_value)]
 pub mod pallet {
 	use super::*;
 	use cf_chains::instances::PalletInstanceAlias;
