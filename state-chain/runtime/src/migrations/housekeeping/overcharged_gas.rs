@@ -82,7 +82,8 @@ const REFUNDS: &[(AssetAmount, [u8; 20])] = &[
 ///
 /// (amount in trxUSDT base units, account id)
 const CREDITS: &[(AssetAmount, [u8; 32])] = &[
-	// TODO Case COM-507 — pending.
+	// Case COM-507 — 91.368448 trxUSDT overcharged on a 51,311.693462 USDT_TRON withdrawal.
+	(91_368_448, hex!("a01c278b9262bdea45f3c33efe71b06ad3a747263273c796efd9192b70851626")),
 ];
 
 /// Everything owed across both tables, in trxUSDT base units.
@@ -110,15 +111,15 @@ const _: () = assert!(
 	"TRX_TO_SWAP no longer covers the refunds; resize it against the current TRX price."
 );
 
-/// The three entries above total 413.360603 trxUSDT. At the TRX price of $0.3386 on 2026-09-11
-/// that is ~1,221 TRX, so 2,000 leaves room for slippage and for the price to fall by a third
-/// between this upgrade and the swap executing a few blocks later. Anything left over stays in the
-/// protocol's trxUSDT balance.
+/// The tables above total 504.729051 trxUSDT. At the TRX price of $0.3386 on 2026-09-11 that is
+/// ~1,491 TRX, so 2,500 leaves room for slippage and for the price to fall by a third between this
+/// upgrade and the swap executing a few blocks later. Anything left over stays in the protocol's
+/// trxUSDT balance.
 ///
 /// Kept deliberately close to the requirement rather than maximally generous: this is drawn out of
 /// the gas budget that reconciliation uses to repay validators, so over-swapping has a cost of its
 /// own.
-const TRX_TO_SWAP: AssetAmount = 2_000_000_000;
+const TRX_TO_SWAP: AssetAmount = 2_500_000_000;
 
 /// Internal account credited with the swapped trxUSDT, following the precedent set by the
 /// `deploy_stuck_eth_channels` migration.
