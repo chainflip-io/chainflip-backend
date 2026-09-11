@@ -48,7 +48,7 @@
 use crate::*;
 use cf_chains::{ForeignChain, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount};
-use cf_traits::{SwapOutputAction, SwapRequestHandler, SwapRequestType};
+use cf_traits::{BalanceApi, SwapOutputAction, SwapRequestHandler, SwapRequestType};
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use hex_literal::hex;
 use pallet_cf_ingress_egress::{EgressIdCounter, FetchOrTransfer, ScheduledEgressFetchOrTransfer};
@@ -76,6 +76,40 @@ const REFUNDS: &[(AssetAmount, [u8; 20])] = &[
 /// optimistically scheduled transfers are covered without the migration having to price the swap.
 /// Any excess simply stays in the protocol's trxUSDT balance.
 ///
+/// Overcharges owed to accounts that hold an on-chain balance, credited in trxUSDT rather than
+/// transferred. This is the exact inverse of the debit the withdrawal took, needs no destination
+/// address, and leaves the holder free to withdraw to whichever chain they want.
+///
+/// (amount in trxUSDT base units, account id)
+const CREDITS: &[(AssetAmount, [u8; 32])] = &[
+	// TODO Case COM-507 — pending.
+];
+
+/// Everything owed across both tables, in trxUSDT base units.
+const fn total_owed() -> AssetAmount {
+	let mut total = 0;
+	let mut i = 0;
+	while i < REFUNDS.len() {
+		total += REFUNDS[i].0;
+		i += 1;
+	}
+	let mut i = 0;
+	while i < CREDITS.len() {
+		total += CREDITS[i].0;
+		i += 1;
+	}
+	total
+}
+
+/// Fails the build if the top-up swap would not cover the tables even with TRX at $0.25, so that
+/// adding a refund without resizing the swap cannot slip through. Both amounts are in 1e-6 units,
+/// so the TRX needed is the trxUSDT owed divided by the price. Evaluated at compile time — the
+/// assert is a build error, never a runtime panic.
+const _: () = assert!(
+	TRX_TO_SWAP >= total_owed() * 4,
+	"TRX_TO_SWAP no longer covers the refunds; resize it against the current TRX price."
+);
+
 /// The three entries above total 413.360603 trxUSDT. At the TRX price of $0.3386 on 2026-09-11
 /// that is ~1,221 TRX, so 2,000 leaves room for slippage and for the price to fall by a third
 /// between this upgrade and the swap executing a few blocks later. Anything left over stays in the
@@ -91,6 +125,10 @@ const TRX_TO_SWAP: AssetAmount = 2_000_000_000;
 ///
 /// TODO: confirm which account this should be before shipping.
 const SWAP_OUTPUT_ACCOUNT: &str = "cFLW4PhasdivcJKuA2BGw9Y9dz7EFwks82K8Z6U3MfCk8WcNW";
+
+/// Transfers this module appends to the Tron queue. Checked by the housekeeping post-upgrade hook.
+#[cfg(feature = "try-runtime")]
+pub const TRON_EGRESSES: u32 = REFUNDS.len() as u32;
 
 pub struct Migration;
 
@@ -118,6 +156,20 @@ impl OnRuntimeUpgrade for Migration {
 				amount,
 				hex::encode(address),
 				egress_id,
+			);
+		}
+
+		for (amount, account_id) in CREDITS {
+			pallet_cf_asset_balances::Pallet::<Runtime>::credit_account(
+				&AccountId::new(*account_id),
+				Asset::TrxUsdt,
+				*amount,
+			);
+
+			log::info!(
+				"⛽ Crediting {} trxUSDT of overcharged gas to {:?}.",
+				amount,
+				AccountId::new(*account_id),
 			);
 		}
 

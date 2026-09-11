@@ -74,6 +74,14 @@ const COM_371_DEPOSIT_ADDRESS: [u8; 32] =
 const COM_371_DESTINATION: [u8; 32] =
 	hex!("03e69ee1b4f77ef79322365aa663dfdbbac8b6146578f227c67fe98e445c5148");
 
+/// Queue entries this module appends. COM-477 only fetches, because the LP is credited on chain;
+/// COM-371 fetches and then transfers. Checked by the housekeeping post-upgrade hook, so a failed
+/// address derivation shows up as a delta mismatch rather than passing silently.
+#[cfg(feature = "try-runtime")]
+pub const ASSETHUB_EGRESSES: u32 = 1;
+#[cfg(feature = "try-runtime")]
+pub const SOLANA_EGRESSES: u32 = 2;
+
 pub struct Migration;
 
 impl OnRuntimeUpgrade for Migration {

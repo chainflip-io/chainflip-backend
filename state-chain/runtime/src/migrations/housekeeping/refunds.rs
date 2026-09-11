@@ -29,13 +29,7 @@ use cf_chains::assets::{eth::Asset as EthAsset, tron::Asset as TronAsset};
 use cf_traits::EgressApi;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use hex_literal::hex;
-#[cfg(feature = "try-runtime")]
-use pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer;
 use sp_core::H160;
-#[cfg(feature = "try-runtime")]
-use sp_runtime::DispatchError;
-#[cfg(feature = "try-runtime")]
-use sp_std::vec::Vec;
 
 /// (asset, amount in the asset's base units, destination address)
 const ETH_REFUNDS: &[(EthAsset, u128, [u8; 20])] = &[
@@ -68,6 +62,12 @@ const TRON_REFUNDS: &[(TronAsset, u128, [u8; 20])] = &[
 	// Case COM-476 — 5,777 USDT sent to the vault without a memo, returned to the sender.
 	(TronAsset::TrxUsdt, 5_777_000_000, hex!("a6d5e8e7e2833835043933db69e49c1a47efe1a6")),
 ];
+
+/// Egresses this module appends, per chain. Checked by the housekeeping post-upgrade hook.
+#[cfg(feature = "try-runtime")]
+pub const ETHEREUM_EGRESSES: u32 = ETH_REFUNDS.len() as u32;
+#[cfg(feature = "try-runtime")]
+pub const TRON_EGRESSES: u32 = TRON_REFUNDS.len() as u32;
 
 pub struct Migration;
 
@@ -124,45 +124,5 @@ impl OnRuntimeUpgrade for Migration {
 		}
 
 		Weight::zero()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let eth = ScheduledEgressFetchOrTransfer::<Runtime, EthereumInstance>::decode_len()
-			.unwrap_or(0) as u32;
-		let tron = ScheduledEgressFetchOrTransfer::<Runtime, TronInstance>::decode_len()
-			.unwrap_or(0) as u32;
-		let mut buf = Vec::with_capacity(8);
-		buf.extend_from_slice(&eth.to_be_bytes());
-		buf.extend_from_slice(&tron.to_be_bytes());
-		Ok(buf)
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let [eth_before, tron_before] = state
-			.chunks_exact(4)
-			.map(|c| u32::from_be_bytes(c.try_into().expect("chunks_exact(4) yields 4 bytes")))
-			.collect::<Vec<_>>()[..]
-		else {
-			return Err(DispatchError::Other("bad pre_upgrade state"));
-		};
-
-		let eth_after = ScheduledEgressFetchOrTransfer::<Runtime, EthereumInstance>::decode_len()
-			.unwrap_or(0) as u32;
-		let tron_after = ScheduledEgressFetchOrTransfer::<Runtime, TronInstance>::decode_len()
-			.unwrap_or(0) as u32;
-
-		assert_eq!(
-			eth_after,
-			eth_before + ETH_REFUNDS.len() as u32,
-			"unexpected Ethereum egress queue delta",
-		);
-		assert_eq!(
-			tron_after,
-			tron_before + TRON_REFUNDS.len() as u32,
-			"unexpected Tron egress queue delta",
-		);
-		Ok(())
 	}
 }

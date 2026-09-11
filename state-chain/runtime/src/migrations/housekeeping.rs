@@ -14,12 +14,44 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use crate::{Runtime, VERSION};
+#[cfg(feature = "try-runtime")]
+use cf_chains::instances::{AssethubInstance, EthereumInstance, SolanaInstance, TronInstance};
 use cf_runtime_utilities::genesis_hashes;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+#[cfg(feature = "try-runtime")]
+use pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
+
+/// Pending egress queue lengths for every chain the refunds touch.
+///
+/// All three refund modules append to these queues, so the deltas can only be checked once they
+/// have all run — an individual module cannot verify its own in isolation.
+#[cfg(feature = "try-runtime")]
+fn egress_queue_lengths() -> [u32; 4] {
+	[
+		ScheduledEgressFetchOrTransfer::<Runtime, EthereumInstance>::decode_len().unwrap_or(0)
+			as u32,
+		ScheduledEgressFetchOrTransfer::<Runtime, TronInstance>::decode_len().unwrap_or(0) as u32,
+		ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::decode_len().unwrap_or(0) as u32,
+		ScheduledEgressFetchOrTransfer::<Runtime, AssethubInstance>::decode_len().unwrap_or(0)
+			as u32,
+	]
+}
+
+/// What each chain's queue is expected to grow by, summed across the three modules.
+#[cfg(feature = "try-runtime")]
+const EXPECTED_EGRESS_DELTAS: [u32; 4] = [
+	refunds::ETHEREUM_EGRESSES,
+	refunds::TRON_EGRESSES + overcharged_gas::TRON_EGRESSES,
+	stuck_channels::SOLANA_EGRESSES,
+	stuck_channels::ASSETHUB_EGRESSES,
+];
+
+#[cfg(feature = "try-runtime")]
+const CHAIN_NAMES: [&str; 4] = ["Ethereum", "Tron", "Solana", "Assethub"];
 
 pub mod liveness_election_state;
 pub mod overcharged_gas;
@@ -79,7 +111,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) &&
 			VERSION.spec_version == REFUNDS_SPEC_VERSION
 		{
-			refunds::Migration::pre_upgrade()
+			Ok(egress_queue_lengths().iter().flat_map(|len| len.to_be_bytes()).collect())
 		} else {
 			Ok(Default::default())
 		}
@@ -87,11 +119,29 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) &&
-			VERSION.spec_version == REFUNDS_SPEC_VERSION
+		if !matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) ||
+			VERSION.spec_version != REFUNDS_SPEC_VERSION
 		{
-			refunds::Migration::post_upgrade(state)?;
+			return Ok(());
 		}
+
+		if state.len() != 16 {
+			return Err(DispatchError::Other("bad pre_upgrade state"));
+		}
+
+		let after = egress_queue_lengths();
+		for (i, chunk) in state.chunks_exact(4).enumerate() {
+			let before = u32::from_be_bytes(
+				chunk.try_into().map_err(|_| DispatchError::Other("bad pre_upgrade state"))?,
+			);
+			assert_eq!(
+				after[i],
+				before + EXPECTED_EGRESS_DELTAS[i],
+				"unexpected {} egress queue delta",
+				CHAIN_NAMES[i],
+			);
+		}
+
 		Ok(())
 	}
 }
