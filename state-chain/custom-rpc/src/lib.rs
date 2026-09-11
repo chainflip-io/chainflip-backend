@@ -3769,18 +3769,14 @@ where
 				return api.cf_oracle_prices(hash, base_and_quote_asset).map_err(CfApiError::from);
 			}
 
-			let historical_query = if let Some((base_asset, quote_asset)) = base_and_quote_asset {
-				let Ok(base_asset) = try_migrate_to_historical_type(v20300, base_asset) else {
-					return Ok(Vec::new());
-				};
-				let Ok(quote_asset) = try_migrate_to_historical_type(v20300, quote_asset) else {
-					return Ok(Vec::new());
-				};
-
-				Some((base_asset, quote_asset))
-			} else {
-				None
-			};
+			let historical_query = try_migrate_to_historical_type(v20300, base_and_quote_asset)
+				.map_err(|_| {
+					CfApiError::ErrorObject(ErrorObject::owned(
+						ErrorCode::InvalidParams.code(),
+						"The base or quote asset is not supported at the requested block.",
+						None::<()>,
+					))
+				})?;
 
 			Ok::<_, CfApiError>(if version < 11 {
 				#[expect(deprecated)]
