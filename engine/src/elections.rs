@@ -66,7 +66,7 @@ pub struct Voter<
 }
 
 impl<
-		Instance: state_chain_runtime::chainflip::BatchedInstance + Send + Sync + 'static,
+		Instance: state_chain_runtime::chainflip::elections::BatchedInstance + Send + Sync + 'static,
 		StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi + Send + Sync + 'static,
 		VoterClient: CompositeVoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner> + Clone + Send + Sync + 'static,
 	> Voter<Instance, StateChainClient, VoterClient>

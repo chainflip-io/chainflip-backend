@@ -227,7 +227,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type TransactionPayments = pallet_transaction_payment::ChargeTransactionPayment<Self>;
 	type GetTransactionPayments = GetTransactionPayments;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
-	type ElectionInstances = chainflip::AllElectionInstances;
+	type ElectionInstances = chainflip::elections::AllElectionInstances;
 }
 
 parameter_types! {

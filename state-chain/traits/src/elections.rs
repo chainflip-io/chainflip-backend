@@ -35,24 +35,6 @@ pub struct VoterContext<T: Chainflip> {
 	pub block_number: BlockNumberFor<T>,
 }
 
-/// Names one `pallet-cf-elections` instance: the chain-agnostic one, or the one for a chain.
-#[derive(
-	Clone,
-	Copy,
-	Debug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-)]
-pub enum ElectionInstance {
-	Generic,
-	Chain(ForeignChain),
-}
-
 /// Check that the origin is a validator, and gather the parts of [`VoterContext`] that are shared
 /// across elections instances.
 ///
@@ -70,6 +52,24 @@ pub fn authorise_voter<T: Chainflip>(
 		authority_index,
 		block_number: frame_system::Pallet::<T>::block_number(),
 	}))
+}
+
+/// Names one `pallet-cf-elections` instance: the chain-agnostic one, or the one for a chain.
+#[derive(
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+pub enum ElectionInstance {
+	Generic,
+	Chain(ForeignChain),
 }
 
 /// The set of `pallet-cf-elections` instances a validator votes in, as one unit.
