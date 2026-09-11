@@ -16,23 +16,23 @@
 
 //! Recovery for deposits that are still sitting at a deposit channel rather than in a vault.
 //!
-//! These cannot be egressed directly: the funds have to be fetched out of the channel first, and
-//! only then transferred on to the user.
+//! These cannot be paid out directly: the funds have to be fetched out of the channel first.
 //!
 //! Currently covers COM-477 — DOT sent to Assethub channel 14661791-Assethub-14 via extrinsic
 //! 0xd9d24bc9de34c6d4a5eba986ecf9bcfc20027cb50086bfac428ef4225eab49df and never witnessed, because
-//! of the Assethub witnessing bug fixed in 2.3. The funds never left the channel, so a fetch plus
-//! an egress is all the recovery needs and it rides fine on 2.2.
+//! of the Assethub witnessing bug fixed in 2.3. The funds never left the channel, so fetching them
+//! and crediting the LP reproduces what witnessing would have done, and rides fine on 2.2.
 //!
 //! COM-371 (15.39031019 SOL at expired Solana channel 14120216-Solana-118758) belongs here too and
-//! is still blocked on a destination address. Solana deposit channels are not recycled and stay
-//! under our control across rotations, so the same shape applies once that is confirmed.
+//! is still blocked on confirmation of who is being repaid. It needs a fetch followed by an egress
+//! rather than an on-chain credit, since it is a swap channel with an external destination. Solana
+//! deposit channels are not recycled and stay under our control across rotations, so the fetch
+//! half works the same way.
 
 use crate::*;
-use cf_chains::{
-	assets::hub::Asset as HubAsset, dot::PolkadotAccountId, hub::calculate_derived_address,
-};
-use cf_traits::EgressApi;
+use cf_chains::{assets::hub::Asset as HubAsset, hub::calculate_derived_address};
+use cf_primitives::Asset;
+use cf_traits::BalanceApi;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use hex_literal::hex;
 use pallet_cf_ingress_egress::{FetchOrTransfer, ScheduledEgressFetchOrTransfer};
@@ -44,11 +44,13 @@ const COM_477_CHANNEL_ID: u64 = 14;
 /// Balance of the deposit channel net of the fee the `balances.transfer_all` paid, in Planck.
 const COM_477_AMOUNT: u128 = 19_999_691_329_918;
 
-/// The DOT refund address registered by the channel's LP,
-/// cFHsUq1uK5opJudRDcztAViXfhnskxZcR2kNHfe5KsD3Loq2y —
-/// 15DQWnuLk3QbeYnUE7R5d35u3JXgPt6VxoJtZxa2xYHcQZue.
-const COM_477_REFUND_ADDRESS: [u8; 32] =
-	hex!("ba67085bbd451dbe92af133bea17b84d5b14537d2cba1726d31cf7f0e701c25a");
+/// The channel's LP.
+///
+/// This was an LP deposit channel, so the recovery is what witnessing would have done had it
+/// worked: credit the LP on-chain. They can then withdraw to their registered DOT refund address
+/// or anywhere else, as normal.
+const COM_477_LP_ACCOUNT: [u8; 32] =
+	hex!("00000000000000000000000026d211574963fa0fc0dff0211caa20b614063de6");
 
 pub struct Migration;
 
@@ -71,22 +73,17 @@ impl OnRuntimeUpgrade for Migration {
 			amount: COM_477_AMOUNT,
 		});
 
-		match <AssethubIngressEgress as EgressApi<_>>::schedule_egress(
-			HubAsset::HubDot,
+		pallet_cf_asset_balances::Pallet::<Runtime>::credit_account(
+			&AccountId::new(COM_477_LP_ACCOUNT),
+			Asset::HubDot,
 			COM_477_AMOUNT,
-			PolkadotAccountId::from_aliased(COM_477_REFUND_ADDRESS),
-			None,
-		) {
-			Ok(d) => log::info!(
-				"📦 COM-477: fetching channel {} and refunding {} Planck: egress_id={:?} after_fees={} fee={}",
-				COM_477_CHANNEL_ID,
-				COM_477_AMOUNT,
-				d.egress_id,
-				d.egress_amount,
-				d.fee_withheld,
-			),
-			Err(e) => log::error!("📦 COM-477: failed to schedule the DOT refund: {:?}", e),
-		}
+		);
+
+		log::info!(
+			"📦 COM-477: fetching Assethub channel {} and crediting {} Planck to the LP.",
+			COM_477_CHANNEL_ID,
+			COM_477_AMOUNT,
+		);
 
 		Weight::zero()
 	}

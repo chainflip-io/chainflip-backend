@@ -59,14 +59,14 @@ const TRON_REFUNDS: &[(TronAsset, u128, [u8; 20])] = &[
 	// those funds were converted to TRX and sit in `WithheldAssets`, so they are repaid via a
 	// swap rather than a direct egress. See [`super::overcharged_gas`].
 	//
-	// Amounts below are confirmed and the funds are in the vault; each is blocked only on a
-	// destination address.
-	//
-	// TODO Case COM-366 — pending.
-	//
-	// TODO Case COM-408 — pending.
-	//
-	// TODO Case COM-476 — pending.
+	// Case COM-366 — 100 USDT that reached the vault without a note.
+	(TronAsset::TrxUsdt, 100_000_000, hex!("b9ef9e40f4b9f8799e9e23b071286f12bda1daa4")),
+	// Case COM-408 — two stuck Tron swaps, kept as separate entries so each transfer maps to
+	// the transaction it repays.
+	(TronAsset::TrxUsdt, 1_000_000_000, hex!("b9ef9e40f4b9f8799e9e23b071286f12bda1daa4")),
+	(TronAsset::TrxUsdt, 500_000_000, hex!("b9ef9e40f4b9f8799e9e23b071286f12bda1daa4")),
+	// Case COM-476 — 5,777 USDT sent to the vault without a memo, returned to the sender.
+	(TronAsset::TrxUsdt, 5_777_000_000, hex!("a6d5e8e7e2833835043933db69e49c1a47efe1a6")),
 ];
 
 pub struct Migration;
