@@ -451,7 +451,7 @@ fn burn() {
 				(amount, Position::default())
 			);
 			// Burning an order in its entirety removes it.
-			assert_matches!(pool_state.position::<SD>(&lp(0), tick), Ok(None));
+			assert_eq!(pool_state.position::<SD>(&lp(0), tick), None);
 		}
 		{
 			// Burning one lp's order leaves the others at that price alone.
@@ -741,7 +741,7 @@ fn check_fragmented_book_fills<SD: SwapDirection>(small_order_amount: u128, inpu
 			*bought += fill.bought_amount;
 			*count += 1;
 			assert_eq!(fill.remaining_amount, *original - *sold);
-			match pool_state.position::<SD>(&fill.lp, tick).unwrap() {
+			match pool_state.position::<SD>(&fill.lp, tick) {
 				Some(position) => {
 					assert_eq!(position.amount, fill.remaining_amount);
 					assert_eq!(position.original_amount, *original);
@@ -851,7 +851,7 @@ fn fills_conserve_liquidity_for_arbitrary_books() {
 		assert_eq!(sold + left, minted, "every unit is either still on the book or was bought");
 
 		for fill in &fills {
-			match assert_ok!(pool_state.position::<BaseToQuote>(&fill.lp, fill.tick)) {
+			match pool_state.position::<BaseToQuote>(&fill.lp, fill.tick) {
 				Some(position) => assert_eq!(position.amount, fill.remaining_amount),
 				None => assert!(fill.remaining_amount.is_zero(), "a live order was dropped"),
 			}
@@ -907,8 +907,8 @@ fn filled_orders_are_removed() {
 	assert_eq!(fills.len(), 2);
 	assert!(fills.iter().all(|fill| fill.remaining_amount.is_zero() && fill.tick == near));
 
-	assert_matches!(pool_state.position::<QuoteToBase>(&lp(0), near), Ok(None));
-	assert_matches!(pool_state.position::<QuoteToBase>(&lp(1), near), Ok(None));
+	assert_eq!(pool_state.position::<QuoteToBase>(&lp(0), near), None);
+	assert_eq!(pool_state.position::<QuoteToBase>(&lp(1), near), None);
 	assert_eq!(pool_state.liquidity::<QuoteToBase>(), vec![(far, 1000.into())]);
 	assert_eq!(pool_state.current_sqrt_price::<QuoteToBase>(), Some(SqrtPrice::from_tick(far)));
 }

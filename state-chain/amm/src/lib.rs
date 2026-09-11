@@ -467,7 +467,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		order: Side,
 		tick: Tick,
-	) -> Result<Option<limit_orders::Position>, limit_orders::PositionError> {
+	) -> Option<limit_orders::Position> {
 		match order {
 			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
 			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),

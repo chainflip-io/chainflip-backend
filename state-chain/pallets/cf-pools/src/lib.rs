@@ -2372,8 +2372,6 @@ impl<T: Config> Pallet<T> {
 						let position = pool
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
-							.ok()
-							.flatten()
 							.or_else(|| {
 								// The cache is expected to be in sync with the pool. Report and
 								// skip.

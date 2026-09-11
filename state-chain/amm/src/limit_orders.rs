@@ -461,20 +461,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Ok((burnt_amount, position_info))
 	}
 
-	/// Returns the position for the given lp at the given tick, or `None` if there isn't one.
+	/// Returns the position for the given lp at the given tick, if there is one.
 	///
 	/// This function never panics.
 	pub(super) fn position<SD: SwapDirection>(
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<Option<Position>, PositionError> {
-		let sqrt_price = Self::validate_tick(tick)?;
+	) -> Option<Position> {
+		// An invalid tick cannot hold a position either, so it is reported the same way.
+		let sqrt_price = Self::validate_tick(tick).ok()?;
 
-		Ok(self.orders[!SD::INPUT_SIDE]
+		self.orders[!SD::INPUT_SIDE]
 			.get(&sqrt_price)
 			.and_then(|orders| orders.get(lp))
-			.cloned())
+			.cloned()
 	}
 
 	/// Returns all the assets available for swaps in a given direction, grouped by tick.
@@ -1002,7 +1003,6 @@ pub mod legacy_support {
 mod migration_tests {
 	use super::{legacy_support::*, *};
 	use crate::common::Pairs;
-	use cf_utilities::{assert_matches, assert_ok};
 
 	type Lp = cf_primitives::AccountId;
 	type OldPoolState = PoolStateV10<Lp>;
@@ -1073,7 +1073,7 @@ mod migration_tests {
 		assert!(proceeds.is_empty(), "nothing has been bought, so nothing is owed");
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 1000.into())]);
 		assert_eq!(
-			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
+			state.position::<QuoteToBase>(&lp(1), 0),
 			Some(Position { amount: 1000.into(), original_amount: 1000.into() })
 		);
 	}
@@ -1113,11 +1113,11 @@ mod migration_tests {
 		);
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 375.into())]);
 		assert_eq!(
-			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
+			state.position::<QuoteToBase>(&lp(1), 0),
 			Some(Position { amount: 125.into(), original_amount: 1000.into() })
 		);
 		assert_eq!(
-			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
+			state.position::<QuoteToBase>(&lp(2), 0),
 			Some(Position { amount: 250.into(), original_amount: 2000.into() })
 		);
 	}
@@ -1141,7 +1141,7 @@ mod migration_tests {
 			}]
 		);
 		assert!(state.liquidity::<QuoteToBase>().is_empty());
-		assert_matches!(state.position::<QuoteToBase>(&lp(1), 0), Ok(None));
+		assert_eq!(state.position::<QuoteToBase>(&lp(1), 0), None);
 	}
 
 	#[test]
@@ -1170,7 +1170,7 @@ mod migration_tests {
 		// The order from the current incarnation is untouched.
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 400.into())]);
 		assert_eq!(
-			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
+			state.position::<QuoteToBase>(&lp(2), 0),
 			Some(Position { amount: 400.into(), original_amount: 400.into() })
 		);
 	}
