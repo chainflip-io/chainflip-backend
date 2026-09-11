@@ -30,23 +30,24 @@ use crate::{
 
 // ----------- identity migrations -------------
 
+#[macro_export]
 macro_rules! impl_identity_migrations {
 	($($ty:ty, )*) => {
+		$(
+			impl $crate::migrations::basics::IsHistoricalType for $ty {
+				type GetCurrentType = Self;
+			}
 
-        #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-        impl IsHistoricalType for Type {
-            type GetCurrentType = Self;
-        }
-        #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-        impl HasGenericVariant for Type {
-            type GenericType = Type;
-            type MigrationFromGeneric = IdentityMigration;
-        }
-        #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-        impl HasChangelog for Type {
-            type if_unspecified = IdentityMigration;
-        }
-    };
+			impl $crate::migrations::basics::HasGenericVariant for $ty {
+				type GenericType = Self;
+				type MigrationFromGeneric = $crate::migrations::basics::IdentityMigration;
+			}
+
+			impl $crate::migrations::HasChangelog for $ty {
+				type if_unspecified = $crate::migrations::basics::IdentityMigration;
+			}
+		)*
+	};
 }
 
 impl_identity_migrations! {(), bool, u16, u32, u64, u128, u8, Never, }
