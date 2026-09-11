@@ -30,7 +30,7 @@ pub use ethabi::{
 	ethereum_types::{H160, H256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
-use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
+use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{cmp::min, str};
@@ -77,7 +77,7 @@ impl Chain for Bsc {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,

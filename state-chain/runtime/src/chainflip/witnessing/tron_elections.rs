@@ -59,7 +59,6 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
 use sp_core::{Decode, Encode, Get};
-use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
 pub type TronElectoralSystemRunner = CompositeRunner<
@@ -88,7 +87,7 @@ pub const TRON_MAINNET_SAFETY_MARGIN: u32 = 19;
 pub const TRON_MAINNET_SAFETY_BUFFER: u32 = 25;
 pub const TRON_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 16;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, Debug, TypeInfo)]
 pub enum TronElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<<Tron as Chain>::ChainBlockNumber> },
 }

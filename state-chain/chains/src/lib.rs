@@ -49,7 +49,7 @@ use cf_primitives::{
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
-	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
+	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub},
 		BoundedVec, DispatchError,
@@ -683,7 +683,7 @@ impl<C: Chain> TransactionMetadata<C> for () {
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
 #[derive(
-	RuntimeDebug,
+	Debug,
 	Copy,
 	Clone,
 	PartialEq,
@@ -710,7 +710,7 @@ impl<C: Chain> BenchmarkValue for FetchAssetParams<C> {
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
-#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
 	pub amount: <C as Chain>::ChainAmount,
@@ -743,14 +743,14 @@ pub trait ChainEnvironment<
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
-#[derive(RuntimeDebug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SetAggKeyWithAggKeyError {
 	Failed,
 	FinalTransactionExceededMaxLength,
 	DispatchError(DispatchError),
 }
 
-#[derive(RuntimeDebug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SetGovKeyWithAggKeyError {
 	FailedToBuildAPICall,
 	VaultAccountNotSet,

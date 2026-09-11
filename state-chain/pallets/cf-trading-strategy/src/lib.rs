@@ -122,7 +122,7 @@ pub enum TradingStrategy {
 
 #[derive(
 	Clone,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEq,
 	Eq,
 	Encode,

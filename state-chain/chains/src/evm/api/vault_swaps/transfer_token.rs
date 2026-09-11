@@ -18,14 +18,13 @@ use crate::evm::{api::EvmCall, tokenizable::Tokenizable, Address as EvmAddress};
 use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
 use ethabi::Token;
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to ERC20's 'transfer'
 /// function for ERC20 asset transfers.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub struct TransferToken {
 	/// The destination address to receive the tokens.
 	to: EvmAddress,

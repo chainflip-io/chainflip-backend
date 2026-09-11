@@ -22,7 +22,7 @@ use cf_traits::{
 	mocks::offence_reporting::MockOffenceReporter, AccountRoleRegistry, CallDispatchFilter,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
-use frame_support::{derive_impl, pallet_prelude::RuntimeDebug, parameter_types};
+use frame_support::{derive_impl, parameter_types};
 use frame_system as system;
 use scale_info::TypeInfo;
 
@@ -62,7 +62,7 @@ parameter_types! {
 	Clone,
 	PartialEq,
 	Eq,
-	RuntimeDebug,
+	Debug,
 )]
 pub struct MockCallFilter;
 

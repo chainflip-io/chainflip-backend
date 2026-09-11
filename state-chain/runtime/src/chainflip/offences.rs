@@ -18,7 +18,6 @@ use crate::Runtime;
 use cf_chains::{ForeignChain, Get};
 use cf_traits::{offence_reporting::OffenceReporter, Chainflip};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
-use frame_support::pallet_prelude::RuntimeDebug;
 use pallet_cf_elections::electoral_systems::liveness::OnCheckComplete;
 use pallet_cf_reputation::OffenceList;
 use pallet_grandpa::EquivocationOffence;
@@ -33,7 +32,7 @@ use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData};
 	Copy,
 	PartialEq,
 	Eq,
-	RuntimeDebug,
+	Debug,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
