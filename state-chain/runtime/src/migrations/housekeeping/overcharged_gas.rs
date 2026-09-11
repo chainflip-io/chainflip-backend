@@ -76,11 +76,15 @@ const REFUNDS: &[(AssetAmount, [u8; 20])] = &[
 /// optimistically scheduled transfers are covered without the migration having to price the swap.
 /// Any excess simply stays in the protocol's trxUSDT balance.
 ///
-/// The three entries above total 413.360603 trxUSDT, so 5,000 TRX covers them at any TRX price
-/// above ~$0.083. Anything left over stays in the protocol's trxUSDT balance.
+/// The three entries above total 413.360603 trxUSDT. At the TRX price of $0.3386 on 2026-09-11
+/// that is ~1,221 TRX, so 2,000 leaves room for slippage and for the price to fall by a third
+/// between this upgrade and the swap executing a few blocks later. Anything left over stays in the
+/// protocol's trxUSDT balance.
 ///
-/// TODO: sanity-check against the TRX price before shipping.
-const TRX_TO_SWAP: AssetAmount = 5_000_000_000;
+/// Kept deliberately close to the requirement rather than maximally generous: this is drawn out of
+/// the gas budget that reconciliation uses to repay validators, so over-swapping has a cost of its
+/// own.
+const TRX_TO_SWAP: AssetAmount = 2_000_000_000;
 
 /// Internal account credited with the swapped trxUSDT, following the precedent set by the
 /// `deploy_stuck_eth_channels` migration.
