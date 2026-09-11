@@ -209,17 +209,7 @@ async fn watch_election_vote_batching_disabled<
 			)
 			.await
 		{
-			Ok(disabled) => {
-				let enabled = !disabled;
-				// Only report transitions - this runs every block and is otherwise silent.
-				if batching_enabled.swap(enabled, Ordering::Relaxed) != enabled {
-					tracing::info!(
-						"Election vote batching {} by governance at block {}",
-						if enabled { "enabled" } else { "disabled" },
-						block.number,
-					);
-				}
-			},
+			Ok(disabled) => batching_enabled.store(!disabled, Ordering::Relaxed),
 			Err(error) => {
 				// Leave the flag as it was: a failed read says nothing about what governance
 				// wants, and guessing either way is worse than carrying on.
