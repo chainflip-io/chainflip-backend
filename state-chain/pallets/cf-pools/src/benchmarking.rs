@@ -27,6 +27,8 @@ use frame_support::{
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 
+mod swaps;
+
 fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 	let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
 		AccountRole::LiquidityProvider,
@@ -45,6 +47,55 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 #[benchmarks]
 mod benchmarks {
 	use super::*;
+
+	// Exploratory measurements: pin c/a/v with the runner, rather than fitting a slope to
+	// categorical parameters. Excluded from normal weight generation by `extra`.
+	#[benchmark(extra)]
+	fn swap_single_leg(
+		n: Linear<1, 10_000>,
+		c: Linear<0, 10>,
+		a: Linear<0, 3>,
+		v: Linear<1, 1_000>,
+	) {
+		let fixture = swaps::Fixture::<T>::new(n, c, a, v);
+		let result;
+
+		#[block]
+		{
+			result = Pallet::<T>::swap_single_leg(fixture.from, fixture.to, fixture.input);
+		}
+
+		fixture.verify(result);
+	}
+
+	#[test]
+	fn swap_configuration_matrix() {
+		for n in [1, 12, 37] {
+			for c in 0..=10 {
+				for a in 0..=3 {
+					for v in [1, 5, 10] {
+						crate::mock::new_test_ext().execute_with(|| {
+							_swap_single_leg::<crate::mock::Test>(n, c, a, v, true);
+						});
+					}
+				}
+			}
+		}
+	}
+
+	#[test]
+	fn swap_large_books() {
+		for c in [2, 7, 9, 10] {
+			for a in 0..=3 {
+				crate::mock::new_test_ext().execute_with(|| {
+					_swap_single_leg::<crate::mock::Test>(10_000, c, a, 5, true);
+				});
+			}
+		}
+		crate::mock::new_test_ext().execute_with(|| {
+			_swap_single_leg::<crate::mock::Test>(100_000, 10, 0, 5, true);
+		});
+	}
 
 	// Create some orders so the cost of decoding the pool, and of sweeping the caller's range
 	// orders, is taken into account.

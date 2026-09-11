@@ -16,6 +16,16 @@ on:
         required: false
         type: string
         default: "10"
+      swap_order_counts:
+        description: "Order counts for the swap sweep (space-separated)."
+        required: false
+        type: string
+        default: "1 12 100 1000 10000"
+      swap_order_usd:
+        description: "USD values per order for the swap sweep (space-separated, e.g. 5 10)."
+        required: false
+        type: string
+        default: "10"
       benchmark_machine_spec:
         description: "What machine Spec the benchmark will run on?"
         required: true
@@ -56,8 +66,7 @@ jobs:
         "${{ github.event.inputs.benchmark_machine_spec }}",
       ]
     needs: [deploy_benchmarks_runner]
-    continue-on-error: true
-    timeout-minutes: 40
+    timeout-minutes: 180
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -91,19 +100,76 @@ jobs:
           search_artifacts: true
           check_artifacts: true
 
-      - name: Update permissions on chainflip-node 🚓
-        run: chmod +x ./chainflip-node
+      - name: Prepare benchmark binary 🚓
+        run: |
+          chmod +x ./chainflip-node
+          echo "SWAP_BENCHMARK_OUTPUT=$RUNNER_TEMP/swap-benchmarks-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
 
       - name: Run benchmarks 📏
+        env:
+          BENCHMARK_STEPS: ${{ inputs.steps }}
+          BENCHMARK_REPETITIONS: ${{ inputs.repetitions }}
         run: >
           ./state-chain/scripts/benchmark-all.sh
           --binary ./chainflip-node
-          --steps ${{ github.event.inputs.steps }}
-          --repetitions ${{ github.event.inputs.repetitions }}
+          --steps "$BENCHMARK_STEPS"
+          --repeat "$BENCHMARK_REPETITIONS"
 
-      - name: Cleanup 🧹
-        run: >
-          rm ./chainflip-node
+      - name: Run swap configuration benchmarks 📏
+        id: swap-benchmarks
+        # Preserve the weight PR and partial measurements, then fail the job below.
+        continue-on-error: true
+        timeout-minutes: 120
+        env:
+          BENCHMARK_COMMIT: ${{ steps.resolve-sha.outputs.full_sha }}
+          BENCHMARK_REPETITIONS: ${{ inputs.repetitions }}
+          SWAP_ORDER_COUNTS: ${{ inputs.swap_order_counts }}
+          SWAP_ORDER_USD: ${{ inputs.swap_order_usd }}
+        run: |
+          ./chainflip-node benchmark pallet --chain=dev-3 --list --extra \
+            --pallet=pallet_cf_pools \
+            > "$RUNNER_TEMP/swap-benchmarks-list.csv"
+          if ! grep -q '^pallet_cf_pools, swap_single_leg$' "$RUNNER_TEMP/swap-benchmarks-list.csv"; then
+            echo "::notice::swap_single_leg benchmark is unavailable in binary $BENCHMARK_COMMIT"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+          read -r -a order_counts <<< "$SWAP_ORDER_COUNTS"
+          read -r -a order_usd <<< "$SWAP_ORDER_USD"
+          python3 -B state-chain/scripts/benchmark-swaps.py \
+            --binary ./chainflip-node --binary-commit "$BENCHMARK_COMMIT" \
+            --output-dir "$SWAP_BENCHMARK_OUTPUT" \
+            --orders "${order_counts[@]}" --order-usd "${order_usd[@]}" \
+            --repeat "$BENCHMARK_REPETITIONS"
+
+      - name: Summarize swap benchmarks 📊
+        if: always() && steps.swap-benchmarks.outcome != 'skipped'
+        env:
+          BENCHMARK_COMMIT: ${{ steps.resolve-sha.outputs.full_sha }}
+          BENCHMARK_PROFILE: ${{ inputs.profile }}
+          BENCHMARK_MACHINE: ${{ inputs.benchmark_machine_spec }}
+          SWAP_BENCHMARK_AVAILABLE: ${{ steps.swap-benchmarks.outputs.available }}
+        run: |
+          {
+            printf 'Binary commit: %s · Profile: %s · Hardware: %s\n\n' \
+              "$BENCHMARK_COMMIT" "$BENCHMARK_PROFILE" "$BENCHMARK_MACHINE"
+            if [ -f "$SWAP_BENCHMARK_OUTPUT/summary.md" ]; then
+              cat "$SWAP_BENCHMARK_OUTPUT/summary.md"
+            elif [ "$SWAP_BENCHMARK_AVAILABLE" = false ]; then
+              echo 'Swap measurements skipped: the selected binary does not contain this benchmark.'
+            else
+              echo 'Swap measurements did not complete. Inspect the step log and any partial artifacts.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload swap measurements 📦
+        if: always() && steps.swap-benchmarks.outputs.available == 'true'
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        with:
+          name: swap-benchmarks-${{ steps.resolve-sha.outputs.full_sha }}-${{ inputs.profile }}-${{ inputs.benchmark_machine_spec }}
+          path: ${{ env.SWAP_BENCHMARK_OUTPUT }}
+          if-no-files-found: warn
 
       - name: Setup Git 🛠️
         uses: ./.github/actions/setup-git
@@ -111,6 +177,9 @@ jobs:
           ssh-private-key: ${{ secrets.CF_GITHUB_BOT_SSH_PRIVATE_KEY }}
 
       - name: Analyse benchmark weight changes 📊
+        env:
+          BENCHMARK_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SWAP_BENCHMARK_STATUS: ${{ steps.swap-benchmarks.outputs.available == 'false' && 'unavailable in selected binary' || steps.swap-benchmarks.outcome }}
         run: |
           ANALYSIS=$(git diff -U50 -- 'state-chain/pallets/*/src/weights.rs' | python3 ./state-chain/scripts/analyze-benchmark-weights.py) \
             || ANALYSIS="_Weight analysis could not be generated._"
@@ -119,6 +188,8 @@ jobs:
             echo "This pull request was opened automatically. Close it if you think it was opened in error."
             echo ""
             echo "$ANALYSIS"
+            echo ""
+            echo "Swap measurements: **$SWAP_BENCHMARK_STATUS**. [Results and artifacts]($BENCHMARK_RUN_URL)."
             echo "PR_BODY_EOF"
           } >> "$GITHUB_ENV"
 
@@ -128,13 +199,25 @@ jobs:
           base: ${{ github.ref_name }}
           title: "[AUTOMATED] Benchmark results"
           commit-message: "[AUTOMATED] Benchmarking results."
+          add-paths: state-chain/pallets/*/src/weights.rs
           body: ${{ env.PR_BODY }}
           branch: auto/benchmark-results/${{ inputs.commit_sha }}
           delete-branch: true
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
 
+      - name: Check swap benchmark outcome
+        if: steps.swap-benchmarks.outcome == 'failure'
+        run: |
+          echo '::error::Swap benchmarks failed; partial results are in the run artifacts.'
+          exit 1
+
+      - name: Cleanup 🧹
+        if: always()
+        run: rm -f ./chainflip-node
+
   destroy_benchmarks_runner:
     needs: [run_benchmarks]
+    if: always()
     uses: ./.github/workflows/_110_deploy_benchmarks_runner.yml
     with:
       command: destroy
