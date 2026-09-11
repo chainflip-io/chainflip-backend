@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.13] - 2026-09-11
+
+### Fixes
+
+- Circuit breaker for fee price estimates: a price estimate derived by probing the pools is discarded in favour of the hard-coded reference price if it deviates from it by more than 4x. Prevents fees being charged from implausible prices when a pool is thin or manipulated ([#6821](https://github.com/chainflip-io/chainflip-backend/issues/6821)).
+- Refreshed the hard-coded reference prices used for fee estimation. These are the fallback when a pool cannot be probed, and the reference the circuit breaker above compares against.
+
 ## [2.2.12] - 2026-09-04
 
 ### Fixes
