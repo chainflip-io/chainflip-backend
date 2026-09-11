@@ -56,7 +56,7 @@ use std::sync::Arc;
 use subxt::events::Phase;
 
 use crate::elections::{
-	vote_batcher::VoteBatcher,
+	vote_submitter::VoteSubmitter,
 	voter_api::{CompositeVoter, VoterApi},
 };
 
@@ -378,7 +378,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: DotCachingClient,
 	state_chain_client: Arc<StateChainClient>,
-	vote_batcher: VoteBatcher,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -397,7 +397,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
-			let vote_batcher = vote_batcher.clone();
+			let vote_submitter = vote_submitter.clone();
 			async move {
 				task_scope::task_scope(|scope| {
 					async {
@@ -413,7 +413,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Assethub",
-							vote_batcher,
+							vote_submitter,
 						)
 						.continuously_vote()
 						.await;

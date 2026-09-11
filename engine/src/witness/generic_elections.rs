@@ -16,7 +16,7 @@
 
 use crate::{
 	elections::{
-		vote_batcher::VoteBatcher,
+		vote_submitter::VoteSubmitter,
 		voter_api::{CompositeVoter, VoterApi},
 	},
 	evm::{
@@ -209,7 +209,7 @@ pub async fn start<StateChainClient>(
 	arb_client: EvmCachingClient<EvmRpcSigningClient>,
 	eth_client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
-	vote_batcher: VoteBatcher,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 ) -> Result<()>
 where
 	StateChainClient:
@@ -223,7 +223,7 @@ where
 			let arb_client = arb_client.clone();
 			let eth_client = eth_client.clone();
 			let state_chain_client = state_chain_client.clone();
-			let vote_batcher = vote_batcher.clone();
+			let vote_submitter = vote_submitter.clone();
 			async move {
 				task_scope::task_scope(|scope| {
 					async {
@@ -238,7 +238,7 @@ where
 							)),
 							None,
 							"GenericElections",
-							vote_batcher,
+							vote_submitter,
 						)
 						.continuously_vote()
 						.await;

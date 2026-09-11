@@ -16,7 +16,7 @@
 
 use crate::{
 	elections::{
-		vote_batcher::VoteBatcher,
+		vote_submitter::VoteSubmitter,
 		voter_api::{CompositeVoter, VoterApi},
 	},
 	evm::event::{Event, EvmEventSource},
@@ -435,7 +435,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
 	state_chain_client: Arc<StateChainClient>,
-	vote_batcher: VoteBatcher,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -497,7 +497,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
-			let vote_batcher = vote_batcher.clone();
+			let vote_submitter = vote_submitter.clone();
 			let deposit_channel_config = deposit_channel_config.clone();
 			let vault_deposit_config = vault_deposit_config.clone();
 			let key_manager_config = key_manager_config.clone();
@@ -525,7 +525,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Tron",
-							vote_batcher,
+							vote_submitter,
 						)
 						.continuously_vote()
 						.await;

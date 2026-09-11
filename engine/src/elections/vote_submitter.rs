@@ -14,8 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//! Collects the votes the per-instance [`Voter`](super::Voter) tasks produce each block and
-//! submits them as a single `Environment::submit_elections_votes` extrinsic.
+//! Submits the votes the per-instance [`Voter`](super::Voter) tasks produce each block, gathering
+//! a block's worth into a single `Environment::submit_elections_votes` extrinsic.
 //!
 //! Each elections instance has its own `Voter`, and each used to submit its own extrinsic - so a
 //! validator sent one per instance per block, paying a full signed extrinsic's overhead
@@ -28,7 +28,10 @@ use cf_utilities::{task_scope::Scope, UnendingStream};
 use engine_sc_client::{
 	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 };
-use state_chain_runtime::{chainflip::AllElectionInstancesVotes, Runtime};
+use state_chain_runtime::{
+	chainflip::{AllElectionInstancesVotes, BatchedInstance},
+	Runtime, RuntimeCall,
+};
 use std::{
 	sync::{
 		atomic::{AtomicBool, Ordering},
@@ -38,26 +41,37 @@ use std::{
 };
 use tokio::sync::mpsc;
 
-/// Enough room that a voter is never blocked by the batcher; if it ever fills, votes are dropped
-/// rather than stalling the voter, and the election is simply voted in again next block.
+/// Enough room that a voter is never blocked by the batching task; if it ever fills, votes are
+/// dropped rather than stalling the voter, and the election is simply voted in again next block.
 const CHANNEL_CAPACITY: usize = 64;
 
-/// Handle the per-instance voters use to hand their votes over for batching.
-#[derive(Clone)]
-pub struct VoteBatcher {
+/// Handle the per-instance voters use to hand their votes over for submission.
+pub struct VoteSubmitter<StateChainClient> {
 	votes_sender: mpsc::Sender<AllElectionInstancesVotes>,
 	batching_enabled: Arc<AtomicBool>,
+	state_chain_client: Arc<StateChainClient>,
 }
 
-impl VoteBatcher {
+impl<StateChainClient> Clone for VoteSubmitter<StateChainClient> {
+	fn clone(&self) -> Self {
+		Self {
+			votes_sender: self.votes_sender.clone(),
+			batching_enabled: self.batching_enabled.clone(),
+			state_chain_client: self.state_chain_client.clone(),
+		}
+	}
+}
+
+impl<StateChainClient> VoteSubmitter<StateChainClient> {
 	/// Spawn the batching task and return a handle to it.
-	pub fn start<
-		StateChainClient: SignedExtrinsicApi + StorageApi + ChainApi + Send + Sync + 'static,
-	>(
+	pub fn start(
 		scope: &Scope<'_, anyhow::Error>,
 		state_chain_client: Arc<StateChainClient>,
-	) -> Self {
-		let (votes, receiver) = mpsc::channel(CHANNEL_CAPACITY);
+	) -> Self
+	where
+		StateChainClient: SignedExtrinsicApi + StorageApi + ChainApi + Send + Sync + 'static,
+	{
+		let (votes_sender, receiver) = mpsc::channel(CHANNEL_CAPACITY);
 		let batching_enabled = Arc::new(AtomicBool::new(true));
 
 		scope.spawn({
@@ -68,32 +82,47 @@ impl VoteBatcher {
 				Ok(())
 			}
 		});
-		scope.spawn(async move {
-			run(receiver, state_chain_client).await;
-			Ok(())
+		scope.spawn({
+			let state_chain_client = state_chain_client.clone();
+			async move {
+				run(receiver, state_chain_client).await;
+				Ok(())
+			}
 		});
 
-		Self { votes_sender: votes, batching_enabled }
+		Self { votes_sender, batching_enabled, state_chain_client }
 	}
 
-	/// Whether votes should be batched, as of the last block the watcher saw.
+	/// Submit one instance's votes.
 	///
-	/// Callers that get `false` must submit through the per-instance
-	/// `pallet_cf_elections::Call::vote` extrinsic instead. Falling back to a batch carrying a
-	/// single instance would not do: the point of the switch is to leave the batched dispatch
-	/// path entirely, which is what makes it useful if that path is the thing at fault.
-	pub fn batching_enabled(&self) -> bool {
-		self.batching_enabled.load(Ordering::Relaxed)
-	}
-
-	/// Hand one instance's votes to the batcher. `instance` names it, for logging only.
+	/// With batching off the votes go out from here as their own per-instance
+	/// `pallet_cf_elections::Call::vote`: a single-instance batch would not do, because the point
+	/// of the switch is to leave the batched path entirely.
 	///
-	/// Never blocks the caller: if the batcher has fallen far enough behind to fill the channel,
-	/// these votes are dropped and the election is voted in again on the next block, which is
-	/// preferable to holding up the voter that produced them.
-	pub fn send(&self, instance: &'static str, votes: AllElectionInstancesVotes) {
-		if let Err(error) = self.votes_sender.try_send(votes) {
-			tracing::warn!("Dropping {instance} votes, vote batcher is not keeping up: {error}");
+	/// Batched votes never block the caller - if the channel is full they are dropped, and the
+	/// election is voted in again next block.
+	pub async fn submit<Instance>(
+		&self,
+		votes: pallet_cf_elections::AuthorityVotes<Runtime, Instance>,
+	) where
+		Instance: BatchedInstance,
+		Runtime: pallet_cf_elections::Config<Instance>,
+		pallet_cf_elections::Call<Runtime, Instance>: Into<RuntimeCall>,
+		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
+	{
+		if self.batching_enabled.load(Ordering::Relaxed) {
+			if let Err(error) = self.votes_sender.try_send(Instance::votes(votes)) {
+				tracing::warn!("Dropping votes, vote batching task is not keeping up: {error}");
+			}
+		} else {
+			self.state_chain_client
+				.submit_signed_extrinsic::<RuntimeCall>(
+					pallet_cf_elections::Call::<Runtime, Instance>::vote {
+						authority_votes: Box::new(votes),
+					}
+					.into(),
+				)
+				.await;
 		}
 	}
 }
@@ -271,7 +300,6 @@ async fn submit<StateChainClient: SignedExtrinsicApi + Send + Sync + 'static>(
 mod tests {
 	use super::*;
 	use frame_support::instances::{Instance3, Instance5, Instance7};
-	use state_chain_runtime::chainflip::BatchedInstance;
 	use std::collections::BTreeMap;
 
 	/// One instance's votes, as its `Voter` would hand them over.
