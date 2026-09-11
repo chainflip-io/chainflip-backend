@@ -361,6 +361,22 @@ export const cfChainsSolApiSolanaGovCall = z.discriminatedUnion('__kind', [
   }),
 ]);
 
+export const cfPrimitivesChainsForeignChain = simpleEnum([
+  'Ethereum',
+  'Polkadot',
+  'Bitcoin',
+  'Arbitrum',
+  'Solana',
+  'Assethub',
+  'Tron',
+  'Bsc',
+]);
+
+export const cfTraitsElectionsElectionInstance = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('Generic') }),
+  z.object({ __kind: z.literal('Chain'), value: cfPrimitivesChainsForeignChain }),
+]);
+
 export const palletCfEnvironmentPalletConfigUpdate = z.object({
   __kind: z.literal('ElectionVoteBatching'),
   disabled: z.boolean(),
@@ -394,17 +410,6 @@ export const palletCfFlipPalletConfigUpdate = z.discriminatedUnion('__kind', [
     value: palletCfFlipOnChargeTransactionFeeScalingRateConfig,
   }),
   z.object({ __kind: z.literal('SetFeeRewardsActivationEpoch'), value: z.number() }),
-]);
-
-export const cfPrimitivesChainsForeignChain = simpleEnum([
-  'Ethereum',
-  'Polkadot',
-  'Bitcoin',
-  'Arbitrum',
-  'Solana',
-  'Assethub',
-  'Tron',
-  'Bsc',
 ]);
 
 export const cfTraitsFundingSource = z.discriminatedUnion('__kind', [

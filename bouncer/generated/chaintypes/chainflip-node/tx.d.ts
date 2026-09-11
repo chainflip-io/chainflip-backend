@@ -34,7 +34,7 @@ import type {
   CfChainsSolApiSolanaGovCall,
   PalletCfEnvironmentSubmitRuntimeCallChainflipExtrinsic,
   PalletCfEnvironmentSubmitRuntimeCallSignatureData,
-  StateChainRuntimeChainflipAllElectionInstancesVotes,
+  StateChainRuntimeChainflipElectionsAllElectionInstancesVotes,
   PalletCfEnvironmentPalletConfigUpdate,
   PalletCfFlipPalletConfigUpdate,
   PalletCfFundingRedemptionAmount,
@@ -786,15 +786,17 @@ export interface ChainTx<
      * Record a validator's election votes across every `pallet-cf-elections` instance in
      * one extrinsic.
      *
-     * @param {StateChainRuntimeChainflipAllElectionInstancesVotes} votes
+     * @param {StateChainRuntimeChainflipElectionsAllElectionInstancesVotes} votes
      **/
     submitElectionsVotes: GenericTxCall<
-      (votes: StateChainRuntimeChainflipAllElectionInstancesVotes) => ChainSubmittableExtrinsic<
+      (
+        votes: StateChainRuntimeChainflipElectionsAllElectionInstancesVotes,
+      ) => ChainSubmittableExtrinsic<
         {
           pallet: 'Environment';
           palletCall: {
             name: 'SubmitElectionsVotes';
-            params: { votes: StateChainRuntimeChainflipAllElectionInstancesVotes };
+            params: { votes: StateChainRuntimeChainflipElectionsAllElectionInstancesVotes };
           };
         },
         ChainKnownTypes

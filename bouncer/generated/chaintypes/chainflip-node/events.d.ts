@@ -22,6 +22,7 @@ import type {
   SolPrimAddress,
   SolPrimDigest,
   CfChainsSolApiSolanaGovCall,
+  CfTraitsElectionsElectionInstance,
   PalletCfEnvironmentPalletConfigUpdate,
   PalletCfFlipImbalancesImbalanceSource,
   PalletCfFlipPalletConfigUpdate,
@@ -371,13 +372,12 @@ export interface ChainEvents extends GenericChainEvents {
 
     /**
      * Votes submitted via [`Call::submit_elections_votes`] were rejected by one election
-     * instance. The other instances in the same call are unaffected. `instance` identifies
-     * which one, as defined by the runtime's `ElectionInstances`.
+     * instance. The other instances in the same call are unaffected.
      **/
     ElectionInstanceVotesRejected: GenericPalletEvent<
       'Environment',
       'ElectionInstanceVotesRejected',
-      { instance: number; error: DispatchError }
+      { instance: CfTraitsElectionsElectionInstance; error: DispatchError }
     >;
 
     /**
