@@ -27,7 +27,9 @@ use frame_support::{
 	migrations::VersionedMigration as FrameVersionedMigration, traits::UncheckedOnRuntimeUpgrade,
 	weights::Weight,
 };
-use pallet_cf_elections::{InitialStateOf, UniqueMonotonicIdentifier};
+use pallet_cf_elections::InitialStateOf;
+#[cfg(feature = "try-runtime")]
+use pallet_cf_elections::UniqueMonotonicIdentifier;
 use sp_core::H160;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
@@ -47,30 +49,12 @@ impl UncheckedOnRuntimeUpgrade for Migration {
 		let initial =
 			new_initial_state(pallet_cf_environment::ChainflipNetworkName::<Runtime>::get());
 
-		pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime>::put(
-			initial.unsynchronised_state,
-		);
-		pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime>::put(
-			initial.unsynchronised_settings,
-		);
-
-		let _ = pallet_cf_elections::SharedDataReferenceCount::<Runtime>::clear(u32::MAX, None);
-		let _ = pallet_cf_elections::SharedData::<Runtime>::clear(u32::MAX, None);
-		let _ = pallet_cf_elections::BitmapComponents::<Runtime>::clear(u32::MAX, None);
-		let _ = pallet_cf_elections::IndividualComponents::<Runtime>::clear(u32::MAX, None);
-		let _ =
-			pallet_cf_elections::ElectoralUnsynchronisedStateMap::<Runtime>::clear(u32::MAX, None);
-		let _ = pallet_cf_elections::ElectionProperties::<Runtime>::clear(u32::MAX, None);
-		let _ = pallet_cf_elections::ElectionState::<Runtime>::clear(u32::MAX, None);
-		let _ = pallet_cf_elections::ElectionConsensusHistory::<Runtime>::clear(u32::MAX, None);
-		let _ =
-			pallet_cf_elections::ElectionConsensusHistoryUpToDate::<Runtime>::clear(u32::MAX, None);
-		let _ = pallet_cf_elections::ElectoralSettings::<Runtime>::clear(u32::MAX, None);
-
-		pallet_cf_elections::ElectoralSettings::<Runtime>::insert(
-			UniqueMonotonicIdentifier::default(),
-			initial.settings,
-		);
+		pallet_cf_elections::Pallet::<Runtime>::reset();
+		if let Err(error) = pallet_cf_elections::Pallet::<Runtime>::internally_initialize(initial) {
+			cf_runtime_utilities::log_or_panic!(
+				"Failed to initialize generic oracle elections after reset: {error:?}"
+			);
+		}
 
 		log::info!("Reset generic oracle elections with the BSC price source enabled");
 		Weight::zero()
@@ -107,6 +91,27 @@ impl UncheckedOnRuntimeUpgrade for Migration {
 		frame_support::ensure!(
 			election_storage_is_empty(),
 			"Old oracle elections were not cleared"
+		);
+		frame_support::ensure!(
+			pallet_cf_elections::NextElectionIdentifier::<Runtime>::get() ==
+				UniqueMonotonicIdentifier::default(),
+			"Oracle election identifiers were not reset"
+		);
+		frame_support::ensure!(
+			pallet_cf_elections::ContributingAuthorities::<Runtime>::iter_keys()
+				.next()
+				.is_none(),
+			"Contributing oracle authorities were not cleared"
+		);
+		frame_support::ensure!(
+			pallet_cf_elections::Status::<Runtime>::get() ==
+				Some(pallet_cf_elections::ElectionPalletStatus::Running),
+			"Generic oracle elections were not initialized"
+		);
+		frame_support::ensure!(
+			pallet_cf_elections::SharedDataReferenceLifetime::<Runtime>::get() ==
+				expected.shared_data_reference_lifetime,
+			"Oracle shared data reference lifetime was not initialized"
 		);
 		frame_support::ensure!(
 			pallet_cf_elections::Pallet::<Runtime>::on_chain_storage_version() ==

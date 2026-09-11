@@ -1845,6 +1845,29 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/// Returns this instance to an uninitialized state, retaining its storage version.
+		/// Intended for migrations: clearing all entries has unbounded cost and does not decode
+		/// values that may have been encoded with an older runtime.
+		pub fn reset() {
+			SharedDataReferenceLifetime::<T, I>::kill();
+			NextElectionIdentifier::<T, I>::kill();
+			ElectoralUnsynchronisedSettings::<T, I>::kill();
+			ElectoralUnsynchronisedState::<T, I>::kill();
+			Status::<T, I>::kill();
+
+			let _ = SharedDataReferenceCount::<T, I>::clear(u32::MAX, None);
+			let _ = SharedData::<T, I>::clear(u32::MAX, None);
+			let _ = BitmapComponents::<T, I>::clear(u32::MAX, None);
+			let _ = IndividualComponents::<T, I>::clear(u32::MAX, None);
+			let _ = ElectoralUnsynchronisedStateMap::<T, I>::clear(u32::MAX, None);
+			let _ = ElectoralSettings::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionProperties::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionState::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionConsensusHistory::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionConsensusHistoryUpToDate::<T, I>::clear(u32::MAX, None);
+			let _ = ContributingAuthorities::<T, I>::clear(u32::MAX, None);
+		}
+
 		/// This function allows other pallets to initialize an Elections pallet, instead of needing
 		/// to initialize it via a governance extrinsic or at genesis.
 		pub fn internally_initialize(

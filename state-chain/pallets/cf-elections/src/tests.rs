@@ -20,10 +20,45 @@ use cf_primitives::AuthorityCount;
 use electoral_system::ConsensusStatus;
 use electoral_system_runner::RunnerStorageAccessTrait;
 use electoral_systems::mock::{BehaviourUpdate, MockElectoralSystemRunner};
-use frame_support::traits::OriginTrait;
+use frame_support::{
+	assert_ok,
+	storage::unhashed,
+	traits::{GetStorageVersion, OriginTrait, StorageInfoTrait},
+};
 use mock::Test;
 use std::collections::BTreeMap;
 use vote_storage::AuthorityVote;
+
+#[test]
+fn reset_clears_all_storage_without_decoding_values() {
+	new_test_ext().execute_with(|| {
+		let storage_version = StorageVersion::new(9);
+		storage_version.put::<Elections>();
+		System::set_block_number(42);
+
+		let keys = Elections::storage_info()
+			.into_iter()
+			.map(|info| {
+				let mut key = info.prefix;
+				if info.max_values != Some(1) {
+					// Map keys and values may no longer decode after a runtime upgrade.
+					key.extend_from_slice(b"old election key");
+				}
+				unhashed::put_raw(&key, &[0xff]);
+				key
+			})
+			.collect::<Vec<_>>();
+
+		Elections::reset();
+
+		for key in keys {
+			assert!(!unhashed::exists(&key), "Storage was not cleared: {key:?}");
+		}
+		assert_eq!(Elections::on_chain_storage_version(), storage_version);
+		assert_eq!(System::block_number(), 42);
+		assert_ok!(Elections::do_try_state());
+	});
+}
 
 #[test]
 fn votes_not_provided_until_shared_data_is_provided() {
