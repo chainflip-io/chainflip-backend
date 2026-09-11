@@ -246,6 +246,9 @@ decl_runtime_apis!(
 			account_id: AccountId32,
 		) -> before_version_19::AssetMap<AssetAmount>;
 		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
+		#[changed_in(21)]
+		fn cf_withdrawal_restrictions();
+		fn cf_withdrawal_restrictions(account_id: AccountId32) -> WithdrawalRestrictions;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
 		fn cf_failed_call_ethereum(

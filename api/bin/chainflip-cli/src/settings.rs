@@ -232,6 +232,10 @@ pub enum CliCommand {
 		#[clap(help = "The Ethereum address you wish to bind your account to")]
 		eth_address: String,
 	},
+	#[clap(
+		about = "Shows what restricts where this account can withdraw to: the withdrawal whitelist, 		         any registered refund addresses, and a bound broker withdrawal address"
+	)]
+	GetWithdrawalRestrictions,
 	#[clap(about = "Shows the redeem address your account is bound to")]
 	GetBoundRedeemAddress,
 	#[clap(about = "Shows the executor address your account is bound to")]
@@ -492,6 +496,13 @@ mod tests {
 			)) => assert_eq!(account, AccountId32::from_str(account_ss58).unwrap()),
 			other => panic!("unexpected command: {other:?}"),
 		}
+
+		// `get-withdrawal-restrictions` is deliberately not under `lp`: brokers have withdrawal
+		// restrictions too.
+		let opts =
+			CLICommandLineOptions::try_parse_from(["chainflip-cli", "get-withdrawal-restrictions"])
+				.unwrap();
+		assert!(matches!(opts.cmd, CliCommand::GetWithdrawalRestrictions));
 
 		// `lp update-whitelist remove-account <ss58>`
 		let opts = CLICommandLineOptions::try_parse_from([

@@ -20,8 +20,10 @@ use crate::settings::{
 };
 use anyhow::{Context, Result};
 use api::{
-	lp::LpApi, primitives::EpochIndex, queries::QueryApi, AccountId32, GovernanceApi, KeyPair,
-	OperatorApi, StateChainApi, ValidatorApi,
+	lp::LpApi,
+	primitives::{AccountRole, EpochIndex},
+	queries::QueryApi,
+	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
 use cf_chains::evm::Address as EthereumAddress;
@@ -34,6 +36,10 @@ use chainflip_api::{
 	Asset, BrokerApi,
 };
 use clap::Parser;
+use custom_rpc::{
+	RpcActiveWithdrawalWhitelist, RpcPendingWhitelistUpdate, RpcRefundAddress, RpcWhitelistUpdate,
+	RpcWithdrawalRestrictions,
+};
 use futures::FutureExt;
 use serde::Serialize;
 use std::{
@@ -227,6 +233,9 @@ async fn run_cli() -> Result<()> {
 				},
 				BindExecutorAddress { eth_address } => {
 					bind_executor_address(api.operator_api(), &eth_address).await?;
+				},
+				GetWithdrawalRestrictions => {
+					get_withdrawal_restrictions(api.query_api()).await?;
 				},
 				GetBoundRedeemAddress => {
 					get_bound_redeem_address(api.query_api()).await?;
@@ -435,6 +444,87 @@ async fn bind_executor_address(api: Arc<impl OperatorApi + Sync>, eth_address: &
 	let tx_hash = api.bind_executor_address(eth_address).await?;
 
 	println!("Account bound to executor address {eth_address}, transaction hash: `{tx_hash:#x}`.");
+
+	Ok(())
+}
+
+fn describe_destination(destination: &WhitelistDestinationRpc) -> String {
+	match destination {
+		WhitelistDestinationRpc::InternalAccount(account) => format!("account {account}"),
+		WhitelistDestinationRpc::ExternalAddress { chain, address } =>
+			format!("{chain} address {address}"),
+	}
+}
+
+async fn get_withdrawal_restrictions(api: QueryApi) -> Result<()> {
+	let RpcWithdrawalRestrictions {
+		account_role,
+		whitelist,
+		pending,
+		refund_addresses,
+		bound_broker_withdrawal_address,
+	} = api.get_withdrawal_restrictions(None, None).await?;
+
+	// Matched exhaustively on purpose: a new role should force a decision about its label here
+	// rather than silently printing something unhelpful.
+	println!(
+		"Account role: {}",
+		match account_role {
+			Some(AccountRole::LiquidityProvider) => "liquidity provider",
+			Some(AccountRole::Broker) => "broker",
+			Some(AccountRole::Validator) => "validator",
+			Some(AccountRole::Operator) => "operator",
+			Some(AccountRole::Unregistered) | None => "unregistered",
+		}
+	);
+
+	match whitelist {
+		Some(RpcActiveWithdrawalWhitelist { timelock_secs, allowed }) => {
+			println!("\nWithdrawal whitelist timelock: {timelock_secs} seconds.");
+			if allowed.is_empty() {
+				println!("The whitelist is empty.");
+			} else {
+				println!("Whitelisted destinations:");
+				for destination in &allowed {
+					println!("  {}", describe_destination(destination));
+				}
+			}
+		},
+		None => println!("\nNo withdrawal whitelist is set, so it restricts nothing."),
+	}
+
+	if !pending.is_empty() {
+		println!("Timelocked whitelist updates that have not been applied yet:");
+		for RpcPendingWhitelistUpdate { activates_at, update } in &pending {
+			let update = match update {
+				RpcWhitelistUpdate::Allow(destination) =>
+					format!("allow {}", describe_destination(destination)),
+				RpcWhitelistUpdate::Remove(destination) =>
+					format!("remove {}", describe_destination(destination)),
+				RpcWhitelistUpdate::Timelock(timelock) =>
+					format!("set timelock to {timelock} seconds"),
+			};
+			println!("  {update}, from unix time {activates_at}");
+		}
+	}
+
+	if refund_addresses.is_empty() {
+		println!("\nNo refund addresses are registered.");
+	} else {
+		println!("\nRefund addresses, allowed without being whitelisted:");
+		for RpcRefundAddress { chain, address } in &refund_addresses {
+			println!("  {chain} address {address}");
+		}
+	}
+
+	// This one is a restriction rather than an allowance, and it overrides the whitelist, so it
+	// would be misleading to list it alongside the allowed destinations above.
+	if let Some(address) = bound_broker_withdrawal_address {
+		println!(
+			"\nThis account is bound to Ethereum withdrawal address {address}. Ethereum \
+			 withdrawals to any other destination are rejected, whitelisted or not."
+		);
+	}
 
 	Ok(())
 }
