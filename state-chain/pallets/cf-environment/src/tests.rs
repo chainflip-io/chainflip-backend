@@ -35,7 +35,8 @@ use cf_chains::{
 		SolAddress, SolHash,
 	},
 };
-use cf_traits::{BalanceApi, SafeMode};
+use cf_primitives::ForeignChain;
+use cf_traits::{elections::ElectionInstance, BalanceApi, SafeMode};
 use frame_support::{assert_noop, assert_ok, sp_runtime::BoundedVec, traits::OriginTrait};
 use std::str::FromStr;
 
@@ -1201,18 +1202,21 @@ mod submit_elections_votes {
 				MockElectionInstances::<Test>::recorded_votes(),
 				vec![(0, 2, 1), (1, 4, 1), (2, 6, 1)],
 			);
-			// Only the index is asserted: `DispatchError::Other`'s message is `#[codec(skip)]`,
+			// Only the instance is asserted: `DispatchError::Other`'s message is `#[codec(skip)]`,
 			// so the mock's error arrives here as `Other("")`. Real instances fail with `Module`
 			// errors, which do survive the event's encoding.
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Environment(Event::ElectionInstanceVotesRejected { instance: 1, .. })
+				RuntimeEvent::Environment(Event::ElectionInstanceVotesRejected {
+					instance: ElectionInstance::Chain(ForeignChain::Ethereum),
+					..
+				})
 			);
 		});
 	}
 
 	#[test]
-	fn every_rejection_is_reported_with_its_own_index() {
+	fn every_rejection_is_reported_with_its_own_instance() {
 		new_test_ext().execute_with(|| {
 			setup_authority();
 
@@ -1236,7 +1240,7 @@ mod submit_elections_votes {
 						_ => None,
 					})
 					.collect::<Vec<_>>(),
-				vec![0, 2],
+				vec![MOCK_INSTANCES[0], MOCK_INSTANCES[2]],
 			);
 		});
 	}
