@@ -185,7 +185,7 @@ import type {
   PalletCfElectionsElectoralSystemsBlockchainDeltaBasedIngressBackoffSettings,
   StateChainRuntimeChainflipWitnessingSolanaElectionsSolanaVaultSwapsSettings,
   PalletCfElectionsElectoralSystemsCompositeTuple7ImplsCompositeElectionProperties,
-  PalletCfElectionsElectionIdentifier,
+  PalletCfElectionsElectionIdentifier004,
   PalletCfElectionsElectoralSystemsCompositeTuple7ImplsCompositeElectionState,
   PalletCfElectionsConsensusHistory,
   PalletCfElectionsElectionPalletStatus,
@@ -232,7 +232,7 @@ import type {
   PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectoralUnsynchronisedStateMapKey,
   StateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinFeeSettings,
   PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionProperties,
-  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+  PalletCfElectionsElectionIdentifier003,
   PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionState,
   PalletCfElectionsConsensusHistoryCompositeConsensus,
   PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeSharedData,
@@ -245,7 +245,7 @@ import type {
   PalletCfElectionsElectoralSystemsCompositeTuple1ImplsCompositeElectoralUnsynchronisedStateMapKey,
   StateChainRuntimeChainflipWitnessingGenericElectionsChainlinkOraclePriceSettings,
   PalletCfElectionsElectoralSystemsCompositeTuple1ImplsCompositeElectionProperties,
-  PalletCfElectionsElectionIdentifier003,
+  PalletCfElectionsElectionIdentifier,
   PalletCfElectionsElectoralSystemsCompositeTuple1ImplsCompositeElectionState,
   PalletCfElectionsConsensusHistory003,
   PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData,
@@ -262,7 +262,7 @@ import type {
   PalletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectoralUnsynchronisedStateMapValue,
   PalletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectoralUnsynchronisedStateMapKey,
   PalletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectionProperties,
-  PalletCfElectionsElectionIdentifier004,
+  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
   PalletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectionState,
   PalletCfElectionsConsensusHistory004,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
@@ -837,6 +837,13 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<CfPrimitivesChainflipNetwork> =} callback
      **/
     chainflipNetworkName: GenericStorageQuery<() => CfPrimitivesChainflipNetwork>;
+
+    /**
+     * Whether validators should stop batching their all election instances votes or not
+     *
+     * @param {Callback<boolean> =} callback
+     **/
+    electionVoteBatchingDisabled: GenericStorageQuery<() => boolean>;
 
     /**
      * Generic pallet storage query
@@ -5680,16 +5687,16 @@ export interface ChainStorage extends GenericChainStorage {
      * Stores the properties of each election. These settings are fixed and are set on creation of
      * the election by the electoral system.
      *
-     * @param {PalletCfElectionsElectionIdentifier} arg
+     * @param {PalletCfElectionsElectionIdentifier004} arg
      * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple7ImplsCompositeElectionProperties | undefined> =} callback
      **/
     electionProperties: GenericStorageQuery<
       (
-        arg: PalletCfElectionsElectionIdentifier,
+        arg: PalletCfElectionsElectionIdentifier004,
       ) =>
         | PalletCfElectionsElectoralSystemsCompositeTuple7ImplsCompositeElectionProperties
         | undefined,
-      PalletCfElectionsElectionIdentifier
+      PalletCfElectionsElectionIdentifier004
     >;
 
     /**
@@ -6797,16 +6804,16 @@ export interface ChainStorage extends GenericChainStorage {
      * Stores the properties of each election. These settings are fixed and are set on creation of
      * the election by the electoral system.
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} arg
+     * @param {PalletCfElectionsElectionIdentifier003} arg
      * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionProperties | undefined> =} callback
      **/
     electionProperties: GenericStorageQuery<
       (
-        arg: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        arg: PalletCfElectionsElectionIdentifier003,
       ) =>
         | PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionProperties
         | undefined,
-      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+      PalletCfElectionsElectionIdentifier003
     >;
 
     /**
@@ -7020,16 +7027,16 @@ export interface ChainStorage extends GenericChainStorage {
      * Stores the properties of each election. These settings are fixed and are set on creation of
      * the election by the electoral system.
      *
-     * @param {PalletCfElectionsElectionIdentifier003} arg
+     * @param {PalletCfElectionsElectionIdentifier} arg
      * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple1ImplsCompositeElectionProperties | undefined> =} callback
      **/
     electionProperties: GenericStorageQuery<
       (
-        arg: PalletCfElectionsElectionIdentifier003,
+        arg: PalletCfElectionsElectionIdentifier,
       ) =>
         | PalletCfElectionsElectoralSystemsCompositeTuple1ImplsCompositeElectionProperties
         | undefined,
-      PalletCfElectionsElectionIdentifier003
+      PalletCfElectionsElectionIdentifier
     >;
 
     /**
@@ -7263,16 +7270,16 @@ export interface ChainStorage extends GenericChainStorage {
      * Stores the properties of each election. These settings are fixed and are set on creation of
      * the election by the electoral system.
      *
-     * @param {PalletCfElectionsElectionIdentifier004} arg
+     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} arg
      * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectionProperties | undefined> =} callback
      **/
     electionProperties: GenericStorageQuery<
       (
-        arg: PalletCfElectionsElectionIdentifier004,
+        arg: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
       ) =>
         | PalletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectionProperties
         | undefined,
-      PalletCfElectionsElectionIdentifier004
+      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
     >;
 
     /**
@@ -7502,16 +7509,16 @@ export interface ChainStorage extends GenericChainStorage {
      * Stores the properties of each election. These settings are fixed and are set on creation of
      * the election by the electoral system.
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} arg
+     * @param {PalletCfElectionsElectionIdentifier003} arg
      * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesArbitrum | undefined> =} callback
      **/
     electionProperties: GenericStorageQuery<
       (
-        arg: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        arg: PalletCfElectionsElectionIdentifier003,
       ) =>
         | PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesArbitrum
         | undefined,
-      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+      PalletCfElectionsElectionIdentifier003
     >;
 
     /**
@@ -9003,16 +9010,16 @@ export interface ChainStorage extends GenericChainStorage {
      * Stores the properties of each election. These settings are fixed and are set on creation of
      * the election by the electoral system.
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} arg
+     * @param {PalletCfElectionsElectionIdentifier003} arg
      * @param {Callback<PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesBsc | undefined> =} callback
      **/
     electionProperties: GenericStorageQuery<
       (
-        arg: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        arg: PalletCfElectionsElectionIdentifier003,
       ) =>
         | PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesBsc
         | undefined,
-      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+      PalletCfElectionsElectionIdentifier003
     >;
 
     /**

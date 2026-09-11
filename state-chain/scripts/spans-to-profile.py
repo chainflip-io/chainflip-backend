@@ -490,7 +490,7 @@ def report(a, spans_in_block):
     # ---- extrinsic dispatches ----
     #
     # A span carrying a `pallet` field is attributed to that instance. Spans without one belong
-    # here too, under instance `-`: the batched vote path (`submit_election_votes` -> `vote_all`
+    # here too, under instance `-`: the batched vote path (`submit_elections_votes` -> `vote_all`
     # -> `authorise_voter`) is instance-agnostic by design, which is the whole point of batching,
     # so keying the table on the label alone hid exactly the spans worth measuring. Their `call`
     # is qualified with the target, since a bare name is not unique across crates.
