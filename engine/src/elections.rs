@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod vote_batcher;
+pub mod vote_submitter;
 pub mod voter_api;
 
 use engine_sc_client::{
@@ -40,7 +40,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tracing::Level;
-use vote_batcher::VoteBatcher;
+use vote_submitter::VoteSubmitter;
 use voter_api::CompositeVoterApi;
 
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
@@ -61,13 +61,13 @@ pub struct Voter<
 	voter: RetrierClient<VoterClient>,
 	voter_name: &'static str,
 	cache_invalidation_senders: Option<Vec<mpsc::Sender<()>>>,
-	vote_batcher: VoteBatcher,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 	_phantom: core::marker::PhantomData<Instance>,
 }
 
 impl<
 		Instance: state_chain_runtime::chainflip::BatchedInstance + Send + Sync + 'static,
-		StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi,
+		StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi + Send + Sync + 'static,
 		VoterClient: CompositeVoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner> + Clone + Send + Sync + 'static,
 	> Voter<Instance, StateChainClient, VoterClient>
 where
@@ -82,7 +82,7 @@ where
 		voter: VoterClient,
 		cache_invalidation_senders: Option<Vec<mpsc::Sender<()>>>,
 		voter_name: &'static str,
-		vote_batcher: VoteBatcher,
+		vote_submitter: VoteSubmitter<StateChainClient>,
 	) -> Self {
 		Self {
 			state_chain_client,
@@ -97,7 +97,7 @@ where
 			),
 			voter_name,
 			cache_invalidation_senders,
-			vote_batcher,
+			vote_submitter,
 			_phantom: Default::default(),
 		}
 	}
@@ -197,15 +197,7 @@ where
 						}
 						let votes = BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/);
 
-						if self.vote_batcher.batching_enabled() {
-							self.vote_batcher.send(self.voter_name, Instance::votes(votes));
-						} else {
-							self.state_chain_client.submit_signed_extrinsic(
-								pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::vote {
-									authority_votes: Box::new(votes),
-								},
-							).await;
-						}
+						self.vote_submitter.submit::<Instance>(votes).await;
 					}
 				}).await;
 			},
