@@ -1386,9 +1386,8 @@ pub mod pallet {
 			context: &VoterContext<T>,
 			authority_votes: AuthorityVotes<T, I>,
 		) -> DispatchResult {
-			let VoterContext { epoch_index, authority, authority_index, block_number } = context;
-			let (epoch_index, authority_index, block_number) =
-				(*epoch_index, *authority_index, *block_number);
+			let &VoterContext { epoch_index, ref authority, authority_index, block_number } =
+				context;
 
 			ensure!(
 				matches!(Status::<T, I>::get(), Some(ElectionPalletStatus::Running)),
