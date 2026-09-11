@@ -531,7 +531,7 @@ impl<T: Config> LoanAccount<T> {
 		let total_owed = self
 			.loans
 			.values()
-			.map(|loan| loan.owed_principal_usd_value(price_cache))
+			.map(|loan| loan.total_owed_usd_value(price_cache))
 			.try_fold(0u128, |acc, x| x.map(|v| acc.saturating_add(v)))?;
 
 		let swapped_from_collateral = match &self.liquidation_status {
@@ -563,17 +563,17 @@ impl<T: Config> LoanAccount<T> {
 	/// Returns error if oracle prices are not available, or if collateral is zero.
 	pub fn derive_ltv(&self, price_cache: &OraclePriceCache<T>) -> Result<FixedU64, Error<T>> {
 		let collateral = self.total_collateral_usd_value(price_cache)?;
-		let principal = self.total_owed_usd_value(price_cache)?;
+		let owed = self.total_owed_usd_value(price_cache)?;
 
 		if collateral == 0 {
-			if principal == 0 {
+			if owed == 0 {
 				return Ok(FixedU64::zero());
 			} else {
 				return Ok(FixedU64::max_value());
 			}
 		}
 
-		Ok(FixedU64::from_rational(principal, collateral))
+		Ok(FixedU64::from_rational(owed, collateral))
 	}
 
 	pub fn check_low_ltv_penalty_and_collect_interest(
@@ -641,11 +641,11 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	/// Collect just enough collateral from supply pools to cover the outstanding loan
-	/// principal plus a buffer for the maximum oracle price slippage allowed for the
-	/// upcoming liquidation swaps, then split the collected collateral proportionally to
-	/// the usd value of each loan (to give each loan a fair chance of being liquidated
-	/// without a loss). When multiple collateral assets are involved, each is drawn
+	/// Collect just enough collateral from supply pools to cover the outstanding debt
+	/// (principal plus pending interest) plus a buffer for the maximum oracle price slippage
+	/// allowed for the upcoming liquidation swaps, then split the collected collateral
+	/// proportionally to the usd value of each loan (to give each loan a fair chance of being
+	/// liquidated without a loss). When multiple collateral assets are involved, each is drawn
 	/// proportionally to its available USD value. Returns error if oracle prices aren't
 	/// available.
 	pub(super) fn prepare_collateral_for_liquidation(
@@ -739,11 +739,11 @@ impl<T: Config> LoanAccount<T> {
 			return Ok(Default::default());
 		}
 
-		let principal_amounts_usd = self
+		let owed_amounts_usd = self
 			.loans
 			.iter()
 			.map(|(loan_id, loan)| {
-				loan.owed_principal_usd_value(price_cache)
+				loan.total_owed_usd_value(price_cache)
 					.map(|usd_value| ((*loan_id, loan.asset), usd_value))
 			})
 			.collect::<Result<Vec<_>, Error<T>>>()?;
@@ -753,7 +753,7 @@ impl<T: Config> LoanAccount<T> {
 		for (collateral_asset, collateral_amount) in collateral_to_liquidate {
 			let distribution = utils::distribute_proportionally(
 				collateral_amount,
-				principal_amounts_usd.iter().map(|(k, v)| (k, *v)),
+				owed_amounts_usd.iter().map(|(k, v)| (k, *v)),
 			);
 
 			for ((loan_id, loan_asset), collateral_amount) in distribution {
@@ -978,18 +978,21 @@ pub struct PriceCacheAndThreshold<'a, T: Config> {
 }
 
 impl<T: Config> GeneralLoan<T> {
-	fn owed_principal_usd_value(
-		&self,
-		price_cache: &OraclePriceCache<T>,
-	) -> Result<AssetAmount, Error<T>> {
-		price_cache.usd_value_of(self.asset, self.owed_principal)
-	}
-
 	/// The total amount owed on the loan, in the loan's asset: the principal plus all pending
 	/// interest (whole units only — sub-unit interest remainders are excluded).
 	fn total_owed(&self) -> AssetAmount {
 		self.owed_principal
 			.saturating_add(self.pending_interest.total().into_asset_amount())
+	}
+
+	/// USD value of [Self::total_owed]. Pending interest is included so that every risk
+	/// check (LTV, withdrawal headroom, liquidation sizing) sees the same debt that
+	/// repayment collects.
+	fn total_owed_usd_value(
+		&self,
+		price_cache: &OraclePriceCache<T>,
+	) -> Result<AssetAmount, Error<T>> {
+		price_cache.usd_value_of(self.asset, self.total_owed())
 	}
 
 	fn collect_pending_interest(&mut self) {
@@ -1855,7 +1858,7 @@ fn required_liquidation_amount<T: Config>(
 		let total_loans_usd =
 			loan_account.loans.values().try_fold(0 as AssetAmount, |sum, loan| {
 				price_cache
-					.usd_value_of_allow_stale(loan.asset, loan.owed_principal)
+					.usd_value_of_allow_stale(loan.asset, loan.total_owed())
 					.map(|usd| sum.saturating_add(usd))
 			})?;
 
