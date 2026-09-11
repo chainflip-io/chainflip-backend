@@ -20,6 +20,9 @@
 #![allow(clippy::allow_attributes)]
 
 pub mod migrations;
+pub mod voting_authority;
+
+pub use voting_authority::VotingAuthority;
 
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
