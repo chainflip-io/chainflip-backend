@@ -58,7 +58,7 @@ use super::common::{
 	epoch_source::{EpochSource, Vault},
 };
 
-// To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
+// To generate the metadata file use the subxt-cli tool (`cargo install subxt-cli`):
 // subxt metadata --version=14 --pallets Proxy,Balances,TransactionPayment,System,Assets --url
 // wss://polkadot-asset-hub-rpc.polkadot.io:443 > metadata.assethub.scale
 //
