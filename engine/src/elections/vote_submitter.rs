@@ -29,7 +29,7 @@ use engine_sc_client::{
 	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 };
 use state_chain_runtime::{
-	chainflip::{AllElectionInstancesVotes, BatchedInstance},
+	chainflip::elections::{AllElectionInstancesVotes, BatchedInstance},
 	Runtime, RuntimeCall,
 };
 use std::{
