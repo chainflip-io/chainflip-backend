@@ -213,7 +213,6 @@ pub mod pallet {
 			AuthorityElectionData<Settings, Properties, AuthorityVote>,
 		>,
 		pub unprovided_shared_data_hashes: BTreeMap<SharedDataHash, ReferenceDetails<BlockNumber>>,
-		pub contributing: bool,
 		pub authority_count: u32,
 	}
 
@@ -691,16 +690,6 @@ pub mod pallet {
 	pub type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, UniqueMonotonicIdentifier, EpochIndex, OptionQuery>;
 
-	/// Stores the set of authorities whose votes can contribute to consensus. Whether an authority
-	/// is included is controlled solely by them. This serves as a method for validators to quickly
-	/// remove all their votes from consensus, without having to know which votes should be removed
-	/// and without deleting votes that are still valid. This storage item is not consistent with
-	/// the current authority set, and so it may include authorities that are not in the current
-	/// authority set or exclude authorities that are in the current authority set.
-	#[pallet::storage]
-	pub type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
-
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
 	/// this is None, the pallet is considered uninitialized.
 	#[pallet::storage]
@@ -886,8 +875,7 @@ pub mod pallet {
 								)
 							})
 							.map(|(vote_components, validator_id)| {
-								if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
-									match <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as
+								match <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as
 								VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash|
 							{
 								 	// We don't bother to check if the reference has expired, as if we have the
@@ -903,9 +891,6 @@ pub mod pallet {
 									Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
 									Ok(None) => Ok(None),
 									Err(e) => Err(e),
-								}
-								} else {
-									Ok(None)
 								}
 								.map(|props_and_vote| ConsensusVote {
 									vote: props_and_vote,
@@ -1381,10 +1366,6 @@ pub mod pallet {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
 			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
-			ensure!(
-				ContributingAuthorities::<T, I>::contains_key(&authority),
-				Error::<T, I>::NotContributing
-			);
 
 			// Constant for the whole extrinsic, so read it once rather than for every vote.
 			let block_number = frame_system::Pallet::<T>::current_block_number();
@@ -1431,7 +1412,6 @@ pub mod pallet {
 					unique_monotonic_identifier,
 					&authority,
 					authority_index,
-					true, // Ensured before the loop.
 					component_storage_kind,
 					|option_existing_vote, election_bitmap_components| {
 						let components = <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::partial_vote_into_components(
@@ -1506,30 +1486,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(2)]
-		#[pallet::weight((T::WeightInfo::ignore_my_votes(), DispatchClass::Operational))]
-		pub fn ignore_my_votes(origin: OriginFor<T>) -> DispatchResult {
-			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
+		// #[pallet::call_index(2)]
+		// This was `ignore_my_votes`
 
-			if ContributingAuthorities::<T, I>::take(&authority).is_some() {
-				Self::recheck_contributed_to_consensuses(epoch_index, &authority, authority_index)?;
-			}
-
-			Ok(())
-		}
-
-		#[pallet::call_index(3)]
-		#[pallet::weight((T::WeightInfo::stop_ignoring_my_votes(), DispatchClass::Operational))]
-		pub fn stop_ignoring_my_votes(origin: OriginFor<T>) -> DispatchResult {
-			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
-
-			if !ContributingAuthorities::<T, I>::contains_key(&authority) {
-				Self::recheck_contributed_to_consensuses(epoch_index, &authority, authority_index)?;
-			}
-			ContributingAuthorities::<T, I>::insert(authority, ());
-
-			Ok(())
-		}
+		// #[pallet::call_index(3)]
+		// This was `stop_ignoring_my_votes`
 
 		#[pallet::call_index(4)]
 		#[pallet::weight((T::WeightInfo::delete_vote(), DispatchClass::Operational))]
@@ -1545,7 +1506,6 @@ pub mod pallet {
 				unique_monotonic_identifier,
 				&authority,
 				authority_index,
-				ContributingAuthorities::<T, I>::contains_key(&authority),
 				ComponentStorageKind::Both, // Make no assumptions about what is stored.
 				|_, _| Ok(()),
 			))?;
@@ -1794,15 +1754,6 @@ pub mod pallet {
 								{
 									ElectoralSettings::<T, I>::remove(setting_boundary);
 								}
-
-								let current_authorities = T::EpochInfo::current_authorities();
-								for validator in
-									ContributingAuthorities::<T, I>::iter_keys().collect::<Vec<_>>()
-								{
-									if !current_authorities.contains(&validator) {
-										ContributingAuthorities::<T, I>::remove(validator);
-									}
-								}
 							}
 
 							T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
@@ -1981,7 +1932,6 @@ pub mod pallet {
 
 							unprovided_shared_data_hashes
 						},
-						contributing: ContributingAuthorities::<T, I>::contains_key(&authority),
 						authority_count: T::EpochInfo::current_authority_count(),
 					})
 				})
@@ -2080,29 +2030,6 @@ pub mod pallet {
 			}
 		}
 
-		pub(crate) fn recheck_contributed_to_consensuses(
-			epoch_index: EpochIndex,
-			authority: &T::ValidatorId,
-			authority_index: AuthorityCount,
-		) -> Result<(), Error<T, I>> {
-			for unique_monotonic_identifier in
-				ElectionConsensusHistoryUpToDate::<T, I>::iter_keys().collect::<Vec<_>>()
-			{
-				if Self::handle_corrupt_storage(Self::get_vote(
-					epoch_index,
-					unique_monotonic_identifier,
-					authority,
-					authority_index,
-					|_unprovided_shared_data_hash| (),
-				))?
-				.is_some_and(|(_, authority_vote)| matches!(authority_vote, AuthorityVote::Vote(_)))
-				{
-					ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
-				}
-			}
-			Ok(())
-		}
-
 		fn take_vote_and_then<
 			R,
 			F: for<'a> FnOnce(
@@ -2117,7 +2044,6 @@ pub mod pallet {
 			unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,
-			is_contributing_authority: bool,
 			component_storage_kind: ComponentStorageKind,
 			f: F,
 		) -> Result<R, CorruptStorageError> {
@@ -2154,13 +2080,8 @@ pub mod pallet {
 						);
 					}
 
-					// Invalidate any cached consensus, since the votes have changed. Only a
-					// contributing authority's vote counts towards consensus.
-					if is_contributing_authority {
-						ElectionConsensusHistoryUpToDate::<T, I>::remove(
-							unique_monotonic_identifier,
-						);
-					}
+					// Invalidate any cached consensus, since the votes have changed.
+					ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
 
 					Ok(r)
 				},

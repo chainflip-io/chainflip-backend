@@ -101,20 +101,13 @@ fn votes_not_provided_until_shared_data_is_provided() {
 #[test]
 fn ensure_can_vote() {
 	new_test_ext().then_execute_at_next_block(|()| {
-		let setup = TestSetup { num_non_contributing_authorities: 1, ..Default::default() };
+		let setup = TestSetup { num_authorities: 3, ..Default::default() };
 
-		let initial_state = election_test_ext(setup.clone())
-			.new_election()
-			.submit_votes(
-				&setup.non_contributing_authorities()[..],
-				AuthorityVote::Vote(()),
-				Err(Error::NotContributing),
-			)
-			.snapshot();
+		let initial_state = election_test_ext(setup.clone()).new_election().snapshot();
 
-		// Contributing authorities can vote.
+		// All authorities can vote.
 		TestRunner::from_snapshot(initial_state.clone()).submit_votes(
-			&setup.contributing_authorities()[..],
+			&setup.all_authorities()[..],
 			AuthorityVote::Vote(()),
 			Ok(()),
 		);
@@ -262,7 +255,7 @@ impl ElectoralSystemRunnerTestExt for TestRunner<TestContext> {
 fn consensus_state_transitions() {
 	const VOTE: AuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
 
-	election_test_ext(TestSetup { num_non_contributing_authorities: 2, ..Default::default() })
+	election_test_ext(TestSetup { num_authorities: 5, ..Default::default() })
 		.new_election()
 		// Initial consensus state of the mock election system is `None`.
 		.expect_consensus(ConsensusStatus::None)
@@ -302,10 +295,7 @@ fn consensus_state_transitions() {
 		.submit_votes(&[2], VOTE, Ok(())) // Consensus is only updated if there is a vote.
 		.expect_consensus(ConsensusStatus::Gained { most_recent: Some(2), new: 3 })
 		.expect_consensus_after_next_block(ConsensusStatus::Unchanged { current: 3 })
-		// Non-contributing authorities do not affect consensus.
-		.submit_votes(&[3, 4], VOTE, Err(Error::<Test, _>::NotContributing))
-		.expect_consensus(ConsensusStatus::Unchanged { current: 3 })
-		.assert_calls_ok(&[3, 4], |_| Call::<Test, _>::stop_ignoring_my_votes {})
+		// the validator that hasn't voted yet votes
 		.submit_votes(&[3, 4], VOTE, Ok(()))
 		.expect_consensus(ConsensusStatus::Changed { previous: 3, new: 5 });
 }
@@ -319,10 +309,6 @@ fn authority_removes_and_re_adds_itself_from_contributing_set() {
 		.assume_consensus()
 		.submit_votes(&[0, 1, 2], VOTE, Ok(()))
 		.expect_consensus(ConsensusStatus::Gained { most_recent: None, new: 3 })
-		.assert_calls_ok(&[1], |_| Call::<Test, _>::ignore_my_votes {})
-		.expect_consensus(ConsensusStatus::Changed { previous: 3, new: 2 })
-		.assert_calls_ok(&[1], |_| Call::<Test, _>::stop_ignoring_my_votes {})
-		.expect_consensus(ConsensusStatus::Changed { previous: 2, new: 3 })
 		// Validator 1 deletes its vote.
 		.then_apply_extrinsics(
 			#[track_caller]
@@ -341,10 +327,6 @@ fn authority_removes_and_re_adds_itself_from_contributing_set() {
 			},
 		)
 		.expect_consensus(ConsensusStatus::Changed { previous: 3, new: 2 })
-		.assert_calls_ok(&[1], |_| Call::<Test, _>::ignore_my_votes {})
-		.submit_votes(&[1], VOTE, Err(Error::<Test, _>::NotContributing))
-		.expect_consensus(ConsensusStatus::Unchanged { current: 2 })
-		.assert_calls_ok(&[1], |_| Call::<Test, _>::stop_ignoring_my_votes {})
 		.submit_votes(&[1], VOTE, Ok(()))
 		.expect_consensus(ConsensusStatus::Changed { previous: 2, new: 3 });
 }
