@@ -33,7 +33,7 @@ use cf_amm::{
 };
 use cf_primitives::{Asset, AssetAmount, OrderId, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::{BalanceApi, LpStatsApi};
+use cf_traits::{AssetWithholding, BalanceApi, LpStatsApi};
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::{ConstU32, Get, UncheckedOnRuntimeUpgrade},
@@ -114,27 +114,45 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		old::LimitOrderAutoSweepingThresholds::<T>::kill();
 
-		let (mut pools, mut payouts, mut unsettled) = (0u64, 0u64, 0u64);
-		let mut dust = PoolPairsMap::<Amount>::default();
+		let (mut pools, mut payouts, mut unsettled, mut withheld) = (0u64, 0u64, 0u64, 0u64);
+		let mut total_unclaimed = PoolPairsMap::<Amount>::default();
 
 		Pools::<T>::translate::<old::Pool<T>, _>(|asset_pair, old_pool| {
 			pools = pools.saturating_add(1);
 
-			let Migrated { pool_state: limit_orders, proceeds, dropped_dust, unconvertible } =
-				old_pool.pool_state.limit_orders.migrate();
+			let Migrated {
+				pool_state: limit_orders,
+				proceeds,
+				unclaimed_liquidity: unclaimed,
+				unconvertible,
+			} = old_pool.pool_state.limit_orders.migrate();
 			let assets = asset_pair.assets();
 
-			// Log uncollected dust
+			// Liquidity no surviving order claims is owned by nobody, but the funds themselves
+			// are still there, so the protocol takes them on rather than losing track of them.
+			// That includes what an unconvertible order held: its lp is repaid by hand, out of
+			// this, rather than from funds that went unaccounted for.
 			for sold_pair in [Pairs::Base, Pairs::Quote] {
-				if !dropped_dust[sold_pair].is_zero() {
-					log::info!(
-						"Dropping {} of unowned {:?} at {:?}.",
-						dropped_dust[sold_pair],
-						assets[sold_pair],
-						asset_pair,
-					);
+				if unclaimed[sold_pair].is_zero() {
+					continue
 				}
-				dust[sold_pair] = dust[sold_pair].saturating_add(dropped_dust[sold_pair]);
+				total_unclaimed[sold_pair] =
+					total_unclaimed[sold_pair].saturating_add(unclaimed[sold_pair]);
+
+				match AssetAmount::try_from(unclaimed[sold_pair]) {
+					Ok(amount) => {
+						withheld = withheld.saturating_add(1);
+						T::AssetWithholding::withhold_assets(assets[sold_pair], amount);
+						log::info!(
+							"Withholding {amount} of unowned {:?} from {asset_pair:?}.",
+							assets[sold_pair],
+						);
+					},
+					Err(_) => log_or_panic!(
+						"Unowned liquidity of {} does not fit an AssetAmount",
+						unclaimed[sold_pair]
+					),
+				}
 			}
 
 			// Report anything that would not convert, in full. Such an order is dropped rather
@@ -202,10 +220,10 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		});
 
 		log::info!(
-			"Removed fixed pools from {pools} pool(s), settling {payouts} order(s) and writing off \
-			 {} base / {} quote of unowned liquidity.",
-			dust[Pairs::Base],
-			dust[Pairs::Quote],
+			"Removed fixed pools from {pools} pool(s), settling {payouts} order(s) and withholding \
+			 {} base / {} quote of unowned liquidity, summed across pools.",
+			total_unclaimed[Pairs::Base],
+			total_unclaimed[Pairs::Quote],
 		);
 		if unsettled > 0 {
 			log::error!(
@@ -214,9 +232,10 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			);
 		}
 
-		// A read and write per pool, a read and write per lp paid out, and the killed thresholds.
+		// A read and write per pool, a read and write per lp paid out, a write per asset
+		// withheld, and the killed thresholds.
 		let touched = pools.saturating_add(payouts);
-		T::DbWeight::get().reads_writes(touched, touched.saturating_add(1))
+		T::DbWeight::get().reads_writes(touched, touched.saturating_add(withheld).saturating_add(1))
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -262,7 +281,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		type BalancesBefore<T> =
 			BTreeMap<(<T as frame_system::Config>::AccountId, Asset), AssetAmount>;
 
-		let (count_before, before, balances_before) =
+		let (count_before, pools_before, balances_before) =
 			<(u32, Vec<(AssetPair, PoolBefore<T>)>, BalancesBefore<T>)>::decode(&mut &state[..])
 				.map_err(|_| DispatchError::Other("Failed to decode the pre-upgrade state"))?;
 
@@ -273,13 +292,16 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			!old::LimitOrderAutoSweepingThresholds::<T>::exists(),
 			"The auto sweeping thresholds should have been removed"
 		);
-		ensure!(before.len() as u32 == count_before, "A pool was lost before the migration ran");
+		ensure!(
+			pools_before.len() as u32 == count_before,
+			"A pool was lost before the migration ran"
+		);
 		ensure!(
 			Pools::<T>::iter_keys().count() as u32 == count_before,
 			"Wrong number of pools after migration"
 		);
 
-		for (asset_pair, before) in before {
+		for (asset_pair, before) in pools_before {
 			let pool = Pools::<T>::get(asset_pair)
 				.ok_or(DispatchError::Other("A pool was lost during the migration"))?;
 
@@ -415,7 +437,10 @@ mod tests {
 		math::{Price, SqrtPrice},
 	};
 	use cf_primitives::{Asset, STABLE_ASSET};
-	use cf_traits::mocks::{balance_api::MockBalance, lp_stats_api::MockLpStatsApi};
+	use cf_traits::mocks::{
+		asset_withholding::MockAssetWithholding, balance_api::MockBalance,
+		lp_stats_api::MockLpStatsApi,
+	};
 	use frame_support::assert_ok;
 	use sp_runtime::{traits::Zero, FixedU128};
 
@@ -663,6 +688,45 @@ mod tests {
 			let state = Migration::<Test>::pre_upgrade().unwrap();
 			Migration::<Test>::on_runtime_upgrade();
 			assert_ok!(Migration::<Test>::post_upgrade(state));
+		});
+	}
+
+	/// A price could offer more than the orders behind it added up to. Nobody can claim the
+	/// difference, but the funds are real, so the protocol has to end up holding them.
+	#[test]
+	fn liquidity_no_order_can_claim_is_withheld() {
+		new_test_ext().execute_with(|| {
+			put_old_pool(
+				vec![
+					OldFixedPool {
+						tick: 0,
+						pool_instance: 0,
+						available: 1000.into(),
+						percent_remaining: float_max(),
+					},
+					// Nothing is left to back this one at all.
+					OldFixedPool {
+						tick: 120,
+						pool_instance: 1,
+						available: 47.into(),
+						percent_remaining: float_max(),
+					},
+				],
+				vec![OldOrder {
+					tick: 0,
+					lp: (ALICE, ALICE_ORDER),
+					pool_instance: 0,
+					amount: 900.into(),
+					last_percent_remaining: float_max(),
+					original_amount: 900.into(),
+				}],
+			);
+
+			Migration::<Test>::on_runtime_upgrade();
+
+			// The hundred Alice's order does not cover, plus the whole of the orphaned price.
+			assert_eq!(MockAssetWithholding::withheld_assets(BASE_ASSET), 100 + 47);
+			assert_eq!(MockAssetWithholding::withheld_assets(STABLE_ASSET), 0);
 		});
 	}
 

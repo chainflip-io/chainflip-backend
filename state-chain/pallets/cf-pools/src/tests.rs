@@ -21,7 +21,8 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{
-	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
+	assert_events_eq, assert_events_match, assert_matching_event_count, assert_no_matching_event,
+	last_event,
 };
 use cf_traits::{
 	mocks::{asset_withholding::MockAssetWithholding, balance_api::MockBalance},
@@ -1472,10 +1473,10 @@ fn limit_order_dust_is_withheld_in_the_input_asset() {
 					limit_order_amounts::<Test>(Asset::Btc, side),
 					vec![(ALICE, 0, order_amount), (BOB, 0, order_amount)]
 				);
-				assert!(!System::events().iter().any(|record| matches!(
-					&record.event,
+				assert_no_matching_event!(
+					Test,
 					RuntimeEvent::LiquidityPools(Event::LimitOrderFilled { .. })
-				)));
+				);
 			}
 		});
 	}

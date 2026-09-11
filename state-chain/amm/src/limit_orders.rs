@@ -634,10 +634,12 @@ pub mod migration_support {
 		pub pool_state: PoolState<LiquidityProvider>,
 		/// Earnings that have to be paid out, because the new representation cannot hold them.
 		pub proceeds: Vec<UncollectedProceeds<LiquidityProvider>>,
-		/// Liquidity the fixed pools were offering over and above the orders backing them, by the
-		/// pair it was being sold in. Rounding in the old representation let the two drift apart,
-		/// and no order could ever claim the difference, so it is dropped.
-		pub dropped_dust: PoolPairsMap<Amount>,
+		/// Liquidity the fixed pools were offering that no surviving order claims, by the pair it
+		/// was being sold in: a price whose orders have all gone, whether bought out or belonging
+		/// to an earlier incarnation of it, one whose orders would not convert, and the drift
+		/// rounding in the old representation left between a price and the orders behind it. The
+		/// caller must account for the lot as protocol-owned surplus.
+		pub unclaimed_liquidity: PoolPairsMap<Amount>,
 		/// Orders dropped because their share of their price would not convert. Expected to be
 		/// empty; anything here is an lp owed an amount the migration could not work out,
 		/// reported so it can be settled by hand.
@@ -749,15 +751,13 @@ pub mod migration_support {
 				}
 			}
 
-			// After collection, because of the rounding down when paying out positions, some dust
-			// can be left. We calculate that here just for accounting purposes. It will be
-			// dropped.
-			let mut dropped_dust = PoolPairsMap::<Amount>::default();
+			// Whatever a price was offering that no surviving order claims.
+			let mut unclaimed_liquidity = PoolPairsMap::<Amount>::default();
 			for sold_pair in [Pairs::Base, Pairs::Quote] {
 				for (sqrt_price, fixed_pool) in &fixed_pools[sold_pair] {
 					let claimed =
 						orders[sold_pair].get(sqrt_price).map_or(Amount::zero(), liquidity_of);
-					dropped_dust[sold_pair] = dropped_dust[sold_pair]
+					unclaimed_liquidity[sold_pair] = unclaimed_liquidity[sold_pair]
 						.saturating_add(fixed_pool.available.saturating_sub(claimed));
 				}
 			}
@@ -765,7 +765,7 @@ pub mod migration_support {
 			Migrated {
 				pool_state: PoolState { orders, total_swap_inputs, total_swap_outputs },
 				proceeds,
-				dropped_dust,
+				unclaimed_liquidity,
 				unconvertible,
 			}
 		}
@@ -1144,14 +1144,14 @@ mod migration_tests {
 		assert!(remaining + sold <= 1001.into(), "the lp must not end up with more than they had");
 	}
 
-	/// Rounding in the old representation let a price offer more than the orders behind it backed.
-	/// Nobody could claim the difference then either, so it is reported and dropped rather than
-	/// handed to whichever order happened to be there.
+	/// A price could outlive the orders behind it, and rounding could let it offer more than they
+	/// backed. Nobody could claim either then, so both are reported for the caller to absorb
+	/// rather than handed to whichever order happened to be there.
 	#[test]
-	fn liquidity_no_order_can_claim_is_dropped() {
+	fn liquidity_no_order_can_claim_is_reported() {
 		let orphaned_tick = 120;
 
-		let Migrated { pool_state: state, dropped_dust, .. } = old_state(
+		let Migrated { pool_state: state, unclaimed_liquidity, .. } = old_state(
 			vec![
 				// Backed by the order below, but offering three units more than it holds.
 				(at_tick_zero(), 0, 1003.into(), float_max()),
@@ -1163,8 +1163,8 @@ mod migration_tests {
 		)
 		.migrate();
 
-		assert_eq!(dropped_dust[Pairs::Base], (3 + 47).into());
-		assert_eq!(dropped_dust[Pairs::Quote], Amount::zero());
+		assert_eq!(unclaimed_liquidity[Pairs::Base], (3 + 47).into());
+		assert_eq!(unclaimed_liquidity[Pairs::Quote], Amount::zero());
 
 		// Only what an order actually held carries over, and the orphaned price is gone.
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 1000.into())]);
