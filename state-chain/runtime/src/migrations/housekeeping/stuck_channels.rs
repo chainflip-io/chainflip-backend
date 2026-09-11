@@ -18,21 +18,25 @@
 //!
 //! These cannot be paid out directly: the funds have to be fetched out of the channel first.
 //!
-//! Currently covers COM-477 — DOT sent to Assethub channel 14661791-Assethub-14 via extrinsic
-//! 0xd9d24bc9de34c6d4a5eba986ecf9bcfc20027cb50086bfac428ef4225eab49df and never witnessed, because
-//! of the Assethub witnessing bug fixed in 2.3. The funds never left the channel, so fetching them
-//! and crediting the LP reproduces what witnessing would have done, and rides fine on 2.2.
+//! Case COM-477 was never witnessed because of the Assethub witnessing bug fixed in 2.3. The
+//! funds never left the channel, so fetching them and crediting the LP reproduces what witnessing
+//! would have done, and rides fine on 2.2.
 //!
-//! COM-371 (15.39031019 SOL at expired Solana channel 14120216-Solana-118758) belongs here too and
-//! is still blocked on confirmation of who is being repaid. It needs a fetch followed by an egress
-//! rather than an on-chain credit, since it is a swap channel with an external destination. Solana
-//! deposit channels are not recycled and stay under our control across rotations, so the fetch
-//! half works the same way.
+//! Case COM-371 reached a Solana channel after it had expired. Solana deposit channels are not
+//! recycled and stay under our control across rotations, so the same fetch works. Unlike COM-477
+//! this is a swap channel with an external destination, so the fetch is followed by an egress
+//! rather than an on-chain credit.
 
-use crate::*;
-use cf_chains::{assets::hub::Asset as HubAsset, hub::calculate_derived_address};
+use crate::{chainflip::address_derivation::AddressDerivation, *};
+use cf_chains::{
+	address::AddressDerivationApi,
+	assets::{hub::Asset as HubAsset, sol::Asset as SolAsset},
+	hub::calculate_derived_address,
+	sol::{SolAddress, SolanaDepositFetchId},
+	Solana,
+};
 use cf_primitives::Asset;
-use cf_traits::BalanceApi;
+use cf_traits::{BalanceApi, EgressApi};
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use hex_literal::hex;
 use pallet_cf_ingress_egress::{FetchOrTransfer, ScheduledEgressFetchOrTransfer};
@@ -51,6 +55,24 @@ const COM_477_AMOUNT: u128 = 19_999_691_329_918;
 /// or anywhere else, as normal.
 const COM_477_LP_ACCOUNT: [u8; 32] =
 	hex!("00000000000000000000000026d211574963fa0fc0dff0211caa20b614063de6");
+
+/// The channel id.
+const COM_371_CHANNEL_ID: u64 = 118_758;
+
+/// 15.39031019 SOL, in lamports.
+const COM_371_AMOUNT: u64 = 15_390_310_190;
+
+/// The channel's deposit address.
+///
+/// The address and its PDA bump are re-derived from the channel id below rather than hardcoded;
+/// this is kept only so the derivation can be checked against what is actually on chain, and the
+/// migration refuses to act if the two disagree.
+const COM_371_DEPOSIT_ADDRESS: [u8; 32] =
+	hex!("7ee2065fd412020955e3e1d849579ea974bfc79493833d45d8ffc0a93e1a3a53");
+
+/// The channel's registered refund address.
+const COM_371_DESTINATION: [u8; 32] =
+	hex!("03e69ee1b4f77ef79322365aa663dfdbbac8b6146578f227c67fe98e445c5148");
 
 pub struct Migration;
 
@@ -85,6 +107,62 @@ impl OnRuntimeUpgrade for Migration {
 			COM_477_AMOUNT,
 		);
 
+		Self::recover_com_371();
+
 		Weight::zero()
+	}
+}
+
+impl Migration {
+	fn recover_com_371() {
+		let (address, bump) =
+			match <AddressDerivation as AddressDerivationApi<Solana>>::generate_address_and_state(
+				SolAsset::Sol,
+				COM_371_CHANNEL_ID,
+			) {
+				Ok(derived) => derived,
+				Err(e) => {
+					log::error!("📦 COM-371: could not derive the deposit address: {e:?}");
+					return;
+				},
+			};
+
+		if address != SolAddress(COM_371_DEPOSIT_ADDRESS) {
+			log::error!(
+				"📦 COM-371: derived {address:?} but the deposit is at {:?}; not fetching.",
+				SolAddress(COM_371_DEPOSIT_ADDRESS),
+			);
+			return;
+		}
+
+		ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::append(FetchOrTransfer::<
+			Solana,
+		>::Fetch {
+			asset: SolAsset::Sol,
+			deposit_address: address,
+			deposit_fetch_id: Some(SolanaDepositFetchId {
+				channel_id: COM_371_CHANNEL_ID,
+				address,
+				bump,
+			}),
+			amount: COM_371_AMOUNT,
+		});
+
+		match <SolanaIngressEgress as EgressApi<_>>::schedule_egress(
+			SolAsset::Sol,
+			COM_371_AMOUNT,
+			SolAddress(COM_371_DESTINATION),
+			None,
+		) {
+			Ok(d) => log::info!(
+				"📦 COM-371: fetching channel {} and refunding {} lamports: egress_id={:?} after_fees={} fee={}",
+				COM_371_CHANNEL_ID,
+				COM_371_AMOUNT,
+				d.egress_id,
+				d.egress_amount,
+				d.fee_withheld,
+			),
+			Err(e) => log::error!("📦 COM-371: failed to schedule the SOL refund: {e:?}"),
+		}
 	}
 }
