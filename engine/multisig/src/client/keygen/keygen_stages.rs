@@ -358,16 +358,18 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> StageResult<KeygenCeremony<Crypto>> {
-		let hash_commitments = match verify_broadcasts_non_blocking(messages).await {
-			Ok(hash_commitments) => hash_commitments,
-			Err((reported_parties, abort_reason)) => {
-				warn!("Broadcast verification is not successful for {}", Self::NAME);
-				return KeygenStageResult::Error(
-					reported_parties,
-					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
-				)
-			},
-		};
+		let hash_commitments =
+			match verify_broadcasts_non_blocking(messages, self.keygen_common.common.own_idx).await
+			{
+				Ok(hash_commitments) => hash_commitments,
+				Err((reported_parties, abort_reason)) => {
+					warn!("Broadcast verification is not successful for {}", Self::NAME);
+					return KeygenStageResult::Error(
+						reported_parties,
+						KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					)
+				},
+			};
 
 		debug!("{} is successful", Self::NAME);
 
@@ -462,14 +464,16 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		let commitments = match verify_broadcasts_non_blocking(messages).await {
-			Ok(comms) => comms,
-			Err((reported_parties, abort_reason)) =>
-				return KeygenStageResult::Error(
-					reported_parties,
-					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
-				),
-		};
+		let commitments =
+			match verify_broadcasts_non_blocking(messages, self.keygen_common.common.own_idx).await
+			{
+				Ok(comms) => comms,
+				Err((reported_parties, abort_reason)) =>
+					return KeygenStageResult::Error(
+						reported_parties,
+						KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					),
+			};
 
 		let KeygenCommon { common, resharing_context, keygen_context, sharing_params } =
 			&self.keygen_common;
@@ -727,14 +731,16 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		let mut verified_complaints = match verify_broadcasts_non_blocking(messages).await {
-			Ok(comms) => comms,
-			Err((reported_parties, abort_reason)) =>
-				return KeygenStageResult::Error(
-					reported_parties,
-					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
-				),
-		};
+		let mut verified_complaints =
+			match verify_broadcasts_non_blocking(messages, self.keygen_common.common.own_idx).await
+			{
+				Ok(comms) => comms,
+				Err((reported_parties, abort_reason)) =>
+					return KeygenStageResult::Error(
+						reported_parties,
+						KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					),
+			};
 
 		// During handover, ignore complaints from non-receiving participants.
 		// Only receivers process incoming shares, so a non-receiver has nothing
@@ -1182,14 +1188,16 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	) -> KeygenStageResult<Crypto> {
 		debug!("Processing {}", Self::NAME);
 
-		let verified_responses = match verify_broadcasts_non_blocking(messages).await {
-			Ok(comms) => comms,
-			Err((reported_parties, abort_reason)) =>
-				return KeygenStageResult::Error(
-					reported_parties,
-					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
-				),
-		};
+		let verified_responses =
+			match verify_broadcasts_non_blocking(messages, self.keygen_common.common.own_idx).await
+			{
+				Ok(comms) => comms,
+				Err((reported_parties, abort_reason)) =>
+					return KeygenStageResult::Error(
+						reported_parties,
+						KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					),
+			};
 
 		match self.check_blame_responses(verified_responses) {
 			Ok(shares_for_us) => {

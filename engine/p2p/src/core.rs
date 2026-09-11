@@ -58,6 +58,17 @@ use socket::{
 	RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX,
 };
 
+/// Spawn a named OS thread.
+pub(crate) fn spawn_named<F>(name: &str, f: F) -> std::thread::JoinHandle<()>
+where
+	F: FnOnce() + Send + 'static,
+{
+	std::thread::Builder::new()
+		.name(name.to_owned())
+		.spawn(f)
+		.expect("failed to spawn p2p thread")
+}
+
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep
 /// this somewhat short to mitigate some attacks where clients
@@ -690,7 +701,7 @@ impl P2PContext {
 
 		// This OS thread is for incoming messages
 		// TODO: combine this with the authentication thread?
-		std::thread::spawn(move || loop {
+		spawn_named("p2p-incoming", move || loop {
 			if stop_thread.load(Ordering::Relaxed) {
 				break
 			}

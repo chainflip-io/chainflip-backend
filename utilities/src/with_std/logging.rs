@@ -16,7 +16,6 @@
 
 use crate::Port;
 use serde::Deserialize;
-use tracing::subscriber::DefaultGuard;
 use tracing_subscriber::{fmt::format::FmtSpan, util::SubscriberInitExt};
 use warp::{Filter, Reply};
 
@@ -99,29 +98,48 @@ macro_rules! print_start_and_end {
 /// '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing
 ///
 /// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
-pub async fn init_json_logger(settings: LoggingSettings) -> DefaultGuard {
+pub async fn init_json_logger(settings: LoggingSettings) {
+	use std::sync::OnceLock;
 	use tracing::metadata::LevelFilter;
-	use tracing_subscriber::EnvFilter;
+	use tracing_subscriber::{
+		fmt::{
+			format::{Format, Json, JsonFields},
+			Formatter,
+		},
+		reload, EnvFilter,
+	};
+
+	// A global subscriber can only be installed once per process, but the engine runner can call
+	// the same engine's entrypoint twice (before and after a runtime upgrade), so later calls reuse
+	// the first call's subscriber.
+	static RELOAD_HANDLE: OnceLock<reload::Handle<EnvFilter, Formatter<JsonFields, Format<Json>>>> =
+		OnceLock::new();
 
 	let format_span = if settings.span_lifecycle { FmtSpan::FULL } else { FmtSpan::NONE };
 
-	let (reload_handle, _guard) = {
-		let builder = tracing_subscriber::fmt()
-			.json()
-			.with_current_span(false)
-			.with_span_list(true)
-			.with_env_filter(
-				EnvFilter::builder()
-					.with_default_directive(LevelFilter::INFO.into())
-					.from_env_lossy(),
-			)
-			.with_span_events(format_span)
-			.with_filter_reloading();
+	let reload_handle = RELOAD_HANDLE
+		.get_or_init(|| {
+			let builder = tracing_subscriber::fmt()
+				.json()
+				.with_current_span(false)
+				.with_span_list(true)
+				.with_env_filter(
+					EnvFilter::builder()
+						.with_default_directive(LevelFilter::INFO.into())
+						.from_env_lossy(),
+				)
+				.with_span_events(format_span)
+				.with_filter_reloading();
 
-		let reload_handle = builder.reload_handle();
-		let _guard = builder.finish().set_default();
-		(reload_handle, _guard)
-	};
+			let reload_handle = builder.reload_handle();
+			builder.finish().init();
+			// `init` caps `log` records at the startup filter's level, which would stop `/tracing`
+			// from raising verbosity for `log`-based dependencies. The filter handles levels
+			// instead.
+			log::set_max_level(log::LevelFilter::Trace);
+			reload_handle
+		})
+		.clone();
 
 	tokio::task::spawn(async move {
 		const PATH: &str = "tracing";
@@ -181,6 +199,4 @@ pub async fn init_json_logger(settings: LoggingSettings) -> DefaultGuard {
 			.run((std::net::Ipv4Addr::LOCALHOST, settings.command_server_port))
 			.await;
 	});
-
-	_guard
 }
