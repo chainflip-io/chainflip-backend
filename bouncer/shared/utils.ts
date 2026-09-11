@@ -179,6 +179,10 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0x7a2088a1bFc9d81c55368AE168C2C02570cB814F';
         case 'PRICE_FEED_USDT':
           return '0x09635F643e140090A9A8Dcd712eD6285858ceBef';
+        case 'PRICE_FEED_CBBTC':
+          return '0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690';
+        case 'PRICE_FEED_BNB':
+          return '0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB';
         case 'SC_UTILS':
           return '0xc5a5C42992dECbae36851359345FE25997F5C42d';
         default:
@@ -208,6 +212,12 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0x09635F643e140090A9A8Dcd712eD6285858ceBef';
         case 'PRICE_FEED_USDT':
           return '0xc5a5C42992dECbae36851359345FE25997F5C42d';
+        case 'PRICE_FEED_WBTC':
+          return '0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690';
+        case 'PRICE_FEED_BNB':
+          return '0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB';
+        case 'PRICE_FEED_DOT':
+          return '0x9E545E3C0baAB3E08CdfD552C960A1050f373042';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
