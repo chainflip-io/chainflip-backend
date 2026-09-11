@@ -110,9 +110,7 @@ fn state_of_genesis_is_as_expected() {
 		);
 
 		assert!(
-			pallet_cf_governance::Members::<Runtime>::get()
-				.members
-				.contains(&AccountId::from(ERIN)),
+			pallet_cf_governance::Members::<Runtime>::get().is_member(&AccountId::from(ERIN)),
 			"expected governor"
 		);
 		assert_eq!(

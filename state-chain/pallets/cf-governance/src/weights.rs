@@ -50,7 +50,7 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn propose_governance_extrinsic() -> Weight;
 	fn approve() -> Weight;
-	fn new_membership_set() -> Weight;
+	fn set_voting_authority() -> Weight;
 	fn call_as_sudo() -> Weight;
 	fn on_initialize(b: u32, ) -> Weight;
 	fn on_initialize_best_case() -> Weight;
@@ -111,7 +111,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `System::Account` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
 	/// Storage: `AccountRoles::AccountRoles` (r:0 w:4)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn new_membership_set() -> Weight {
+	fn set_voting_authority() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `508`
 		//  Estimated: `18763`
@@ -270,7 +270,7 @@ impl WeightInfo for () {
 	/// Proof: `System::Account` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
 	/// Storage: `AccountRoles::AccountRoles` (r:0 w:4)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn new_membership_set() -> Weight {
+	fn set_voting_authority() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `508`
 		//  Estimated: `18763`
