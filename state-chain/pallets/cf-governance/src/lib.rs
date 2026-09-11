@@ -19,7 +19,10 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 #![allow(clippy::allow_attributes)]
 
+pub mod council;
 pub mod migrations;
+
+pub use council::Council;
 
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
