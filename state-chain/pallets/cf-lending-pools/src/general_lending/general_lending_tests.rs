@@ -6944,3 +6944,158 @@ mod utilisation_cap {
 		});
 	}
 }
+
+/// Pending (not yet collected) interest is real debt and must be counted by every risk check,
+/// not only by repayment.
+mod pending_interest_is_debt {
+	use super::*;
+	use cf_primitives::Beneficiary;
+
+	const BROKER: u64 = 999;
+	const BROKER_BPS: u16 = 100;
+
+	/// Pool exactly covers the principal and the network's share of the origination fee, so
+	/// utilisation hits 100% and network/broker interest can't be collected and stays pending.
+	fn init_pool_amount() -> AssetAmount {
+		let (origination_fee_network, _) = take_network_fee(ORIGINATION_FEE);
+		PRINCIPAL + origination_fee_network
+	}
+
+	fn create_brokered_loan_on_fully_utilised_pool() {
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+		MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
+		register_as_broker(&BROKER);
+		assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
+		assert_ok!(supply_funds::<Test>(
+			BORROWER,
+			COLLATERAL_ASSET,
+			INIT_COLLATERAL,
+			SupplyAddedActionType::Manual,
+		));
+		assert_ok!(LendingPools::new_loan(
+			BORROWER,
+			LOAN_ASSET,
+			PRINCIPAL,
+			Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
+		));
+		assert_eq!(GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().available_amount, 0);
+	}
+
+	fn account() -> LoanAccount<Test> {
+		LoanAccounts::<Test>::get(BORROWER).unwrap()
+	}
+
+	fn loan() -> GeneralLoan<Test> {
+		account().loans.get(&LOAN_ID).unwrap().clone()
+	}
+
+	#[test]
+	fn withdrawal_headroom_includes_pending_interest() {
+		new_test_ext()
+			.with_funded_pool(init_pool_amount())
+			.then_execute_with(|_| create_brokered_loan_on_fully_utilised_pool())
+			.then_process_blocks_until_block(
+				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+			)
+			.then_execute_with(|_| {
+				let loan = loan();
+				assert!(loan.total_owed() > loan.owed_principal, "expected pending interest");
+
+				let balance_before = MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET);
+
+				// Withdraw as much collateral as the LTV target allows:
+				assert_ok!(general_lending::remove_lender_funds::<Test>(
+					BORROWER,
+					COLLATERAL_ASSET,
+					None
+				));
+
+				assert_eq!(
+					account().derive_ltv(&OraclePriceCache::default()).unwrap(),
+					CONFIG.ltv_thresholds.target.into()
+				);
+
+				// The collateral left behind secures principal *and* pending interest
+				// (collateral is priced at 1 USD, loan asset at SWAP_RATE, target LTV is 80%):
+				let required_collateral = loan.total_owed() * SWAP_RATE * 5 / 4;
+				assert_eq!(
+					GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER),
+					Ok(required_collateral)
+				);
+				assert_eq!(
+					MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET),
+					balance_before + (INIT_COLLATERAL - required_collateral)
+				);
+			});
+	}
+
+	#[test]
+	fn liquidation_collateral_covers_pending_interest() {
+		// Pushes LTV just above the soft liquidation threshold.
+		const NEW_SWAP_RATE: u128 = 24;
+
+		new_test_ext()
+			.with_funded_pool(init_pool_amount())
+			.then_execute_with(|_| create_brokered_loan_on_fully_utilised_pool())
+			.then_process_blocks_until_block(
+				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+			)
+			.then_execute_with(|_| {
+				let loan = loan();
+				assert!(loan.total_owed() > loan.owed_principal, "expected pending interest");
+				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, NEW_SWAP_RATE);
+				loan
+			})
+			.then_execute_at_next_block(|loan| {
+				let swap_id = match &account().liquidation_status {
+					LiquidationStatus::Liquidating { liquidation_swaps, liquidation_type } => {
+						assert_eq!(*liquidation_type, LiquidationType::Soft);
+						*liquidation_swaps.keys().next().unwrap()
+					},
+					other => panic!("expected liquidation, got {other:?}"),
+				};
+
+				let buffer = bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage)
+					.saturating_add(CONFIG.liquidation_fee(LOAN_ASSET));
+
+				// Collateral is sized off the full debt, so the liquidation can repay pending
+				// interest as well as the principal:
+				assert_eq!(
+					MockSwapRequestHandler::<Test>::get_swap_requests()
+						.get(&swap_id)
+						.unwrap()
+						.input_amount,
+					required_collateral_with_buffer(loan.total_owed() * NEW_SWAP_RATE, buffer)
+				);
+
+				// Executing the swap at oracle price repays everything, including the interest
+				// that was pending, and pays the broker:
+				let input = MockSwapRequestHandler::<Test>::get_swap_requests()
+					.get(&swap_id)
+					.unwrap()
+					.input_amount;
+				let output = input / NEW_SWAP_RATE;
+				MockSwapRequestHandler::<Test>::set_swap_request_progress(
+					swap_id,
+					SwapExecutionProgress {
+						remaining_input_amount: 0,
+						accumulated_output_amount: output,
+					},
+				);
+				LendingPools::process_loan_swap_outcome(
+					swap_id,
+					LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+					output,
+				);
+
+				assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+					loan_id: LOAN_ID,
+					outstanding_principal: 0,
+					via_liquidation: true,
+				}));
+				assert!(MockBalance::get_balance(&BROKER, LOAN_ASSET) > 0);
+			});
+	}
+}
