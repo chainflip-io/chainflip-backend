@@ -15,10 +15,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	common::option_inner,
 	dot::{cached_rpc::DotRetryRpcApiWithResult, http_rpc::DotRpcClientBuilder},
-	retrier::{Attempt, RetryLimitReturn, MAX_RPC_RETRY_DELAY, MAX_SUBSCRIPTION_RETRY_DELAY},
-	settings::{NodeContainer, WsHttpEndpoints},
+	retrier::{Attempt, RetryLimitReturn, MAX_RPC_RETRY_DELAY},
+	settings::{HttpEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{
@@ -28,13 +27,11 @@ use cf_chains::{
 use cf_primitives::{chains::assets::hub::Asset as HubAsset, PolkadotBlockNumber};
 use cf_utilities::task_scope::Scope;
 use core::time::Duration;
-use futures_core::Stream;
-use std::pin::Pin;
 use subxt::{backend::legacy::rpc_methods::Bytes, events::Events, PolkadotConfig};
 
 use crate::retrier::{RequestLog, RetrierClient};
 
-use super::{rpc::DotSubClient, PolkadotHash, PolkadotHeader};
+use super::{PolkadotHash, PolkadotHeader};
 use anyhow::{anyhow, Result};
 
 use crate::dot::rpc::DotRpcApi;
@@ -42,7 +39,6 @@ use crate::dot::rpc::DotRpcApi;
 #[derive(Clone)]
 pub struct DotRetryRpcClient {
 	rpc_retry_client: RetrierClient<DotRpcClientBuilder>,
-	sub_retry_client: RetrierClient<DotSubClient>,
 }
 
 const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(28 * 1000);
@@ -54,7 +50,7 @@ const MAX_RETRY_FOR_WITH_RESULT: Attempt = 2;
 impl DotRetryRpcClient {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		nodes: NodeContainer<WsHttpEndpoints>,
+		nodes: NodeContainer<HttpEndpoint>,
 		expected_genesis_hash: PolkadotHash,
 	) -> Result<Self> {
 		Self::new_inner(scope, nodes, Some(expected_genesis_hash))
@@ -62,25 +58,16 @@ impl DotRetryRpcClient {
 
 	fn new_inner(
 		scope: &Scope<'_, anyhow::Error>,
-		nodes: NodeContainer<WsHttpEndpoints>,
+		nodes: NodeContainer<HttpEndpoint>,
 		// The genesis hash is optional to facilitate testing
 		expected_genesis_hash: Option<PolkadotHash>,
 	) -> Result<Self> {
-		let f_create_clients = |endpoints: WsHttpEndpoints| {
-			Result::<_, anyhow::Error>::Ok((
-				DotRpcClientBuilder::new(
-					endpoints.ws_endpoint.clone(),
-					endpoints.http_endpoint.clone(),
-					expected_genesis_hash,
-				)?,
-				DotSubClient::new(endpoints.ws_endpoint, expected_genesis_hash),
-			))
+		let f_create_client = |endpoint: HttpEndpoint| {
+			DotRpcClientBuilder::new(endpoint.http_endpoint, expected_genesis_hash)
 		};
 
-		let (rpc_client, sub_client) = f_create_clients(nodes.primary)?;
-
-		let (backup_rpc_client, backup_sub_client) =
-			option_inner(nodes.backup.map(f_create_clients).transpose()?);
+		let rpc_client = f_create_client(nodes.primary)?;
+		let backup_rpc_client = nodes.backup.map(f_create_client).transpose()?;
 
 		Ok(DotRetryRpcClient {
 			rpc_retry_client: RetrierClient::new(
@@ -90,15 +77,6 @@ impl DotRetryRpcClient {
 				backup_rpc_client.map(futures::future::ready),
 				POLKADOT_RPC_TIMEOUT,
 				MAX_RPC_RETRY_DELAY,
-				MAX_CONCURRENT_SUBMISSIONS,
-			),
-			sub_retry_client: RetrierClient::new(
-				scope,
-				"hub_subscribe",
-				futures::future::ready(sub_client),
-				backup_sub_client.map(futures::future::ready),
-				POLKADOT_RPC_TIMEOUT,
-				MAX_SUBSCRIPTION_RETRY_DELAY,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 		})
@@ -265,7 +243,7 @@ impl DotRetrySigningRpcApi for DotRetryRpcClient {
 				Box::pin(move |client| {
 					let encoded_bytes = encoded_bytes.clone();
 					Box::pin(async move {
-						client.ws_client().await.submit_raw_encoded_extrinsic(encoded_bytes).await
+						client.http_client().await.submit_raw_encoded_extrinsic(encoded_bytes).await
 					})
 				}),
 				MAX_BROADCAST_RETRIES,
@@ -390,48 +368,6 @@ impl DotRetryRpcApiWithResult for DotRetryRpcClient {
 					})
 				}),
 				MAX_RETRY_FOR_WITH_RESULT,
-			)
-			.await
-	}
-}
-
-#[async_trait::async_trait]
-pub trait DotRetrySubscribeApi {
-	async fn subscribe_best_heads(
-		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<(PolkadotHash, PolkadotHeader)>> + Send>>;
-
-	async fn subscribe_finalized_heads(
-		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<(PolkadotHash, PolkadotHeader)>> + Send>>;
-}
-
-use crate::dot::rpc::DotSubscribeApi;
-
-#[async_trait::async_trait]
-impl DotRetrySubscribeApi for DotRetryRpcClient {
-	async fn subscribe_best_heads(
-		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<(PolkadotHash, PolkadotHeader)>> + Send>> {
-		self.sub_retry_client
-			.request(
-				RequestLog::new("subscribe_best_heads".to_string(), None),
-				Box::pin(move |client| {
-					Box::pin(async move { client.subscribe_best_heads().await })
-				}),
-			)
-			.await
-	}
-
-	async fn subscribe_finalized_heads(
-		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<(PolkadotHash, PolkadotHeader)>> + Send>> {
-		self.sub_retry_client
-			.request(
-				RequestLog::new("subscribe_finalized_heads".to_string(), None),
-				Box::pin(move |client| {
-					Box::pin(async move { client.subscribe_finalized_heads().await })
-				}),
 			)
 			.await
 	}
@@ -580,7 +516,7 @@ mod tests {
 	use crate::{
 		dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient, DotRetrySigningRpcApi},
 		retrier::NoRetryLimit,
-		settings::{NodeContainer, WsHttpEndpoints},
+		settings::{HttpEndpoint, NodeContainer},
 	};
 
 	#[tokio::test]
@@ -591,10 +527,7 @@ mod tests {
 				let dot_retry_rpc_client = DotRetryRpcClient::new_inner(
 					scope,
 					NodeContainer {
-						primary: WsHttpEndpoints {
-							http_endpoint: "http://127.0.0.1:9945".into(),
-							ws_endpoint: "ws://127.0.0.1:9945".into(),
-						},
+						primary: HttpEndpoint { http_endpoint: "http://127.0.0.1:9945".into() },
 						backup: None,
 					},
 					None,
