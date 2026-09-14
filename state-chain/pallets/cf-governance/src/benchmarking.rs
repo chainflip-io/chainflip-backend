@@ -26,10 +26,12 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 
-/// `MAX_MEMBERS` voters in sub-groups at `MAX_DEPTH`: the most expensive authority to validate and
-/// evaluate. Also returns the last voter, which every quorum check has to reach.
+/// A maximum-size authority at `MAX_DEPTH`: `MAX_MEMBERS` voters in sub-groups. Also returns the
+/// last voter, which every quorum check has to reach.
 fn max_size_authority<T: Config>(seed: u32) -> (VotingAuthority<T::AccountId>, T::AccountId) {
 	const GROUPS: u32 = 8;
+	// Otherwise the division drops voters, including the returned last one.
+	const _: () = assert!((MAX_MEMBERS as u32).is_multiple_of(GROUPS));
 	let group_size = MAX_MEMBERS as u32 / GROUPS;
 	let voter = |i: u32| account::<T::AccountId>("voter", i, seed);
 	(
@@ -49,6 +51,15 @@ fn max_size_authority<T: Config>(seed: u32) -> (VotingAuthority<T::AccountId>, T
 		},
 		voter(MAX_MEMBERS as u32 - 1),
 	)
+}
+
+/// Gives each member the sufficient that genesis and `set_voting_authority` would, so removing
+/// them later goes through account reaping, as in production.
+fn install_authority<T: Config>(authority: VotingAuthority<T::AccountId>) {
+	for member in authority.members() {
+		frame_system::Pallet::<T>::inc_sufficients(&member);
+	}
+	<Members<T>>::put(authority);
 }
 
 #[benchmarks]
@@ -83,7 +94,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn set_voting_authority() {
-		<Members<T>>::put(max_size_authority::<T>(0).0);
+		install_authority::<T>(max_size_authority::<T>(0).0);
 		let (new_authority, _) = max_size_authority::<T>(1);
 		let call = Call::<T>::set_voting_authority { new_authority: new_authority.clone() };
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
@@ -196,7 +207,7 @@ mod benchmarks {
 	#[benchmark]
 	fn dispatch_whitelisted_call() {
 		let (authority, caller) = max_size_authority::<T>(0);
-		<Members<T>>::put(authority);
+		install_authority::<T>(authority);
 		let call: <T as Config>::RuntimeCall = Call::<T>::set_voting_authority {
 			new_authority: VotingAuthority::Individual { id: caller.clone() },
 		}
