@@ -55,7 +55,7 @@ jobs:
           cargo deb -v --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}"
 
       - name: Upload packages 📤
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: chainflip-backend-packages
           path: |

@@ -216,7 +216,7 @@ jobs:
       - name: Upload chain explorer 📤
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: chain-explorer${{ inputs.log-postfix }}
           path: /tmp/chainflip/*_explorer.txt
@@ -261,7 +261,7 @@ jobs:
       - name: Upload Localnet Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: localnet-logs${{ inputs.log-postfix }}
           path: |
@@ -273,7 +273,7 @@ jobs:
       - name: Upload Bouncer Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: bouncer-logs${{ inputs.log-postfix }}
           path: |
@@ -282,7 +282,7 @@ jobs:
       - name: Upload runner diagnostics 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: runner-diagnostics${{ inputs.log-postfix }}
           path: /opt/actions-runner/_diag/
@@ -298,7 +298,7 @@ jobs:
       - name: Upload indexer database
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: indexer-pgsql-dump${{ inputs.log-postfix }}
           path: |
@@ -331,7 +331,7 @@ jobs:
       - name: Upload Docker Container Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: docker-container-logs${{ inputs.log-postfix }}
           path: /tmp/chainflip/docker-logs/
