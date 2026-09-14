@@ -595,7 +595,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		delegate(RawOrigin::Signed(delegator.clone()), operator.clone(), DelegationAmount::Max);
 
-		assert!(DelegationChoices::<T>::get(delegator).is_some());
+		assert!(DelegationChoice::<T>::get(delegator).is_some());
 	}
 
 	#[benchmark]
@@ -622,7 +622,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		undelegate(RawOrigin::Signed(delegator.clone()), DelegationAmount::Max);
 
-		assert!(DelegationChoices::<T>::get(&delegator).is_none());
+		assert!(DelegationChoice::<T>::get(&delegator).is_none());
 	}
 
 	#[benchmark]
@@ -667,7 +667,7 @@ mod benchmarks {
 			.unwrap(),
 		);
 
-		assert!(DelegationChoices::<T>::get(&delegator)
+		assert!(DelegationChoice::<T>::get(&delegator)
 			.unwrap()
 			.into_map()
 			.contains_key(&operator_b));
