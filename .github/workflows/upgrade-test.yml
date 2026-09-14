@@ -336,7 +336,7 @@ jobs:
       - name: Upload Localnet Logs 💾
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: localnet-logs-upgrade-test
           path: |
@@ -348,7 +348,7 @@ jobs:
       - name: Upload Chainflip Logs 💾
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: chainflip-logs-upgrade-test
           path: |
@@ -357,7 +357,7 @@ jobs:
       - name: Upload Bouncer Logs 💾
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: bouncer-logs-upgrade-test
           path: |
@@ -379,7 +379,7 @@ jobs:
       - name: Upload chain explorer 📤
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: chain-explorer-upgrade-test
           path: /tmp/chainflip/explorer.txt
@@ -387,7 +387,7 @@ jobs:
       - name: Upload Snapshots 💾
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: failure-snapshots
           path: |
@@ -403,7 +403,7 @@ jobs:
       - name: Upload indexer database
         if: ${{ always() && inputs.run-job }}
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: indexer-pgsql-dump-upgrade-test
           path: |
@@ -421,7 +421,7 @@ jobs:
       - name: Upload Docker Container Logs 💾
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: docker-container-logs-upgrade-test
           path: /tmp/chainflip/docker-logs/
