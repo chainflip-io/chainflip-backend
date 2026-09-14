@@ -157,9 +157,14 @@ pub trait RunnerStorageAccessTrait {
 		state: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionState,
 	) -> Result<(), CorruptStorageError>;
 
-	// Clear the votes of a particular election
+	/// Clear the votes of a particular election.
+	///
+	/// Normally only the components the election's electoral system can have are touched. Set
+	/// `clear_all_components` to clear both regardless: for governance recovery, where the stored
+	/// votes may not match what the current code says they should be.
 	fn clear_election_votes(
 		composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
+		clear_all_components: bool,
 	);
 
 	fn delete_election(

@@ -790,12 +790,16 @@ pub mod pallet {
 			}
 			fn clear_election_votes(
 				composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
+				clear_all_components: bool,
 			) {
 				let unique_monotonic_identifier = *composite_election_identifier.unique_monotonic();
-				let component_storage_kind =
+				let component_storage_kind = if clear_all_components {
+					ComponentStorageKind::Both
+				} else {
 					<T::ElectoralSystemRunner as ElectoralSystemRunner>::election_component_storage_kind(
 						composite_election_identifier,
-					);
+					)
+				};
 
 				if component_storage_kind.has_bitmap() {
 					ElectionBitmapComponents::<T, I>::clear(unique_monotonic_identifier);
@@ -817,7 +821,7 @@ pub mod pallet {
 				composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
 			) {
 				let unique_monotonic_identifier = composite_election_identifier.unique_monotonic();
-				Self::clear_election_votes(composite_election_identifier);
+				Self::clear_election_votes(composite_election_identifier, false);
 				ElectionProperties::<T, I>::remove(composite_election_identifier);
 				ElectionState::<T, I>::remove(unique_monotonic_identifier);
 				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
@@ -1640,7 +1644,8 @@ pub mod pallet {
 				Self::ensure_election_exists(election_identifier)?;
 			}
 
-			RunnerStorageAccess::<T, I>::clear_election_votes(election_identifier);
+			// All components are cleared regardless of what the election's system declares
+			RunnerStorageAccess::<T, I>::clear_election_votes(election_identifier, true);
 
 			Ok(())
 		}
