@@ -15,15 +15,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	council::tests::pro_3132_council, mock::*, ActiveProposals, Council, Error, Event,
-	ExecutionMode, ExecutionPipeline, ExpiryTime, Members, PreAuthorisedGovCalls,
-	ProposalIdCounter,
+	council::{tests::pro_3132_council, MAX_MEMBERS},
+	mock::*,
+	ActiveProposals, Council, Error, Event, ExecutionMode, ExecutionPipeline, ExpiryTime, Members,
+	PreAuthorisedGovCalls, ProposalIdCounter,
 };
 use cf_primitives::SemVer;
 use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_err, assert_noop, assert_ok};
-use sp_runtime::Percent;
+use sp_runtime::{BuildStorage, Percent};
 use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
@@ -48,6 +49,19 @@ fn genesis_config() {
 		let expiry_span = ExpiryTime::<Test>::get();
 		assert_eq!(expiry_span, 50);
 	});
+}
+
+#[test]
+#[should_panic(expected = "TooManyMembers")]
+fn genesis_rejects_invalid_council() {
+	let _ = RuntimeGenesisConfig {
+		system: Default::default(),
+		governance: GovernanceConfig {
+			members: (0..=MAX_MEMBERS as u64).collect(),
+			expiry_span: 50,
+		},
+	}
+	.build_storage();
 }
 
 #[test]
