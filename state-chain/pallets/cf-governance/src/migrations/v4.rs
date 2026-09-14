@@ -115,4 +115,16 @@ mod tests {
 			);
 		});
 	}
+
+	#[test]
+	fn absent_council_reads_as_default() {
+		new_test_ext().execute_with(|| {
+			Members::<Test>::kill();
+
+			Migration::<Test>::on_runtime_upgrade();
+
+			assert!(!Members::<Test>::exists());
+			assert_eq!(Members::<Test>::get(), VotingAuthority::default());
+		});
+	}
 }
