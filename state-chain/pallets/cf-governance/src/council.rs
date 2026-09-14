@@ -351,7 +351,8 @@ pub(crate) mod tests {
 
 	proptest! {
 		/// The core safety property: nothing that passes validation can be unfulfillable, trivially
-		/// satisfied, too deep, too large, or double-count an account.
+		/// satisfied, or double-count an account. Samples rarely come near `MAX_DEPTH` or
+		/// `MAX_MEMBERS`, so the unit tests and `too_deep_councils_are_rejected` pin the bounds.
 		#[test]
 		fn validated_councils_are_well_formed(council in arb_council()) {
 			if council.validate().is_ok() {
@@ -361,6 +362,17 @@ pub(crate) mod tests {
 				prop_assert!(council.members().len() <= MAX_MEMBERS);
 				prop_assert_eq!(leaves(&council).len(), council.members().len());
 			}
+		}
+
+		/// Exactly one level too deep, so an off-by-one in the depth check is caught.
+		#[test]
+		fn too_deep_councils_are_rejected(council in valid_council()) {
+			// The wrappers are otherwise valid and the depth check fails before any member is
+			// visited, so `TooDeep` is the only possible error.
+			let too_deep = (depth(&council)..=MAX_DEPTH)
+				.fold(council, |inner, _| SimpleGroup { threshold: 1, members: vec![inner] });
+			prop_assert_eq!(depth(&too_deep), MAX_DEPTH + 1);
+			prop_assert_eq!(too_deep.validate(), Err(TooDeep));
 		}
 
 		#[test]
