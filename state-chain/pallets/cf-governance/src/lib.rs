@@ -462,13 +462,19 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
+			let authority = VotingAuthority::simple_group(
+				u8::try_from(self.members.len().div_ceil(2)).unwrap_or(u8::MAX),
+				self.members.iter().cloned(),
+			);
+			// No members (the default) means governance is disabled, which `validate` would reject
+			// as an empty group.
+			if !self.members.is_empty() {
+				authority.validate().expect("The genesis voting authority must be valid");
+			}
 			for member in &self.members {
 				<frame_system::Pallet<T>>::inc_sufficients(member);
 			}
-			Members::<T>::set(VotingAuthority::simple_group(
-				u8::try_from(self.members.len().div_ceil(2)).unwrap_or(u8::MAX),
-				self.members.iter().cloned(),
-			));
+			Members::<T>::set(authority);
 			ExpiryTime::<T>::set(self.expiry_span);
 		}
 	}
