@@ -229,6 +229,60 @@ fn create_loan_and_supply_collateral(
 }
 
 #[test]
+fn unwind_lending_positions_repays_loans_and_returns_supply() {
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.execute_with(|| {
+			// The borrower holds the principal, but not the origination fee added to the loan.
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
+
+			assert_ok!(LendingPools::unwind_lending_positions(LOAN_ASSET));
+
+			// The loan is repaid from the borrower's balance and the remainder written off.
+			assert!(LoanAccounts::<Test>::get(BORROWER).is_none());
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+				loan_id: LOAN_ID,
+				outstanding_principal: ORIGINATION_FEE,
+				via_liquidation: false,
+			}));
+
+			// The lender gets its whole supply back, less the network's share of the unpaid fee.
+			let pool = GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap();
+			assert!(pool.lender_shares.is_empty());
+			assert_eq!((pool.total_amount, pool.available_amount, pool.owed_to_network), (0, 0, 0));
+			let (network_fee, _) = take_network_fee(ORIGINATION_FEE);
+			assert_eq!(
+				MockBalance::get_balance(&LENDER, LOAN_ASSET),
+				INIT_POOL_AMOUNT - network_fee
+			);
+
+			// The borrower's collateral in another asset is untouched.
+			assert_eq!(get_collateral(), INIT_COLLATERAL);
+		});
+}
+
+// `log_or_panic!` panics only with debug assertions; in release builds (as in CI) it logs and the
+// unwind carries on, so the assertions below only run there.
+#[test]
+#[cfg_attr(debug_assertions, should_panic(expected = "backs open loans"))]
+fn unwind_lending_positions_flags_supply_backing_loans() {
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.execute_with(|| {
+			// The borrower's collateral is its supply in the collateral asset's pool.
+			assert_ok!(LendingPools::unwind_lending_positions(COLLATERAL_ASSET));
+
+			// The supply is returned regardless, leaving the loan uncollateralised.
+			assert_eq!(get_collateral(), 0);
+			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), INIT_COLLATERAL);
+			assert!(LoanAccounts::<Test>::get(BORROWER).is_some());
+		});
+}
+
+#[test]
 fn collateral_reported_for_supply_only_account() {
 	// `cf_account_info` reports collateral via `get_total_collateral_for_account`. An account
 	// that has supplied funds but never borrowed has no loan account, yet its supply positions

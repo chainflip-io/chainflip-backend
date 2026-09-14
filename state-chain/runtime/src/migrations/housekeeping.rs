@@ -74,9 +74,9 @@ pub type Migration = (
 	liveness_election_state::LivenessElectionStateMigration,
 );
 
-/// Closes all TrxUsdt trading strategies, returning their funds to the owning LPs, and cancels all
-/// TrxUsdt/Usdc pool orders. Then takes every LP's free TrxUsdt balance into
-/// `TrxUsdtExploitSnapshot`, recording the amount per account. Lending supply is left untouched.
+/// Closes all TrxUsdt trading strategies, returning their funds to the owning LPs, cancels all
+/// TrxUsdt/Usdc pool orders, and unwinds all TrxUsdt lending positions. Then takes every LP's
+/// free TrxUsdt balance into `TrxUsdtExploitSnapshot`, recording the amount per account.
 fn snapshot_trx_usdt_balances() {
 	use cf_primitives::{Asset, AssetAmount};
 	use cf_traits::PoolOrdersManager;
@@ -107,6 +107,13 @@ fn snapshot_trx_usdt_balances() {
 		Asset::Usdc,
 	) {
 		log::error!("🧹 Failed to cancel TrxUsdt pool orders: {e:?}");
+	}
+
+	// Repays loans from borrowers' free balances and returns lenders' supply to theirs.
+	if let Err(e) = with_storage_layer(|| {
+		pallet_cf_lending_pools::Pallet::<Runtime>::unwind_lending_positions(Asset::TrxUsdt)
+	}) {
+		log::error!("🧹 Failed to unwind TrxUsdt lending positions: {e:?}");
 	}
 
 	let accounts: Vec<AccountId32> = FreeBalances::<Runtime>::iter()
@@ -179,6 +186,18 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) &&
 			VERSION.spec_version == REFUNDS_SPEC_VERSION
 		{
+			use cf_primitives::Asset;
+
+			// Returning TrxUsdt supply skips LTV checks, so it must not back any open loans.
+			frame_support::ensure!(
+				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(Asset::TrxUsdt)
+					.is_none_or(|pool| {
+						pool.lender_shares.keys().all(|lender| {
+							!pallet_cf_lending_pools::LoanAccounts::<Runtime>::contains_key(lender)
+						})
+					}),
+				"A TrxUsdt lender has open loans"
+			);
 			Ok(egress_queue_lengths().iter().flat_map(|len| len.to_be_bytes()).collect())
 		} else {
 			Ok(Default::default())
@@ -213,6 +232,17 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 			);
 		}
 
+		frame_support::ensure!(
+			pallet_cf_lending_pools::get_all_loans::<Runtime>()
+				.iter()
+				.all(|loan| loan.asset != Asset::TrxUsdt),
+			"TrxUsdt loans remain"
+		);
+		frame_support::ensure!(
+			pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(Asset::TrxUsdt)
+				.is_none_or(|pool| pool.lender_shares.is_empty()),
+			"TrxUsdt lending supply remains"
+		);
 		frame_support::ensure!(
 			pallet_cf_trading_strategy::Strategies::<Runtime>::iter()
 				.all(|(_, _, strategy)| !strategy.supported_assets().contains(&Asset::TrxUsdt)),
