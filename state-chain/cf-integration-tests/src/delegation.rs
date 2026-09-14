@@ -89,7 +89,7 @@ pub(crate) fn setup_delegation(
 	// Move to the next for delegation to take affect
 	testnet.move_to_the_next_epoch();
 
-	let actual_delegator_set = pallet_cf_validator::DelegationChoices::<Runtime>::iter()
+	let actual_delegator_set = pallet_cf_validator::DelegationChoice::<Runtime>::iter()
 		.map(|(d, _)| d)
 		.collect::<BTreeSet<_>>();
 	assert_eq!(actual_delegator_set, delegators.keys().cloned().collect());
