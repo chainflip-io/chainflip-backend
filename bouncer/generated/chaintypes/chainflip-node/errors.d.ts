@@ -2303,6 +2303,10 @@ export interface ChainErrors extends GenericChainErrors {
     UnreferencedSharedData: GenericPalletError;
     CorruptStorage: GenericPalletError;
     VotesNotCleared: GenericPalletError;
+
+    /**
+     * Retired. Kept only so the discriminants of the variants below it stay stable.
+     **/
     NotContributing: GenericPalletError;
     NoVotesSpecified: GenericPalletError;
 
@@ -2759,6 +2763,10 @@ export interface ChainErrors extends GenericChainErrors {
     UnreferencedSharedData: GenericPalletError;
     CorruptStorage: GenericPalletError;
     VotesNotCleared: GenericPalletError;
+
+    /**
+     * Retired. Kept only so the discriminants of the variants below it stay stable.
+     **/
     NotContributing: GenericPalletError;
     NoVotesSpecified: GenericPalletError;
 
@@ -2780,6 +2788,10 @@ export interface ChainErrors extends GenericChainErrors {
     UnreferencedSharedData: GenericPalletError;
     CorruptStorage: GenericPalletError;
     VotesNotCleared: GenericPalletError;
+
+    /**
+     * Retired. Kept only so the discriminants of the variants below it stay stable.
+     **/
     NotContributing: GenericPalletError;
     NoVotesSpecified: GenericPalletError;
 
@@ -2801,6 +2813,10 @@ export interface ChainErrors extends GenericChainErrors {
     UnreferencedSharedData: GenericPalletError;
     CorruptStorage: GenericPalletError;
     VotesNotCleared: GenericPalletError;
+
+    /**
+     * Retired. Kept only so the discriminants of the variants below it stay stable.
+     **/
     NotContributing: GenericPalletError;
     NoVotesSpecified: GenericPalletError;
 
@@ -2822,6 +2838,10 @@ export interface ChainErrors extends GenericChainErrors {
     UnreferencedSharedData: GenericPalletError;
     CorruptStorage: GenericPalletError;
     VotesNotCleared: GenericPalletError;
+
+    /**
+     * Retired. Kept only so the discriminants of the variants below it stay stable.
+     **/
     NotContributing: GenericPalletError;
     NoVotesSpecified: GenericPalletError;
 
@@ -3004,6 +3024,10 @@ export interface ChainErrors extends GenericChainErrors {
     UnreferencedSharedData: GenericPalletError;
     CorruptStorage: GenericPalletError;
     VotesNotCleared: GenericPalletError;
+
+    /**
+     * Retired. Kept only so the discriminants of the variants below it stay stable.
+     **/
     NotContributing: GenericPalletError;
     NoVotesSpecified: GenericPalletError;
 
@@ -3186,6 +3210,10 @@ export interface ChainErrors extends GenericChainErrors {
     UnreferencedSharedData: GenericPalletError;
     CorruptStorage: GenericPalletError;
     VotesNotCleared: GenericPalletError;
+
+    /**
+     * Retired. Kept only so the discriminants of the variants below it stay stable.
+     **/
     NotContributing: GenericPalletError;
     NoVotesSpecified: GenericPalletError;
 
@@ -3207,6 +3235,10 @@ export interface ChainErrors extends GenericChainErrors {
     UnreferencedSharedData: GenericPalletError;
     CorruptStorage: GenericPalletError;
     VotesNotCleared: GenericPalletError;
+
+    /**
+     * Retired. Kept only so the discriminants of the variants below it stay stable.
+     **/
     NotContributing: GenericPalletError;
     NoVotesSpecified: GenericPalletError;
 
