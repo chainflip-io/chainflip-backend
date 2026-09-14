@@ -554,29 +554,7 @@ pub mod pallet {
 
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			let strategy =
-				Strategies::<T>::take(lp, &strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
-
-			T::PoolApi::cancel_all_limit_orders(&strategy_id)?;
-
-			for asset in strategy.supported_assets() {
-				let balance = T::BalanceApi::get_balance(&strategy_id, asset);
-				T::BalanceApi::transfer(&strategy_id, lp, asset, balance)?;
-			}
-
-			frame_system::Provider::<T>::killed(&strategy_id).unwrap_or_else(|e| {
-				// This shouldn't happen, and not much we can do if it does except fix it on a
-				// subsequent release. Consequences are minor.
-				log::error!(
-					"Unexpected reference count error while closing a strategy {:?}: {:?}.",
-					strategy_id,
-					e
-				);
-			});
-
-			Self::deposit_event(Event::<T>::StrategyClosed { strategy_id: strategy_id.clone() });
-
-			Ok(())
+			Self::close_strategy_inner(lp, &strategy_id)
 		}
 
 		#[pallet::call_index(3)]
@@ -654,6 +632,34 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Cancels the strategy's orders and returns its funds to the owner. Does not check safe mode
+	/// or origin.
+	pub fn close_strategy_inner(lp: &T::AccountId, strategy_id: &T::AccountId) -> DispatchResult {
+		let strategy =
+			Strategies::<T>::take(lp, strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
+
+		T::PoolApi::cancel_all_limit_orders(strategy_id)?;
+
+		for asset in strategy.supported_assets() {
+			let balance = T::BalanceApi::get_balance(strategy_id, asset);
+			T::BalanceApi::transfer(strategy_id, lp, asset, balance)?;
+		}
+
+		frame_system::Provider::<T>::killed(strategy_id).unwrap_or_else(|e| {
+			// This shouldn't happen, and not much we can do if it does except fix it on a
+			// subsequent release. Consequences are minor.
+			log::error!(
+				"Unexpected reference count error while closing a strategy {:?}: {:?}.",
+				strategy_id,
+				e
+			);
+		});
+
+		Self::deposit_event(Event::<T>::StrategyClosed { strategy_id: strategy_id.clone() });
+
+		Ok(())
+	}
+
 	fn add_funds_to_existing_strategy(
 		lp: &T::AccountId,
 		strategy_id: &T::AccountId,

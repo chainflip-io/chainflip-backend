@@ -1847,8 +1847,8 @@ fn cancel_all_pool_positions() {
 			Price::at_tick_zero(),
 		));
 
+		const AMOUNT: AssetAmount = 1_000_000;
 		for (lp, side, n) in [(ALICE, Side::Sell, 2), (ALICE, Side::Buy, 2), (BOB, Side::Sell, 8)] {
-			const AMOUNT: AssetAmount = 1_000_000;
 			MockBalance::credit_account(&lp, BASE_ASSET, AMOUNT);
 			MockBalance::credit_account(&lp, STABLE_ASSET, AMOUNT);
 
@@ -1904,6 +1904,17 @@ fn cancel_all_pool_positions() {
 		// All orders in the pool should be closed
 		assert_eq!(count_orders(BASE_ASSET, ALICE), (0, 0, 0));
 		assert_eq!(count_orders(BASE_ASSET, BOB), (0, 0, 0));
+
+		// Funds are returned to the LPs, less rounding on range orders.
+		for (lp, credited, range_orders) in [(ALICE, 2 * AMOUNT, 2), (BOB, AMOUNT, 8)] {
+			for asset in [BASE_ASSET, STABLE_ASSET] {
+				let balance = MockBalance::get_balance(&lp, asset);
+				assert!(
+					balance <= credited && credited - balance <= 2 * range_orders,
+					"{lp:?} {asset:?}: {balance} of {credited}"
+				);
+			}
+		}
 	});
 }
 
