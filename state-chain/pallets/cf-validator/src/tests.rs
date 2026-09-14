@@ -1964,7 +1964,7 @@ fn should_expire_all_previous_epochs() {
 /// (at most) one relation -- most existing tests only ever exercise that case.
 #[cfg(test)]
 fn single_relation(delegator: u64) -> Option<(u64, u128)> {
-	DelegationChoices::<Test>::get(delegator).map(|relations| {
+	DelegationChoice::<Test>::get(delegator).map(|relations| {
 		let operators = relations.into_map();
 		assert_eq!(
 			operators.len(),
@@ -2464,11 +2464,11 @@ mod delegation {
 				INDEPENDENT_VALIDATOR
 			)));
 
-			DelegationChoices::<Test>::insert(
+			DelegationChoice::<Test>::insert(
 				ALICE,
 				DelegationPlan::try_from_map(BTreeMap::from([(BOB, BID)])).unwrap(),
 			);
-			DelegationChoices::<Test>::insert(
+			DelegationChoice::<Test>::insert(
 				INDEPENDENT_VALIDATOR,
 				DelegationPlan::try_from_map(BTreeMap::from([(BOB, BID)])).unwrap(),
 			);
@@ -2651,7 +2651,7 @@ mod delegation {
 				DelegationAmount::Some(1),
 			));
 
-			assert!(DelegationChoices::<Test>::contains_key(ALICE));
+			assert!(DelegationChoice::<Test>::contains_key(ALICE));
 			assert!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
 		});
 	}
@@ -3386,7 +3386,7 @@ mod delegation {
 			));
 
 			assert_eq!(
-				DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map(),
+				DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
 			);
 
@@ -3436,7 +3436,7 @@ mod delegation {
 			));
 
 			let requested_total = REQUESTED_TO_A + REQUESTED_TO_B;
-			let stored = DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map();
+			let stored = DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map();
 			assert_eq!(stored.values().copied().sum::<u128>(), BALANCE);
 			// Proportional to the original 1400:600 (7:3) split.
 			assert_eq!(
@@ -3477,7 +3477,7 @@ mod delegation {
 				fixed_plan([(OPERATOR_A, half_of_min), (OPERATOR_B, min_bid - half_of_min)])
 			));
 			assert_eq!(
-				DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map(),
+				DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(OPERATOR_A, half_of_min), (OPERATOR_B, min_bid - half_of_min)])
 			);
 
@@ -3521,7 +3521,7 @@ mod delegation {
 				fixed_plan([(OPERATOR_A, BID_TO_A - 100), (OPERATOR_B, BID_TO_B)])
 			));
 			assert_eq!(
-				DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map(),
+				DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(OPERATOR_A, BID_TO_A - 100), (OPERATOR_B, BID_TO_B)])
 			);
 
@@ -3532,7 +3532,7 @@ mod delegation {
 				fixed_plan([(OPERATOR_B, BID_TO_B)])
 			));
 			assert_eq!(
-				DelegationChoices::<Test>::get(DELEGATOR).unwrap().into_map(),
+				DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(OPERATOR_B, BID_TO_B)])
 			);
 			System::assert_last_event(RuntimeEvent::ValidatorPallet(
@@ -3553,7 +3553,7 @@ mod delegation {
 				OriginTrait::signed(DELEGATOR),
 				fixed_plan([])
 			));
-			assert!(!DelegationChoices::<Test>::contains_key(DELEGATOR));
+			assert!(!DelegationChoice::<Test>::contains_key(DELEGATOR));
 			assert!(!<Roles as AccountRoleRegistry<Test>>::has_account_role(
 				&DELEGATOR,
 				AccountRole::LiquidityProvider

@@ -225,8 +225,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `Validator::MinimumValidatorStake` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::OperatorChoice` (r:400 w:0)
 	/// Proof: `Validator::OperatorChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::DelegationChoices` (r:1 w:0)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:0)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::MinimumAuctionBid` (r:1 w:0)
 	/// Proof: `Validator::MinimumAuctionBid` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::CurrentAuthorities` (r:1 w:0)
@@ -532,8 +532,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::DelegationChoices` (r:1 w:0)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:0)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::OperatorSettingsLookup` (r:1 w:0)
 	/// Proof: `Validator::OperatorSettingsLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::Exceptions` (r:1 w:1)
@@ -583,8 +583,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::ManagedValidators` (r:1 w:1)
 	/// Proof: `Validator::ManagedValidators` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::DelegationChoices` (r:1 w:0)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:0)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::LastExpiredEpoch` (r:1 w:0)
 	/// Proof: `Validator::LastExpiredEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
@@ -614,8 +614,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `Validator::Exceptions` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Flip::Account` (r:1 w:0)
 	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// Storage: `Validator::DelegationChoices` (r:1 w:1)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:1)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Funding::MinimumFunding` (r:1 w:0)
 	/// Proof: `Funding::MinimumFunding` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	fn delegate() -> Weight {
@@ -627,8 +627,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(7_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `Validator::DelegationChoices` (r:1 w:1)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:1)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn undelegate() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `546`
@@ -841,8 +841,8 @@ impl WeightInfo for () {
 	/// Proof: `Validator::MinimumValidatorStake` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::OperatorChoice` (r:400 w:0)
 	/// Proof: `Validator::OperatorChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::DelegationChoices` (r:1 w:0)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:0)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::MinimumAuctionBid` (r:1 w:0)
 	/// Proof: `Validator::MinimumAuctionBid` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::CurrentAuthorities` (r:1 w:0)
@@ -1148,8 +1148,8 @@ impl WeightInfo for () {
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::DelegationChoices` (r:1 w:0)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:0)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::OperatorSettingsLookup` (r:1 w:0)
 	/// Proof: `Validator::OperatorSettingsLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::Exceptions` (r:1 w:1)
@@ -1199,8 +1199,8 @@ impl WeightInfo for () {
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::ManagedValidators` (r:1 w:1)
 	/// Proof: `Validator::ManagedValidators` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::DelegationChoices` (r:1 w:0)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:0)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::LastExpiredEpoch` (r:1 w:0)
 	/// Proof: `Validator::LastExpiredEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
@@ -1230,8 +1230,8 @@ impl WeightInfo for () {
 	/// Proof: `Validator::Exceptions` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Flip::Account` (r:1 w:0)
 	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// Storage: `Validator::DelegationChoices` (r:1 w:1)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:1)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Funding::MinimumFunding` (r:1 w:0)
 	/// Proof: `Funding::MinimumFunding` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	fn delegate() -> Weight {
@@ -1243,8 +1243,8 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(7_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
-	/// Storage: `Validator::DelegationChoices` (r:1 w:1)
-	/// Proof: `Validator::DelegationChoices` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationChoice` (r:1 w:1)
+	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn undelegate() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `546`

@@ -15,26 +15,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! `DelegationChoice: StorageMap<delegator, (operator, max_bid)>` only ever supported a single
-//! operator relation per delegator. To support multi-operator delegation, it's reshaped into
-//! `DelegationChoices: StorageMap<delegator, DelegationPlan>`, where `DelegationPlan` holds a
-//! full `operator -> max_bid` set instead of a single pair. This migration translates each
+//! operator relation per delegator. To support multi-operator delegation, its value is reshaped
+//! in place into `DelegationChoice: StorageMap<delegator, DelegationPlan>`, where `DelegationPlan`
+//! holds a full `operator -> max_bid` set instead of a single pair. This migration translates each
 //! pre-existing single-relation entry into the equivalent one-entry plan, preserving all
 //! delegator/operator/max_bid data exactly.
 
-use crate::{Config, DelegationChoices, DelegationPlan};
+use crate::{Config, DelegationChoice, DelegationPlan};
 use frame_support::{
 	pallet_prelude::Weight,
 	sp_runtime::Saturating,
 	traits::{Get, UncheckedOnRuntimeUpgrade},
 };
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
 #[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
-#[cfg(feature = "try-runtime")]
-use sp_std::vec::Vec;
 
 /// Shared with `assign_lp_role_to_delegators` -- both migrations read/write the same
 /// pre-version-11 `DelegationChoice` storage item.
@@ -58,8 +56,11 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		let mut entries_migrated: u64 = 0;
 
-		for (delegator, (operator, max_bid)) in old::DelegationChoice::<T>::drain() {
-			DelegationChoices::<T>::insert(
+		let drained: Vec<(T::AccountId, (T::AccountId, T::Amount))> =
+			old::DelegationChoice::<T>::drain().collect();
+
+		for (delegator, (operator, max_bid)) in drained {
+			DelegationChoice::<T>::insert(
 				&delegator,
 				DelegationPlan::try_from_map(BTreeMap::from([(operator, max_bid)])).unwrap_or_else(
 					|_| {
@@ -90,18 +91,19 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		let entries: Vec<(T::AccountId, T::AccountId, T::Amount)> =
 			Decode::decode(&mut &state[..]).map_err(|_| "failed to decode pre_upgrade state")?;
+		let entries_count = entries.len();
 
 		for (delegator, operator, max_bid) in entries {
-			let plan = DelegationChoices::<T>::get(&delegator)
-				.ok_or(DispatchError::Other("expected migrated DelegationChoices entry"))?;
+			let plan = DelegationChoice::<T>::get(&delegator)
+				.ok_or(DispatchError::Other("expected migrated DelegationChoice entry"))?;
 			frame_support::ensure!(
 				plan.into_map().get(&operator) == Some(&max_bid),
 				DispatchError::Other("migrated max_bid did not match its pre-upgrade value")
 			);
 		}
 		frame_support::ensure!(
-			old::DelegationChoice::<T>::iter().next().is_none(),
-			DispatchError::Other("old DelegationChoice storage was not fully drained")
+			DelegationChoice::<T>::iter().count() == entries_count,
+			DispatchError::Other("migrated entry count did not match pre-upgrade entry count")
 		);
 		Ok(())
 	}
@@ -131,14 +133,14 @@ mod tests {
 			Migration::<Test>::post_upgrade(state).unwrap();
 
 			assert_eq!(
-				DelegationChoices::<Test>::get(ALICE).unwrap().into_map(),
+				DelegationChoice::<Test>::get(ALICE).unwrap().into_map(),
 				BTreeMap::from([(BOB, 1_000)])
 			);
 			assert_eq!(
-				DelegationChoices::<Test>::get(OTHER_DELEGATOR).unwrap().into_map(),
+				DelegationChoice::<Test>::get(OTHER_DELEGATOR).unwrap().into_map(),
 				BTreeMap::from([(BOB, 500)])
 			);
-			assert!(old::DelegationChoice::<Test>::iter().next().is_none());
+			assert_eq!(DelegationChoice::<Test>::iter().count(), 2);
 		});
 	}
 
@@ -146,7 +148,7 @@ mod tests {
 	fn no_entries_is_a_noop() {
 		new_test_ext().execute_with(|| {
 			Migration::<Test>::on_runtime_upgrade();
-			assert!(DelegationChoices::<Test>::iter().next().is_none());
+			assert!(DelegationChoice::<Test>::iter().next().is_none());
 		});
 	}
 }

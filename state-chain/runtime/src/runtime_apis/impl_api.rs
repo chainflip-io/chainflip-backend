@@ -816,7 +816,7 @@ impl_runtime_apis! {
 			// Operator -> bid, for every operator this account currently delegates to (a
 			// delegator may hold relations to multiple operators simultaneously).
 			let upcoming_delegation_status: BTreeMap<AccountId, FlipBalance> =
-				pallet_cf_validator::DelegationChoices::<Runtime>::get(account_id)
+				pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
 					.map(|relations| {
 						relations
 							.into_map()
@@ -1009,7 +1009,7 @@ impl_runtime_apis! {
 								bond: Flip::bond(account),
 								reward: reward_of(account),
 								role,
-								// `Validator`-role accounts can't hold a `DelegationChoices` entry
+								// `Validator`-role accounts can't hold a `DelegationChoice` entry
 								// (`delegate`/`delegate_multi` reject Validator/Operator callers),
 								// so a Validator here can only be demoted from this same
 								// operator's own set.
@@ -2213,7 +2213,7 @@ impl_runtime_apis! {
 			let caller_id = EthereumAccount(caller).into_account_id();
 			let required_deposit = match call {
 				EthereumSCApi::Delegation { call: DelegationApi::Delegate { increase: DelegationAmount::Some(ref increase), .. } } => {
-					pallet_cf_validator::DelegationChoices::<Runtime>::get(&caller_id)
+					pallet_cf_validator::DelegationChoice::<Runtime>::get(&caller_id)
 						.map(|relations| relations.into_map().into_values().sum::<FlipBalance>())
 						.unwrap_or_default()
 						.saturating_add(*increase)
