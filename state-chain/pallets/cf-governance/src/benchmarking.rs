@@ -26,10 +26,12 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 
-/// `MAX_MEMBERS` voters in sub-groups at `MAX_DEPTH`: the most expensive council to validate and
-/// evaluate. Also returns the last voter, which every quorum check has to reach.
+/// A maximum-size council at `MAX_DEPTH`: `MAX_MEMBERS` voters in sub-groups. Also returns the
+/// last voter, which every quorum check has to reach.
 fn max_size_council<T: Config>(seed: u32) -> (Council<T::AccountId>, T::AccountId) {
 	const GROUPS: u32 = 8;
+	// Otherwise the division drops voters, including the returned last one.
+	const _: () = assert!((MAX_MEMBERS as u32).is_multiple_of(GROUPS));
 	let group_size = MAX_MEMBERS as u32 / GROUPS;
 	let voter = |i: u32| account::<T::AccountId>("voter", i, seed);
 	(
@@ -49,6 +51,15 @@ fn max_size_council<T: Config>(seed: u32) -> (Council<T::AccountId>, T::AccountI
 		},
 		voter(MAX_MEMBERS as u32 - 1),
 	)
+}
+
+/// Gives each member the sufficient that genesis and `set_council` would, so removing
+/// them later goes through account reaping, as in production.
+fn install_council<T: Config>(council: Council<T::AccountId>) {
+	for member in council.members() {
+		frame_system::Pallet::<T>::inc_sufficients(&member);
+	}
+	<Members<T>>::put(council);
 }
 
 #[benchmarks]
@@ -83,7 +94,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn set_council() {
-		<Members<T>>::put(max_size_council::<T>(0).0);
+		install_council::<T>(max_size_council::<T>(0).0);
 		let (new_council, _) = max_size_council::<T>(1);
 		let call = Call::<T>::set_council { new_council: new_council.clone() };
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
@@ -193,7 +204,7 @@ mod benchmarks {
 	#[benchmark]
 	fn dispatch_whitelisted_call() {
 		let (council, caller) = max_size_council::<T>(0);
-		<Members<T>>::put(council);
+		install_council::<T>(council);
 		let call: <T as Config>::RuntimeCall =
 			Call::<T>::set_council { new_council: Council::Individual { id: caller.clone() } }
 				.into();
