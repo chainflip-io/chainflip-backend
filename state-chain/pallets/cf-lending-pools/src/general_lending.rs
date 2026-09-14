@@ -1961,6 +1961,93 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Unwinds all lending positions in `asset`, for one-off runtime migrations. Every loan in
+	/// `asset` is repaid from the borrower's free balance as far as possible and the rest is
+	/// written off, then each lender's full supply is returned to their free balance. Ignores safe
+	/// mode and minimum amounts. Accounts that are being liquidated are skipped.
+	#[transactional]
+	pub fn unwind_lending_positions(asset: Asset) -> DispatchResult {
+		if GeneralLendingPools::<T>::get(asset).is_none() {
+			return Ok(());
+		}
+
+		for borrower_id in LoanAccounts::<T>::iter_keys().collect::<Vec<_>>() {
+			LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
+				let Some(loan_account) = maybe_account.as_mut() else { return };
+				let loan_ids: Vec<LoanId> = loan_account
+					.loans
+					.iter()
+					.filter(|(_, loan)| loan.asset == asset)
+					.map(|(loan_id, _)| *loan_id)
+					.collect();
+				if loan_ids.is_empty() {
+					return;
+				}
+				if loan_account.liquidation_status != LiquidationStatus::NoLiquidation {
+					log_or_panic!(
+						"Not unwinding loans of {:?}: liquidation in progress",
+						borrower_id
+					);
+					return;
+				}
+				for loan_id in loan_ids {
+					if let Some(loan) = loan_account.loans.get_mut(&loan_id) {
+						loan.collect_pending_interest();
+						let repayment = core::cmp::min(
+							T::Balance::get_balance(&borrower_id, asset),
+							loan.owed_principal,
+						);
+						if repayment > 0 &&
+							T::Balance::try_debit_account(&borrower_id, asset, repayment).is_ok()
+						{
+							loan.repay_principal(repayment, LoanRepaidActionType::Manual);
+						}
+					}
+					// Writes off any principal that could not be repaid.
+					loan_account.settle_loan(loan_id, false /* not via liquidation */);
+				}
+				if loan_account.loans.is_empty() {
+					*maybe_account = None;
+				}
+			});
+		}
+
+		// Pay the network what it is owed first, so lenders only withdraw their own funds.
+		Self::mutate_existing_pool(asset, |pool| {
+			Self::credit_fees_to_network(asset, pool.record_and_collect_network_fee(0));
+		});
+
+		let lenders: Vec<T::AccountId> = GeneralLendingPools::<T>::get(asset)
+			.map(|pool| pool.lender_shares.into_keys().collect())
+			.unwrap_or_default();
+		for lender_id in lenders {
+			// Returning supply skips the LTV check, so it could leave the lender's own loans
+			// undercollateralised.
+			if LoanAccounts::<T>::contains_key(&lender_id) {
+				log_or_panic!("Returning supply of {:?} that backs open loans", lender_id);
+			}
+			let Some(WithdrawnAndRemainingAmounts { withdrawn_amount, remaining_amount }) =
+				Self::mutate_existing_pool(asset, |pool| pool.remove_funds(&lender_id, None))
+					.transpose()
+					.map_err(Error::<T>::from)?
+			else {
+				continue;
+			};
+			if remaining_amount > 0 {
+				log_or_panic!("Lender {:?} left {} in the pool", lender_id, remaining_amount);
+			}
+			T::Balance::credit_account(&lender_id, asset, withdrawn_amount);
+			Self::deposit_event(Event::<T>::LendingFundsRemoved {
+				lender_id,
+				asset,
+				unlocked_amount: withdrawn_amount,
+				action_type: SupplyRemovedActionType::Manual,
+			});
+		}
+
+		Ok(())
+	}
+
 	/// Pays fee to the pool in the pool's asset.
 	fn credit_fees_to_pool(loan_asset: Asset, fee_amount: AssetAmount) {
 		Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
