@@ -161,6 +161,7 @@ mod tests {
 			"--sol.rpc.http_endpoint=http://localhost:8899".to_string(),
 			"--sol.backup_rpc.http_endpoint=http://localhost:8899".to_string(),
 			// Hub
+			// Legacy WS flags must remain accepted while 2.2 and 2.3 share arguments.
 			"--hub.rpc.ws_endpoint=ws://localhost:8545".to_string(),
 			"--hub.backup_rpc.ws_endpoint=ws://localhost:8546".to_string(),
 			"--hub.rpc.http_endpoint=http://localhost:8545".to_string(),
