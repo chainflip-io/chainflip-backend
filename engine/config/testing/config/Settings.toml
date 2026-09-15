@@ -28,7 +28,6 @@ http_endpoint = "http://localhost:8899"
 
 [hub.rpc]
 # NB: You will need to manually add :443 to the url provided by the provider, as jsonrpsee wants one.
-ws_endpoint = "wss://my_fake_assethub_rpc:443/secret_key"
 http_endpoint = "http://my_fake_assethub_rpc:443/secret_key"
 
 [tron.rpc]
