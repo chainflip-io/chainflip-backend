@@ -33,10 +33,10 @@ use frame_support::{
 	pallet_prelude::{DispatchResultWithPostInfo, Weight},
 	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
-	traits::{EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable, UnixTime},
+	traits::{EnsureOrigin, Get, IsSubType, StorageVersion, UnfilteredDispatchable, UnixTime},
 };
 pub use pallet::*;
-use sp_std::{boxed::Box, ops::Add, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_set::BTreeSet, ops::Add, vec::Vec};
 
 mod benchmarking;
 
@@ -130,6 +130,7 @@ pub mod pallet {
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self>>
+			+ IsSubType<Call<Self>>
 			+ GetDispatchInfo;
 		/// UnixTime implementation for TimeSource
 		type TimeSource: UnixTime;
@@ -188,6 +189,12 @@ pub mod pallet {
 	/// The body whose approvals decide governance proposals.
 	#[pallet::storage]
 	pub type Members<T: Config> = StorageValue<_, Council<T::AccountId>, ValueQuery>;
+
+	/// Members that an open proposal would add to the council. They all have to approve
+	/// it before it can pass, which proves their keys are valid and that they can sign.
+	#[pallet::storage]
+	pub type PendingMembers<T: Config> =
+		StorageMap<_, Blake2_128Concat, ProposalId, BTreeSet<AccountId<T>>, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -274,8 +281,18 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let (council, account_id) = ensure_governance_member!(origin);
 
+			let incoming = Self::incoming_members(&council, call.as_ref());
+
 			let id = Self::push_proposal(call, execution);
 			Self::deposit_event(Event::Proposed(id));
+
+			if !incoming.is_empty() {
+				// Without an account reference, `CheckNonce` would reject their approval.
+				for member in &incoming {
+					<frame_system::Pallet<T>>::inc_sufficients(member);
+				}
+				PendingMembers::<T>::insert(id, incoming);
+			}
 
 			Self::inner_approve(&council, account_id, id)?;
 
@@ -319,7 +336,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			approved_id: ProposalId,
 		) -> DispatchResultWithPostInfo {
-			let (council, account_id) = ensure_governance_member!(origin);
+			let account_id = ensure_signed(origin)?;
+			let council = Members::<T>::get();
+			ensure!(
+				council.is_member(&account_id) ||
+					PendingMembers::<T>::get(approved_id).contains(&account_id),
+				Error::<T>::NotMember
+			);
 			Self::inner_approve(&council, account_id, approved_id)?;
 			// Governance members don't pay transaction fees
 			Ok(Pays::No.into())
@@ -426,6 +449,7 @@ pub mod pallet {
 
 			for proposal_id in ActiveProposals::<T>::take() {
 				Proposals::<T>::remove(proposal_id.proposal_id);
+				Self::release_pending_members(proposal_id.proposal_id);
 				Self::deposit_event(Event::Expired(proposal_id.proposal_id));
 			}
 
@@ -542,6 +566,28 @@ impl<T> From<InvalidCouncil> for Error<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// The members `call` would add to the council, if it is a `set_council` call carrying a valid
+	/// council. An invalid one can never be installed, and ignoring it keeps this bounded by
+	/// `MAX_MEMBERS`.
+	fn incoming_members(
+		council: &Council<T::AccountId>,
+		call: &<T as Config>::RuntimeCall,
+	) -> BTreeSet<T::AccountId> {
+		match call.is_sub_type() {
+			Some(Call::set_council { new_council }) if new_council.validate().is_ok() =>
+				new_council.members().difference(&council.members()).cloned().collect(),
+			_ => Default::default(),
+		}
+	}
+
+	/// Releases the account references taken when the proposal was submitted: exactly one per
+	/// incoming member, so they can't leak if the proposal never executes.
+	fn release_pending_members(proposal_id: ProposalId) {
+		for member in PendingMembers::<T>::take(proposal_id) {
+			<frame_system::Pallet<T>>::dec_sufficients(&member);
+		}
+	}
+
 	pub fn inner_approve(
 		council: &Council<T::AccountId>,
 		who: T::AccountId,
@@ -560,7 +606,9 @@ impl<T: Config> Pallet<T> {
 			Ok(proposal.clone())
 		})?;
 
-		if council.quorum_reached(&proposal.approved) {
+		if council.quorum_reached(&proposal.approved) &&
+			PendingMembers::<T>::get(approved_id).is_subset(&proposal.approved)
+		{
 			if proposal.execution == ExecutionMode::Manual {
 				PreAuthorisedGovCalls::<T>::insert(approved_id, proposal.call);
 			} else {
@@ -570,6 +618,7 @@ impl<T: Config> Pallet<T> {
 			ActiveProposals::<T>::mutate(|proposals| {
 				proposals.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id)
 			});
+			Self::release_pending_members(approved_id);
 		}
 		Ok(())
 	}
@@ -618,6 +667,7 @@ impl<T: Config> Pallet<T> {
 	fn expire_proposals(expired: Vec<ActiveProposal>) -> Weight {
 		for ActiveProposal { proposal_id, .. } in &expired {
 			Proposals::<T>::remove(proposal_id);
+			Self::release_pending_members(*proposal_id);
 			Self::deposit_event(Event::Expired(*proposal_id));
 		}
 		T::WeightInfo::expire_proposals(expired.len() as u32)
