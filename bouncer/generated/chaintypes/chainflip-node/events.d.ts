@@ -38,7 +38,6 @@ import type {
   PalletCfValidatorDelegationChange,
   CfPrimitivesWitnessingTaskName,
   SpConsensusGrandpaAppPublic,
-  PalletCfGovernanceGovernanceCouncil,
   PalletCfTokenholderGovernanceProposal,
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
@@ -1062,13 +1061,10 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * New governance council set
+     * The council was replaced. Carries the flattened members rather than the
+     * council itself: the event schema generator can't express a recursive type (PRO-3155).
      **/
-    NewGovernanceCouncil: GenericPalletEvent<
-      'Governance',
-      'NewGovernanceCouncil',
-      { newCouncil: PalletCfGovernanceGovernanceCouncil }
-    >;
+    NewCouncil: GenericPalletEvent<'Governance', 'NewCouncil', { members: Array<AccountId32> }>;
 
     /**
      * Generic pallet event

@@ -1822,14 +1822,6 @@ export type PalletCfGovernanceCall =
       params: { call: StateChainRuntimeRuntimeCall; execution: PalletCfGovernanceExecutionMode };
     }
   /**
-   * Sets a new set of governance members
-   * **Can only be called via the Governance Origin**
-   *
-   * Sets a new set of governance members. Note that this can be called with an empty vector
-   * to remove the possibility to govern the chain at all.
-   **/
-  | { name: 'NewMembershipSet'; params: { newMembers: Array<AccountId32>; newThreshold: number } }
-  /**
    * Performs a runtime upgrade of the Chainflip runtime
    * **Can only be called via the Governance Origin**
    **/
@@ -1861,7 +1853,14 @@ export type PalletCfGovernanceCall =
    * Submit a call to be executed if the gov key has already committed to it.
    **/
   | { name: 'SubmitGovkeyCall'; params: { call: StateChainRuntimeRuntimeCall } }
-  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } };
+  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } }
+  /**
+   * Replaces the council.
+   * **Can only be called via the Governance Origin**
+   *
+   * Expires all active proposals, since they were approved under the old council.
+   **/
+  | { name: 'SetCouncil'; params: { newCouncil: PalletCfGovernanceCouncil } };
 
 export type PalletCfGovernanceCallLike =
   /**
@@ -1873,17 +1872,6 @@ export type PalletCfGovernanceCallLike =
         call: StateChainRuntimeRuntimeCallLike;
         execution: PalletCfGovernanceExecutionMode;
       };
-    }
-  /**
-   * Sets a new set of governance members
-   * **Can only be called via the Governance Origin**
-   *
-   * Sets a new set of governance members. Note that this can be called with an empty vector
-   * to remove the possibility to govern the chain at all.
-   **/
-  | {
-      name: 'NewMembershipSet';
-      params: { newMembers: Array<AccountId32Like>; newThreshold: number };
     }
   /**
    * Performs a runtime upgrade of the Chainflip runtime
@@ -1920,9 +1908,27 @@ export type PalletCfGovernanceCallLike =
    * Submit a call to be executed if the gov key has already committed to it.
    **/
   | { name: 'SubmitGovkeyCall'; params: { call: StateChainRuntimeRuntimeCallLike } }
-  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } };
+  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } }
+  /**
+   * Replaces the council.
+   * **Can only be called via the Governance Origin**
+   *
+   * Expires all active proposals, since they were approved under the old council.
+   **/
+  | { name: 'SetCouncil'; params: { newCouncil: PalletCfGovernanceCouncil } };
 
 export type PalletCfGovernanceExecutionMode = 'Automatic' | 'Manual';
+
+export type PalletCfGovernanceCouncil =
+  | {
+      type: 'WeightedGroup';
+      value: { threshold: number; members: Array<[number, PalletCfGovernanceCouncil]> };
+    }
+  | {
+      type: 'SimpleGroup';
+      value: { threshold: number; members: Array<PalletCfGovernanceCouncil> };
+    }
+  | { type: 'Individual'; value: { id: AccountId32 } };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -13736,14 +13742,10 @@ export type PalletCfGovernanceEvent =
    **/
   | { name: 'GovKeyCallExecutionFailed'; data: { callHash: FixedBytes<32>; error: DispatchError } }
   /**
-   * New governance council set
+   * The council was replaced. Carries the flattened members rather than the
+   * council itself: the event schema generator can't express a recursive type (PRO-3155).
    **/
-  | { name: 'NewGovernanceCouncil'; data: { newCouncil: PalletCfGovernanceGovernanceCouncil } };
-
-export type PalletCfGovernanceGovernanceCouncil = {
-  members: Array<AccountId32>;
-  threshold: number;
-};
+  | { name: 'NewCouncil'; data: { members: Array<AccountId32> } };
 
 /**
  * The `Event` enum of this pallet
@@ -18320,9 +18322,37 @@ export type PalletCfGovernanceError =
    **/
   | 'NotEnoughAuthoritiesCfesAtTargetVersion'
   /**
-   * The provided council is invalid: either empty or threshold > members.len()
+   * The council is nested deeper than `council::MAX_DEPTH`.
    **/
-  | 'InvalidCouncil';
+  | 'CouncilTooDeep'
+  /**
+   * The council has more than `council::MAX_MEMBERS` members.
+   **/
+  | 'TooManyCouncilMembers'
+  /**
+   * A group in the council has no members.
+   **/
+  | 'EmptyCouncilGroup'
+  /**
+   * A group in the council has a threshold of zero, which would approve anything.
+   **/
+  | 'ZeroCouncilThreshold'
+  /**
+   * A member of a weighted council group has zero weight.
+   **/
+  | 'ZeroCouncilWeight'
+  /**
+   * The weights of a council group overflow.
+   **/
+  | 'CouncilWeightOverflow'
+  /**
+   * A council group's threshold exceeds its members' combined count or weight.
+   **/
+  | 'UnreachableCouncilThreshold'
+  /**
+   * An account appears more than once in the council.
+   **/
+  | 'DuplicateCouncilMember';
 
 /**
  * The `Error` enum of this pallet.

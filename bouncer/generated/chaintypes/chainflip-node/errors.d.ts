@@ -721,9 +721,44 @@ export interface ChainErrors extends GenericChainErrors {
     NotEnoughAuthoritiesCfesAtTargetVersion: GenericPalletError;
 
     /**
-     * The provided council is invalid: either empty or threshold > members.len()
+     * The council is nested deeper than `council::MAX_DEPTH`.
      **/
-    InvalidCouncil: GenericPalletError;
+    CouncilTooDeep: GenericPalletError;
+
+    /**
+     * The council has more than `council::MAX_MEMBERS` members.
+     **/
+    TooManyCouncilMembers: GenericPalletError;
+
+    /**
+     * A group in the council has no members.
+     **/
+    EmptyCouncilGroup: GenericPalletError;
+
+    /**
+     * A group in the council has a threshold of zero, which would approve anything.
+     **/
+    ZeroCouncilThreshold: GenericPalletError;
+
+    /**
+     * A member of a weighted council group has zero weight.
+     **/
+    ZeroCouncilWeight: GenericPalletError;
+
+    /**
+     * The weights of a council group overflow.
+     **/
+    CouncilWeightOverflow: GenericPalletError;
+
+    /**
+     * A council group's threshold exceeds its members' combined count or weight.
+     **/
+    UnreachableCouncilThreshold: GenericPalletError;
+
+    /**
+     * An account appears more than once in the council.
+     **/
+    DuplicateCouncilMember: GenericPalletError;
 
     /**
      * Generic pallet error
