@@ -188,12 +188,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type RefundFeeMultiple<T> =
 		StorageMap<_, Twox64Concat, ForeignChain, u32, ValueQuery, ConstU32<100>>;
-
-	/// Free trxUSDT balances taken out of circulation after the Tron vault exploit: the amount
-	/// each account held at the time.
-	#[pallet::storage]
-	pub type TrxUsdtExploitSnapshot<T: Config> =
-		StorageValue<_, BTreeMap<T::AccountId, AssetAmount>, ValueQuery>;
 }
 
 impl<T: Config> Pallet<T> {
