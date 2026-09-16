@@ -3747,6 +3747,157 @@ mod delegation {
 				assert_eq!(MockBonderFor::<Test>::get_bond(&DELEGATOR), BID_TO_A + BID_TO_B);
 			});
 	}
+
+	#[test]
+	fn operator_delegators_index_tracks_delegate_and_undelegate() {
+		const DELEGATOR: u64 = 5000;
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&DELEGATOR, 1_000);
+
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert!(OperatorDelegators::<Test>::contains_key(BOB, DELEGATOR));
+
+			// Switching to a different operator moves the index entry, not just adds one.
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				ALICE,
+				DelegationAmount::Max
+			));
+			assert!(!OperatorDelegators::<Test>::contains_key(BOB, DELEGATOR));
+			assert!(OperatorDelegators::<Test>::contains_key(ALICE, DELEGATOR));
+
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Max
+			));
+			assert!(!OperatorDelegators::<Test>::contains_key(ALICE, DELEGATOR));
+		});
+	}
+
+	#[test]
+	fn operator_delegators_index_tracks_delegate_multi_plan_changes() {
+		const OPERATOR_A: u64 = 200;
+		const OPERATOR_B: u64 = 201;
+		const DELEGATOR: u64 = 5000;
+
+		new_test_ext().execute_with(|| {
+			for operator in [OPERATOR_A, OPERATOR_B] {
+				assert_ok!(ValidatorPallet::register_as_operator(
+					OriginTrait::signed(operator),
+					OPERATOR_SETTINGS,
+					vanity()
+				));
+			}
+			MockFlip::credit_funds(&DELEGATOR, 1_000);
+
+			// Fresh plan across both operators: both get indexed.
+			assert_ok!(ValidatorPallet::delegate_multi(
+				OriginTrait::signed(DELEGATOR),
+				fixed_plan([(OPERATOR_A, 400), (OPERATOR_B, 600)])
+			));
+			assert!(OperatorDelegators::<Test>::contains_key(OPERATOR_A, DELEGATOR));
+			assert!(OperatorDelegators::<Test>::contains_key(OPERATOR_B, DELEGATOR));
+
+			// A replacement plan that drops OPERATOR_A and keeps OPERATOR_B must remove exactly
+			// the dropped entry, not touch the retained one.
+			assert_ok!(ValidatorPallet::delegate_multi(
+				OriginTrait::signed(DELEGATOR),
+				fixed_plan([(OPERATOR_B, 1_000)])
+			));
+			assert!(!OperatorDelegators::<Test>::contains_key(OPERATOR_A, DELEGATOR));
+			assert!(OperatorDelegators::<Test>::contains_key(OPERATOR_B, DELEGATOR));
+
+			// An empty plan undelegates everything.
+			assert_ok!(ValidatorPallet::delegate_multi(
+				OriginTrait::signed(DELEGATOR),
+				fixed_plan([])
+			));
+			assert!(!OperatorDelegators::<Test>::contains_key(OPERATOR_B, DELEGATOR));
+		});
+	}
+
+	#[test]
+	fn block_delegator_and_deregister_as_operator_only_clear_their_own_index_entries() {
+		const OPERATOR_A: u64 = 200;
+		const OPERATOR_B: u64 = 201;
+		const DELEGATOR_1: u64 = 5000;
+		const DELEGATOR_2: u64 = 5001;
+
+		new_test_ext().execute_with(|| {
+			for operator in [OPERATOR_A, OPERATOR_B] {
+				assert_ok!(ValidatorPallet::register_as_operator(
+					OriginTrait::signed(operator),
+					OPERATOR_SETTINGS,
+					vanity()
+				));
+			}
+			for delegator in [DELEGATOR_1, DELEGATOR_2] {
+				// `block_delegator` (with the operator's default `Allow` policy) requires the
+				// delegator account to exist, which genesis accounts get for free but these
+				// fresh test accounts need explicitly.
+				frame_system::Provider::<Test>::created(&delegator).unwrap();
+				MockFlip::credit_funds(&delegator, 1_000);
+				assert_ok!(ValidatorPallet::delegate_multi(
+					OriginTrait::signed(delegator),
+					fixed_plan([(OPERATOR_A, 400), (OPERATOR_B, 600)])
+				));
+			}
+
+			// Blocking DELEGATOR_1 from OPERATOR_A only removes that one entry.
+			assert_ok!(ValidatorPallet::block_delegator(
+				OriginTrait::signed(OPERATOR_A),
+				DELEGATOR_1
+			));
+			assert!(!OperatorDelegators::<Test>::contains_key(OPERATOR_A, DELEGATOR_1));
+			assert!(OperatorDelegators::<Test>::contains_key(OPERATOR_B, DELEGATOR_1));
+			assert!(OperatorDelegators::<Test>::contains_key(OPERATOR_A, DELEGATOR_2));
+
+			// Deregistering OPERATOR_B clears every delegator's entry for OPERATOR_B, but leaves
+			// their OPERATOR_A relations (where they still have one) untouched.
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(OPERATOR_B)));
+			assert!(!OperatorDelegators::<Test>::contains_key(OPERATOR_B, DELEGATOR_1));
+			assert!(!OperatorDelegators::<Test>::contains_key(OPERATOR_B, DELEGATOR_2));
+			assert!(OperatorDelegators::<Test>::contains_key(OPERATOR_A, DELEGATOR_2));
+			assert_eq!(OperatorDelegators::<Test>::iter_key_prefix(OPERATOR_B).count(), 0);
+		});
+	}
+
+	#[test]
+	fn operator_delegators_index_cleared_on_account_killed() {
+		const DELEGATOR: u64 = 5000;
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&DELEGATOR, 500);
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert!(OperatorDelegators::<Test>::contains_key(BOB, DELEGATOR));
+
+			DelegatedAccountCleanup::<Test>::on_killed_account(&DELEGATOR);
+
+			assert!(!OperatorDelegators::<Test>::contains_key(BOB, DELEGATOR));
+		});
+	}
 }
 
 #[cfg(test)]
