@@ -1429,6 +1429,11 @@ export const palletCfPoolsPalletConfigUpdate = z.discriminatedUnion('__kind', [
     asset: cfPrimitivesChainsAssetsAnyAsset,
     amount: numberOrHex,
   }),
+  z.object({
+    __kind: z.literal('SetMinimumRangeOrderAmount'),
+    asset: cfPrimitivesChainsAssetsAnyAsset,
+    amount: numberOrHex,
+  }),
 ]);
 
 export const cfChainsArbArbitrumTrackedData = z.object({

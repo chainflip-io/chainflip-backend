@@ -4314,6 +4314,18 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * Minimum amount of an asset that a range order may hold. Set per asset by governance. A
+     * value of `0` disables the check for that asset.
+     *
+     * @param {CfPrimitivesChainsAssetsAnyAsset} arg
+     * @param {Callback<bigint> =} callback
+     **/
+    minimumRangeOrderAmount: GenericStorageQuery<
+      (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint,
+      CfPrimitivesChainsAssetsAnyAsset
+    >;
+
+    /**
      * Historical earned fees for an account.
      *
      * @param {[AccountId32Like, CfPrimitivesChainsAssetsAnyAsset]} arg

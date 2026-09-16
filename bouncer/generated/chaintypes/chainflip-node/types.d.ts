@@ -4846,6 +4846,10 @@ export type PalletCfPoolsPalletConfigUpdate =
   | {
       type: 'SetMinimumLimitOrderAmount';
       value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
+    }
+  | {
+      type: 'SetMinimumRangeOrderAmount';
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
     };
 
 /**
@@ -19929,7 +19933,7 @@ export type PalletCfPoolsError =
    **/
   | 'OpenOrdersRemaining'
   /**
-   * The resulting limit order amount is below the configured per-asset minimum.
+   * The resulting order amount is below the configured per-asset minimum.
    **/
   | 'BelowMinimumOrderAmount';
 
