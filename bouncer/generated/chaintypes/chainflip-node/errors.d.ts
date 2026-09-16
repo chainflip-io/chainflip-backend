@@ -721,9 +721,44 @@ export interface ChainErrors extends GenericChainErrors {
     NotEnoughAuthoritiesCfesAtTargetVersion: GenericPalletError;
 
     /**
-     * The provided council is invalid: either empty or threshold > members.len()
+     * The voting authority is nested deeper than `voting_authority::MAX_DEPTH`.
      **/
-    InvalidCouncil: GenericPalletError;
+    VotingAuthorityTooDeep: GenericPalletError;
+
+    /**
+     * The voting authority has more than `voting_authority::MAX_MEMBERS` members.
+     **/
+    TooManyVotingMembers: GenericPalletError;
+
+    /**
+     * A voting group has no members.
+     **/
+    EmptyVotingGroup: GenericPalletError;
+
+    /**
+     * A voting group has a threshold of zero, which would approve anything.
+     **/
+    ZeroVotingThreshold: GenericPalletError;
+
+    /**
+     * A member of a weighted voting group has zero weight.
+     **/
+    ZeroVotingWeight: GenericPalletError;
+
+    /**
+     * The weights of a voting group overflow.
+     **/
+    VotingWeightOverflow: GenericPalletError;
+
+    /**
+     * A voting group's threshold exceeds its members' combined count or weight.
+     **/
+    UnreachableVotingThreshold: GenericPalletError;
+
+    /**
+     * An account appears more than once in the voting authority.
+     **/
+    DuplicateVotingMember: GenericPalletError;
 
     /**
      * Generic pallet error

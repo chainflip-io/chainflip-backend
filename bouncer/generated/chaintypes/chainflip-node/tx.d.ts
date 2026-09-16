@@ -48,6 +48,7 @@ import type {
   SpConsensusGrandpaEquivocationProof,
   StateChainRuntimeChainflipKeyOwnerProofCurrentSessionProof,
   PalletCfGovernanceExecutionMode,
+  PalletCfGovernanceVotingAuthority,
   PalletCfTokenholderGovernanceProposal,
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
@@ -1979,32 +1980,6 @@ export interface ChainTx<
     >;
 
     /**
-     * Sets a new set of governance members
-     * **Can only be called via the Governance Origin**
-     *
-     * Sets a new set of governance members. Note that this can be called with an empty vector
-     * to remove the possibility to govern the chain at all.
-     *
-     * @param {Array<AccountId32Like>} newMembers
-     * @param {number} newThreshold
-     **/
-    newMembershipSet: GenericTxCall<
-      (
-        newMembers: Array<AccountId32Like>,
-        newThreshold: number,
-      ) => ChainSubmittableExtrinsic<
-        {
-          pallet: 'Governance';
-          palletCall: {
-            name: 'NewMembershipSet';
-            params: { newMembers: Array<AccountId32Like>; newThreshold: number };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
      * Performs a runtime upgrade of the Chainflip runtime
      * **Can only be called via the Governance Origin**
      *
@@ -2121,6 +2096,27 @@ export interface ChainTx<
           palletCall: {
             name: 'DispatchWhitelistedCall';
             params: { approvedId: number };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Replaces the voting authority.
+     * **Can only be called via the Governance Origin**
+     *
+     * Expires all active proposals, since they were approved under the old authority.
+     *
+     * @param {PalletCfGovernanceVotingAuthority} newAuthority
+     **/
+    setVotingAuthority: GenericTxCall<
+      (newAuthority: PalletCfGovernanceVotingAuthority) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Governance';
+          palletCall: {
+            name: 'SetVotingAuthority';
+            params: { newAuthority: PalletCfGovernanceVotingAuthority };
           };
         },
         ChainKnownTypes
