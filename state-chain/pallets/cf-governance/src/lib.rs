@@ -222,8 +222,9 @@ pub mod pallet {
 		GovKeyCallHashWhitelisted { call_hash: GovCallHash },
 		/// Failed GovKey call
 		GovKeyCallExecutionFailed { call_hash: GovCallHash, error: DispatchError },
-		/// The council was replaced.
-		NewCouncil { new_council: Council<T::AccountId> },
+		/// The council was replaced. Carries the flattened members rather than the
+		/// council itself: the event schema generator can't express a recursive type (PRO-3155).
+		NewCouncil { members: BTreeSet<AccountId<T>> },
 	}
 
 	#[pallet::error]
@@ -436,9 +437,9 @@ pub mod pallet {
 			for member in new_members.difference(&old_members) {
 				<frame_system::Pallet<T>>::inc_sufficients(member);
 			}
-			Members::<T>::put(new_council.clone());
+			Members::<T>::put(new_council);
 
-			Self::deposit_event(Event::NewCouncil { new_council });
+			Self::deposit_event(Event::NewCouncil { members: new_members });
 
 			Ok(())
 		}
