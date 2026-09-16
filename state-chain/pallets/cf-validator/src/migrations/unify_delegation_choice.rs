@@ -19,20 +19,24 @@
 //! in place into `DelegationChoice: StorageMap<delegator, DelegationPlan>`, where `DelegationPlan`
 //! holds a full `operator -> max_bid` set instead of a single pair. This migration translates each
 //! pre-existing single-relation entry into the equivalent one-entry plan, preserving all
-//! delegator/operator/max_bid data exactly.
+//! delegator/operator/max_bid data exactly, and in the same pass backfills the new
+//! `OperatorDelegators` reverse index (operator -> delegator) that lets "who delegates to this
+//! operator" be answered without scanning every delegator in the system.
 
-use crate::{Config, DelegationChoice, DelegationPlan};
+use crate::{Config, DelegationChoice, DelegationPlan, OperatorDelegators};
 use frame_support::{
 	pallet_prelude::Weight,
 	sp_runtime::Saturating,
 	traits::{Get, UncheckedOnRuntimeUpgrade},
 };
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
 #[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 
 /// Shared with `assign_lp_role_to_delegators` -- both migrations read/write the same
 /// pre-version-11 `DelegationChoice` storage item.
@@ -56,26 +60,23 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		let mut entries_migrated: u64 = 0;
 
-		let drained: Vec<(T::AccountId, (T::AccountId, T::Amount))> =
-			old::DelegationChoice::<T>::drain().collect();
-
-		for (delegator, (operator, max_bid)) in drained {
+		for (delegator, (operator, max_bid)) in old::DelegationChoice::<T>::drain() {
 			DelegationChoice::<T>::insert(
 				&delegator,
-				DelegationPlan::try_from_map(BTreeMap::from([(operator, max_bid)])).unwrap_or_else(
-					|_| {
+				DelegationPlan::try_from_map(BTreeMap::from([(operator.clone(), max_bid)]))
+					.unwrap_or_else(|_| {
 						cf_runtime_utilities::log_or_panic!(
 							"migrated delegator relation exceeded MaxOperatorsPerDelegator"
 						);
 						Default::default()
-					},
-				),
+					}),
 			);
+			OperatorDelegators::<T>::insert(operator, &delegator, ());
 			entries_migrated.saturating_accrue(1);
 		}
 
 		T::DbWeight::get()
-			.reads_writes(entries_migrated.saturating_add(1), entries_migrated.saturating_mul(2))
+			.reads_writes(entries_migrated.saturating_add(1), entries_migrated.saturating_mul(3))
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -93,17 +94,27 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			Decode::decode(&mut &state[..]).map_err(|_| "failed to decode pre_upgrade state")?;
 		let entries_count = entries.len();
 
-		for (delegator, operator, max_bid) in entries {
-			let plan = DelegationChoice::<T>::get(&delegator)
+		for (delegator, operator, max_bid) in &entries {
+			let plan = DelegationChoice::<T>::get(delegator)
 				.ok_or(DispatchError::Other("expected migrated DelegationChoice entry"))?;
 			frame_support::ensure!(
-				plan.into_map().get(&operator) == Some(&max_bid),
+				plan.into_map().get(operator) == Some(max_bid),
 				DispatchError::Other("migrated max_bid did not match its pre-upgrade value")
+			);
+			frame_support::ensure!(
+				OperatorDelegators::<T>::contains_key(operator, delegator),
+				DispatchError::Other("expected backfilled OperatorDelegators entry")
 			);
 		}
 		frame_support::ensure!(
 			DelegationChoice::<T>::iter().count() == entries_count,
 			DispatchError::Other("migrated entry count did not match pre-upgrade entry count")
+		);
+		frame_support::ensure!(
+			OperatorDelegators::<T>::iter().count() == entries_count,
+			DispatchError::Other(
+				"OperatorDelegators entry count did not match pre-upgrade entry count"
+			)
 		);
 		Ok(())
 	}
@@ -115,14 +126,15 @@ mod tests {
 	use crate::mock::{new_test_ext, MockFlip, Test, ALICE, BOB};
 
 	const OTHER_DELEGATOR: u64 = 102;
+	const OTHER_OPERATOR: u64 = 103;
 
 	#[test]
-	fn migrates_single_relation_entries() {
+	fn migrates_single_relation_entries_and_backfills_index() {
 		new_test_ext().execute_with(|| {
 			MockFlip::credit_funds(&ALICE, 1_000);
 			MockFlip::credit_funds(&OTHER_DELEGATOR, 500);
 			old::DelegationChoice::<Test>::insert(ALICE, (BOB, 1_000));
-			old::DelegationChoice::<Test>::insert(OTHER_DELEGATOR, (BOB, 500));
+			old::DelegationChoice::<Test>::insert(OTHER_DELEGATOR, (OTHER_OPERATOR, 500));
 
 			#[cfg(feature = "try-runtime")]
 			let state = Migration::<Test>::pre_upgrade().unwrap();
@@ -138,9 +150,13 @@ mod tests {
 			);
 			assert_eq!(
 				DelegationChoice::<Test>::get(OTHER_DELEGATOR).unwrap().into_map(),
-				BTreeMap::from([(BOB, 500)])
+				BTreeMap::from([(OTHER_OPERATOR, 500)])
 			);
 			assert_eq!(DelegationChoice::<Test>::iter().count(), 2);
+
+			assert!(OperatorDelegators::<Test>::contains_key(BOB, ALICE));
+			assert!(OperatorDelegators::<Test>::contains_key(OTHER_OPERATOR, OTHER_DELEGATOR));
+			assert_eq!(OperatorDelegators::<Test>::iter().count(), 2);
 		});
 	}
 
@@ -149,6 +165,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			Migration::<Test>::on_runtime_upgrade();
 			assert!(DelegationChoice::<Test>::iter().next().is_none());
+			assert!(OperatorDelegators::<Test>::iter().next().is_none());
 		});
 	}
 }

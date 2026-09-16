@@ -189,6 +189,11 @@ impl<
 	}
 }
 
+/// Returned by `DelegationPlan::try_from_map` when the number of entries exceeds the plan's
+/// bound `N` (i.e. `MaxOperatorsPerDelegator`).
+#[derive(Debug)]
+pub struct TooManyOperators;
+
 impl<
 		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
 		Value: Clone + PartialEq + Eq + core::fmt::Debug,
@@ -214,8 +219,14 @@ impl<
 
 	/// Builds a `Fixed` plan directly from an `account -> value` map. Fails if `entries` doesn't
 	/// fit within the bound `N`.
-	pub fn try_from_map(entries: BTreeMap<Account, Value>) -> Result<Self, ()> {
-		Ok(Self::Fixed(entries.into_iter().collect::<Vec<_>>().try_into().map_err(|_| ())?))
+	pub fn try_from_map(entries: BTreeMap<Account, Value>) -> Result<Self, TooManyOperators> {
+		Ok(Self::Fixed(
+			entries
+				.into_iter()
+				.collect::<Vec<_>>()
+				.try_into()
+				.map_err(|_| TooManyOperators)?,
+		))
 	}
 }
 

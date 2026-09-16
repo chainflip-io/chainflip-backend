@@ -429,6 +429,14 @@ pub mod pallet {
 	pub type DelegationChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, DelegationPlanOf<T>, OptionQuery>;
 
+	/// Reverse index of `DelegationChoice`: for a given operator, the set of delegators
+	/// currently delegating to it. Kept in lockstep with `DelegationChoice` by every site that
+	/// writes it -- the amount itself is never duplicated here (only `DelegationChoice` is
+	/// authoritative for that) to avoid the two maps drifting apart.
+	#[pallet::storage]
+	pub type OperatorDelegators<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Identity, T::AccountId, (), ValueQuery>;
+
 	/// Maps a validator to the operator that manages it.
 	#[pallet::storage]
 	pub type OperatorChoice<T: Config> =
@@ -1153,14 +1161,7 @@ pub mod pallet {
 						Exceptions::<T>::mutate(&operator, |allowed| {
 							allowed.clear();
 							// Any existing delegators need be added to the allowed list.
-							allowed.extend(
-								Self::get_all_associations_by_operator(
-									&operator,
-									AssociationToOperator::Delegator,
-									|_, _| (),
-								)
-								.into_keys(),
-							);
+							allowed.extend(OperatorDelegators::<T>::iter_key_prefix(&operator));
 						});
 					},
 					(DelegationAcceptance::Deny, DelegationAcceptance::Allow) => {
@@ -1192,21 +1193,17 @@ pub mod pallet {
 
 			// If the delegator is currently delegating to this operator, we need to
 			// undelegate them from this operator (their other relations, if any, are untouched).
-			DelegationChoice::<T>::mutate_exists(&delegator, |maybe_plan| {
-				if let Some(plan) = maybe_plan.take() {
-					let mut operators = plan.into_map();
-					if let Some(max_bid) = operators.remove(&operator) {
-						Self::deposit_event(Event::Undelegated {
-							delegator: delegator.clone(),
-							operator: operator.clone(),
-							max_bid,
-						});
-					}
-					if !operators.is_empty() {
-						*maybe_plan = Some(Self::plan_from_amounts(operators));
-					}
+			if let Some(plan) = DelegationChoice::<T>::get(&delegator) {
+				let mut operators = plan.into_map();
+				if let Some(max_bid) = operators.remove(&operator) {
+					Self::set_delegator_relations(&delegator, operators);
+					Self::deposit_event(Event::Undelegated {
+						delegator: delegator.clone(),
+						operator: operator.clone(),
+						max_bid,
+					});
 				}
-			});
+			}
 
 			match OperatorSettingsLookup::<T>::get(&operator)
 				.unwrap_or_default()
@@ -1318,26 +1315,23 @@ pub mod pallet {
 				});
 			}
 
-			for (delegator, ()) in Self::get_all_associations_by_operator(
-				&operator,
-				AssociationToOperator::Delegator,
-				|_, _| (),
-			) {
-				DelegationChoice::<T>::mutate_exists(&delegator, |maybe_plan| {
-					if let Some(plan) = maybe_plan.take() {
-						let mut operators = plan.into_map();
-						if let Some(max_bid) = operators.remove(&operator) {
-							Self::deposit_event(Event::Undelegated {
-								delegator: delegator.clone(),
-								operator: operator.clone(),
-								max_bid,
-							});
-						}
-						if !operators.is_empty() {
-							*maybe_plan = Some(Self::plan_from_amounts(operators));
-						}
+			// `OperatorDelegators` gives us this operator's delegators in O(this operator's
+			// delegator count) -- rather than scanning every delegator in the system. Collected
+			// into a `Vec` first since `set_delegator_relations` below mutates this same prefix
+			// as it goes.
+			for delegator in OperatorDelegators::<T>::iter_key_prefix(&operator).collect::<Vec<_>>()
+			{
+				if let Some(plan) = DelegationChoice::<T>::get(&delegator) {
+					let mut operators = plan.into_map();
+					if let Some(max_bid) = operators.remove(&operator) {
+						Self::set_delegator_relations(&delegator, operators);
+						Self::deposit_event(Event::Undelegated {
+							delegator: delegator.clone(),
+							operator: operator.clone(),
+							max_bid,
+						});
 					}
-				});
+				}
 			}
 
 			ManagedValidators::<T>::remove(&operator);
@@ -1412,15 +1406,12 @@ pub mod pallet {
 				Error::<T>::DelegationAmountBelowMinimum
 			);
 
-			DelegationChoice::<T>::mutate(&delegator, |maybe_plan| {
-				let mut operators =
-					maybe_plan.take().map(DelegationPlanOf::<T>::into_map).unwrap_or_default();
-				if let Some(old_operator) = &switch_from {
-					operators.remove(old_operator);
-				}
-				operators.insert(operator.clone(), new_max_bid);
-				*maybe_plan = Some(Self::plan_from_amounts(operators));
-			});
+			// `delegate` always leaves the delegator with exactly one relation -- to `operator`
+			// -- whether this was a switch, a top-up, or a fresh delegation.
+			Self::set_delegator_relations(
+				&delegator,
+				BTreeMap::from([(operator.clone(), new_max_bid)]),
+			);
 
 			Ok(())
 		}
@@ -1467,7 +1458,7 @@ pub mod pallet {
 			Self::deposit_max_bid_update(&delegator, current_max_bid, new_max_bid);
 
 			if new_max_bid.is_zero() {
-				DelegationChoice::<T>::remove(&delegator);
+				Self::set_delegator_relations(&delegator, BTreeMap::new());
 				Self::deposit_event(Event::Undelegated {
 					delegator: delegator.clone(),
 					operator: current_operator,
@@ -1479,13 +1470,10 @@ pub mod pallet {
 				// check and simply remain registered as a Liquidity Provider.
 				let _ = T::AccountRoleRegistry::deregister_as_liquidity_provider(&delegator);
 			} else {
-				DelegationChoice::<T>::mutate(&delegator, |maybe_plan| {
-					if maybe_plan.is_some() {
-						let mut operators = BTreeMap::new();
-						operators.insert(current_operator, new_max_bid);
-						*maybe_plan = Some(Self::plan_from_amounts(operators));
-					}
-				});
+				Self::set_delegator_relations(
+					&delegator,
+					BTreeMap::from([(current_operator, new_max_bid)]),
+				);
 			}
 
 			Ok(())
@@ -1545,7 +1533,6 @@ pub mod pallet {
 				.collect();
 
 			let new_relations = if new_relations.is_empty() {
-				DelegationChoice::<T>::remove(&delegator);
 				// Mirrors the auto-registration above. Best-effort: accounts that also hold
 				// other LP state (open orders, balances, etc.) fail the deregistration check
 				// and simply remain registered as a Liquidity Provider.
@@ -1579,12 +1566,10 @@ pub mod pallet {
 					new_total.into() >= T::MinimumFunding::get_min_funding_amount(),
 					Error::<T>::DelegationAmountBelowMinimum
 				);
-				DelegationChoice::<T>::insert(
-					&delegator,
-					Self::plan_from_amounts(new_relations.clone()),
-				);
 				new_relations
 			};
+
+			Self::set_delegator_relations(&delegator, new_relations.clone());
 
 			Self::deposit_event(Event::DelegationPlanUpdated {
 				delegator: delegator.clone(),
@@ -2369,11 +2354,11 @@ impl<T: Config> Pallet<T> {
 		match association {
 			AssociationToOperator::Validator =>
 				ManagedValidators::<T>::get(operator).into_iter().map(apply_f).collect(),
-			AssociationToOperator::Delegator => DelegationChoice::<T>::iter()
-				.filter_map(|(account_id, plan)| {
-					plan.into_map()
-						.get(operator)
-						.map(|max_bid| (account_id.clone(), f(&account_id, Some(*max_bid))))
+			AssociationToOperator::Delegator => OperatorDelegators::<T>::iter_key_prefix(operator)
+				.filter_map(|account_id| {
+					DelegationChoice::<T>::get(&account_id)
+						.and_then(|plan| plan.into_map().get(operator).copied())
+						.map(|max_bid| (account_id.clone(), f(&account_id, Some(max_bid))))
 				})
 				.collect(),
 		}
@@ -2404,6 +2389,34 @@ impl<T: Config> Pallet<T> {
 			);
 			Default::default()
 		})
+	}
+
+	/// The only place that writes `DelegationChoice`/`OperatorDelegators` -- every extrinsic (and
+	/// the account-killed hook) that changes a delegator's relations goes through this, so the
+	/// two storages can never drift out of sync with each other. `new_relations` becomes the
+	/// delegator's entire set of relations, replacing whatever existed before; an empty map
+	/// removes the `DelegationChoice` entry entirely.
+	fn set_delegator_relations(
+		delegator: &T::AccountId,
+		new_relations: BTreeMap<T::AccountId, T::Amount>,
+	) {
+		let old_operators: BTreeSet<T::AccountId> = DelegationChoice::<T>::get(delegator)
+			.map(|plan| plan.into_map().into_keys().collect())
+			.unwrap_or_default();
+		let new_operators: BTreeSet<T::AccountId> = new_relations.keys().cloned().collect();
+
+		if new_relations.is_empty() {
+			DelegationChoice::<T>::remove(delegator);
+		} else {
+			DelegationChoice::<T>::insert(delegator, Self::plan_from_amounts(new_relations));
+		}
+
+		for operator in old_operators.difference(&new_operators) {
+			OperatorDelegators::<T>::remove(operator, delegator);
+		}
+		for operator in new_operators.difference(&old_operators) {
+			OperatorDelegators::<T>::insert(operator, delegator, ());
+		}
 	}
 
 	/// Emits `MaxBidUpdated` if `old` and `new` differ. Shared by `delegate` and `undelegate`.
@@ -2860,7 +2873,8 @@ pub struct DelegatedAccountCleanup<T>(PhantomData<T>);
 
 impl<T: Config> OnKilledAccount<T::AccountId> for DelegatedAccountCleanup<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some(plan) = DelegationChoice::<T>::take(account_id) {
+		if let Some(plan) = DelegationChoice::<T>::get(account_id) {
+			Pallet::<T>::set_delegator_relations(account_id, BTreeMap::new());
 			for (operator, max_bid) in plan.into_map() {
 				Pallet::<T>::deposit_event(Event::Undelegated {
 					delegator: account_id.clone(),
