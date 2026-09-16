@@ -151,10 +151,17 @@ impl cf_traits::WaivedFees for WaivedFees {
 	type RuntimeCall = RuntimeCall;
 
 	fn should_waive_fees(call: &Self::RuntimeCall, caller: &Self::AccountId) -> bool {
-		if matches!(call, RuntimeCall::Governance(_)) {
-			return pallet_cf_governance::Members::<Runtime>::get().is_member(caller)
+		match call {
+			// An incoming member approves their own inclusion before they are a member, so the
+			// waiver has to cover that one approval too.
+			RuntimeCall::Governance(pallet_cf_governance::Call::approve { approved_id }) =>
+				pallet_cf_governance::Members::<Runtime>::get().is_member(caller) ||
+					pallet_cf_governance::PendingMembers::<Runtime>::get(approved_id)
+						.contains(caller),
+			RuntimeCall::Governance(_) =>
+				pallet_cf_governance::Members::<Runtime>::get().is_member(caller),
+			_ => false,
 		}
-		false
 	}
 }
 

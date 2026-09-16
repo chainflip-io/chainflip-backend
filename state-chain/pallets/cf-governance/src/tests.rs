@@ -18,7 +18,7 @@ use crate::{
 	mock::*,
 	voting_authority::{tests::pro_3132_authority, MAX_MEMBERS},
 	ActiveProposals, Error, Event, ExecutionMode, ExecutionPipeline, ExpiryTime, Members,
-	PreAuthorisedGovCalls, ProposalIdCounter, VotingAuthority,
+	PendingMembers, PreAuthorisedGovCalls, ProposalIdCounter, Proposals, VotingAuthority,
 };
 use cf_primitives::SemVer;
 use cf_test_utilities::last_event;
@@ -35,6 +35,13 @@ const DUMMY_WASM_BLOB: Vec<u8> = vec![];
 fn mock_extrinsic() -> Box<RuntimeCall> {
 	Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::set_voting_authority {
 		new_authority: VotingAuthority::simple_group(2, [EVE, PETER, MAX]),
+	}))
+}
+
+/// Changes the threshold without adding members, so no incoming member has to approve it.
+fn threshold_change_extrinsic() -> Box<RuntimeCall> {
+	Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::set_voting_authority {
+		new_authority: VotingAuthority::simple_group(1, [ALICE, BOB, CHARLES]),
 	}))
 }
 
@@ -86,7 +93,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			assert_noop!(
 				Governance::propose_governance_extrinsic(
 					RuntimeOrigin::signed(NOT_GOV_MEMBER),
-					mock_extrinsic(),
+					threshold_change_extrinsic(),
 					ExecutionMode::Automatic,
 				),
 				Error::<Test>::NotMember
@@ -94,7 +101,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			// Propose a governance extrinsic
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
-				mock_extrinsic(),
+				threshold_change_extrinsic(),
 				ExecutionMode::Automatic,
 			));
 			assert_eq!(
@@ -115,10 +122,11 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 				last_event::<Test>(),
 				crate::mock::RuntimeEvent::Governance(Event::Executed(1)),
 			);
-			// Check the new governance set
-			let genesis_members = Members::<Test>::get().members();
-			assert!(genesis_members.contains(&EVE));
-			assert!(genesis_members.contains(&PETER));
+			// Check the proposal took effect
+			assert_eq!(
+				Members::<Test>::get(),
+				VotingAuthority::simple_group(1, [ALICE, BOB, CHARLES])
+			);
 			// Check if the storage was cleaned up
 			assert_eq!(ActiveProposals::<Test>::get().len(), 0);
 			assert_eq!(ExecutionPipeline::<Test>::get().len(), 0);
@@ -131,7 +139,7 @@ fn already_executed() {
 		// Propose a governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
-			mock_extrinsic(),
+			threshold_change_extrinsic(),
 			ExecutionMode::Automatic,
 		));
 		// Assert the proposed event was fired
@@ -366,7 +374,7 @@ fn whitelisted_gov_call() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
-			mock_extrinsic(),
+			threshold_change_extrinsic(),
 			ExecutionMode::Manual,
 		));
 		assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
@@ -452,7 +460,11 @@ fn weighted_authority_passes_proposal_across_groups() {
 			// Member 1 of group 1 proposes.
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(101),
-				mock_extrinsic(),
+				Box::new(RuntimeCall::Governance(
+					pallet_cf_governance::Call::<Test>::set_voting_authority {
+						new_authority: VotingAuthority::simple_group(1, [101]),
+					},
+				)),
 				ExecutionMode::Automatic,
 			));
 			// Individual 1 brings support to 20 of 50.
@@ -494,5 +506,171 @@ fn nested_members_are_sufficient() {
 		assert_eq!(System::sufficients(&101), 1);
 		assert_eq!(System::sufficients(&102), 0);
 		assert_eq!(System::sufficients(&301), 0);
+	});
+}
+
+#[test]
+fn new_members_must_approve_their_own_inclusion() {
+	new_test_ext()
+		.execute_with(|| {
+			// ALICE proposes (and implicitly approves) a new authority of EVE, PETER and MAX.
+			assert_ok!(Governance::propose_governance_extrinsic(
+				RuntimeOrigin::signed(ALICE),
+				mock_extrinsic(),
+				ExecutionMode::Automatic,
+			));
+			assert_eq!(
+				PendingMembers::<Test>::get(1),
+				BTreeSet::from_iter([EVE, PETER, MAX]),
+				"the incoming members are pending until they approve"
+			);
+
+			// Quorum of the *current* authority is reached, but the incoming members have not
+			// approved, so the proposal stays open.
+			assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
+			assert!(Proposals::<Test>::contains_key(1));
+			assert!(ExecutionPipeline::<Test>::get().is_empty());
+
+			// Two of the three incoming members are not enough either.
+			assert_ok!(Governance::approve(RuntimeOrigin::signed(EVE), 1));
+			assert_ok!(Governance::approve(RuntimeOrigin::signed(PETER), 1));
+			assert!(Proposals::<Test>::contains_key(1));
+
+			// The last incoming member unblocks it.
+			assert_ok!(Governance::approve(RuntimeOrigin::signed(MAX), 1));
+			assert_eq!(ExecutionPipeline::<Test>::decode_len().unwrap(), 1);
+			assert!(!PendingMembers::<Test>::contains_key(1));
+		})
+		.then_execute_at_next_block(|_| {
+			assert_eq!(Members::<Test>::get(), VotingAuthority::simple_group(2, [EVE, PETER, MAX]));
+		});
+}
+
+#[test]
+fn incoming_approvals_do_not_count_towards_quorum() {
+	new_test_ext().execute_with(|| {
+		// Only ALICE has approved, so the old authority is one approval short of its 2-of-3.
+		assert_ok!(Governance::propose_governance_extrinsic(
+			RuntimeOrigin::signed(ALICE),
+			mock_extrinsic(),
+			ExecutionMode::Automatic,
+		));
+		for incoming in [EVE, PETER, MAX] {
+			assert_ok!(Governance::approve(RuntimeOrigin::signed(incoming), 1));
+		}
+		assert!(
+			Proposals::<Test>::contains_key(1),
+			"incoming members must not be able to pass a proposal on their own"
+		);
+
+		assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
+		assert_eq!(ExecutionPipeline::<Test>::decode_len().unwrap(), 1);
+	});
+}
+
+#[test]
+fn incoming_members_can_only_approve_their_own_proposal() {
+	new_test_ext().execute_with(|| {
+		// Proposal 1 adds EVE, PETER and MAX; proposal 2 does not.
+		assert_ok!(Governance::propose_governance_extrinsic(
+			RuntimeOrigin::signed(ALICE),
+			mock_extrinsic(),
+			ExecutionMode::Automatic,
+		));
+		assert_ok!(Governance::propose_governance_extrinsic(
+			RuntimeOrigin::signed(ALICE),
+			Box::new(RuntimeCall::Governance(
+				pallet_cf_governance::Call::<Test>::set_voting_authority {
+					new_authority: VotingAuthority::simple_group(1, [CHARLES]),
+				},
+			)),
+			ExecutionMode::Automatic,
+		));
+
+		assert_noop!(Governance::approve(RuntimeOrigin::signed(EVE), 2), Error::<Test>::NotMember);
+		assert_noop!(
+			Governance::approve(RuntimeOrigin::signed(NOT_GOV_MEMBER), 1),
+			Error::<Test>::NotMember
+		);
+	});
+}
+
+#[test]
+fn incoming_members_get_an_account_to_sign_with() {
+	const START_TIME: Duration = Duration::from_secs(10);
+	const END_TIME: Duration = Duration::from_secs(7300);
+
+	new_test_ext()
+		.execute_with(|| {
+			time_source::Mock::reset_to(START_TIME);
+			assert_eq!(System::sufficients(&EVE), 0);
+
+			// An incoming member needs an account before they can submit their approval:
+			// `CheckNonce` rejects an extrinsic from an account with no providers or sufficients.
+			assert_ok!(Governance::propose_governance_extrinsic(
+				RuntimeOrigin::signed(ALICE),
+				mock_extrinsic(),
+				ExecutionMode::Automatic,
+			));
+			assert_eq!(System::sufficients(&EVE), 1);
+		})
+		.then_execute_at_next_block(|_| {
+			time_source::Mock::reset_to(END_TIME);
+		})
+		.then_execute_at_next_block(|_| {
+			// The proposal expired, so the account reference goes away again.
+			assert_eq!(
+				last_event::<Test>(),
+				crate::mock::RuntimeEvent::Governance(Event::Expired(1))
+			);
+			assert_eq!(System::sufficients(&EVE), 0);
+			assert!(!PendingMembers::<Test>::contains_key(1));
+		});
+}
+
+#[test]
+fn an_executed_proposal_leaves_one_reference_per_member() {
+	new_test_ext()
+		.execute_with(|| {
+			assert_ok!(Governance::propose_governance_extrinsic(
+				RuntimeOrigin::signed(ALICE),
+				mock_extrinsic(),
+				ExecutionMode::Automatic,
+			));
+			assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
+			for incoming in [EVE, PETER, MAX] {
+				assert_ok!(Governance::approve(RuntimeOrigin::signed(incoming), 1));
+			}
+		})
+		.then_execute_at_next_block(|_| {
+			// One reference from being installed as a member, not two: the pending reference
+			// taken at proposal time is released when the proposal resolves.
+			for member in [EVE, PETER, MAX] {
+				assert_eq!(System::sufficients(&member), 1);
+			}
+			for former in [ALICE, BOB, CHARLES] {
+				assert_eq!(System::sufficients(&former), 0);
+			}
+		});
+}
+
+#[test]
+fn replacing_the_authority_releases_pending_members() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Governance::propose_governance_extrinsic(
+			RuntimeOrigin::signed(ALICE),
+			mock_extrinsic(),
+			ExecutionMode::Automatic,
+		));
+		assert_eq!(System::sufficients(&EVE), 1);
+
+		// Replacing the authority expires the open proposal, which must also release the
+		// references it took for its incoming members.
+		assert_ok!(Governance::set_voting_authority(
+			crate::RawOrigin::GovernanceApproval.into(),
+			VotingAuthority::simple_group(1, [CHARLES]),
+		));
+		assert_eq!(System::sufficients(&EVE), 0);
+		assert!(!PendingMembers::<Test>::contains_key(1));
 	});
 }
