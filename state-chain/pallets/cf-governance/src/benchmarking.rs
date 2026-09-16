@@ -62,6 +62,20 @@ fn install_authority<T: Config>(authority: VotingAuthority<T::AccountId>) {
 	<Members<T>>::put(authority);
 }
 
+/// Submits a proposal to install `new_authority`, registering its members as pending.
+fn propose_new_authority<T: Config>(
+	new_authority: &VotingAuthority<T::AccountId>,
+	proposer: T::AccountId,
+) {
+	assert_ok!(Call::<T>::propose_governance_extrinsic {
+		call: Box::new(
+			Call::<T>::set_voting_authority { new_authority: new_authority.clone() }.into()
+		),
+		execution: ExecutionMode::Automatic,
+	}
+	.dispatch_bypass_filter(RawOrigin::Signed(proposer).into()));
+}
+
 #[benchmarks]
 mod benchmarks {
 	use super::*;
@@ -71,25 +85,37 @@ mod benchmarks {
 	fn propose_governance_extrinsic() {
 		let (authority, caller) = max_size_authority::<T>(0);
 		<Members<T>>::put(authority);
-		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
+		// Worst case: a disjoint authority, so every incoming member is registered as pending
+		// and given an account reference to sign their approval with.
+		let call: Box<<T as Config>::RuntimeCall> = Box::new(
+			Call::<T>::set_voting_authority { new_authority: max_size_authority::<T>(1).0 }.into(),
+		);
 
 		#[extrinsic_call]
 		propose_governance_extrinsic(RawOrigin::Signed(caller), call, ExecutionMode::Automatic);
 
 		assert_eq!(ProposalIdCounter::<T>::get(), 1);
+		assert_eq!(PendingMembers::<T>::get(1).len(), MAX_MEMBERS);
 	}
 
 	#[benchmark]
 	fn approve() {
-		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: vec![] }.into();
 		let (authority, caller) = max_size_authority::<T>(0);
-		<Members<T>>::put(authority);
-		Pallet::<T>::push_proposal(Box::new(call), ExecutionMode::Automatic);
+		let (new_authority, _) = max_size_authority::<T>(1);
+		install_authority::<T>(authority);
+		// Worst case: this approval resolves the proposal, so it also releases the account
+		// reference held for each incoming member.
+		propose_new_authority::<T>(&new_authority, account::<T::AccountId>("voter", 0, 0));
+		Proposals::<T>::mutate(1, |proposal| {
+			if let Some(proposal) = proposal {
+				proposal.approved.extend(new_authority.members());
+			}
+		});
 
 		#[extrinsic_call]
 		approve(RawOrigin::Signed(caller), 1);
 
-		assert_eq!(ProposalIdCounter::<T>::get(), 1);
+		assert_eq!(ExecutionPipeline::<T>::decode_len(), Some(1));
 	}
 
 	#[benchmark]
@@ -143,9 +169,12 @@ mod benchmarks {
 
 	#[benchmark]
 	fn expire_proposals(b: Linear<1, 100>) {
+		let (authority, proposer) = max_size_authority::<T>(0);
+		install_authority::<T>(authority);
+		// Worst case: each expiring proposal releases a full set of incoming members.
+		let (new_authority, _) = max_size_authority::<T>(1);
 		for _ in 1..b {
-			let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
-			Pallet::<T>::push_proposal(call, ExecutionMode::Automatic);
+			propose_new_authority::<T>(&new_authority, proposer.clone());
 		}
 
 		#[block]
