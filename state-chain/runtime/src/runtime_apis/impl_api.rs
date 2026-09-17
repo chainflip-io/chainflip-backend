@@ -60,7 +60,7 @@ use frame_support::{
 	pallet_prelude::{TransactionSource, TransactionValidity},
 	sp_runtime::{
 		traits::{Block as BlockT, NumberFor, Saturating, UniqueSaturatedInto},
-		ApplyExtrinsicResult,
+		ApplyExtrinsicResult, Perquintill,
 	},
 };
 use pallet_cf_elections::electoral_systems::oracle_price::{
@@ -814,15 +814,27 @@ impl_runtime_apis! {
 		) -> RpcAccountInfoCommonItems<FlipBalance> {
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			// Operator -> bid, for every operator this account currently delegates to (a
-			// delegator's plan may hold entries for multiple operators simultaneously).
+			// delegator's plan may hold entries for multiple operators simultaneously). Mirrors
+			// `build_delegation_snapshots`: in case total in delegation plan exceed balance,
+			// prorate every entry's share of the balance proportionally to what it was pledged
 			let upcoming_delegation_status: BTreeMap<AccountId, FlipBalance> =
 				pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
 					.map(|plan| {
-						plan
-							.into_map()
-							.into_iter()
-							.map(|(operator, max_bid)| (operator, core::cmp::min(flip_account.total(), max_bid)))
-							.collect()
+						let plan = plan.into_map();
+						let total_committed: FlipBalance = plan.values().copied().sum();
+						let balance = flip_account.total();
+						if total_committed <= balance {
+							plan
+						} else {
+							plan.into_iter()
+								.map(|(operator, max_bid)| {
+									(
+										operator,
+										Perquintill::from_rational(max_bid, total_committed) * balance,
+									)
+								})
+								.collect()
+						}
 					})
 					.unwrap_or_default();
 			// Operator -> bid, for every operator whose current-epoch snapshot counts this
