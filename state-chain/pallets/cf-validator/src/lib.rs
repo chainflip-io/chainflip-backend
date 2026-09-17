@@ -1562,9 +1562,6 @@ pub mod pallet {
 					Self::ensure_operator_accepts_delegator(&delegator, operator)?;
 				}
 
-				// `fixed_total <= balance` is already checked above, and a `Max` entry (if any)
-				// absorbs exactly `balance - fixed_total`, so `new_relations`'s total can never
-				// exceed `balance` here.
 				let new_total: T::Amount = new_relations.values().copied().sum();
 				ensure!(
 					new_total.into() >= T::MinimumFunding::get_min_funding_amount(),
