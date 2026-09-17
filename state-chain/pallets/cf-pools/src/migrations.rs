@@ -18,6 +18,7 @@ use crate::{Pallet, STORAGE_VERSION_U16};
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
+mod rename_minimum_order_amount;
 mod set_minimum_limit_order_amounts;
 
 pub type PalletMigration<T> = (
@@ -25,6 +26,13 @@ pub type PalletMigration<T> = (
 		8,
 		9,
 		set_minimum_limit_order_amounts::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		9,
+		10,
+		rename_minimum_order_amount::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
