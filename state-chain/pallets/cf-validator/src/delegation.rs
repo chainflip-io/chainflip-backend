@@ -214,6 +214,7 @@ impl<
 
 	/// Builds a `Fixed` plan directly from an `account -> value` map. Fails if `entries` doesn't
 	/// fit within the bound `N`.
+	#[expect(clippy::result_unit_err)]
 	pub fn try_from_map(entries: BTreeMap<Account, Value>) -> Result<Self, ()> {
 		Ok(Self::Fixed(entries.into_iter().collect::<Vec<_>>().try_into().map_err(|_| ())?))
 	}

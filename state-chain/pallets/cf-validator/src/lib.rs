@@ -608,6 +608,9 @@ pub mod pallet {
 		MultiOperatorDelegator,
 		/// At most one entry in a `delegate_multi` plan may be `DelegationAmount::Max`.
 		MultipleMaxDelegationEntries,
+		/// A `delegate_multi` plan's fixed (non-`Max`) amounts already exceed the delegator's
+		/// funding balance.
+		DelegationAmountExceedsBalance,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1499,11 +1502,11 @@ pub mod pallet {
 		/// increase/decrease delta -- entries with a zero amount are treated the same as an
 		/// absent entry.
 		///
-		/// If `plan`'s amounts sum to more than the delegator's funding balance, every entry is
-		/// scaled down proportionally so the total exactly matches the balance -- the sum of a
-		/// delegator's relations can never exceed what they actually hold. The (possibly
-		/// scaled-down) total must be at least the minimum funding amount if `plan` is
-		/// non-empty; individual entries may be smaller, only the total is checked.
+		/// `plan`'s fixed (non-`Max`) amounts must not exceed the delegator's funding balance --
+		/// unlike `delegate`, which clamps an over-large increase to the balance, this rejects
+		/// the plan outright rather than silently scaling it down. The total must be at least
+		/// the minimum funding amount if `plan` is non-empty; individual entries may be smaller,
+		/// only the total is checked.
 		#[pallet::call_index(24)]
 		#[pallet::weight(T::ValidatorWeightInfo::delegate_multi())]
 		pub fn delegate_multi(
@@ -1532,6 +1535,7 @@ pub mod pallet {
 				.fold(T::Amount::zero(), |acc, amount| acc.saturating_add(amount));
 
 			let balance = T::FundingInfo::balance(&delegator);
+			ensure!(fixed_total <= balance, Error::<T>::DelegationAmountExceedsBalance);
 
 			// At most one entry may be `Max` (checked above); it absorbs whatever of the
 			// balance isn't already claimed by the other, fixed entries.
@@ -1558,22 +1562,9 @@ pub mod pallet {
 					Self::ensure_operator_accepts_delegator(&delegator, operator)?;
 				}
 
-				// The sum of a delegator's relations can never exceed what they actually hold --
-				// scale every entry down proportionally to fit, rather than rejecting the plan
-				// outright.
-				let raw_total: T::Amount = new_relations.values().copied().sum();
-				let new_relations: BTreeMap<T::AccountId, T::Amount> = if raw_total > balance {
-					new_relations
-						.into_iter()
-						.map(|(operator, amount)| {
-							(operator, Perquintill::from_rational(amount, raw_total) * balance)
-						})
-						.filter(|(_, amount)| !amount.is_zero())
-						.collect()
-				} else {
-					new_relations
-				};
-
+				// `fixed_total <= balance` is already checked above, and a `Max` entry (if any)
+				// absorbs exactly `balance - fixed_total`, so `new_relations`'s total can never
+				// exceed `balance` here.
 				let new_total: T::Amount = new_relations.values().copied().sum();
 				ensure!(
 					new_total.into() >= T::MinimumFunding::get_min_funding_amount(),

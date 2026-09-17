@@ -3408,7 +3408,7 @@ mod delegation {
 	}
 
 	#[test]
-	fn delegate_multi_prorates_plan_exceeding_balance() {
+	fn delegate_multi_rejects_plan_exceeding_balance() {
 		const OPERATOR_A: u64 = 200;
 		const OPERATOR_B: u64 = 201;
 		const DELEGATOR: u64 = 5000;
@@ -3426,26 +3426,16 @@ mod delegation {
 			}
 			MockFlip::credit_funds(&DELEGATOR, BALANCE);
 
-			// The plan asks for more (2000) than the delegator's balance (1000) -- rather than
-			// rejecting it outright, every entry is scaled down proportionally so the sum
-			// exactly matches the balance. The two relations must never double-count the same
-			// stake.
-			assert_ok!(ValidatorPallet::delegate_multi(
-				OriginTrait::signed(DELEGATOR),
-				fixed_plan([(OPERATOR_A, REQUESTED_TO_A), (OPERATOR_B, REQUESTED_TO_B)])
-			));
-
-			let requested_total = REQUESTED_TO_A + REQUESTED_TO_B;
-			let stored = DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map();
-			assert_eq!(stored.values().copied().sum::<u128>(), BALANCE);
-			// Proportional to the original 1400:600 (7:3) split.
-			assert_eq!(
-				stored,
-				BTreeMap::from([
-					(OPERATOR_A, BALANCE * REQUESTED_TO_A / requested_total),
-					(OPERATOR_B, BALANCE * REQUESTED_TO_B / requested_total)
-				])
+			// The plan asks for more (2000) than the delegator's balance (1000) -- rejected
+			// outright rather than silently scaled down.
+			assert_noop!(
+				ValidatorPallet::delegate_multi(
+					OriginTrait::signed(DELEGATOR),
+					fixed_plan([(OPERATOR_A, REQUESTED_TO_A), (OPERATOR_B, REQUESTED_TO_B)])
+				),
+				Error::<Test>::DelegationAmountExceedsBalance
 			);
+			assert!(DelegationChoice::<Test>::get(DELEGATOR).is_none());
 		});
 	}
 

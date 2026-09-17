@@ -27,12 +27,14 @@ use frame_support::{
 	sp_runtime::Saturating,
 	traits::{Get, UncheckedOnRuntimeUpgrade},
 };
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
 #[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 
 /// Shared with `assign_lp_role_to_delegators` -- both migrations read/write the same
 /// pre-version-11 `DelegationChoice` storage item.
@@ -56,10 +58,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		let mut entries_migrated: u64 = 0;
 
-		let drained: Vec<(T::AccountId, (T::AccountId, T::Amount))> =
-			old::DelegationChoice::<T>::drain().collect();
-
-		for (delegator, (operator, max_bid)) in drained {
+		for (delegator, (operator, max_bid)) in old::DelegationChoice::<T>::drain() {
 			DelegationChoice::<T>::insert(
 				&delegator,
 				DelegationPlan::try_from_map(BTreeMap::from([(operator, max_bid)])).unwrap_or_else(
