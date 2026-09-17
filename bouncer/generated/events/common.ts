@@ -1425,12 +1425,7 @@ export const palletCfPoolsPalletConfigUpdate = z.discriminatedUnion('__kind', [
     amount: numberOrHex,
   }),
   z.object({
-    __kind: z.literal('SetMinimumLimitOrderAmount'),
-    asset: cfPrimitivesChainsAssetsAnyAsset,
-    amount: numberOrHex,
-  }),
-  z.object({
-    __kind: z.literal('SetMinimumRangeOrderAmount'),
+    __kind: z.literal('SetMinimumOrderAmount'),
     asset: cfPrimitivesChainsAssetsAnyAsset,
     amount: numberOrHex,
   }),

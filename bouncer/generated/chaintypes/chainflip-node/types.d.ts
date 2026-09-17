@@ -4844,11 +4844,7 @@ export type PalletCfPoolsPalletConfigUpdate =
       value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
     }
   | {
-      type: 'SetMinimumLimitOrderAmount';
-      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
-    }
-  | {
-      type: 'SetMinimumRangeOrderAmount';
+      type: 'SetMinimumOrderAmount';
       value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
     };
 

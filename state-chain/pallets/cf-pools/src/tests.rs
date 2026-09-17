@@ -1473,10 +1473,7 @@ fn cancel_all_limit_orders_for_account() {
 #[test]
 fn can_update_all_config_items() {
 	const NEW_SWEEPING_THRESHOLD: AssetAmount = 5_000 * 10u128.pow(6);
-	// The two order minimums are separate settings, so give the same asset a different value for
-	// each: writing one must not disturb the other.
-	const NEW_LIMIT_ORDER_MINIMUM: AssetAmount = 6_000 * 10u128.pow(6);
-	const NEW_RANGE_ORDER_MINIMUM: AssetAmount = 7_000 * 10u128.pow(6);
+	const NEW_ORDER_MINIMUM: AssetAmount = 6_000 * 10u128.pow(6);
 
 	new_test_ext().execute_with(|| {
 		// Check that the default values are different from the new ones
@@ -1487,8 +1484,7 @@ fn can_update_all_config_items() {
 				.unwrap_or_default(),
 			NEW_SWEEPING_THRESHOLD
 		);
-		assert_ne!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdc), NEW_LIMIT_ORDER_MINIMUM);
-		assert_ne!(MinimumRangeOrderAmount::<Test>::get(Asset::Usdc), NEW_RANGE_ORDER_MINIMUM);
+		assert_ne!(MinimumOrderAmount::<Test>::get(Asset::Usdc), NEW_ORDER_MINIMUM);
 
 		// Update all config items at the same time
 		assert_ok!(LiquidityPools::update_pallet_config(
@@ -1498,13 +1494,9 @@ fn can_update_all_config_items() {
 					asset: Asset::Usdc,
 					amount: NEW_SWEEPING_THRESHOLD
 				},
-				PalletConfigUpdate::SetMinimumLimitOrderAmount {
+				PalletConfigUpdate::SetMinimumOrderAmount {
 					asset: Asset::Usdc,
-					amount: NEW_LIMIT_ORDER_MINIMUM
-				},
-				PalletConfigUpdate::SetMinimumRangeOrderAmount {
-					asset: Asset::Usdc,
-					amount: NEW_RANGE_ORDER_MINIMUM
+					amount: NEW_ORDER_MINIMUM
 				},
 			],
 		));
@@ -1517,8 +1509,7 @@ fn can_update_all_config_items() {
 				.unwrap_or_default(),
 			NEW_SWEEPING_THRESHOLD
 		);
-		assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdc), NEW_LIMIT_ORDER_MINIMUM);
-		assert_eq!(MinimumRangeOrderAmount::<Test>::get(Asset::Usdc), NEW_RANGE_ORDER_MINIMUM);
+		assert_eq!(MinimumOrderAmount::<Test>::get(Asset::Usdc), NEW_ORDER_MINIMUM);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -1530,15 +1521,9 @@ fn can_update_all_config_items() {
 				},
 			}),
 			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::SetMinimumLimitOrderAmount {
+				update: PalletConfigUpdate::SetMinimumOrderAmount {
 					asset: Asset::Usdc,
-					amount: NEW_LIMIT_ORDER_MINIMUM,
-				},
-			}),
-			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::SetMinimumRangeOrderAmount {
-					asset: Asset::Usdc,
-					amount: NEW_RANGE_ORDER_MINIMUM,
+					amount: NEW_ORDER_MINIMUM,
 				},
 			}),
 		);
@@ -2060,14 +2045,8 @@ mod minimum_limit_order_amount {
 		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
 			bounded_vec![
-				PalletConfigUpdate::SetMinimumLimitOrderAmount {
-					asset: Asset::Eth,
-					amount: MIN_ETH
-				},
-				PalletConfigUpdate::SetMinimumLimitOrderAmount {
-					asset: STABLE_ASSET,
-					amount: MIN_USDC
-				},
+				PalletConfigUpdate::SetMinimumOrderAmount { asset: Asset::Eth, amount: MIN_ETH },
+				PalletConfigUpdate::SetMinimumOrderAmount { asset: STABLE_ASSET, amount: MIN_USDC },
 			],
 		));
 	}
@@ -2341,14 +2320,8 @@ mod minimum_range_order_amount {
 		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
 			bounded_vec![
-				PalletConfigUpdate::SetMinimumRangeOrderAmount {
-					asset: Asset::Eth,
-					amount: MIN_ETH
-				},
-				PalletConfigUpdate::SetMinimumRangeOrderAmount {
-					asset: STABLE_ASSET,
-					amount: MIN_USDC
-				},
+				PalletConfigUpdate::SetMinimumOrderAmount { asset: Asset::Eth, amount: MIN_ETH },
+				PalletConfigUpdate::SetMinimumOrderAmount { asset: STABLE_ASSET, amount: MIN_USDC },
 			],
 		));
 	}
@@ -2429,7 +2402,7 @@ mod minimum_range_order_amount {
 			// Now configure ETH only, leaving USDC at its default of zero.
 			assert_ok!(LiquidityPools::update_pallet_config(
 				RuntimeOrigin::root(),
-				bounded_vec![PalletConfigUpdate::SetMinimumRangeOrderAmount {
+				bounded_vec![PalletConfigUpdate::SetMinimumOrderAmount {
 					asset: Asset::Eth,
 					amount: MIN_ETH
 				}],
