@@ -814,6 +814,118 @@ fn block_update_serialization() {
 	insta::assert_json_snapshot!(val);
 }
 
+/// `cf_lp_events` is un-versioned: the node decodes `pallet_cf_pools::Event` out of historical
+/// blocks using whatever the *current* type definition says. So the whole enum's SCALE encoding has
+/// to stay put, not just the variants order fills happen to read. Appending a variant is safe and
+/// shows up here as an added line; reordering or removing one, or retyping a field, rewrites an
+/// existing line and means historical blocks can no longer be decoded.
+#[test]
+fn lp_events_serialization() {
+	use cf_amm::common::AssetPair;
+	use pallet_cf_pools::{
+		CloseOrder, Event as PoolEvent, IncreaseOrDecrease, PalletConfigUpdate, RangeOrderChange,
+	};
+
+	let events = vec![
+		PoolEvent::NewPoolCreated {
+			base_asset: Asset::Btc,
+			quote_asset: Asset::Usdc,
+			fee_hundredth_pips: 500,
+			initial_price: Price::at_tick_zero(),
+		},
+		PoolEvent::RangeOrderUpdated {
+			lp: ID_1,
+			base_asset: Asset::Btc,
+			quote_asset: Asset::Usdc,
+			id: 1234,
+			tick_range: Range { start: -100, end: 100 },
+			size_change: Some(IncreaseOrDecrease::Increase(RangeOrderChange {
+				liquidity: 123456,
+				amounts: PoolPairsMap { base: 54321, quote: 65432 },
+			})),
+			liquidity_total: 567890,
+			collected_fees: PoolPairsMap { base: 111, quote: 222 },
+		},
+		PoolEvent::LimitOrderUpdated {
+			lp: ID_1,
+			base_asset: Asset::Btc,
+			quote_asset: Asset::Usdc,
+			side: Side::Buy,
+			id: 1234,
+			tick: -100,
+			sell_amount_change: Some(IncreaseOrDecrease::Decrease(4321)),
+			sell_amount_total: 23456,
+			collected_fees: 123,
+			bought_amount: 456,
+		},
+		PoolEvent::AssetSwapped {
+			from: Asset::Btc,
+			to: Asset::Usdc,
+			input_amount: 1000,
+			output_amount: 2000,
+		},
+		PoolEvent::PoolFeeSet {
+			base_asset: Asset::Btc,
+			quote_asset: Asset::Usdc,
+			fee_hundredth_pips: 500,
+		},
+		PoolEvent::ScheduledLimitOrderUpdateDispatchSuccess { lp: ID_1, order_id: 1234 },
+		PoolEvent::ScheduledLimitOrderUpdateDispatchFailure {
+			lp: ID_1,
+			order_id: 1234,
+			error: sp_runtime::DispatchError::BadOrigin,
+		},
+		PoolEvent::LimitOrderSetOrUpdateScheduled { lp: ID_1, order_id: 1234, dispatch_at: 99 },
+		PoolEvent::PriceImpactLimitSet {
+			asset_pair: AssetPair::new(Asset::Btc, Asset::Usdc).unwrap(),
+			limit: Some(50),
+		},
+		PoolEvent::OrderDeletionFailed {
+			order: CloseOrder::Range { base_asset: Asset::Btc, quote_asset: Asset::Usdc, id: 1234 },
+		},
+		PoolEvent::PalletConfigUpdated {
+			update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
+				asset: Asset::Btc,
+				amount: 100_000,
+			},
+		},
+		PoolEvent::PalletConfigUpdated {
+			update: PalletConfigUpdate::SetMinimumOrderAmount {
+				asset: Asset::Btc,
+				amount: 100_000,
+			},
+		},
+	];
+
+	// Every variant has to appear above. This match is exhaustive, so adding one to `Event`
+	// stops this file compiling until it is covered here too.
+	fn _assert_every_variant_is_covered(event: &PoolEvent<state_chain_runtime::Runtime>) {
+		match event {
+			PoolEvent::NewPoolCreated { .. } |
+			PoolEvent::RangeOrderUpdated { .. } |
+			PoolEvent::LimitOrderUpdated { .. } |
+			PoolEvent::AssetSwapped { .. } |
+			PoolEvent::PoolFeeSet { .. } |
+			PoolEvent::ScheduledLimitOrderUpdateDispatchSuccess { .. } |
+			PoolEvent::ScheduledLimitOrderUpdateDispatchFailure { .. } |
+			PoolEvent::LimitOrderSetOrUpdateScheduled { .. } |
+			PoolEvent::PriceImpactLimitSet { .. } |
+			PoolEvent::OrderDeletionFailed { .. } |
+			PoolEvent::PalletConfigUpdated { .. } |
+			PoolEvent::__Ignore(..) => (),
+		}
+	}
+
+	let val = events
+		.into_iter()
+		.map(|event: PoolEvent<state_chain_runtime::Runtime>| {
+			format!("{event:?} => 0x{}", hex::encode(event.encode()))
+		})
+		.collect::<Vec<_>>();
+
+	insta::assert_json_snapshot!(val);
+}
+
 #[test]
 fn scheduled_swap_serialization() {
 	let val = ScheduledSwap {

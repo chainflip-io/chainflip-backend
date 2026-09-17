@@ -15,14 +15,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Seeds the initial per-asset minimum limit order amounts directly into storage.
+//!
+//! Writes the storage under its name at this version; the following migration renames it to
+//! `MinimumOrderAmount`.
 
-use crate::{Config, MinimumLimitOrderAmount};
+use crate::{Config, Pallet};
 use cf_primitives::{Asset, AssetAmount};
 use frame_support::{
+	pallet_prelude::ValueQuery,
 	traits::{Get, UncheckedOnRuntimeUpgrade},
 	weights::Weight,
+	Twox64Concat,
 };
 use sp_std::marker::PhantomData;
+
+#[frame_support::storage_alias]
+type MinimumLimitOrderAmount<T: Config> =
+	StorageMap<Pallet<T>, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
