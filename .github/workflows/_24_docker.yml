@@ -117,7 +117,7 @@ jobs:
             type=ref,event=pr
 
       - name: Login to Github Container Registry 🔑
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload image 📤
         if: inputs.save_tags != ''
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: chainflip-backend-private-images-${{ matrix.target }}
           path: private
@@ -197,7 +197,7 @@ jobs:
             type=ref,event=pr
 
       - name: Login to DockerHub 🔑
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
@@ -224,7 +224,7 @@ jobs:
 
       - name: Upload image 📤
         if: inputs.save_tags != ''
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: chainflip-backend-public-images-${{ matrix.target }}
           path: public

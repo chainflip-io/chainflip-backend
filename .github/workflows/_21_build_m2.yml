@@ -81,7 +81,7 @@ jobs:
           fi
 
       - name: Upload binary artifacts
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ inputs.upload-name }}-mac-m2
           path: |
@@ -94,7 +94,7 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/engine-runner
 
       - name: Upload runtime artifacts
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: chainflip-node-runtime-${{ inputs.profile }}-${{ steps.extract-version.outputs.version }}-mac-m2
           path: |
