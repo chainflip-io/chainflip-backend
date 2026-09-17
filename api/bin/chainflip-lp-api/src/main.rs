@@ -367,6 +367,7 @@ impl LpRpcApiServer for RpcServerImpl {
 					pool.base,
 					pool.quote,
 					Some(self.api.state_chain_client.account_id()),
+					// Deprecated `filled_orders`, ignored by the node.
 					None,
 					None,
 				)

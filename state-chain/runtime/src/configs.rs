@@ -582,6 +582,7 @@ impl pallet_cf_ingress_egress::Config<Instance8> for Runtime {
 
 impl pallet_cf_pools::Config for Runtime {
 	type LpBalance = AssetBalances;
+	type AssetWithholding = AssetBalances;
 	type LpStats = LiquidityProvider;
 	type RefundAddressRegistry = AssetBalances;
 	type SwapRequestHandler = Swapping;

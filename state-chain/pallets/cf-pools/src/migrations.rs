@@ -16,8 +16,20 @@
 
 use crate::{Pallet, STORAGE_VERSION_U16};
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
 
-pub type PalletMigration<T> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,);
+mod remove_fixed_pools;
+
+pub type PalletMigration<T> = (
+	VersionedMigration<
+		9,
+		10,
+		remove_fixed_pools::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,
+);
 
 #[cfg(test)]
 const _: u16 =

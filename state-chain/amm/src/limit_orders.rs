@@ -30,18 +30,16 @@
 //! amount of the position that is executed will be greater, but the same percentage-wise) as they
 //! contribute more to the swap.
 //!
-//! To track fees earned and remaining liquidity in each position, the pool records the big product
-//! of the "percent_remaining" of each swap. Using two of these values you can calculate the
-//! percentage of liquidity swapped in a position between the two points in time at which those
-//! percent_remaining values were recorded.
+//! A swap splits what it takes across the orders at the price it executes at, in proportion to the
+//! liquidity each of them provides, and reports the result as a [Fill] per order. The proceeds are
+//! owed to the LP there and then, so an order that has been bought in its entirety ceases to
+//! exist, and every order the pool holds has liquidity left to sell.
 
 #[cfg(test)]
 mod tests;
 
-use core::convert::Infallible;
-
 use serde::{Deserialize, Serialize};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::collections::btree_map::{BTreeMap, OccupiedEntry};
 
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -49,32 +47,12 @@ use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
 use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase};
-use cf_amm_math::{is_tick_valid, Amount, Price, SqrtPrice, Tick};
+use cf_amm_math::{is_tick_valid, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
 
-// This is the maximum liquidity/amount of an asset that can be sold at a single tick/price. If an
-// LP attempts to add more liquidity that would increase the total at the tick past this value, the
-// minting operation will error. Note this maximum is for all lps combined, and not a single lp,
-// therefore it is possible for an LP to "consume" a tick by filling it up to the maximum, and
-// thereby not allowing other LPs to mint at that price (But the maximum is high enough that this is
-// not feasible).
-const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* little endian */);
-
-/// Represents a number exclusively between 0 and 1.
-#[derive(
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	TypeInfo,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-)]
-#[cfg_attr(feature = "std", derive(Default))]
-struct FloatBetweenZeroAndOne {
+/// TODO: remove FloatBetweenZeroAndOne and its unit tests once the fixed pool removal migration is
+/// complete.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct FloatBetweenZeroAndOne {
 	/// A fixed point number where the msb has a value of `0.5`,
 	/// therefore it cannot represent 1.0, only numbers inside
 	/// `0.0..1.0`, although note the mantissa will never be zero, and
@@ -87,28 +65,8 @@ struct FloatBetweenZeroAndOne {
 	/// the exponent is either 0 or negative.
 	negative_exponent: U256,
 }
-impl Ord for FloatBetweenZeroAndOne {
-	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-		// Because the float is normalised we can get away with comparing only the exponents (unless
-		// they are the same). Also note the exponent comparison is reversed, as the exponent is
-		// implicitly negative.
-		other
-			.negative_exponent
-			.cmp(&self.negative_exponent)
-			.then_with(|| self.normalised_mantissa.cmp(&other.normalised_mantissa))
-	}
-}
-impl PartialOrd for FloatBetweenZeroAndOne {
-	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-		Some(self.cmp(other))
-	}
-}
-impl FloatBetweenZeroAndOne {
-	/// Returns the largest possible value i.e. `1.0 - (2^-256)`.
-	fn max() -> Self {
-		Self { normalised_mantissa: U256::max_value(), negative_exponent: U256::zero() }
-	}
 
+impl FloatBetweenZeroAndOne {
 	/// Rights shifts x by shift_bits bits, returning the result and the bits that were shifted
 	/// out/the remainder. You can think of this as a div_mod, but we are always dividing by powers
 	/// of 2.
@@ -121,99 +79,52 @@ impl FloatBetweenZeroAndOne {
 		}
 	}
 
-	/// Returns the result of `self * numerator / denominator` with the result rounded up.
+	/// The floor and ceil of `x * numerator / denominator`.
 	///
-	/// This function will panic if the numerator is zero, or if numerator > denominator
-	fn mul_div_ceil(&self, numerator: U256, denominator: U256) -> Self {
-		// We cannot use the `mul_div_ceil` function here (and then right-shift the result) to
-		// calculate the normalised_mantissa as the low zero bits (where we shifted) could be wrong.
-
-		assert!(!numerator.is_zero());
-		assert!(numerator <= denominator);
-		self.assert_valid();
-
-		// We do the mul first to avoid losing precision as in the division bits will possibly get
-		// shifted off the "bottom" of the mantissa.
-		let (mul_normalised_mantissa, mul_normalise_shift) = {
-			let unnormalised_mantissa = U256::full_mul(self.normalised_mantissa, numerator);
-			let normalize_shift = unnormalised_mantissa.leading_zeros();
-			(
-				unnormalised_mantissa << normalize_shift,
-				256 - normalize_shift, /* Cannot underflow as numerator != 0 */
-			)
-		};
-
-		let (mul_div_normalised_mantissa, div_normalise_shift) = {
-			// As the denominator <= U256::MAX, this div will not right-shift the mantissa more than
-			// 256 bits, so we maintain at least 256 accurate bits in the result.
-			let (d, div_remainder) =
-				U512::div_mod(mul_normalised_mantissa, U512::from(denominator)); // Note that d can never be zero as mul_normalised_mantissa always has at least one bit
-																	 // set above the 256th bit.
-			let d = if div_remainder.is_zero() { d } else { d + U512::one() };
-			let normalise_shift = d.leading_zeros();
-			// We right shift and use the lower 256 bits for the mantissa
-			let shift_bits = 256 - normalise_shift;
-			let (d, shift_remainder) = Self::right_shift_mod(d, shift_bits.into());
-			let d = U256::try_from(d).unwrap();
-
-			(if shift_remainder.is_zero() { d } else { d + U256::one() }, normalise_shift)
-		};
-
-		assert!(!mul_div_normalised_mantissa.is_zero());
-
-		if let Some(negative_exponent) = self
-			.negative_exponent
-			.checked_add(U256::from(div_normalise_shift - mul_normalise_shift))
-		{
-			Self { normalised_mantissa: mul_div_normalised_mantissa, negative_exponent }
-		} else {
-			// This bounding will cause swaps to get bad prices, but this case will effectively
-			// never happen, as at least (U256::MAX / 256) (~10^74) swaps would have to happen to
-			// get into this situation. TODO: A possible solution is disabling minting for pools
-			// "close" to this minimum. With a small change to the swapping logic it would be
-			// possible to guarantee that the pool would be emptied before percent_remaining could
-			// reach this min bound.
-			Self { normalised_mantissa: U256::one() << 255, negative_exponent: U256::MAX }
+	/// Returns `None` rather than panicking on input the old representation could not have
+	/// produced, so that a corrupt entry cannot take the chain down mid-migration.
+	fn integer_mul_div(x: U256, numerator: &Self, denominator: &Self) -> Option<(U256, U256)> {
+		if !numerator.normalised_mantissa.bit(255) || !denominator.normalised_mantissa.bit(255) {
+			return None
 		}
-	}
-
-	/// Returns both floor and ceil of `y = x * numerator / denominator`.
-	///
-	/// This will panic if the numerator is more than the denominator.
-	fn integer_mul_div(x: U256, numerator: &Self, denominator: &Self) -> (U256, U256) {
-		// Note this does not imply numerator.normalised_mantissa <= denominator.normalised_mantissa
-		assert!(numerator <= denominator);
-		numerator.assert_valid();
-		denominator.assert_valid();
 
 		let (y_shifted_floor, div_remainder) = U512::div_mod(
 			U256::full_mul(x, numerator.normalised_mantissa),
 			denominator.normalised_mantissa.into(),
 		);
 
-		// Unwrap safe as numerator is smaller than denominator, so its negative_exponent must be
-		// greater than or equal to the denominator's
+		// The numerator must be the smaller number: a price cannot have more left than when
+		// the order recorded its share of it. Because both mantissas are normalised, the
+		// exponents settle it unless they are equal, so the subtraction catches every case
+		// but that one.
 		let negative_exponent =
-			numerator.negative_exponent.checked_sub(denominator.negative_exponent).unwrap();
+			numerator.negative_exponent.checked_sub(denominator.negative_exponent)?;
+		if negative_exponent.is_zero() &&
+			numerator.normalised_mantissa > denominator.normalised_mantissa
+		{
+			return None
+		}
 
 		let (y_floor, shift_remainder) = Self::right_shift_mod(y_shifted_floor, negative_exponent);
 
-		let y_floor = y_floor.try_into().unwrap(); // Unwrap safe as numerator <= denominator and therefore y cannot be greater than x
+		// Cannot exceed `x` now that the numerator is known to be the smaller of the two, but
+		// the conversion stays checked rather than resting on that.
+		let y_floor = U256::try_from(y_floor).ok()?;
 
-		(
+		Some((
 			y_floor,
 			if div_remainder.is_zero() && shift_remainder.is_zero() {
 				y_floor
 			} else {
-				y_floor + 1 // Safe as for there to be a remainder y_floor must be at least 1 less than x
+				// Safe: for there to be a remainder, y_floor is at least one below x.
+				y_floor.saturating_add(U256::one())
 			},
-		)
-	}
-
-	fn assert_valid(&self) {
-		assert!(self.normalised_mantissa.bit(255));
+		))
 	}
 }
+
+/// All the orders selling at a single price.
+pub(super) type Orders<LiquidityProvider> = BTreeMap<LiquidityProvider, Position>;
 
 pub(super) trait SwapDirection: crate::common::SwapDirection {
 	/// Calculates the swap input amount needed to produce an output amount at a price
@@ -228,10 +139,10 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 	/// Calculates the swap output amount produced for an input amount at a price
 	fn output_amount_floor(input: Amount, price: Price) -> Option<Amount>;
 
-	/// Gets entry for best prices pool
-	fn best_priced_fixed_pool(
-		pools: &'_ mut BTreeMap<SqrtPrice, FixedPool>,
-	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPrice, FixedPool>>;
+	/// Gets the entry for the orders priced best for this direction of swap
+	fn best_priced_orders<LP: Ord>(
+		orders: &'_ mut BTreeMap<SqrtPrice, Orders<LP>>,
+	) -> Option<OccupiedEntry<'_, SqrtPrice, Orders<LP>>>;
 }
 impl SwapDirection for BaseToQuote {
 	fn input_amount_ceil(output: Amount, price: Price) -> Option<Amount> {
@@ -250,10 +161,10 @@ impl SwapDirection for BaseToQuote {
 		price.output_amount_floor(input)
 	}
 
-	fn best_priced_fixed_pool(
-		pools: &'_ mut BTreeMap<SqrtPrice, FixedPool>,
-	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPrice, FixedPool>> {
-		pools.last_entry()
+	fn best_priced_orders<LP: Ord>(
+		orders: &'_ mut BTreeMap<SqrtPrice, Orders<LP>>,
+	) -> Option<OccupiedEntry<'_, SqrtPrice, Orders<LP>>> {
+		orders.last_entry()
 	}
 }
 impl SwapDirection for QuoteToBase {
@@ -273,10 +184,10 @@ impl SwapDirection for QuoteToBase {
 		BaseToQuote::input_amount_floor(input, price)
 	}
 
-	fn best_priced_fixed_pool(
-		pools: &'_ mut BTreeMap<SqrtPrice, FixedPool>,
-	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPrice, FixedPool>> {
-		pools.first_entry()
+	fn best_priced_orders<LP: Ord>(
+		orders: &'_ mut BTreeMap<SqrtPrice, Orders<LP>>,
+	) -> Option<OccupiedEntry<'_, SqrtPrice, Orders<LP>>> {
+		orders.first_entry()
 	}
 }
 
@@ -289,152 +200,65 @@ pub enum DepthError {
 }
 
 #[derive(Debug)]
-pub enum MintError {
-	/// One of the start/end ticks of the range reached its maximum gross liquidity
-	MaximumLiquidity,
-	/// Pool instance limit, this occurs when we run out of unique pool instance indices
-	MaximumPoolInstances,
-}
-
-#[derive(Debug)]
-pub enum PositionError<T> {
+pub enum PositionError {
 	/// Invalid Price
 	InvalidTick,
 	/// Position referenced does not exist
 	NonExistent,
-	Other(T),
-}
-impl<T> PositionError<T> {
-	fn map_other<R>(self, f: impl FnOnce(T) -> R) -> PositionError<R> {
-		match self {
-			PositionError::InvalidTick => PositionError::InvalidTick,
-			PositionError::NonExistent => PositionError::NonExistent,
-			PositionError::Other(t) => PositionError::Other(f(t)),
-		}
-	}
 }
 
-#[derive(Debug)]
-pub enum BurnError {}
-
-#[derive(Debug)]
-pub enum CollectError {}
-
-#[derive(
-	Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen,
-)]
-pub struct Collected {
-	/// The amount of assets purchased by the LP using the liquidity in this position since the
-	/// last collect.
-	pub bought_amount: Amount,
-	/// The amount of assets sold by the LP using the liquidity in this position since the
-	/// last collect.
+/// A swap has bought a certain amount of an order's liquidity, the proceeds are owed to the LP
+/// and will need to be payed out immediately.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Fill<LiquidityProvider> {
+	pub lp: LiquidityProvider,
+	pub tick: Tick,
+	/// The amount of the order's liquidity that the swap bought.
 	pub sold_amount: Amount,
-	/// The amount of liquidity in the position when it was created/last updated (a non-zero mint
-	/// or burn) prior to the operation that which returned this value.
+	/// The proceeds owed to the lp in exchange for it.
+	pub bought_amount: Amount,
+	/// The liquidity left in the order afterwards. Zero means the order was filled in its
+	/// entirety and no longer exists.
+	pub remaining_amount: Amount,
+}
+
+/// A single LP position, i.e. a limit order with liquidity left to sell.
+#[derive(
+	Clone,
+	Debug,
+	Default,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialEq,
+	Eq,
+)]
+pub struct Position {
+	/// The liquidity this position provides that has not been bought yet. Never zero; a position
+	/// with nothing left to sell is removed from the pool.
+	pub amount: Amount,
+	/// The liquidity this position provided as of its last non-zero mint or burn.
 	pub original_amount: Amount,
 }
-
-#[derive(
-	Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen,
-)]
-pub struct PositionInfo {
-	/// The amount of liquidity in the position after the operation.
-	pub amount: Amount,
-}
-impl PositionInfo {
+impl Position {
 	pub fn new(amount: Amount) -> Self {
-		Self { amount }
+		Self { amount, original_amount: amount }
 	}
-}
-impl<'a> From<&'a Position> for PositionInfo {
-	fn from(value: &'a Position) -> Self {
-		Self { amount: value.amount }
-	}
-}
-
-/// Represents a single LP position
-#[derive(
-	Clone,
-	Debug,
-	TypeInfo,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	PartialEq,
-)]
-struct Position {
-	/// Used to identify when the position was created and thereby determine if all the liquidity
-	/// in the position has been used or not. As once all the liquidity at a tick has been used,
-	/// the internal record of that tick/fixed pool is deleted, and if liquidity is added back
-	/// later the record will have a different pool_instance. Therefore a position can tell if all
-	/// its liquidity has been used, by seeing if there is not a fixed pool at the same tick, or if
-	/// that fixed pool has a different pool_instance.
-	pool_instance: u128,
-	/// The total amount of liquidity provided by this position as of the last operation on the
-	/// position. I.e. This value is not updated when swaps occur, only when the LP updates their
-	/// position in some way.
-	amount: Amount,
-	/// This value is used in combination with the FixedPool's `percent_remaining` to determine how
-	/// much liquidity/amount is remaining in a position when an LP does a collect/update of the
-	/// position. It is the percent_remaining of the FixedPool when the position was last
-	/// updated/collected from.
-	last_percent_remaining: FloatBetweenZeroAndOne,
-	/// This is the original amount of liquidity provider by this position as of its creation. This
-	/// value is updated if a non-zero mint or burn is performed on the position.
-	original_amount: Amount,
-}
-
-/// Represents a pool that is selling an amount of an asset at a specific/fixed price. A
-/// single fixed pool will contain the liquidity/assets for all limit orders at that specific price.
-#[derive(
-	Clone,
-	Debug,
-	TypeInfo,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	PartialEq,
-)]
-pub struct FixedPool {
-	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is
-	/// used, a new value for pool_instance is used, and the previously used value will never be
-	/// used again. This is used to determine whether a position was created during the current
-	/// FixedPool's lifetime and therefore that FixedPool's `percent_remaining` is meaningful for
-	/// the position, or if the position was created before the current FixedPool's lifetime.
-	pool_instance: u128,
-	/// This is the total liquidity/amount available for swaps at this price. This value is greater
-	/// than or equal to the amount provided currently by all positions at the same tick. It is not
-	/// always equal due to rounding, and therefore it is possible for a FixedPool to have no
-	/// associated position but have some liquidity available, but this would likely be a very
-	/// small amount.
-	available: Amount,
-	/// This is the big product of all `1.0 - percent_used_by_swap` for all swaps that have
-	/// occurred since this FixedPool instance was created and used liquidity from it.
-	percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(
 	Clone, Debug, TypeInfo, Encode, Decode, DecodeWithMemTracking, Serialize, Deserialize, PartialEq,
 )]
 pub struct PoolState<LiquidityProvider: Ord> {
-	/// The ID the next FixedPool that is created will use.
-	next_pool_instance: u128,
-	/// All the FixedPools that have some liquidity. They are grouped into all those that are
-	/// selling asset `Base` and all those that are selling asset `Quote` used the PoolPairsMap.
-	fixed_pools: PoolPairsMap<BTreeMap<SqrtPrice, FixedPool>>,
-	/// All the Positions that either are providing liquidity currently, or were providing
-	/// liquidity directly after the last time they where updated. They are grouped into all those
-	/// that are selling asset `Base` and all those that are selling asset `Quote` used the
-	/// PoolPairsMap. Therefore there can be positions stored here that don't provide any
-	/// liquidity.
-	positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), Position>>,
+	/// Every order with liquidity left to sell, grouped by the asset it is selling and then by the
+	/// price it is selling at. Orders are dropped as soon as they are bought in their entirety and
+	/// a price with no orders left is removed, so the first and last prices are always the best a
+	/// swap can execute at.
+	orders: PoolPairsMap<BTreeMap<SqrtPrice, Orders<LiquidityProvider>>>,
 	/// Total of all swap inputs over all time (not including fees)
 	pub(super) total_swap_inputs: PoolPairsMap<Amount>,
 	/// Total of all swap outputs over all time
@@ -442,15 +266,12 @@ pub struct PoolState<LiquidityProvider: Ord> {
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
-	/// Creates a new pool state with the given fee. The pool is created with no liquidity. The pool
-	/// may not be created with a fee higher than 50%.
+	/// Creates a new pool state. The pool is created with no liquidity.
 	///
 	/// This function never panics.
 	pub(super) fn new() -> Self {
 		Self {
-			next_pool_instance: 0,
-			fixed_pools: Default::default(),
-			positions: Default::default(),
+			orders: Default::default(),
 			total_swap_inputs: Default::default(),
 			total_swap_outputs: Default::default(),
 		}
@@ -461,73 +282,25 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics.
 	pub(super) fn positions<SD: SwapDirection>(
 		&self,
-	) -> impl '_ + Iterator<Item = (LiquidityProvider, Tick, Collected, PositionInfo)> {
-		self.positions[!SD::INPUT_SIDE].iter().map(|((sqrt_price, lp), position)| {
-			let (collected, option_position) = Self::collect_from_position::<SD>(
-				position.clone(),
-				self.fixed_pools[!SD::INPUT_SIDE].get(sqrt_price),
-				(*sqrt_price).into(),
-			);
-
-			(
-				lp.clone(),
-				sqrt_price.to_tick(),
-				collected,
-				option_position
-					.map_or(Default::default(), |position| PositionInfo::from(&position)),
-			)
+	) -> impl '_ + Iterator<Item = (LiquidityProvider, Tick, Position)> {
+		self.orders[!SD::INPUT_SIDE].iter().flat_map(|(sqrt_price, orders)| {
+			orders
+				.iter()
+				.map(move |(lp, position)| (lp.clone(), sqrt_price.to_tick(), position.clone()))
 		})
-	}
-
-	/// Runs collect for all positions in the pool. Returns a PoolPairsMap
-	/// containing the state and fees collected from every position. The positions are grouped into
-	/// a PoolPairsMap by the asset they sell.
-	///
-	/// This function never panics.
-	pub(super) fn collect_all(
-		&mut self,
-	) -> PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>> {
-		// We must collect all positions before we can change the fee, otherwise the fee and swapped
-		// liquidity calculations would be wrong.
-		PoolPairsMap::from_array([
-			self.positions[!<QuoteToBase as crate::common::SwapDirection>::INPUT_SIDE]
-				.keys()
-				.cloned()
-				.collect::<sp_std::vec::Vec<_>>()
-				.into_iter()
-				.map(|(sqrt_price, lp)| {
-					let (collected, position_info) =
-						self.inner_collect::<QuoteToBase>(&lp, sqrt_price).unwrap();
-
-					(lp.clone(), sqrt_price.to_tick(), collected, position_info)
-				})
-				.collect(),
-			self.positions[!<BaseToQuote as crate::common::SwapDirection>::INPUT_SIDE]
-				.keys()
-				.cloned()
-				.collect::<sp_std::vec::Vec<_>>()
-				.into_iter()
-				.map(|(sqrt_price, lp)| {
-					let (collected, position_info) =
-						self.inner_collect::<BaseToQuote>(&lp, sqrt_price).unwrap();
-
-					(lp.clone(), sqrt_price.to_tick(), collected, position_info)
-				})
-				.collect(),
-		])
 	}
 
 	/// Returns the current price of the pool for a given swap direction, if some liquidity exists.
 	///
 	/// This function never panics.
 	pub(super) fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPrice> {
-		SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]).map(|entry| *entry.key())
+		SD::best_priced_orders(&mut self.orders[!SD::INPUT_SIDE]).map(|entry| *entry.key())
 	}
 
 	/// Swaps the specified Amount into the other currency until sqrt_price_limit is reached (If
-	/// Some), and returns the resulting Amount and the remaining input Amount. The direction of the
-	/// swap is controlled by the generic type parameter `SD`, by setting it to `BaseToQuote` or
-	/// `QuoteToBase`. Note sqrt_price_limit is inclusive.
+	/// Some), reporting the output, unspent input, LP fills, and undistributed input dust. The
+	/// direction is controlled by `SD`: `BaseToQuote` or `QuoteToBase`. The price limit is
+	/// inclusive.
 	///
 	/// This function never panics
 	pub(super) fn swap<SD: SwapDirection>(
@@ -535,12 +308,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
 		range_orders_pool_fee_hundredth_pips: u32,
-	) -> (Amount, Amount) {
+	) -> crate::SwapOutcome<LiquidityProvider> {
 		let mut total_output_amount = U256::zero();
+		let mut fills = Vec::new();
+		let mut input_dust = Amount::zero();
 
-		while let Some((sqrt_price, mut fixed_pool_entry)) = (!amount.is_zero())
+		while let Some((sqrt_price, mut orders_entry)) = (!amount.is_zero())
 			.then_some(())
-			.and_then(|()| SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]))
+			.and_then(|()| SD::best_priced_orders(&mut self.orders[!SD::INPUT_SIDE]))
 			.map(|entry| (*entry.key(), entry))
 			.filter(|(sqrt_price, _)| {
 				// Compare in the clamped `SqrtPrice` domain, consistently with
@@ -554,353 +329,154 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					!SD::sqrt_price_op_more_than(sqrt_price_adjusted, sqrt_price_limit)
 				})
 			}) {
-			let fixed_pool = fixed_pool_entry.get_mut();
+			let orders = orders_entry.get_mut();
+			let available = liquidity_of(orders);
 
 			let price = Price::from(sqrt_price);
-			let amount_required_to_consume_pool =
-				SD::input_amount_ceil(fixed_pool.available, price)
-					.expect("Amount and price are assumed to be valid");
 
-			let (output_amount, swapped_amount) = if amount >= amount_required_to_consume_pool {
-				let fixed_pool = fixed_pool_entry.remove();
-
-				// Cannot underflow as amount >= amount_required_to_consume_pool
-				amount -= amount_required_to_consume_pool;
-
-				(fixed_pool.available, amount_required_to_consume_pool)
-			} else {
-				let initial_output_amount = SD::output_amount_floor(amount, price)
-					.expect("Amount and price are assumed to be valid");
-
-				// We calculate (output_amount, next_percent_remaining) so that
-				// next_percent_remaining is an under-estimate of the remaining liquidity, but also
-				// an under-estimate of the used liquidity, by over-estimating it according to
-				// used liquidity and then decreasing output_amount so that next_percent_remaining
-				// also under-estimates the remaining_liquidity
-
-				let next_percent_remaining = FloatBetweenZeroAndOne::mul_div_ceil(
-					&fixed_pool.percent_remaining,
-					/* Cannot underflow as amount_required_to_consume_pool is ceiled, but
-					 * amount_minus_fees < amount_required_to_consume_pool, therefore
-					 * amount_minus_fees <= SD::input_amount_floor(fixed_pool.available, price) */
-					fixed_pool.available - initial_output_amount,
-					fixed_pool.available,
-				);
-
-				// We back-calculate output_amount to ensure output_amount is less than or equal to
-				// what percent_remaining suggests has been output
-				let output_amount = fixed_pool.available -
-					FloatBetweenZeroAndOne::integer_mul_div(
-						fixed_pool.available,
-						&next_percent_remaining,
-						&fixed_pool.percent_remaining,
-					)
-					.1;
-
-				assert!(output_amount <= initial_output_amount);
-
-				fixed_pool.percent_remaining = next_percent_remaining;
-				fixed_pool.available -= output_amount;
-
-				let swapped_amount = amount;
-
-				amount = Amount::zero();
-
-				(output_amount, swapped_amount)
+			// Either the input buys all the liquidity at this price, and the swap moves on to the
+			// next best price, or the input runs out here and buys as much as it can.
+			let (sold_amount, bought_amount) = match SD::input_amount_ceil(available, price) {
+				Some(required_to_consume) if amount >= required_to_consume =>
+					(available, required_to_consume),
+				// An overflowing output would exceed `available`, which bounds it regardless.
+				_ => (
+					core::cmp::min(
+						SD::output_amount_floor(amount, price).unwrap_or(available),
+						available,
+					),
+					amount,
+				),
 			};
 
-			self.total_swap_inputs[SD::INPUT_SIDE] =
-				self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(swapped_amount);
+			// Cannot underflow as swapped_amount is bounded by amount in both cases above. Saturate
+			// defensively anyway.
+			amount = amount.saturating_sub(bought_amount);
 
-			total_output_amount = total_output_amount.saturating_add(output_amount);
+			input_dust = input_dust.saturating_add(fill_orders(
+				orders,
+				sqrt_price,
+				available,
+				sold_amount,
+				bought_amount,
+				&mut fills,
+			));
+
+			if orders.is_empty() {
+				orders_entry.remove();
+			}
+
+			self.total_swap_inputs[SD::INPUT_SIDE] =
+				self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(bought_amount);
+
+			total_output_amount = total_output_amount.saturating_add(sold_amount);
 		}
 
 		self.total_swap_outputs[!SD::INPUT_SIDE] =
 			self.total_swap_outputs[!SD::INPUT_SIDE].saturating_add(total_output_amount);
 
-		(total_output_amount, amount)
+		crate::SwapOutcome {
+			output_amount: total_output_amount,
+			remaining_input_amount: amount,
+			limit_order_fills: fills,
+			limit_order_input_dust: input_dust,
+		}
 	}
 
-	fn collect_from_position<SD: SwapDirection>(
-		mut position: Position,
-		fixed_pool: Option<&FixedPool>,
-		price: Price,
-	) -> (Collected, Option<Position>) {
-		let previous_position = position.clone();
-		let (used_liquidity, option_position) = if let Some(fixed_pool) =
-			fixed_pool.filter(|fixed_pool| fixed_pool.pool_instance == position.pool_instance)
-		{
-			let (remaining_amount_floor, remaining_amount_ceil) =
-				FloatBetweenZeroAndOne::integer_mul_div(
-					position.amount,
-					&fixed_pool.percent_remaining,
-					&position.last_percent_remaining,
-				);
-
-			(
-				// We under-estimate used liquidity so that lp's don't receive more
-				// bought_amount and fees than may exist in the pool
-				position.amount - remaining_amount_ceil,
-				// We under-estimate remaining liquidity so that lp's cannot burn more
-				// liquidity than truly exists in the pool
-				if remaining_amount_floor.is_zero() {
-					None
-				} else {
-					position.amount = remaining_amount_floor;
-					position.last_percent_remaining = fixed_pool.percent_remaining.clone();
-					Some(position)
-				},
-			)
-		} else {
-			(position.amount, None)
-		};
-
-		let bought_amount = SD::input_amount_floor(used_liquidity, price)
-			.expect("Amount and price are assumed to be valid");
-
-		(
-			Collected {
-				bought_amount,
-				sold_amount: used_liquidity,
-				original_amount: previous_position.original_amount,
-			},
-			option_position,
-		)
-	}
-
-	/// Collects any earnings from the specified position, and then adds additional liquidity to it.
-	/// The SwapDirection determines which direction of swaps the liquidity/position you're minting
+	/// Adds liquidity to the position at the given tick, creating it if it doesn't exist yet. The
+	/// SwapDirection determines which direction of swaps the liquidity/position you're minting
 	/// will be for.
 	///
 	/// This function never panics.
-	pub(super) fn collect_and_mint<SD: SwapDirection>(
+	pub(super) fn mint<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(Collected, PositionInfo), PositionError<MintError>> {
+	) -> Result<Position, PositionError> {
+		let sqrt_price = Self::validate_tick(tick)?;
+		let orders = &mut self.orders[!SD::INPUT_SIDE];
+
 		if amount.is_zero() {
-			self.collect::<SD>(lp, tick)
-				.map_err(|err| err.map_other(|e| -> MintError { match e {} }))
-		} else {
-			let sqrt_price = Self::validate_tick(tick)?;
-			let price = Price::from(sqrt_price);
-
-			let positions = &mut self.positions[!SD::INPUT_SIDE];
-			let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
-
-			let option_fixed_pool = fixed_pools.get(&sqrt_price);
-			let (collected_amounts, option_position) =
-				if let Some(position) = positions.get(&(sqrt_price, lp.clone())).cloned() {
-					Self::collect_from_position::<SD>(position, option_fixed_pool, price)
-				} else {
-					(Default::default(), None)
-				};
-
-			let (mut position, mut fixed_pool, next_pool_instance) = if let Some(position) =
-				option_position
-			{
-				(
-					position,
-					option_fixed_pool.unwrap().clone(), /* Position having liquidity implies
-					                                     * fixed pool existing. */
-					self.next_pool_instance,
-				)
-			} else {
-				let (fixed_pool, next_pool_instance) = if let Some(fixed_pool) = option_fixed_pool {
-					(fixed_pool.clone(), self.next_pool_instance)
-				} else {
-					(
-						FixedPool {
-							pool_instance: self.next_pool_instance,
-							available: U256::zero(),
-							percent_remaining: FloatBetweenZeroAndOne::max(),
-						},
-						self.next_pool_instance
-							.checked_add(1)
-							.ok_or(PositionError::Other(MintError::MaximumPoolInstances))?,
-					)
-				};
-
-				(
-					Position {
-						pool_instance: fixed_pool.pool_instance,
-						amount: Amount::zero(),
-						last_percent_remaining: fixed_pool.percent_remaining.clone(),
-						original_amount: Amount::zero(),
-					},
-					fixed_pool,
-					next_pool_instance,
-				)
-			};
-
-			fixed_pool.available = fixed_pool.available.saturating_add(amount);
-			if fixed_pool.available > MAX_FIXED_POOL_LIQUIDITY {
-				Err(PositionError::Other(MintError::MaximumLiquidity))
-			} else {
-				position.amount += amount;
-				position.original_amount = position.amount;
-
-				let position_info = PositionInfo::from(&position);
-
-				self.next_pool_instance = next_pool_instance;
-				fixed_pools.insert(sqrt_price, fixed_pool);
-				positions.insert((sqrt_price, lp.clone()), position);
-
-				Ok((collected_amounts, position_info))
-			}
+			return orders
+				.get(&sqrt_price)
+				.and_then(|orders| orders.get(lp))
+				.cloned()
+				.ok_or(PositionError::NonExistent)
 		}
+
+		let position = orders.entry(sqrt_price).or_default().entry(lp.clone()).or_default();
+		position.amount = position.amount.saturating_add(amount);
+		position.original_amount = position.amount;
+
+		Ok(position.clone())
 	}
 
-	fn validate_tick<T>(tick: Tick) -> Result<SqrtPrice, PositionError<T>> {
+	fn validate_tick(tick: Tick) -> Result<SqrtPrice, PositionError> {
 		is_tick_valid(tick)
 			.then(|| SqrtPrice::from_tick(tick))
 			.ok_or(PositionError::InvalidTick)
 	}
 
-	/// Collects any earnings from the specified position, and then removes the requested amount of
-	/// liquidity from it. The SwapDirection determines which direction of swaps the
+	/// Removes the requested amount of liquidity from the position at the given tick, returning
+	/// the amount actually removed. The SwapDirection determines which direction of swaps the
 	/// liquidity/position you're burning was for.
 	///
 	/// This function never panics.
-	pub(super) fn collect_and_burn<SD: SwapDirection>(
+	pub(super) fn burn<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(Amount, Collected, PositionInfo), PositionError<BurnError>> {
-		if amount.is_zero() {
-			self.collect::<SD>(lp, tick)
-				.map_err(|err| err.map_other(|e| -> BurnError { match e {} }))
-				.map(|(collected_amounts, position_info)| {
-					(Amount::zero(), collected_amounts, position_info)
-				})
-		} else {
-			let sqrt_price = Self::validate_tick(tick)?;
-			let price = Price::from(sqrt_price);
-
-			let positions = &mut self.positions[!SD::INPUT_SIDE];
-			let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
-
-			let position = positions
-				.get(&(sqrt_price, lp.clone()))
-				.ok_or(PositionError::NonExistent)?
-				.clone();
-			let option_fixed_pool = fixed_pools.get(&sqrt_price);
-
-			let (collected_amounts, option_position) =
-				Self::collect_from_position::<SD>(position, option_fixed_pool, price);
-			Ok(if let Some(mut position) = option_position {
-				let mut fixed_pool = option_fixed_pool.unwrap().clone(); // Position having liquidity remaining implies fixed pool existing before collect.
-
-				let amount = core::cmp::min(position.amount, amount);
-				position.amount -= amount;
-				position.original_amount = position.amount;
-				fixed_pool.available -= amount;
-
-				let position_info = PositionInfo::from(&position);
-
-				if position.amount.is_zero() {
-					positions.remove(&(sqrt_price, lp.clone()));
-				} else {
-					assert!(!fixed_pool.available.is_zero());
-					positions.insert((sqrt_price, lp.clone()), position);
-				};
-				if fixed_pool.available.is_zero() {
-					fixed_pools.remove(&sqrt_price);
-				} else {
-					fixed_pools.insert(sqrt_price, fixed_pool);
-				}
-
-				(amount, collected_amounts, position_info)
-			} else {
-				positions.remove(&(sqrt_price, lp.clone()));
-				(Default::default(), collected_amounts, PositionInfo::default())
-			})
-		}
-	}
-
-	/// Collects any earnings from the specified position. The SwapDirection determines which
-	/// direction of swaps the liquidity/position you're referring to is for.
-	///
-	/// This function never panics.
-	pub(super) fn collect<SD: SwapDirection>(
-		&mut self,
-		lp: &LiquidityProvider,
-		tick: Tick,
-	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
+	) -> Result<(Amount, Position), PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
-		self.inner_collect::<SD>(lp, sqrt_price)
+
+		let all_orders = &mut self.orders[!SD::INPUT_SIDE];
+		let orders = all_orders.get_mut(&sqrt_price).ok_or(PositionError::NonExistent)?;
+		let position = orders.get_mut(lp).ok_or(PositionError::NonExistent)?;
+		if amount.is_zero() {
+			return Ok((Amount::zero(), position.clone()))
+		}
+
+		let burnt_amount = core::cmp::min(position.amount, amount);
+		// Cannot underflow, the burn is capped by the position's liquidity.
+		position.amount -= burnt_amount;
+		position.original_amount = position.amount;
+		let position_info = position.clone();
+
+		if position.amount.is_zero() {
+			orders.remove(lp);
+			if orders.is_empty() {
+				all_orders.remove(&sqrt_price);
+			}
+		}
+
+		Ok((burnt_amount, position_info))
 	}
 
-	fn inner_collect<SD: SwapDirection>(
-		&mut self,
-		lp: &LiquidityProvider,
-		sqrt_price: SqrtPrice,
-	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
-		let price = Price::from(sqrt_price);
-
-		let positions = &mut self.positions[!SD::INPUT_SIDE];
-		let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
-
-		let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
-			positions
-				.get(&(sqrt_price, lp.clone()))
-				.ok_or(PositionError::NonExistent)?
-				.clone(),
-			fixed_pools.get(&sqrt_price),
-			price,
-		);
-
-		Ok((
-			collected_amounts,
-			if let Some(position) = option_position {
-				let position_info = PositionInfo::from(&position);
-				positions.insert((sqrt_price, lp.clone()), position);
-				position_info
-			} else {
-				positions.remove(&(sqrt_price, lp.clone()));
-				PositionInfo::default()
-			},
-		))
-	}
-
-	/// Returns all the assets associated with a position
+	/// Returns the position for the given lp at the given tick, or `None` if there isn't one.
 	///
 	/// This function never panics.
 	pub(super) fn position<SD: SwapDirection>(
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<(Collected, PositionInfo), PositionError<Infallible>> {
+	) -> Result<Option<Position>, PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
-		let price = Price::from(sqrt_price);
 
-		let positions = &self.positions[!SD::INPUT_SIDE];
-		let fixed_pools = &self.fixed_pools[!SD::INPUT_SIDE];
-
-		let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
-			positions
-				.get(&(sqrt_price, lp.clone()))
-				.ok_or(PositionError::NonExistent)?
-				.clone(),
-			fixed_pools.get(&sqrt_price),
-			price,
-		);
-
-		Ok((
-			collected_amounts,
-			option_position.map_or(Default::default(), |position| PositionInfo::from(&position)),
-		))
+		Ok(self.orders[!SD::INPUT_SIDE]
+			.get(&sqrt_price)
+			.and_then(|orders| orders.get(lp))
+			.cloned())
 	}
 
-	/// Returns all the assets available for swaps in a given direction
+	/// Returns all the assets available for swaps in a given direction, grouped by tick.
 	///
 	/// This function never panics.
 	pub(super) fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
-		self.fixed_pools[!SD::INPUT_SIDE]
+		self.orders[!SD::INPUT_SIDE]
 			.iter()
-			.map(|(sqrt_price, fixed_pool)| (sqrt_price.to_tick(), fixed_pool.available))
+			.map(|(sqrt_price, orders)| (sqrt_price.to_tick(), liquidity_of(orders)))
 			.collect()
 	}
 
@@ -911,73 +487,775 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		range: core::ops::Range<Tick>,
 	) -> Result<Amount, DepthError> {
-		let start =
-			Self::validate_tick::<Infallible>(range.start).map_err(|_| DepthError::InvalidTick)?;
-		let end =
-			Self::validate_tick::<Infallible>(range.end).map_err(|_| DepthError::InvalidTick)?;
+		let start = Self::validate_tick(range.start).map_err(|_| DepthError::InvalidTick)?;
+		let end = Self::validate_tick(range.end).map_err(|_| DepthError::InvalidTick)?;
 		if start <= end {
-			Ok(self.fixed_pools[!SD::INPUT_SIDE]
+			Ok(self.orders[!SD::INPUT_SIDE]
 				.range(start..end)
-				.map(|(_, fixed_pool)| fixed_pool.available)
-				.fold(Default::default(), |acc, x| acc + x))
+				.map(|(_, orders)| liquidity_of(orders))
+				.fold(Amount::zero(), |total, amount| total.saturating_add(amount)))
 		} else {
 			Err(DepthError::InvalidTickRange)
 		}
 	}
 }
 
-/// Putting some supporting code of migrating from v7 to v8 here to preserve existing visibility of
-/// structs involved in the migration.
+/// The total liquidity a set of orders provides.
+fn liquidity_of<LiquidityProvider: Ord>(orders: &Orders<LiquidityProvider>) -> Amount {
+	orders
+		.values()
+		.fold(Amount::zero(), |total, position| total.saturating_add(position.amount))
+}
+
+/// Buys `sold_amount` of the orders' liquidity for `bought_amount` of the other asset, splitting
+/// the liquidity bought across them in proportion to the liquidity each of them provides and paying
+/// each of them for it at the fill's rate, and appending the result to `fills`. Orders left with
+/// nothing to sell are removed.
+///
+/// For nonzero `sold_amount`, every order is short by less than one bought-asset unit relative to
+/// the fill's rate. This bound applies per fill, not cumulatively. Undistributed proceeds are
+/// returned as protocol surplus. If `sold_amount` is zero, all proceeds are surplus and no order
+/// changes or receives a fill.
+///
+/// `available` must be the total liquidity the orders provide, and `sold_amount` no more than it.
+fn fill_orders<LiquidityProvider: Ord + Clone>(
+	orders: &mut Orders<LiquidityProvider>,
+	sqrt_price: SqrtPrice,
+	available: Amount,
+	sold_amount: Amount,
+	bought_amount: Amount,
+	fills: &mut Vec<Fill<LiquidityProvider>>,
+) -> Amount {
+	debug_assert!(sold_amount <= available);
+
+	let tick = sqrt_price.to_tick();
+	let mut remaining_available = available;
+	let mut remaining_sold = sold_amount;
+	let mut remaining_bought = bought_amount;
+
+	orders.retain(|lp, position| {
+		// The share is taken against what is left rather than the total, so that rounding dust
+		// rolls forward and the last order takes exactly what remains. The division cannot fail:
+		// every order holds a non-zero amount, so the remaining liquidity is non-zero for as long
+		// as there is an order left to fill.
+		let sold = mul_div_floor_checked(remaining_sold, position.amount, remaining_available)
+			.unwrap_or_default();
+		// Paying only for the actual sale bounds underpayment and prevents any order from
+		// collecting another order's rounding dust. A zero-output swap pays no LP.
+		let bought = mul_div_floor_checked(sold, bought_amount, sold_amount).unwrap_or_default();
+
+		// Cannot underflow: `remaining_sold` never exceeds `remaining_available`, which bounds
+		// an order's share of it by the liquidity that order provides.
+		debug_assert!(sold <= position.amount);
+		remaining_available = remaining_available.saturating_sub(position.amount);
+		if !sold.is_zero() || !bought.is_zero() {
+			remaining_sold = remaining_sold.saturating_sub(sold);
+			remaining_bought = remaining_bought.saturating_sub(bought);
+
+			position.amount = position.amount.saturating_sub(sold);
+
+			fills.push(Fill {
+				lp: lp.clone(),
+				tick,
+				sold_amount: sold,
+				bought_amount: bought,
+				remaining_amount: position.amount,
+			});
+		}
+
+		// An order with nothing left to sell is dropped; its proceeds are owed to the lp, not held
+		// by the pool.
+		!position.amount.is_zero()
+	});
+	remaining_bought
+}
+
+/// Decoding and conversion of the limit order state as it was before fixed pools were removed.
+///
+/// The old representation did not store what an order had earned. It stored the running product of
+/// `1 - percent_used` for each price (`percent_remaining`), and each order stored that product as
+/// of the last time it was touched; the ratio between the two recovered how much of the order had
+/// been bought since. There is nowhere to put that in the new representation, so converting has to
+/// realise it: whatever each order had earned and not yet collected comes back as
+/// [migration_support::UncollectedProceeds] for the caller to pay out.
+///
+/// This lives here rather than beside the migration because converting has to construct the new
+/// [PoolState] and [Position], whose fields are private to this module. Exposing constructors for
+/// them would widen this crate's API permanently for a need that expires.
+///
+/// It exists solely for `pallet-cf-pools`'s `remove_fixed_pools` migration, and should be deleted
+/// with it. The equivalent support for the v7 to v8 migration outlived its migration by several
+/// releases because the two sit in different crates.
 pub mod migration_support {
 	use super::*;
+	use crate::common::Pairs;
 
-	#[derive(Decode, Encode)]
-	pub struct PositionV7 {
+	pub use super::FloatBetweenZeroAndOne;
+
+	/// An order as it stood before the conversion.
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub struct OrderBefore<LiquidityProvider> {
+		/// The price the order was selling at.
+		pub tick: Tick,
+		pub lp: LiquidityProvider,
+		/// What it had left to sell.
+		pub amount: Amount,
+		/// Its size as of its last update.
+		pub original_amount: Amount,
+	}
+
+	/// All the liquidity offered at one price, as a single pool.
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub struct FixedPool {
+		pool_instance: u128,
+		available: Amount,
+		percent_remaining: FloatBetweenZeroAndOne,
+	}
+
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub struct PositionV9 {
 		pool_instance: u128,
 		amount: Amount,
 		last_percent_remaining: FloatBetweenZeroAndOne,
-		_accumulative_fees: Amount, // this field is being removed
 		original_amount: Amount,
 	}
 
-	#[derive(Decode, Encode)]
-	pub struct PoolStateV7<LiquidityProvider: Ord> {
-		_fee_hundredth_pips: u32, // this field is being removed
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub struct PoolStateV9<LiquidityProvider: Ord> {
 		next_pool_instance: u128,
 		fixed_pools: PoolPairsMap<BTreeMap<SqrtPrice, FixedPool>>,
-		positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), PositionV7>>,
-		_total_fees_earned: PoolPairsMap<Amount>, // this field is being removed
+		positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), PositionV9>>,
 		total_swap_inputs: PoolPairsMap<Amount>,
 		total_swap_outputs: PoolPairsMap<Amount>,
 	}
 
-	impl<LP: Ord> PoolStateV7<LP> {
-		pub fn migrate_to_v8(self) -> PoolState<LP> {
-			PoolState {
-				next_pool_instance: self.next_pool_instance,
-				fixed_pools: self.fixed_pools,
-				positions: self.positions.map(|positions_map| {
-					positions_map
-						.into_iter()
-						.map(|(key, position_v7)| {
-							(
-								key,
-								Position {
-									pool_instance: position_v7.pool_instance,
-									amount: position_v7.amount,
-									last_percent_remaining: position_v7.last_percent_remaining,
-									original_amount: position_v7.original_amount,
-									// accumulative_fees is dropped
-								},
-							)
-						})
-						.collect()
-				}),
-				total_swap_inputs: self.total_swap_inputs,
-				total_swap_outputs: self.total_swap_outputs,
-				// fee_hundredth_pips is dropped
-				// total_fees_earned is dropped
+	/// The outcome of converting to the current representation.
+	pub struct Migrated<LiquidityProvider: Ord> {
+		pub pool_state: PoolState<LiquidityProvider>,
+		/// Earnings that have to be paid out, because the new representation cannot hold them.
+		pub proceeds: Vec<UncollectedProceeds<LiquidityProvider>>,
+		/// Liquidity the fixed pools were offering that no surviving order claims, by the pair it
+		/// was being sold in: a price whose orders have all gone, whether bought out or belonging
+		/// to an earlier incarnation of it, one whose orders would not convert, and the drift
+		/// rounding in the old representation left between a price and the orders behind it. The
+		/// caller must account for the lot as protocol-owned surplus.
+		pub unclaimed_liquidity: PoolPairsMap<Amount>,
+		/// Orders dropped because their share of their price would not convert. Expected to be
+		/// empty; anything here is an lp owed an amount the migration could not work out,
+		/// reported so it can be settled by hand.
+		pub unconvertible: Vec<UnconvertibleOrder<LiquidityProvider>>,
+	}
+
+	/// An order whose recorded share of its price would not convert, which the old representation
+	/// could not produce. The migration drops such an order rather than carrying it over, so this
+	/// is everything needed to work out by hand what its lp is owed.
+	#[derive(Clone, Debug, PartialEq, Eq)]
+	pub struct UnconvertibleOrder<LiquidityProvider> {
+		pub lp: LiquidityProvider,
+		/// The pair the order was selling. Anything it earned would be in the other one.
+		pub sold_pair: Pairs,
+		pub tick: Tick,
+		/// The size the order last recorded. An upper bound on what its lp is owed, since some
+		/// of it may already have been bought.
+		pub amount: Amount,
+		pub original_amount: Amount,
+		/// The order's snapshot of the fraction of its fixed pool still unsold, taken when the
+		/// order was last updated. Not a price: the price is `tick`.
+		pub order_percent_remaining: FloatBetweenZeroAndOne,
+		/// The fraction of that fixed pool still unsold now. What the order had left is `amount`
+		/// times this over the snapshot; the rest had been bought.
+		pub pool_percent_remaining: Option<FloatBetweenZeroAndOne>,
+	}
+
+	/// What an order had earned but not collected. The new representation cannot hold it, so it
+	/// has to be paid out as part of the migration.
+	#[derive(Clone, Debug, PartialEq, Eq)]
+	pub struct UncollectedProceeds<LiquidityProvider> {
+		pub lp: LiquidityProvider,
+		/// The pair the order was selling. The proceeds are in the other one.
+		pub sold_pair: Pairs,
+		/// The amount of the order's liquidity that had been bought. Needed to value the fill in
+		/// usd terms when the proceeds are not the stable asset.
+		pub sold_amount: Amount,
+		/// What it earned, owed to the lp.
+		pub bought_amount: Amount,
+	}
+
+	impl<LiquidityProvider: Clone + Ord> PoolStateV9<LiquidityProvider> {
+		/// Converts to the current representation, returning the earnings that have to be paid out
+		/// because there is no longer anywhere to keep them.
+		pub fn migrate(self) -> Migrated<LiquidityProvider> {
+			let Self { fixed_pools, positions, total_swap_inputs, total_swap_outputs, .. } = self;
+
+			let mut proceeds = Vec::new();
+			let mut unconvertible = Vec::new();
+			let mut orders =
+				PoolPairsMap::<BTreeMap<SqrtPrice, Orders<LiquidityProvider>>>::default();
+
+			for sold_pair in [Pairs::Base, Pairs::Quote] {
+				for ((sqrt_price, lp), position) in &positions[sold_pair] {
+					let fixed_pool = fixed_pools[sold_pair].get(sqrt_price);
+					let (remaining_amount, used_amount) =
+						match remaining_and_used(position, fixed_pool) {
+							Some(converted) => converted,
+							None => {
+								// Dropped rather than carried over: the size it records is stale,
+								// and nothing checks it once the fixed pool is gone, so an order
+								// kept here could sell liquidity that had already been bought.
+								// Erring towards the lp being owed is recoverable; liquidity
+								// conjured out of nothing is not. Reported rather than fatal,
+								// because a panic would stop the chain producing blocks.
+								unconvertible.push(UnconvertibleOrder {
+									lp: lp.clone(),
+									sold_pair,
+									tick: sqrt_price.to_tick(),
+									amount: position.amount,
+									original_amount: position.original_amount,
+									order_percent_remaining: position
+										.last_percent_remaining
+										.clone(),
+									pool_percent_remaining: fixed_pool
+										.map(|fixed_pool| fixed_pool.percent_remaining.clone()),
+								});
+								(Amount::zero(), Amount::zero())
+							},
+						};
+
+					if !used_amount.is_zero() {
+						// Mirrors what a collect would have paid out at this price.
+						let price = Price::from(*sqrt_price);
+						let bought_amount = match sold_pair {
+							Pairs::Base => price.output_amount_floor(used_amount),
+							Pairs::Quote => price.input_amount_floor(used_amount),
+						}
+						.unwrap_or_default();
+
+						proceeds.push(UncollectedProceeds {
+							lp: lp.clone(),
+							sold_pair,
+							sold_amount: used_amount,
+							bought_amount,
+						});
+					}
+
+					// Build the new list of orders, leaving out the empty ones.
+					if !remaining_amount.is_zero() {
+						orders[sold_pair].entry(*sqrt_price).or_default().insert(
+							lp.clone(),
+							Position {
+								amount: remaining_amount,
+								original_amount: position.original_amount,
+							},
+						);
+					}
+				}
+			}
+
+			// Whatever a price was offering that no surviving order claims.
+			let mut unclaimed_liquidity = PoolPairsMap::<Amount>::default();
+			for sold_pair in [Pairs::Base, Pairs::Quote] {
+				for (sqrt_price, fixed_pool) in &fixed_pools[sold_pair] {
+					let claimed =
+						orders[sold_pair].get(sqrt_price).map_or(Amount::zero(), liquidity_of);
+					unclaimed_liquidity[sold_pair] = unclaimed_liquidity[sold_pair]
+						.saturating_add(fixed_pool.available.saturating_sub(claimed));
+				}
+			}
+
+			Migrated {
+				pool_state: PoolState { orders, total_swap_inputs, total_swap_outputs },
+				proceeds,
+				unclaimed_liquidity,
+				unconvertible,
 			}
 		}
+
+		/// The liquidity on offer at each price, by the pair being sold. A price's orders can
+		/// never survive the conversion totalling more than the price was offering.
+		pub fn available_by_price(&self) -> PoolPairsMap<Vec<(Tick, Amount)>> {
+			PoolPairsMap::from_array([Pairs::Base, Pairs::Quote].map(|sold_pair| {
+				self.fixed_pools[sold_pair]
+					.iter()
+					.map(|(sqrt_price, fixed_pool)| (sqrt_price.to_tick(), fixed_pool.available))
+					.collect()
+			}))
+		}
+
+		/// Every order, by the pair it sells. Conversion may shrink an order or remove it, but
+		/// never grow one or invent one.
+		pub fn orders(&self) -> PoolPairsMap<Vec<OrderBefore<LiquidityProvider>>> {
+			PoolPairsMap::from_array([Pairs::Base, Pairs::Quote].map(|sold_pair| {
+				self.positions[sold_pair]
+					.iter()
+					.map(|((sqrt_price, lp), position)| OrderBefore {
+						tick: sqrt_price.to_tick(),
+						lp: lp.clone(),
+						amount: position.amount,
+						original_amount: position.original_amount,
+					})
+					.collect()
+			}))
+		}
+
+		/// The liquidity the fixed pools are offering, by the pair being sold.
+		pub fn total_available(&self) -> PoolPairsMap<Amount> {
+			let mut totals = PoolPairsMap::<Amount>::default();
+			for sold_pair in [Pairs::Base, Pairs::Quote] {
+				for fixed_pool in self.fixed_pools[sold_pair].values() {
+					totals[sold_pair] = totals[sold_pair].saturating_add(fixed_pool.available);
+				}
+			}
+			totals
+		}
+	}
+
+	#[cfg(any(test, feature = "test"))]
+	mod test_constructors {
+		use super::*;
+
+		impl FloatBetweenZeroAndOne {
+			pub fn from_parts(normalised_mantissa: U256, negative_exponent: U256) -> Self {
+				Self { normalised_mantissa, negative_exponent }
+			}
+
+			/// Returns the largest possible value i.e. `1.0 - (2^-256)`. A price nothing had
+			/// been bought from held exactly this.
+			pub fn max() -> Self {
+				Self { normalised_mantissa: U256::max_value(), negative_exponent: U256::zero() }
+			}
+
+			/// `self * numerator / denominator`, rounded up.
+			///
+			/// Ported verbatim from the old representation, which folded one of these into a
+			/// price's running product for every swap that took liquidity from it. Building
+			/// fixtures the same way is what makes them the same shape as the values on chain:
+			/// arbitrary reals, not round numbers.
+			pub fn mul_div_ceil(&self, numerator: U256, denominator: U256) -> Self {
+				assert!(!numerator.is_zero());
+				assert!(numerator <= denominator);
+				assert!(self.normalised_mantissa.bit(255));
+
+				// The multiply comes first so that precision is not lost off the bottom of the
+				// mantissa during the division.
+				let (mul_normalised_mantissa, mul_normalise_shift) = {
+					let unnormalised_mantissa = U256::full_mul(self.normalised_mantissa, numerator);
+					let normalize_shift = unnormalised_mantissa.leading_zeros();
+					(unnormalised_mantissa << normalize_shift, 256 - normalize_shift)
+				};
+
+				let (mul_div_normalised_mantissa, div_normalise_shift) = {
+					let (d, div_remainder) =
+						U512::div_mod(mul_normalised_mantissa, U512::from(denominator));
+					let d = if div_remainder.is_zero() { d } else { d + U512::one() };
+					let normalise_shift = d.leading_zeros();
+					let shift_bits = 256 - normalise_shift;
+					let (d, shift_remainder) = Self::right_shift_mod(d, shift_bits.into());
+					let d = U256::try_from(d).unwrap();
+
+					(if shift_remainder.is_zero() { d } else { d + U256::one() }, normalise_shift)
+				};
+
+				assert!(!mul_div_normalised_mantissa.is_zero());
+
+				match self
+					.negative_exponent
+					.checked_add(U256::from(div_normalise_shift - mul_normalise_shift))
+				{
+					Some(negative_exponent) =>
+						Self { normalised_mantissa: mul_div_normalised_mantissa, negative_exponent },
+					// The old representation clamped here rather than overflowing.
+					None => Self {
+						normalised_mantissa: U256::one() << 255,
+						negative_exponent: U256::MAX,
+					},
+				}
+			}
+		}
+
+		impl FixedPool {
+			pub fn from_parts(
+				pool_instance: u128,
+				available: Amount,
+				percent_remaining: FloatBetweenZeroAndOne,
+			) -> Self {
+				Self { pool_instance, available, percent_remaining }
+			}
+		}
+
+		impl PositionV9 {
+			pub fn from_parts(
+				pool_instance: u128,
+				amount: Amount,
+				last_percent_remaining: FloatBetweenZeroAndOne,
+				original_amount: Amount,
+			) -> Self {
+				Self { pool_instance, amount, last_percent_remaining, original_amount }
+			}
+		}
+
+		impl<LiquidityProvider: Ord> PoolStateV9<LiquidityProvider> {
+			pub fn from_parts(
+				fixed_pools: PoolPairsMap<BTreeMap<SqrtPrice, FixedPool>>,
+				positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), PositionV9>>,
+			) -> Self {
+				Self {
+					next_pool_instance: 0,
+					fixed_pools,
+					positions,
+					total_swap_inputs: Default::default(),
+					total_swap_outputs: Default::default(),
+				}
+			}
+
+			pub fn set_swap_totals(
+				&mut self,
+				inputs: PoolPairsMap<Amount>,
+				outputs: PoolPairsMap<Amount>,
+			) {
+				self.total_swap_inputs = inputs;
+				self.total_swap_outputs = outputs;
+			}
+		}
+	}
+
+	/// How much of an order was left, and how much of it had been bought, given the fixed pool it
+	/// belonged to.
+	/// `None` where the position's recorded share of the price could not be converted, which the
+	/// old representation could not produce: `percent_remaining` only ever decreases and an order
+	/// records it at an earlier point.
+	fn remaining_and_used(
+		position: &PositionV9,
+		fixed_pool: Option<&FixedPool>,
+	) -> Option<(Amount, Amount)> {
+		let Some(fixed_pool) =
+			fixed_pool.filter(|fixed_pool| fixed_pool.pool_instance == position.pool_instance)
+		else {
+			// No fixed pool at this price,  means every last unit of
+			// this order was bought.
+			return Some((Amount::zero(), position.amount))
+		};
+
+		FloatBetweenZeroAndOne::integer_mul_div(
+			position.amount,
+			&fixed_pool.percent_remaining,
+			&position.last_percent_remaining,
+		)
+		// As when collecting: the remainder is rounded down so an lp cannot withdraw liquidity
+		// that isn't there, and the amount used is rounded down so they cannot be paid for more
+		// than was bought.
+		.map(|(remaining_floor, remaining_ceil)| {
+			(remaining_floor, position.amount.saturating_sub(remaining_ceil))
+		})
+	}
+}
+
+#[cfg(test)]
+mod migration_tests {
+	use super::{migration_support::*, *};
+	use crate::common::Pairs;
+	use cf_utilities::{assert_matches, assert_ok};
+
+	type Lp = cf_primitives::AccountId;
+	type OldPoolState = PoolStateV9<Lp>;
+
+	fn lp(id: u8) -> Lp {
+		Lp::from([id; 32])
+	}
+
+	/// A fresh order at 100% remaining.
+	fn float_max() -> FloatBetweenZeroAndOne {
+		FloatBetweenZeroAndOne::max()
+	}
+
+	/// A price that swaps have taken these fractions of, folded into the running product one at a
+	/// time exactly as the swaps would have. Real prices are a long chain of these, not a single
+	/// ratio, so building fixtures this way gives them the same shape.
+	fn remaining_after(
+		fractions: impl IntoIterator<Item = (u128, u128)>,
+	) -> FloatBetweenZeroAndOne {
+		fractions.into_iter().fold(float_max(), |remaining, (numerator, denominator)| {
+			remaining.mul_div_ceil(numerator.into(), denominator.into())
+		})
+	}
+
+	/// Tick zero, so a price of one, which makes the amount bought equal to the amount sold and
+	/// keeps the arithmetic under test visible.
+	fn at_tick_zero() -> SqrtPrice {
+		SqrtPrice::from_tick(0)
+	}
+
+	fn old_state(
+		fixed_pools: Vec<(SqrtPrice, u128, Amount, FloatBetweenZeroAndOne)>,
+		positions: Vec<(SqrtPrice, Lp, u128, Amount, FloatBetweenZeroAndOne, Amount)>,
+	) -> OldPoolState {
+		OldPoolState::from_parts(
+			PoolPairsMap::from_array([
+				fixed_pools
+					.into_iter()
+					.map(|(sqrt_price, instance, available, remaining)| {
+						(sqrt_price, FixedPool::from_parts(instance, available, remaining))
+					})
+					.collect(),
+				Default::default(),
+			]),
+			PoolPairsMap::from_array([
+				positions
+					.into_iter()
+					.map(|(sqrt_price, lp, instance, amount, remaining, original)| {
+						(
+							(sqrt_price, lp),
+							PositionV9::from_parts(instance, amount, remaining, original),
+						)
+					})
+					.collect(),
+				Default::default(),
+			]),
+		)
+	}
+
+	#[test]
+	fn untouched_orders_survive_intact_and_earn_nothing() {
+		let Migrated { pool_state: state, proceeds, .. } = old_state(
+			vec![(at_tick_zero(), 0, 1000.into(), float_max())],
+			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into())],
+		)
+		.migrate();
+
+		assert!(proceeds.is_empty(), "nothing has been bought, so nothing is owed");
+		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 1000.into())]);
+		assert_eq!(
+			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
+			Some(Position { amount: 1000.into(), original_amount: 1000.into() })
+		);
+	}
+
+	#[test]
+	fn a_partly_bought_price_splits_the_order() {
+		// The price has an eighth of its liquidity left, and both orders were minted when it was
+		// full. Uneven sizes, so an lp's remainder, their payout, and the other lp's share are all
+		// distinct numbers.
+		let Migrated { pool_state: state, proceeds, .. } = old_state(
+			vec![(at_tick_zero(), 0, 375.into(), remaining_after([(1, 8)]))],
+			vec![
+				(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into()),
+				(at_tick_zero(), lp(2), 0, 2000.into(), float_max(), 2000.into()),
+			],
+		)
+		.migrate();
+
+		// Each order is settled against its own size, rather than one being filled before the
+		// next is touched.
+		assert_eq!(
+			proceeds,
+			vec![
+				UncollectedProceeds {
+					lp: lp(1),
+					sold_pair: Pairs::Base,
+					sold_amount: 875.into(),
+					bought_amount: 875.into(),
+				},
+				UncollectedProceeds {
+					lp: lp(2),
+					sold_pair: Pairs::Base,
+					sold_amount: 1750.into(),
+					bought_amount: 1750.into(),
+				},
+			]
+		);
+		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 375.into())]);
+		assert_eq!(
+			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
+			Some(Position { amount: 125.into(), original_amount: 1000.into() })
+		);
+		assert_eq!(
+			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
+			Some(Position { amount: 250.into(), original_amount: 2000.into() })
+		);
+	}
+
+	#[test]
+	fn orders_bought_in_their_entirety_are_paid_out_and_dropped() {
+		// No fixed pool at the price at all: the last of it was bought and the pool deleted.
+		let Migrated { pool_state: state, proceeds, .. } = old_state(
+			vec![],
+			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into())],
+		)
+		.migrate();
+
+		assert_eq!(
+			proceeds,
+			vec![UncollectedProceeds {
+				lp: lp(1),
+				sold_pair: Pairs::Base,
+				sold_amount: 1000.into(),
+				bought_amount: 1000.into(),
+			}]
+		);
+		assert!(state.liquidity::<QuoteToBase>().is_empty());
+		assert_matches!(state.position::<QuoteToBase>(&lp(1), 0), Ok(None));
+	}
+
+	#[test]
+	fn an_order_from_an_earlier_incarnation_of_a_price_is_fully_bought() {
+		// Liquidity returned to the price after the pool was emptied, so the pool exists again but
+		// under a new instance. The order belongs to the old one and was bought in full.
+		let Migrated { pool_state: state, proceeds, .. } = old_state(
+			vec![(at_tick_zero(), 7, 400.into(), float_max())],
+			vec![
+				(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into()),
+				(at_tick_zero(), lp(2), 7, 400.into(), float_max(), 400.into()),
+			],
+		)
+		.migrate();
+
+		assert_eq!(
+			proceeds,
+			vec![UncollectedProceeds {
+				lp: lp(1),
+				sold_pair: Pairs::Base,
+				sold_amount: 1000.into(),
+				bought_amount: 1000.into(),
+			}],
+			"only the order from the earlier incarnation is settled"
+		);
+		// The order from the current incarnation is untouched.
+		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 400.into())]);
+		assert_eq!(
+			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
+			Some(Position { amount: 400.into(), original_amount: 400.into() })
+		);
+	}
+
+	#[test]
+	fn rounding_favours_the_pool_over_the_lp() {
+		// An odd amount at a half-bought price: the lp keeps the floor of what is left and is paid
+		// for the floor of what went, so neither number is rounded up in their favour.
+		let Migrated { pool_state: state, proceeds, .. } = old_state(
+			vec![(at_tick_zero(), 0, 501.into(), remaining_after([(1, 2)]))],
+			vec![(at_tick_zero(), lp(1), 0, 1001.into(), float_max(), 1001.into())],
+		)
+		.migrate();
+
+		let remaining = state.liquidity::<QuoteToBase>()[0].1;
+		let sold = proceeds[0].sold_amount;
+
+		assert_eq!(remaining, 500.into());
+		assert_eq!(sold, 500.into());
+		assert!(remaining + sold <= 1001.into(), "the lp must not end up with more than they had");
+	}
+
+	/// A price could outlive the orders behind it, and rounding could let it offer more than they
+	/// backed. Nobody could claim either then, so both are reported for the caller to absorb
+	/// rather than handed to whichever order happened to be there.
+	#[test]
+	fn liquidity_no_order_can_claim_is_reported() {
+		let orphaned_tick = 120;
+
+		let Migrated { pool_state: state, unclaimed_liquidity, .. } = old_state(
+			vec![
+				// Backed by the order below, but offering three units more than it holds.
+				(at_tick_zero(), 0, 1003.into(), float_max()),
+				// Entirely orphaned: every order that once backed this price is gone.
+				// A different price, so a different pool: one counter served them all.
+				(SqrtPrice::from_tick(orphaned_tick), 1, 47.into(), float_max()),
+			],
+			vec![(at_tick_zero(), lp(1), 0, 1000.into(), float_max(), 1000.into())],
+		)
+		.migrate();
+
+		assert_eq!(unclaimed_liquidity[Pairs::Base], (3 + 47).into());
+		assert_eq!(unclaimed_liquidity[Pairs::Quote], Amount::zero());
+
+		// Only what an order actually held carries over, and the orphaned price is gone.
+		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 1000.into())]);
+	}
+
+	/// Real prices hold arbitrary fractions of their liquidity, not round ones, and the ratios in
+	/// the other tests are all powers of two — the one shape where the arithmetic is cleanest.
+	/// Whatever the ratio, an order must be split into no more than it held.
+	#[test]
+	fn an_order_is_never_split_into_more_than_it_held() {
+		let amount = Amount::from(1_000_000u32);
+
+		for remaining @ (numerator, denominator) in
+			[(1, 3), (2, 7), (37, 100), (999_999, 1_000_000), (1, 1_000_000)]
+		{
+			// The swaps that took the price down took the liquidity with them, so what the
+			// price still offers is the order's share of it.
+			let expected = amount * Amount::from(numerator) / Amount::from(denominator);
+
+			let Migrated { pool_state: state, proceeds, .. } = old_state(
+				vec![(at_tick_zero(), 0, expected, remaining_after([remaining]))],
+				vec![(at_tick_zero(), lp(1), 0, amount, float_max(), amount)],
+			)
+			.migrate();
+
+			let kept = state
+				.liquidity::<QuoteToBase>()
+				.first()
+				.map_or(Amount::zero(), |(_tick, amount)| *amount);
+			let sold = proceeds.first().map_or(Amount::zero(), |proceeds| proceeds.sold_amount);
+
+			assert!(
+				kept + sold <= amount,
+				"{numerator}/{denominator} left: kept {kept} and sold {sold}, more than the \
+				 {amount} the order held"
+			);
+
+			// And the split lands where the ratio says it should, give or take the rounding.
+			assert!(
+				kept.abs_diff(expected) <= 2.into(),
+				"{numerator}/{denominator} left: kept {kept}, expected about {expected}"
+			);
+		}
+	}
+
+	/// A price on chain has been bought down by many swaps, so its running product is a long chain
+	/// of multiplications rather than the single ratio every other test here uses. Compounding is
+	/// what the float existed to survive, so it is worth checking an order still splits sensibly
+	/// after it.
+	#[test]
+	fn a_price_bought_down_over_many_swaps_still_splits_its_order() {
+		let amount = Amount::from(1_000_000_000u32);
+		let swaps = [(9, 10), (3, 4), (5, 7), (99, 100), (1, 3), (17, 19), (2, 5)];
+
+		// Roughly what the price still offers after each swap has taken its cut in turn.
+		let expected = swaps.iter().fold(amount, |amount, (numerator, denominator)| {
+			amount * Amount::from(*numerator) / Amount::from(*denominator)
+		});
+
+		let Migrated { pool_state: state, proceeds, .. } = old_state(
+			vec![(at_tick_zero(), 0, expected, remaining_after(swaps))],
+			vec![(at_tick_zero(), lp(1), 0, amount, float_max(), amount)],
+		)
+		.migrate();
+
+		let kept = state
+			.liquidity::<QuoteToBase>()
+			.first()
+			.map_or(Amount::zero(), |(_tick, amount)| *amount);
+		let sold = proceeds.first().map_or(Amount::zero(), |proceeds| proceeds.sold_amount);
+
+		assert!(kept + sold <= amount, "kept {kept} and sold {sold} of an order holding {amount}");
+
+		assert!(
+			kept.abs_diff(expected) <= 8.into(),
+			"kept {kept} after {} swaps, expected about {expected}",
+			swaps.len()
+		);
+	}
+
+	#[test]
+	fn swap_totals_carry_across() {
+		let mut old = old_state(vec![], vec![]);
+		old.set_swap_totals(
+			PoolPairsMap::from_array([11.into(), 22.into()]),
+			PoolPairsMap::from_array([33.into(), 44.into()]),
+		);
+
+		let Migrated { pool_state: state, .. } = old.migrate();
+
+		assert_eq!(state.total_swap_inputs, PoolPairsMap::from_array([11.into(), 22.into()]));
+		assert_eq!(state.total_swap_outputs, PoolPairsMap::from_array([33.into(), 44.into()]));
 	}
 }

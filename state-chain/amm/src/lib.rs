@@ -57,6 +57,21 @@ pub enum NewError {
 	RangeOrders(range_orders::NewError),
 }
 
+/// The result of a swap against a pool.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SwapOutcome<LiquidityProvider> {
+	/// The amount bought by the swap.
+	pub output_amount: Amount,
+	/// The part of the input amount that could not be swapped.
+	pub remaining_input_amount: Amount,
+	/// The limit orders the swap bought into. Their proceeds are owed to the LPs and must be paid
+	/// out by the caller; the pool does not hold on to them.
+	pub limit_order_fills: Vec<limit_orders::Fill<LiquidityProvider>>,
+	/// Consumed input left over after rounding limit-order proceeds. The caller must account for
+	/// it as protocol-owned surplus; it is not owed to an LP or available for another swap.
+	pub limit_order_input_dust: Amount,
+}
+
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn new(
 		fee_hundredth_pips: u32,
@@ -226,7 +241,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		sold_amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
-	) -> (Amount, Amount) {
+	) -> SwapOutcome<LiquidityProvider> {
 		match order.to_sold_pair() {
 			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, sqrt_price_limit),
 			Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, sqrt_price_limit),
@@ -239,8 +254,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
-	) -> (Amount, Amount) {
+	) -> SwapOutcome<LiquidityProvider> {
 		let mut total_output_amount = Amount::zero();
+		let mut limit_order_fills = Vec::new();
+		let mut limit_order_input_dust = Amount::zero();
 
 		let range_orders_fee = self.range_orders.fee_hundredth_pips;
 
@@ -286,15 +303,22 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 							// amount, therefore we would loop forever
 
 							// Also we prefer limit orders as they don't immediately incur slippage
-							self.limit_orders.swap::<SD>(
+							self.swap_limit_orders::<SD>(
 								amount,
 								Some(range_orders_sqrt_price),
 								range_orders_fee,
+								&mut limit_order_fills,
+								&mut limit_order_input_dust,
 							)
 						}
 					},
-					(Some(_), None) =>
-						self.limit_orders.swap::<SD>(amount, sqrt_price_limit, range_orders_fee),
+					(Some(_), None) => self.swap_limit_orders::<SD>(
+						amount,
+						sqrt_price_limit,
+						range_orders_fee,
+						&mut limit_order_fills,
+						&mut limit_order_input_dust,
+					),
 					(None, Some(_)) => self.range_orders.swap::<SD>(amount, sqrt_price_limit),
 					(None, None) => break,
 				};
@@ -303,40 +327,57 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			total_output_amount = total_output_amount.saturating_add(output_amount);
 		}
 
-		(total_output_amount, amount)
-	}
-
-	pub fn collect_and_mint_limit_order(
-		&mut self,
-		lp: &LiquidityProvider,
-		order: Side,
-		tick: Tick,
-		sold_amount: Amount,
-	) -> Result<
-		(limit_orders::Collected, limit_orders::PositionInfo),
-		limit_orders::PositionError<limit_orders::MintError>,
-	> {
-		match order.to_sold_pair() {
-			Pairs::Base => self.limit_orders.collect_and_mint::<QuoteToBase>(lp, tick, sold_amount),
-			Pairs::Quote =>
-				self.limit_orders.collect_and_mint::<BaseToQuote>(lp, tick, sold_amount),
+		SwapOutcome {
+			output_amount: total_output_amount,
+			remaining_input_amount: amount,
+			limit_order_fills,
+			limit_order_input_dust,
 		}
 	}
 
-	pub fn collect_and_burn_limit_order(
+	fn swap_limit_orders<SD: common::SwapDirection + limit_orders::SwapDirection>(
+		&mut self,
+		amount: Amount,
+		sqrt_price_limit: Option<SqrtPrice>,
+		range_orders_fee: u32,
+		fills: &mut Vec<limit_orders::Fill<LiquidityProvider>>,
+		input_dust: &mut Amount,
+	) -> (Amount, Amount) {
+		let outcome = self.limit_orders.swap::<SD>(amount, sqrt_price_limit, range_orders_fee);
+		fills.extend(outcome.limit_order_fills);
+		*input_dust = input_dust.saturating_add(outcome.limit_order_input_dust);
+		(outcome.output_amount, outcome.remaining_input_amount)
+	}
+
+	/// Adds `sold_amount` to the lp's order at the given tick, creating it if it doesn't exist
+	/// yet, and returns the order as it stands afterwards. Minting nothing reports the existing
+	/// order, and errors if there is none.
+	pub fn mint_limit_order(
 		&mut self,
 		lp: &LiquidityProvider,
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
-	) -> Result<
-		(Amount, limit_orders::Collected, limit_orders::PositionInfo),
-		limit_orders::PositionError<limit_orders::BurnError>,
-	> {
+	) -> Result<limit_orders::Position, limit_orders::PositionError> {
 		match order.to_sold_pair() {
-			Pairs::Base => self.limit_orders.collect_and_burn::<QuoteToBase>(lp, tick, sold_amount),
-			Pairs::Quote =>
-				self.limit_orders.collect_and_burn::<BaseToQuote>(lp, tick, sold_amount),
+			Pairs::Base => self.limit_orders.mint::<QuoteToBase>(lp, tick, sold_amount),
+			Pairs::Quote => self.limit_orders.mint::<BaseToQuote>(lp, tick, sold_amount),
+		}
+	}
+
+	/// Removes up to `sold_amount` from the lp's order at the given tick, and returns how much
+	/// was actually removed along with the order as it stands afterwards. An order with nothing
+	/// left is removed from the pool.
+	pub fn burn_limit_order(
+		&mut self,
+		lp: &LiquidityProvider,
+		order: Side,
+		tick: Tick,
+		sold_amount: Amount,
+	) -> Result<(Amount, limit_orders::Position), limit_orders::PositionError> {
+		match order.to_sold_pair() {
+			Pairs::Base => self.limit_orders.burn::<QuoteToBase>(lp, tick, sold_amount),
+			Pairs::Quote => self.limit_orders.burn::<BaseToQuote>(lp, tick, sold_amount),
 		}
 	}
 
@@ -426,10 +467,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		order: Side,
 		tick: Tick,
-	) -> Result<
-		(limit_orders::Collected, limit_orders::PositionInfo),
-		limit_orders::PositionError<Infallible>,
-	> {
+	) -> Result<Option<limit_orders::Position>, limit_orders::PositionError> {
 		match order {
 			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
 			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),
@@ -440,15 +478,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		order: Side,
 	) -> sp_std::boxed::Box<
-		dyn '_
-			+ Iterator<
-				Item = (
-					LiquidityProvider,
-					Tick,
-					limit_orders::Collected,
-					limit_orders::PositionInfo,
-				),
-			>,
+		dyn '_ + Iterator<Item = (LiquidityProvider, Tick, limit_orders::Position)>,
 	> {
 		match order {
 			Side::Sell => sp_std::boxed::Box::new(self.limit_orders.positions::<QuoteToBase>()),
@@ -527,14 +557,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				(lp, lower_tick..upper_tick, collected, position_info)
 			})
 			.collect()
-	}
-
-	pub fn collect_all_limit_orders(
-		&mut self,
-	) -> PoolPairsMap<
-		Vec<(LiquidityProvider, Tick, limit_orders::Collected, limit_orders::PositionInfo)>,
-	> {
-		self.limit_orders.collect_all()
 	}
 
 	// Returns if the pool fee is valid.

@@ -3580,6 +3580,39 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
+     * A swap bought into a limit order. The proceeds have been credited to the LP as part of
+     * the swap.
+     **/
+    LimitOrderFilled: GenericPalletEvent<
+      'LiquidityPools',
+      'LimitOrderFilled',
+      {
+        lp: AccountId32;
+        baseAsset: CfPrimitivesChainsAssetsAnyAsset;
+        quoteAsset: CfPrimitivesChainsAssetsAnyAsset;
+        side: CfAmmCommonSide;
+        id: bigint;
+        tick: number;
+
+        /**
+         * The amount of the order's liquidity that the swap bought.
+         **/
+        soldAmount: bigint;
+
+        /**
+         * The proceeds credited to the LP in exchange for it.
+         **/
+        boughtAmount: bigint;
+
+        /**
+         * The amount left in the order. Zero means the order was filled in its entirety and
+         * no longer exists.
+         **/
+        remainingAmount: bigint;
+      }
+    >;
+
+    /**
      * Generic pallet event
      **/
     [prop: string]: GenericPalletEvent;
