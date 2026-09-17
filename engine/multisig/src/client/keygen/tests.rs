@@ -151,15 +151,16 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
 	ceremony.complete();
 }
 
-/// A party blamed by `threshold + 1` others would reveal enough evaluations to
-/// have its sharing polynomial reconstructed, so the ceremony must abort before
-/// the blame round rather than let it answer.
+/// Past the limit, the revealed evaluations plus the one every participant already
+/// holds would reconstruct the polynomial, so the ceremony aborts before the blame
+/// round rather than let the party answer.
 #[tokio::test]
 async fn should_abort_rather_than_reveal_enough_shares_to_reconstruct_polynomial() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let party_count = ceremony.nodes.len() as u32;
 	let threshold = cf_utilities::threshold_from_share_count(party_count) as usize;
+	let limit = super::keygen_stages::disclosure_limit(threshold);
 
 	let bad_dealer = ceremony.nodes.keys().next().unwrap().clone();
 
@@ -167,10 +168,10 @@ async fn should_abort_rather_than_reveal_enough_shares_to_reconstruct_polynomial
 		.nodes
 		.keys()
 		.filter(|id| **id != bad_dealer)
-		.take(threshold + 1)
+		.take(limit + 1)
 		.cloned()
 		.collect();
-	assert_eq!(targets.len(), threshold + 1);
+	assert_eq!(targets.len(), limit + 1);
 
 	let messages = ceremony.request().await;
 
@@ -198,22 +199,22 @@ async fn should_abort_rather_than_reveal_enough_shares_to_reconstruct_polynomial
 	);
 }
 
-/// The bound must not fire at exactly `threshold` complaints, where the
-/// polynomial still has a degree of freedom: the blame round runs as usual and
-/// the ceremony recovers.
+/// The bound must not fire *at* the disclosure limit, where enough degrees of
+/// freedom remain: the blame round runs as usual and the ceremony recovers.
 #[tokio::test]
 async fn should_still_enter_blame_round_at_the_disclosure_limit() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let party_count = ceremony.nodes.len() as u32;
 	let threshold = cf_utilities::threshold_from_share_count(party_count) as usize;
+	let limit = super::keygen_stages::disclosure_limit(threshold);
 
 	let bad_dealer = ceremony.nodes.keys().next().unwrap().clone();
 	let targets: Vec<_> = ceremony
 		.nodes
 		.keys()
 		.filter(|id| **id != bad_dealer)
-		.take(threshold)
+		.take(limit)
 		.cloned()
 		.collect();
 

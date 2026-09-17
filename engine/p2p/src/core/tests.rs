@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{PeerInfo, PeerUpdate};
+use super::{monitor::MonitorEvent, ConnectionState, P2PContext, PeerInfo, PeerUpdate};
 use crate::{
 	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
 	fair_channel::{fair_channel, FairReceiver},
@@ -23,7 +23,7 @@ use crate::{
 use cf_primitives::AccountId;
 use cf_utilities::Port;
 use sp_core::ed25519::Public;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 
 fn create_node_info(id: AccountId, node_key: &ed25519_dalek::SigningKey, port: Port) -> PeerInfo {
@@ -235,4 +235,72 @@ async fn stale_connections() {
 	// Ensure that we can re-activate stale connections when needed
 	send_and_receive_message(&node1, &mut node2).await.unwrap();
 	send_and_receive_message(&node2, &mut node1).await.unwrap();
+}
+
+/// Build a context without running the control loop, so that the control-loop
+/// event handlers can be driven deterministically. The receivers are returned
+/// only so that the caller can keep them alive for the duration of the test.
+fn create_context(
+	our_account_id: AccountId,
+) -> (P2PContext, UnboundedReceiver<MonitorEvent>, UnboundedReceiver<AccountId>) {
+	let (incoming_message_sender, _incoming_message_receiver) =
+		fair_channel(super::INCOMING_MESSAGE_PER_PEER_LIMIT);
+
+	P2PContext::spawn(
+		P2PKey::new(create_keypair().as_bytes()).encryption_key,
+		our_account_id,
+		incoming_message_sender,
+	)
+}
+
+fn connection_state<'a>(
+	context: &'a P2PContext,
+	account_id: &AccountId,
+) -> Option<&'a ConnectionState> {
+	context.active_connections.get(account_id).map(|peer| &peer.state)
+}
+
+/// A reconnect timer that fires after the peer has been re-registered (and thus
+/// freshly connected) must not remove the peer from `active_connections`.
+#[tokio::test]
+async fn reconnect_timer_keeps_reconnected_peer() {
+	let (mut context, _monitor_events, _reconnects) = create_context(AccountId::new([1; 32]));
+	let peer = create_node_info(AccountId::new([2; 32]), &create_keypair(), 8096);
+	let peer_id = peer.account_id.clone();
+
+	context.add_or_update_peer(peer.clone());
+	context.handle_monitor_event(MonitorEvent::ConnectionFailure(peer_id.clone()));
+	assert!(matches!(
+		connection_state(&context, &peer_id),
+		Some(ConnectionState::ReconnectionScheduled)
+	));
+
+	// Peer info update arrives while the reconnect timer is pending:
+	context.add_or_update_peer(peer);
+	assert!(matches!(connection_state(&context, &peer_id), Some(ConnectionState::Connected(_))));
+
+	// The (now redundant) timer fires:
+	context.reconnect_to_peer(&peer_id);
+	assert!(matches!(connection_state(&context, &peer_id), Some(ConnectionState::Connected(_))));
+}
+
+/// A reconnect timer that fires after the peer has been deemed stale must not
+/// remove the peer from `active_connections`.
+#[tokio::test(start_paused = true)]
+async fn reconnect_timer_keeps_stale_peer() {
+	let (mut context, _monitor_events, _reconnects) = create_context(AccountId::new([1; 32]));
+	let peer = create_node_info(AccountId::new([2; 32]), &create_keypair(), 8097);
+	let peer_id = peer.account_id.clone();
+
+	context.add_or_update_peer(peer);
+	context.handle_monitor_event(MonitorEvent::ConnectionFailure(peer_id.clone()));
+
+	// Connection becomes stale while the reconnect timer is pending:
+	tokio::time::advance(MAX_INACTIVITY_THRESHOLD + Duration::from_secs(1)).await;
+	context.check_activity();
+	assert!(matches!(connection_state(&context, &peer_id), Some(ConnectionState::Stale)));
+
+	// The (now redundant) timer fires:
+	context.reconnect_to_peer(&peer_id);
+	assert!(matches!(connection_state(&context, &peer_id), Some(ConnectionState::Stale)));
 }

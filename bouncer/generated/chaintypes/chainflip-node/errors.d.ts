@@ -1907,7 +1907,7 @@ export interface ChainErrors extends GenericChainErrors {
     OpenOrdersRemaining: GenericPalletError;
 
     /**
-     * The resulting limit order amount is below the configured per-asset minimum.
+     * The resulting order amount is below the configured per-asset minimum.
      **/
     BelowMinimumOrderAmount: GenericPalletError;
 
