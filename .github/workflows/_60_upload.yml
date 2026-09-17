@@ -67,7 +67,7 @@ jobs:
           path: assets/docker/private
 
       - name: Configure AWS credentials using OIDC 🪪
-        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
         with:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::771478732399:role/chainflip-github-bot
