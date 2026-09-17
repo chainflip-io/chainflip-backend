@@ -52,7 +52,7 @@ interface ChainKnownTypes extends GenericChainKnownTypes {
 
 /**
  * @name: ChainflipNodeApi
- * @specVersion: 20301
+ * @specVersion: 20302
  **/
 export interface ChainflipNodeApi extends GenericSubstrateApi {
   rpc: ChainJsonRpcApis;

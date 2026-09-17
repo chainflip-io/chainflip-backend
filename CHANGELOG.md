@@ -2,9 +2,26 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.3.2] - 2026-09-17
+
+### Features
+
+- Additional debug logs for multisig ([#6871](https://github.com/chainflip-io/chainflip-backend/issues/6871))
+- Bouncer seedable ccm ([#6822](https://github.com/chainflip-io/chainflip-backend/issues/6822))
+- Aggregate commitments before deriving party pubkeys in keygen ([#6882](https://github.com/chainflip-io/chainflip-backend/issues/6882))
+
+### Fixes
+
+- Count pending interest as debt in lending risk checks ([#6873](https://github.com/chainflip-io/chainflip-backend/issues/6873))
+- Report the underlying error when the retrier gives up ([#6838](https://github.com/chainflip-io/chainflip-backend/issues/6838))
+- Report bad bitcoin RPC responses instead of decode errors (([PRO-1083](https://linear.app/chainflip/issue/PRO-1083))) ([#6802](https://github.com/chainflip-io/chainflip-backend/issues/6802))
+- Do not remove active zmq connection prematurely ([#6861](https://github.com/chainflip-io/chainflip-backend/issues/6861))
+- Cap managed validator bids by max_bid in cf_operator_info ([#6855](https://github.com/chainflip-io/chainflip-backend/issues/6855))
+- Reject multiple deposits sharing the same tx_id (#6826) ([#6826](https://github.com/chainflip-io/chainflip-backend/issues/6826))
+
 ## [2.3.1] - 2026-08-31
 
-## Fixes
+### Fixes
 
 - Support for splitting Engine runner args with equal sign.
 
@@ -14,7 +31,6 @@ All notable changes included in each Chainflip release will be documented in thi
 
 - Include Chain in FailedToBroadcastTransaction ([#6810](https://github.com/chainflip-io/chainflip-backend/issues/6810))
 - Add `validator rotate-keys` subcommand ([#6806](https://github.com/chainflip-io/chainflip-backend/issues/6806))
-- Circuit breaker for fee price estimates ([#6821](https://github.com/chainflip-io/chainflip-backend/issues/6821))
 - Ensure broadcasts are retried a minimum number of times ([#6808](https://github.com/chainflip-io/chainflip-backend/issues/6808))
 - Auto deregister lp when redeem all ([#6809](https://github.com/chainflip-io/chainflip-backend/issues/6809))
 - Bouncer advanced commands ([#6722](https://github.com/chainflip-io/chainflip-backend/issues/6722))
@@ -56,7 +72,6 @@ All notable changes included in each Chainflip release will be documented in thi
 - Ensure Flip is credited to account when opening channel with FLIP ([#6790](https://github.com/chainflip-io/chainflip-backend/issues/6790))
 - Enforce withdrawal safe mode on affiliate withdrawals ([#6773](https://github.com/chainflip-io/chainflip-backend/issues/6773))
 - Redemption edge case ([#6787](https://github.com/chainflip-io/chainflip-backend/issues/6787))
-- Further ceremony hardening.
 - Bouncer resubmit assethub txs that fail to be included ([#6782](https://github.com/chainflip-io/chainflip-backend/issues/6782))
 - Solana nonce test flakiness ([#6788](https://github.com/chainflip-io/chainflip-backend/issues/6788))
 - Improve BHW startup consensus ([#6774](https://github.com/chainflip-io/chainflip-backend/issues/6774))
@@ -88,12 +103,48 @@ All notable changes included in each Chainflip release will be documented in thi
 - Zero price defense ([#6596](https://github.com/chainflip-io/chainflip-backend/issues/6596))
 - Is oracle supported function for price feed api ([#6607](https://github.com/chainflip-io/chainflip-backend/issues/6607))
 
+## [2.2.13] - 2026-09-11
+
+### Fixes
+
+- Circuit breaker for fee price estimates: a price estimate derived by probing the pools is discarded in favour of the hard-coded reference price if it deviates from it by more than 4x. Prevents fees being charged from implausible prices when a pool is thin or manipulated ([#6821](https://github.com/chainflip-io/chainflip-backend/issues/6821)).
+- Refreshed the hard-coded reference prices used for fee estimation. These are the fallback when a pool cannot be probed, and the reference the circuit breaker above compares against.
+- Only accept Tron vault swaps from direct transfers to the Vault.
+- Close trxUSDT trading strategies, cancel all trxUSDT pool orders and take LP trxUSDT balances
+  into a snapshot.
+- Repay trxUSDT loans and return trxUSDT lending supply before the snapshot is taken.
+
+## [2.2.12] - 2026-09-04
+
+### Fixes
+
+- Update Assethub metadata file
+
+## [2.2.11] - 2026-09-03
+
+### Fixes
+
+- Limit Keygen complaints to 1/3 of shares
+- bound PublickeyShares0 to MAX_AUTHORITIES
+
+## [2.2.10] - 2026-08-24
+
+### Fixes
+
+- don't finalise fetch on CCM broadcast.
+
+## [2.2.9] - 2026-08-19
+
+### Fixes
+
+- Further ceremony hardening.
+
 ## [2.2.8] - 2026-08-11
 
 ### Fixes
 
-- Broadcast verification requires 2/3 majority ([#2](https://github.com/chainflip-io/chainflip-backend/issues/2))
-- Key handover non receiver hardening ([#3](https://github.com/chainflip-io/chainflip-backend/issues/3))
+- Broadcast verification requires 2/3 majority.
+- Key handover non receiver hardening.
 - Only allow (un-)delegation if rotation status is idle.
 - Registering account as operator or validator is only possible if not delegating.
 - Performance improvements ([#6756](https://github.com/chainflip-io/chainflip-backend/issues/6756))
