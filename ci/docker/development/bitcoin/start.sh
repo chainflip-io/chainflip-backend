@@ -17,13 +17,6 @@ if [ "$ENV_PRUNE" == "true" ]; then
   bitcoind -debug=http -debug=rpc &
 else
   bitcoind -debug=http -debug=rpc -prune=0 &
-
-  while [ "$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8332)" != "405" ]; do
-    echo "Waiting for bitcoind to start..."
-    sleep 1
-  done
-
-  electrs --conf electrs.conf &
 fi
 
 echo "Bitcoin version: $btc_version"
