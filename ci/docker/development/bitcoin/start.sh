@@ -16,14 +16,7 @@ echo "Prune setting is: $ENV_PRUNE"
 if [ "$ENV_PRUNE" == "true" ]; then
   bitcoind -debug=http -debug=rpc &
 else
-  bitcoind -debug=http -debug=rpc -prune=0 -deprecatedrpc=warnings &
-
-  while [ "$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8332)" != "405" ]; do
-    echo "Waiting for bitcoind to start..."
-    sleep 1
-  done
-
-  electrs --conf electrs.conf &
+  bitcoind -debug=http -debug=rpc -prune=0 &
 fi
 
 echo "Bitcoin version: $btc_version"
