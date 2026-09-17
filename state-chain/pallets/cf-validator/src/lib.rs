@@ -1539,7 +1539,7 @@ pub mod pallet {
 
 			// At most one entry may be `Max` (checked above); it absorbs whatever of the
 			// balance isn't already claimed by the other, fixed entries.
-			let new_relations: BTreeMap<T::AccountId, T::Amount> = requested
+			let new_plan: BTreeMap<T::AccountId, T::Amount> = requested
 				.into_iter()
 				.map(|(operator, amount)| match amount {
 					DelegationAmount::Some(amount) => (operator, amount),
@@ -1548,7 +1548,7 @@ pub mod pallet {
 				.filter(|(_, amount)| !amount.is_zero())
 				.collect();
 
-			let new_relations = if new_relations.is_empty() {
+			let new_plan = if new_plan.is_empty() {
 				DelegationChoice::<T>::remove(&delegator);
 				// Mirrors the auto-registration above. Best-effort: accounts that also hold
 				// other LP state (open orders, balances, etc.) fail the deregistration check
@@ -1558,25 +1558,25 @@ pub mod pallet {
 			} else {
 				Self::ensure_delegator_role(&delegator)?;
 
-				for operator in new_relations.keys() {
+				for operator in new_plan.keys() {
 					Self::ensure_operator_accepts_delegator(&delegator, operator)?;
 				}
 
-				let new_total: T::Amount = new_relations.values().copied().sum();
+				let new_total: T::Amount = new_plan.values().copied().sum();
 				ensure!(
 					new_total.into() >= T::MinimumFunding::get_min_funding_amount(),
 					Error::<T>::DelegationAmountBelowMinimum
 				);
 				DelegationChoice::<T>::insert(
 					&delegator,
-					Self::plan_from_amounts(new_relations.clone()),
+					Self::plan_from_amounts(new_plan.clone()),
 				);
-				new_relations
+				new_plan
 			};
 
 			Self::deposit_event(Event::DelegationPlanUpdated {
 				delegator: delegator.clone(),
-				plan: Self::plan_from_amounts(new_relations),
+				plan: Self::plan_from_amounts(new_plan),
 			});
 
 			Ok(())
