@@ -814,11 +814,11 @@ impl_runtime_apis! {
 		) -> RpcAccountInfoCommonItems<FlipBalance> {
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			// Operator -> bid, for every operator this account currently delegates to (a
-			// delegator may hold relations to multiple operators simultaneously).
+			// delegator's plan may hold entries for multiple operators simultaneously).
 			let upcoming_delegation_status: BTreeMap<AccountId, FlipBalance> =
 				pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
-					.map(|relations| {
-						relations
+					.map(|plan| {
+						plan
 							.into_map()
 							.into_iter()
 							.map(|(operator, max_bid)| (operator, core::cmp::min(flip_account.total(), max_bid)))
@@ -2214,7 +2214,7 @@ impl_runtime_apis! {
 			let required_deposit = match call {
 				EthereumSCApi::Delegation { call: DelegationApi::Delegate { increase: DelegationAmount::Some(ref increase), .. } } => {
 					pallet_cf_validator::DelegationChoice::<Runtime>::get(&caller_id)
-						.map(|relations| relations.into_map().into_values().sum::<FlipBalance>())
+						.map(|plan| plan.into_map().into_values().sum::<FlipBalance>())
 						.unwrap_or_default()
 						.saturating_add(*increase)
 						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id))

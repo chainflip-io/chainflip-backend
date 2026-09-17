@@ -1816,7 +1816,7 @@ fn redemption_amount_check_respects_delegation_reservation() {
 			ALICE,
 			DelegationAmount::Some(MAX_BID)
 		));
-		assert_eq!(single_relation(BOB), Some((ALICE, MAX_BID)));
+		assert_eq!(single_plan_entry(BOB), Some((ALICE, MAX_BID)));
 
 		// Redeeming exactly the un-pledged portion is allowed.
 		assert_ok!(ValidatorPallet::ensure_can_redeem_amount(&BOB, BALANCE - MAX_BID));
@@ -1960,16 +1960,16 @@ fn should_expire_all_previous_epochs() {
 	});
 }
 
-/// Test helper mirroring the old single-valued `DelegationChoice::get` for delegators that have
-/// (at most) one relation -- most existing tests only ever exercise that case.
+/// Test helper mirroring the old single-valued `DelegationChoice::get` for delegators whose
+/// plan has (at most) one entry -- most existing tests only ever exercise that case.
 #[cfg(test)]
-fn single_relation(delegator: u64) -> Option<(u64, u128)> {
-	DelegationChoice::<Test>::get(delegator).map(|relations| {
-		let operators = relations.into_map();
+fn single_plan_entry(delegator: u64) -> Option<(u64, u128)> {
+	DelegationChoice::<Test>::get(delegator).map(|plan| {
+		let operators = plan.into_map();
 		assert_eq!(
 			operators.len(),
 			1,
-			"single_relation() test helper only supports a single-relation delegator"
+			"single_plan_entry() test helper only supports a single-entry delegator"
 		);
 		operators.into_iter().next().unwrap()
 	})
@@ -2016,12 +2016,12 @@ mod operator {
 				ALICE,
 				DelegationAmount::Max
 			));
-			assert_eq!(single_relation(BOB), Some((ALICE, BID)));
+			assert_eq!(single_plan_entry(BOB), Some((ALICE, BID)));
 
 			// Block BOB
 			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
-			assert!(single_relation(BOB).is_none());
+			assert!(single_plan_entry(BOB).is_none());
 
 			// Allow BOB again
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
@@ -2079,7 +2079,7 @@ mod operator {
 				Error::<Test>::DelegatorBlocked
 			);
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
-			assert!(single_relation(BOB).is_none());
+			assert!(single_plan_entry(BOB).is_none());
 
 			// Allow BOB (add to exceptions list to override deny default)
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
@@ -2089,12 +2089,12 @@ mod operator {
 				ALICE,
 				DelegationAmount::Max
 			));
-			assert_eq!(single_relation(BOB), Some((ALICE, BID)));
+			assert_eq!(single_plan_entry(BOB), Some((ALICE, BID)));
 
 			// Block BOB again (remove from exceptions list, back to deny default)
 			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
-			assert!(single_relation(BOB).is_none());
+			assert!(single_plan_entry(BOB).is_none());
 
 			assert_event_sequence!(
 				Test,
@@ -2152,7 +2152,7 @@ mod operator {
 				ALICE,
 				DelegationAmount::Max
 			));
-			assert_eq!(single_relation(BOB), Some((ALICE, BID)));
+			assert_eq!(single_plan_entry(BOB), Some((ALICE, BID)));
 			// Update operator settings to DENY delegation acceptance.
 			const NEW_OPERATOR_SETTINGS: OperatorSettings = OperatorSettings {
 				fee_bps: DEFAULT_MIN_OPERATOR_FEE,
@@ -2400,7 +2400,7 @@ mod delegation {
 				BOB,
 				DelegationAmount::Max
 			));
-			assert_eq!(single_relation(ALICE), Some((BOB, BID)));
+			assert_eq!(single_plan_entry(ALICE), Some((BOB, BID)));
 			// Should emit MaxBidUpdated and Delegated events
 			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Delegated {
 				delegator: ALICE,
@@ -2539,7 +2539,7 @@ mod delegation {
 				OriginTrait::signed(ALICE),
 				DelegationAmount::Max,
 			));
-			assert_eq!(single_relation(ALICE), None);
+			assert_eq!(single_plan_entry(ALICE), None);
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
@@ -2893,7 +2893,7 @@ mod delegation {
 							DelegationAmount::Max
 						));
 						// Delegation choice should be removed after undelegation
-						assert!(single_relation(*delegator).is_none());
+						assert!(single_plan_entry(*delegator).is_none());
 					}
 				}
 			})
@@ -3054,7 +3054,7 @@ mod delegation {
 				DelegationAmount::Some(min_bid)
 			));
 
-			assert_eq!(single_relation(DELEGATOR), Some((BOB, min_bid)));
+			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, min_bid)));
 
 			// If we are about to reduce out delegation so it is below the minimum,
 			// the amount will be "rounded down" to 0 and we won't end up with a dust
@@ -3064,7 +3064,7 @@ mod delegation {
 				DelegationAmount::Some(min_bid - 1)
 			));
 
-			assert_eq!(single_relation(DELEGATOR), None);
+			assert_eq!(single_plan_entry(DELEGATOR), None);
 		});
 	}
 
@@ -3089,7 +3089,7 @@ mod delegation {
 				BOB,
 				DelegationAmount::Some(DELEGATION_AMOUNT)
 			));
-			assert_eq!(single_relation(DELEGATOR), Some((BOB, DELEGATION_AMOUNT)));
+			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, DELEGATION_AMOUNT)));
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
@@ -3129,7 +3129,7 @@ mod delegation {
 				ALICE,
 				DelegationAmount::Some(0)
 			));
-			assert_eq!(single_relation(DELEGATOR), Some((ALICE, DELEGATION_AMOUNT * 2)));
+			assert_eq!(single_plan_entry(DELEGATOR), Some((ALICE, DELEGATION_AMOUNT * 2)));
 
 			cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
 				Event::Undelegated {
@@ -3176,7 +3176,7 @@ mod delegation {
 				OriginTrait::signed(DELEGATOR),
 				DelegationAmount::Some(300)
 			));
-			assert_eq!(single_relation(DELEGATOR), Some((BOB, 700))); // Still delegated
+			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, 700))); // Still delegated
 			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
 				delegator: DELEGATOR,
 				change: Change::Decrease(300),
@@ -3187,7 +3187,7 @@ mod delegation {
 				OriginTrait::signed(DELEGATOR),
 				DelegationAmount::Some(200)
 			));
-			assert_eq!(single_relation(DELEGATOR), Some((BOB, 500))); // Still delegated
+			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, 500))); // Still delegated
 			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
 				delegator: DELEGATOR,
 				change: Change::Decrease(200),
@@ -3200,7 +3200,7 @@ mod delegation {
 			));
 			// Verify delegation is removed after decrementing to zero
 			assert_eq!(
-				single_relation(DELEGATOR),
+				single_plan_entry(DELEGATOR),
 				None,
 				"delegation should be removed after decrementing to zero"
 			);
@@ -3240,7 +3240,7 @@ mod delegation {
 				OriginTrait::signed(DELEGATOR),
 				DelegationAmount::Some(BALANCE * 2)
 			));
-			assert_eq!(single_relation(DELEGATOR), None);
+			assert_eq!(single_plan_entry(DELEGATOR), None);
 			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
 				delegator: DELEGATOR,
 				operator: BOB,
@@ -3278,7 +3278,7 @@ mod delegation {
 				OriginTrait::signed(DELEGATOR),
 				DelegationAmount::Some(300)
 			));
-			assert_eq!(single_relation(DELEGATOR), Some((BOB, 700)));
+			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, 700)));
 			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
 				delegator: DELEGATOR,
 				change: Change::Decrease(300),
@@ -3314,7 +3314,7 @@ mod delegation {
 				BOB,
 				DelegationAmount::Some(200)
 			));
-			assert_eq!(single_relation(DELEGATOR), Some((BOB, 700)));
+			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, 700)));
 
 			// Re-delegate with Max - should set to full balance
 			assert_ok!(ValidatorPallet::delegate(
@@ -3322,7 +3322,7 @@ mod delegation {
 				BOB,
 				DelegationAmount::Max
 			));
-			assert_eq!(single_relation(DELEGATOR), Some((BOB, 1000)));
+			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, 1000)));
 		});
 	}
 
@@ -3344,7 +3344,7 @@ mod delegation {
 				BOB,
 				DelegationAmount::Max
 			));
-			assert_eq!(single_relation(DELEGATOR), Some((BOB, 500)));
+			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, 500)));
 
 			// Clear events before account cleanup
 			System::reset_events();
@@ -3353,7 +3353,7 @@ mod delegation {
 			DelegatedAccountCleanup::<Test>::on_killed_account(&DELEGATOR);
 
 			// Check that delegation data is cleaned up
-			assert_eq!(single_relation(DELEGATOR), None);
+			assert_eq!(single_plan_entry(DELEGATOR), None);
 			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
 				delegator: DELEGATOR,
 				operator: BOB,
@@ -3390,8 +3390,8 @@ mod delegation {
 				BTreeMap::from([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
 			);
 
-			// Legacy `delegate`/`undelegate` no longer apply once there's more than one
-			// relation -- ambiguous which one they'd act on.
+			// Legacy `delegate`/`undelegate` no longer apply once the plan has more than one
+			// entry -- ambiguous which one they'd act on.
 			assert_noop!(
 				ValidatorPallet::delegate(
 					OriginTrait::signed(DELEGATOR),
@@ -3483,7 +3483,7 @@ mod delegation {
 	}
 
 	#[test]
-	fn delegate_multi_plan_updates_and_removes_relations() {
+	fn delegate_multi_plan_updates_and_removes_entries() {
 		const OPERATOR_A: u64 = 200;
 		const OPERATOR_B: u64 = 201;
 		const DELEGATOR: u64 = 5000;
@@ -3645,8 +3645,8 @@ mod delegation {
 			));
 
 			// Simulate a slash: the delegator's balance drops below the sum of its two max
-			// bids (both relations were valid when written, so this can only happen after the
-			// fact). Each relation should be prorated proportionally, not just capped
+			// bids (both plan entries were valid when written, so this can only happen after
+			// the fact). Each entry should be prorated proportionally, not just capped
 			// independently -- otherwise the same shrunk balance would be double-counted.
 			const NEW_BALANCE: u128 = 500;
 			assert!(MockFlip::try_debit_funds(&DELEGATOR, (BID_TO_A + BID_TO_B) - NEW_BALANCE)
@@ -3733,7 +3733,7 @@ mod delegation {
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
 				// a delegator appearing in two operators' snapshots must
-				// be bonded for the SUM of both relations
+				// be bonded for the SUM of both plan entries
 				assert_eq!(MockBonderFor::<Test>::get_bond(&DELEGATOR), BID_TO_A + BID_TO_B);
 			});
 	}

@@ -255,7 +255,7 @@ pub mod pallet {
 		/// GRANDPA vote delegation manager.
 		type GrandpaDelegation: GrandpaVoteDelegation;
 
-		/// The maximum number of operators a single delegator can have live relations with at
+		/// The maximum number of operators a single delegator's plan can hold entries for at
 		/// once.
 		#[pallet::constant]
 		type MaxOperatorsPerDelegator: Get<u32>;
@@ -422,9 +422,9 @@ pub mod pallet {
 	pub type OperatorSettingsLookup<T: Config> =
 		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
 
-	/// Maps a delegator to its live relations: the set of operators it delegates to and the max
+	/// Maps a delegator to its live plan: the set of operators it delegates to and the max
 	/// bid pledged to each. The sum of all of a delegator's max bids is capped at its funding
-	/// balance. The key is always removed entirely once a delegator's relations become empty.
+	/// balance. The key is always removed entirely once a delegator's plan becomes empty.
 	#[pallet::storage]
 	pub type DelegationChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, DelegationPlanOf<T>, OptionQuery>;
@@ -508,8 +508,7 @@ pub mod pallet {
 		/// max_bid has been removed entirly.
 		MaxBidUpdated { delegator: T::AccountId, change: Change<T::Amount> },
 		/// A delegator submitted a new full delegation plan via `delegate_multi`. `plan` is the
-		/// resulting set of relations that was actually stored (after dropping zero-amount
-		/// entries and prorating down to fit the delegator's balance, if it was oversubscribed).
+		/// plan that was actually stored (after dropping zero-amount entries).
 		DelegationPlanUpdated { delegator: T::AccountId, plan: DelegationPlanOf<T> },
 		/// A validator reported that a witnessing task crashed and was restarted.
 		WitnessingTaskRestarted {
@@ -603,7 +602,7 @@ pub mod pallet {
 		NotLiquidityProvider,
 		/// The account cannot deregister as a Liquidity Provider while actively delegating.
 		StillDelegating,
-		/// `delegate`/`undelegate` only support a delegator with at most one existing relation.
+		/// `delegate`/`undelegate` only support a delegator whose plan has at most one entry.
 		/// Use `delegate_multi` and specify the full plan explicitly.
 		MultiOperatorDelegator,
 		/// At most one entry in a `delegate_multi` plan may be `DelegationAmount::Max`.
@@ -1194,7 +1193,7 @@ pub mod pallet {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			// If the delegator is currently delegating to this operator, we need to
-			// undelegate them from this operator (their other relations, if any, are untouched).
+			// undelegate them from this operator (the rest of their plan, if any, is untouched).
 			DelegationChoice::<T>::mutate_exists(&delegator, |maybe_plan| {
 				if let Some(plan) = maybe_plan.take() {
 					let mut operators = plan.into_map();
@@ -1354,11 +1353,10 @@ pub mod pallet {
 
 		/// Delegate to a single operator.
 		///
-		/// This extrinsic pre-dates multi-operator delegation and keeps its original,
-		/// implicit-switch behaviour: it is only valid for delegators with at most one existing
-		/// relation. A delegator with relations to two or more operators (only reachable via
+		/// This extrinsic is only valid for delegators whose plan has at most one
+		/// entry. A delegator with entries for two or more operators (only reachable via
 		/// [`Self::delegate_multi`]) must use `delegate_multi` instead, since "switch operator"
-		/// is ambiguous once more than one relation exists.
+		/// is ambiguous once the plan has more than one entry.
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
 		pub fn delegate(
@@ -1394,7 +1392,7 @@ pub mod pallet {
 
 			Self::deposit_max_bid_update(&delegator, old_max_bid, new_max_bid);
 
-			let is_new_relation = switch_from.is_some() || old_max_bid.is_zero();
+			let is_new_entry = switch_from.is_some() || old_max_bid.is_zero();
 			if let Some(old_operator) = &switch_from {
 				Self::deposit_event(Event::Undelegated {
 					delegator: delegator.clone(),
@@ -1402,7 +1400,7 @@ pub mod pallet {
 					max_bid: old_max_bid,
 				});
 			}
-			if is_new_relation {
+			if is_new_entry {
 				Self::deposit_event(Event::Delegated {
 					delegator: delegator.clone(),
 					operator: operator.clone(),
@@ -1430,8 +1428,8 @@ pub mod pallet {
 
 		/// Undelegate from the sole operator a delegator currently delegates to.
 		///
-		/// Only valid for delegators with at most one existing relation, mirroring `delegate`.
-		/// A delegator with relations to two or more operators must use `delegate_multi` and
+		/// Only valid for delegators whose plan has at most one entry, mirroring `delegate`.
+		/// A delegator with entries for two or more operators must use `delegate_multi` and
 		/// submit a plan that omits the operator(s) to undelegate from.
 		#[pallet::call_index(19)]
 		#[pallet::weight(T::ValidatorWeightInfo::undelegate())]
@@ -1495,7 +1493,7 @@ pub mod pallet {
 		}
 
 		/// Sets `delegator`'s complete delegation plan across one or more operators in a single
-		/// call: `plan` becomes their entire new set of relations, replacing whatever existed
+		/// call: `plan` becomes their entire new plan, replacing whatever existed
 		/// before. Any operator the delegator was previously delegating to but that's absent
 		/// from `plan` is fully undelegated; an empty `plan` undelegates everything. Unlike
 		/// `delegate`, the caller declares exact target amounts rather than an
@@ -2372,7 +2370,7 @@ impl<T: Config> Pallet<T> {
 		T::AccountRoleRegistry::has_account_role(account_id, AccountRole::LiquidityProvider)
 	}
 
-	/// Sum of a delegator's max bids across all of its live operator relations.
+	/// Sum of a delegator's max bids across its entire live plan.
 	pub(crate) fn total_delegated(delegator: &T::AccountId) -> T::Amount {
 		DelegationChoice::<T>::get(delegator)
 			.map(|plan| plan.into_map().values().copied().sum())
@@ -2381,14 +2379,14 @@ impl<T: Config> Pallet<T> {
 
 	/// Wraps concrete per-operator amounts into a `DelegationPlan`. Every call site either
 	/// removes entries from an already-bounded plan or replaces a single operator's entry in a
-	/// delegator known (via `MultiOperatorDelegator`) to have at most one relation, so the
+	/// delegator known (via `MultiOperatorDelegator`) to have at most one plan entry, so the
 	/// result can never exceed `MaxOperatorsPerDelegator`.
 	pub(crate) fn plan_from_amounts(
 		operators: BTreeMap<T::AccountId, T::Amount>,
 	) -> DelegationPlanOf<T> {
 		DelegationPlanOf::<T>::try_from_map(operators).unwrap_or_else(|_| {
 			cf_runtime_utilities::log_or_panic!(
-				"delegator's operator relations exceeded MaxOperatorsPerDelegator"
+				"delegator's plan exceeded MaxOperatorsPerDelegator entries"
 			);
 			Default::default()
 		})
@@ -2499,30 +2497,29 @@ impl<T: Config> Pallet<T> {
 				continue;
 			}
 
-			// Only relations to operators actually bidding this epoch count towards the
+			// Only plan entries for operators actually bidding this epoch count towards the
 			// delegator's committed total -- an operator with no qualified validators has no
 			// snapshot and can't claim any of the delegator's balance.
-			let live_relations: Vec<(T::AccountId, T::Amount)> = plan
+			let live_plan: Vec<(T::AccountId, T::Amount)> = plan
 				.into_map()
 				.into_iter()
 				.filter(|(operator, _)| snapshots.contains_key(operator))
 				.collect();
-			if live_relations.is_empty() {
+			if live_plan.is_empty() {
 				continue;
 			}
 
-			let total_committed: T::Amount =
-				live_relations.iter().map(|(_, max_bid)| *max_bid).sum();
+			let total_committed: T::Amount = live_plan.iter().map(|(_, max_bid)| *max_bid).sum();
 			let balance = T::FundingInfo::balance(&delegator);
 
-			// A delegator's relations are each capped at `balance` individually when written
-			// (see `delegate`/`delegate_multi`), so the only way their sum can exceed `balance`
-			// here is a balance reduction after the fact (e.g. slashing) -- in that case,
-			// prorate each relation's share of the shrunk balance proportionally to what it was
-			// pledged. This reduces to exactly `min(bid, balance)` when there's only one
-			// relation, matching pre-multi-operator behaviour precisely.
+			// Each of a delegator's plan entries is capped at `balance` individually when
+			// written (see `delegate`/`delegate_multi`), so the only way their sum can exceed
+			// `balance` here is a balance reduction after the fact (e.g. slashing) -- in that
+			// case, prorate each entry's share of the shrunk balance proportionally to what it
+			// was pledged. This reduces to exactly `min(bid, balance)` when the plan has only
+			// one entry, matching pre-multi-operator behaviour precisely.
 			if total_committed <= balance {
-				for (operator, bid) in live_relations {
+				for (operator, bid) in live_plan {
 					if bid > Zero::zero() {
 						if let Some(snapshot) = snapshots.get_mut(&operator) {
 							snapshot.delegators.insert(delegator.clone(), bid);
@@ -2530,7 +2527,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 			} else {
-				for (operator, bid) in live_relations {
+				for (operator, bid) in live_plan {
 					let scaled_bid = Perquintill::from_rational(bid, total_committed) * balance;
 					if scaled_bid > Zero::zero() {
 						if let Some(snapshot) = snapshots.get_mut(&operator) {
@@ -2774,7 +2771,7 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 	) -> DispatchResult {
 		Self::ensure_not_active_bidder_during_auction(validator_id)?;
 		// A delegator may redeem from the portion of their balance that is not
-		// reserved by the sum of their stored max_bids (across all of their operator relations)
+		// reserved by the sum of their stored max_bids (across their entire plan)
 		// — the amount visible to the auction (capped at that sum) cannot drop, but funds the
 		// user never pledged remain freely redeemable.
 		let total_max_bid = Self::total_delegated(validator_id.into_ref());
