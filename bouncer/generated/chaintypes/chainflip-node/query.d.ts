@@ -47,7 +47,7 @@ import type {
   PalletCfValidatorRotationPhase,
   PalletCfValidatorAuctionResolverSetSizeParameters,
   PalletCfValidatorDelegationOperatorSettings,
-  PalletCfValidatorDelegationDelegatorRelations,
+  PalletCfValidatorDelegationDelegationPlanU128,
   PalletCfValidatorDelegationDelegationSnapshot,
   StateChainRuntimeOpaqueSessionKeys,
   SpStakingOffenceOffenceSeverity,
@@ -1428,15 +1428,15 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Maps a delegator to its live relations: the set of operators it delegates to and the max
+     * Maps a delegator to its live plan: the set of operators it delegates to and the max
      * bid pledged to each. The sum of all of a delegator's max bids is capped at its funding
-     * balance. The key is always removed entirely once a delegator's relations become empty.
+     * balance. The key is always removed entirely once a delegator's plan becomes empty.
      *
      * @param {AccountId32Like} arg
-     * @param {Callback<PalletCfValidatorDelegationDelegatorRelations | undefined> =} callback
+     * @param {Callback<PalletCfValidatorDelegationDelegationPlanU128 | undefined> =} callback
      **/
-    delegationChoices: GenericStorageQuery<
-      (arg: AccountId32Like) => PalletCfValidatorDelegationDelegatorRelations | undefined,
+    delegationChoice: GenericStorageQuery<
+      (arg: AccountId32Like) => PalletCfValidatorDelegationDelegationPlanU128 | undefined,
       AccountId32
     >;
 

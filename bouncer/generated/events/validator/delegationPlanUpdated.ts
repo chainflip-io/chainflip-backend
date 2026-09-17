@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { accountId, palletCfValidatorDelegationDelegatorRelations } from '../common';
+import { accountId, palletCfValidatorDelegationDelegationPlanU128 } from '../common';
 import { defineEvent } from '@chainflip/processor/event';
 
 export const validatorDelegationPlanUpdated = z.object({
   delegator: accountId,
-  plan: palletCfValidatorDelegationDelegatorRelations,
+  plan: palletCfValidatorDelegationDelegationPlanU128,
 });
 
 export const validatorDelegationPlanUpdatedEvent = defineEvent(
