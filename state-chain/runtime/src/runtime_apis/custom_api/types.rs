@@ -922,7 +922,7 @@ impl HasChangelog for RpcAccountInfoCommonItems<FlipBalance> {
 
 /// Historically (before v20400) `current_delegation_status`/`upcoming_delegation_status` were a
 /// single optional `DelegationInfo { operator, bid }`, since a delegator could only delegate to
-/// one operator at a time. `try_backwards` is lossy if there's more than one relation -- there's
+/// one operator at a time. `try_backwards` is lossy if there's more than one entry -- there's
 /// no way to represent that in the old shape, so it errors instead of silently dropping data.
 ///
 /// The historical shape is expressed as `Option<(WrappedAccountId32, FlipBalance)>` rather than
