@@ -567,6 +567,23 @@ export interface ChainErrors extends GenericChainErrors {
     StillDelegating: GenericPalletError;
 
     /**
+     * `delegate`/`undelegate` only support a delegator whose plan has at most one entry.
+     * Use `delegate_multi` and specify the full plan explicitly.
+     **/
+    MultiOperatorDelegator: GenericPalletError;
+
+    /**
+     * At most one entry in a `delegate_multi` plan may be `DelegationAmount::Max`.
+     **/
+    MultipleMaxDelegationEntries: GenericPalletError;
+
+    /**
+     * A `delegate_multi` plan's fixed (non-`Max`) amounts already exceed the delegator's
+     * funding balance.
+     **/
+    DelegationAmountExceedsBalance: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;

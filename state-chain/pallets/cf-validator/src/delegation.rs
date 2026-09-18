@@ -23,7 +23,8 @@ use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
 	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill, Saturating},
-	traits::IsType,
+	traits::{Get, IsType},
+	BoundedVec, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
@@ -74,6 +75,10 @@ impl<T> DelegationAmount<T> {
 			DelegationAmount::Max => Ok(DelegationAmount::Max),
 			DelegationAmount::Some(amount) => Ok(DelegationAmount::Some(f(amount)?)),
 		}
+	}
+
+	pub fn is_max(&self) -> bool {
+		matches!(self, DelegationAmount::Max)
 	}
 }
 
@@ -137,6 +142,82 @@ pub struct OperatorSettings {
 	pub fee_bps: u32,
 	/// Default delegation acceptance preference for this validator
 	pub delegation_acceptance: DelegationAcceptance,
+}
+
+/// A delegator's live delegation plan: the set of operators it delegates to and the value
+/// pledged to each. Generic over `Value` so the same shape serves two different points in a
+/// plan's life:
+/// - as `delegate_multi`'s input (`Value = DelegationAmount<Amount>`), where a cap may be given as
+///   `Max`, absorbing whatever of the balance isn't already claimed by the other, fixed entries --
+///   Σ of the `Some` entries ≤ balance, and at most one entry may be `Max`;
+/// - as the stored plan (`Value = Amount`), once any `Max` has already been resolved to a concrete
+///   number by `delegate_multi` and there's no more ambiguity left to represent.
+#[derive(
+	CloneNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	DebugNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+#[scale_info(skip_type_params(N))]
+#[serde(
+	bound = "Account: Serialize + for<'a> Deserialize<'a>, Value: Serialize + for<'a> Deserialize<'a>"
+)]
+pub enum DelegationPlan<
+	Account: Clone + PartialEq + Eq + core::fmt::Debug,
+	Value: Clone + PartialEq + Eq + core::fmt::Debug,
+	N: Get<u32>,
+> {
+	Fixed(BoundedVec<(Account, Value), N>),
+	// v2, appended later:
+	// Proportional(BoundedVec<(Account, Perbill), N>),
+}
+
+impl<
+		Account: Clone + PartialEq + Eq + core::fmt::Debug,
+		Value: Clone + PartialEq + Eq + core::fmt::Debug,
+		N: Get<u32>,
+	> Default for DelegationPlan<Account, Value, N>
+{
+	fn default() -> Self {
+		Self::Fixed(Default::default())
+	}
+}
+
+impl<
+		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
+		Value: Clone + PartialEq + Eq + core::fmt::Debug,
+		N: Get<u32>,
+	> DelegationPlan<Account, Value, N>
+{
+	pub fn len(&self) -> usize {
+		match self {
+			Self::Fixed(entries) => entries.len(),
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+
+	/// The raw `account -> value` map backing this plan.
+	pub fn into_map(self) -> BTreeMap<Account, Value> {
+		match self {
+			Self::Fixed(entries) => entries.into_iter().collect(),
+		}
+	}
+
+	/// Builds a `Fixed` plan directly from an `account -> value` map. Fails if `entries` doesn't
+	/// fit within the bound `N`.
+	#[expect(clippy::result_unit_err)]
+	pub fn try_from_map(entries: BTreeMap<Account, Value>) -> Result<Self, ()> {
+		Ok(Self::Fixed(entries.into_iter().collect::<Vec<_>>().try_into().map_err(|_| ())?))
+	}
 }
 
 /// A snapshot of delegations to an operator for a specific epoch, including all
