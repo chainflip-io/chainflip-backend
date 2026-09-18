@@ -22449,6 +22449,33 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesBrokerInfo = {
   boundFeeWithdrawalAddress?: H160 | undefined;
 };
 
+export type StateChainRuntimeRuntimeApisCustomApiTypesWithdrawalRestrictions = {
+  accountRole?: CfPrimitivesAccountRole | undefined;
+  whitelist?: StateChainRuntimeRuntimeApisCustomApiTypesActiveWithdrawalWhitelist | undefined;
+  pending: Array<StateChainRuntimeRuntimeApisCustomApiTypesPendingWhitelistUpdate>;
+  refundAddresses: Array<[CfPrimitivesChainsForeignChain, CfChainsAddressEncodedAddress]>;
+  boundBrokerWithdrawalAddress?: CfChainsAddressEncodedAddress | undefined;
+};
+
+export type StateChainRuntimeRuntimeApisCustomApiTypesActiveWithdrawalWhitelist = {
+  timelockSecs: bigint;
+  allowed: Array<StateChainRuntimeRuntimeApisCustomApiTypesWhitelistDestination>;
+};
+
+export type StateChainRuntimeRuntimeApisCustomApiTypesWhitelistDestination =
+  | { type: 'InternalAccount'; value: AccountId32 }
+  | { type: 'ExternalAddress'; value: CfChainsAddressEncodedAddress };
+
+export type StateChainRuntimeRuntimeApisCustomApiTypesPendingWhitelistUpdate = {
+  activatesAt: bigint;
+  update: StateChainRuntimeRuntimeApisCustomApiTypesWhitelistUpdate;
+};
+
+export type StateChainRuntimeRuntimeApisCustomApiTypesWhitelistUpdate =
+  | { type: 'Allow'; value: StateChainRuntimeRuntimeApisCustomApiTypesWhitelistDestination }
+  | { type: 'Remove'; value: StateChainRuntimeRuntimeApisCustomApiTypesWhitelistDestination }
+  | { type: 'Timelock'; value: bigint };
+
 export type StateChainRuntimeRuntimeApisCustomApiTypesFailingWitnessValidators = {
   failingCount: number;
   validators: Array<[AccountId32, string, boolean]>;
