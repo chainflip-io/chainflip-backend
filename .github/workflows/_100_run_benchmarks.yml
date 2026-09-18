@@ -60,15 +60,17 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Resolve full commit SHA
         id: resolve-sha
         run: |
-          FULL_SHA=$(git rev-parse "${{ inputs.commit_sha }}")
+          FULL_SHA=$(git rev-parse "${INPUTS_COMMIT_SHA}")
           echo "full_sha=$FULL_SHA" >> "$GITHUB_OUTPUT"
+        env:
+          INPUTS_COMMIT_SHA: ${{ inputs.commit_sha }}
 
       # Binaries for main commits are built by ci-benchmarks-main.yml, for
       # release/* commits by ci-benchmarks-release.yml.
@@ -98,8 +100,11 @@ jobs:
         run: >
           ./state-chain/scripts/benchmark-all.sh
           --binary ./chainflip-node
-          --steps ${{ github.event.inputs.steps }}
-          --repetitions ${{ github.event.inputs.repetitions }}
+          --steps ${GITHUB_EVENT_INPUTS_STEPS}
+          --repetitions ${GITHUB_EVENT_INPUTS_REPETITIONS}
+        env:
+          GITHUB_EVENT_INPUTS_STEPS: ${{ github.event.inputs.steps }}
+          GITHUB_EVENT_INPUTS_REPETITIONS: ${{ github.event.inputs.repetitions }}
 
       - name: Cleanup 🧹
         run: >
