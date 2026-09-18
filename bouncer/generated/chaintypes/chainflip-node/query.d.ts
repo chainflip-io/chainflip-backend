@@ -58,7 +58,7 @@ import type {
   SpConsensusGrandpaAppPublic,
   PalletCfGovernanceProposal,
   PalletCfGovernanceActiveProposal,
-  PalletCfGovernanceGovernanceCouncil,
+  PalletCfGovernanceVotingAuthority,
   PalletCfTokenholderGovernanceProposal,
   CfPrimitivesChainsForeignChain,
   PalletCfReputationReputationReputationTracker,
@@ -1747,11 +1747,11 @@ export interface ChainStorage extends GenericChainStorage {
     expiryTime: GenericStorageQuery<() => bigint>;
 
     /**
-     * Accounts in the current governance set.
+     * The body whose approvals decide governance proposals.
      *
-     * @param {Callback<PalletCfGovernanceGovernanceCouncil> =} callback
+     * @param {Callback<PalletCfGovernanceVotingAuthority> =} callback
      **/
-    members: GenericStorageQuery<() => PalletCfGovernanceGovernanceCouncil>;
+    members: GenericStorageQuery<() => PalletCfGovernanceVotingAuthority>;
 
     /**
      * Generic pallet storage query

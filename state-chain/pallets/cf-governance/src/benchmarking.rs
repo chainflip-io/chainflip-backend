@@ -18,13 +18,49 @@
 
 use super::*;
 
+use crate::voting_authority::MAX_MEMBERS;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
 	traits::{Get, OnInitialize, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
-use sp_std::collections::btree_set::BTreeSet;
+
+/// A maximum-size authority at `MAX_DEPTH`: `MAX_MEMBERS` voters in sub-groups. Also returns the
+/// last voter, which every quorum check has to reach.
+fn max_size_authority<T: Config>(seed: u32) -> (VotingAuthority<T::AccountId>, T::AccountId) {
+	const GROUPS: u32 = 8;
+	// Otherwise the division drops voters, including the returned last one.
+	const _: () = assert!((MAX_MEMBERS as u32).is_multiple_of(GROUPS));
+	let group_size = MAX_MEMBERS as u32 / GROUPS;
+	let voter = |i: u32| account::<T::AccountId>("voter", i, seed);
+	(
+		VotingAuthority::WeightedGroup {
+			threshold: 1,
+			members: (0..GROUPS)
+				.map(|group| {
+					(
+						1,
+						VotingAuthority::simple_group(
+							1,
+							(0..group_size).map(|i| voter(group * group_size + i)),
+						),
+					)
+				})
+				.collect(),
+		},
+		voter(MAX_MEMBERS as u32 - 1),
+	)
+}
+
+/// Gives each member the sufficient that genesis and `set_voting_authority` would, so removing
+/// them later goes through account reaping, as in production.
+fn install_authority<T: Config>(authority: VotingAuthority<T::AccountId>) {
+	for member in authority.members() {
+		frame_system::Pallet::<T>::inc_sufficients(&member);
+	}
+	<Members<T>>::put(authority);
+}
 
 #[benchmarks]
 mod benchmarks {
@@ -33,19 +69,12 @@ mod benchmarks {
 
 	#[benchmark]
 	fn propose_governance_extrinsic() {
-		let caller: T::AccountId = whitelisted_caller();
+		let (authority, caller) = max_size_authority::<T>(0);
+		<Members<T>>::put(authority);
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
-		<Members<T>>::put(GovernanceCouncil {
-			members: BTreeSet::from([caller.clone()]),
-			threshold: 1,
-		});
 
 		#[extrinsic_call]
-		propose_governance_extrinsic(
-			RawOrigin::Signed(caller.clone()),
-			call,
-			ExecutionMode::Automatic,
-		);
+		propose_governance_extrinsic(RawOrigin::Signed(caller), call, ExecutionMode::Automatic);
 
 		assert_eq!(ProposalIdCounter::<T>::get(), 1);
 	}
@@ -53,30 +82,21 @@ mod benchmarks {
 	#[benchmark]
 	fn approve() {
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: vec![] }.into();
-		let caller: T::AccountId = whitelisted_caller();
-		<Members<T>>::put(GovernanceCouncil {
-			members: BTreeSet::from([caller.clone()]),
-			threshold: 1,
-		});
+		let (authority, caller) = max_size_authority::<T>(0);
+		<Members<T>>::put(authority);
 		Pallet::<T>::push_proposal(Box::new(call), ExecutionMode::Automatic);
 
 		#[extrinsic_call]
-		approve(RawOrigin::Signed(caller.clone()), 1);
+		approve(RawOrigin::Signed(caller), 1);
 
 		assert_eq!(ProposalIdCounter::<T>::get(), 1);
 	}
 
 	#[benchmark]
-	fn new_membership_set() {
-		let old_members = (0..7)
-			.map(|i| account::<T::AccountId>("whitelisted_caller", 0, i))
-			.collect::<BTreeSet<_>>();
-		let new_members = (4..11)
-			.map(|i| account::<T::AccountId>("whitelisted_caller", 0, i))
-			.collect::<BTreeSet<_>>();
-		<Members<T>>::put(GovernanceCouncil { members: old_members, threshold: 4 });
-		let call =
-			Call::<T>::new_membership_set { new_members: new_members.clone(), new_threshold: 3 };
+	fn set_voting_authority() {
+		install_authority::<T>(max_size_authority::<T>(0).0);
+		let (new_authority, _) = max_size_authority::<T>(1);
+		let call = Call::<T>::set_voting_authority { new_authority: new_authority.clone() };
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
 		#[block]
@@ -84,7 +104,7 @@ mod benchmarks {
 			assert_ok!(call.dispatch_bypass_filter(origin));
 		}
 
-		assert_eq!(Members::<T>::get(), GovernanceCouncil { members: new_members, threshold: 3 });
+		assert_eq!(Members::<T>::get(), new_authority);
 	}
 
 	#[benchmark]
@@ -155,21 +175,23 @@ mod benchmarks {
 		let next_nonce = 788;
 		NextGovKeyCallHashNonce::<T>::put(next_nonce);
 
-		let new_membership_set_call: <T as Config>::RuntimeCall = Call::<T>::new_membership_set {
-			new_members: Default::default(),
-			new_threshold: Default::default(),
-		}
-		.into();
+		let set_voting_authority_call: <T as Config>::RuntimeCall =
+			Call::<T>::set_voting_authority {
+				new_authority: VotingAuthority::Individual {
+					id: account::<T::AccountId>("voter", 0, 0),
+				},
+			}
+			.into();
 
 		let call_hash = frame_support::Hashable::blake2_256(&(
-			new_membership_set_call.clone(),
+			set_voting_authority_call.clone(),
 			next_nonce,
 			T::Version::get(),
 		));
 
 		GovKeyWhitelistedCallHash::<T>::put(call_hash);
 
-		let call = Call::<T>::submit_govkey_call { call: Box::new(new_membership_set_call) };
+		let call = Call::<T>::submit_govkey_call { call: Box::new(set_voting_authority_call) };
 
 		#[block]
 		{
@@ -184,14 +206,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn dispatch_whitelisted_call() {
-		let members = (0..2)
-			.map(|i| account::<T::AccountId>("whitelisted_caller", 0, i))
-			.collect::<BTreeSet<_>>();
-		<Members<T>>::put(GovernanceCouncil { members: members.clone(), threshold: 1 });
-		let caller = members.first().cloned().unwrap();
-		let call: <T as Config>::RuntimeCall = Call::<T>::new_membership_set {
-			new_members: [caller.clone()].into_iter().collect(),
-			new_threshold: Default::default(),
+		let (authority, caller) = max_size_authority::<T>(0);
+		install_authority::<T>(authority);
+		let call: <T as Config>::RuntimeCall = Call::<T>::set_voting_authority {
+			new_authority: VotingAuthority::Individual { id: caller.clone() },
 		}
 		.into();
 		Pallet::<T>::push_proposal(Box::new(call.clone()), ExecutionMode::Manual);

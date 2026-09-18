@@ -1822,14 +1822,6 @@ export type PalletCfGovernanceCall =
       params: { call: StateChainRuntimeRuntimeCall; execution: PalletCfGovernanceExecutionMode };
     }
   /**
-   * Sets a new set of governance members
-   * **Can only be called via the Governance Origin**
-   *
-   * Sets a new set of governance members. Note that this can be called with an empty vector
-   * to remove the possibility to govern the chain at all.
-   **/
-  | { name: 'NewMembershipSet'; params: { newMembers: Array<AccountId32>; newThreshold: number } }
-  /**
    * Performs a runtime upgrade of the Chainflip runtime
    * **Can only be called via the Governance Origin**
    **/
@@ -1861,7 +1853,14 @@ export type PalletCfGovernanceCall =
    * Submit a call to be executed if the gov key has already committed to it.
    **/
   | { name: 'SubmitGovkeyCall'; params: { call: StateChainRuntimeRuntimeCall } }
-  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } };
+  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } }
+  /**
+   * Replaces the voting authority.
+   * **Can only be called via the Governance Origin**
+   *
+   * Expires all active proposals, since they were approved under the old authority.
+   **/
+  | { name: 'SetVotingAuthority'; params: { newAuthority: PalletCfGovernanceVotingAuthority } };
 
 export type PalletCfGovernanceCallLike =
   /**
@@ -1873,17 +1872,6 @@ export type PalletCfGovernanceCallLike =
         call: StateChainRuntimeRuntimeCallLike;
         execution: PalletCfGovernanceExecutionMode;
       };
-    }
-  /**
-   * Sets a new set of governance members
-   * **Can only be called via the Governance Origin**
-   *
-   * Sets a new set of governance members. Note that this can be called with an empty vector
-   * to remove the possibility to govern the chain at all.
-   **/
-  | {
-      name: 'NewMembershipSet';
-      params: { newMembers: Array<AccountId32Like>; newThreshold: number };
     }
   /**
    * Performs a runtime upgrade of the Chainflip runtime
@@ -1920,9 +1908,27 @@ export type PalletCfGovernanceCallLike =
    * Submit a call to be executed if the gov key has already committed to it.
    **/
   | { name: 'SubmitGovkeyCall'; params: { call: StateChainRuntimeRuntimeCallLike } }
-  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } };
+  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } }
+  /**
+   * Replaces the voting authority.
+   * **Can only be called via the Governance Origin**
+   *
+   * Expires all active proposals, since they were approved under the old authority.
+   **/
+  | { name: 'SetVotingAuthority'; params: { newAuthority: PalletCfGovernanceVotingAuthority } };
 
 export type PalletCfGovernanceExecutionMode = 'Automatic' | 'Manual';
+
+export type PalletCfGovernanceVotingAuthority =
+  | {
+      type: 'WeightedGroup';
+      value: { threshold: number; members: Array<[number, PalletCfGovernanceVotingAuthority]> };
+    }
+  | {
+      type: 'SimpleGroup';
+      value: { threshold: number; members: Array<PalletCfGovernanceVotingAuthority> };
+    }
+  | { type: 'Individual'; value: { id: AccountId32 } };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -13736,14 +13742,10 @@ export type PalletCfGovernanceEvent =
    **/
   | { name: 'GovKeyCallExecutionFailed'; data: { callHash: FixedBytes<32>; error: DispatchError } }
   /**
-   * New governance council set
+   * The voting authority was replaced. Carries the flattened members rather than the
+   * authority itself: the event schema generator can't express a recursive type (PRO-3155).
    **/
-  | { name: 'NewGovernanceCouncil'; data: { newCouncil: PalletCfGovernanceGovernanceCouncil } };
-
-export type PalletCfGovernanceGovernanceCouncil = {
-  members: Array<AccountId32>;
-  threshold: number;
-};
+  | { name: 'NewVotingAuthority'; data: { members: Array<AccountId32> } };
 
 /**
  * The `Event` enum of this pallet
@@ -18320,9 +18322,37 @@ export type PalletCfGovernanceError =
    **/
   | 'NotEnoughAuthoritiesCfesAtTargetVersion'
   /**
-   * The provided council is invalid: either empty or threshold > members.len()
+   * The voting authority is nested deeper than `voting_authority::MAX_DEPTH`.
    **/
-  | 'InvalidCouncil';
+  | 'VotingAuthorityTooDeep'
+  /**
+   * The voting authority has more than `voting_authority::MAX_MEMBERS` members.
+   **/
+  | 'TooManyVotingMembers'
+  /**
+   * A voting group has no members.
+   **/
+  | 'EmptyVotingGroup'
+  /**
+   * A voting group has a threshold of zero, which would approve anything.
+   **/
+  | 'ZeroVotingThreshold'
+  /**
+   * A member of a weighted voting group has zero weight.
+   **/
+  | 'ZeroVotingWeight'
+  /**
+   * The weights of a voting group overflow.
+   **/
+  | 'VotingWeightOverflow'
+  /**
+   * A voting group's threshold exceeds its members' combined count or weight.
+   **/
+  | 'UnreachableVotingThreshold'
+  /**
+   * An account appears more than once in the voting authority.
+   **/
+  | 'DuplicateVotingMember';
 
 /**
  * The `Error` enum of this pallet.

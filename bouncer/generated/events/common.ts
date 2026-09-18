@@ -536,11 +536,6 @@ export const cfPrimitivesWitnessingTaskName = simpleEnum([
   'Bsc',
 ]);
 
-export const palletCfGovernanceGovernanceCouncil = z.object({
-  members: z.array(accountId),
-  threshold: z.number(),
-});
-
 export const palletCfTokenholderGovernanceProposal = z.discriminatedUnion('__kind', [
   z.object({
     __kind: z.literal('SetGovernanceKey'),
