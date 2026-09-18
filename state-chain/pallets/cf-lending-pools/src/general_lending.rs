@@ -573,7 +573,10 @@ impl<T: Config> LoanAccount<T> {
 			}
 		}
 
-		Ok(FixedU64::from_rational(owed, collateral))
+		// Saturating: `from_rational` panics once owed/collateral exceeds ~1.8e10 (dust
+		// collateral against a large unrecovered debt), and every consumer treats any LTV
+		// above 100% identically.
+		Ok(FixedU64::saturating_from_rational(owed, collateral))
 	}
 
 	pub fn check_low_ltv_penalty_and_collect_interest(
