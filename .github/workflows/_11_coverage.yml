@@ -95,7 +95,7 @@ jobs:
           bun run build
 
       - name: Install cargo-llvm-cov 💿
-        uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf
+        uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
         with:
           tool: cargo-llvm-cov@0.9.0
 

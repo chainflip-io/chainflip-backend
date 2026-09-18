@@ -166,7 +166,7 @@ jobs:
           persist-credentials: false
 
       - name: Login to DockerHub 🔑
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}

@@ -102,14 +102,14 @@ jobs:
           persist-credentials: false
 
       - name: Login to Github Container Registry 🔑
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to DockerHub 🔑
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
@@ -220,7 +220,7 @@ jobs:
       - name: Upload chain explorer 📤
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: chain-explorer${{ inputs.log-postfix }}
           path: /tmp/chainflip/*_explorer.txt
@@ -265,7 +265,7 @@ jobs:
       - name: Upload Localnet Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: localnet-logs${{ inputs.log-postfix }}
           path: |
@@ -277,7 +277,7 @@ jobs:
       - name: Upload Bouncer Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bouncer-logs${{ inputs.log-postfix }}
           path: |
@@ -286,7 +286,7 @@ jobs:
       - name: Upload runner diagnostics 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: runner-diagnostics${{ inputs.log-postfix }}
           path: /opt/actions-runner/_diag/
@@ -302,7 +302,7 @@ jobs:
       - name: Upload indexer database
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: indexer-pgsql-dump${{ inputs.log-postfix }}
           path: |
@@ -335,7 +335,7 @@ jobs:
       - name: Upload Docker Container Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: docker-container-logs${{ inputs.log-postfix }}
           path: /tmp/chainflip/docker-logs/

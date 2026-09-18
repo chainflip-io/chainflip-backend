@@ -173,7 +173,7 @@ jobs:
           STEPS_BLOCK_RANGE_OUTPUTS_TO: ${{ steps.block-range.outputs.to }}
 
       - name: Upload benchmark output 📦
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-block-output-${{ steps.resolve-sha.outputs.full_sha }}
           path: benchmark-block-output.txt
@@ -197,7 +197,7 @@ jobs:
         run: tar -czf "$GITHUB_WORKSPACE/berghain-chaindata.tar.gz" -C "$BASE_PATH" .
 
       - name: Upload chain database 📦
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: berghain-chaindata-${{ steps.block-range.outputs.from }}-${{ steps.block-range.outputs.to }}
           path: berghain-chaindata.tar.gz
