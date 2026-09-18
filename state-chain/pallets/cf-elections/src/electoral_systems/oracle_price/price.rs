@@ -23,6 +23,7 @@ use crate::{
 	generic_tools::*,
 };
 use cf_amm_math::{mul_div_floor_checked, Price};
+use cf_utilities::migrations::HasChangelog;
 #[cfg(test)]
 use proptest::prelude::Strategy;
 use sp_core::U256;
@@ -39,17 +40,50 @@ impl PriceUnit {
 	}
 }
 
-derive_common_traits! {
-	#[derive(Copy, PartialOrd, Ord, TypeInfo)]
-	pub enum PriceAsset {
-		Btc,
-		Eth,
-		Sol,
-		Usdc,
-		Usdt,
-		Usd,
-		Fine,
-	}
+#[cf_proc_macros::generate_module]
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	codec::Encode,
+	codec::Decode,
+	codec::DecodeWithMemTracking,
+	serde::Deserialize,
+	serde::Serialize,
+	TypeInfo,
+)]
+#[serde(bound(deserialize = "", serialize = ""))]
+pub enum PriceAsset {
+	Btc,
+	Eth,
+	Sol,
+	Usdc,
+	Usdt,
+	Usd,
+	Fine,
+	Wbtc,
+	Cbbtc,
+	Dot,
+	Trx,
+	Bnb,
+}
+
+impl HasChangelog for PriceAsset {
+	type if_unspecified = _PriceAsset::see_variant_changelogs;
+	type in_20400 = _PriceAsset::see_variant_changelogs_and_also<(
+		_PriceAsset::variant::Wbtc::Added,
+		(
+			_PriceAsset::variant::Cbbtc::Added,
+			(
+				_PriceAsset::variant::Dot::Added,
+				(_PriceAsset::variant::Trx::Added, _PriceAsset::variant::Bnb::Added),
+			),
+		),
+	)>;
 }
 
 impl PriceAsset {
@@ -63,6 +97,10 @@ impl PriceAsset {
 			Usdt => 6,
 			Usd => 6,
 			Fine => 0,
+			Wbtc | Cbbtc => 8,
+			Trx => 6,
+			Bnb => 18,
+			Dot => 10,
 		}
 	}
 }

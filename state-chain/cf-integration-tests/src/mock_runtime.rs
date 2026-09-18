@@ -406,6 +406,8 @@ impl ExtBuilder {
 					arb_oracle_feeds: Default::default(),
 					eth_address_checker: Default::default(),
 					eth_oracle_feeds: Default::default(),
+					bsc_address_checker: Default::default(),
+					bsc_oracle_feeds: Default::default(),
 				})),
 			},
 			ethereum_elections: EthereumElectionsConfig { option_initial_state: None },

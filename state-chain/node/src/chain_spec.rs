@@ -167,7 +167,8 @@ pub struct StateChainEnvironment {
 	sol_alt_manager_program: SolAddress,
 	// Initialized with 65 accounts (50 of them nonces)
 	sol_address_lookup_table_account: (SolAddress, [SolAddress; 65]),
-	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings<ArrayContainer<5>>,
+	chainlink_oracle_price_settings:
+		ChainlinkOraclePriceSettings<ArrayContainer<8>, ArrayContainer<7>, ArrayContainer<8>>,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -568,7 +569,11 @@ pub fn inner_cf_development_chain_spec(
 			},
 			GenericElectionsConfig {
 				option_initial_state: Some(generic_elections::initial_state(
-					chainlink_oracle_price_settings.convert(ArrayToVector),
+					chainlink_oracle_price_settings.convert(
+						ArrayToVector,
+						ArrayToVector,
+						ArrayToVector,
+					),
 				)),
 			},
 			EthereumElectionsConfig {
@@ -803,7 +808,11 @@ macro_rules! network_spec {
 						},
 						GenericElectionsConfig {
 							option_initial_state: Some(generic_elections::initial_state(
-								chainlink_oracle_price_settings.convert(ArrayToVector),
+								chainlink_oracle_price_settings.convert(
+									ArrayToVector,
+									ArrayToVector,
+									ArrayToVector,
+								),
 							)),
 						},
 						EthereumElectionsConfig {

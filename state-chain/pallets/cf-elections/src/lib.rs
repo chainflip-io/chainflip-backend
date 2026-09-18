@@ -155,7 +155,7 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
-pub const STORAGE_VERSION_U16: u16 = 9;
+pub const STORAGE_VERSION_U16: u16 = 10;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub use pallet::UniqueMonotonicIdentifier;
@@ -1569,20 +1569,22 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_settings())]
 		pub fn update_settings(
 			origin: OriginFor<T>,
-			unsynchronised_settings: Option<
+			unsynchronised_settings: Option<Box<
 				<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+			>>,
+			settings: Option<
+				Box<<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralSettings>,
 			>,
-			settings: Option<<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralSettings>,
 			ignore_corrupt_storage: CorruptStorageAdherance,
 		) -> DispatchResult {
 			Self::ensure_governance(origin, ignore_corrupt_storage)?;
 			if let Some(unsynchronised_settings) = unsynchronised_settings {
-				ElectoralUnsynchronisedSettings::<T, I>::put(unsynchronised_settings);
+				ElectoralUnsynchronisedSettings::<T, I>::put(*unsynchronised_settings);
 			}
 			if let Some(settings) = settings {
 				// This cannot effect settings of any election as all elections have IDs strictly
 				// lower than `NextElectionIdentifier`.
-				ElectoralSettings::<T, I>::insert(NextElectionIdentifier::<T, I>::get(), settings);
+				ElectoralSettings::<T, I>::insert(NextElectionIdentifier::<T, I>::get(), *settings);
 			}
 			Ok(())
 		}
@@ -1843,6 +1845,29 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/// Returns this instance to an uninitialized state, retaining its storage version.
+		/// Intended for migrations: clearing all entries has unbounded cost and does not decode
+		/// values that may have been encoded with an older runtime.
+		pub fn reset() {
+			SharedDataReferenceLifetime::<T, I>::kill();
+			NextElectionIdentifier::<T, I>::kill();
+			ElectoralUnsynchronisedSettings::<T, I>::kill();
+			ElectoralUnsynchronisedState::<T, I>::kill();
+			Status::<T, I>::kill();
+
+			let _ = SharedDataReferenceCount::<T, I>::clear(u32::MAX, None);
+			let _ = SharedData::<T, I>::clear(u32::MAX, None);
+			let _ = BitmapComponents::<T, I>::clear(u32::MAX, None);
+			let _ = IndividualComponents::<T, I>::clear(u32::MAX, None);
+			let _ = ElectoralUnsynchronisedStateMap::<T, I>::clear(u32::MAX, None);
+			let _ = ElectoralSettings::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionProperties::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionState::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionConsensusHistory::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionConsensusHistoryUpToDate::<T, I>::clear(u32::MAX, None);
+			let _ = ContributingAuthorities::<T, I>::clear(u32::MAX, None);
+		}
+
 		/// This function allows other pallets to initialize an Elections pallet, instead of needing
 		/// to initialize it via a governance extrinsic or at genesis.
 		pub fn internally_initialize(

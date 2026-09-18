@@ -21,7 +21,7 @@ use crate::electoral_systems::{
 	state_machine::common_imports::*,
 };
 use cf_amm_math::Price;
-use cf_utilities::macros::*;
+use cf_utilities::{macros::*, migrations::HasChangelog};
 use sp_std::iter;
 
 derive_common_traits! {
@@ -33,7 +33,12 @@ derive_common_traits! {
 		EthUsd,
 		SolUsd,
 		UsdcUsd,
-		UsdtUsd
+		UsdtUsd,
+		WbtcUsd,
+		CbbtcUsd,
+		DotUsd,
+		TrxUsd,
+		BnbUsd
 	}
 }
 
@@ -48,6 +53,11 @@ impl ChainlinkAssetpair {
 			(PriceAsset::Sol, PriceAsset::Usd) => Some(ChainlinkAssetpair::SolUsd),
 			(PriceAsset::Usdc, PriceAsset::Usd) => Some(ChainlinkAssetpair::UsdcUsd),
 			(PriceAsset::Usdt, PriceAsset::Usd) => Some(ChainlinkAssetpair::UsdtUsd),
+			(PriceAsset::Wbtc, PriceAsset::Usd) => Some(ChainlinkAssetpair::WbtcUsd),
+			(PriceAsset::Cbbtc, PriceAsset::Usd) => Some(ChainlinkAssetpair::CbbtcUsd),
+			(PriceAsset::Trx, PriceAsset::Usd) => Some(ChainlinkAssetpair::TrxUsd),
+			(PriceAsset::Bnb, PriceAsset::Usd) => Some(ChainlinkAssetpair::BnbUsd),
+			(PriceAsset::Dot, PriceAsset::Usd) => Some(ChainlinkAssetpair::DotUsd),
 			_ => None,
 		}
 	}
@@ -63,6 +73,11 @@ impl AssetPairTrait for ChainlinkAssetpair {
 			SolUsd => Sol,
 			UsdcUsd => Usdc,
 			UsdtUsd => Usdt,
+			WbtcUsd => Wbtc,
+			CbbtcUsd => Cbbtc,
+			TrxUsd => Trx,
+			BnbUsd => Bnb,
+			DotUsd => Dot,
 		};
 		PriceUnit { base_asset, quote_asset: PriceAsset::Usd }
 	}
@@ -142,6 +157,7 @@ pub fn statechain_price_to_chainlink_price(
 	Some(price)
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct OraclePrice {
 	pub price: Price,
@@ -152,6 +168,11 @@ pub struct OraclePrice {
 	pub price_status: PriceStatus,
 }
 
+impl HasChangelog for OraclePrice {
+	type if_unspecified = _OraclePrice::see_field_changelogs;
+}
+
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct OraclePriceLegacy {
 	pub price: Price,
@@ -159,6 +180,10 @@ pub struct OraclePriceLegacy {
 	pub updated_at_statechain_block: u32,
 	pub base_asset: PriceAsset,
 	pub quote_asset: PriceAsset,
+}
+
+impl HasChangelog for OraclePriceLegacy {
+	type if_unspecified = _OraclePriceLegacy::see_field_changelogs;
 }
 
 impl From<OraclePriceLegacy> for OraclePrice {

@@ -2,7 +2,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity, registerLiquidityRefundAddressForChain } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
-import { Asset } from 'shared/utils';
+import { assetDecimals, Asset, fineAmountToAmount } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
 export const deposits = new Map<Asset, number>([
@@ -120,31 +120,16 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
     ),
   );
 
-  const lp1Deposits = (parentCf: ChainflipIO<A>) =>
-    parentCf
-      .with({ account: fullAccountFromUri('//LP_1', 'LP') })
-      .all([
-        (subcf) => depositLiquidity(subcf, 'Usdc', deposits.get('Usdc')!),
-        (subcf) => depositLiquidity(subcf, 'Eth', deposits.get('Eth')!),
-        (subcf) => depositLiquidity(subcf, 'Btc', deposits.get('Btc')!),
-        (subcf) => depositLiquidity(subcf, 'Flip', deposits.get('Flip')!),
-        (subcf) => depositLiquidity(subcf, 'Usdt', deposits.get('Usdt')!),
-        (subcf) => depositLiquidity(subcf, 'Wbtc', deposits.get('Wbtc')!),
-        (subcf) => depositLiquidity(subcf, 'Cbbtc', deposits.get('Cbbtc')!),
-        (subcf) => depositLiquidity(subcf, 'ArbEth', deposits.get('ArbEth')!),
-        (subcf) => depositLiquidity(subcf, 'ArbUsdc', deposits.get('ArbUsdc')!),
-        (subcf) => depositLiquidity(subcf, 'ArbUsdt', deposits.get('ArbUsdt')!),
-        (subcf) => depositLiquidity(subcf, 'Bnb', deposits.get('Bnb')!),
-        (subcf) => depositLiquidity(subcf, 'BscUsdt', deposits.get('BscUsdt')!),
-        (subcf) => depositLiquidity(subcf, 'Sol', deposits.get('Sol')!),
-        (subcf) => depositLiquidity(subcf, 'SolUsdc', deposits.get('SolUsdc')!),
-        (subcf) => depositLiquidity(subcf, 'SolUsdt', deposits.get('SolUsdt')!),
-        (subcf) => depositLiquidity(subcf, 'Trx', deposits.get('Trx')!),
-        (subcf) => depositLiquidity(subcf, 'TrxUsdt', deposits.get('TrxUsdt')!),
-        (subcf) => depositLiquidity(subcf, 'HubDot', deposits.get('HubDot')!),
-        (subcf) => depositLiquidity(subcf, 'HubUsdc', deposits.get('HubUsdc')!),
-        (subcf) => depositLiquidity(subcf, 'HubUsdt', deposits.get('HubUsdt')!),
-      ]);
+  const lp1Deposits = async (parentCf: ChainflipIO<A>) => {
+    const depositResults = await parentCf.with({ account: fullAccountFromUri('//LP_1', 'LP') }).all(
+      [...deposits].map(([asset, amount]) => async (subcf) => ({
+        asset,
+        ...(await depositLiquidity(subcf, asset, amount)),
+      })),
+    );
+
+    return new Map(depositResults.map(({ asset, amountCredited }) => [asset, amountCredited]));
+  };
 
   const lpApiDeposits = (parentCf: ChainflipIO<A>) =>
     parentCf
@@ -173,31 +158,41 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
       ]);
 
   cf.info('Depositing liquidity');
-  await cf.all([lpApiDeposits, lp1Deposits]);
+  const [, lp1DepositedAmounts] = await cf.all([lpApiDeposits, lp1Deposits]);
+
+  const rangeOrderAmount = (asset: Asset): string => {
+    const amountCredited = lp1DepositedAmounts.get(asset);
+    if (amountCredited === undefined) {
+      throw new Error(`Missing credited deposit amount for ${asset}`);
+    }
+
+    const bufferedAmount = (amountCredited * 9999n) / 10000n;
+    return fineAmountToAmount(bufferedAmount.toString(), assetDecimals(asset));
+  };
 
   const lp1RangeOrders = (parentCf: ChainflipIO<A>) =>
     parentCf
       .with({ account: fullAccountFromUri('//LP_1', 'LP') })
       .all([
-        (subcf) => rangeOrder(subcf, 'Eth', deposits.get('Eth')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Btc', deposits.get('Btc')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Flip', deposits.get('Flip')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Usdt', deposits.get('Usdt')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Wbtc', deposits.get('Wbtc')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Cbbtc', deposits.get('Cbbtc')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'ArbEth', deposits.get('ArbEth')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'ArbUsdc', deposits.get('ArbUsdc')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'ArbUsdt', deposits.get('ArbUsdt')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Bnb', deposits.get('Bnb')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'BscUsdt', deposits.get('BscUsdt')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Sol', deposits.get('Sol')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'SolUsdc', deposits.get('SolUsdc')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'SolUsdt', deposits.get('SolUsdt')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Trx', deposits.get('Trx')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'TrxUsdt', deposits.get('TrxUsdt')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'HubDot', deposits.get('HubDot')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'HubUsdc', deposits.get('HubUsdc')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'HubUsdt', deposits.get('HubUsdt')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'Eth', rangeOrderAmount('Eth')),
+        (subcf) => rangeOrder(subcf, 'Btc', rangeOrderAmount('Btc')),
+        (subcf) => rangeOrder(subcf, 'Flip', rangeOrderAmount('Flip')),
+        (subcf) => rangeOrder(subcf, 'Usdt', rangeOrderAmount('Usdt')),
+        (subcf) => rangeOrder(subcf, 'Wbtc', rangeOrderAmount('Wbtc')),
+        (subcf) => rangeOrder(subcf, 'Cbbtc', rangeOrderAmount('Cbbtc')),
+        (subcf) => rangeOrder(subcf, 'ArbEth', rangeOrderAmount('ArbEth')),
+        (subcf) => rangeOrder(subcf, 'ArbUsdc', rangeOrderAmount('ArbUsdc')),
+        (subcf) => rangeOrder(subcf, 'ArbUsdt', rangeOrderAmount('ArbUsdt')),
+        (subcf) => rangeOrder(subcf, 'Bnb', rangeOrderAmount('Bnb')),
+        (subcf) => rangeOrder(subcf, 'BscUsdt', rangeOrderAmount('BscUsdt')),
+        (subcf) => rangeOrder(subcf, 'Sol', rangeOrderAmount('Sol')),
+        (subcf) => rangeOrder(subcf, 'SolUsdc', rangeOrderAmount('SolUsdc')),
+        (subcf) => rangeOrder(subcf, 'SolUsdt', rangeOrderAmount('SolUsdt')),
+        (subcf) => rangeOrder(subcf, 'Trx', rangeOrderAmount('Trx')),
+        (subcf) => rangeOrder(subcf, 'TrxUsdt', rangeOrderAmount('TrxUsdt')),
+        (subcf) => rangeOrder(subcf, 'HubDot', rangeOrderAmount('HubDot')),
+        (subcf) => rangeOrder(subcf, 'HubUsdc', rangeOrderAmount('HubUsdc')),
+        (subcf) => rangeOrder(subcf, 'HubUsdt', rangeOrderAmount('HubUsdt')),
       ]);
 
   cf.info('Setting up range orders');

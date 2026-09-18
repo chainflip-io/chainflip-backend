@@ -358,8 +358,8 @@ mod benchmarks {
 		ElectoralSettings::<T, I>::remove(next_election);
 
 		let call = Call::<T, I>::update_settings {
-			unsynchronised_settings: Some(BenchmarkValue::benchmark_value()),
-			settings: Some(BenchmarkValue::benchmark_value()),
+			unsynchronised_settings: Some(Box::new(BenchmarkValue::benchmark_value())),
+			settings: Some(Box::new(BenchmarkValue::benchmark_value())),
 			ignore_corrupt_storage: CorruptStorageAdherance::Heed,
 		};
 
