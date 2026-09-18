@@ -55,6 +55,13 @@ macro_rules! polkadot_source {
 						tokio::time::timeout(TIMEOUT, state.stream.next()).await
 					{
 						if let Ok((hash, header)) = result {
+							// Genesis has no parent block whose runtime metadata can be used to
+							// decode its events. There are no genesis events relevant to
+							// witnessing, so wait for the first non-genesis header instead.
+							if header.number == 0 {
+								continue
+							}
+
 							let Some(events) = unwrap_events(
 								state.client.events(hash, header.parent_hash, $retry_limit).await,
 							) else {
