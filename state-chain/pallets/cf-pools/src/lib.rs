@@ -287,17 +287,19 @@ pub enum PalletConfigUpdate {
 		asset: Asset,
 		amount: AssetAmount,
 	},
-	/// Set the per-asset minimum amount required for a limit order to be created or to
-	/// remain open. The minimum applies to the asset being sold (`base_asset` for
-	/// `Side::Sell`, `quote_asset` for `Side::Buy`). Set to `0` to disable the check
-	/// for an asset.
-	SetMinimumLimitOrderAmount {
+	/// Set the per-asset minimum amount required for an order to be created or to remain open
+	/// after a manual update. One amount covers both order types, though each applies it
+	/// differently: a limit order is measured on the asset it sells (`base_asset` for
+	/// `Side::Sell`, `quote_asset` for `Side::Buy`), while a range order holds both pool assets
+	/// and needs only *one* of its two sides to reach the minimum. Set to `0` to disable the
+	/// check for an asset.
+	SetMinimumOrderAmount {
 		asset: Asset,
 		amount: AssetAmount,
 	},
 }
 
-pub const STORAGE_VERSION_U16: u16 = 9;
+pub const STORAGE_VERSION_U16: u16 = 10;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[frame_support::pallet]
@@ -432,10 +434,10 @@ pub mod pallet {
 	pub(super) type LimitOrderAutoSweepingThresholds<T: Config> =
 		StorageValue<_, SweepingThresholds, ValueQuery, StablecoinDefaults<1_000>>; // $1000 USD
 
-	/// Minimum amount of the sold asset that a limit order may hold. Set per asset by
-	/// governance. A value of `0` disables the check for that asset.
+	/// Minimum amount of an asset that an order may hold, shared by limit and range orders. Set
+	/// per asset by governance. A value of `0` disables the check for that asset.
 	#[pallet::storage]
-	pub type MinimumLimitOrderAmount<T: Config> =
+	pub type MinimumOrderAmount<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::storage]
@@ -520,7 +522,7 @@ pub mod pallet {
 		SheduledUpdateLimitReached,
 		/// The account still has open orders.
 		OpenOrdersRemaining,
-		/// The resulting limit order amount is below the configured per-asset minimum.
+		/// The resulting order amount is below the configured per-asset minimum.
 		BelowMinimumOrderAmount,
 	}
 
@@ -688,12 +690,12 @@ pub mod pallet {
 						Ok(new_tick_range)
 					},
 				}?;
-				Self::inner_update_range_order(
+				let (_, new_order_liquidity) = Self::inner_update_range_order(
 					pool,
 					&lp,
 					asset_pair,
 					id,
-					tick_range,
+					tick_range.clone(),
 					size_change.map(|size| match size {
 						RangeOrderSize::Liquidity { liquidity } =>
 							range_orders::Size::Liquidity { liquidity },
@@ -704,6 +706,12 @@ pub mod pallet {
 							},
 					}),
 					NoOpStatus::Error,
+				)?;
+				Self::ensure_min_range_order_amount(
+					pool,
+					asset_pair,
+					tick_range,
+					new_order_liquidity,
 				)?;
 				Ok(())
 			})
@@ -763,7 +771,7 @@ pub mod pallet {
 					&lp,
 					asset_pair,
 					id,
-					tick_range,
+					tick_range.clone(),
 					IncreaseOrDecrease::Increase(match size {
 						RangeOrderSize::Liquidity { liquidity } =>
 							range_orders::Size::Liquidity { liquidity },
@@ -784,6 +792,13 @@ pub mod pallet {
 						(!size.max_is_zero() && !new_order_liquidity.is_zero()),
 					Error::<T>::InvalidSize
 				);
+
+				Self::ensure_min_range_order_amount(
+					pool,
+					asset_pair,
+					tick_range,
+					new_order_liquidity,
+				)?;
 
 				Ok(())
 			})
@@ -874,7 +889,7 @@ pub mod pallet {
 				&lp,
 				[base_asset, quote_asset],
 			)?;
-			Self::ensure_min_order_amount(base_asset, quote_asset, side, sell_amount)?;
+			Self::ensure_min_limit_order_amount(base_asset, quote_asset, side, sell_amount)?;
 
 			if let Some(dispatch_at) = dispatch_at {
 				LimitOrderUpdate::<T> {
@@ -1087,8 +1102,8 @@ pub mod pallet {
 							thresholds.try_insert(asset, amount).expect("Every asset will fit");
 						});
 					},
-					PalletConfigUpdate::SetMinimumLimitOrderAmount { asset, amount } => {
-						MinimumLimitOrderAmount::<T>::set(asset, amount);
+					PalletConfigUpdate::SetMinimumOrderAmount { asset, amount } => {
+						MinimumOrderAmount::<T>::set(asset, amount);
 					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
@@ -1680,7 +1695,7 @@ impl<T: Config> Pallet<T> {
 	/// Enforce the per-asset minimum on the remaining amount of a limit order. The remaining amount
 	/// is denominated in the asset being sold. A `remaining_amount` of `0` is always allowed (the
 	/// order is being closed); any other value below the configured minimum is rejected.
-	fn ensure_min_order_amount(
+	fn ensure_min_limit_order_amount(
 		base_asset: Asset,
 		quote_asset: Asset,
 		side: Side,
@@ -1691,8 +1706,41 @@ impl<T: Config> Pallet<T> {
 			Side::Sell => base_asset,
 		};
 		ensure!(
-			remaining_amount == 0 ||
-				remaining_amount >= MinimumLimitOrderAmount::<T>::get(sold_asset),
+			remaining_amount == 0 || remaining_amount >= MinimumOrderAmount::<T>::get(sold_asset),
+			Error::<T>::BelowMinimumOrderAmount,
+		);
+		Ok(())
+	}
+
+	/// Enforce the per-asset minimum on a range order's resulting position. We require only that
+	/// *one* of the two sides reaches its minimum. A minimum of `0` for either asset will disable
+	/// this check.
+	fn ensure_min_range_order_amount(
+		pool: &Pool<T>,
+		asset_pair: &AssetPair,
+		tick_range: Range<Tick>,
+		liquidity: Liquidity,
+	) -> DispatchResult {
+		// Skip the check if the order was closed.
+		if liquidity.is_zero() {
+			return Ok(())
+		}
+
+		let amounts = pool.pool_state.range_order_liquidity_value(tick_range, liquidity).map_err(
+			|error| match error {
+				range_orders::LiquidityToAmountsError::InvalidTickRange =>
+					Error::<T>::InvalidTickRange,
+				range_orders::LiquidityToAmountsError::LiquidityTooLarge =>
+					Error::<T>::MaximumGrossLiquidity,
+			},
+		)?;
+
+		ensure!(
+			asset_pair
+				.assets()
+				.zip(amounts)
+				.into_iter()
+				.any(|(_, (asset, amount))| amount >= MinimumOrderAmount::<T>::get(asset).into()),
 			Error::<T>::BelowMinimumOrderAmount,
 		);
 		Ok(())
@@ -1814,7 +1862,7 @@ impl<T: Config> Pallet<T> {
 				amount_change.map(|amount| amount.into()),
 				NoOpStatus::Error,
 			)?;
-			Self::ensure_min_order_amount(base_asset, quote_asset, side, remaining_amount)?;
+			Self::ensure_min_limit_order_amount(base_asset, quote_asset, side, remaining_amount)?;
 
 			Ok(())
 		})
@@ -1931,6 +1979,8 @@ impl<T: Config> Pallet<T> {
 		Ok((*sold_amount_change.abs(), remaining_amount))
 	}
 
+	/// Returns the assets debited (on increase) or withdrawn (on decrease), and the liquidity the
+	/// position holds *after* the update.
 	fn inner_update_range_order(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
@@ -2088,7 +2138,7 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
-		Ok((assets_change, *liquidity_change.abs()))
+		Ok((assets_change, position_info.liquidity))
 	}
 
 	pub fn try_add_limit_order(

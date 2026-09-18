@@ -187,6 +187,8 @@ async function testTxMultipleVaultSwaps<A = []>(
   cf.info(`Success found ${foundSwapRequestIds.length} SwapRequested events`);
 }
 
+// Unused while vault swaps triggered via contract are unsupported; see multipleTxSwapsTest.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function testTronTxMultipleVaultSwaps<A = []>(
   parentCf: ChainflipIO<A>,
   sourceAsset: Asset,
@@ -529,8 +531,9 @@ export async function dotestEvmDeposits<A = []>(
     parentCf.all([
       (subcf) => testTxMultipleVaultSwaps(subcf, 'Eth', 'Flip'),
       (subcf) => testTxMultipleVaultSwaps(subcf, 'ArbEth', 'Flip'),
-      (subcf) => testTronTxMultipleVaultSwaps(subcf, 'Trx', 'ArbEth'),
-      (subcf) => testTronTxMultipleVaultSwaps(subcf, 'TrxUsdt', 'Usdc'),
+      // Disabled: we don't support vault swaps triggered via contract.
+      // (subcf) => testTronTxMultipleVaultSwaps(subcf, 'Trx', 'ArbEth'),
+      // (subcf) => testTronTxMultipleVaultSwaps(subcf, 'TrxUsdt', 'Usdc'),
     ]);
 
   const doubleDepositTests = (parentCf: ChainflipIO<A>) =>
