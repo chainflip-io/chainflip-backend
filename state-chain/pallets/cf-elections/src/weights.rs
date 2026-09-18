@@ -49,10 +49,6 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_elections.
 pub trait WeightInfo {
 	fn vote(n: u32, ) -> Weight;
-	fn stop_ignoring_my_votes() -> Weight;
-	fn ignore_my_votes() -> Weight;
-	fn recheck_contributed_to_consensuses() -> Weight;
-	fn delete_vote() -> Weight;
 	fn provide_shared_data() -> Weight;
 	fn initialize() -> Weight;
 	fn update_settings() -> Weight;
@@ -77,8 +73,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `SolanaElections::Status` (r:1 w:0)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:0)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `SolanaElections::ElectionProperties` (r:16 w:0)
 	/// Proof: `SolanaElections::ElectionProperties` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `SolanaElections::BitmapComponents` (r:16 w:16)
@@ -100,87 +94,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads((2_u64).saturating_mul(n.into())))
 			.saturating_add(T::DbWeight::get().writes((2_u64).saturating_mul(n.into())))
 			.saturating_add(Weight::from_parts(0, 2498).saturating_mul(n.into()))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:1)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:1 w:0)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn stop_ignoring_my_votes() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1479`
-		//  Estimated: `4944`
-		// Minimum execution time: 41_541_000 picoseconds.
-		Weight::from_parts(42_070_000, 4944)
-			.saturating_add(T::DbWeight::get().reads(6_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:0)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn ignore_my_votes() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1479`
-		//  Estimated: `4944`
-		// Minimum execution time: 34_612_000 picoseconds.
-		Weight::from_parts(35_343_000, 4944)
-			.saturating_add(T::DbWeight::get().reads(5_u64))
-	}
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:2 w:1)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::BitmapComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::BitmapComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::IndividualComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::IndividualComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn recheck_contributed_to_consensuses() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `467`
-		//  Estimated: `6407`
-		// Minimum execution time: 19_784_000 picoseconds.
-		Weight::from_parts(20_133_000, 6407)
-			.saturating_add(T::DbWeight::get().reads(4_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionProperties` (r:1 w:0)
-	/// Proof: `SolanaElections::ElectionProperties` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:0)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::BitmapComponents` (r:1 w:1)
-	/// Proof: `SolanaElections::BitmapComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::IndividualComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::IndividualComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:0 w:1)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn delete_vote() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1788`
-		//  Estimated: `5253`
-		// Minimum execution time: 57_630_000 picoseconds.
-		Weight::from_parts(58_521_000, 5253)
-			.saturating_add(T::DbWeight::get().reads(8_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -397,8 +310,6 @@ impl WeightInfo for () {
 	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `SolanaElections::Status` (r:1 w:0)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:0)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `SolanaElections::ElectionProperties` (r:16 w:0)
 	/// Proof: `SolanaElections::ElectionProperties` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `SolanaElections::BitmapComponents` (r:16 w:16)
@@ -420,87 +331,6 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads((2_u64).saturating_mul(n.into())))
 			.saturating_add(ParityDbWeight::get().writes((2_u64).saturating_mul(n.into())))
 			.saturating_add(Weight::from_parts(0, 2498).saturating_mul(n.into()))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:1)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:1 w:0)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn stop_ignoring_my_votes() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1479`
-		//  Estimated: `4944`
-		// Minimum execution time: 41_541_000 picoseconds.
-		Weight::from_parts(42_070_000, 4944)
-			.saturating_add(ParityDbWeight::get().reads(6_u64))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:0)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn ignore_my_votes() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1479`
-		//  Estimated: `4944`
-		// Minimum execution time: 34_612_000 picoseconds.
-		Weight::from_parts(35_343_000, 4944)
-			.saturating_add(ParityDbWeight::get().reads(5_u64))
-	}
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:2 w:1)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::BitmapComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::BitmapComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::IndividualComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::IndividualComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn recheck_contributed_to_consensuses() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `467`
-		//  Estimated: `6407`
-		// Minimum execution time: 19_784_000 picoseconds.
-		Weight::from_parts(20_133_000, 6407)
-			.saturating_add(ParityDbWeight::get().reads(4_u64))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionProperties` (r:1 w:0)
-	/// Proof: `SolanaElections::ElectionProperties` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:0)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::BitmapComponents` (r:1 w:1)
-	/// Proof: `SolanaElections::BitmapComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::IndividualComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::IndividualComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:0 w:1)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn delete_vote() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1788`
-		//  Estimated: `5253`
-		// Minimum execution time: 57_630_000 picoseconds.
-		Weight::from_parts(58_521_000, 5253)
-			.saturating_add(ParityDbWeight::get().reads(8_u64))
-			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)

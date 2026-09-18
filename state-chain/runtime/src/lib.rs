@@ -491,9 +491,12 @@ pub type PalletMigrations = (
 	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 	pallet_cf_lending_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_asset_balances::migrations::PalletMigration<Runtime>,
-	pallet_cf_elections::migrations::PalletMigration<Runtime, SolanaInstance>,
+	pallet_cf_elections::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	pallet_cf_elections::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	pallet_cf_elections::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, AssethubInstance>,
+	pallet_cf_elections::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, ()>,
 );
