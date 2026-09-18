@@ -20,7 +20,7 @@ import {
   encodedAddress,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
-import type { CfChainsRefundParametersChannelRefundParameters } from 'generated/chaintypes/chainflip-node';
+import type { CfChainsRefundParametersChannelRefundParametersEncodedAddress } from 'generated/chaintypes/chainflip-node';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
@@ -104,7 +104,7 @@ async function testBrokerFees<A extends WithBrokerAccount>(
 
   const encodedEthAddr = encodedAddress('Ethereum', destinationAddress);
 
-  const refundParams: CfChainsRefundParametersChannelRefundParameters = {
+  const refundParams: CfChainsRefundParametersChannelRefundParametersEncodedAddress = {
     refundAddress: encodedAddress('Ethereum', await newAssetAddress(inputAsset, 'DEFAULT_REFUND')),
     minPrice: 0n,
     retryDuration: 0,
