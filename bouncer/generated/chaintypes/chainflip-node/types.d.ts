@@ -5819,8 +5819,6 @@ export type PalletCfElectionsCall =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState } }
   | {
@@ -5886,8 +5884,6 @@ export type PalletCfElectionsCallLike =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState } }
   | {
@@ -8390,8 +8386,6 @@ export type PalletCfElectionsCall002 =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | {
       name: 'DeleteVote';
       params: {
@@ -8475,8 +8469,6 @@ export type PalletCfElectionsCallLike002 =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | {
       name: 'DeleteVote';
       params: {
@@ -8948,8 +8940,6 @@ export type PalletCfElectionsCall003 =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState003 } }
   | {
@@ -9006,8 +8996,6 @@ export type PalletCfElectionsCallLike003 =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState003 } }
   | {
@@ -9216,8 +9204,6 @@ export type PalletCfElectionsCall004 =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier004 } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState004 } }
   | {
@@ -9286,8 +9272,6 @@ export type PalletCfElectionsCallLike004 =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier004 } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState004 } }
   | {
@@ -10013,8 +9997,6 @@ export type PalletCfElectionsCall005 =
         sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum;
       };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | {
       name: 'DeleteVote';
       params: {
@@ -10094,8 +10076,6 @@ export type PalletCfElectionsCallLike005 =
         sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum;
       };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | {
       name: 'DeleteVote';
       params: {
@@ -11002,8 +10982,6 @@ export type PalletCfElectionsCall006 =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState006 } }
   | {
@@ -11069,8 +11047,6 @@ export type PalletCfElectionsCallLike006 =
       name: 'ProvideSharedData';
       params: { sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState006 } }
   | {
@@ -11924,8 +11900,6 @@ export type PalletCfElectionsCall007 =
         sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc;
       };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | {
       name: 'DeleteVote';
       params: {
@@ -12005,8 +11979,6 @@ export type PalletCfElectionsCallLike007 =
         sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc;
       };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | {
       name: 'DeleteVote';
       params: {
@@ -12513,8 +12485,6 @@ export type PalletCfElectionsCall008 =
         sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
       };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState008 } }
   | {
@@ -12585,8 +12555,6 @@ export type PalletCfElectionsCallLike008 =
         sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
       };
     }
-  | { name: 'IgnoreMyVotes' }
-  | { name: 'StopIgnoringMyVotes' }
   | { name: 'DeleteVote'; params: { electionIdentifier: PalletCfElectionsElectionIdentifier005 } }
   | { name: 'Initialize'; params: { initialState: PalletCfElectionsInitialState008 } }
   | {
