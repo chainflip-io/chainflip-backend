@@ -17,6 +17,35 @@ function check_endpoint_health() {
   fi
 }
 
+# java-tron's wallet/broadcasttransaction returns NO_CONNECTION unless the node has at least one
+# handshaken peer, so a responsive HTTP API is not enough for the localnet to be usable.
+#
+# The peer (`tron-peer`) syncs from genesis, and applying the first block produced after the
+# image's baked-in snapshot makes it iterate every witness slot missed since that snapshot was
+# taken (~28.8k per day, logged one line each). That stalls it for minutes, long enough for its
+# sync watchdog to drop the connection and for the witness node to time-ban it, so the connection
+# is only stable once the peer has caught up. The budget here grows with the snapshot's age; if
+# it runs out, the fix is a fresh snapshot in the chainflip-eth-contracts tron image.
+function wait_for_tron_peer() {
+  retries=60
+  delay=10
+
+  while [ $retries -gt 0 ]; do
+    if curl -s -X POST -H "Content-Type: application/json" http://localhost:8090/wallet/getnodeinfo |
+      grep -q '"currentConnectCount":[1-9]'; then
+      break
+    else
+      sleep $delay
+      retries=$((retries - 1))
+    fi
+  done
+
+  if [ $retries -eq 0 ]; then
+    echo "Maximum retries reached. TRON node has no connected peer."
+    exit 1
+  fi
+}
+
 # Kills every process whose executable name (the basename of argv[0]) exactly
 # matches one of the given names.
 #

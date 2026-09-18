@@ -230,6 +230,11 @@ jobs:
           sed -i 's|\(ghcr.io/chainflip-io/chainflip-eth-contracts/[^:]*:\)v[^ ]*|\1v1.5.1-rc2-${NODE_COUNT}|g' localnet/docker-compose.yml
 
           ./localnet/manage.sh
+
+          # The old manage.sh only waits for the TRON HTTP API; broadcasts also need a
+          # connected peer. See `wait_for_tron_peer`.
+          source <(git show ${{ github.sha }}:localnet/helper.sh)
+          wait_for_tron_peer
           git reset --hard
 
       - name: Setup bouncer tests initial state 📦

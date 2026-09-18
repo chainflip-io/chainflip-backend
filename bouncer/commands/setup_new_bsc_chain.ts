@@ -86,9 +86,10 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
 
   const lp1Deposits = (parentCf: ChainflipIO<A>) =>
     parentCf.with({ account: fullAccountFromUri('//LP_1', 'LP') }).all([
-      // Fund the Usdc quote side of the Bnb + BscUsdt range orders below. LP_1's free Usdc
-      // is nearly exhausted by the pre-upgrade setup's range orders.
-      (subcf) => depositLiquidity(subcf, 'Usdc', 3000000),
+      // Top up the Usdc quote side for the Bnb + BscUsdt range orders below. The mock USDC
+      // whale only holds 20M and the pre-upgrade setup already takes 15M, so together with
+      // `setup_new_cbbtc_asset.ts` the post-upgrade top-ups must stay under ~4.9M.
+      (subcf) => depositLiquidity(subcf, 'Usdc', 2000000),
       (subcf) => depositLiquidity(subcf, 'Bnb', deposits.get('Bnb')!),
       (subcf) => depositLiquidity(subcf, 'BscUsdt', deposits.get('BscUsdt')!),
     ]);
