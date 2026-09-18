@@ -49,7 +49,6 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnInitialize, Time},
 };
 use pallet_cf_funding::EthTransactionHash;
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::crypto::Pair;
 use state_chain_runtime::{

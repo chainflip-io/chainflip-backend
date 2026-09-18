@@ -34,7 +34,7 @@ pub type Seconds = u64;
 /// Generic over the address representation: the `update_whitelist` extrinsic input uses
 /// `EncodedAddress`, which is decoded into the internal [`ForeignChainAddress`] form before being
 /// scheduled and emitted in events.
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub enum WhitelistChange<AccountId, Address> {
 	Allow(AccountOrAddress<AccountId, Address>),
 	Remove(AccountOrAddress<AccountId, Address>),
@@ -48,7 +48,7 @@ pub(crate) enum ApplyChangeError {
 }
 
 /// A timelocked change awaiting activation in the pallet's pending queue.
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub enum PendingChange<AccountId> {
 	/// A whitelist change.
 	Whitelist(WhitelistChange<AccountId, ForeignChainAddress>),
@@ -75,15 +75,7 @@ impl<AccountId> PendingChange<AccountId> {
 /// An account's active withdrawal-whitelist state: the external/internal whitelists and the
 /// whitelist timelock.
 #[derive(
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	Clone,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
-	DefaultNoBound,
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Debug, DefaultNoBound,
 )]
 pub struct WithdrawalWhitelist<AccountId> {
 	/// Active external destinations per chain. An empty/absent set for a chain = nothing allowed

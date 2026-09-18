@@ -126,7 +126,7 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn execute_block(block: Block) {
+		fn execute_block(block: <Block as BlockT>::LazyBlock) {
 			Executive::execute_block(block);
 		}
 
@@ -163,7 +163,7 @@ impl_runtime_apis! {
 		}
 
 		fn check_inherents(
-			block: Block,
+			block: <Block as BlockT>::LazyBlock,
 			data: sp_inherents::InherentData,
 		) -> sp_inherents::CheckInherentsResult {
 			data.check_extrinsics(&block)
@@ -197,8 +197,11 @@ impl_runtime_apis! {
 	}
 
 	impl sp_session::SessionKeys<Block> for Runtime {
-		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
-			opaque::SessionKeys::generate(seed)
+		fn generate_session_keys(
+			owner: Vec<u8>,
+			seed: Option<Vec<u8>>,
+		) -> sp_session::OpaqueGeneratedSessionKeys {
+			opaque::SessionKeys::generate(&owner, seed).into()
 		}
 
 		fn decode_session_keys(encoded: Vec<u8>) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
@@ -304,7 +307,7 @@ impl_runtime_apis! {
 		}
 
 		fn execute_block(
-			block: Block,
+			block: <Block as BlockT>::LazyBlock,
 			state_root_check: bool,
 			signature_check: bool,
 			select: frame_try_runtime::TryStateSelect,
@@ -362,7 +365,21 @@ impl_runtime_apis! {
 			use cf_session_benchmarking::Pallet as SessionBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 
-			impl cf_session_benchmarking::Config for Runtime {}
+			impl cf_session_benchmarking::Config for Runtime {
+				fn generate_session_keys_and_proof(
+					owner: crate::AccountId,
+				) -> (opaque::SessionKeys, Vec<u8>) {
+					let keys = opaque::SessionKeys::generate(&owner.encode(), None);
+					(keys.keys, keys.proof.encode())
+				}
+			}
+			impl pallet_cf_validator::benchmarking::RuntimeConfig for Runtime {
+				fn generate_session_keys_and_proof(
+					owner: crate::AccountId,
+				) -> (opaque::SessionKeys, Vec<u8>) {
+					<Runtime as cf_session_benchmarking::Config>::generate_session_keys_and_proof(owner)
+				}
+			}
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 

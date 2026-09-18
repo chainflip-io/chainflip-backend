@@ -37,7 +37,8 @@ use cf_traits::{
 	SwapOutputAction, SwapRequestType,
 };
 use frame_support::{
-	assert_err, assert_noop, assert_ok, error::BadOrigin, sp_runtime::DispatchResult,
+	assert_err, assert_noop, assert_ok,
+	sp_runtime::{traits::BadOrigin, DispatchResult},
 	traits::OriginTrait,
 };
 use sp_runtime::FixedU128;

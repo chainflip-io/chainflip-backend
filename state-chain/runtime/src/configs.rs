@@ -59,8 +59,13 @@ use cf_traits::{
 	DummyIngressSource, NoLimit,
 };
 
+use frame_support::{
+	derive_impl,
+	instances::*,
+	sp_runtime::traits::{BlakeTwo256, ConvertInto, One, OpaqueKeys, Verify},
+};
 pub use frame_support::{
-	debug, parameter_types,
+	parameter_types,
 	traits::{
 		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, Get, KeyOwnerProofSystem,
 		Randomness, StorageInfo,
@@ -73,11 +78,6 @@ pub use frame_support::{
 		ConstantMultiplier, IdentityFee, Weight,
 	},
 	StorageValue,
-};
-use frame_support::{
-	derive_impl,
-	instances::*,
-	sp_runtime::traits::{BlakeTwo256, ConvertInto, One, OpaqueKeys, Verify},
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use frame_system::Call as SystemCall;
@@ -646,8 +646,12 @@ parameter_types! {
 			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
 			NORMAL_DISPATCH_RATIO,
 		);
-	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
-		::max_with_normal_ratio(MAX_BLOCK_LENGTH, BLOCK_LENGTH_RATIO);
+	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength::builder()
+		.max_length(MAX_BLOCK_LENGTH)
+		.modify_max_length_for_class(frame_support::dispatch::DispatchClass::Normal, |m| {
+			*m = BLOCK_LENGTH_RATIO * *m
+		})
+		.build();
 }
 
 // Configure FRAME pallets to include in runtime.

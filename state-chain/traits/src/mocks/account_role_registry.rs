@@ -76,7 +76,8 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 	fn ensure_account_role(
 		origin: <T as frame_system::Config>::RuntimeOrigin,
 		role: AccountRole,
-	) -> Result<<T as frame_system::Config>::AccountId, frame_support::error::BadOrigin> {
+	) -> Result<<T as frame_system::Config>::AccountId, frame_support::sp_runtime::traits::BadOrigin>
+	{
 		match ensure_signed(origin) {
 			Ok(account_id) => {
 				let account_role = <Self as MockPalletStorage>::get_storage::<_, AccountRole>(
@@ -87,10 +88,10 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 				if account_role == role {
 					Ok(account_id)
 				} else {
-					Err(frame_support::error::BadOrigin)
+					Err(frame_support::sp_runtime::traits::BadOrigin)
 				}
 			},
-			Err(_) => Err(frame_support::error::BadOrigin),
+			Err(_) => Err(frame_support::sp_runtime::traits::BadOrigin),
 		}
 	}
 }
