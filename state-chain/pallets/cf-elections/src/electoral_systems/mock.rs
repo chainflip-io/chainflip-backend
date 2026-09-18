@@ -21,7 +21,8 @@ use crate::{
 	},
 	electoral_system_runner::{ElectoralSystemRunner, RunnerStorageAccessTrait},
 	mock::Test,
-	vote_storage, CorruptStorageError, RunnerStorageAccess, UniqueMonotonicIdentifier,
+	vote_storage::{self, ComponentStorageKind, VoteStorage},
+	CorruptStorageError, RunnerStorageAccess, UniqueMonotonicIdentifier,
 };
 use cf_primitives::AuthorityCount;
 use cf_traits::Chainflip;
@@ -39,6 +40,7 @@ thread_local! {
 		BTreeMap<UniqueMonotonicIdentifier, ConsensusStatus<AuthorityCount>>
 	> = RefCell::new(Default::default());
 	static DELETE_ELECTIONS_ON_FINALIZE_CONSENSUS: RefCell<bool> = RefCell::new(false);
+	static COMPONENT_STORAGE_KIND: RefCell<Option<ComponentStorageKind>> = const { RefCell::new(None) };
 }
 
 /// Mock electoral system for testing.
@@ -58,6 +60,7 @@ pub enum BehaviourUpdate {
 	VoteValid(bool),
 	AssumeConsensus(bool),
 	DeleteOnFinalizeConsensus(bool),
+	ComponentStorageKind(Option<ComponentStorageKind>),
 }
 
 impl BehaviourUpdate {
@@ -77,6 +80,9 @@ impl BehaviourUpdate {
 			},
 			BehaviourUpdate::DeleteOnFinalizeConsensus(delete) => {
 				DELETE_ELECTIONS_ON_FINALIZE_CONSENSUS.with(|v| *v.borrow_mut() = *delete);
+			},
+			BehaviourUpdate::ComponentStorageKind(kind) => {
+				COMPONENT_STORAGE_KIND.with(|v| *v.borrow_mut() = *kind);
 			},
 		}
 	}
@@ -103,6 +109,12 @@ impl MockElectoralSystemRunner {
 		DELETE_ELECTIONS_ON_FINALIZE_CONSENSUS.with(|v| *v.borrow())
 	}
 
+	pub fn component_storage_kind() -> ComponentStorageKind {
+		COMPONENT_STORAGE_KIND.with(|v| *v.borrow()).unwrap_or_else(
+			<<Self as ElectoralSystemTypes>::VoteStorage as VoteStorage>::component_storage_kind,
+		)
+	}
+
 	pub fn consensus_status(umi: UniqueMonotonicIdentifier) -> ConsensusStatus<AuthorityCount> {
 		CONSENSUS_STATUS.with_borrow(|v| v.get(&umi).cloned().unwrap_or(ConsensusStatus::None))
 	}
@@ -127,6 +139,7 @@ impl MockElectoralSystemRunner {
 			BehaviourUpdate::VoteValid(true),
 			BehaviourUpdate::AssumeConsensus(false),
 			BehaviourUpdate::DeleteOnFinalizeConsensus(false),
+			BehaviourUpdate::ComponentStorageKind(None),
 		]);
 		CONSENSUS_STATUS.with(|v| v.borrow_mut().clear());
 	}
@@ -209,5 +222,11 @@ impl ElectoralSystemRunner for MockElectoralSystemRunner {
 		_partial_vote: &PartialVoteOf<Self>,
 	) -> Result<(), sp_runtime::DispatchError> {
 		Ok(())
+	}
+
+	fn election_component_storage_kind(
+		_election_identifier: ElectionIdentifierOf<Self>,
+	) -> ComponentStorageKind {
+		Self::component_storage_kind()
 	}
 }
