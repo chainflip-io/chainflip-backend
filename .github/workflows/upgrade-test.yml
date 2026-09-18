@@ -159,7 +159,7 @@ jobs:
 
       - name: Download upgrade-to binaries 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
@@ -182,7 +182,7 @@ jobs:
 
       - name: Download upgrade-to runtime 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: chainflip-node-runtime-try-runtime-${{ steps.main-version.outputs.version }}
           path: upgrade-to-runtime
