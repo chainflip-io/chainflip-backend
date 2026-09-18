@@ -1037,6 +1037,8 @@ export interface RuntimeApis extends GenericRuntimeApis {
     /**
      *
      * @callname: CustomRuntimeApi_cf_authority_emission_per_block
+     *
+     * @deprecated Emissions no longer exist; this always returns 0.
      **/
     cfAuthorityEmissionPerBlock: GenericRuntimeApiMethod<() => Promise<bigint>>;
 

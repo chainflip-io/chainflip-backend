@@ -460,7 +460,7 @@ impl From<LendingPoolsSafeMode> for pallet_cf_lending_pools::PalletSafeMode {
 	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
 )]
 pub struct RuntimeSafeMode {
-	pub emissions: pallet_cf_emissions::PalletSafeMode,
+	pub emissions: super::before_version_22::EmissionsSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,
 	pub swapping: pallet_cf_swapping::PalletSafeMode,
 	pub liquidity_provider: before_version_19::LiquidityProviderSafeMode,
@@ -510,7 +510,6 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 				pallet_cf_witnesser::PalletSafeMode::CodeAmber(old_perms.into()),
 		};
 		Self {
-			emissions: old.emissions,
 			funding: old.funding,
 			swapping: old.swapping,
 			liquidity_provider: old.liquidity_provider.into(),

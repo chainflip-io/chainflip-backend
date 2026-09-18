@@ -140,30 +140,6 @@ export interface ChainErrors extends GenericChainErrors {
     [error: string]: GenericPalletError;
   };
   /**
-   * Pallet `Emissions`'s errors
-   **/
-  emissions: {
-    /**
-     * Emissions calculation resulted in overflow.
-     **/
-    Overflow: GenericPalletError;
-
-    /**
-     * Invalid percentage
-     **/
-    InvalidPercentage: GenericPalletError;
-
-    /**
-     * The Flip balance was below the burn threshold.
-     **/
-    FlipBalanceBelowBurnThreshold: GenericPalletError;
-
-    /**
-     * Generic pallet error
-     **/
-    [error: string]: GenericPalletError;
-  };
-  /**
    * Pallet `Funding`'s errors
    **/
   funding: {
@@ -1504,11 +1480,6 @@ export interface ChainErrors extends GenericChainErrors {
      * Transfers to the on-chain balance are disabled due to safe mode.
      **/
     FlipTransferToOnChainBalanceDisabled: GenericPalletError;
-
-    /**
-     * Transfers to the on-chain balance are only available once Flip 2.1 is active.
-     **/
-    FlipTransferToOnChainBalanceUnavailable: GenericPalletError;
 
     /**
      * The transferred amount is below the minimum funding amount.

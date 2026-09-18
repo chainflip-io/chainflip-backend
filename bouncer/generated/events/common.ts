@@ -106,8 +106,6 @@ export const cfPrimitivesChainsAssetsEthAsset = simpleEnum([
 
 export const cfPrimitivesChainsAssetsArbAsset = simpleEnum(['ArbEth', 'ArbUsdc', 'ArbUsdt']);
 
-export const palletCfEmissionsPalletSafeMode = z.object({ emissionsSyncEnabled: z.boolean() });
-
 export const palletCfFundingPalletSafeMode = z.object({ redeemEnabled: z.boolean() });
 
 export const palletCfSwappingPalletSafeMode = z.object({
@@ -265,7 +263,6 @@ export const stateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMod
 });
 
 export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
-  emissions: palletCfEmissionsPalletSafeMode,
   funding: palletCfFundingPalletSafeMode,
   swapping: palletCfSwappingPalletSafeMode,
   liquidityProvider: palletCfLpPalletSafeMode,
@@ -370,7 +367,6 @@ export const palletCfFlipImbalancesInternalSource = z.discriminatedUnion('__kind
 export const palletCfFlipImbalancesImbalanceSource = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('External') }),
   z.object({ __kind: z.literal('Internal'), value: palletCfFlipImbalancesInternalSource }),
-  z.object({ __kind: z.literal('Emissions') }),
 ]);
 
 export const palletCfFlipOnChargeTransactionFeeScalingRateConfig = z.discriminatedUnion('__kind', [
@@ -388,18 +384,6 @@ export const palletCfFlipPalletConfigUpdate = z.discriminatedUnion('__kind', [
     __kind: z.literal('SetFeeScalingRate'),
     value: palletCfFlipOnChargeTransactionFeeScalingRateConfig,
   }),
-  z.object({ __kind: z.literal('SetFeeRewardsActivationEpoch'), value: z.number() }),
-]);
-
-export const cfPrimitivesChainsForeignChain = simpleEnum([
-  'Ethereum',
-  'Polkadot',
-  'Bitcoin',
-  'Arbitrum',
-  'Solana',
-  'Assethub',
-  'Tron',
-  'Bsc',
 ]);
 
 export const cfTraitsFundingSource = z.discriminatedUnion('__kind', [
@@ -540,6 +524,17 @@ export const palletCfGovernanceGovernanceCouncil = z.object({
   members: z.array(accountId),
   threshold: z.number(),
 });
+
+export const cfPrimitivesChainsForeignChain = simpleEnum([
+  'Ethereum',
+  'Polkadot',
+  'Bitcoin',
+  'Arbitrum',
+  'Solana',
+  'Assethub',
+  'Tron',
+  'Bsc',
+]);
 
 export const palletCfTokenholderGovernanceProposal = z.discriminatedUnion('__kind', [
   z.object({

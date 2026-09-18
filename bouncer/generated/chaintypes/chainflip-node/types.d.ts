@@ -31,7 +31,6 @@ export type StateChainRuntimeRuntimeCall =
   | { pallet: 'Timestamp'; palletCall: PalletTimestampCall }
   | { pallet: 'Environment'; palletCall: PalletCfEnvironmentCall }
   | { pallet: 'Flip'; palletCall: PalletCfFlipCall }
-  | { pallet: 'Emissions'; palletCall: PalletCfEmissionsCall }
   | { pallet: 'Funding'; palletCall: PalletCfFundingCall }
   | { pallet: 'AccountRoles'; palletCall: PalletCfAccountRolesCall }
   | { pallet: 'Witnesser'; palletCall: PalletCfWitnesserCall }
@@ -97,7 +96,6 @@ export type StateChainRuntimeRuntimeCallLike =
   | { pallet: 'Timestamp'; palletCall: PalletTimestampCallLike }
   | { pallet: 'Environment'; palletCall: PalletCfEnvironmentCallLike }
   | { pallet: 'Flip'; palletCall: PalletCfFlipCallLike }
-  | { pallet: 'Emissions'; palletCall: PalletCfEmissionsCallLike }
   | { pallet: 'Funding'; palletCall: PalletCfFundingCallLike }
   | { pallet: 'AccountRoles'; palletCall: PalletCfAccountRolesCallLike }
   | { pallet: 'Witnesser'; palletCall: PalletCfWitnesserCallLike }
@@ -583,7 +581,6 @@ export type PalletCfEnvironmentSafeModeUpdate =
   | { type: 'CodeAmber'; value: StateChainRuntimeSafeModeInnerRuntimeSafeMode };
 
 export type StateChainRuntimeSafeModeInnerRuntimeSafeMode = {
-  emissions: PalletCfEmissionsPalletSafeMode;
   funding: PalletCfFundingPalletSafeMode;
   swapping: PalletCfSwappingPalletSafeMode;
   liquidityProvider: PalletCfLpPalletSafeMode;
@@ -620,8 +617,6 @@ export type StateChainRuntimeSafeModeInnerRuntimeSafeMode = {
   tronElections: StateChainRuntimeChainflipWitnessingTronElectionsTronElectionsSafeMode;
   bscElections: StateChainRuntimeChainflipWitnessingBscElectionsBscElectionsSafeMode;
 };
-
-export type PalletCfEmissionsPalletSafeMode = { emissionsSyncEnabled: boolean };
 
 export type PalletCfFundingPalletSafeMode = { redeemEnabled: boolean };
 
@@ -862,39 +857,11 @@ export type PalletCfFlipCallLike =
 
 export type PalletCfFlipPalletConfigUpdate =
   | { type: 'SetSlashingRate'; value: Permill }
-  | { type: 'SetFeeScalingRate'; value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig }
-  | { type: 'SetFeeRewardsActivationEpoch'; value: number };
+  | { type: 'SetFeeScalingRate'; value: PalletCfFlipOnChargeTransactionFeeScalingRateConfig };
 
 export type PalletCfFlipOnChargeTransactionFeeScalingRateConfig =
   | { type: 'DelayedExponential'; value: { threshold: number; exponent: number } }
   | { type: 'NoScaling' };
-
-/**
- * Contains a variant per dispatchable extrinsic that this pallet has.
- **/
-export type PalletCfEmissionsCall =
-  /**
-   * Updates the emission rate to Validators.
-   *
-   * Can only be called by the root origin.
-   **/
-  | { name: 'UpdateCurrentAuthorityEmissionInflation'; params: { inflation: number } }
-  /**
-   * Updates the Supply Update interval.
-   **/
-  | { name: 'UpdateSupplyUpdateInterval'; params: { value: number } };
-
-export type PalletCfEmissionsCallLike =
-  /**
-   * Updates the emission rate to Validators.
-   *
-   * Can only be called by the root origin.
-   **/
-  | { name: 'UpdateCurrentAuthorityEmissionInflation'; params: { inflation: number } }
-  /**
-   * Updates the Supply Update interval.
-   **/
-  | { name: 'UpdateSupplyUpdateInterval'; params: { value: number } };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -13027,7 +12994,6 @@ export type StateChainRuntimeRuntimeEvent =
   | { pallet: 'System'; palletEvent: FrameSystemEvent }
   | { pallet: 'Environment'; palletEvent: PalletCfEnvironmentEvent }
   | { pallet: 'Flip'; palletEvent: PalletCfFlipEvent }
-  | { pallet: 'Emissions'; palletEvent: PalletCfEmissionsEvent }
   | { pallet: 'Funding'; palletEvent: PalletCfFundingEvent }
   | { pallet: 'AccountRoles'; palletEvent: PalletCfAccountRolesEvent }
   | { pallet: 'TransactionPayment'; palletEvent: PalletTransactionPaymentEvent }
@@ -13258,47 +13224,17 @@ export type PalletCfFlipEvent =
   | { name: 'SlashingPerformed'; data: { who: AccountId32; amount: bigint } }
   | { name: 'AccountReaped'; data: { who: AccountId32; dustBurned: bigint } }
   | { name: 'PalletConfigUpdated'; data: { update: PalletCfFlipPalletConfigUpdate } }
-  | { name: 'FlipMinted'; data: { to: AccountId32; amount: bigint } }
   | { name: 'BondUpdated'; data: { accountId: AccountId32; newBond: bigint } }
   | { name: 'FlipDistributed'; data: { amounts: Array<[AccountId32, bigint]> } };
 
 export type PalletCfFlipImbalancesImbalanceSource =
   | { type: 'External' }
-  | { type: 'Internal'; value: PalletCfFlipImbalancesInternalSource }
-  | { type: 'Emissions' };
+  | { type: 'Internal'; value: PalletCfFlipImbalancesInternalSource };
 
 export type PalletCfFlipImbalancesInternalSource =
   | { type: 'Account'; value: AccountId32 }
   | { type: 'Reserve'; value: FixedBytes<4> }
   | { type: 'PendingRedemption'; value: AccountId32 };
-
-/**
- * The `Event` enum of this pallet
- **/
-export type PalletCfEmissionsEvent =
-  /**
-   * Supply Update has been Broadcasted [block_number]
-   **/
-  | { name: 'SupplyUpdateBroadcastRequested'; data: number }
-  /**
-   * Current authority inflation emission has been updated \[new\]
-   **/
-  | { name: 'CurrentAuthorityInflationEmissionsUpdated'; data: number }
-  /**
-   * SupplyUpdateInterval has been updated [block_number]
-   **/
-  | { name: 'SupplyUpdateIntervalUpdated'; data: number }
-  /**
-   * The Flip that was bought using the network fee has been burned.
-   **/
-  | {
-      name: 'NetworkFeeBurned';
-      data: { amount: bigint; egressId: [CfPrimitivesChainsForeignChain, bigint] };
-    }
-  /**
-   * The Flip burn was skipped.
-   **/
-  | { name: 'FlipBurnSkipped'; data: { reason: DispatchError } };
 
 /**
  * The `Event` enum of this pallet
@@ -17826,23 +17762,6 @@ export type PalletCfFlipError =
 
 export type PalletSessionHoldReason = 'Keys';
 
-/**
- * The `Error` enum of this pallet.
- **/
-export type PalletCfEmissionsError =
-  /**
-   * Emissions calculation resulted in overflow.
-   **/
-  | 'Overflow'
-  /**
-   * Invalid percentage
-   **/
-  | 'InvalidPercentage'
-  /**
-   * The Flip balance was below the burn threshold.
-   **/
-  | 'FlipBalanceBelowBurnThreshold';
-
 export type PalletCfFundingPendingRedemptionInfo = {
   total: bigint;
   restricted: bigint;
@@ -19136,10 +19055,6 @@ export type PalletCfLpError =
    * Transfers to the on-chain balance are disabled due to safe mode.
    **/
   | 'FlipTransferToOnChainBalanceDisabled'
-  /**
-   * Transfers to the on-chain balance are only available once Flip 2.1 is active.
-   **/
-  | 'FlipTransferToOnChainBalanceUnavailable'
   /**
    * The transferred amount is below the minimum funding amount.
    **/
@@ -22156,7 +22071,6 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo = {
   isOnline: boolean;
   isBidding: boolean;
   boundRedeemAddress?: H160 | undefined;
-  apyBp?: number | undefined;
   restrictedBalances: Array<[H160, bigint]>;
   estimatedRedeemableBalance: bigint;
   operator?: AccountId32 | undefined;
@@ -23108,7 +23022,6 @@ export type StateChainRuntimeRuntimeError =
   | { pallet: 'System'; palletError: FrameSystemError }
   | { pallet: 'Environment'; palletError: PalletCfEnvironmentError }
   | { pallet: 'Flip'; palletError: PalletCfFlipError }
-  | { pallet: 'Emissions'; palletError: PalletCfEmissionsError }
   | { pallet: 'Funding'; palletError: PalletCfFundingError }
   | { pallet: 'AccountRoles'; palletError: PalletCfAccountRolesError }
   | { pallet: 'Witnesser'; palletError: PalletCfWitnesserError }
