@@ -45,7 +45,7 @@ jobs:
       server-id: ${{ steps.provision.outputs.server-id }}
     steps:
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Provision ephemeral Hetzner runner ☁️
         id: provision
@@ -76,7 +76,7 @@ jobs:
 
       - name: Checkout chainflip-backend 🛒
         if: inputs.run-job
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
@@ -441,7 +441,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Destroy ephemeral Hetzner runner 🧹
         env:
