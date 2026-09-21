@@ -56,6 +56,7 @@ use frame_support::{
 		Percent, Permill, Perquintill,
 	},
 	traits::{EstimateNextSessionRotation, OnKilledAccount},
+	BoundedBTreeMap,
 };
 use frame_system::pallet_prelude::*;
 use nanorand::{Rng, WyRand};
@@ -1205,7 +1206,17 @@ pub mod pallet {
 						});
 					}
 					if !operators.is_empty() {
-						*maybe_plan = Some(Self::plan_from_amounts(operators));
+						// Removing an entry from an already-bounded plan can only shrink it, so
+						// this can never exceed `MaxOperatorsPerDelegator`.
+						*maybe_plan =
+							Some(DelegationPlanOf::<T>::try_from_map(operators).unwrap_or_else(
+								|_| {
+									cf_runtime_utilities::log_or_panic!(
+										"plan shrank below MaxOperatorsPerDelegator after removing an entry -- unreachable"
+									);
+									Default::default()
+								},
+							));
 					}
 				}
 			});
@@ -1336,7 +1347,18 @@ pub mod pallet {
 							});
 						}
 						if !operators.is_empty() {
-							*maybe_plan = Some(Self::plan_from_amounts(operators));
+							// Removing an entry from an already-bounded plan can only shrink it,
+							// so this can never exceed `MaxOperatorsPerDelegator`.
+							*maybe_plan = Some(
+								DelegationPlanOf::<T>::try_from_map(operators).unwrap_or_else(
+									|_| {
+										cf_runtime_utilities::log_or_panic!(
+											"plan shrank below MaxOperatorsPerDelegator after removing an entry -- unreachable"
+										);
+										Default::default()
+									},
+								),
+							);
 						}
 					}
 				});
@@ -1420,7 +1442,15 @@ pub mod pallet {
 					operators.remove(old_operator);
 				}
 				operators.insert(operator.clone(), new_max_bid);
-				*maybe_plan = Some(Self::plan_from_amounts(operators));
+				// The `operators.len() <= 1` check above, plus at most one removal and one
+				// insertion here, means the result never exceeds 1 entry.
+				*maybe_plan =
+					Some(DelegationPlanOf::<T>::try_from_map(operators).unwrap_or_else(|_| {
+						cf_runtime_utilities::log_or_panic!(
+							"plan grew beyond 1 entry in `delegate` -- unreachable"
+						);
+						Default::default()
+					}));
 			});
 
 			Ok(())
@@ -1484,7 +1514,15 @@ pub mod pallet {
 					if maybe_plan.is_some() {
 						let mut operators = BTreeMap::new();
 						operators.insert(current_operator, new_max_bid);
-						*maybe_plan = Some(Self::plan_from_amounts(operators));
+						// A single-entry map is always within `MaxOperatorsPerDelegator`.
+						*maybe_plan = Some(
+							DelegationPlanOf::<T>::try_from_map(operators).unwrap_or_else(|_| {
+								cf_runtime_utilities::log_or_panic!(
+									"single-entry plan exceeded MaxOperatorsPerDelegator -- unreachable"
+								);
+								Default::default()
+							}),
+						);
 					}
 				});
 			}
@@ -1546,7 +1584,7 @@ pub mod pallet {
 				.filter(|(_, amount)| !amount.is_zero())
 				.collect();
 
-			let new_plan = if new_plan.is_empty() {
+			let new_plan: DelegationPlanOf<T> = if new_plan.is_empty() {
 				DelegationChoice::<T>::remove(&delegator);
 				// Mirrors the auto-registration above. Best-effort: accounts that also hold
 				// other LP state (open orders, balances, etc.) fail the deregistration check
@@ -1565,16 +1603,22 @@ pub mod pallet {
 					new_total.into() >= T::MinimumFunding::get_min_funding_amount(),
 					Error::<T>::DelegationAmountBelowMinimum
 				);
-				DelegationChoice::<T>::insert(
-					&delegator,
-					Self::plan_from_amounts(new_plan.clone()),
-				);
+				// `new_plan`'s keys are a subset of `requested`'s (mapped/filtered, never added
+				// to), which is already bounded by `RequestedDelegationPlanOf`'s `N`.
+				let new_plan =
+					DelegationPlanOf::<T>::try_from_map(new_plan).unwrap_or_else(|_| {
+						cf_runtime_utilities::log_or_panic!(
+							"delegate_multi plan exceeded MaxOperatorsPerDelegator -- unreachable"
+						);
+						Default::default()
+					});
+				DelegationChoice::<T>::insert(&delegator, new_plan.clone());
 				new_plan
 			};
 
 			Self::deposit_event(Event::DelegationPlanUpdated {
 				delegator: delegator.clone(),
-				plan: Self::plan_from_amounts(new_plan),
+				plan: new_plan,
 			});
 
 			Ok(())
@@ -2375,21 +2419,6 @@ impl<T: Config> Pallet<T> {
 		DelegationChoice::<T>::get(delegator)
 			.map(|plan| plan.into_map().values().copied().sum())
 			.unwrap_or_else(T::Amount::zero)
-	}
-
-	/// Wraps concrete per-operator amounts into a `DelegationPlan`. Every call site either
-	/// removes entries from an already-bounded plan or replaces a single operator's entry in a
-	/// delegator known (via `MultiOperatorDelegator`) to have at most one plan entry, so the
-	/// result can never exceed `MaxOperatorsPerDelegator`.
-	pub(crate) fn plan_from_amounts(
-		operators: BTreeMap<T::AccountId, T::Amount>,
-	) -> DelegationPlanOf<T> {
-		DelegationPlanOf::<T>::try_from_map(operators).unwrap_or_else(|_| {
-			cf_runtime_utilities::log_or_panic!(
-				"delegator's plan exceeded MaxOperatorsPerDelegator entries"
-			);
-			Default::default()
-		})
 	}
 
 	/// Emits `MaxBidUpdated` if `old` and `new` differ. Shared by `delegate` and `undelegate`.
