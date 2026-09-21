@@ -28,7 +28,7 @@ use frame_support::{
 		Perquintill, Rounding, Saturating,
 	},
 	traits::{Get, IsType},
-	BoundedVec, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
+	BoundedBTreeMap, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
@@ -170,20 +170,20 @@ pub struct OperatorSettings {
 )]
 #[scale_info(skip_type_params(N))]
 #[serde(
-	bound = "Account: Serialize + for<'a> Deserialize<'a>, Value: Serialize + for<'a> Deserialize<'a>"
+	bound = "Account: Ord + Serialize + for<'a> Deserialize<'a>, Value: Serialize + for<'a> Deserialize<'a>"
 )]
 pub enum DelegationPlan<
-	Account: Clone + PartialEq + Eq + core::fmt::Debug,
+	Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
 	Value: Clone + PartialEq + Eq + core::fmt::Debug,
 	N: Get<u32>,
 > {
-	Fixed(BoundedVec<(Account, Value), N>),
+	Fixed(BoundedBTreeMap<Account, Value, N>),
 	// v2, appended later:
-	// Proportional(BoundedVec<(Account, Perbill), N>),
+	// Proportional(BoundedBTreeMap<Account, Perbill, N>),
 }
 
 impl<
-		Account: Clone + PartialEq + Eq + core::fmt::Debug,
+		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
 		Value: Clone + PartialEq + Eq + core::fmt::Debug,
 		N: Get<u32>,
 	> Default for DelegationPlan<Account, Value, N>
@@ -212,7 +212,7 @@ impl<
 	/// The raw `account -> value` map backing this plan.
 	pub fn into_map(self) -> BTreeMap<Account, Value> {
 		match self {
-			Self::Fixed(entries) => entries.into_iter().collect(),
+			Self::Fixed(entries) => entries.into(),
 		}
 	}
 
@@ -220,7 +220,7 @@ impl<
 	/// fit within the bound `N`.
 	#[expect(clippy::result_unit_err)]
 	pub fn try_from_map(entries: BTreeMap<Account, Value>) -> Result<Self, ()> {
-		Ok(Self::Fixed(entries.into_iter().collect::<Vec<_>>().try_into().map_err(|_| ())?))
+		Ok(Self::Fixed(entries.try_into()?))
 	}
 }
 
