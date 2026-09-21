@@ -1584,8 +1584,9 @@ pub mod pallet {
 		/// withdrawal address.
 		///
 		/// Affiliates have a unique account id that can only be accessed through the affiliate's
-		/// broker. The affiliate account id is derived from the broker account id using a short id
-		/// that is unique to that combination of broker and affiliate.
+		/// broker. The affiliate account id is derived from the broker account id, the short id and
+		/// the withdrawal address. Short ids are recycled on deregistration, so the withdrawal
+		/// address is what keeps the derived account id distinct across re-registrations.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
@@ -1606,7 +1607,9 @@ pub mod pallet {
 			);
 
 			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
-				(*b"chainflip/affiliate", broker_id.clone(), short_id).blake2_256().as_ref(),
+				(*b"chainflip/affiliate", broker_id.clone(), short_id, withdrawal_address)
+					.blake2_256()
+					.as_ref(),
 			))
 			.map_err(|_| Error::<T>::AffiliateAccountIdDerivationFailed)?;
 
