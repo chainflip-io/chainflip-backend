@@ -41,7 +41,7 @@ jobs:
           --health-retries 5
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install system packages
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -69,7 +69,7 @@ jobs:
             -c "SELECT name, COUNT(*) FROM event GROUP BY name ORDER BY count DESC LIMIT 5"
 
       - name: Run Claude Code debugger
-        uses: anthropics/claude-code-action@833fb0f8c9f6686b33d963a8bae0a94f4936ab2a # v1.0.211
+        uses: anthropics/claude-code-action@9c5ddab2e6d17b83ea679153b31f1d5f023cf636 # v1.0.217
         with:
           anthropic_api_key: ${{ secrets.CF_PROTOCOL_ANTHROPIC_API_KEY }}
           claude_args: >-

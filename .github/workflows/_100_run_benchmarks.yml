@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
@@ -81,7 +81,7 @@ jobs:
           esac
 
       - name: Fetch chainflip-node with benchmarks from ${{ inputs.commit_sha }}
-        uses: dawidd6/action-download-artifact@09f2f74827fd3a8607589e5ad7f9398816f540fe # v3.1.4
+        uses: dawidd6/action-download-artifact@d63b86af1b34672e53c440b1b83979861906bad7 # v24
         with:
           workflow: ci-benchmarks-${{ steps.artefact-source.outputs.source }}.yml
           workflow_conclusion: completed
