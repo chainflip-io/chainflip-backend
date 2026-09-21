@@ -91,6 +91,57 @@ fn output_amounts_bounded() {
 	.unwrap();
 }
 
+#[test]
+fn swap_input_never_underflows() {
+	// Backs the `amount -= amount_swapped + fees` proof in `swap`: when a step reaches its
+	// target price, the input it consumes plus the fee it charges never exceeds the input
+	// remaining.
+	fn assert_step_is_affordable(amount: Amount, fee_hundredth_pips: u32, amount_swapped: Amount) {
+		let fees = mul_div_ceil_checked(
+			amount_swapped,
+			U256::from(fee_hundredth_pips),
+			U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
+		)
+		.expect("fee will never be 100%");
+
+		assert!(
+			amount_swapped.checked_add(fees).is_some_and(|total| total <= amount),
+			"{amount_swapped} + {fees} exceeds {amount} at fee {fee_hundredth_pips}"
+		);
+	}
+
+	// A step only reaches its target while `amount_swapped` is within the fee-reduced input,
+	// so that bound is the worst case.
+	fn assert_affordable_up_to_bound(amount: Amount, fee_hundredth_pips: u32) {
+		let bound = crate::reduce_by_pool_fee(amount, fee_hundredth_pips);
+		assert_step_is_affordable(amount, fee_hundredth_pips, bound);
+		if !bound.is_zero() {
+			assert_step_is_affordable(amount, fee_hundredth_pips, bound - 1);
+		}
+	}
+
+	for fee in [0, 1, MAX_LP_FEE / 2, MAX_LP_FEE - 1, MAX_LP_FEE] {
+		for amount in [Amount::zero(), Amount::one(), Amount::from(u128::MAX), Amount::MAX] {
+			assert_affordable_up_to_bound(amount, fee);
+		}
+	}
+
+	let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([0; 32]);
+	for _ in 0..100000 {
+		let fee = rng.gen_range(0..=MAX_LP_FEE);
+		let amount = rng_u256_inclusive_bound(&mut rng, Amount::zero()..=Amount::MAX);
+		assert_affordable_up_to_bound(amount, fee);
+		assert_step_is_affordable(
+			amount,
+			fee,
+			rng_u256_inclusive_bound(
+				&mut rng,
+				Amount::zero()..=crate::reduce_by_pool_fee(amount, fee),
+			),
+		);
+	}
+}
+
 #[cfg(feature = "slow-tests")]
 #[test]
 fn maximum_liquidity_swap() {
