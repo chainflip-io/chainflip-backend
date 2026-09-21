@@ -158,7 +158,6 @@ mod benchmarks {
 	) -> T::AccountId {
 		let caller: T::AccountId = account("booster", 0, seed);
 
-		// TODO: remove once https://github.com/chainflip-io/chainflip-backend/pull/4716 is merged
 		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
 			frame_system::Pallet::<T>::inc_providers(&caller);
 		}
