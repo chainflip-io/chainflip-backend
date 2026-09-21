@@ -35,7 +35,7 @@ jobs:
       count: ${{ steps.collect.outputs.count }}
     steps:
       - name: Checkout main
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: main
           fetch-depth: 0
@@ -94,7 +94,7 @@ jobs:
         commit: ${{ fromJSON(needs.prepare.outputs.commits) }}
     steps:
       - name: Checkout main
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: main
           fetch-depth: 0

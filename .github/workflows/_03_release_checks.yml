@@ -24,7 +24,7 @@ jobs:
           - state-chain/runtime/Cargo.toml
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install Rust 🦀
         uses: dtolnay/rust-toolchain@7b1c307e0dcbda6122208f10795a713336a9b35a
@@ -51,7 +51,7 @@ jobs:
     if: inputs.network != 'sisyphos'
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Check changelog 📝
         shell: bash
@@ -62,7 +62,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Check runtime spec version against Berghain 🕵️‍♂️
         shell: bash
@@ -72,7 +72,7 @@ jobs:
     runs-on: namespace-profile-default-light
     steps:
       - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
