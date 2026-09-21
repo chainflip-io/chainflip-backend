@@ -2146,6 +2146,7 @@ dependencies = [
  "pallet-cf-witnesser",
  "parity-scale-codec",
  "pin-project",
+ "prost 0.13.5",
  "rand 0.8.5",
  "reqwest",
  "rlp 0.5.2",
