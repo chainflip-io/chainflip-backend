@@ -84,6 +84,7 @@ jobs:
             '{rootDir: $root, S3PublishEndpoints: .}' \
             "$config" > "$aptly_config"
 
+          # The repo on this VM holds release history; require the bootstrap backfill first.
           if ! aptly -config="$aptly_config" repo show "$repo" >/dev/null 2>&1; then
             echo "::error::Aptly repository '$repo' is not initialized"
             exit 1
@@ -91,6 +92,7 @@ jobs:
 
           aptly -config="$aptly_config" repo add -force-replace "$repo" packages
 
+          # Package versions follow chainflip-node; keep every build in the newest two minors.
           node_versions=$(aptly -config="$aptly_config" repo search \
             -format='{{.Version}}' "$repo" 'Name (chainflip-node)')
           mapfile -t minors < <(
@@ -105,6 +107,7 @@ jobs:
           if ((${#minors[@]} == 2)); then
             cutoff="${minors[0]}"
             echo "Keeping package versions from minor releases ${minors[*]}"
+            # This filter removes old versions of every package, not only chainflip-node.
             aptly -config="$aptly_config" repo remove \
               "$repo" "\$Version (<< $cutoff)"
           fi
