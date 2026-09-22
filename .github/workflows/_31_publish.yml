@@ -92,19 +92,19 @@ jobs:
 
           aptly -config="$aptly_config" repo add -force-replace "$repo" packages
 
-          # Package versions follow chainflip-node; keep every build in the newest two minors.
+          # Package versions follow chainflip-node; keep every build in the newest three minors.
           node_versions=$(aptly -config="$aptly_config" repo search \
             -format='{{.Version}}' "$repo" 'Name (chainflip-node)')
           mapfile -t minors < <(
             printf '%s\n' "$node_versions" |
               sed -nE 's/^([0-9]+\.[0-9]+)\.[0-9]+.*/\1/p' |
-              sort -Vu | tail -n 2
+              sort -Vu | tail -n 3
           )
           if ((${#minors[@]} == 0)); then
             echo "::error::No chainflip-node versions found in '$repo'"
             exit 1
           fi
-          if ((${#minors[@]} == 2)); then
+          if ((${#minors[@]} == 3)); then
             cutoff="${minors[0]}"
             echo "Keeping package versions from minor releases ${minors[*]}"
             # This filter removes old versions of every package, not only chainflip-node.
