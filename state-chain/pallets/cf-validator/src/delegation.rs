@@ -267,9 +267,9 @@ impl<
 
 	/// Resolves each `is_live` entry's amount against `balance`: if the live entries' total
 	/// fits within `balance`, each passes through unchanged; otherwise each is scaled down
-	/// proportionally so the resolved total exactly matches `balance`. Entries that aren't
-	/// `is_live`, or that resolve to zero, are omitted -- a zero bid can't claim anything
-	/// either way.
+	/// proportionally, rounded down per entry so the resolved total never exceeds `balance`.
+	/// Entries that aren't `is_live`, or that resolve to zero, are omitted -- a zero bid can't
+	/// claim anything either way.
 	pub fn resolve_bids(
 		&self,
 		balance: Value,
@@ -304,7 +304,7 @@ impl<
 						let resolved = if total_committed <= balance {
 							bid
 						} else {
-							Perquintill::from_rational(bid, total_committed) * balance
+							Perquintill::from_rational(bid, total_committed).mul_floor(balance)
 						};
 						(!resolved.is_zero()).then(|| (operator.clone(), resolved))
 					})
@@ -689,7 +689,7 @@ pub fn distribute<T: Config>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::*;
+	use crate::{mock::*, DelegationPlanOf};
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
 	use proptest::{prelude::*, proptest};
 
@@ -842,6 +842,145 @@ mod tests {
 
 				Ok(())
 			});
+		}
+	}
+
+	proptest! {
+		#[test]
+		fn is_valid_matches_reference_computation(
+			entries in prop::collection::vec((1u64..1000, 0u128..1_000_000_000_000u128), 0..20),
+			minimum_total in 0u128..1_000_000_000_000u128,
+		) {
+			let map: BTreeMap<u64, u128> = entries.into_iter().collect();
+			let plan = DelegationPlanOf::<Test>::try_from_map(map.clone()).unwrap();
+
+			let has_zero_entry = map.values().any(|amount| *amount == 0);
+			// Safe: bounded generator, well within u128's range regardless of how many entries.
+			let total: u128 = map.values().sum();
+			let expected = !has_zero_entry && (map.is_empty() || total >= minimum_total);
+
+			prop_assert_eq!(
+				plan.is_valid(minimum_total), expected,
+				"is_valid({}) disagreed with the reference computation for {:?}", minimum_total, map
+			);
+		}
+	}
+
+	proptest! {
+		#[test]
+		fn try_insert_either_commits_a_valid_plan_or_leaves_it_unchanged(
+			existing in prop::collection::vec((1u64..1000, 1u128..1_000_000_000_000u128), 0..20),
+			operator in 1u64..1000,
+			value in 1u128..1_000_000_000_000u128,
+		) {
+			let plan_before =
+				DelegationPlanOf::<Test>::try_from_map(existing.into_iter().collect()).unwrap();
+			let mut plan = plan_before.clone();
+
+			match plan.try_insert(operator, value) {
+				Ok(_) => {
+					prop_assert!(
+						plan.is_valid(0),
+						"try_insert committed a plan that fails its own validity check"
+					);
+					prop_assert_eq!(
+						plan.get(&operator), Some(&value),
+						"the committed entry doesn't match what was inserted"
+					);
+				},
+				Err(()) => {
+					prop_assert_eq!(
+						plan, plan_before,
+						"try_insert mutated the plan despite returning an error"
+					);
+				},
+			}
+		}
+	}
+
+	proptest! {
+		#[test]
+		fn resolve_bids_sum_never_exceeds_balance(
+			entries in prop::collection::vec((1u64..1000, 1u128..1_000_000_000_000u128), 1..20),
+			balance in 0u128..2_000_000_000_000u128,
+		) {
+			// Proptest, I1: for arbitrary plans and balances, the sum of effective bids never
+			// exceeds the balance.
+			let map: BTreeMap<u64, u128> = entries.into_iter().collect();
+			let plan = DelegationPlanOf::<Test>::try_from_map(map).unwrap();
+
+			let resolved = plan.resolve_bids(balance, |_| true);
+			let resolved_total: u128 = resolved.values().sum();
+
+			prop_assert!(
+				resolved_total <= balance,
+				"resolved total {} exceeds balance {}", resolved_total, balance
+			);
+		}
+	}
+
+	proptest! {
+		#[test]
+		fn resolve_bids_scale_down_respects_individual_caps(
+			entries in prop::collection::vec((1u64..1000, 1u128..1_000_000_000_000u128), 1..20),
+			balance in 0u128..2_000_000_000_000u128,
+		) {
+			// Proptest, degradation: pro-rata scale-down never exceeds any individual cap and
+			// never sums above the balance (mirrors `validator_bond_amounts_capped`).
+			let map: BTreeMap<u64, u128> = entries.into_iter().collect();
+			let total_committed: u128 = map.values().sum();
+			let plan = DelegationPlanOf::<Test>::try_from_map(map.clone()).unwrap();
+
+			let resolved = plan.resolve_bids(balance, |_| true);
+
+			for (operator, resolved_bid) in &resolved {
+				prop_assert!(
+					*resolved_bid <= map[operator],
+					"operator {} resolved to {} above its own bid {}",
+					operator, resolved_bid, map[operator]
+				);
+			}
+
+			let resolved_total: u128 = resolved.values().sum();
+			if total_committed <= balance {
+				prop_assert_eq!(resolved_total, total_committed);
+			} else {
+				prop_assert!(resolved_total <= balance);
+			}
+		}
+	}
+
+	proptest! {
+		#[test]
+		fn resolve_bids_slashing_never_exceeds_the_delegators_own_pool_allocation(
+			entries in prop::collection::vec((1u64..1000, 1u128..1_000_000_000_000u128), 2..20),
+			// A fraction (1-99%) of the committed total, so `balance` always ends up strictly
+			// less than `total_committed` -- simulating a balance reduction from slashing that
+			// leaves the delegator's plan over-subscribed.
+			shortfall_percent in 1u32..100,
+		) {
+			// Proptest, slashing bound: a delegator can never be attributed, at any one
+			// operator, more than what they originally allocated to it -- regardless of how
+			// much of their balance a slash consumed.
+			let map: BTreeMap<u64, u128> = entries.into_iter().collect();
+			let total_committed: u128 = map.values().sum();
+			prop_assume!(total_committed > 0);
+			let balance = total_committed * (100 - shortfall_percent) as u128 / 100;
+
+			let plan = DelegationPlanOf::<Test>::try_from_map(map.clone()).unwrap();
+			let resolved = plan.resolve_bids(balance, |_| true);
+
+			for (operator, original_bid) in &map {
+				let resolved_bid = resolved.get(operator).copied().unwrap_or(0);
+				prop_assert!(
+					resolved_bid <= *original_bid,
+					"operator {} was attributed {} but the delegator only ever pledged {} to it",
+					operator, resolved_bid, original_bid
+				);
+			}
+
+			let resolved_total: u128 = resolved.values().sum();
+			prop_assert!(resolved_total <= balance);
 		}
 	}
 
