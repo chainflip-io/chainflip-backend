@@ -23,16 +23,7 @@ permissions:
   id-token: write
 
 jobs:
-  publish-aptly-shadow:
-    if: inputs.additional_context == 'aptly-shadow'
-    uses: ./.github/workflows/_31_publish_shadow.yml
-    with:
-      run_id: ${{ fromJSON(inputs.failed_run_id) }}
-      network: ${{ inputs.artifact_suffix }}
-    secrets: inherit
-
   debug:
-    if: inputs.additional_context != 'aptly-shadow'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
