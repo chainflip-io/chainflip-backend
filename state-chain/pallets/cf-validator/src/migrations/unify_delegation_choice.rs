@@ -96,7 +96,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			let plan = DelegationChoice::<T>::get(&delegator)
 				.ok_or(DispatchError::Other("expected migrated DelegationChoice entry"))?;
 			frame_support::ensure!(
-				plan.into_map().get(&operator) == Some(&max_bid),
+				plan.get(&operator) == Some(&max_bid),
 				DispatchError::Other("migrated max_bid did not match its pre-upgrade value")
 			);
 		}
@@ -132,12 +132,12 @@ mod tests {
 			Migration::<Test>::post_upgrade(state).unwrap();
 
 			assert_eq!(
-				DelegationChoice::<Test>::get(ALICE).unwrap().into_map(),
-				BTreeMap::from([(BOB, 1_000)])
+				DelegationChoice::<Test>::get(ALICE).unwrap(),
+				DelegationPlan::try_from_map(BTreeMap::from([(BOB, 1_000)])).unwrap()
 			);
 			assert_eq!(
-				DelegationChoice::<Test>::get(OTHER_DELEGATOR).unwrap().into_map(),
-				BTreeMap::from([(BOB, 500)])
+				DelegationChoice::<Test>::get(OTHER_DELEGATOR).unwrap(),
+				DelegationPlan::try_from_map(BTreeMap::from([(BOB, 500)])).unwrap()
 			);
 			assert_eq!(DelegationChoice::<Test>::iter().count(), 2);
 		});
