@@ -26,8 +26,16 @@ Dependabot's PRs can't access the secrets CI needs, so they need to be re-create
     Dependabot stays the author; the user is committer and signer.
 5. **Conflicts** are almost always the same action bumped twice (earlier batch vs. this one).
    Take the newer version (`git checkout --theirs <file>`), confirm with grep, continue.
-6. **Verify:** `git log --format='%h %G? %an/%cn | %s' <base>..HEAD` shows `G dependabot[bot]` on every line.
-7. **Push and open the PR.** Title `chore: dependabot updates yy-mm-dd`, base from step 2. Body:
+6. **Annotate the pins.** Every `uses: owner/action@<sha>` carries a `# vX.Y.Z` comment naming
+   the version the sha resolves to — that's the only readable record of what is pinned. Dependabot
+   updates an existing comment but never adds a missing one, so after the cherry-picks, grep the
+   new shas and append the comment by hand where it's absent:
+    ```bash
+    grep -rnE 'uses: .*@[0-9a-f]{40}$' .github/    # no trailing comment == needs one
+    ```
+   Only for actions this batch touched; leave untouched pins alone.
+7. **Verify:** `git log --format='%h %G? %an/%cn | %s' <base>..HEAD` shows `G dependabot[bot]` on every line.
+8. **Push and open the PR.** Title `chore: dependabot updates yy-mm-dd`, base from step 2. Body:
 
     ```
     # Pull Request
@@ -41,7 +49,7 @@ Dependabot's PRs can't access the secrets CI needs, so they need to be re-create
 
     plus an Action / From / To table.
 
-8. **Close each original** with `gh pr close <n> --comment "Superseded by #<new>."`.
+9. **Close each original** with `gh pr close <n> --comment "Superseded by #<new>."`.
 
 ## If signing fails
 
@@ -60,3 +68,4 @@ signing just works; verify with `%G?` either way.
 | Basing on `main` while an earlier batch PR is still open | Stack on that branch and target it              |
 | Resolving a version conflict toward the older pin        | Take the newer version, then grep to confirm    |
 | Deleting the pushed branch to rename it                  | Close the old PR with a pointer to the new one  |
+| Leaving a bumped sha without its `# vX.Y.Z` comment      | Grep for bare shas and annotate before pushing  |
