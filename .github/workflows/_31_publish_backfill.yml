@@ -32,7 +32,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-      - name: Download 2.3 packages from the published pool
+      - name: Download 2.2 and 2.3 packages from the published pool
         env:
           NETWORK: ${{ inputs.network }}
         run: |
@@ -47,11 +47,13 @@ jobs:
             exit 1
           fi
           aws s3 sync "s3://$bucket/$NETWORK/jammy/pool/" packages/ \
-            --exclude '*' --include '*_2.3.*.deb'
-          if ! find packages -type f -name 'chainflip-node_2.3.*.deb' -print -quit | grep -q .; then
-            echo "::error::No chainflip-node 2.3 packages found in $bucket"
-            exit 1
-          fi
+            --exclude '*' --include '*_2.2.*.deb' --include '*_2.3.*.deb'
+          for minor in 2.2 2.3; do
+            if ! find packages -type f -name "chainflip-node_${minor}.*.deb" -print -quit | grep -q .; then
+              echo "::error::No chainflip-node $minor packages found in $bucket"
+              exit 1
+            fi
+          done
 
       - name: Import production package signing key
         id: import_gpg_prod
