@@ -654,7 +654,7 @@ mod benchmarks {
 			RawOrigin::Signed(delegator.clone()).into(),
 			DelegationPlan::try_from_map(BTreeMap::from([(
 				operator_a.clone(),
-				DelegationAmount::Some((500 * FLIPPERINOS_PER_FLIP).into())
+				(500 * FLIPPERINOS_PER_FLIP).into()
 			)]))
 			.unwrap(),
 		));
@@ -663,16 +663,13 @@ mod benchmarks {
 		delegate_multi(
 			RawOrigin::Signed(delegator.clone()),
 			DelegationPlan::try_from_map(BTreeMap::from([
-				(operator_a, DelegationAmount::Some((250 * FLIPPERINOS_PER_FLIP).into())),
-				(operator_b.clone(), DelegationAmount::Some((250 * FLIPPERINOS_PER_FLIP).into())),
+				(operator_a, (250 * FLIPPERINOS_PER_FLIP).into()),
+				(operator_b.clone(), (250 * FLIPPERINOS_PER_FLIP).into()),
 			]))
 			.unwrap(),
 		);
 
-		assert!(DelegationChoice::<T>::get(&delegator)
-			.unwrap()
-			.into_map()
-			.contains_key(&operator_b));
+		assert!(DelegationChoice::<T>::get(&delegator).unwrap().get(&operator_b).is_some());
 	}
 
 	#[benchmark]

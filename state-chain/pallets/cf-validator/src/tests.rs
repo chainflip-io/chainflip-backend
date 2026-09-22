@@ -1965,26 +1965,20 @@ fn should_expire_all_previous_epochs() {
 #[cfg(test)]
 fn single_plan_entry(delegator: u64) -> Option<(u64, u128)> {
 	DelegationChoice::<Test>::get(delegator).map(|plan| {
-		let operators = plan.into_map();
 		assert_eq!(
-			operators.len(),
+			plan.len(),
 			1,
 			"single_plan_entry() test helper only supports a single-entry delegator"
 		);
-		operators.into_iter().next().unwrap()
+		let operator = plan.iter_operators().next().unwrap();
+		(*operator, *plan.get(operator).unwrap())
 	})
 }
 
-/// Builds a `delegate_multi` input plan from concrete (non-`Max`) per-operator amounts.
+/// Builds a `delegate_multi` input plan from per-operator amounts.
 #[cfg(test)]
-fn fixed_plan(entries: impl IntoIterator<Item = (u64, u128)>) -> RequestedDelegationPlanOf<Test> {
-	DelegationPlan::try_from_map(
-		entries
-			.into_iter()
-			.map(|(operator, amount)| (operator, DelegationAmount::Some(amount)))
-			.collect(),
-	)
-	.unwrap()
+fn fixed_plan(entries: impl IntoIterator<Item = (u64, u128)>) -> DelegationPlanOf<Test> {
+	DelegationPlan::try_from_map(entries.into_iter().collect()).unwrap()
 }
 
 #[cfg(test)]
@@ -3386,8 +3380,8 @@ mod delegation {
 			));
 
 			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map(),
-				BTreeMap::from([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
+				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
+				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
 			);
 
 			// Legacy `delegate`/`undelegate` no longer apply once the plan has more than one
@@ -3408,7 +3402,7 @@ mod delegation {
 	}
 
 	#[test]
-	fn delegate_multi_rejects_plan_exceeding_balance() {
+	fn delegate_multi_accepts_plan_exceeding_balance() {
 		const OPERATOR_A: u64 = 200;
 		const OPERATOR_B: u64 = 201;
 		const DELEGATOR: u64 = 5000;
@@ -3426,16 +3420,18 @@ mod delegation {
 			}
 			MockFlip::credit_funds(&DELEGATOR, BALANCE);
 
-			// The plan asks for more (2000) than the delegator's balance (1000) -- rejected
-			// outright rather than silently scaled down.
-			assert_noop!(
-				ValidatorPallet::delegate_multi(
-					OriginTrait::signed(DELEGATOR),
-					fixed_plan([(OPERATOR_A, REQUESTED_TO_A), (OPERATOR_B, REQUESTED_TO_B)])
-				),
-				Error::<Test>::DelegationAmountExceedsBalance
+			// The plan asks for more (2000) than the delegator's balance (1000) -- stored
+			// exactly as submitted rather than rejected or scaled down here; over-subscription
+			// is only resolved later, at auction-resolution time
+			// (`snapshot_prorates_a_multi_operator_delegator_after_balance_shrinks` covers that).
+			assert_ok!(ValidatorPallet::delegate_multi(
+				OriginTrait::signed(DELEGATOR),
+				fixed_plan([(OPERATOR_A, REQUESTED_TO_A), (OPERATOR_B, REQUESTED_TO_B)])
+			));
+			assert_eq!(
+				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
+				fixed_plan([(OPERATOR_A, REQUESTED_TO_A), (OPERATOR_B, REQUESTED_TO_B)])
 			);
-			assert!(DelegationChoice::<Test>::get(DELEGATOR).is_none());
 		});
 	}
 
@@ -3467,8 +3463,8 @@ mod delegation {
 				fixed_plan([(OPERATOR_A, half_of_min), (OPERATOR_B, min_bid - half_of_min)])
 			));
 			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map(),
-				BTreeMap::from([(OPERATOR_A, half_of_min), (OPERATOR_B, min_bid - half_of_min)])
+				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
+				fixed_plan([(OPERATOR_A, half_of_min), (OPERATOR_B, min_bid - half_of_min)])
 			);
 
 			// A plan whose total itself falls below the minimum is still rejected.
@@ -3477,8 +3473,38 @@ mod delegation {
 					OriginTrait::signed(DELEGATOR),
 					fixed_plan([(OPERATOR_A, half_of_min)])
 				),
-				Error::<Test>::DelegationAmountBelowMinimum
+				Error::<Test>::InvalidDelegationPlan
 			);
+		});
+	}
+
+	#[test]
+	fn delegate_multi_rejects_zero_amount_entries() {
+		const OPERATOR_A: u64 = 200;
+		const OPERATOR_B: u64 = 201;
+		const DELEGATOR: u64 = 5000;
+		const BID: u128 = 1_000;
+
+		new_test_ext().execute_with(|| {
+			for operator in [OPERATOR_A, OPERATOR_B] {
+				assert_ok!(ValidatorPallet::register_as_operator(
+					OriginTrait::signed(operator),
+					OPERATOR_SETTINGS,
+					vanity()
+				));
+			}
+			MockFlip::credit_funds(&DELEGATOR, BID);
+
+			// A zero-amount entry is invalid -- the caller should omit the operator entirely
+			// rather than include it with nothing pledged.
+			assert_noop!(
+				ValidatorPallet::delegate_multi(
+					OriginTrait::signed(DELEGATOR),
+					fixed_plan([(OPERATOR_A, BID), (OPERATOR_B, 0)])
+				),
+				Error::<Test>::InvalidDelegationPlan
+			);
+			assert!(DelegationChoice::<Test>::get(DELEGATOR).is_none());
 		});
 	}
 
@@ -3511,8 +3537,8 @@ mod delegation {
 				fixed_plan([(OPERATOR_A, BID_TO_A - 100), (OPERATOR_B, BID_TO_B)])
 			));
 			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map(),
-				BTreeMap::from([(OPERATOR_A, BID_TO_A - 100), (OPERATOR_B, BID_TO_B)])
+				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
+				fixed_plan([(OPERATOR_A, BID_TO_A - 100), (OPERATOR_B, BID_TO_B)])
 			);
 
 			// Omitting OPERATOR_A from the next plan fully undelegates it; the delegator is
@@ -3522,8 +3548,8 @@ mod delegation {
 				fixed_plan([(OPERATOR_B, BID_TO_B)])
 			));
 			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR).unwrap().into_map(),
-				BTreeMap::from([(OPERATOR_B, BID_TO_B)])
+				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
+				fixed_plan([(OPERATOR_B, BID_TO_B)])
 			);
 			System::assert_last_event(RuntimeEvent::ValidatorPallet(
 				Event::DelegationPlanUpdated {

@@ -17,12 +17,15 @@ use crate::{
 	AuctionOutcome, Config, DelegationSnapshots, HistoricalAuthorities, HistoricalBonds, Pallet,
 	ValidatorToOperator,
 };
-use cf_primitives::EpochIndex;
+use cf_primitives::{AssetAmount, EpochIndex};
 use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
-	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill, Saturating},
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, Zero},
+		FixedPointOperand, Perquintill, Saturating,
+	},
 	traits::{Get, IsType},
 	BoundedBTreeMap, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
@@ -144,14 +147,11 @@ pub struct OperatorSettings {
 	pub delegation_acceptance: DelegationAcceptance,
 }
 
-/// A delegator's live delegation plan: the set of operators it delegates to and the value
-/// pledged to each. Generic over `Value` so the same shape serves two different points in a
-/// plan's life:
-/// - as `delegate_multi`'s input (`Value = DelegationAmount<Amount>`), where a cap may be given as
-///   `Max`, absorbing whatever of the balance isn't already claimed by the other, fixed entries --
-///   Σ of the `Some` entries ≤ balance, and at most one entry may be `Max`;
-/// - as the stored plan (`Value = Amount`), once any `Max` has already been resolved to a concrete
-///   number by `delegate_multi` and there's no more ambiguity left to represent.
+/// A delegator's live delegation plan: the set of operators it delegates to and the exact
+/// amount pledged to each. `delegate_multi` stores this exactly as submitted -- an
+/// over-subscribed plan (total pledged > balance) isn't rejected or scaled down at submission
+/// time, it's resolved at auction-resolution time instead (`build_delegation_snapshots` prorates
+/// each entry proportionally to whatever balance is actually available).
 #[derive(
 	CloneNoBound,
 	PartialEqNoBound,
@@ -191,7 +191,7 @@ impl<
 
 impl<
 		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
-		Value: Clone + PartialEq + Eq + core::fmt::Debug,
+		Value: Clone + PartialEq + Eq + core::fmt::Debug + Zero,
 		N: Get<u32>,
 	> DelegationPlan<Account, Value, N>
 {
@@ -205,10 +205,138 @@ impl<
 		self.len() == 0
 	}
 
-	/// The raw `account -> value` map backing this plan.
-	pub fn into_map(self) -> BTreeMap<Account, Value> {
+	/// The operators this plan delegates to.
+	pub fn iter_operators(&self) -> impl Iterator<Item = &Account> {
 		match self {
-			Self::Fixed(entries) => entries.into(),
+			Self::Fixed(entries) => entries.keys(),
+		}
+	}
+
+	/// The amount pledged to `operator`, if this plan has an entry for it.
+	pub fn get(&self, operator: &Account) -> Option<&Value> {
+		match self {
+			Self::Fixed(entries) => entries.get(operator),
+		}
+	}
+
+	/// The sum of every entry's amount.
+	pub fn total(&self) -> Value
+	where
+		Value: Copy + Sum<Value>,
+	{
+		match self {
+			Self::Fixed(entries) => entries.values().copied().sum(),
+		}
+	}
+
+	/// Removes `operator`'s entry, if any, returning its amount. Safe to call unconditionally:
+	/// removing an entry can only shrink an already-bounded plan.
+	pub fn remove(&mut self, operator: &Account) -> Option<Value> {
+		match self {
+			Self::Fixed(entries) => entries.remove(operator),
+		}
+	}
+
+	/// Inserts (or replaces) `operator`'s entry. Fails, leaving the plan unchanged, if the plan
+	/// is already at its bound and `operator` isn't already an entry, or if the result would no
+	/// longer be `is_valid` (e.g. its total no longer fits in `AssetAmount`).
+	#[expect(clippy::result_unit_err)]
+	pub fn try_insert(&mut self, operator: Account, value: Value) -> Result<Option<Value>, ()>
+	where
+		Value: Copy + Into<AssetAmount>,
+	{
+		let mut updated = self.clone();
+		let previous = match &mut updated {
+			Self::Fixed(entries) => entries.try_insert(operator, value).map_err(|_| ())?,
+		};
+		if !updated.is_valid(0) {
+			return Err(());
+		}
+		*self = updated;
+		Ok(previous)
+	}
+
+	pub fn pop(&mut self) -> Option<(Account, Value)> {
+		match self {
+			Self::Fixed(entries) => {
+				let operator = entries.keys().next()?.clone();
+				entries.remove(&operator).map(|value| (operator, value))
+			},
+		}
+	}
+
+	/// Resolves each `is_live` entry's amount against `balance`: if the live entries' total
+	/// fits within `balance`, each passes through unchanged; otherwise each is scaled down
+	/// proportionally so the resolved total exactly matches `balance`. Entries that aren't
+	/// `is_live`, or that resolve to zero, are omitted -- a zero bid can't claim anything
+	/// either way.
+	pub fn resolve_bids(
+		&self,
+		balance: Value,
+		is_live: impl Fn(&Account) -> bool,
+	) -> BTreeMap<Account, Value>
+	where
+		Value: Copy + AtLeast32BitUnsigned + FixedPointOperand + From<u64>,
+	{
+		match self {
+			Self::Fixed(entries) => {
+				let live: Vec<(&Account, Value)> = entries
+					.iter()
+					.filter(|(operator, _)| is_live(operator))
+					.map(|(operator, bid)| (operator, *bid))
+					.collect();
+
+				// `is_valid` (enforced by `delegate_multi` at submission time) already rejects
+				// any plan whose total doesn't fit in `Value`, and `live` is a subset of that
+				// plan, so this checked sum should never actually overflow.
+				let total_committed = live
+					.iter()
+					.try_fold(Value::zero(), |acc, (_, bid)| acc.checked_add(bid))
+					.unwrap_or_else(|| {
+						cf_runtime_utilities::log_or_panic!(
+							"plan's total overflowed Value -- unreachable, `is_valid` rejects this at submission time"
+						);
+						Value::max_value()
+					});
+
+				live.into_iter()
+					.filter_map(|(operator, bid)| {
+						let resolved = if total_committed <= balance {
+							bid
+						} else {
+							Perquintill::from_rational(bid, total_committed) * balance
+						};
+						(!resolved.is_zero()).then(|| (operator.clone(), resolved))
+					})
+					.collect()
+			},
+		}
+	}
+
+	///  A plan is invalid if:
+	/// - any entry's amount is zero a delegator should omit an operator entirely rather than
+	///   include it with nothing pledged
+	/// - a non-empty plan's total falls below `minimum_total`
+	/// - the total doesn't even fit in `AssetAmount`. This is the only place a plan's total is
+	///   allowed to not fit -- rejecting it here means every other consumer of a *stored* plan
+	///   (which only ever got there via this check) can safely assume its total fits within
+	///   `Value`, without needing to re-guard against overflow.
+	pub fn is_valid(&self, minimum_total: AssetAmount) -> bool
+	where
+		Value: Copy + Into<AssetAmount>,
+	{
+		match self {
+			Self::Fixed(entries) =>
+				entries.values().all(|amount| !amount.is_zero()) &&
+					(entries.is_empty() ||
+						match entries
+							.values()
+							.copied()
+							.try_fold(0u128, |acc, amount| acc.checked_add(amount.into()))
+						{
+							Some(total) => total >= minimum_total,
+							None => false,
+						}),
 		}
 	}
 

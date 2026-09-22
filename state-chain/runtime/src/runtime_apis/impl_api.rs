@@ -60,7 +60,7 @@ use frame_support::{
 	pallet_prelude::{TransactionSource, TransactionValidity},
 	sp_runtime::{
 		traits::{Block as BlockT, NumberFor, Saturating, UniqueSaturatedInto},
-		ApplyExtrinsicResult, Perquintill,
+		ApplyExtrinsicResult,
 	},
 };
 use pallet_cf_elections::electoral_systems::oracle_price::{
@@ -819,23 +819,7 @@ impl_runtime_apis! {
 			// prorate every entry's share of the balance proportionally to what it was pledged
 			let upcoming_delegation_status: BTreeMap<AccountId, FlipBalance> =
 				pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
-					.map(|plan| {
-						let plan = plan.into_map();
-						let total_committed: FlipBalance = plan.values().copied().sum();
-						let balance = flip_account.total();
-						if total_committed <= balance {
-							plan
-						} else {
-							plan.into_iter()
-								.map(|(operator, max_bid)| {
-									(
-										operator,
-										Perquintill::from_rational(max_bid, total_committed) * balance,
-									)
-								})
-								.collect()
-						}
-					})
+					.map(|plan| plan.resolve_bids(flip_account.total(), |_| true))
 					.unwrap_or_default();
 			// Operator -> bid, for every operator whose current-epoch snapshot counts this
 			// account as one of its delegators.
@@ -2226,7 +2210,7 @@ impl_runtime_apis! {
 			let required_deposit = match call {
 				EthereumSCApi::Delegation { call: DelegationApi::Delegate { increase: DelegationAmount::Some(ref increase), .. } } => {
 					pallet_cf_validator::DelegationChoice::<Runtime>::get(&caller_id)
-						.map(|plan| plan.into_map().into_values().sum::<FlipBalance>())
+						.map(|plan| plan.total())
 						.unwrap_or_default()
 						.saturating_add(*increase)
 						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id))
