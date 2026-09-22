@@ -26,7 +26,10 @@ use scale_info::{
 };
 use scale_value::{Composite, Primitive, Value, ValueDef};
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{
+	collections::btree_map::{BTreeMap, Entry},
+	vec::Vec,
+};
 
 use crate::{
 	eip712::{EIP712Domain, Eip712DomainType, Eip712Error, TypedData},
@@ -211,11 +214,11 @@ pub fn recursively_construct_types(
 					.ok_or("variant name in value should match one of the variants in type def")??,
 
 			(TypeDef::Sequence(type_def_sequence), ValueDef::Composite(Composite::Unnamed(fs))) =>
-				process_array(type_def_sequence.type_param, fs, types)?,
+				process_array(type_def_sequence.type_param, fs, types, true)?,
 
 			(TypeDef::Array(type_def_array), ValueDef::Composite(Composite::Unnamed(fs))) => {
 				debug_assert!((type_def_array.len as usize) == fs.len());
-				process_array(type_def_array.type_param, fs, types)?
+				process_array(type_def_array.type_param, fs, types, false)?
 			},
 			(TypeDef::Tuple(type_def_tuple), ValueDef::Composite(Composite::Unnamed(fs))) => {
 				let (requires_type_id_suffix, type_fields, modified_values) =
@@ -289,7 +292,17 @@ pub fn recursively_construct_types(
 					"__" + &hex::encode(&keccak256(format!("{type_fields:?}"))[..8]);
 			}
 
-			types.insert(type_name.name.clone(), type_fields);
+			// Two shapes under one name would leave only one definition in `types`, and the hash
+			// would then not commit to the parts of the other value that the definition omits.
+			match types.entry(type_name.name.clone()) {
+				Entry::Vacant(entry) => {
+					entry.insert(type_fields);
+				},
+				Entry::Occupied(entry) =>
+					if *entry.get() != type_fields {
+						return Err("conflicting definitions for the same EIP-712 type name");
+					},
+			}
 		}
 	}
 
@@ -300,6 +313,7 @@ fn process_array(
 	ty: MetaType,
 	values: Vec<Value>,
 	types: &mut BTreeMap<String, Vec<Eip712DomainType>>,
+	variable_length: bool,
 ) -> Result<(TypeName, AddTypeOrNot, Value), &'static str> {
 	let (requires_type_id_suffix, type_fields, modified_values) =
 		process_tuple(vec![ty; values.len()], values, types, |_, i| i.to_string())?;
@@ -325,7 +339,9 @@ fn process_array(
 						&type_name.r#type + &hex::encode(
 						&keccak256(format!("{type_fields:?}"))[..4],
 					),
-					requires_type_id_suffix,
+					// The element count is part of the type, so a sequence gives its enclosing
+					// types a different shape for each length.
+					requires_type_id_suffix: requires_type_id_suffix || variable_length,
 				},
 				AddTypeOrNot::AddType { type_fields },
 				Value::named_composite(modified_values),
@@ -862,5 +878,126 @@ pub mod tests {
 			status: Status::Inactive { reason: "maintenance".to_string() },
 			metadata: None,
 		});
+	}
+
+	mod signing_hash_injectivity {
+		use super::*;
+		use crate::build_eip712_data::build_eip712_typed_data;
+		use codec::{Decode, DecodeAll};
+		use proptest::prelude::*;
+		use proptest_derive::Arbitrary;
+
+		#[derive(TypeInfo, Clone, Encode, Decode, Debug, Arbitrary)]
+		struct Leaf {
+			#[proptest(strategy = "0..3u32")]
+			x: u32,
+		}
+
+		#[derive(TypeInfo, Clone, Encode, Decode, Debug, Arbitrary)]
+		enum Kind {
+			A,
+			B(#[proptest(strategy = "0..3u32")] u32),
+			C {
+				#[proptest(strategy = "prop::collection::vec(0..3u32, 0..3)")]
+				items: Vec<u32>,
+			},
+		}
+
+		// Appears twice in `Root`, so the two instances can differ in shape. It deliberately has
+		// no enum-typed fields: those would force a content suffix onto its type name.
+		#[derive(TypeInfo, Clone, Encode, Decode, Debug, Arbitrary)]
+		struct Bar {
+			#[proptest(strategy = "prop::collection::vec(any::<Leaf>(), 0..3)")]
+			items: Vec<Leaf>,
+		}
+
+		#[derive(TypeInfo, Clone, Encode, Decode, Debug, Arbitrary)]
+		struct Root {
+			a: Bar,
+			b: Bar,
+			#[proptest(strategy = "prop::collection::vec(any::<Kind>(), 0..3)")]
+			kinds: Vec<Kind>,
+			#[proptest(strategy = "prop::option::of(0..3u32)")]
+			tag: Option<u32>,
+			#[proptest(strategy = "(0..3u32, prop::collection::vec(0..3u32, 0..3))")]
+			pair: (u32, Vec<u32>),
+			#[proptest(strategy = "prop::collection::vec(0..3u8, 0..3)")]
+			bytes: Vec<u8>,
+		}
+
+		fn signing_hash<T: TypeInfo + Encode + 'static>(value: T) -> Option<[u8; 32]> {
+			let typed_data =
+				build_eip712_typed_data(value, "Chainflip-Mainnet".to_string(), 1).ok()?;
+			typed_data.encode_eip712().ok().map(keccak256)
+		}
+
+		/// Values whose SCALE encoding differs from `value`'s in a single byte, e.g. one array
+		/// element changed. These are the hardest cases for the signing hash to tell apart.
+		fn single_byte_mutants(value: &Root) -> Vec<Root> {
+			let encoded = value.encode();
+			(0..encoded.len())
+				.filter_map(|i| {
+					let mut mutated = encoded.clone();
+					mutated[i] ^= 1;
+					Root::decode_all(&mut &mutated[..]).ok()
+				})
+				.collect()
+		}
+
+		proptest! {
+			#![proptest_config(ProptestConfig::with_cases(500))]
+			/// A signature over one value must not also authorise a different value.
+			#[test]
+			fn distinct_values_have_distinct_signing_hashes(value in any::<Root>(), other in any::<Root>()) {
+				let mut seen = BTreeMap::<[u8; 32], Vec<u8>>::new();
+				for candidate in single_byte_mutants(&value).into_iter().chain([value, other]) {
+					let encoded = candidate.encode();
+					let hash = signing_hash(candidate);
+					prop_assert!(hash.is_some(), "failed to encode {:?}", encoded);
+					if let Some(previous) = seen.insert(hash.unwrap(), encoded.clone()) {
+						prop_assert_eq!(previous, encoded);
+					}
+				}
+			}
+		}
+
+		/// `Bar` appears twice with different lengths (`a` has two items, `b` has one). Both
+		/// instances used to share one type definition, so the hash ignored `a`'s second item.
+		#[test]
+		fn a_signature_covers_every_array_element() {
+			let root = |a: &[u32]| Root {
+				a: Bar { items: a.iter().map(|&x| Leaf { x }).collect() },
+				b: Bar { items: vec![Leaf { x: 3 }] },
+				kinds: vec![],
+				tag: None,
+				pair: (0, vec![]),
+				bytes: vec![],
+			};
+
+			assert_ne!(
+				signing_hash(root(&[1, 2])).unwrap(),
+				signing_hash(root(&[1, 999])).unwrap()
+			);
+		}
+
+		/// Tests the guard directly: the suffix rules stop any value from producing two definitions
+		/// under one name, so the conflict is set up by hand.
+		#[test]
+		fn conflicting_type_definitions_are_rejected() {
+			let value = || {
+				typeinfo_decoder::decode_with_type_info::<Bar>(
+					&mut &Bar { items: vec![Leaf { x: 1 }] }.encode()[..],
+				)
+				.unwrap()
+			};
+			let mut types = BTreeMap::new();
+			let (bar, _) =
+				recursively_construct_types(value(), MetaType::new::<Bar>(), &mut types).unwrap();
+			types.insert(bar.name, vec![]);
+
+			assert!(
+				recursively_construct_types(value(), MetaType::new::<Bar>(), &mut types).is_err()
+			);
+		}
 	}
 }
