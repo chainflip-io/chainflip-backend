@@ -23,7 +23,22 @@ permissions:
   id-token: write
 
 jobs:
+  backfill-sisyphos:
+    if: inputs.additional_context == 'aptly-backfill' && inputs.artifact_suffix == 'sisyphos'
+    uses: ./.github/workflows/_31_publish_backfill.yml
+    with:
+      network: sisyphos
+    secrets: inherit
+
+  backfill-perseverance:
+    if: inputs.additional_context == 'aptly-backfill' && inputs.artifact_suffix == 'perseverance'
+    uses: ./.github/workflows/_31_publish_backfill.yml
+    with:
+      network: perseverance
+    secrets: inherit
+
   debug:
+    if: inputs.additional_context != 'aptly-backfill'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
