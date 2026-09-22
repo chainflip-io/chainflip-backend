@@ -939,6 +939,13 @@ export interface ChainStorage extends GenericChainStorage {
     flipToDistribute: GenericStorageQuery<() => bigint>;
 
     /**
+     * Flip held in the Vault that is earmarked for transfer to the State Chain Gateway.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    flipToBeSentToGateway: GenericStorageQuery<() => bigint>;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
@@ -3088,13 +3095,6 @@ export interface ChainStorage extends GenericChainStorage {
       (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint,
       CfPrimitivesChainsAssetsAnyAsset
     >;
-
-    /**
-     * FLIP ready to be sent to gateway.
-     *
-     * @param {Callback<bigint> =} callback
-     **/
-    flipToBeSentToGateway: GenericStorageQuery<() => bigint>;
 
     /**
      * Interval at which we buy FLIP from swap fees in order to distribute as rewards.
