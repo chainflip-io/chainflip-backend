@@ -13,6 +13,8 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
+use std::collections::BTreeSet;
+
 use crate::{
 	dot::cached_rpc::{DotCachingClient, DotRetryRpcApiWithResult},
 	witness::{
@@ -53,7 +55,10 @@ use state_chain_runtime::{
 use std::sync::Arc;
 use subxt::events::Phase;
 
-use crate::elections::voter_api::{CompositeVoter, VoterApi};
+use crate::elections::{
+	vote_submitter::VoteSubmitter,
+	voter_api::{CompositeVoter, VoterApi},
+};
 
 use anyhow::Result;
 
@@ -240,7 +245,7 @@ impl WitnessClientForBlockData<AssethubChain, Vec<DepositWitness<Assethub>>> for
 		block_headers: &Self::BlockQuery,
 	) -> Result<Vec<DepositWitness<Assethub>>> {
 		// sanity check the deposit channel data
-		let addresses: Vec<_> = deposit_channels
+		let addresses: BTreeSet<_> = deposit_channels
 			.iter()
 			.map(|deposit_channel| {
 				assert!(
@@ -373,6 +378,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: DotCachingClient,
 	state_chain_client: Arc<StateChainClient>,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -391,6 +397,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_submitter = vote_submitter.clone();
 			async move {
 				task_scope::task_scope(|scope| {
 					async {
@@ -406,6 +413,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Assethub",
+							vote_submitter,
 						)
 						.continuously_vote()
 						.await;

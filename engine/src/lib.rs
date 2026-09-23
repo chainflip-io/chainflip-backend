@@ -138,7 +138,7 @@ async fn run_main(
 	settings: Settings,
 	start_from: Option<state_chain_runtime::BlockNumber>,
 ) -> anyhow::Result<()> {
-	let _guard = cf_utilities::logging::init_json_logger(settings.logging.clone()).await;
+	cf_utilities::logging::init_json_logger(settings.logging.clone()).await;
 
 	task_scope(|scope| {
 		async move {

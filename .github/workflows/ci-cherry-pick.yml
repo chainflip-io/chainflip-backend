@@ -14,6 +14,10 @@ jobs:
   cherry-pick:
     if: ${{ (github.event.pull_request.merged == true) && (contains(github.event.pull_request.labels.*.name, 'pick-to-release')) }}
     runs-on: namespace-profile-default-light
+    env:
+      # Taken from the event rather than the checkout: main's tip at runner start is the wrong
+      # commit as soon as another PR merges in between.
+      COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
     steps:
       - name: Checkout branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -30,8 +34,6 @@ jobs:
         run: |
           set -x
           git fetch --all
-          COMMIT_SHA=$(git rev-parse HEAD)
-          echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
 
           RELEASE_BRANCH="release/$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)"
           echo "RELEASE_BRANCH=$RELEASE_BRANCH" >> $GITHUB_ENV

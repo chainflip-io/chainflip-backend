@@ -159,14 +159,15 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> SigningStageResult<Crypto> {
-		let verified_commitments = match verify_broadcasts_non_blocking(messages).await {
-			Ok(comms) => comms,
-			Err((reported_parties, abort_reason)) =>
-				return SigningStageResult::Error(
-					reported_parties,
-					SigningFailureReason::BroadcastFailure(abort_reason, Self::NAME),
-				),
-		};
+		let verified_commitments =
+			match verify_broadcasts_non_blocking(messages, self.common.own_idx).await {
+				Ok(comms) => comms,
+				Err((reported_parties, abort_reason)) =>
+					return SigningStageResult::Error(
+						reported_parties,
+						SigningFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					),
+			};
 
 		// Deserialize and report any party for which deserialization fails:
 		let verified_commitments = match try_deserialize(verified_commitments) {
@@ -365,7 +366,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> SigningStageResult<Crypto> {
-		let local_sigs = match verify_broadcasts_non_blocking(messages).await {
+		let local_sigs = match verify_broadcasts_non_blocking(messages, self.common.own_idx).await {
 			Ok(sigs) => sigs,
 			Err((reported_parties, abort_reason)) =>
 				return SigningStageResult::Error(

@@ -54,7 +54,10 @@ use state_chain_runtime::{
 };
 
 use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
+	elections::{
+		vote_submitter::VoteSubmitter,
+		voter_api::{CompositeVoter, VoterApi},
+	},
 	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
 use anyhow::Result;
@@ -270,6 +273,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: BtcCachingClient,
 	state_chain_client: Arc<StateChainClient>,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -287,6 +291,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_submitter = vote_submitter.clone();
 			async move {
 				task_scope::task_scope(|scope| {
 					async {
@@ -303,6 +308,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Bitcoin",
+							vote_submitter,
 						)
 						.continuously_vote()
 						.await;

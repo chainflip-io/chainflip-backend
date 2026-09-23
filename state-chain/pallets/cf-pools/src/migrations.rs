@@ -19,11 +19,19 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 mod remove_fixed_pools;
+mod rename_minimum_order_amount;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
 		9,
 		10,
+		rename_minimum_order_amount::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
 		remove_fixed_pools::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
