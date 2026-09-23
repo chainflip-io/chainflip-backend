@@ -91,7 +91,10 @@ where
 }
 
 // NB: A Bitcoin transaction containing a UTXO below the dust limit will fail to be included by a
-// block. Therefore, we do not include UTXOs below the dust limit in the transaction.
+// block. Therefore, we do not include UTXOs below the dust limit in the transaction. Likewise a
+// single non-standard output makes the whole transaction unrelayable, and a stuck batch also leaves
+// the UTXO set out of sync (inputs taken, change registered), so such outputs are dropped here as a
+// last line of defence even though upstream validation should never let one through.
 impl<E> AllBatch<Bitcoin> for BitcoinApi<E>
 where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
@@ -111,6 +114,13 @@ where
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
+			if !transfer_param.to.is_standard() {
+				log::warn!(
+					"Dropping Bitcoin egress output to non-standard script {:?}",
+					transfer_param.to
+				);
+				continue;
+			}
 			if transfer_param.amount >= BITCOIN_DUST_LIMIT {
 				btc_outputs.push(BitcoinOutput {
 					amount: transfer_param.amount,
@@ -274,5 +284,85 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 				call.signer_and_signatures.as_ref().map(|(signer, _)| *signer),
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::btc::{ScriptPubkey, UtxoId};
+	use cf_primitives::ForeignChain;
+	use sp_core::bounded_vec;
+
+	const AGG_KEY: [u8; 32] = [1; 32];
+	const CHANGE_AMOUNT: BtcAmount = 10_000;
+
+	struct TestEnvironment;
+
+	impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for TestEnvironment {
+		fn lookup(_: UtxoSelectionType) -> Option<SelectedUtxosAndChangeAmount> {
+			Some((
+				vec![Utxo {
+					id: UtxoId { tx_id: [2; 32].into(), vout: 0 },
+					amount: 1_000_000,
+					deposit_address: DepositAddress::new(AGG_KEY, 0),
+				}],
+				CHANGE_AMOUNT,
+			))
+		}
+	}
+
+	impl ChainEnvironment<(), AggKey> for TestEnvironment {
+		fn lookup(_: ()) -> Option<AggKey> {
+			Some(AggKey { previous: None, current: AGG_KEY })
+		}
+	}
+
+	fn transfer(amount: BtcAmount, to: ScriptPubkey) -> TransferAssetParams<Bitcoin> {
+		TransferAssetParams { asset: crate::assets::btc::Asset::Btc, amount, to }
+	}
+
+	#[test]
+	fn batch_transfer_drops_non_standard_outputs() {
+		let standard = ScriptPubkey::P2WPKH([3; 20]);
+		let non_standard = ScriptPubkey::OtherSegwit { version: 0, program: bounded_vec![3; 5] };
+		let standard_egress_id = (ForeignChain::Bitcoin, 1);
+		let non_standard_egress_id = (ForeignChain::Bitcoin, 2);
+
+		let batches = <BitcoinApi<TestEnvironment> as AllBatch<Bitcoin>>::new_unsigned_impl(
+			vec![],
+			vec![
+				(transfer(50_000, standard.clone()), standard_egress_id),
+				(transfer(50_000, non_standard.clone()), non_standard_egress_id),
+			],
+		)
+		.unwrap();
+
+		let [(BitcoinApi::BatchTransfer(batch), egress_ids)] = &batches[..] else {
+			panic!("expected exactly one batch transfer, got {batches:?}");
+		};
+		assert_eq!(
+			batch.bitcoin_transaction.outputs,
+			vec![
+				BitcoinOutput { amount: 50_000, script_pubkey: standard },
+				BitcoinOutput {
+					amount: CHANGE_AMOUNT,
+					script_pubkey: DepositAddress::new(AGG_KEY, CHANGE_ADDRESS_SALT)
+						.script_pubkey(),
+				},
+			]
+		);
+		// The dropped egress is still reported as handled, as for dust outputs.
+		assert_eq!(egress_ids, &vec![standard_egress_id, non_standard_egress_id]);
+
+		// With nothing standard to pay, no transaction is built at all.
+		assert_eq!(
+			<BitcoinApi<TestEnvironment> as AllBatch<Bitcoin>>::new_unsigned_impl(
+				vec![],
+				vec![(transfer(50_000, non_standard), non_standard_egress_id)],
+			)
+			.unwrap_err(),
+			AllBatchError::NotRequired
+		);
 	}
 }

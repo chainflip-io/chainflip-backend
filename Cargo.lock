@@ -1648,6 +1648,7 @@ dependencies = [
  "arrayref",
  "bech32 0.9.1",
  "bincode 2.0.1",
+ "bitcoin",
  "borsh",
  "bs58",
  "cf-amm-math",

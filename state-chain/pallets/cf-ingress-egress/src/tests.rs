@@ -32,13 +32,14 @@ use cf_amm_math::Price;
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	assets::{any::Asset, eth::Asset as EthAsset},
-	btc::{BitcoinNetwork, ScriptPubkey},
+	btc::{deposit_address::DepositAddress, BitcoinNetwork, ScriptPubkey, Utxo, UtxoId},
 	evm::{Address as EthereumAddress, DepositDetails, EvmFetchId, Hash as EvmHash},
 	mocks::MockEthereum,
-	AccountOrAddress, CcmChannelMetadata, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
-	CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain,
-	DepositChannel, DepositOriginType, Ethereum, ExecutexSwapAndCall, ForeignChainAddress,
-	SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
+	AccountOrAddress, Bitcoin, CcmChannelMetadata, CcmChannelMetadataChecked,
+	CcmChannelMetadataUnchecked, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain,
+	ChannelRefundParametersForChain, DepositChannel, DepositOriginType, Ethereum,
+	ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin, TransactionInIdForAnyChain,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
@@ -2647,6 +2648,67 @@ fn submit_vault_swap_request(
 	)
 }
 
+/// A valid Ethereum vault deposit that results in a swap, so tests only need to spell out the
+/// fields under test via struct-update syntax.
+fn eth_vault_deposit_witness() -> VaultDepositWitness<Test, Instance1> {
+	VaultDepositWitness {
+		input_asset: EthAsset::Eth,
+		deposit_address: None,
+		channel_id: Some(0),
+		deposit_amount: 100,
+		deposit_details: Default::default(),
+		output_asset: Asset::Eth,
+		destination_address: EncodedAddress::Eth(Default::default()),
+		deposit_metadata: None,
+		tx_id: EvmHash::default(),
+		broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+		affiliate_fees: Default::default(),
+		refund_params: ChannelRefundParametersForChain::<Ethereum> {
+			retry_duration: 0,
+			min_price: Default::default(),
+			refund_address: H160([1; 20]),
+			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
+		},
+		dca_params: None,
+		boost_fee: 0,
+	}
+}
+
+/// Bitcoin counterpart of [eth_vault_deposit_witness]. The mock swap handler egresses through the
+/// same chain instance, so the swap output is also Bitcoin.
+fn btc_vault_deposit_witness() -> VaultDepositWitness<Test, Instance2> {
+	const DEPOSIT_AMOUNT: u64 = 100_000;
+	VaultDepositWitness {
+		input_asset: btc::Asset::Btc,
+		deposit_address: Some(ScriptPubkey::Taproot([0; 32])),
+		channel_id: Some(0),
+		deposit_amount: DEPOSIT_AMOUNT,
+		deposit_details: Utxo {
+			id: UtxoId { tx_id: Default::default(), vout: 0 },
+			amount: DEPOSIT_AMOUNT,
+			deposit_address: DepositAddress::new([0; 32], 0),
+		},
+		output_asset: Asset::Btc,
+		destination_address: MockAddressConverter::to_encoded_address(ForeignChainAddress::Btc(
+			ScriptPubkey::P2WPKH([2; 20]),
+		)),
+		deposit_metadata: None,
+		tx_id: Default::default(),
+		broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+		affiliate_fees: Default::default(),
+		refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+			retry_duration: 0,
+			refund_address: ScriptPubkey::P2WPKH([1; 20]),
+			min_price: Price::zero(),
+			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
+		},
+		dca_params: None,
+		boost_fee: 0,
+	}
+}
+
 #[test]
 fn can_request_swap_via_extrinsic() {
 	const INPUT_ASSET: Asset = Asset::Eth;
@@ -4183,54 +4245,18 @@ fn test_various_refund_reasons() {
 
 	// Test case 1: Invalid broker fees
 	test_vault_swap_refund(
-		VaultDepositWitness {
-			input_asset: Asset::Eth.try_into().unwrap(),
-			deposit_address: Default::default(),
-			channel_id: Some(0),
-			deposit_amount: 100,
-			deposit_details: Default::default(),
-			output_asset: Asset::Eth,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: Default::default(),
-			tx_id: EvmHash::default(),
-			broker_fee: None,
-			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersForChain::<Ethereum> {
-				retry_duration: 0,
-				min_price: Default::default(),
-				refund_address: H160([1; 20]),
-				refund_ccm_metadata: None,
-				max_oracle_price_slippage: None,
-			},
-			dca_params: None,
-			boost_fee: 0,
-		},
+		VaultDepositWitness { broker_fee: None, ..eth_vault_deposit_witness() },
 		RefundReason::InvalidBrokerFees,
 	);
 
 	// Test case 2: Invalid refund parameters - retry duration too high
 	test_vault_swap_refund(
 		VaultDepositWitness {
-			input_asset: Asset::Eth.try_into().unwrap(),
-			deposit_address: Default::default(),
-			channel_id: Some(0),
-			deposit_amount: 100,
-			deposit_details: Default::default(),
-			output_asset: Asset::Eth,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: Default::default(),
-			tx_id: EvmHash::default(),
-			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
-			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 700,
-				min_price: Default::default(),
-				refund_address: H160([1; 20]),
-				refund_ccm_metadata: None,
-				max_oracle_price_slippage: None,
+				..eth_vault_deposit_witness().refund_params
 			},
-			dca_params: None,
-			boost_fee: 0,
+			..eth_vault_deposit_witness()
 		},
 		RefundReason::InvalidRefundParameters,
 	);
@@ -4238,26 +4264,8 @@ fn test_various_refund_reasons() {
 	// Test case 3: Invalid DCA parameters - number of chunks is 0
 	test_vault_swap_refund(
 		VaultDepositWitness {
-			input_asset: Asset::Eth.try_into().unwrap(),
-			deposit_address: Default::default(),
-			channel_id: Some(0),
-			deposit_amount: 100,
-			deposit_details: Default::default(),
-			output_asset: Asset::Eth,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: Default::default(),
-			tx_id: EvmHash::default(),
-			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
-			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersForChain::<Ethereum> {
-				retry_duration: 0,
-				min_price: Default::default(),
-				refund_address: H160([1; 20]),
-				refund_ccm_metadata: None,
-				max_oracle_price_slippage: None,
-			},
 			dca_params: Some(DcaParameters { number_of_chunks: 0, chunk_interval: 100 }),
-			boost_fee: 0,
+			..eth_vault_deposit_witness()
 		},
 		RefundReason::InvalidDcaParameters,
 	);
@@ -4367,5 +4375,56 @@ fn vault_swap_with_burn_refund_address_is_ingressed_but_no_action_dispatched() {
 				..
 			})
 		);
+	});
+}
+
+/// The refund address of a Bitcoin vault swap is the depositor's own change output, and the
+/// `ScriptPubkey` type can encode scripts that Bitcoin Core refuses to relay. Such a deposit must
+/// be processed as unrefundable rather than have its refund poison an egress batch.
+#[test]
+fn btc_vault_swap_with_non_standard_refund_address_is_unrefundable() {
+	let submit_with_refund_address = |refund_address: ScriptPubkey| {
+		BitcoinIngressEgress::vault_swap_request(
+			RuntimeOrigin::root(),
+			0,
+			Box::new(VaultDepositWitness {
+				refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+					refund_address,
+					..btc_vault_deposit_witness().refund_params
+				},
+				..btc_vault_deposit_witness()
+			}),
+		)
+	};
+
+	new_test_ext().execute_with(|| {
+		// Witness version 0 with a 5-byte program: a well-formed witness program that default
+		// Bitcoin Core policy treats as non-standard.
+		let non_standard = ScriptPubkey::OtherSegwit { version: 0, program: bounded_vec![1; 5] };
+		assert!(!non_standard.is_standard());
+
+		assert_ok!(submit_with_refund_address(non_standard));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::BitcoinIngressEgress(Event::DepositFinalised {
+				action: DepositAction::Unrefundable,
+				..
+			})
+		);
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+		// Control: the same deposit with a standard refund address is swapped as usual.
+		System::reset_events();
+		assert_ok!(submit_with_refund_address(ScriptPubkey::P2WPKH([1; 20])));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::BitcoinIngressEgress(Event::DepositFinalised {
+				action: DepositAction::Swap { .. },
+				..
+			})
+		);
+		assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests().len(), 1);
 	});
 }

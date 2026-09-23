@@ -231,6 +231,17 @@ impl ChannelRefundParametersUnchecked<ForeignChainAddress> {
 				)
 			}
 
+			// A refund address witnessed from a Bitcoin transaction output is chosen by the
+			// depositor. Paying to a non-standard script would make the whole egress batch
+			// unbroadcastable.
+			if let ForeignChainAddress::Btc(script_pubkey) = &self.refund_address {
+				if !script_pubkey.is_standard() {
+					return Err(
+						"Invalid refund parameter: non-standard Bitcoin refund address.".into()
+					)
+				}
+			}
+
 			Ok(ChannelRefundParametersChecked {
 				retry_duration: self.retry_duration,
 				refund_address: self.refund_address.clone(),
@@ -264,5 +275,34 @@ impl<A: BenchmarkValue, D: BenchmarkValue> BenchmarkValue
 			refund_ccm_metadata: Some(BenchmarkValue::benchmark_value()),
 			max_oracle_price_slippage: Some(BenchmarkValue::benchmark_value()),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::btc::ScriptPubkey;
+	use sp_core::bounded_vec;
+
+	#[test]
+	fn into_checked_rejects_non_standard_bitcoin_refund_address() {
+		let params_with = |refund_address| ChannelRefundParametersUnchecked {
+			retry_duration: 0,
+			refund_address: ForeignChainAddress::Btc(refund_address),
+			min_price: Price::zero(),
+			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
+		};
+
+		assert!(params_with(ScriptPubkey::P2WPKH([1; 20]))
+			.into_checked(None, Asset::Btc)
+			.is_ok());
+		assert!(params_with(ScriptPubkey::OtherSegwit { version: 2, program: bounded_vec![1; 5] })
+			.into_checked(None, Asset::Btc)
+			.is_ok());
+
+		assert!(params_with(ScriptPubkey::OtherSegwit { version: 0, program: bounded_vec![1; 5] })
+			.into_checked(None, Asset::Btc)
+			.is_err());
 	}
 }
