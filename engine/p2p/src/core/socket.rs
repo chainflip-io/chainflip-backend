@@ -39,10 +39,10 @@ pub(crate) const INCOMING_MESSAGES_BUFFER_SIZE: i32 = 250;
 
 /// How often should ZMQ send heartbeat messages in order to detect
 /// dead connections sooner (setting this to 0 disables heartbeats)
-const CONNECTION_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
+pub(crate) const CONNECTION_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// How long to wait for a heartbeat response before timing out the
 /// connection
-const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
 /// An argument to set_linger on a socket that, when set, ensures that
 /// we don't attempt to deliver pending messages before destroying the
 /// socket
