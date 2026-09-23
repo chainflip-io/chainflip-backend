@@ -68,10 +68,16 @@ where
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		// For the unfinalised source we limit to two retries, so we try the primary and backup. We
-		// stop here because for unfinalised it's possible the block simple doesn't exist, due to a
-		// reorg.
-		polkadot_source!(self, subscribe_best_heads, 2, |raw_events: Result<
+		// We use only 2 retries because this is for chaintracking and thus missing a block is not a
+		// problem.
+		//
+		// NOTE: this uses finalized subscription because due to frequent reorgs on
+		// assethub we came to miss deposits that have been sent immediately after a deposit
+		// channel was opened. (Previously this used an unfinalized header subscription.)
+		// See PRO-3117 for the issue. Long-term this will be fixed by migrating assethub to
+		// elections.
+		//
+		polkadot_source!(self, subscribe_finalized_heads, 2, |raw_events: Result<
 			Option<Events<PolkadotConfig>>,
 		>| raw_events.ok().flatten())
 	}
