@@ -5583,7 +5583,7 @@ mod rpcs {
 					vec![
 						RpcLoanAccount {
 							account: BORROWER_2,
-							ltv_ratio: Some(FixedU64::from_rational(1_173_483_514, 1_000_000_000)),
+							ltv_ratio: Some(FixedU64::from_rational(1_173_483_513, 1_000_000_000)),
 							// NOTE: all of collateral is in liquidation swaps, but we include
 							// any amount that has not been swapped yet:
 							collateral: vec![AssetAndAmount {

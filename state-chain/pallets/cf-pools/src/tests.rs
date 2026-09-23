@@ -1472,41 +1472,33 @@ fn cancel_all_limit_orders_for_account() {
 }
 #[test]
 fn can_update_all_config_items() {
-	new_test_ext().execute_with(|| {
-		const NEW_LIMIT_ORDER_THRESHOLD_USDC: AssetAmount = 5_000 * 10u128.pow(6);
-		const NEW_LIMIT_ORDER_THRESHOLD_USDT: AssetAmount = 6_000 * 10u128.pow(6);
+	const NEW_SWEEPING_THRESHOLD: AssetAmount = 5_000 * 10u128.pow(6);
+	const NEW_ORDER_MINIMUM: AssetAmount = 6_000 * 10u128.pow(6);
 
+	new_test_ext().execute_with(|| {
 		// Check that the default values are different from the new ones
 		assert_ne!(
 			LimitOrderAutoSweepingThresholds::<Test>::get()
 				.get(&Asset::Usdc)
 				.copied()
 				.unwrap_or_default(),
-			NEW_LIMIT_ORDER_THRESHOLD_USDC
+			NEW_SWEEPING_THRESHOLD
 		);
-		assert_ne!(
-			LimitOrderAutoSweepingThresholds::<Test>::get()
-				.get(&Asset::Usdt)
-				.copied()
-				.unwrap_or_default(),
-			NEW_LIMIT_ORDER_THRESHOLD_USDT
-		);
+		assert_ne!(MinimumOrderAmount::<Test>::get(Asset::Usdc), NEW_ORDER_MINIMUM);
 
 		// Update all config items at the same time
 		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
-			vec![
+			bounded_vec![
 				PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
 					asset: Asset::Usdc,
-					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC
+					amount: NEW_SWEEPING_THRESHOLD
 				},
-				PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
-					asset: Asset::Usdt,
-					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT
+				PalletConfigUpdate::SetMinimumOrderAmount {
+					asset: Asset::Usdc,
+					amount: NEW_ORDER_MINIMUM
 				},
-			]
-			.try_into()
-			.unwrap()
+			],
 		));
 
 		// Check that the new values were set
@@ -1515,15 +1507,9 @@ fn can_update_all_config_items() {
 				.get(&Asset::Usdc)
 				.copied()
 				.unwrap_or_default(),
-			NEW_LIMIT_ORDER_THRESHOLD_USDC
+			NEW_SWEEPING_THRESHOLD
 		);
-		assert_eq!(
-			LimitOrderAutoSweepingThresholds::<Test>::get()
-				.get(&Asset::Usdt)
-				.copied()
-				.unwrap_or_default(),
-			NEW_LIMIT_ORDER_THRESHOLD_USDT
-		);
+		assert_eq!(MinimumOrderAmount::<Test>::get(Asset::Usdc), NEW_ORDER_MINIMUM);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -1531,23 +1517,20 @@ fn can_update_all_config_items() {
 			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
 				update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
 					asset: Asset::Usdc,
-					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC,
+					amount: NEW_SWEEPING_THRESHOLD,
 				},
 			}),
 			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
-					asset: Asset::Usdt,
-					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT,
+				update: PalletConfigUpdate::SetMinimumOrderAmount {
+					asset: Asset::Usdc,
+					amount: NEW_ORDER_MINIMUM,
 				},
 			}),
 		);
 
 		// Make sure that only governance can update the config
 		assert_noop!(
-			LiquidityPools::update_pallet_config(
-				RuntimeOrigin::signed(ALICE),
-				vec![].try_into().unwrap()
-			),
+			LiquidityPools::update_pallet_config(RuntimeOrigin::signed(ALICE), bounded_vec![]),
 			sp_runtime::traits::BadOrigin
 		);
 	});
@@ -2062,55 +2045,10 @@ mod minimum_limit_order_amount {
 		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
 			bounded_vec![
-				PalletConfigUpdate::SetMinimumLimitOrderAmount {
-					asset: Asset::Eth,
-					amount: MIN_ETH
-				},
-				PalletConfigUpdate::SetMinimumLimitOrderAmount {
-					asset: STABLE_ASSET,
-					amount: MIN_USDC
-				},
+				PalletConfigUpdate::SetMinimumOrderAmount { asset: Asset::Eth, amount: MIN_ETH },
+				PalletConfigUpdate::SetMinimumOrderAmount { asset: STABLE_ASSET, amount: MIN_USDC },
 			],
 		));
-	}
-
-	#[test]
-	fn minimum_limit_order_amount_config_governance_only_and_emits_event() {
-		new_test_ext().execute_with(|| {
-			// Non-governance origin is rejected.
-			assert_noop!(
-				LiquidityPools::update_pallet_config(
-					RuntimeOrigin::signed(ALICE),
-					bounded_vec![PalletConfigUpdate::SetMinimumLimitOrderAmount {
-						asset: Asset::Eth,
-						amount: MIN_ETH
-					}],
-				),
-				sp_runtime::traits::BadOrigin,
-			);
-
-			// Governance sets the configured minimums (and only those), one event each.
-			assert_ok!(LiquidityPools::update_pallet_config(
-				RuntimeOrigin::root(),
-				bounded_vec![
-					PalletConfigUpdate::SetMinimumLimitOrderAmount {
-						asset: Asset::Eth,
-						amount: MIN_ETH
-					},
-					PalletConfigUpdate::SetMinimumLimitOrderAmount {
-						asset: Asset::Usdc,
-						amount: MIN_USDC
-					},
-				],
-			));
-			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Eth), MIN_ETH);
-			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdc), MIN_USDC);
-			assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Btc), 0);
-			assert_matching_event_count!(
-				Test,
-				RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated { update: PalletConfigUpdate::SetMinimumLimitOrderAmount { .. } }) => 2
-			);
-		});
 	}
 
 	#[test]
@@ -2278,5 +2216,240 @@ mod minimum_limit_order_amount {
 					order_after_open,
 				);
 			});
+	}
+}
+
+mod minimum_range_order_amount {
+	use super::*;
+	use cf_amm::{math::Amount, range_orders::Liquidity};
+
+	// Deliberately different, so a test can tell which of the two was applied: a just-sub-minimum
+	// USDC amount has to be one that would have passed had the ETH minimum been applied instead.
+	const MIN_ETH: AssetAmount = 1_000;
+	const MIN_USDC: AssetAmount = 5_000;
+	const _: () = assert!(MIN_ETH < MIN_USDC);
+
+	// The pool price sits at tick zero, so where a range falls relative to it decides which assets
+	// the position holds - which is the only way to drive the two per-asset minimums separately.
+	/// Entirely above the price: the position holds base (ETH) only.
+	const ABOVE_PRICE: core::ops::Range<Tick> = 100..200;
+	/// Entirely below the price: the position holds quote (USDC) only.
+	const BELOW_PRICE: core::ops::Range<Tick> = -200..-100;
+	/// Straddles the price symmetrically, so the position holds both assets in roughly equal
+	/// amounts.
+	const STRADDLING: core::ops::Range<Tick> = -100..100;
+	/// Straddles the price, but nearly all of its width is above: the position is mostly base,
+	/// with only a sliver of quote.
+	const MOSTLY_ABOVE_PRICE: core::ops::Range<Tick> = -1..1000;
+
+	// Helpers that expose only the fields relevant to these tests (range and size) and use fixed
+	// defaults for the rest (order id 0).
+	fn set_order(tick_range: core::ops::Range<Tick>, size: RangeOrderSize) -> DispatchResult {
+		LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(tick_range),
+			size,
+		)
+	}
+
+	fn update_order(
+		tick_range: core::ops::Range<Tick>,
+		size_change: IncreaseOrDecrease<RangeOrderSize>,
+	) -> DispatchResult {
+		LiquidityPools::update_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(tick_range),
+			size_change,
+		)
+	}
+
+	/// Caps each side independently. The AMM takes whatever ratio the range requires up to these
+	/// maxima, so the side that binds is what sizes the position.
+	fn amounts(base: AssetAmount, quote: AssetAmount) -> RangeOrderSize {
+		RangeOrderSize::AssetAmounts {
+			maximum: AssetAmounts { base, quote },
+			minimum: AssetAmounts { base: 0, quote: 0 },
+		}
+	}
+
+	fn order() -> RangeOrder<u64> {
+		LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &ALICE, false)
+			.unwrap()
+			.range_orders
+			.remove(0)
+	}
+
+	fn order_liquidity() -> Liquidity {
+		order().liquidity
+	}
+
+	/// The assets the open position currently holds - what the minimum is actually measured
+	/// against.
+	fn order_amounts() -> (Amount, Amount) {
+		let order = order();
+		let value = LiquidityPools::pool_range_order_liquidity_value(
+			Asset::Eth,
+			STABLE_ASSET,
+			order.range,
+			order.liquidity,
+		)
+		.unwrap();
+		(value.base, value.quote)
+	}
+
+	fn create_pool() {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Price::at_tick_zero(),
+		));
+		MockBalance::credit_account(&ALICE, Asset::Eth, 1_000_000);
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 1_000_000);
+	}
+
+	fn setup_pool_with_minimums() {
+		create_pool();
+		assert_ok!(LiquidityPools::update_pallet_config(
+			RuntimeOrigin::root(),
+			bounded_vec![
+				PalletConfigUpdate::SetMinimumOrderAmount { asset: Asset::Eth, amount: MIN_ETH },
+				PalletConfigUpdate::SetMinimumOrderAmount { asset: STABLE_ASSET, amount: MIN_USDC },
+			],
+		));
+	}
+
+	/// Each asset's minimum is measured against that asset's side of the position, so a base-only
+	/// position answers to the ETH minimum and a quote-only one to the (different) USDC minimum.
+	#[test]
+	fn each_asset_is_measured_against_its_own_minimum() {
+		new_test_ext().execute_with(|| {
+			setup_pool_with_minimums();
+
+			// Base-only: judged against MIN_ETH. A one-sided range converts between liquidity and
+			// amounts exactly, so the position holds precisely what was asked for and these cases
+			// sit either side of the boundary - the `assert_eq!`s pin that down.
+			assert_noop!(
+				set_order(ABOVE_PRICE, amounts(MIN_ETH - 1, 0)),
+				Error::<Test>::BelowMinimumOrderAmount
+			);
+			assert_ok!(set_order(ABOVE_PRICE, amounts(MIN_ETH, 0)));
+			assert_eq!(order_amounts(), (MIN_ETH.into(), Amount::zero()));
+			// Still able to close the order in full, even though it sits below the minimum.
+			assert_ok!(set_order(ABOVE_PRICE, RangeOrderSize::Liquidity { liquidity: 0 }));
+
+			// Quote-only: judged against MIN_USDC. This amount clears MIN_ETH, so it would have
+			// been accepted had the base asset's minimum been the one applied.
+			assert_noop!(
+				set_order(BELOW_PRICE, amounts(0, MIN_USDC - 1)),
+				Error::<Test>::BelowMinimumOrderAmount
+			);
+			assert_ok!(set_order(BELOW_PRICE, amounts(0, MIN_USDC)));
+			assert_eq!(order_amounts(), (Amount::zero(), MIN_USDC.into()));
+		});
+	}
+
+	#[test]
+	fn one_side_reaching_the_minimum_is_enough() {
+		new_test_ext().execute_with(|| {
+			setup_pool_with_minimums();
+
+			// Both caps are set clear of their respective minimums. Opening the order debits both
+			// assets, but nearly all of this range sits above the price, so the ratio it requires
+			// is heavily skewed: the base cap is what binds, and the quote debit lands far short
+			// of its own cap.
+			assert_ok!(set_order(MOSTLY_ABOVE_PRICE, amounts(MIN_ETH * 2, MIN_USDC * 2)));
+
+			let (base, quote) = order_amounts();
+			// The base cap bound exactly, confirming the quote cap never came into play.
+			assert_eq!(base, (MIN_ETH * 2).into());
+			// And the USDC side really is a non-zero sliver below its own minimum - this is the
+			// case the rule exists for, rather than the trivial one where the other side is zero.
+			assert!(quote > Amount::zero() && quote < MIN_USDC.into());
+		});
+	}
+
+	#[test]
+	fn neither_side_reaching_its_minimum_is_rejected() {
+		new_test_ext().execute_with(|| {
+			setup_pool_with_minimums();
+
+			assert_noop!(
+				set_order(STRADDLING, amounts(MIN_ETH / 2, MIN_USDC / 2)),
+				Error::<Test>::BelowMinimumOrderAmount
+			);
+		});
+	}
+
+	/// A minimum of zero is satisfied by any amount and only one side has to qualify, so an asset
+	/// left unconfigured disables the check for every pool it appears in - the quote asset needs
+	/// one too, or nothing is enforced anywhere.
+	#[test]
+	fn an_unconfigured_asset_disables_the_check() {
+		new_test_ext().execute_with(|| {
+			create_pool();
+
+			// Neither asset configured: any non-zero position is fine.
+			assert_ok!(set_order(STRADDLING, amounts(1, 1)));
+
+			// Now configure ETH only, leaving USDC at its default of zero.
+			assert_ok!(LiquidityPools::update_pallet_config(
+				RuntimeOrigin::root(),
+				bounded_vec![PalletConfigUpdate::SetMinimumOrderAmount {
+					asset: Asset::Eth,
+					amount: MIN_ETH
+				}],
+			));
+
+			// A position too small for the ETH minimum is still accepted.
+			assert_ok!(set_order(STRADDLING, amounts(1, 1)));
+		});
+	}
+
+	#[test]
+	fn update_range_order_enforces_minimum() {
+		new_test_ext().execute_with(|| {
+			setup_pool_with_minimums();
+
+			// Increasing from no order to below the minimum is rejected...
+			assert_noop!(
+				update_order(
+					STRADDLING,
+					IncreaseOrDecrease::Increase(amounts(MIN_ETH / 2, MIN_USDC / 2))
+				),
+				Error::<Test>::BelowMinimumOrderAmount,
+			);
+			// ...while reaching it is accepted.
+			assert_ok!(update_order(
+				STRADDLING,
+				IncreaseOrDecrease::Increase(amounts(MIN_ETH * 2, MIN_USDC * 2))
+			));
+
+			// Decreasing such that a non-zero dust position is left behind is rejected...
+			let liquidity = order_liquidity();
+			assert_noop!(
+				update_order(
+					STRADDLING,
+					IncreaseOrDecrease::Decrease(RangeOrderSize::Liquidity {
+						liquidity: liquidity - liquidity / 1_000
+					}),
+				),
+				Error::<Test>::BelowMinimumOrderAmount,
+			);
+			// ...but closing it in full is allowed.
+			assert_ok!(update_order(
+				STRADDLING,
+				IncreaseOrDecrease::Decrease(RangeOrderSize::Liquidity {
+					liquidity: Liquidity::MAX
+				}),
+			));
+		});
 	}
 }

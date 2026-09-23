@@ -10,24 +10,29 @@ jobs:
         uses: ./.github/workflows/_01_pre_check.yml
         secrets: inherit
     force-version-bump:
+        needs: pre-check
         uses: ./.github/workflows/_05_force_version_bump.yml
         secrets: inherit
         with:
             network-to-check-against: "sisyphos"
     test:
+        needs: pre-check
         uses: ./.github/workflows/_10_test.yml
         secrets: inherit
     coverage:
+        needs: pre-check
         uses: ./.github/workflows/_11_coverage.yml
         with:
             test_features: runtime-benchmarks
         secrets: inherit
     build:
+        needs: pre-check
         uses: ./.github/workflows/_20_build.yml
         secrets: inherit
         with:
             profile: "release"
     build-turbo:
+        needs: pre-check
         uses: ./.github/workflows/_20_build.yml
         secrets: inherit
         with:
@@ -35,6 +40,7 @@ jobs:
             upload-name: "chainflip-backend-bin-turbo"
     # Used to test upgrades to this version from the latest release
     build-try-runtime:
+        needs: pre-check
         uses: ./.github/workflows/_20_build.yml
         secrets: inherit
         with:
@@ -42,6 +48,7 @@ jobs:
             upload-name: "chainflip-backend-bin-try-runtime"
             binary-subdir: release
     build-benchmarks:
+        needs: pre-check
         uses: ./.github/workflows/_20_build.yml
         secrets: inherit
         with:

@@ -41,7 +41,9 @@ jobs:
           --health-retries 5
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
 
       - name: Install system packages
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -50,10 +52,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PGPASSWORD: postgres
+          INPUTS_ARTIFACT_SUFFIX: ${{ inputs.artifact_suffix }}
+          INPUTS_FAILED_RUN_ID: ${{ inputs.failed_run_id }}
         run: |
           set -euo pipefail
-          SUFFIX="${{ inputs.artifact_suffix }}"
-          RUN_ID="${{ inputs.failed_run_id }}"
+          SUFFIX="${INPUTS_ARTIFACT_SUFFIX}"
+          RUN_ID="${INPUTS_FAILED_RUN_ID}"
 
           echo "Downloading indexer dump from run $RUN_ID (suffix: '$SUFFIX')"
           gh run download "$RUN_ID" \
@@ -69,7 +73,7 @@ jobs:
             -c "SELECT name, COUNT(*) FROM event GROUP BY name ORDER BY count DESC LIMIT 5"
 
       - name: Run Claude Code debugger
-        uses: anthropics/claude-code-action@a874e9ecd7bb36efdad65429c6b35815f5a08f10 # v1.0.210
+        uses: anthropics/claude-code-action@833fb0f8c9f6686b33d963a8bae0a94f4936ab2a # v1.0.211
         with:
           anthropic_api_key: ${{ secrets.CF_PROTOCOL_ANTHROPIC_API_KEY }}
           claude_args: >-

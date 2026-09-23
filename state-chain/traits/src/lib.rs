@@ -40,6 +40,7 @@ pub use swapping::{
 	SwapRequestTypeEncoded, SwapType,
 };
 
+pub mod elections;
 pub mod mocks;
 pub mod offence_reporting;
 
