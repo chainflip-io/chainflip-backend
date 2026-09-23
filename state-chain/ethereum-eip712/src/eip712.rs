@@ -431,11 +431,18 @@ pub fn encode_data(
 	let mut tokens = vec![Token::Uint(U256::from_big_endian(&hash))];
 
 	if let Some(fields) = types.get(primary_type) {
+		// Indexed up front: arrays are structs with one field per element, so a lookup per field
+		// would make hashing quadratic in the array length. Reversed so the first duplicate wins.
+		let field_values: BTreeMap<&str, &MinimizedScaleValue> = match data {
+			MinimizedScaleValue::NamedStruct(fs) =>
+				fs.iter().rev().map(|(name, value)| (name.as_str(), value)).collect(),
+			_ => BTreeMap::new(),
+		};
 		for field in fields.iter() {
 			// handle recursive types
 
-			if let Ok(field_value) = data.get_struct_field(field.name.clone()) {
-				let field = encode_field(types, &field.name, &field.r#type, &field_value)?;
+			if let Some(field_value) = field_values.get(field.name.as_str()) {
+				let field = encode_field(types, &field.name, &field.r#type, field_value)?;
 				tokens.push(field);
 			} else if types.contains_key(&field.r#type) {
 				tokens.push(Token::Uint(U256::zero()));
