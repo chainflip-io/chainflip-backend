@@ -1997,18 +1997,18 @@ fn can_update_all_config_items() {
 
 	new_test_ext().execute_with(|| {
 		// Check that the default values are different from the new ones
-		assert_ne!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdc), NEW_MINIMUM_USDC);
-		assert_ne!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdt), NEW_MINIMUM_USDT);
+		assert_ne!(MinimumOrderAmount::<Test>::get(Asset::Usdc), NEW_MINIMUM_USDC);
+		assert_ne!(MinimumOrderAmount::<Test>::get(Asset::Usdt), NEW_MINIMUM_USDT);
 
 		// Update all config items at the same time
 		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
 			bounded_vec![
-				PalletConfigUpdate::SetMinimumLimitOrderAmount {
+				PalletConfigUpdate::SetMinimumOrderAmount {
 					asset: Asset::Usdc,
 					amount: NEW_MINIMUM_USDC
 				},
-				PalletConfigUpdate::SetMinimumLimitOrderAmount {
+				PalletConfigUpdate::SetMinimumOrderAmount {
 					asset: Asset::Usdt,
 					amount: NEW_MINIMUM_USDT
 				},
@@ -2016,20 +2016,20 @@ fn can_update_all_config_items() {
 		));
 
 		// Check that the new values were set
-		assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdc), NEW_MINIMUM_USDC);
-		assert_eq!(MinimumLimitOrderAmount::<Test>::get(Asset::Usdt), NEW_MINIMUM_USDT);
+		assert_eq!(MinimumOrderAmount::<Test>::get(Asset::Usdc), NEW_MINIMUM_USDC);
+		assert_eq!(MinimumOrderAmount::<Test>::get(Asset::Usdt), NEW_MINIMUM_USDT);
 
 		// Check that the events were emitted
 		assert_events_eq!(
 			Test,
 			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::SetMinimumLimitOrderAmount {
+				update: PalletConfigUpdate::SetMinimumOrderAmount {
 					asset: Asset::Usdc,
 					amount: NEW_MINIMUM_USDC,
 				},
 			}),
 			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::SetMinimumLimitOrderAmount {
+				update: PalletConfigUpdate::SetMinimumOrderAmount {
 					asset: Asset::Usdt,
 					amount: NEW_MINIMUM_USDT,
 				},
@@ -2327,7 +2327,7 @@ mod minimum_range_order_amount {
 	}
 
 	fn order() -> RangeOrder<u64> {
-		LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &ALICE, false)
+		LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &ALICE)
 			.unwrap()
 			.range_orders
 			.remove(0)
@@ -2510,11 +2510,10 @@ mod minimum_range_order_amount {
 fn pallet_config_update_indices_are_pinned() {
 	use codec::{Decode, Encode};
 
-	let update =
-		PalletConfigUpdate::SetMinimumLimitOrderAmount { asset: Asset::Eth, amount: 1_000 };
+	let update = PalletConfigUpdate::SetMinimumOrderAmount { asset: Asset::Eth, amount: 1_000 };
 	let encoded = update.encode();
 
-	assert_eq!(encoded[0], 1, "SetMinimumLimitOrderAmount must stay at codec index 1");
+	assert_eq!(encoded[0], 1, "SetMinimumOrderAmount must stay at codec index 1");
 	assert_eq!(PalletConfigUpdate::decode(&mut &encoded[..]).unwrap(), update);
 
 	// The index the removed variant used must not decode as anything.
