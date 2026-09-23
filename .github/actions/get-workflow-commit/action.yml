@@ -20,7 +20,7 @@ runs:
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const workflow_id = "${{ inputs.workflow-name }}";
+          const workflow_id = process.env.WORKFLOW_NAME;
           const owner = context.repo.owner;
           const repo = context.repo.repo;
           const runs = await github.rest.actions.listWorkflowRuns({
@@ -31,3 +31,5 @@ runs:
           });
           const run = runs.data.workflow_runs[0];
           return run.head_sha;
+      env:
+        WORKFLOW_NAME: ${{ inputs.workflow-name }}
