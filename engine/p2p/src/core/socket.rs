@@ -16,9 +16,14 @@
 
 use std::time::Duration;
 
+use blake2::{
+	digest::{consts::U32, Mac},
+	Blake2bMac,
+};
 use tracing::{debug, warn};
 
 use super::{PeerInfo, X25519KeyPair};
+use crate::XPublicKey;
 
 /// Wait this long until attempting to reconnect
 pub const RECONNECT_INTERVAL: Duration = Duration::from_millis(250);
@@ -57,8 +62,34 @@ pub struct OutgoingSocket {
 }
 
 impl OutgoingSocket {
-	pub fn new(context: &zmq::Context, key: &X25519KeyPair) -> Self {
+	pub fn new(context: &zmq::Context, key: &X25519KeyPair, remote_pubkey: &XPublicKey) -> Self {
 		let socket = context.socket(zmq::SocketType::DEALER).unwrap();
+
+		// Give this connection a stable, unguessable routing id so the receiving ROUTER
+		// identifies us by it rather than falling back to its own auto-generated id - a
+		// value from an unseeded, sequential per-ROUTER counter, i.e. predictable. The id is
+		// not covered by the CURVE handshake and is never surfaced to the ZAP authenticator
+		// (the ROUTER parses it only after authentication), so it cannot be validated
+		// against our key; unpredictability is the only available defence. Keying a hash of
+		// the remote's public key with our own secret makes the id unguessable to everyone
+		// else - so no other peer can squat or displace it - yet deterministic for this
+		// (us, remote) pair, so router_handover cleanly reclaims our previous pipe on
+		// reconnect, even across a restart. It is distinct per remote (the remote key is the
+		// hashed input). The "CFE" prefix keeps the leading byte non-zero: routing ids
+		// starting with a zero byte are reserved by ZMQ for its own auto-generated ids.
+		let hash = Blake2bMac::<U32>::new_with_salt_and_personal(
+			&key.secret_key.to_bytes(),
+			b"",
+			b"CFE_zmq_route_id",
+		)
+		.expect("32-byte key and 16-byte persona are within BLAKE2b limits")
+		.chain_update(remote_pubkey.as_bytes())
+		.finalize()
+		.into_bytes();
+		let mut routing_id = [0u8; 35];
+		routing_id[..3].copy_from_slice(b"CFE");
+		routing_id[3..].copy_from_slice(&hash);
+		socket.set_identity(&routing_id).unwrap();
 
 		// Discard any pending messages when disconnecting a socket
 		socket.set_linger(DO_NOT_LINGER).unwrap();

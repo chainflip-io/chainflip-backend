@@ -592,7 +592,7 @@ impl P2PContext {
 	fn connect_to_peer(&mut self, peer: PeerInfo, previous_activity: tokio::time::Instant) {
 		let account_id = peer.account_id.clone();
 
-		let socket = OutgoingSocket::new(&self.zmq_context, &self.key);
+		let socket = OutgoingSocket::new(&self.zmq_context, &self.key, &peer.pubkey);
 
 		self.monitor_handle.start_monitoring_for(&socket, &peer);
 
@@ -683,6 +683,12 @@ impl P2PContext {
 			.set_heartbeat_timeout(CONNECTION_HEARTBEAT_TIMEOUT.as_millis() as i32)
 			.unwrap();
 
+		// When a peer reconnects it presents the same (stable, key-derived) routing id as
+		// its previous connection, whose pipe here may not yet have been reaped. Handover
+		// lets the new connection take over that id and terminates the stale pipe, rather
+		// than the reconnection being refused. This is safe because our DEALERs present
+		// unguessable keyed ids (see OutgoingSocket::new): handover can only ever be
+		// triggered by the genuine owner of an id, not by a peer guessing another's.
 		socket.set_router_handover(true).unwrap();
 		socket.set_curve_server(true).unwrap();
 		socket.set_curve_secretkey(&self.key.secret_key.to_bytes()).unwrap();

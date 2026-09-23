@@ -3893,6 +3893,7 @@ version = "2.4.0"
 dependencies = [
  "anyhow",
  "bincode 1.3.3",
+ "blake2 0.10.6",
  "cf-chains",
  "cf-primitives",
  "curve25519-dalek 4.1.3",
