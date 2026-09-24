@@ -4081,8 +4081,9 @@ export interface ChainTx<
      * withdrawal address.
      *
      * Affiliates have a unique account id that can only be accessed through the affiliate's
-     * broker. The affiliate account id is derived from the broker account id using a short id
-     * that is unique to that combination of broker and affiliate.
+     * broker. The affiliate account id is derived from the broker account id, the short id and
+     * the withdrawal address. Short ids are recycled on deregistration, so the withdrawal
+     * address is what keeps the derived account id distinct across re-registrations.
      *
      * @param {H160} withdrawalAddress
      **/
