@@ -122,12 +122,30 @@ enum EgressType {
 	Refund { refund_fee: AssetAmount },
 }
 
+/// AffiliateDetails are assumed to be immutable for the lifetime of the affiliate account. In
+/// particular, the withdrawal address cannot be updated. If an affiliate wishes to change the
+/// withdrawal address, they can create a new affiliate account with a new short id.
 #[derive(
 	Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Copy, Clone, Debug,
 )]
 pub struct AffiliateDetails {
 	pub short_id: AffiliateShortId,
+	/// NOTE: this address should never be updated, it is part of the Affiliate's identity.
 	pub withdrawal_address: EthereumAddress,
+}
+
+impl AffiliateDetails {
+	pub fn derive_account_id<T: Config>(
+		&self,
+		broker_id: T::AccountId,
+	) -> Result<T::AccountId, Error<T>> {
+		Decode::decode(&mut TrailingZeroInput::new(
+			(*b"chainflip/affiliate", broker_id.clone(), self.short_id, self.withdrawal_address)
+				.blake2_256()
+				.as_ref(),
+		))
+		.map_err(|_| Error::<T>::AffiliateAccountIdDerivationFailed)
+	}
 }
 
 /// Refund parameter used within the swapping pallet.
@@ -1584,8 +1602,9 @@ pub mod pallet {
 		/// withdrawal address.
 		///
 		/// Affiliates have a unique account id that can only be accessed through the affiliate's
-		/// broker. The affiliate account id is derived from the broker account id using a short id
-		/// that is unique to that combination of broker and affiliate.
+		/// broker. The affiliate account id is derived from the broker account id, the short id and
+		/// the withdrawal address. Short ids are recycled on deregistration, so the withdrawal
+		/// address is what keeps the derived account id distinct across re-registrations.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
@@ -1605,10 +1624,8 @@ pub mod pallet {
 					.ok_or(Error::<T>::AffiliateShortIdOutOfBounds)?,
 			);
 
-			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
-				(*b"chainflip/affiliate", broker_id.clone(), short_id).blake2_256().as_ref(),
-			))
-			.map_err(|_| Error::<T>::AffiliateAccountIdDerivationFailed)?;
+			let affiliate_details = AffiliateDetails { short_id, withdrawal_address };
+			let affiliate_id = affiliate_details.derive_account_id::<T>(broker_id.clone())?;
 
 			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
 			if !frame_system::Pallet::<T>::account_exists(&affiliate_id) {
@@ -1616,11 +1633,7 @@ pub mod pallet {
 				let _ = frame_system::Provider::<T>::created(&affiliate_id);
 			}
 
-			AffiliateAccountDetails::<T>::insert(
-				&broker_id,
-				&affiliate_id,
-				AffiliateDetails { short_id, withdrawal_address },
-			);
+			AffiliateAccountDetails::<T>::insert(&broker_id, &affiliate_id, affiliate_details);
 
 			Self::deposit_event(Event::<T>::AffiliateRegistration {
 				broker_id,

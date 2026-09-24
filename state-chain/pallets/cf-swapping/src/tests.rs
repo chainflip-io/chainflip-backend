@@ -2665,6 +2665,43 @@ mod affiliates {
 	}
 
 	#[test]
+	fn reregistering_with_new_withdrawal_address_yields_distinct_id() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+
+			let register_and_deregister = |withdrawal_address: EthereumAddress| {
+				assert_ok!(Swapping::register_affiliate(
+					OriginTrait::signed(BROKER),
+					withdrawal_address,
+				));
+
+				let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+					.expect("Affiliate must be registered!");
+
+				assert_ok!(Swapping::deregister_affiliate(
+					OriginTrait::signed(BROKER),
+					affiliate_account_id,
+				));
+
+				affiliate_account_id
+			};
+
+			// The short id is recycled on deregistration, so the withdrawal address is what keeps
+			// the derived account id distinct.
+			assert_ne!(
+				register_and_deregister([0xaa; 20].into()),
+				register_and_deregister([0xbb; 20].into()),
+			);
+
+			// Conversely, the same inputs must still derive the same account id.
+			assert_eq!(
+				register_and_deregister([0xaa; 20].into()),
+				register_and_deregister([0xaa; 20].into()),
+			);
+		});
+	}
+
+	#[test]
 	fn can_not_deregister_broker_if_affiliates_still_have_balance() {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
