@@ -110,10 +110,9 @@ jobs:
       run-job: true
   publish:
     needs: [package]
-    uses: ./.github/workflows/_30_publish.yml
+    uses: ./.github/workflows/_31_publish.yml
     with:
-      version: "sisyphos/"
-      environment: "development"
+      network: "sisyphos"
     secrets: inherit
   invalidate-apt-cache:
     needs: [publish]

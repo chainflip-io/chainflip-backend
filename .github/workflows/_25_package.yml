@@ -54,6 +54,7 @@ jobs:
           DEB_REVISION: ${{ steps.get-date.outputs.date }}
           NETWORK: ${{ inputs.network }}
         run: |
+          rm -f target/debian/*.deb
           cargo deb -v --no-build --no-strip -p chainflip-node --deb-revision "${DEB_REVISION}" --variant="${NETWORK}"
           cargo deb -v --no-build --no-strip -p engine-runner --deb-revision "${DEB_REVISION}" --variant="${NETWORK}"
           cargo deb -v --no-build --no-strip -p chainflip-cli --deb-revision "${DEB_REVISION}"
