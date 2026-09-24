@@ -993,17 +993,14 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
 					.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
 			for (i, output) in outputs.iter().enumerate() {
-				if [
-					ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
-					ScriptPubkey::Taproot(btc_key.current),
-				]
-				.contains(&output.script_pubkey)
-				{
-					Environment::add_bitcoin_change_utxo(
-						output.amount,
-						UtxoId { tx_id, vout: i as u32 },
-						batch_transfer.change_utxo_key,
-					);
+				if let ScriptPubkey::Taproot(pubkey_x) = &output.script_pubkey {
+					if *pubkey_x == btc_key.current || Some(*pubkey_x) == btc_key.previous {
+						Environment::add_bitcoin_change_utxo(
+							output.amount,
+							UtxoId { tx_id, vout: i as u32 },
+							*pubkey_x,
+						);
+					}
 				}
 			}
 		}
