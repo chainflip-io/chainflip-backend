@@ -47,7 +47,15 @@ pub(crate) const INCOMING_MESSAGES_BUFFER_SIZE: i32 = 250;
 pub(crate) const CONNECTION_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// How long to wait for a heartbeat response before timing out the
 /// connection
-pub(crate) const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
+const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
+/// Heartbeat timeout for inbound (ROUTER) connections. ZMQ only resets it once a
+/// *complete* message arrives, and a peer's PONG queues behind whatever message it is
+/// still sending us, so on a slow path a single large message (a ~500 KB keygen
+/// verification broadcast) can keep it running for its whole transfer. 120 s is
+/// 4 x MAX_STAGE_DURATION: a keygen message still transferring after that could no
+/// longer arrive in time to be used, so the heartbeat never cuts one that would have
+/// been. Reaping dead connections needs no tighter bound.
+pub(crate) const INCOMING_CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(120);
 /// An argument to set_linger on a socket that, when set, ensures that
 /// we don't attempt to deliver pending messages before destroying the
 /// socket

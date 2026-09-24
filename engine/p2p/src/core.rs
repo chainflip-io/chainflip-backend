@@ -55,7 +55,7 @@ use crate::{EdPublicKey, OutgoingMultisigStageMessages, P2PKey, XPublicKey};
 
 use socket::{
 	ConnectedOutgoingSocket, OutgoingSocket, CONNECTION_HEARTBEAT_INTERVAL,
-	CONNECTION_HEARTBEAT_TIMEOUT, INCOMING_MESSAGES_BUFFER_SIZE, MAX_MESSAGE_SIZE,
+	INCOMING_CONNECTION_HEARTBEAT_TIMEOUT, INCOMING_MESSAGES_BUFFER_SIZE, MAX_MESSAGE_SIZE,
 	RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX,
 };
 
@@ -680,7 +680,7 @@ impl P2PContext {
 			.set_heartbeat_ivl(CONNECTION_HEARTBEAT_INTERVAL.as_millis() as i32)
 			.unwrap();
 		socket
-			.set_heartbeat_timeout(CONNECTION_HEARTBEAT_TIMEOUT.as_millis() as i32)
+			.set_heartbeat_timeout(INCOMING_CONNECTION_HEARTBEAT_TIMEOUT.as_millis() as i32)
 			.unwrap();
 
 		// When a peer reconnects it presents the same (stable, key-derived) routing id as
