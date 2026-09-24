@@ -2,6 +2,14 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.15] - 2026-09-24
+
+### Fixes
+
+- Preserve the correct signing key when recording Bitcoin vault outputs as available UTXOs.
+- Reject non-standard bitcoin scripts.
+- Use finalized block subscription for assethub chain tracking
+
 ## [2.2.14] - 2026-09-16
 
 ## [2.2.13] - 2026-09-11
