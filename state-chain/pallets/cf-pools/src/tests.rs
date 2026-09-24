@@ -2524,3 +2524,18 @@ fn pallet_config_update_indices_are_pinned() {
 		"index 0 belonged to a removed variant and must not be reused"
 	);
 }
+
+/// Pins the SCALE layout of the `Pools` storage value, including the `cf-amm` types nested inside
+/// it. `cf_lp_get_order_fills` decodes `Pools` at historical blocks with whatever `Pool` the node
+/// was built with, so a change here breaks that rpc for every block before the migration that
+/// introduces it, and needs a matching legacy decoder in `custom-rpc`'s `order_fills`. Nothing else
+/// fails when the layout moves — treat a diff here as a prompt to write one, not as a snapshot to
+/// accept.
+///
+/// `T::AccountId` resolves to the mock's `u64`; only the pallet's own types are pinned.
+#[test]
+fn pools_storage_layout_is_pinned() {
+	let mut registry = scale_info::Registry::new();
+	registry.register_type(&scale_info::meta_type::<Pool<Test>>());
+	insta::assert_json_snapshot!(scale_info::PortableRegistry::from(registry));
+}

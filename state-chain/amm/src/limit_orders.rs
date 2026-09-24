@@ -265,16 +265,23 @@ pub struct PoolState<LiquidityProvider: Ord> {
 	total_swap_outputs: PoolPairsMap<Amount>,
 }
 
-impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
-	/// Creates a new pool state. The pool is created with no liquidity.
-	///
-	/// This function never panics.
-	pub(super) fn new() -> Self {
+impl<LiquidityProvider: Ord> Default for PoolState<LiquidityProvider> {
+	/// A pool with no orders that nothing has been swapped through.
+	fn default() -> Self {
 		Self {
 			orders: Default::default(),
 			total_swap_inputs: Default::default(),
 			total_swap_outputs: Default::default(),
 		}
+	}
+}
+
+impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
+	/// Creates a new pool state. The pool is created with no liquidity.
+	///
+	/// This function never panics.
+	pub(super) fn new() -> Self {
+		Default::default()
 	}
 
 	/// Creates an iterator over all positions
@@ -577,16 +584,16 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 /// of the last time it was touched; the ratio between the two recovered how much of the order had
 /// been bought since. There is nowhere to put that in the new representation, so converting has to
 /// realise it: whatever each order had earned and not yet collected comes back as
-/// [migration_support::UncollectedProceeds] for the caller to pay out.
+/// [legacy_support::UncollectedProceeds] for the caller to pay out.
 ///
 /// This lives here rather than beside the migration because converting has to construct the new
-/// [PoolState] and [Position], whose fields are private to this module. Exposing constructors for
-/// them would widen this crate's API permanently for a need that expires.
+/// [PoolState] and [Position], whose fields are private to this module.
 ///
-/// It exists solely for `pallet-cf-pools`'s `remove_fixed_pools` migration, and should be deleted
-/// with it. The equivalent support for the v7 to v8 migration outlived its migration by several
-/// releases because the two sit in different crates.
-pub mod migration_support {
+/// Two things use it: `pallet-cf-pools`'s `remove_fixed_pools` migration, and the node's order
+/// fills rpc, which reports fills for blocks either side of the upgrade and so has to read both
+/// representations. Only the first expires, so this outlives the migration and may not be deleted
+/// with it.
+pub mod legacy_support {
 	use super::*;
 	use crate::common::Pairs;
 
@@ -613,7 +620,7 @@ pub mod migration_support {
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-	pub struct PositionV9 {
+	pub struct PositionV10 {
 		pool_instance: u128,
 		amount: Amount,
 		last_percent_remaining: FloatBetweenZeroAndOne,
@@ -621,10 +628,10 @@ pub mod migration_support {
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-	pub struct PoolStateV9<LiquidityProvider: Ord> {
+	pub struct PoolStateV10<LiquidityProvider: Ord> {
 		next_pool_instance: u128,
 		fixed_pools: PoolPairsMap<BTreeMap<SqrtPrice, FixedPool>>,
-		positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), PositionV9>>,
+		positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), PositionV10>>,
 		total_swap_inputs: PoolPairsMap<Amount>,
 		total_swap_outputs: PoolPairsMap<Amount>,
 	}
@@ -667,6 +674,21 @@ pub mod migration_support {
 		pub pool_percent_remaining: Option<FloatBetweenZeroAndOne>,
 	}
 
+	/// An order as the old representation would have reported it to a collect: what had been
+	/// bought from it since its lp last collected, and what it had left.
+	#[derive(Clone, Debug, PartialEq, Eq)]
+	pub struct CollectedBefore<LiquidityProvider> {
+		pub lp: LiquidityProvider,
+		/// The price the order is selling at.
+		pub tick: Tick,
+		/// How much of the order's liquidity had been bought.
+		pub sold_amount: Amount,
+		/// What that had earned, in the pair the order is not selling.
+		pub bought_amount: Amount,
+		/// What the order had left to sell.
+		pub remaining_amount: Amount,
+	}
+
 	/// What an order had earned but not collected. The new representation cannot hold it, so it
 	/// has to be paid out as part of the migration.
 	#[derive(Clone, Debug, PartialEq, Eq)]
@@ -681,7 +703,7 @@ pub mod migration_support {
 		pub bought_amount: Amount,
 	}
 
-	impl<LiquidityProvider: Clone + Ord> PoolStateV9<LiquidityProvider> {
+	impl<LiquidityProvider: Clone + Ord> PoolStateV10<LiquidityProvider> {
 		/// Converts to the current representation, returning the earnings that have to be paid out
 		/// because there is no longer anywhere to keep them.
 		pub fn migrate(self) -> Migrated<LiquidityProvider> {
@@ -722,19 +744,11 @@ pub mod migration_support {
 						};
 
 					if !used_amount.is_zero() {
-						// Mirrors what a collect would have paid out at this price.
-						let price = Price::from(*sqrt_price);
-						let bought_amount = match sold_pair {
-							Pairs::Base => price.output_amount_floor(used_amount),
-							Pairs::Quote => price.input_amount_floor(used_amount),
-						}
-						.unwrap_or_default();
-
 						proceeds.push(UncollectedProceeds {
 							lp: lp.clone(),
 							sold_pair,
 							sold_amount: used_amount,
-							bought_amount,
+							bought_amount: proceeds_of(sold_pair, *sqrt_price, used_amount),
 						});
 					}
 
@@ -792,6 +806,31 @@ pub mod migration_support {
 						lp: lp.clone(),
 						amount: position.amount,
 						original_amount: position.original_amount,
+					})
+					.collect()
+			}))
+		}
+
+		/// Every order as a collect would have reported it, by the pair it sells. Orders whose
+		/// recorded share of their price does not convert are left out, as they are by
+		/// [Self::migrate].
+		pub fn collected(&self) -> PoolPairsMap<Vec<CollectedBefore<LiquidityProvider>>> {
+			PoolPairsMap::from_array([Pairs::Base, Pairs::Quote].map(|sold_pair| {
+				self.positions[sold_pair]
+					.iter()
+					.filter_map(|((sqrt_price, lp), position)| {
+						let (remaining_amount, sold_amount) = remaining_and_used(
+							position,
+							self.fixed_pools[sold_pair].get(sqrt_price),
+						)?;
+
+						Some(CollectedBefore {
+							lp: lp.clone(),
+							tick: sqrt_price.to_tick(),
+							sold_amount,
+							bought_amount: proceeds_of(sold_pair, *sqrt_price, sold_amount),
+							remaining_amount,
+						})
 					})
 					.collect()
 			}))
@@ -882,7 +921,7 @@ pub mod migration_support {
 			}
 		}
 
-		impl PositionV9 {
+		impl PositionV10 {
 			pub fn from_parts(
 				pool_instance: u128,
 				amount: Amount,
@@ -893,10 +932,10 @@ pub mod migration_support {
 			}
 		}
 
-		impl<LiquidityProvider: Ord> PoolStateV9<LiquidityProvider> {
+		impl<LiquidityProvider: Ord> PoolStateV10<LiquidityProvider> {
 			pub fn from_parts(
 				fixed_pools: PoolPairsMap<BTreeMap<SqrtPrice, FixedPool>>,
-				positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), PositionV9>>,
+				positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), PositionV10>>,
 			) -> Self {
 				Self {
 					next_pool_instance: 0,
@@ -918,13 +957,23 @@ pub mod migration_support {
 		}
 	}
 
+	/// What a collect would have paid out for `used_amount` of an order's liquidity at this price.
+	fn proceeds_of(sold_pair: Pairs, sqrt_price: SqrtPrice, used_amount: Amount) -> Amount {
+		let price = Price::from(sqrt_price);
+		match sold_pair {
+			Pairs::Base => price.output_amount_floor(used_amount),
+			Pairs::Quote => price.input_amount_floor(used_amount),
+		}
+		.unwrap_or_default()
+	}
+
 	/// How much of an order was left, and how much of it had been bought, given the fixed pool it
 	/// belonged to.
 	/// `None` where the position's recorded share of the price could not be converted, which the
 	/// old representation could not produce: `percent_remaining` only ever decreases and an order
 	/// records it at an earlier point.
 	fn remaining_and_used(
-		position: &PositionV9,
+		position: &PositionV10,
 		fixed_pool: Option<&FixedPool>,
 	) -> Option<(Amount, Amount)> {
 		let Some(fixed_pool) =
@@ -951,12 +1000,12 @@ pub mod migration_support {
 
 #[cfg(test)]
 mod migration_tests {
-	use super::{migration_support::*, *};
+	use super::{legacy_support::*, *};
 	use crate::common::Pairs;
 	use cf_utilities::{assert_matches, assert_ok};
 
 	type Lp = cf_primitives::AccountId;
-	type OldPoolState = PoolStateV9<Lp>;
+	type OldPoolState = PoolStateV10<Lp>;
 
 	fn lp(id: u8) -> Lp {
 		Lp::from([id; 32])
@@ -1004,7 +1053,7 @@ mod migration_tests {
 					.map(|(sqrt_price, lp, instance, amount, remaining, original)| {
 						(
 							(sqrt_price, lp),
-							PositionV9::from_parts(instance, amount, remaining, original),
+							PositionV10::from_parts(instance, amount, remaining, original),
 						)
 					})
 					.collect(),

@@ -16,6 +16,7 @@
 
 //! Contains tests related to liquidity, pools and swapping
 use cf_rpc_types::OrderFilled;
+use custom_rpc::order_fills::PoolsAtBlock;
 use sp_runtime::{Permill, SaturatedConversion};
 use std::{collections::BTreeMap, vec};
 
@@ -1030,8 +1031,8 @@ fn order_fills_subscription() {
 			let pools_after: BTreeMap<_, _> = pallet_cf_pools::Pools::<Runtime>::iter().collect();
 
 			let order_fills = custom_rpc::order_fills::order_fills_from_block_updates(
-				&pools_before,
-				&pools_after,
+				&PoolsAtBlock::current(pools_before),
+				&PoolsAtBlock::current(pools_after),
 				lp_events,
 			);
 

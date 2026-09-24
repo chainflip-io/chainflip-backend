@@ -27,7 +27,7 @@
 use crate::{Config, Pallet, Pool, Pools};
 use cf_amm::{
 	common::{Pairs, PoolPairsMap, Side},
-	limit_orders::migration_support::{Migrated, PoolStateV9, UncollectedProceeds},
+	limit_orders::legacy_support::{Migrated, PoolStateV10, UncollectedProceeds},
 	math::{Amount, Tick},
 	range_orders,
 };
@@ -47,7 +47,7 @@ use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, ops::Range};
 #[cfg(any(test, feature = "try-runtime"))]
 use cf_amm::common::AssetPair;
 #[cfg(feature = "try-runtime")]
-use cf_amm::limit_orders::migration_support::OrderBefore;
+use cf_amm::limit_orders::legacy_support::OrderBefore;
 #[cfg(feature = "try-runtime")]
 use cf_amm::math::Price;
 #[cfg(feature = "try-runtime")]
@@ -72,7 +72,7 @@ mod old {
 
 	#[derive(Encode, Decode)]
 	pub struct PoolState<T: Config> {
-		pub limit_orders: PoolStateV9<(T::AccountId, OrderId)>,
+		pub limit_orders: PoolStateV10<(T::AccountId, OrderId)>,
 		pub range_orders: range_orders::PoolState<(T::AccountId, OrderId)>,
 	}
 
@@ -433,7 +433,7 @@ mod tests {
 	use crate::mock::{new_test_ext, RuntimeOrigin, Test, ALICE, BOB};
 	use cf_amm::{
 		common::AssetPair,
-		limit_orders::migration_support::{FixedPool, FloatBetweenZeroAndOne, PositionV9},
+		limit_orders::legacy_support::{FixedPool, FloatBetweenZeroAndOne, PositionV10},
 		math::{Price, SqrtPrice},
 	};
 	use cf_primitives::{Asset, STABLE_ASSET};
@@ -485,7 +485,7 @@ mod tests {
 		percent_remaining: FloatBetweenZeroAndOne,
 	}
 
-	/// A single order, mirroring `PositionV9` field for field, plus the key it was stored under.
+	/// A single order, mirroring `PositionV10` field for field, plus the key it was stored under.
 	struct OldOrder {
 		/// The price and lp are the map key rather than part of the order itself.
 		tick: Tick,
@@ -521,7 +521,7 @@ mod tests {
 			// rather than carry it over.
 			limit_orders_cache: Default::default(),
 			pool_state: old::PoolState {
-				limit_orders: PoolStateV9::from_parts(
+				limit_orders: PoolStateV10::from_parts(
 					PoolPairsMap::from_array([
 						fixed_pools
 							.into_iter()
@@ -544,7 +544,7 @@ mod tests {
 							.map(|order| {
 								(
 									(SqrtPrice::from_tick(order.tick), order.lp),
-									PositionV9::from_parts(
+									PositionV10::from_parts(
 										order.pool_instance,
 										order.amount,
 										order.last_percent_remaining,

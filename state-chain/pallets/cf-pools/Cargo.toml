@@ -45,6 +45,7 @@ sp-io = { workspace = true, default-features = true }
 cf-amm = { workspace = true, features = ["test"] }
 cf-test-utilities = { workspace = true, default-features = true }
 cf-traits = { workspace = true, features = ["mocks"] }
+insta = { workspace = true, features = ["json"] }
 
 [features]
 default = ["std"]
