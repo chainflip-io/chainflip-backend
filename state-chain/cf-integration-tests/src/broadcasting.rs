@@ -16,16 +16,67 @@
 
 use super::*;
 use cf_chains::{
-	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo},
+	btc::{
+		api::{batch_transfer::BatchTransfer, BitcoinApi},
+		deposit_address::DepositAddress,
+		AggKey, BitcoinOutput, ScriptPubkey, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+	},
 	eth::api::EthereumApi,
 	AllBatch, ApiCall, Bitcoin, ForeignChain, TransferAssetParams, UpdateFlipSupply,
 };
 use cf_primitives::{chains::assets::btc, AuthorityCount, BroadcastId};
-use cf_traits::{Broadcaster, EpochInfo};
+use cf_traits::{Broadcaster, EpochInfo, OnBroadcastReady};
 use pallet_cf_broadcast::{AwaitingBroadcast, DelayedBroadcastRetryQueue, PendingBroadcasts};
+use pallet_cf_environment::BitcoinAvailableUtxos;
+use pallet_cf_threshold_signature::{CurrentKeyEpoch, Keys};
 use state_chain_runtime::{
-	BitcoinBroadcaster, BitcoinInstance, BitcoinThresholdSigner, Environment, Runtime, Validator,
+	chainflip::BroadcastReadyProvider, BitcoinBroadcaster, BitcoinInstance, BitcoinThresholdSigner,
+	Environment, Runtime, Validator,
 };
+
+#[test]
+fn bitcoin_broadcast_ready_preserves_output_keys() {
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let previous = [1; 32];
+		let current = [2; 32];
+		let agg_key = AggKey { previous: Some(previous), current };
+		CurrentKeyEpoch::<Runtime, BitcoinInstance>::put(1);
+		Keys::<Runtime, BitcoinInstance>::insert(1, agg_key);
+
+		let batch = BatchTransfer::new_unsigned(
+			&agg_key,
+			current,
+			vec![],
+			vec![
+				BitcoinOutput { amount: 10_000, script_pubkey: ScriptPubkey::Taproot(current) },
+				BitcoinOutput { amount: 20_000, script_pubkey: ScriptPubkey::P2PKH([3; 20]) },
+				BitcoinOutput { amount: 30_000, script_pubkey: ScriptPubkey::Taproot(previous) },
+				BitcoinOutput { amount: 40_000, script_pubkey: ScriptPubkey::Taproot([4; 32]) },
+			],
+		);
+		let tx_id = batch.bitcoin_transaction.txid();
+
+		<BroadcastReadyProvider as OnBroadcastReady<Bitcoin>>::on_broadcast_ready(
+			&BitcoinApi::BatchTransfer(batch),
+		);
+
+		assert_eq!(
+			BitcoinAvailableUtxos::<Runtime>::get(),
+			vec![
+				Utxo {
+					id: UtxoId { tx_id, vout: 0 },
+					amount: 10_000,
+					deposit_address: DepositAddress::new(current, CHANGE_ADDRESS_SALT),
+				},
+				Utxo {
+					id: UtxoId { tx_id, vout: 2 },
+					amount: 30_000,
+					deposit_address: DepositAddress::new(previous, CHANGE_ADDRESS_SALT),
+				},
+			],
+		);
+	});
+}
 
 #[test]
 fn bitcoin_broadcast_delay_works() {
