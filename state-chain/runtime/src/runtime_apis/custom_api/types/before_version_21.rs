@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use cf_utilities::migrations::{basics::HasVersion, v20300};
 
 /// The runtime offence shape before failed broadcasts became chain-specific.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
@@ -71,6 +72,12 @@ pub fn into_current_offences<T>(entries: Vec<(Offence, T)>) -> Vec<(super::Offen
 		.map(|(offence, value)| (offence.into_current(), value))
 		.collect()
 }
+
+// Before v20400, a delegator could only delegate to a single operator at a time, so
+// `current_delegation_status`/`upcoming_delegation_status` were a single optional
+// `DelegationInfo { operator, bid }` rather than a map of every operator it delegates to.
+pub type RpcAccountInfoCommonItems =
+	<super::RpcAccountInfoCommonItems<FlipBalance> as HasVersion<v20300>>::HistoricalType;
 
 #[cfg(test)]
 mod tests {

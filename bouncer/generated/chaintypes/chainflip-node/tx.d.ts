@@ -44,6 +44,7 @@ import type {
   CfPrimitivesSemVer,
   PalletCfValidatorDelegationOperatorSettings,
   PalletCfValidatorDelegationDelegationAmount,
+  PalletCfValidatorDelegationDelegationPlan,
   CfPrimitivesWitnessingTaskName,
   SpConsensusGrandpaAppPublic,
   SpConsensusGrandpaAppSignature,
@@ -1715,6 +1716,12 @@ export interface ChainTx<
     >;
 
     /**
+     * Delegate to a single operator.
+     *
+     * This extrinsic is only valid for delegators whose plan has at most one
+     * entry. A delegator with entries for two or more operators (only reachable via
+     * [`Self::delegate_multi`]) must use `delegate_multi` instead, since "switch operator"
+     * is ambiguous once the plan has more than one entry.
      *
      * @param {AccountId32Like} operator
      * @param {PalletCfValidatorDelegationDelegationAmount} increase
@@ -1739,6 +1746,11 @@ export interface ChainTx<
     >;
 
     /**
+     * Undelegate from the sole operator a delegator currently delegates to.
+     *
+     * Only valid for delegators whose plan has at most one entry, mirroring `delegate`.
+     * A delegator with entries for two or more operators must use `delegate_multi` and
+     * submit a plan that omits the operator(s) to undelegate from.
      *
      * @param {PalletCfValidatorDelegationDelegationAmount} decrease
      **/
@@ -1749,6 +1761,36 @@ export interface ChainTx<
           palletCall: {
             name: 'Undelegate';
             params: { decrease: PalletCfValidatorDelegationDelegationAmount };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Sets `delegator`'s complete delegation plan across one or more operators in a single
+     * call: `plan` becomes their entire new plan, replacing whatever existed
+     * before. Any operator the delegator was previously delegating to but that's absent
+     * from `plan` is fully undelegated; an empty `plan` undelegates everything. Unlike
+     * `delegate`, the caller declares exact target amounts rather than an
+     * increase/decrease delta -- entries with a zero amount are treated the same as an
+     * absent entry.
+     *
+     * `plan`'s fixed (non-`Max`) amounts must not exceed the delegator's funding balance --
+     * unlike `delegate`, which clamps an over-large increase to the balance, this rejects
+     * the plan outright rather than silently scaling it down. The total must be at least
+     * the minimum funding amount if `plan` is non-empty; individual entries may be smaller,
+     * only the total is checked.
+     *
+     * @param {PalletCfValidatorDelegationDelegationPlan} plan
+     **/
+    delegateMulti: GenericTxCall<
+      (plan: PalletCfValidatorDelegationDelegationPlan) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Validator';
+          palletCall: {
+            name: 'DelegateMulti';
+            params: { plan: PalletCfValidatorDelegationDelegationPlan };
           };
         },
         ChainKnownTypes

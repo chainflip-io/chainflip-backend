@@ -19,6 +19,10 @@ use cf_chains::instances::{
 	ArbitrumInstance, AssethubInstance, BitcoinCryptoInstance, BitcoinInstance, EthereumInstance,
 	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaCryptoInstance, SolanaInstance,
 };
+use cf_utilities::migrations::{
+	basics::{try_migrate_from_historical_type, HasVersion},
+	v20200,
+};
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 use pallet_cf_lending_pools::LendingPoolConfiguration;
 
@@ -192,37 +196,13 @@ impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
 	}
 }
 
-// Decode-only intermediate (converted to the current type via `From`); no serde needed.
-#[derive(Encode, Decode, TypeInfo, Clone, Default, Debug)]
-pub struct RpcAccountInfoCommonItems<Balance> {
-	pub account_id: Option<AccountId32>,
-	pub vanity_name: VanityName,
-	pub flip_balance: Balance,
-	pub asset_balances: AssetMap<Balance>,
-	pub bond: Balance,
-	pub estimated_redeemable_balance: Balance,
-	pub bound_redeem_address: Option<EvmAddress>,
-	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-	pub current_delegation_status: Option<DelegationInfo<Balance>>,
-	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
-}
-
-impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCommonItems<B> {
-	fn from(value: RpcAccountInfoCommonItems<B>) -> Self {
-		Self {
-			account_id: value.account_id,
-			vanity_name: value.vanity_name,
-			flip_balance: value.flip_balance,
-			asset_balances: value.asset_balances.into(),
-			bond: value.bond,
-			estimated_redeemable_balance: value.estimated_redeemable_balance,
-			bound_redeem_address: value.bound_redeem_address,
-			restricted_balances: value.restricted_balances,
-			current_delegation_status: value.current_delegation_status,
-			upcoming_delegation_status: value.upcoming_delegation_status,
-		}
-	}
-}
+// Before v19, `cf_common_account_info` didn't take a `should_sweep` parameter, but the
+// `RpcAccountInfoCommonItems` shape itself is unchanged from the v20200 historical shape (the
+// `should_sweep` parameter and the delegation-status shape are unrelated axes) -- so this is the
+// same `HasChangelog`-derived historical type as `before_version_21`, not a hand-written struct.
+// Convert a value of this type via `try_migrate_from_historical_type`, not a manual `From` impl.
+pub type RpcAccountInfoCommonItems =
+	<super::RpcAccountInfoCommonItems<FlipBalance> as HasVersion<v20200>>::HistoricalType;
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct ValidatorInfo {
@@ -603,13 +583,19 @@ impl From<RuntimeApiAccountInfo> for super::RuntimeApiAccountInfo {
 
 #[derive(Encode, Decode, TypeInfo)]
 pub struct RuntimeApiAccountInfoWrapper {
-	pub common_items: RpcAccountInfoCommonItems<FlipBalance>,
+	pub common_items: RpcAccountInfoCommonItems,
 	pub role: RuntimeApiAccountInfo,
 }
 
-impl From<RuntimeApiAccountInfoWrapper> for super::RuntimeApiAccountInfoWrapper {
-	fn from(value: RuntimeApiAccountInfoWrapper) -> Self {
-		Self { common_items: value.common_items.into(), role: value.role.into() }
+impl TryFrom<RuntimeApiAccountInfoWrapper> for super::RuntimeApiAccountInfoWrapper {
+	type Error = ();
+
+	fn try_from(value: RuntimeApiAccountInfoWrapper) -> Result<Self, Self::Error> {
+		Ok(Self {
+			common_items: try_migrate_from_historical_type(v20200, value.common_items)
+				.map_err(|_| ())?,
+			role: value.role.into(),
+		})
 	}
 }
 
