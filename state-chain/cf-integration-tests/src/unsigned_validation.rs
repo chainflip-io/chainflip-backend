@@ -42,7 +42,7 @@
 //! aggregation produced by `#[frame_support::runtime]`, so a misconfiguration
 //! (for example, if `cf-environment`'s `ValidateUnsigned` impl were no
 //! longer wired to the runtime) would fail these tests rather than slip
-//! through. The inner call is a trivial `remark`; the security properties
+//! through. The inner call is a trivial `set_vanity_name`; the security properties
 //! live entirely in nonce and signature validation and are independent of the
 //! inner call.
 
@@ -103,8 +103,12 @@ fn signed_sol_non_native_call(
 	)
 }
 
-fn remark_call() -> RuntimeCall {
-	frame_system::Call::<Runtime>::remark { remark: vec![] }.into()
+/// A trivial call that is allowed as a non-native signed call and succeeds for any account.
+fn vanity_name_call(name: &[u8]) -> RuntimeCall {
+	pallet_cf_account_roles::Call::<Runtime>::set_vanity_name {
+		name: name.to_vec().try_into().unwrap(),
+	}
+	.into()
 }
 
 /// Creates and funds `signer_account` so unsigned validation (account
@@ -145,7 +149,8 @@ fn future_nonce_non_native_call_rejected_at_block_import() {
 		let signing_key = SolSigningKey::new();
 
 		// The on-chain account nonce is 0, but the payload authorises nonce 2.
-		let (call, signer_account) = signed_sol_non_native_call(&signing_key, 2, remark_call());
+		let (call, signer_account) =
+			signed_sol_non_native_call(&signing_key, 2, vanity_name_call(b"first"));
 		provision_signer(&signer_account);
 
 		assert_eq!(frame_system::Pallet::<Runtime>::account_nonce(&signer_account), 0);
@@ -170,7 +175,8 @@ fn future_nonce_non_native_call_rejected_at_block_import() {
 fn future_nonce_non_native_call_replay_blocked_at_block_import() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
 		let signing_key = SolSigningKey::new();
-		let (call, signer_account) = signed_sol_non_native_call(&signing_key, 2, remark_call());
+		let (call, signer_account) =
+			signed_sol_non_native_call(&signing_key, 2, vanity_name_call(b"first"));
 		provision_signer(&signer_account);
 
 		assert_eq!(frame_system::Pallet::<Runtime>::account_nonce(&signer_account), 0);
@@ -192,7 +198,7 @@ fn non_native_exact_nonce_sequence_accepted_at_block_import() {
 		let signing_key = SolSigningKey::new();
 
 		let (call_nonce_0, signer_account) =
-			signed_sol_non_native_call(&signing_key, 0, remark_call());
+			signed_sol_non_native_call(&signing_key, 0, vanity_name_call(b"first"));
 		provision_signer(&signer_account);
 
 		// nonce 0 against account nonce 0 is accepted by Executive::apply_extrinsic.
@@ -200,13 +206,10 @@ fn non_native_exact_nonce_sequence_accepted_at_block_import() {
 		assert_eq!(frame_system::Pallet::<Runtime>::account_nonce(&signer_account), 1);
 
 		// The next sequential nonce (1) against account nonce 1 is accepted.
-		// `remark { remark: vec![1] }` keeps the signed payload distinct from
+		// A different name keeps the signed payload distinct from
 		// the first call so this is a genuinely different authorisation.
-		let (call_nonce_1, signer_account_1) = signed_sol_non_native_call(
-			&signing_key,
-			1,
-			frame_system::Call::<Runtime>::remark { remark: vec![1] }.into(),
-		);
+		let (call_nonce_1, signer_account_1) =
+			signed_sol_non_native_call(&signing_key, 1, vanity_name_call(b"second"));
 		assert_eq!(signer_account_1, signer_account);
 
 		assert_eq!(apply(call_nonce_1), Ok(Ok(())));
@@ -275,7 +278,7 @@ fn executive_rejects_forged_non_native_signed_call() {
 		let forged_call: RuntimeCall =
 			pallet_cf_environment::Call::<Runtime>::non_native_signed_call {
 				chainflip_extrinsic: ChainflipExtrinsic {
-					call: Box::new(remark_call()),
+					call: Box::new(vanity_name_call(b"first")),
 					transaction_metadata: TransactionMetadata { nonce: 0, expiry_block: 10_000 },
 				},
 				signature_data: SignatureData::Solana {
@@ -299,5 +302,21 @@ fn executive_rejects_forged_non_native_signed_call() {
 			0,
 			"victim's nonce must not be bumped when validation fails",
 		);
+	});
+}
+
+#[test]
+fn non_native_call_outside_the_allowlist_is_rejected() {
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let (call, signer_account) = signed_sol_non_native_call(
+			&SolSigningKey::new(),
+			0,
+			frame_system::Call::<Runtime>::remark { remark: vec![] }.into(),
+		);
+		provision_signer(&signer_account);
+
+		let not_allowed = TransactionValidityError::Invalid(InvalidTransaction::Call);
+		assert_eq!(validate_in_pool(TransactionSource::External, call.clone()), Err(not_allowed));
+		assert_eq!(apply(call), Err(not_allowed));
 	});
 }
