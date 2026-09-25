@@ -13,10 +13,24 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use crate::{Pallet, STORAGE_VERSION_U16};
-use cf_runtime_utilities::PlaceholderMigration;
 
-pub type PalletMigration<T> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,);
+use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
+
+use crate::{Pallet, STORAGE_VERSION_U16};
+
+mod remove_fee_rewards_activation_epoch;
+
+pub type PalletMigration<T> = (
+	VersionedMigration<
+		0,
+		1,
+		remove_fee_rewards_activation_epoch::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,
+);
 
 #[cfg(test)]
 const _: u16 =
