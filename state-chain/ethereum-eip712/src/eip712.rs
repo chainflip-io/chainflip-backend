@@ -383,7 +383,7 @@ impl Eip712 for TypedData {
 	}
 
 	fn struct_hash(&self) -> Result<[u8; 32], Self::Error> {
-		let tokens = encode_data(&self.primary_type, &self.message.clone(), &self.types)?;
+		let tokens = Encoder::new(&self.types).encode_data(&self.primary_type, &self.message)?;
 		Ok(keccak256(encode(&tokens)))
 	}
 
@@ -427,41 +427,7 @@ pub fn encode_data(
 	data: &MinimizedScaleValue,
 	types: &Types,
 ) -> Result<Vec<Token>, Eip712Error> {
-	let hash = hash_type(primary_type, types)?;
-	let mut tokens = vec![Token::Uint(U256::from_big_endian(&hash))];
-
-	if let Some(fields) = types.get(primary_type) {
-		// Indexed up front: arrays are structs with one field per element, so a lookup per field
-		// would make hashing quadratic in the array length.
-		let mut field_values = BTreeMap::<&str, &MinimizedScaleValue>::new();
-		if let MinimizedScaleValue::NamedStruct(fs) = data {
-			for (name, value) in fs {
-				// Messages built from `TypeInfo` never repeat a field name.
-				if field_values.insert(name.as_str(), value).is_some() {
-					return Err(Eip712Error::Message(format!(
-						"Duplicate field `{name}` in `{primary_type}`"
-					)));
-				}
-			}
-		}
-		for field in fields.iter() {
-			// handle recursive types
-
-			if let Some(field_value) = field_values.get(field.name.as_str()) {
-				let field = encode_field(types, &field.name, &field.r#type, field_value)?;
-				tokens.push(field);
-			} else if types.contains_key(&field.r#type) {
-				tokens.push(Token::Uint(U256::zero()));
-			} else {
-				return Err(Eip712Error::Message(format!(
-					"Failed to get field data for field: {}",
-					field.name
-				)));
-			}
-		}
-	}
-
-	Ok(tokens)
+	Encoder::new(types).encode_data(primary_type, data)
 }
 
 /// Hashes an object
@@ -547,112 +513,191 @@ fn find_type_dependencies<'a>(
 ///   - `value`: The value to encode.
 ///
 /// Returns the encoded representation of the field.
-pub fn encode_field(
-	types: &Types,
+pub fn encode_field<'a>(
+	types: &'a Types,
 	_field_name: &str,
-	field_type: &str,
+	field_type: &'a str,
 	value: &MinimizedScaleValue,
 ) -> Result<Token, Eip712Error> {
-	let token = {
-		// check if field is custom data type
-		if types.contains_key(field_type) {
-			let tokens = encode_data(field_type, value, types)?;
-			let encoded = encode(&tokens);
-			encode_eip712_type(Token::Bytes(encoded.to_vec()))
-		} else {
-			match field_type {
-				s if s.contains('[') => {
-					let (stripped_type, _) = s.rsplit_once('[').unwrap();
-					// ensure value is an array
-					let values = if let MinimizedScaleValue::Sequence(vals) = value.clone() {
-						vals
-					} else {
-						return Err(Eip712Error::Message(format!(
-							"Expected array for type `{s}`, but got `{value:?}`",
-						)));
-					};
-					let tokens = values
-						.iter()
-						.map(|value| encode_field(types, _field_name, stripped_type, value))
-						.collect::<Result<Vec<_>, _>>()?;
+	Encoder::new(types).encode_field(field_type, value)
+}
 
-					let encoded = encode(&tokens);
-					encode_eip712_type(Token::Bytes(encoded))
-				},
-				s => {
-					// parse as param type
-					let param = HumanReadableParser::parse_type(s).map_err(|err| {
-						Eip712Error::Message(format!("Failed to parse type {s}: {err}",))
-					})?;
+/// Encodes the values of one message. A message can hold many instances of the same type (e.g.
+/// the elements of an array), so work that depends only on the type is done once per type.
+struct Encoder<'a> {
+	types: &'a Types,
+	type_hashes: BTreeMap<&'a str, U256>,
+	param_types: BTreeMap<&'a str, ParamType>,
+}
 
-					let err = Eip712Error::Message(format!(
-						"got unexpected value: `{value:?}` for type `{s}`",
-					));
+impl<'a> Encoder<'a> {
+	fn new(types: &'a Types) -> Self {
+		Self { types, type_hashes: BTreeMap::new(), param_types: BTreeMap::new() }
+	}
 
-					match param {
-						ParamType::Address => Token::Address(H160(
-							value
-								.extract_hex_bytes()
-								.and_then(|r| r.try_into().map_err(|_| ()))
-								.map_err(|_| err)?,
-						)),
-						ParamType::Bytes => encode_eip712_type(Token::Bytes(
-							value.extract_hex_bytes().map_err(|_| err)?,
-						)),
-						ParamType::Int(_) => match value {
-							MinimizedScaleValue::Primitive(MinimizedPrimitive::I128(n)) => {
-								// According to the EIP-712 spec, integer values are sign-extended
-								// to 256-bit and encoded in big endian order.
-								let mut value = U256::from(n.unsigned_abs());
-								if n.is_negative() {
-									// two's complement for negative numbers
-									value = !value + U256::from(1u8);
-								}
-								Token::Int(value)
-							},
-							_ => return Err(err),
-						},
-						ParamType::Uint(_) => match value {
-							MinimizedScaleValue::Primitive(MinimizedPrimitive::String(n)) =>
-								Token::Uint(U256::from_dec_str(n).map_err(|_| err)?),
-							MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(n)) =>
-								Token::Uint((*n).into()),
-							_ => return Err(err),
-						},
-						ParamType::Bool => encode_eip712_type(Token::Bool(
-							if let MinimizedScaleValue::Primitive(MinimizedPrimitive::Bool(b)) =
-								value
-							{
-								*b
-							} else {
-								return Err(err)
-							},
-						)),
-						ParamType::String => {
-							let s: String = match &value {
-								MinimizedScaleValue::Primitive(MinimizedPrimitive::String(s)) =>
-									s.clone(),
-								MinimizedScaleValue::Primitive(MinimizedPrimitive::Char(c)) =>
-									c.to_string(),
-								_ => return Err(err),
-							};
-							encode_eip712_type(Token::String(s))
-						},
-						ParamType::FixedArray(_, _) | ParamType::Array(_) => {
-							unreachable!("is handled in separate arm")
-						},
-						ParamType::FixedBytes(_) =>
-							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
+	fn type_hash(&mut self, primary_type: &str) -> Result<U256, Eip712Error> {
+		let Some((name, fields)) = self.types.get_key_value(primary_type) else {
+			return Err(Eip712Error::Message(format!(
+				"No type definition found for: `{primary_type}`"
+			)));
+		};
+		if let Some(hash) = self.type_hashes.get(name.as_str()) {
+			return Ok(*hash);
+		}
+		// Checked once per type. A message whose fields match unique type fields one-to-one then
+		// has unique field names too, which `encode_data` relies on.
+		let mut field_names = BTreeSet::new();
+		if !fields.iter().all(|field| field_names.insert(field.name.as_str())) {
+			return Err(Eip712Error::Message(format!("Duplicate field in type `{name}`")));
+		}
+		let hash = U256::from_big_endian(&hash_type(name, self.types)?);
+		self.type_hashes.insert(name, hash);
+		Ok(hash)
+	}
 
-						ParamType::Tuple(_) =>
-							return Err(Eip712Error::Message(format!("Unexpected tuple type {s}",))),
+	fn param_type(&mut self, s: &'a str) -> Result<ParamType, Eip712Error> {
+		if let Some(param) = self.param_types.get(s) {
+			return Ok(param.clone());
+		}
+		let param = HumanReadableParser::parse_type(s)
+			.map_err(|err| Eip712Error::Message(format!("Failed to parse type {s}: {err}",)))?;
+		self.param_types.insert(s, param.clone());
+		Ok(param)
+	}
+
+	fn encode_data(
+		&mut self,
+		primary_type: &str,
+		data: &MinimizedScaleValue,
+	) -> Result<Vec<Token>, Eip712Error> {
+		let mut tokens = vec![Token::Uint(self.type_hash(primary_type)?)];
+
+		let types = self.types;
+		if let Some(fields) = types.get(primary_type) {
+			// Messages built from `TypeInfo` list their fields in declaration order.
+			if let MinimizedScaleValue::NamedStruct(fs) = data {
+				if fs.len() == fields.len() &&
+					fs.iter().zip(fields).all(|((name, _), field)| *name == field.name)
+				{
+					for ((_, value), field) in fs.iter().zip(fields) {
+						tokens.push(self.encode_field(&field.r#type, value)?);
 					}
-				},
+					return Ok(tokens);
+				}
+			}
+			// Indexed up front: arrays are structs with one field per element, so a lookup per
+			// field would make hashing quadratic in the array length.
+			let mut field_values = BTreeMap::<&str, &MinimizedScaleValue>::new();
+			if let MinimizedScaleValue::NamedStruct(fs) = data {
+				for (name, value) in fs {
+					// Messages built from `TypeInfo` never repeat a field name.
+					if field_values.insert(name.as_str(), value).is_some() {
+						return Err(Eip712Error::Message(format!(
+							"Duplicate field `{name}` in `{primary_type}`"
+						)));
+					}
+				}
+			}
+			for field in fields.iter() {
+				// handle recursive types
+
+				if let Some(field_value) = field_values.get(field.name.as_str()) {
+					tokens.push(self.encode_field(&field.r#type, field_value)?);
+				} else if types.contains_key(&field.r#type) {
+					tokens.push(Token::Uint(U256::zero()));
+				} else {
+					return Err(Eip712Error::Message(format!(
+						"Failed to get field data for field: {}",
+						field.name
+					)));
+				}
 			}
 		}
-	};
 
-	Ok(token)
+		Ok(tokens)
+	}
+
+	fn encode_field(
+		&mut self,
+		field_type: &'a str,
+		value: &MinimizedScaleValue,
+	) -> Result<Token, Eip712Error> {
+		// check if field is custom data type
+		if self.types.contains_key(field_type) {
+			let tokens = self.encode_data(field_type, value)?;
+			return Ok(encode_eip712_type(Token::Bytes(encode(&tokens))));
+		}
+
+		if let Some((stripped_type, _)) = field_type.rsplit_once('[') {
+			// ensure value is an array
+			let MinimizedScaleValue::Sequence(values) = value else {
+				return Err(Eip712Error::Message(format!(
+					"Expected array for type `{field_type}`, but got `{value:?}`",
+				)));
+			};
+			let tokens = values
+				.iter()
+				.map(|value| self.encode_field(stripped_type, value))
+				.collect::<Result<Vec<_>, _>>()?;
+			return Ok(encode_eip712_type(Token::Bytes(encode(&tokens))));
+		}
+
+		let err = || {
+			Eip712Error::Message(format!(
+				"got unexpected value: `{value:?}` for type `{field_type}`",
+			))
+		};
+
+		Ok(match self.param_type(field_type)? {
+			ParamType::Address => Token::Address(H160(
+				value
+					.extract_hex_bytes()
+					.and_then(|r| r.try_into().map_err(|_| ()))
+					.map_err(|_| err())?,
+			)),
+			ParamType::Bytes =>
+				encode_eip712_type(Token::Bytes(value.extract_hex_bytes().map_err(|_| err())?)),
+			ParamType::Int(_) => match value {
+				MinimizedScaleValue::Primitive(MinimizedPrimitive::I128(n)) => {
+					// According to the EIP-712 spec, integer values are sign-extended
+					// to 256-bit and encoded in big endian order.
+					let mut value = U256::from(n.unsigned_abs());
+					if n.is_negative() {
+						// two's complement for negative numbers
+						value = !value + U256::from(1u8);
+					}
+					Token::Int(value)
+				},
+				_ => return Err(err()),
+			},
+			ParamType::Uint(_) => match value {
+				MinimizedScaleValue::Primitive(MinimizedPrimitive::String(n)) =>
+					Token::Uint(U256::from_dec_str(n).map_err(|_| err())?),
+				MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(n)) =>
+					Token::Uint((*n).into()),
+				_ => return Err(err()),
+			},
+			ParamType::Bool => encode_eip712_type(Token::Bool(
+				if let MinimizedScaleValue::Primitive(MinimizedPrimitive::Bool(b)) = value {
+					*b
+				} else {
+					return Err(err())
+				},
+			)),
+			ParamType::String => {
+				let s: String = match &value {
+					MinimizedScaleValue::Primitive(MinimizedPrimitive::String(s)) => s.clone(),
+					MinimizedScaleValue::Primitive(MinimizedPrimitive::Char(c)) => c.to_string(),
+					_ => return Err(err()),
+				};
+				encode_eip712_type(Token::String(s))
+			},
+			ParamType::FixedBytes(_) | ParamType::FixedArray(_, _) | ParamType::Array(_) =>
+				return Err(Eip712Error::Message(format!("Unsupported type {field_type}",))),
+			ParamType::Tuple(_) =>
+				return Err(Eip712Error::Message(format!("Unexpected tuple type {field_type}",))),
+		})
+	}
 }
 
 /// Convert hash map of field names and types into a type hash corresponding to enc types;
@@ -805,6 +850,23 @@ mod tests {
 			message: MinimizedScaleValue::NamedStruct(vec![
 				("id".to_string(), MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(1))),
 				("id".to_string(), MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(2))),
+			]),
+		};
+
+		assert!(typed_data.encode_eip712().is_err());
+	}
+
+	#[test]
+	fn duplicate_type_field_names_are_rejected() {
+		let id = || Eip712DomainType { name: "id".to_string(), r#type: "uint32".to_string() };
+		let value = || MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(1));
+		let typed_data = TypedData {
+			domain: Default::default(),
+			types: [("Mail".to_string(), vec![id(), id()])].into(),
+			primary_type: "Mail".to_string(),
+			message: MinimizedScaleValue::NamedStruct(vec![
+				("id".to_string(), value()),
+				("id".to_string(), value()),
 			]),
 		};
 

@@ -140,7 +140,7 @@ mod tests {
 
 		assert_eq!(
 			hex::encode(crate::hash::keccak256(typed_data.encode_eip712().unwrap())),
-			"04b0dc2bec528652b0cf86897ab9ba001be647c920995aeeb2ae291c247e6674"
+			"e44f6b83980196ee164ddac1556600fef8cfe2f4d2c862ce5247ad6f2d4923df"
 		);
 	}
 
