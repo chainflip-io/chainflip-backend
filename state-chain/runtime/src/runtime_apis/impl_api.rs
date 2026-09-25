@@ -2247,6 +2247,12 @@ impl_runtime_apis! {
 			use ethereum_eip712::build_eip712_data::build_eip712_typed_data;
 			use ethereum_eip712::eip712::TypedData;
 
+			if call.len() > pallet_cf_environment::MAX_NON_NATIVE_CALL_SIZE {
+				return Err(DispatchErrorWithMessage::from(
+					"Call exceeds the maximum size for non-native signed calls",
+				));
+			}
+
 			let spec_version = <Runtime as frame_system::Config>::Version::get().spec_version;
 			let current_block_number = <frame_system::Pallet<Runtime>>::block_number();
 			let chainflip_network = <pallet_cf_environment::ChainflipNetworkName::<Runtime>>::get();

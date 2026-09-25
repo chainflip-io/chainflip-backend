@@ -33,6 +33,11 @@ use serde::{Deserialize, Serialize};
 
 pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 pub const MAX_BATCHED_CALLS: u32 = 10u32;
+/// Validating a non-native signed call builds its signed payload before the signature is
+/// verified, so anyone can make nodes do this work for free. Bounding the call size bounds that
+/// work. Wallet-signed calls come from LPs and delegators: the largest single call
+/// (`cancel_orders_batch` with 100 orders) is ~1.2 KB, which leaves room for batches.
+pub const MAX_NON_NATIVE_CALL_SIZE: usize = 4 * 1024;
 // We don't use Anza's offchain signing proposal because it's not supported by wallets.
 // The main Solana wallets support utf-8 signing only so we can't use Anza's prefix
 // either. We strip the non-utf-8 characters from Anza's prefix. These transactions won't
