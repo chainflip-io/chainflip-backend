@@ -441,7 +441,7 @@ impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 }
 
 impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_deposit_details: <Bitcoin as Chain>::DepositDetails,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 		_fetch: FetchForRejection<Bitcoin>,
@@ -452,7 +452,7 @@ impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 }
 
 impl RejectCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		deposit_details: <Ethereum as Chain>::DepositDetails,
 		asset: <Ethereum as Chain>::ChainAsset,
 		fetch: FetchForRejection<Ethereum>,

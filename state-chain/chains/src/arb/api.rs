@@ -180,7 +180,7 @@ impl<E> RejectCall<Arbitrum> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_deposit_details: <Arbitrum as Chain>::DepositDetails,
 		asset: <Arbitrum as Chain>::ChainAsset,
 		fetch: FetchForRejection<Arbitrum>,
