@@ -54,7 +54,8 @@ use monitor::MonitorEvent;
 use crate::{EdPublicKey, OutgoingMultisigStageMessages, P2PKey, XPublicKey};
 
 use socket::{
-	ConnectedOutgoingSocket, OutgoingSocket, INCOMING_MESSAGES_BUFFER_SIZE, MAX_MESSAGE_SIZE,
+	ConnectedOutgoingSocket, OutgoingSocket, CONNECTION_HEARTBEAT_INTERVAL,
+	INCOMING_CONNECTION_HEARTBEAT_TIMEOUT, INCOMING_MESSAGES_BUFFER_SIZE, MAX_MESSAGE_SIZE,
 	RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX,
 };
 
@@ -591,7 +592,7 @@ impl P2PContext {
 	fn connect_to_peer(&mut self, peer: PeerInfo, previous_activity: tokio::time::Instant) {
 		let account_id = peer.account_id.clone();
 
-		let socket = OutgoingSocket::new(&self.zmq_context, &self.key);
+		let socket = OutgoingSocket::new(&self.zmq_context, &self.key, &peer.pubkey);
 
 		self.monitor_handle.start_monitoring_for(&socket, &peer);
 
@@ -668,6 +669,26 @@ impl P2PContext {
 		let socket = self.zmq_context.socket(zmq::SocketType::ROUTER).unwrap();
 
 		socket.set_router_mandatory(true).unwrap();
+
+		// Reap dead inbound connections. The ROUTER only ever receives, so without its own
+		// heartbeat it has no timer watching for the absence of inbound traffic: a peer that
+		// vanishes without a clean TCP close (a lost RST on a degraded path, a silent
+		// restart) leaves a half-open pipe that lingers for the lifetime of the process.
+		// With a heartbeat, ZMQ PINGs each inbound connection and tears down any that stops
+		// responding within the timeout, removing its routing-id entry.
+		socket
+			.set_heartbeat_ivl(CONNECTION_HEARTBEAT_INTERVAL.as_millis() as i32)
+			.unwrap();
+		socket
+			.set_heartbeat_timeout(INCOMING_CONNECTION_HEARTBEAT_TIMEOUT.as_millis() as i32)
+			.unwrap();
+
+		// When a peer reconnects it presents the same (stable, key-derived) routing id as
+		// its previous connection, whose pipe here may not yet have been reaped. Handover
+		// lets the new connection take over that id and terminates the stale pipe, rather
+		// than the reconnection being refused. This is safe because our DEALERs present
+		// unguessable keyed ids (see OutgoingSocket::new): handover can only ever be
+		// triggered by the genuine owner of an id, not by a peer guessing another's.
 		socket.set_router_handover(true).unwrap();
 		socket.set_curve_server(true).unwrap();
 		socket.set_curve_secretkey(&self.key.secret_key.to_bytes()).unwrap();
