@@ -922,6 +922,12 @@ pub enum RejectError {
 	FailedToBuildRejection,
 }
 
+impl From<DispatchError> for RejectError {
+	fn from(_e: DispatchError) -> Self {
+		RejectError::Other
+	}
+}
+
 impl From<AllBatchError> for RejectError {
 	fn from(e: AllBatchError) -> Self {
 		match e {
@@ -966,13 +972,35 @@ pub enum TransferForRejection<C: Chain> {
 }
 
 pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
-	fn new_unsigned(
+	/// This needs to be implemented for each chain that supports rejections and includes the logic
+	/// for building the transaction. It should return an error if the transaction building has
+	/// failed.
+	fn new_unsigned_impl(
 		_deposit_details: C::DepositDetails,
 		_asset: C::ChainAsset,
 		_fetch_request: FetchForRejection<C>,
 		_refund_request: TransferForRejection<C>,
 	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
+	}
+
+	/// DO NOT OVERRIDE THIS METHOD.
+	///
+	/// Instead implement the `new_unsigned_impl` method.
+	///
+	/// This method is executing `new_unsigned_impl` transactional to avoid undefined on-chain
+	/// storage by rolling back all changes if the transaction fails. This includes
+	/// [RejectError::NotRequired], which callers treat as success: resources reserved while
+	/// building (for example Solana durable nonces) would otherwise never be released.
+	fn new_unsigned(
+		deposit_details: C::DepositDetails,
+		asset: C::ChainAsset,
+		fetch_request: FetchForRejection<C>,
+		refund_request: TransferForRejection<C>,
+	) -> Result<Self, RejectError> {
+		transactional::with_storage_layer(|| {
+			Self::new_unsigned_impl(deposit_details, asset, fetch_request, refund_request)
+		})
 	}
 }
 
