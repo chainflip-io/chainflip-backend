@@ -1160,6 +1160,19 @@ mod validate_unsigned_tests {
 				Box::new(|| call_of_size(MAX_NON_NATIVE_CALL_SIZE + 1).0),
 			),
 			(
+				"inner call not allowed",
+				InvalidTransaction::Call,
+				Box::new(|| {
+					let (c, a) = signed_call_with_key(
+						&SolSigningKey::new(),
+						0,
+						frame_system::Call::remark_with_event { remark: vec![] }.into(),
+					);
+					create_account(a);
+					c
+				}),
+			),
+			(
 				"wrong call variant",
 				InvalidTransaction::Call,
 				Box::new(|| Call::<Test>::batch { calls: BoundedVec::default() }),

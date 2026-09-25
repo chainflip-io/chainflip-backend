@@ -2247,6 +2247,9 @@ impl_runtime_apis! {
 			use ethereum_eip712::build_eip712_data::build_eip712_typed_data;
 			use ethereum_eip712::eip712::TypedData;
 
+			// Only the size cap applies here, not `AllowedNonNativeCalls`: this also encodes payloads
+			// signed for other purposes, e.g. the `remark` signed to open an account-creation deposit
+			// channel.
 			if call.len() > pallet_cf_environment::MAX_NON_NATIVE_CALL_SIZE {
 				return Err(DispatchErrorWithMessage::from(
 					"Call exceeds the maximum size for non-native signed calls",

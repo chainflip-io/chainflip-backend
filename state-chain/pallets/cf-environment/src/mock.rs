@@ -399,9 +399,18 @@ impl<T: cf_traits::Chainflip> ElectionInstancesVoting<T> for MockElectionInstanc
 	}
 }
 
+/// Allows every call except `remark_with_event`, so tests have one call to reject.
+pub struct MockAllowedNonNativeCalls;
+impl frame_support::traits::Contains<RuntimeCall> for MockAllowedNonNativeCalls {
+	fn contains(call: &RuntimeCall) -> bool {
+		!matches!(call, RuntimeCall::System(frame_system::Call::remark_with_event { .. }))
+	}
+}
+
 impl pallet_cf_environment::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
+	type AllowedNonNativeCalls = MockAllowedNonNativeCalls;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
@@ -504,6 +513,7 @@ pub mod benchmarks_mock {
 	impl pallet_cf_environment::Config for BenchmarksTest {
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
+		type AllowedNonNativeCalls = frame_support::traits::Everything;
 		type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 		type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 		type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;

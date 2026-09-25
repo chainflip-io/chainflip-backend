@@ -23,6 +23,7 @@ pub mod elections;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 pub mod multi_vault_activator;
+pub mod non_native_calls;
 mod offences;
 pub mod pending_rotation_broadcasts;
 mod signer_nomination;
