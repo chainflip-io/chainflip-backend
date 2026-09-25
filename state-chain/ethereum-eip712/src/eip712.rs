@@ -432,12 +432,18 @@ pub fn encode_data(
 
 	if let Some(fields) = types.get(primary_type) {
 		// Indexed up front: arrays are structs with one field per element, so a lookup per field
-		// would make hashing quadratic in the array length. Reversed so the first duplicate wins.
-		let field_values: BTreeMap<&str, &MinimizedScaleValue> = match data {
-			MinimizedScaleValue::NamedStruct(fs) =>
-				fs.iter().rev().map(|(name, value)| (name.as_str(), value)).collect(),
-			_ => BTreeMap::new(),
-		};
+		// would make hashing quadratic in the array length.
+		let mut field_values = BTreeMap::<&str, &MinimizedScaleValue>::new();
+		if let MinimizedScaleValue::NamedStruct(fs) = data {
+			for (name, value) in fs {
+				// Messages built from `TypeInfo` never repeat a field name.
+				if field_values.insert(name.as_str(), value).is_some() {
+					return Err(Eip712Error::Message(format!(
+						"Duplicate field `{name}` in `{primary_type}`"
+					)));
+				}
+			}
+		}
 		for field in fields.iter() {
 			// handle recursive types
 
@@ -784,6 +790,25 @@ mod tests {
 			"8d4a3f4082945b7879e2b55f181c31a77c8c0a464b70669458abbaaf99de4c38",
 			hex::encode(&hash[..])
 		);
+	}
+
+	#[test]
+	fn duplicate_field_names_are_rejected() {
+		let typed_data = TypedData {
+			domain: Default::default(),
+			types: [(
+				"Mail".to_string(),
+				vec![Eip712DomainType { name: "id".to_string(), r#type: "uint32".to_string() }],
+			)]
+			.into(),
+			primary_type: "Mail".to_string(),
+			message: MinimizedScaleValue::NamedStruct(vec![
+				("id".to_string(), MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(1))),
+				("id".to_string(), MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(2))),
+			]),
+		};
+
+		assert!(typed_data.encode_eip712().is_err());
 	}
 
 	#[test]
