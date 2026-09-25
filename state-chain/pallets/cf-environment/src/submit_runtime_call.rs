@@ -22,6 +22,7 @@ use ethereum_eip712::{
 };
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
+	dispatch_context::{run_in_context, with_context},
 	traits::UnfilteredDispatchable,
 	weights::Weight,
 };
@@ -127,11 +128,43 @@ impl SignatureData {
 	}
 }
 
+/// Marks that a batch is being dispatched, so that a batch dispatched from within it, however it
+/// is wrapped (e.g. `batch([as_sub_account(batch(..))])`), can be rejected.
+pub(crate) struct InBatch;
+
 /// Executes a batch of calls and returns the total weight or an error with an associated call
 /// index. It will error early as soon as a call fails.
 /// Inspiration from pallet_utility
 /// https://paritytech.github.io/polkadot-sdk/master/pallet_utility/pallet/struct.Pallet.html
 pub(crate) fn batch_all<T: Config>(
+	signer_account: T::AccountId,
+	calls: BatchedCalls<T>,
+	weight_fn: fn(u32) -> Weight,
+) -> DispatchResultWithPostInfo {
+	let nested_batch = || DispatchErrorWithPostInfo {
+		post_info: Some(weight_fn(0)).into(),
+		error: Error::<T>::InvalidNestedBatch.into(),
+	};
+
+	// Checked before dispatching anything, so an invalid batch does no work.
+	if calls.iter().any(|call| matches!(call.is_sub_type(), Some(Call::batch { .. }))) {
+		return Err(nested_batch());
+	}
+
+	// FRAME dispatches every call in a dispatch context; opening one here as well covers direct
+	// calls (e.g. in tests). A nested `run_in_context` shares the outer context.
+	run_in_context(|| {
+		if with_context::<InBatch, _>(|in_batch| in_batch.get().is_some()).unwrap_or_default() {
+			return Err(nested_batch());
+		}
+		with_context::<InBatch, _>(|in_batch| in_batch.set(InBatch));
+		let result = dispatch_all::<T>(signer_account, calls, weight_fn);
+		with_context::<InBatch, _>(|in_batch| in_batch.clear());
+		result
+	})
+}
+
+fn dispatch_all<T: Config>(
 	signer_account: T::AccountId,
 	calls: BatchedCalls<T>,
 	weight_fn: fn(u32) -> Weight,
@@ -143,16 +176,6 @@ pub(crate) fn batch_all<T: Config>(
 		let info = call.get_dispatch_info();
 
 		let origin = frame_system::RawOrigin::Signed(signer_account.clone()).into();
-
-		// Don't allow nested calls.
-		if let Some(Call::batch { .. }) = call.is_sub_type() {
-			let base_weight = weight_fn(index.saturating_add(1) as u32);
-			let err = DispatchErrorWithPostInfo {
-				post_info: Some(base_weight.saturating_add(weight)).into(),
-				error: Error::<T>::InvalidNestedBatch.into(),
-			};
-			return Err(err);
-		}
 
 		let result = call.dispatch_bypass_filter(origin);
 

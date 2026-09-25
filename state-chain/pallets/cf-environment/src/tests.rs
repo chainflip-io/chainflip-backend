@@ -863,6 +863,58 @@ fn can_build_eip_712_payload_and_validate() {
 }
 
 #[test]
+fn batch_rejects_nested_batch_before_dispatching_anything() {
+	new_test_ext().execute_with(|| {
+		const ALICE: u64 = 1;
+		let calls: BatchedCalls<Test> = vec![
+			frame_system::Call::<Test>::remark_with_event { remark: vec![42] }.into(),
+			crate::Call::<Test>::batch { calls: Default::default() }.into(),
+		]
+		.try_into()
+		.unwrap();
+
+		// Only the base weight is charged: no call was dispatched.
+		assert_eq!(
+			Environment::batch(RuntimeOrigin::signed(ALICE), calls),
+			Err(frame_support::dispatch::DispatchErrorWithPostInfo {
+				post_info: Some(
+					<<Test as crate::Config>::WeightInfo as crate::weights::WeightInfo>::batch(0)
+				)
+				.into(),
+				error: crate::Error::<Test>::InvalidNestedBatch.into(),
+			}),
+		);
+	});
+}
+
+#[test]
+fn batch_rejects_being_dispatched_from_within_a_batch() {
+	use crate::submit_runtime_call::InBatch;
+	use frame_support::dispatch_context::{run_in_context, with_context};
+
+	new_test_ext().execute_with(|| {
+		const ALICE: u64 = 1;
+		let calls: BatchedCalls<Test> =
+			vec![frame_system::Call::<Test>::remark { remark: vec![] }.into()]
+				.try_into()
+				.unwrap();
+
+		run_in_context(|| {
+			// Consecutive batches in one dispatch are fine: neither contains the other.
+			assert_ok!(Environment::batch(RuntimeOrigin::signed(ALICE), calls.clone()));
+			assert_ok!(Environment::batch(RuntimeOrigin::signed(ALICE), calls.clone()));
+
+			// As if dispatched by a call wrapped inside a running batch.
+			with_context::<InBatch, _>(|in_batch| in_batch.set(InBatch));
+			frame_support::assert_err_ignore_postinfo!(
+				Environment::batch(RuntimeOrigin::signed(ALICE), calls),
+				crate::Error::<Test>::InvalidNestedBatch,
+			);
+		});
+	});
+}
+
+#[test]
 fn can_batch() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 1;
