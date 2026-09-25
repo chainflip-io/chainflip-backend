@@ -49,3 +49,6 @@ tfplan
 
 node_modules
 /spans.json
+
+# Apalache build artefacts from `quint verify`
+_apalache-out/
