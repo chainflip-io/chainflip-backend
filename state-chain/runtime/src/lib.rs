@@ -540,7 +540,7 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-pub type MigrationsForV2_4 = ();
+pub type MigrationsForV2_4 = (migrations::flip_accumulators_to_flip_pallet::Migration,);
 
 #[cfg(test)]
 mod test {

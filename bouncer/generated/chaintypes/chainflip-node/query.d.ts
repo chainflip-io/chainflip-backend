@@ -924,6 +924,20 @@ export interface ChainStorage extends GenericChainStorage {
     flipToDistribute: GenericStorageQuery<() => bigint>;
 
     /**
+     * Flip ready to be burned. Negative values are offset against the next burn.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    flipToBurn: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Flip held in the Vault that is earmarked for transfer to the State Chain Gateway.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    flipToBeSentToGateway: GenericStorageQuery<() => bigint>;
+
+    /**
      * The epoch from which flip 2.1 activates.
      * Defaults to u32::MAX (effectively disabled) until set via governance.
      *
@@ -3108,20 +3122,6 @@ export interface ChainStorage extends GenericChainStorage {
       (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint | undefined,
       CfPrimitivesChainsAssetsAnyAsset
     >;
-
-    /**
-     * FLIP ready to be burned.
-     *
-     * @param {Callback<bigint> =} callback
-     **/
-    flipToBurn: GenericStorageQuery<() => bigint>;
-
-    /**
-     * FLIP ready to be sent to gateway.
-     *
-     * @param {Callback<bigint> =} callback
-     **/
-    flipToBeSentToGateway: GenericStorageQuery<() => bigint>;
 
     /**
      * Interval at which we buy FLIP from swap fees in order to distribute as rewards.
