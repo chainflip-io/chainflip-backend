@@ -96,3 +96,51 @@ fn account_deletion_removes_relevant_storage_items() {
 		assert_eq!(Reputations::<Runtime>::get(backup_node).online_blocks, 0);
 	});
 }
+
+#[test]
+fn batch_cannot_be_nested_through_a_sub_account_call() {
+	use cf_traits::Funding as _;
+	use frame_support::{assert_err_ignore_postinfo, assert_ok, traits::HandleLifetime};
+	use sp_runtime::traits::Dispatchable;
+	use state_chain_runtime::{AccountId, Flip, RuntimeCall, RuntimeOrigin};
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let parent = AccountId::from([0xab; 32]);
+		frame_system::Provider::<Runtime>::created(&parent).unwrap();
+		Flip::credit_funds(&parent, super::genesis::GENESIS_BALANCE);
+		assert_ok!(RuntimeCall::from(
+			pallet_cf_account_roles::Call::<Runtime>::spawn_sub_account {
+				sub_account_index: 0,
+				initial_amount: MinimumFunding::<Runtime>::get(),
+			}
+		)
+		.dispatch(RuntimeOrigin::signed(parent.clone())));
+
+		let batch = |calls: Vec<RuntimeCall>| -> RuntimeCall {
+			pallet_cf_environment::Call::<Runtime>::batch { calls: calls.try_into().unwrap() }
+				.into()
+		};
+		let as_sub_account = |call: RuntimeCall| -> RuntimeCall {
+			pallet_cf_account_roles::Call::<Runtime>::as_sub_account {
+				sub_account_index: 0,
+				call: Box::new(call),
+			}
+			.into()
+		};
+		let set_vanity_name: RuntimeCall =
+			pallet_cf_account_roles::Call::<Runtime>::set_vanity_name {
+				name: b"sub".to_vec().try_into().unwrap(),
+			}
+			.into();
+
+		// A batch dispatched through a sub-account is fine on its own...
+		assert_ok!(as_sub_account(batch(vec![set_vanity_name.clone()]))
+			.dispatch(RuntimeOrigin::signed(parent.clone())));
+		// ...but not from within another batch.
+		assert_err_ignore_postinfo!(
+			batch(vec![as_sub_account(batch(vec![set_vanity_name]))])
+				.dispatch(RuntimeOrigin::signed(parent)),
+			pallet_cf_environment::Error::<Runtime>::InvalidNestedBatch,
+		);
+	});
+}
