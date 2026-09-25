@@ -28,9 +28,6 @@
 //! Other the above exceptions the results produced from this code should exactly match Uniswap's
 //! numbers, for a Uniswap pool with a tick spacing of 1.
 //!
-//! Note: There are a few yet to be proved safe maths operations, there are marked below with `TODO:
-//! Prove`. We should resolve these issues before using this code in release.
-//!
 //! Some of the `proofs` assume the values of SqrtPrice are <= U160::MAX, but as that type
 //! doesn't exist we use U256 of SqrtPrice. It is relatively simply to verify that all
 //! instances of SqrtPrice are <=U160::MAX.
@@ -916,7 +913,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				self.total_fees_earned[SD::INPUT_SIDE] =
 					self.total_fees_earned[SD::INPUT_SIDE].saturating_add(fees);
 
-				// TODO: Prove this does not underflow
+				// Cannot underflow, in either branch above. Writing `N` for
+				// `ONE_IN_HUNDREDTH_PIPS`:
+				// - Reaching the target: `amount_swapped + fees` is `ceil(amount_swapped * N / (N -
+				//   fee))`, and that branch is only taken when `amount_swapped <= floor(amount * (N
+				//   - fee) / N)`, hence `amount_swapped * N <= amount * (N - fee)` and the sum is
+				//   `<= amount`.
+				// - Otherwise `fees` is exactly `amount - amount_swapped`, summing to `amount`.
+				// Both bounds also rule out the addition overflowing.
+				// See test `swap_input_never_underflows`.
 				amount -= amount_swapped + fees;
 
 				// DIFF: This behaviour is different to Uniswap's, we saturate instead of
