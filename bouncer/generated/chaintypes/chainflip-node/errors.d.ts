@@ -1854,12 +1854,6 @@ export interface ChainErrors extends GenericChainErrors {
     OrderDoesNotExist: GenericPalletError;
 
     /**
-     * It is no longer possible to mint limit orders due to reaching the maximum pool
-     * instances, other than for ticks where a fixed pool currently exists.
-     **/
-    MaximumPoolInstances: GenericPalletError;
-
-    /**
      * The pool does not have enough liquidity left to process the swap.
      **/
     InsufficientLiquidity: GenericPalletError;
@@ -1910,7 +1904,7 @@ export interface ChainErrors extends GenericChainErrors {
     /**
      * The scheduled update limit has been reached.
      **/
-    SheduledUpdateLimitReached: GenericPalletError;
+    ScheduledUpdateLimitReached: GenericPalletError;
 
     /**
      * The account still has open orders.
@@ -1921,6 +1915,11 @@ export interface ChainErrors extends GenericChainErrors {
      * The resulting order amount is below the configured per-asset minimum.
      **/
     BelowMinimumOrderAmount: GenericPalletError;
+
+    /**
+     * The swap would move the pool's price further than the pool's configured limit.
+     **/
+    PriceImpactLimitExceeded: GenericPalletError;
 
     /**
      * Generic pallet error

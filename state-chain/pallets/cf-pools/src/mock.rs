@@ -58,6 +58,7 @@ impl_mock_chainflip!(Test);
 impl_mock_runtime_safe_mode!(pools: PalletSafeMode);
 impl pallet_cf_pools::Config for Test {
 	type LpBalance = cf_traits::mocks::balance_api::MockBalance;
+	type AssetWithholding = cf_traits::mocks::asset_withholding::MockAssetWithholding;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type RefundAddressRegistry = MockRefundAddressRegistry;
 	type LpStats = MockLpStatsApi;

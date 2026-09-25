@@ -153,6 +153,16 @@ Search for all pallets with VersionedMigration:
 grep -r 'VersionedMigration' state-chain/pallets/*/src/migrations.rs
 ```
 
+**Check for support code in other crates:**
+
+A migration that constructs types with private fields often keeps its old-shape decoding beside
+those types instead of beside itself. Deleting the migration does not delete that, and nothing
+references it afterwards, so it lingers as dead code.
+
+```bash
+rg -l "migration_support" state-chain/
+```
+
 ### 6. Clean Up Temporary CI Workarounds
 
 Check GitHub Actions workflows for temporary changes marked for removal after the previous release:
@@ -161,7 +171,7 @@ Check GitHub Actions workflows for temporary changes marked for removal after th
 grep -rn 'TODO.*temporary\|TODO.*[Rr]emove after\|TODO.*workaround' .github/workflows/
 ```
 
-These are typically `sed` commands, extra steps, or patched values that were needed to bridge compatibility between versions during upgrade tests. Remove any that reference the version you're bumping *from* (e.g. "Remove after 2.1 is released" when bumping from 2.1 to 2.2).
+These are typically `sed` commands, extra steps, or patched values that were needed to bridge compatibility between versions during upgrade tests. Remove any that reference the version you're bumping _from_ (e.g. "Remove after 2.1 is released" when bumping from 2.1 to 2.2).
 
 ### 7. Update Cargo.lock
 
@@ -222,7 +232,7 @@ try-runtime \
   snap --path ./chainflip-node-XXXXX@latest.snap
 ```
 
-**Expected result for a version bump:** Storage version mismatch errors are expected when testing against a snapshot that hasn't run the previous version's migrations yet (e.g. mainnet still on 2.0 when bumping from 2.1 to 2.2). The errors should correspond exactly to the pallets whose `VersionedMigration`s were cleaned up. If testing against a network that *has* run the previous migrations, the test should pass cleanly.
+**Expected result for a version bump:** Storage version mismatch errors are expected when testing against a snapshot that hasn't run the previous version's migrations yet (e.g. mainnet still on 2.0 when bumping from 2.1 to 2.2). The errors should correspond exactly to the pallets whose `VersionedMigration`s were cleaned up. If testing against a network that _has_ run the previous migrations, the test should pass cleanly.
 
 ## Migration System Reference
 
@@ -269,6 +279,48 @@ instanced_migrations! {
 
 Uses `NoopRuntimeUpgrade` for excluded instances to bump their version without running migration logic.
 
+### Reading Storage in its Pre-Migration Shape
+
+A migration and its `pre_upgrade` need to read storage as it was _before_ the migration ran. The
+live storage item is typed as the **new** shape, so reading through it decodes old bytes as the new
+type — and SCALE is not self-describing, so that does not reliably fail. It can decode into
+plausible nonsense.
+
+Declare the old shape in an `old` module and read through a `storage_alias`, rather than reaching
+for `frame_support::storage::unhashed`:
+
+```rust
+mod old {
+    use super::*;
+
+    #[derive(Encode, Decode)]
+    pub struct Pool<T: Config> { /* fields as they were */ }
+
+    // The identifier must match the live storage item's name.
+    #[cfg(feature = "try-runtime")]
+    #[frame_support::storage_alias]
+    pub type Pools<T: Config> =
+        StorageMap<Pallet<T>, Twox64Concat, AssetPair, Pool<T>, OptionQuery>;
+}
+```
+
+- **Name the alias exactly as the storage item is named.** `storage_alias` takes the storage name
+  from the type alias identifier, so `PoolsBefore` looks up a storage item called `PoolsBefore`,
+  which does not exist. There is no error — it reads back empty, and checks built on it pass
+  vacuously or fail for the wrong reason. Defining `pub type Pools` inside `mod old` shadows the
+  glob-imported one and resolves fine.
+- **Gate it** with `#[cfg(feature = "try-runtime")]`, along with imports it alone needs, if only
+  `pre_upgrade` uses it.
+- **State the real value type even when only removing an item.** `kill()` and `exists()` derive the
+  key from the pallet and name alone, so any value type works — but a wrong one is a trap for
+  whoever later adds a `get()`.
+- `unhashed` is still right where there is genuinely no typed handle: killing a prefix, or a key
+  whose pallet no longer exists.
+
+Where the old shape needs to construct types with private fields, the decoding often lives beside
+those types in another crate (see `cf-amm`'s `limit_orders::migration_support`) rather than beside
+the migration. Note it in that module's docs so it gets deleted with the migration.
+
 ## Common Mistakes
 
 - Forgetting to update `engine-dylib/Cargo.toml` lib name (uses underscores: `chainflip_engine_vX_Y_Z`)
@@ -277,3 +329,8 @@ Uses `NoopRuntimeUpgrade` for excluded instances to bump their version without r
 - Removing `VoteStorageMigration` from `cf-elections` (it's marked "Keep this migration")
 - Not checking for new pallets added since the last bump that may also have VersionedMigration entries
 - Leaving dead `pub mod` declarations in `migrations.rs` after deleting files
+- Reading pre-migration storage through the live (new-shaped) item, or via `unhashed` instead of an
+  `old::*` `storage_alias`
+- Naming an `old` module's storage alias anything but the live item's name, so it reads back empty
+  with no error
+- Deleting a migration but leaving its support module behind in another crate
