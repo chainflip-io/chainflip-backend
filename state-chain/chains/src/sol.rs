@@ -39,10 +39,7 @@ use crate::{
 	FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
-use frame_support::{
-	sp_runtime::{BoundedVec, RuntimeDebug},
-	Parameter,
-};
+use frame_support::{sp_runtime::BoundedVec, Parameter};
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Member;
 
@@ -100,9 +97,7 @@ pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 3;
 
 // Use serialized transaction
-#[derive(
-	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
-)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, Default, PartialEq, Eq)]
 pub struct SolanaTransactionData {
 	pub serialized_transaction: Vec<u8>,
 	pub skip_preflight: bool,

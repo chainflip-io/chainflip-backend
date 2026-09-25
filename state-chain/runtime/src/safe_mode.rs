@@ -79,7 +79,7 @@ impl_runtime_safe_mode! {
 	Clone,
 	PartialEq,
 	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
+	Debug,
 )]
 pub struct WitnesserCallPermission {
 	// Non-instantiable pallets

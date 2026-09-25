@@ -81,15 +81,13 @@ fn grandpa_delegation_lifecycle() {
 			);
 
 			// 3. set_keys is blocked while a delegation is active.
-			let new_seed = "new_validator_key";
+			let (new_keys, proof) =
+				network::session_keys_and_proof("new_validator_key", &validator);
 			assert_noop!(
 				Validator::set_keys(
 					RuntimeOrigin::signed(validator.clone()),
-					state_chain_runtime::opaque::SessionKeys {
-						aura: chainflip_node::test_account_from_seed::<AuraId>(new_seed),
-						grandpa: chainflip_node::test_account_from_seed::<GrandpaId>(new_seed),
-					},
-					vec![],
+					new_keys.clone(),
+					proof.clone(),
 				),
 				pallet_cf_validator::Error::<Runtime>::GrandpaDelegationActive,
 			);
@@ -106,11 +104,8 @@ fn grandpa_delegation_lifecycle() {
 			// 6. set_keys works again after revocation.
 			assert_ok!(Validator::set_keys(
 				RuntimeOrigin::signed(validator.clone()),
-				state_chain_runtime::opaque::SessionKeys {
-					aura: chainflip_node::test_account_from_seed::<AuraId>(new_seed),
-					grandpa: chainflip_node::test_account_from_seed::<GrandpaId>(new_seed),
-				},
-				vec![],
+				new_keys,
+				proof
 			));
 		});
 }

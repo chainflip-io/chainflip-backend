@@ -39,7 +39,7 @@ use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	ensure,
-	pallet_prelude::{DispatchResult, Member, RuntimeDebug},
+	pallet_prelude::{DispatchResult, Member},
 	storage::with_storage_layer,
 	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
 	Hashable,
@@ -60,7 +60,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 	Clone,
 	PartialEq,
 	Eq,
-	RuntimeDebug,
+	Debug,
 )]
 pub enum PalletSafeMode<CallPermission> {
 	CodeGreen,
@@ -605,15 +605,7 @@ pub mod pallet {
 
 	/// The raw origin enum for this pallet.
 	#[derive(
-		PartialEq,
-		Eq,
-		Clone,
-		RuntimeDebug,
-		Encode,
-		Decode,
-		DecodeWithMemTracking,
-		TypeInfo,
-		MaxEncodedLen,
+		PartialEq, Eq, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
 	)]
 	pub enum RawOrigin {
 		HistoricalActiveEpochWitnessThreshold,

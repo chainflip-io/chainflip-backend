@@ -19,7 +19,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use frame_remote_externalities::{Mode, OfflineConfig, OnlineConfig, SnapshotConfig, Transport};
+use frame_remote_externalities::{Mode, OfflineConfig, OnlineConfig, SnapshotConfig};
 use tracing_subscriber::filter::LevelFilter;
 
 mod tests;
@@ -270,7 +270,7 @@ async fn main() -> anyhow::Result<()> {
 					OnlineConfig {
 						at: hash,
 						state_snapshot: Some(state_snapshot),
-						transport: Transport::Uri(network.clone()),
+						transport_uris: vec![network.clone()],
 						..Default::default()
 					},
 				),

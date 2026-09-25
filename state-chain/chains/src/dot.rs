@@ -369,7 +369,7 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 	DecodeWithMemTracking,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	Default,
 	PartialEq,
 	Eq,
@@ -473,9 +473,7 @@ impl ChainCrypto for PolkadotCrypto {
 	}
 }
 
-#[derive(
-	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
-)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, Default, PartialEq, Eq)]
 pub struct PolkadotTransactionData {
 	pub encoded_extrinsic: Vec<u8>,
 }

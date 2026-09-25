@@ -925,7 +925,7 @@ mod test {
 		hub::calculate_derived_address,
 	};
 	use codec::{Decode, Encode};
-	use sp_core::blake2_256;
+	use sp_io::hashing::blake2_256;
 	use sp_runtime::{traits::TrailingZeroInput, AccountId32};
 
 	pub(crate) const TEST_RUNTIME_VERSION: RuntimeVersion =

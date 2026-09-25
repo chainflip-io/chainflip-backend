@@ -356,7 +356,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	Clone,
 	PartialEq,
 	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
+	Debug,
 )]
 pub struct WitnesserCallPermission {
 	pub governance: bool,
@@ -427,9 +427,7 @@ impl From<WitnesserCallPermission> for crate::safe_mode::WitnesserCallPermission
 }
 
 // The v16 LendingPoolsSafeMode, with add_collateral/remove_collateral removed in v17.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct LendingPoolsSafeMode {
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
@@ -456,9 +454,7 @@ impl From<LendingPoolsSafeMode> for pallet_cf_lending_pools::PalletSafeMode {
 
 // The v16 RuntimeSafeMode: no broadcast_tron, ingress_egress_tron, or tron_elections fields,
 // and with the old LendingPoolsSafeMode and WitnesserCallPermission.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct RuntimeSafeMode {
 	pub emissions: pallet_cf_emissions::PalletSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,
