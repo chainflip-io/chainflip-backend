@@ -29,6 +29,11 @@ function check_endpoint_health() {
 # witness sees it as in sync. The wait grows with the snapshot's age; if it runs out, the fix is a
 # fresh snapshot in the chainflip-eth-contracts tron image.
 function wait_for_tron_peer() {
+  if ! command -v jq >/dev/null; then
+    echo "jq is required to check the TRON peer."
+    exit 1
+  fi
+
   retries=120
   delay=5
   started_ms=$(($(date +%s) * 1000))
