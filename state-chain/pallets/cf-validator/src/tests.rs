@@ -1071,7 +1071,6 @@ mod key_handover {
 
 	#[test]
 	fn abort_if_too_many_current_authorities_fail() {
-		// TODO: should unban and keep trying instead (see PRO-786)
 		new_test_ext().execute_with(|| {
 			// Too many current authorities banned, we abort.
 			failed_handover_with_offenders(AUTHORITIES.take(*MAX_ALLOWED_SHARING_OFFENDERS + 1));
