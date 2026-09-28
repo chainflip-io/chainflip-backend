@@ -111,6 +111,8 @@ impls! {
 		type BlockHeightChangeHook = Self;
 		type Chain = BitcoinChain;
 		type ReorgHook = Self;
+		// The engine may append up to two headers beyond its submission cap.
+		const MAX_VOTE_HEADERS: u32 = BITCOIN_MAX_SUBMIT_HEADERS_IN_BHW_VOTER + 2;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct

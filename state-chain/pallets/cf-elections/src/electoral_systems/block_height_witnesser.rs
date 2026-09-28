@@ -56,6 +56,8 @@ pub trait BHWTypes: Ord + Clone + Debug + Sized + 'static {
 	type Chain: ChainTypes;
 	type BlockHeightChangeHook: Hook<HookTypeFor<Self, BlockHeightChangeHook>> + CommonTraits;
 	type ReorgHook: Hook<HookTypeFor<Self, ReorgHook>> + CommonTraits;
+
+	const MAX_VOTE_HEADERS: u32;
 }
 
 pub struct BlockHeightChangeHook;

@@ -82,6 +82,9 @@ impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
 		query: &HeightWitnesserProperties<T::Chain>,
 		response: &NonemptyContinuousHeaders<T::Chain>,
 	) -> Result<(), Self::Error> {
+		if response.len() > T::MAX_VOTE_HEADERS as usize {
+			return Err(VoteValidationError::TooManyHeaders)
+		}
 		response
 			.is_valid()
 			.map_err(VoteValidationError::NonemptyContinuousHeadersError)?;
@@ -223,6 +226,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 #[derive(Debug, PartialEq)]
 pub enum VoteValidationError<C: ChainTypes> {
 	BlockNotMatchingRequestedHeight,
+	TooManyHeaders,
 	NonemptyContinuousHeadersError(NonemptyContinuousHeadersError<C>),
 }
 
@@ -366,6 +370,9 @@ pub mod tests {
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 		type ReorgHook = MockHook<HookTypeFor<Self, ReorgHook>>;
 		type Chain = Self;
+
+		// Vote length bounds are covered by dedicated `validate` tests.
+		const MAX_VOTE_HEADERS: u32 = u32::MAX;
 	}
 
 	#[test]
@@ -403,6 +410,8 @@ pub mod tests {
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 		type ReorgHook = MockHook<HookTypeFor<Self, ReorgHook>>;
 		type Chain = TestChain;
+
+		const MAX_VOTE_HEADERS: u32 = u32::MAX;
 	}
 
 	#[test]

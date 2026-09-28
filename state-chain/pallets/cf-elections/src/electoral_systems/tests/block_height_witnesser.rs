@@ -41,6 +41,8 @@ impl BHWTypes for BHTypes {
 	type BlockHeightChangeHook = EmptyHook;
 
 	type ReorgHook = EmptyHook;
+
+	const MAX_VOTE_HEADERS: u32 = 4;
 }
 
 const BHW_PROPERTIES_STARTUP: HeightWitnesserProperties<BHTypes> =
@@ -226,5 +228,37 @@ fn test_validate_vote_and_height() {
 		VoteValidationError::NonemptyContinuousHeadersError(
 			NonemptyContinuousHeadersError::continuous_heights
 		)
+	);
+}
+
+#[test]
+fn test_validate_vote_length() {
+	let headers = |n: u64| -> NonemptyContinuousHeaders<BHTypes> {
+		(5..5 + n)
+			.map(|height| Header { block_height: height, hash: height, parent_hash: height - 1 })
+			.collect::<Vec<_>>()
+			.into()
+	};
+
+	assert!(BlockHeightWitnesser::<BHTypes>::validate(
+		&BHW_PROPERTIES_RUNNING,
+		&headers(BHTypes::MAX_VOTE_HEADERS as u64)
+	)
+	.is_ok());
+	assert_eq!(
+		BlockHeightWitnesser::<BHTypes>::validate(
+			&BHW_PROPERTIES_RUNNING,
+			&headers(BHTypes::MAX_VOTE_HEADERS as u64 + 1)
+		)
+		.unwrap_err(),
+		VoteValidationError::TooManyHeaders
+	);
+	assert_eq!(
+		BlockHeightWitnesser::<BHTypes>::validate(
+			&BHW_PROPERTIES_STARTUP,
+			&headers(BHTypes::MAX_VOTE_HEADERS as u64 + 1)
+		)
+		.unwrap_err(),
+		VoteValidationError::TooManyHeaders
 	);
 }

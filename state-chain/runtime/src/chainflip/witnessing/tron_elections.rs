@@ -104,6 +104,8 @@ impls! {
 		type BlockHeightChangeHook = Self;
 		type Chain = TronChain;
 		type ReorgHook = Self;
+		// The engine may append up to two headers beyond its submission cap.
+		const MAX_VOTE_HEADERS: u32 = TRON_MAX_SUBMIT_HEADERS_IN_BHW_VOTER + 2;
 	}
 
 	StatemachineElectoralSystemTypes {

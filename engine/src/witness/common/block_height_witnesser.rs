@@ -60,13 +60,15 @@ where
 
 	// Compute the highest block height we want to fetch a header for,
 	// since for performance reasons we're bounding the number of headers
-	// submitted in one vote. We're submitting at most `max_submit_headers` headers.
+	// submitted in one vote. We fetch at most `max_submit_headers + 1` headers, plus the best
+	// block header if it's within range. The runtime rejects votes longer than
+	// `max_submit_headers + 2` (see `BHWTypes::MAX_VOTE_HEADERS`).
 	let highest_submitted_height = std::cmp::min(
 		best_block_header.block_height,
 		witness_from_index.saturating_forward(max_submit_headers as usize + 1),
 	);
 
-	// request headers for at most `max_submit_headers` heights, in parallel
+	// request headers for at most `max_submit_headers + 1` heights, in parallel
 	let requests = (witness_from_index..highest_submitted_height)
 		.map(|index| async move { client.block_header_by_height(index).await })
 		.collect::<Vec<_>>();
