@@ -110,6 +110,7 @@ build-localnet() {
 
   echo "🌞 Waiting for TRON node to start"
   check_endpoint_health -s -X POST -H "Content-Type: application/json" http://localhost:8090/wallet/getnowblock >>$DEBUG_OUTPUT_DESTINATION
+  wait_for_tron_peer
 
   echo "🔶 Waiting for BSC node to start"
   check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8645 >>$DEBUG_OUTPUT_DESTINATION

@@ -17,6 +17,41 @@ function check_endpoint_health() {
   fi
 }
 
+# java-tron's wallet/broadcasttransaction fails (NO_CONNECTION / NOT_ENOUGH_EFFECTIVE_CONNECTION)
+# unless the node has a connected peer that is in sync with it, so a responsive HTTP API is not
+# enough for the localnet's Tron to be usable.
+#
+# The first block produced on top of the image's baked-in snapshot makes java-tron account for every
+# witness slot missed since the snapshot was taken (~28.8k per day). `tron-peer` is out of sync while
+# it applies that block, and if that takes too long its sync watchdog drops the connection and the
+# witness refuses reconnects for about a minute. A peer that is in sync *before* that block is
+# therefore no guarantee: wait until the peer has applied a block produced during this run and the
+# witness sees it as in sync. The wait grows with the snapshot's age; if it runs out, the fix is a
+# fresh snapshot in the chainflip-eth-contracts tron image.
+function wait_for_tron_peer() {
+  retries=120
+  delay=5
+  started_ms=$(($(date +%s) * 1000))
+
+  while [ $retries -gt 0 ]; do
+    peer_head_ms=$(docker exec tron-peer curl -s -X POST http://localhost:8090/wallet/getnowblock |
+      jq -r '.block_header.raw_data.timestamp // 0' 2>/dev/null)
+    synced_peers=$(curl -s -X POST http://localhost:8090/wallet/getnodeinfo |
+      jq -r '[.peerList[]? | select(.needSyncFromUs == false and .needSyncFromPeer == false)] | length' 2>/dev/null)
+    if [ "${peer_head_ms:-0}" -ge "$started_ms" ] && [ "${synced_peers:-0}" -ge 1 ]; then
+      break
+    else
+      sleep $delay
+      retries=$((retries - 1))
+    fi
+  done
+
+  if [ $retries -eq 0 ]; then
+    echo "Maximum retries reached. TRON peer has not caught up."
+    exit 1
+  fi
+}
+
 # Kills every process whose executable name (the basename of argv[0]) exactly
 # matches one of the given names.
 #
