@@ -16,13 +16,14 @@
 use cf_chains::witness_period::SaturatingStep;
 use cf_utilities::macros::*;
 use core::iter;
+use frame_support::{traits::Get, BoundedVec};
 use generic_typeinfo_derive::GenericTypeInfo;
 use scale_info::TypeInfo;
-use sp_std::collections::vec_deque::VecDeque;
+use sp_std::{collections::vec_deque::VecDeque, marker::PhantomData, vec::Vec};
 
 use crate::electoral_systems::state_machine::core::defx;
 
-use super::ChainTypes;
+use super::{BHWTypes, ChainTypes};
 use cf_traits::Validate;
 
 //------------------------ inputs ---------------------------
@@ -209,6 +210,53 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	#[expect(clippy::len_without_is_empty)]
 	pub fn len(&self) -> usize {
 		self.headers.len() + 1usize
+	}
+}
+
+derive_common_traits_no_bounds! {
+	/// Headers as submitted in a vote. Encodes identically to `NonemptyContinuousHeaders`, but its
+	/// length is bounded so that oversized votes fail to decode, since consensus memory is quadratic
+	/// in vote length. Continuity is checked by the BHW's `validate` after conversion.
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::Chain::NAME)]
+	pub struct BHWVote<T: BHWTypes> {
+		first: Header<T::Chain>,
+		headers: BoundedVec<Header<T::Chain>, TailBound<T::MaxVoteHeaders>>,
+	}
+}
+
+/// Bound for the headers that follow a vote's first header.
+struct TailBound<S>(PhantomData<S>);
+impl<S: Get<u32>> Get<u32> for TailBound<S> {
+	fn get() -> u32 {
+		S::get().saturating_sub(1)
+	}
+}
+
+impl<T: BHWTypes> From<BHWVote<T>> for NonemptyContinuousHeaders<T::Chain> {
+	fn from(vote: BHWVote<T>) -> Self {
+		Self { first: vote.first, headers: vote.headers.into_inner().into() }
+	}
+}
+
+impl<T: BHWTypes> TryFrom<NonemptyContinuousHeaders<T::Chain>> for BHWVote<T> {
+	type Error = NonemptyContinuousHeaders<T::Chain>;
+
+	fn try_from(headers: NonemptyContinuousHeaders<T::Chain>) -> Result<Self, Self::Error> {
+		let NonemptyContinuousHeaders { first, headers } = headers;
+		match BoundedVec::try_from(Vec::from(headers)) {
+			Ok(headers) => Ok(Self { first, headers }),
+			Err(headers) => Err(NonemptyContinuousHeaders { first, headers: headers.into() }),
+		}
+	}
+}
+
+/// This is an unsafe implementation of `into()` which panics if the input iterator is of length 0
+/// or exceeds the vote bound. Only use for tests!
+#[cfg(test)]
+impl<T: BHWTypes, X: IntoIterator<Item = Header<T::Chain>> + Clone> From<X> for BHWVote<T> {
+	fn from(value: X) -> Self {
+		NonemptyContinuousHeaders::from(value).try_into().unwrap()
 	}
 }
 

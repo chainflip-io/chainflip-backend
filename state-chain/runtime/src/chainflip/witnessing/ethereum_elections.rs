@@ -37,7 +37,7 @@ use pallet_cf_elections::{
 	electoral_system_runner::RunnerStorageAccessTrait,
 	electoral_systems::{
 		block_height_witnesser::{
-			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
+			consensus::BlockHeightWitnesserConsensus, primitives::BHWVote,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
 			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
@@ -61,7 +61,7 @@ use pallet_cf_elections::{
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use sp_core::{Decode, Encode, Get};
+use sp_core::{ConstU32, Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
@@ -111,13 +111,15 @@ impls! {
 		type BlockHeightChangeHook = Self;
 		type Chain = EthereumChain;
 		type ReorgHook = Self;
+		// Engine votes carry up to `MAX_SUBMIT_HEADERS + 2` headers.
+		type MaxVoteHeaders = ConstU32<{ ETHEREUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER + 2 }>;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-		type VoteStorage = vote_storage::bitmap::Bitmap<NonemptyContinuousHeaders<EthereumChain>>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<BHWVote<Self>>;
 
 		type OnFinalizeReturnItem = Option<ChainProgress<EthereumChain>>;
 
