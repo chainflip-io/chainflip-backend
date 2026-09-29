@@ -19,12 +19,20 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 mod remove_boost_delay;
+mod schedule_rejections_by_block;
 
 pub type PalletMigration<T, I> = (
 	VersionedMigration<
 		31,
 		32,
 		remove_boost_delay::Migration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		32,
+		33,
+		schedule_rejections_by_block::Migration<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
