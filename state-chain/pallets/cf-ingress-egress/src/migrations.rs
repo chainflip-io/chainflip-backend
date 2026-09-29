@@ -16,8 +16,20 @@
 
 use crate::{Pallet, STORAGE_VERSION_U16};
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
 
-pub type PalletMigration<T, I> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T, I>>,);
+mod schedule_rejections_by_block;
+
+pub type PalletMigration<T, I> = (
+	VersionedMigration<
+		31,
+		32,
+		schedule_rejections_by_block::Migration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T, I>>,
+);
 
 #[cfg(test)]
 const _: u16 = <PalletMigration<crate::mocks::Test, frame_support::instances::Instance1> as cf_runtime_utilities::MigrationSequence>::FROM;

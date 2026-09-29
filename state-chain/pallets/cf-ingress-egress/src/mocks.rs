@@ -53,7 +53,7 @@ use cf_traits::{
 };
 use frame_support::{
 	assert_ok, derive_impl,
-	instances::{Instance1, Instance2},
+	instances::{Instance1, Instance2, Instance3},
 	parameter_types,
 	sp_runtime::traits::Zero,
 };
@@ -195,11 +195,48 @@ impl Config<Instance2> for Test {
 
 impl_mock_chainflip!(Test);
 
+// Bitcoin shares Solana's non-reusable channel lifecycle, without requiring a Solana API mock.
+impl ChainflipWithTargetChain<Instance3> for Test {
+	type TargetChain = Bitcoin;
+}
+
+impl Config<Instance3> for Test {
+	type RuntimeCall = RuntimeCall;
+	const MANAGE_CHANNEL_LIFETIME: bool = false;
+	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Self>>;
+	type AddressDerivation = MockAddressDerivation;
+	type DepositChannelFreshness = MockBtcChannelFreshness;
+	type AddressConverter = MockAddressConverter;
+	type Balance = MockBalance;
+	type ChainApiCall = MockBitcoinApiCall<MockBtcEnvironment>;
+	type Broadcaster = MockEgressBroadcasterBtc;
+	type DepositHandler = MockDepositHandler;
+	type ChainTracking = ChainTracker<Bitcoin>;
+	type WeightInfo = ();
+	type NetworkEnvironment = MockNetworkEnvironmentProvider;
+	type AssetConverter = MockAssetConverter;
+	type FeePayment = MockFeePayment<Self>;
+	type SwapRequestHandler = MockSwapRequestHandler<(Bitcoin, crate::Pallet<Self, Instance3>)>;
+	type AssetWithholding = MockAssetWithholding;
+	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
+	type SafeMode = MockRuntimeSafeMode;
+	type SwapParameterValidation = MockSwapParameterValidation;
+	type CcmAdditionalDataHandler = MockCcmAdditionalDataHandler;
+	type AffiliateRegistry = MockAffiliateRegistry;
+	type AllowTransactionReports = ConstBool<true>;
+	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
+	type BoostApi = MockBoostApi;
+	type FundAccount = MockFundingInfo<Test>;
+	type RefundAddressRegistry = MockRefundAddressRegistry;
+}
+
 frame_support::construct_runtime!(
 	pub enum Test {
 		System: frame_system,
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance2>,
+		ElectionManagedIngressEgress: pallet_cf_ingress_egress::<Instance3>,
 	}
 );
 
@@ -224,6 +261,7 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 impl_mock_runtime_safe_mode! {
 	ingress_egress_ethereum: PalletSafeMode<Instance1>,
 	ingress_egress_bitcoin: PalletSafeMode<Instance2>,
+	ingress_egress_election_managed: PalletSafeMode<Instance3>,
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -249,8 +287,15 @@ impl_test_helpers! {
 			witness_safety_margin: Some(2),
 			dust_limits: Default::default(),
 		},
+		election_managed_ingress_egress: ElectionManagedIngressEgressConfig {
+			deposit_channel_lifetime: 100,
+			witness_safety_margin: Some(2),
+			dust_limits: Default::default(),
+		},
 	},
 	|| {
+		crate::RejectionDelayBlocks::<Test, Instance1>::set(0);
+		crate::RejectionDelayBlocks::<Test, Instance2>::set(0);
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Bitcoin>::set_tracked_data(
 			BitcoinTrackedData { btc_fee_info: Default::default() }
 		);
