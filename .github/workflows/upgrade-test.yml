@@ -218,9 +218,8 @@ jobs:
 
           ./localnet/manage.sh
 
-          # The old manage.sh may not wait for the TRON peer. See `wait_for_tron_peer`.
-          source <(git show ${{ github.sha }}:localnet/helper.sh)
-          wait_for_tron_peer
+          # The old manage.sh may not wait for the TRON peer. See `wait-for-tron-peer.sh`.
+          bash <(git show ${{ github.sha }}:localnet/init/scripts/wait-for-tron-peer.sh)
           git reset --hard
 
       - name: Setup bouncer tests initial state 📦
