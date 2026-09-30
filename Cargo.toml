@@ -28,6 +28,8 @@ members = [
 	"state-chain/chains",
 	"state-chain/custom-rpc",
 	"state-chain/ethereum-eip712",
+	"state-chain/webauthn",
+	"state-chain/pallets/cf-webauthn",
 	"state-chain/generic-typeinfo-derive",
 	"state-chain/generic-typeinfo-derive/macro",
 	"state-chain/node",
@@ -333,6 +335,8 @@ scale-json = { path = "utilities/scale-json", default-features = false }
 sol-prim = { path = "foreign-chains/solana/sol-prim", default-features = false }
 generic-typeinfo-derive = { path = "state-chain/generic-typeinfo-derive/macro" }
 ethereum-eip712 = { path = "state-chain/ethereum-eip712", default-features = false }
+cf-webauthn = { path = "state-chain/webauthn", default-features = false }
+pallet-cf-webauthn = { path = "state-chain/pallets/cf-webauthn", default-features = false }
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of

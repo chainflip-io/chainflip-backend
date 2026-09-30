@@ -1002,6 +1002,7 @@ fn testnet_genesis(
 			members: BTreeSet::from([root_key]),
 			expiry_span,
 		},
+		web_authn: Default::default(),
 		reputation: state_chain_runtime::ReputationConfig {
 			accrual_ratio,
 			penalties,

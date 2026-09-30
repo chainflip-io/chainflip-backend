@@ -64,6 +64,7 @@ where
 		let lifetime = ..era.death(current_block_number as u64) as state_chain_runtime::BlockNumber;
 
 		let ext: state_chain_runtime::TxExtension = (
+			state_chain_runtime::CheckWebAuthn::disabled(),
 			frame_system::AuthorizeCall::new(),
 			frame_system::CheckNonZeroSender::new(),
 			frame_system::CheckSpecVersion::new(),
@@ -81,6 +82,7 @@ where
 			frame_system::WeightReclaim::new(),
 		);
 		let implicit = (
+			(),
 			(),
 			(),
 			runtime_version.spec_version,

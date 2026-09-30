@@ -1,0 +1,1 @@
+{"type":"webauthn.create","challenge":"zx4RG6r_y11ZCquXPFHzS6j76VD8n979NPCCi4usWmM","origin":"http://localhost:8765","crossOrigin":false,"other_keys_can_be_added_here":"do not compare clientDataJSON against a template. See https://goo.gl/yabPex"}

@@ -1,0 +1,10 @@
+{
+  "rp_id": "localhost",
+  "origin": "http://localhost:8765",
+  "challenge": "61615aeb015a754a99e94b38197b0d9f44ac7d9daf7d3821f9c580043098950d",
+  "credential_id": "osPRFtl_FwBz7-f7QHg_VL7ryYdKfQigpSqKGfhO2I0fQzgTsjW4ezFMOBqPTa59CPCCWNl4PZiO_YfPhqXn-Q",
+  "authenticator_data": "49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630100000003",
+  "client_data_json": "{\"type\":\"webauthn.get\",\"challenge\":\"YWFa6wFadUqZ6Us4GXsNn0SsfZ2vfTgh-cWABDCYlQ0\",\"origin\":\"http://localhost:8765\",\"crossOrigin\":false}",
+  "signature_der": "3045022100e87a7ee5dda3a8720c2fd209bb6b2b4a730ec94ac113df293f1762e20e32277a022075e9e2607e892699e242f03efe36316b035558935ccc5f01ba832f829d01af49",
+  "signature": "e87a7ee5dda3a8720c2fd209bb6b2b4a730ec94ac113df293f1762e20e32277a75e9e2607e892699e242f03efe36316b035558935ccc5f01ba832f829d01af49"
+}

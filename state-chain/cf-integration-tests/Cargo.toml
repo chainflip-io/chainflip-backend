@@ -50,6 +50,8 @@ cf-chains = { workspace = true, default-features = true, features = [
 cf-primitives = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
+cf-webauthn = { workspace = true, default-features = true, features = ["test-utils"] }
+pallet-cf-webauthn = { workspace = true, default-features = true }
 cf-traits = { workspace = true, default-features = true }
 cf-rpc-types = { workspace = true }
 cfe-events = { workspace = true, default-features = true }

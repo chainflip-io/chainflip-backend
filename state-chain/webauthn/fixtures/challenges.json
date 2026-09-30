@@ -1,0 +1,19 @@
+{
+  "registration": {
+    "fixture": "yubikey_registration",
+    "challenge": "cf1e111baaffcb5d590aab973c51f34ba8fbe950fc9fdefd34f0828b8bac5a63",
+    "source": "pallet-cf-webauthn tests::yubikey::print_registration_challenge"
+  },
+  "assertions": [
+    {
+      "fixture": "yubikey_assertion_signature_variant",
+      "challenge": "61615aeb015a754a99e94b38197b0d9f44ac7d9daf7d3821f9c580043098950d",
+      "source": "cf-integration-tests webauthn::yubikey::print_challenges (Governance::approve, path 1)"
+    },
+    {
+      "fixture": "yubikey_assertion_extension",
+      "challenge": "46a0598fe0e1e0dce874a9952c935f409f4208504cfadd3be48a2dffc78ddbb7",
+      "source": "cf-integration-tests webauthn::yubikey::print_challenges (Governance::approve, path 2)"
+    }
+  ]
+}

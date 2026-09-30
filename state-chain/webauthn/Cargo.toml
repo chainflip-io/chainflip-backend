@@ -1,0 +1,45 @@
+[package]
+name = "cf-webauthn"
+version = "0.1.0"
+edition = "2021"
+description = "WebAuthn (FIDO2) assertion and attestation verification for the Chainflip runtime"
+
+[lints]
+workspace = true
+
+[dependencies]
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive", "alloc"] }
+sp-core = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
+
+base64ct = { version = "1.6", default-features = false, features = ["alloc"] }
+ciborium = { version = "0.2.2", default-features = false }
+p256 = { version = "0.13.2", default-features = false, features = ["ecdsa", "alloc"] }
+rsa = { version = "0.9.5", default-features = false, features = ["sha2"] }
+sha2 = { workspace = true }
+x509-cert = { version = "0.2.5", default-features = false }
+
+[dev-dependencies]
+hex = { workspace = true, default-features = true }
+serde_json = { workspace = true, default-features = true }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"scale-info/std",
+	"serde/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"ciborium/std",
+	"p256/std",
+	"rsa/std",
+	"sha2/std",
+	"x509-cert/std",
+]
+# Software authenticator for producing assertions in tests and benchmarks.
+test-utils = []

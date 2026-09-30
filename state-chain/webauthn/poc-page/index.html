@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebAuthn PoC</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 16px; }
+  fieldset { margin-bottom: 1.5rem; }
+  label { display: block; margin: .5rem 0 .2rem; font-weight: 600; }
+  input { width: 100%; font-family: ui-monospace, monospace; box-sizing: border-box; }
+  pre { background: #f4f4f4; padding: .75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  button { margin-top: .75rem; }
+</style>
+</head>
+<body>
+<h1>Chainflip WebAuthn PoC</h1>
+<p>Use Chrome and choose <em>security key</em> when prompted. Recordings are saved to <code>state-chain/webauthn/fixtures/</code>.</p>
+
+<fieldset>
+  <legend>1. Register</legend>
+  <label for="reg-challenge">Challenge (hex)</label>
+  <input id="reg-challenge">
+  <label for="reg-name">Fixture name</label>
+  <input id="reg-name" value="yubikey_registration">
+  <button id="register">Register security key</button>
+</fieldset>
+
+<fieldset>
+  <legend>2. Sign</legend>
+  <label for="credential-id">Credential id (base64url)</label>
+  <input id="credential-id">
+  <div id="sign-rows"></div>
+</fieldset>
+
+<pre id="out"></pre>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const out = (v) => { $('out').textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2); };
+
+const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)))
+  .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const fromB64url = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const fromHex = (h) => Uint8Array.from(h.replace(/^0x/, '').match(/../g) ?? [], (b) => parseInt(b, 16));
+const randomHex = (n) => toHex(crypto.getRandomValues(new Uint8Array(n)));
+
+// WebAuthn returns ASN.1 DER ECDSA signatures; the runtime takes fixed-width r || s.
+function derToRs(der) {
+  const b = new Uint8Array(der);
+  let i = 2;
+  const int = () => {
+    if (b[i++] !== 0x02) throw new Error('bad DER');
+    const len = b[i++];
+    let v = b.slice(i, i + len);
+    i += len;
+    while (v.length > 32 && v[0] === 0) v = v.slice(1);
+    const padded = new Uint8Array(32);
+    padded.set(v, 32 - v.length);
+    return padded;
+  };
+  const r = int();
+  const s = int();
+  return toHex(r) + toHex(s);
+}
+
+async function save(name, data) {
+  const res = await fetch(`/fixtures/${name}`, { method: 'POST', body: JSON.stringify(data) });
+  return res.text();
+}
+
+try { $('credential-id').value = localStorage.getItem('credentialId') ?? ''; } catch {}
+$('reg-challenge').value = randomHex(32);
+
+// Prefill the challenges the Rust tests expect, if present.
+fetch('/fixtures/challenges.json').then((r) => (r.ok ? r.json() : null)).then((c) => {
+  const rows = c?.assertions ?? [{ fixture: 'yubikey_assertion', challenge: randomHex(32) }];
+  if (c) { $('reg-challenge').value = c.registration.challenge; $('reg-name').value = c.registration.fixture; }
+  rows.forEach((row, i) => {
+    $('sign-rows').insertAdjacentHTML('beforeend', `
+      <label for="sign-challenge-${i}">Challenge (hex)</label><input id="sign-challenge-${i}" value="${row.challenge}">
+      <label for="sign-name-${i}">Fixture name</label><input id="sign-name-${i}" value="${row.fixture}">
+      <button id="sign-${i}">Sign challenge ${i + 1}</button>`);
+  });
+  rows.forEach((_, i) => { $(`sign-${i}`).onclick = () => sign($(`sign-challenge-${i}`).value, $(`sign-name-${i}`).value); });
+});
+
+$('register').onclick = async () => {
+  try {
+    const challenge = fromHex($('reg-challenge').value);
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        rp: { id: location.hostname, name: 'Chainflip Governance PoC' },
+        user: { id: crypto.getRandomValues(new Uint8Array(16)), name: 'governance-member', displayName: 'Governance member' },
+        challenge,
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+        authenticatorSelection: { authenticatorAttachment: 'cross-platform', residentKey: 'discouraged', userVerification: 'preferred' },
+        attestation: 'direct',
+        timeout: 120000,
+      },
+    });
+    const data = {
+      rp_id: location.hostname,
+      origin: location.origin,
+      challenge: toHex(challenge),
+      credential_id: b64url(cred.rawId),
+      attestation_object: toHex(cred.response.attestationObject),
+      client_data_json: new TextDecoder().decode(cred.response.clientDataJSON),
+      transports: cred.response.getTransports?.() ?? [],
+    };
+    try { localStorage.setItem('credentialId', data.credential_id); } catch {}
+    $('credential-id').value = data.credential_id;
+    out({ saved: await save($('reg-name').value, data), ...data });
+  } catch (e) { out(String(e)); }
+};
+
+async function sign(challengeHex, name) {
+  try {
+    const challenge = fromHex(challengeHex);
+    const credentialId = $('credential-id').value.trim();
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        rpId: location.hostname,
+        challenge,
+        allowCredentials: credentialId ? [{ type: 'public-key', id: fromB64url(credentialId) }] : [],
+        userVerification: 'preferred',
+        timeout: 120000,
+      },
+    });
+    const data = {
+      rp_id: location.hostname,
+      origin: location.origin,
+      challenge: toHex(challenge),
+      credential_id: b64url(assertion.rawId),
+      authenticator_data: toHex(assertion.response.authenticatorData),
+      client_data_json: new TextDecoder().decode(assertion.response.clientDataJSON),
+      signature_der: toHex(assertion.response.signature),
+      signature: derToRs(assertion.response.signature),
+    };
+    out({ saved: await save(name, data), ...data });
+  } catch (e) { out(String(e)); }
+}
+</script>
+</body>
+</html>

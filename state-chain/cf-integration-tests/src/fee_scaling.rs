@@ -33,6 +33,7 @@ pub fn apply_extrinsic_and_calculate_gas_fee(
 	let before = Flip::total_balance_of(&caller_account_id);
 
 	let extra = (
+		state_chain_runtime::CheckWebAuthn::<Runtime>::disabled(),
 		frame_system::AuthorizeCall::<Runtime>::new(),
 		frame_system::CheckNonZeroSender::<Runtime>::new(),
 		frame_system::CheckSpecVersion::<Runtime>::new(),
@@ -47,7 +48,7 @@ pub fn apply_extrinsic_and_calculate_gas_fee(
 	);
 
 	let signed_payload = SignedPayload::new(call.clone(), extra.clone()).unwrap();
-	let signature = MultiSignature::from(caller.sign(&signed_payload.encode()));
+	let signature = MultiSignature::from(caller.sign(&signed_payload.encode())).into();
 	let ext = sp_runtime::generic::UncheckedExtrinsic::new_signed(
 		call,
 		caller_account_id.clone().into(),

@@ -87,6 +87,7 @@ pub fn create_benchmark_extrinsic(
 		.map(|c| c / 2)
 		.unwrap_or(2) as u64;
 	let tx_ext: runtime::TxExtension = (
+		runtime::CheckWebAuthn::disabled(),
 		frame_system::AuthorizeCall::<runtime::Runtime>::new(),
 		frame_system::CheckNonZeroSender::<runtime::Runtime>::new(),
 		frame_system::CheckSpecVersion::<runtime::Runtime>::new(),
@@ -107,6 +108,7 @@ pub fn create_benchmark_extrinsic(
 		call.clone(),
 		tx_ext.clone(),
 		(
+			(),
 			(),
 			(),
 			runtime::VERSION.spec_version,

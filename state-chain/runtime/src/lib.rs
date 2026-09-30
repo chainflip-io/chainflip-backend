@@ -37,10 +37,7 @@ pub use configs::*;
 
 use codec::{Decode, Encode};
 // use constants::common::*;
-use frame_support::sp_runtime::{
-	traits::{BlakeTwo256, IdentifyAccount, Verify},
-	MultiSignature,
-};
+use frame_support::sp_runtime::traits::{BlakeTwo256, IdentifyAccount, Verify};
 use sp_runtime::generic;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -53,8 +50,10 @@ use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-/// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
-pub type Signature = MultiSignature;
+pub use pallet_cf_webauthn::CheckWebAuthn;
+
+/// `MultiSignature` extended with a WebAuthn (P-256) variant.
+pub type Signature = cf_webauthn::signature::CfSignature;
 
 /// Some way of identifying an account on the chain. We intentionally make it equivalent
 /// to the public key of our transaction signing scheme.
@@ -276,6 +275,9 @@ mod runtime {
 
 	#[runtime::pallet_index(68)]
 	pub type AssethubElections = pallet_cf_elections<Instance6>;
+
+	#[runtime::pallet_index(69)]
+	pub type WebAuthn = pallet_cf_webauthn;
 }
 
 /// The address format for describing accounts.
@@ -290,6 +292,7 @@ pub type SignedBlock = generic::SignedBlock<Block>;
 pub type BlockId = generic::BlockId<Block>;
 /// The `TransactionExtension` to the basic transaction logic.
 pub type TxExtension = (
+	pallet_cf_webauthn::CheckWebAuthn<Runtime>,
 	frame_system::AuthorizeCall<Runtime>,
 	frame_system::CheckNonZeroSender<Runtime>,
 	frame_system::CheckSpecVersion<Runtime>,

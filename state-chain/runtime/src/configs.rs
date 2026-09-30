@@ -806,6 +806,11 @@ impl pallet_cf_governance::Config for Runtime {
 	type AuthoritiesCfeVersions = Validator;
 }
 
+impl pallet_cf_webauthn::Config for Runtime {
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_webauthn::weights::PalletWeight<Runtime>;
+}
+
 impl pallet_cf_emissions::Config for Runtime {
 	type HostChain = Ethereum;
 	type FlipBalance = FlipBalance;

@@ -38,6 +38,7 @@ mod solana;
 mod swapping;
 mod trading_strategy;
 mod unsigned_validation;
+mod webauthn;
 mod witnessing;
 
 use cf_chains::evm::Address as EvmAddress;

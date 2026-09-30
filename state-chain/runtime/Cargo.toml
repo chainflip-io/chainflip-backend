@@ -24,6 +24,7 @@ log = { workspace = true }
 nanorand = { workspace = true, features = ["wyrand"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
 ethereum-eip712 = { workspace = true }
+cf-webauthn = { workspace = true }
 bitvec = { workspace = true }
 paste = { workspace = true }
 
@@ -58,6 +59,7 @@ pallet-cf-threshold-signature = { workspace = true }
 pallet-cf-tokenholder-governance = { workspace = true }
 pallet-cf-validator = { workspace = true }
 pallet-cf-vaults = { workspace = true }
+pallet-cf-webauthn = { workspace = true }
 pallet-cf-witnesser = { workspace = true }
 pallet-cf-cfe-interface = { workspace = true }
 pallet-cf-trading-strategy = { workspace = true }
@@ -152,6 +154,7 @@ runtime-benchmarks = [
 	"pallet-cf-flip/runtime-benchmarks",
 	"pallet-cf-funding/runtime-benchmarks",
 	"pallet-cf-governance/runtime-benchmarks",
+	"pallet-cf-webauthn/runtime-benchmarks",
 	"pallet-cf-ingress-egress/runtime-benchmarks",
 	"pallet-cf-lp/runtime-benchmarks",
 	"pallet-cf-pools/runtime-benchmarks",
@@ -208,6 +211,8 @@ std = [
 	"pallet-cf-threshold-signature/std",
 	"pallet-cf-tokenholder-governance/std",
 	"pallet-cf-validator/std",
+	"pallet-cf-webauthn/std",
+	"cf-webauthn/std",
 	"pallet-cf-vaults/std",
 	"pallet-cf-witnesser/std",
 	"pallet-cf-trading-strategy/std",
@@ -253,6 +258,7 @@ try-runtime = [
 	"pallet-cf-environment/try-runtime",
 	"pallet-cf-flip/try-runtime",
 	"pallet-cf-governance/try-runtime",
+	"pallet-cf-webauthn/try-runtime",
 	"pallet-cf-ingress-egress/try-runtime",
 	"pallet-cf-lp/try-runtime",
 	"pallet-cf-pools/try-runtime",

@@ -209,6 +209,7 @@ impl ExtBuilder {
 				members: self.root.iter().cloned().collect(),
 				expiry_span: EXPIRY_SPAN_IN_SECONDS,
 			},
+			web_authn: Default::default(),
 			validator: ValidatorConfig {
 				genesis_authorities: self
 					.genesis_accounts

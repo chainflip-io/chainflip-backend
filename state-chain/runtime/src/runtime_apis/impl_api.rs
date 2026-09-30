@@ -94,6 +94,7 @@ mod benches {
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_timestamp, Timestamp]
 		[pallet_cf_environment, Environment]
+		[pallet_cf_webauthn, WebAuthn]
 		[pallet_cf_flip, Flip]
 		[pallet_cf_emissions, Emissions]
 		[pallet_cf_funding, Funding]

@@ -1,0 +1,10 @@
+{
+  "rp_id": "localhost",
+  "origin": "http://localhost:8765",
+  "challenge": "46a0598fe0e1e0dce874a9952c935f409f4208504cfadd3be48a2dffc78ddbb7",
+  "credential_id": "osPRFtl_FwBz7-f7QHg_VL7ryYdKfQigpSqKGfhO2I0fQzgTsjW4ezFMOBqPTa59CPCCWNl4PZiO_YfPhqXn-Q",
+  "authenticator_data": "49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630100000005",
+  "client_data_json": "{\"type\":\"webauthn.get\",\"challenge\":\"RqBZj-Dh4NzodKmVLJNfQJ9CCFBM-t075Iot_8eN27c\",\"origin\":\"http://localhost:8765\",\"crossOrigin\":false}",
+  "signature_der": "3046022100c95735356fd58fe8cfc54be716cef59c3d93e2ea7470bbcda4757f4c3cfd5156022100ed8931b58300ad7ef0feabd6b7e183a09af830c273425a1ec464fe1d2c95bb1d",
+  "signature": "c95735356fd58fe8cfc54be716cef59c3d93e2ea7470bbcda4757f4c3cfd5156ed8931b58300ad7ef0feabd6b7e183a09af830c273425a1ec464fe1d2c95bb1d"
+}
