@@ -127,8 +127,6 @@ mod runtime {
 	pub type Environment = pallet_cf_environment;
 	#[runtime::pallet_index(3)]
 	pub type Flip = pallet_cf_flip;
-	#[runtime::pallet_index(4)]
-	pub type Emissions = pallet_cf_emissions;
 
 	// AccountRoles after funding; since account creation comes first.
 	#[runtime::pallet_index(5)]
@@ -343,7 +341,6 @@ pub type PalletExecutionOrder = (
 	CfeInterface,
 	Environment,
 	Flip,
-	Emissions,
 	Funding,
 	AccountRoles,
 	TransactionPayment,
@@ -442,10 +439,10 @@ pub type AllMigrations = (
 /// replace with a dummy migration.
 pub type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
+	pallet_cf_flip::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
 	pallet_cf_validator::migrations::PalletMigration<Runtime>,
-	pallet_cf_emissions::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
@@ -540,7 +537,7 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-pub type MigrationsForV2_4 = ();
+pub type MigrationsForV2_4 = (migrations::remove_emissions_storage::RemoveEmissionsStorage,);
 
 #[cfg(test)]
 mod test {

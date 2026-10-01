@@ -37,7 +37,6 @@ members = [
 	"state-chain/pallets/cf-cfe-interface",
 	"state-chain/pallets/cf-chain-tracking",
 	"state-chain/pallets/cf-elections",
-	"state-chain/pallets/cf-emissions",
 	"state-chain/pallets/cf-environment",
 	"state-chain/pallets/cf-flip",
 	"state-chain/pallets/cf-funding",
@@ -281,7 +280,6 @@ pallet-cf-broadcast = { path = "state-chain/pallets/cf-broadcast", default-featu
 pallet-cf-cfe-interface = { path = "state-chain/pallets/cf-cfe-interface", default-features = false }
 pallet-cf-chain-tracking = { path = "state-chain/pallets/cf-chain-tracking", default-features = false }
 pallet-cf-elections = { path = "state-chain/pallets/cf-elections", default-features = false }
-pallet-cf-emissions = { path = "state-chain/pallets/cf-emissions", default-features = false }
 pallet-cf-environment = { path = "state-chain/pallets/cf-environment", default-features = false }
 pallet-cf-flip = { path = "state-chain/pallets/cf-flip", default-features = false }
 pallet-cf-funding = { path = "state-chain/pallets/cf-funding", default-features = false }

@@ -22,6 +22,7 @@ mod mock;
 mod tests;
 
 mod benchmarking;
+pub mod migrations;
 
 mod imbalances;
 mod on_charge_transaction;
@@ -35,8 +36,8 @@ pub use weights::WeightInfo;
 
 use cf_primitives::EpochIndex;
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationHooks, EpochInfo, FeePayment, FundingInfo, Issuance,
-	RewardsDistribution, Slashing,
+	AccountInfo, Bonding, DeregistrationHooks, FeePayment, FundingInfo, RewardsDistribution,
+	Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
@@ -76,8 +77,6 @@ pub enum PalletConfigUpdate {
 	SetSlashingRate(Permill),
 	// Set fee scaling rate for any calls that are scaled.
 	SetFeeScalingRate(FeeScalingRateConfig),
-	// Set the epoch from which flip 2.1 activates.
-	SetFeeRewardsActivationEpoch(EpochIndex),
 }
 
 #[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -101,6 +100,9 @@ impl<T: Config> MaxEncodedLen for OpaqueCallIndex<T> {
 pub mod pallet {
 	use super::*;
 	use cf_traits::{Chainflip, WaivedFees};
+
+	pub const STORAGE_VERSION_U16: u16 = 1;
+	pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
@@ -143,6 +145,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	/// Funds belonging to on-chain accounts.
@@ -187,12 +190,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FlipToDistribute<T: Config> = StorageValue<_, i128, ValueQuery>;
 
-	/// The epoch from which flip 2.1 activates.
-	/// Defaults to u32::MAX (effectively disabled) until set via governance.
-	#[pallet::storage]
-	pub type FeeRewardsActivationEpoch<T: Config> =
-		StorageValue<_, EpochIndex, ValueQuery, ConstU32<{ u32::MAX }>>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -211,10 +208,6 @@ pub mod pallet {
 		},
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
-		},
-		FlipMinted {
-			to: T::AccountId,
-			amount: T::Balance,
 		},
 		BondUpdated {
 			account_id: T::AccountId,
@@ -274,9 +267,6 @@ pub mod pallet {
 					// i.e. there are 9 decimal places.
 					PalletConfigUpdate::SetFeeScalingRate(fee_scaling_rate) => {
 						FeeScalingRate::<T>::set(fee_scaling_rate);
-					},
-					PalletConfigUpdate::SetFeeRewardsActivationEpoch(epoch) => {
-						FeeRewardsActivationEpoch::<T>::set(epoch);
 					},
 				};
 				Self::deposit_event(Event::PalletConfigUpdated { update });
@@ -465,16 +455,6 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Decreases total issuance and returns a corresponding imbalance that must be reconciled.
-	fn burn(amount: T::Balance) -> Deficit<T> {
-		Deficit::from_burn(amount)
-	}
-
-	/// Increases total issuance and returns a corresponding imbalance that must be reconciled.
-	fn mint(amount: T::Balance) -> Surplus<T> {
-		Surplus::from_mint(amount)
-	}
-
 	/// Create some funds that have been added to the chain from outside.
 	fn bridge_in(amount: T::Balance) -> Surplus<T> {
 		Surplus::from_offchain(amount)
@@ -612,20 +592,9 @@ impl<T: Config> Pallet<T> {
 			.saturating_add(Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID).into())
 	}
 
-	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
-	/// rather than burned.
-	pub fn is_flip_2_1_activated() -> bool {
-		T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get()
-	}
-
-	/// Burns `amount`, unless FLIP 2.1 is active, in which case `amount` is deposited into the
-	/// reserve to be distributed to authorities as fee rewards instead.
+	/// Deposits `amount` into the reserve to be distributed to authorities as fee rewards.
 	fn burn_or_deposit_to_reserve(amount: T::Balance) -> Deficit<T> {
-		if Self::is_flip_2_1_activated() {
-			Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
-		} else {
-			Self::burn(amount)
-		}
+		Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
 	}
 }
 
@@ -647,18 +616,13 @@ impl<T: Config> FeePayment for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
+	fn credit_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
 		use frame_support::traits::HandleLifetime;
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			frame_system::Provider::<T>::created(account_id)
 				.expect("Cannot fail (see implementation).");
 		}
-		Pallet::<T>::settle(account_id, Pallet::<T>::mint(amount).into());
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_flip_2_1() {
-		FeeRewardsActivationEpoch::<T>::set(T::EpochInfo::epoch_index());
+		<Pallet<T> as cf_traits::Funding>::credit_funds(account_id, amount);
 	}
 
 	fn try_take_fee(
@@ -677,16 +641,8 @@ impl<T: Config> FeePayment for Pallet<T> {
 		FlipToDistribute::<T>::mutate(|flip| flip.saturating_accrue(amount));
 	}
 
-	fn burn_or_reserve_offchain(amount: Self::Amount) {
-		if Pallet::<T>::is_flip_2_1_activated() {
-			Pallet::<T>::bridge_in_to_distribution_reserve(amount);
-		} else {
-			<Pallet<T> as Issuance>::burn_offchain(amount);
-		}
-	}
-
-	fn is_flip_2_1_activated() -> bool {
-		Pallet::<T>::is_flip_2_1_activated()
+	fn bridge_in_to_onchain_reserve(amount: Self::Amount) {
+		Pallet::<T>::bridge_in_to_distribution_reserve(amount);
 	}
 }
 
@@ -714,51 +670,6 @@ impl<T: Config> DeregistrationHooks for Bonder<T> {
 		} else {
 			Err(Error::AccountBonded)
 		}
-	}
-}
-
-impl<T: Config> Issuance for Pallet<T> {
-	type AccountId = T::AccountId;
-	type Balance = T::Balance;
-
-	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance) {
-		Pallet::<T>::settle(beneficiary, Pallet::<T>::mint(amount).into());
-		Pallet::<T>::deposit_event(Event::FlipMinted { to: beneficiary.clone(), amount });
-	}
-
-	fn total_issuance() -> Self::Balance {
-		Pallet::<T>::total_issuance()
-	}
-
-	fn burn_offchain(amount: Self::Balance) {
-		let _remainder = Pallet::<T>::burn(amount).offset(Pallet::<T>::bridge_in(amount));
-	}
-
-	fn is_flip_2_1_activated() -> bool {
-		Pallet::<T>::is_flip_2_1_activated()
-	}
-}
-
-pub struct FlipIssuance<T>(PhantomData<T>);
-
-impl<T: Config> Issuance for FlipIssuance<T> {
-	type AccountId = <Pallet<T> as Issuance>::AccountId;
-	type Balance = <Pallet<T> as Issuance>::Balance;
-
-	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance) {
-		<Pallet<T> as Issuance>::mint(beneficiary, amount);
-	}
-
-	fn total_issuance() -> Self::Balance {
-		<Pallet<T> as Issuance>::total_issuance()
-	}
-
-	fn burn_offchain(amount: Self::Balance) {
-		<Pallet<T> as Issuance>::burn_offchain(amount);
-	}
-
-	fn is_flip_2_1_activated() -> bool {
-		<Pallet<T> as Issuance>::is_flip_2_1_activated()
 	}
 }
 
