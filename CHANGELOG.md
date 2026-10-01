@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.16] - 2026-10-01
+
+- bound EncodedAddress::Btc length
+
 ## [2.2.15] - 2026-09-24
 
 ### Fixes
