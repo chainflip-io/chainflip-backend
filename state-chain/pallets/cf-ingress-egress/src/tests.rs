@@ -2929,7 +2929,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			Asset::Dot,
 			10000,
 			Default::default(),
-			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
+			EncodedAddress::Btc(vec![0x41, 0x80, 0x41].try_into().unwrap()),
 			None,
 			Default::default(),
 			DepositDetails { tx_hashes: None },
