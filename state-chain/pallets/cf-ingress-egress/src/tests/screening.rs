@@ -147,7 +147,9 @@ fn process_marked_transaction_and_expect_refund() {
 		);
 
 		assert_eq!(
-			ScheduledTransactionsForRejection::<Test, Instance2>::decode_len(System::block_number()),
+			ScheduledTransactionsForRejection::<Test, Instance2>::decode_len(
+				System::block_number() + 1
+			),
 			Some(1)
 		);
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
@@ -476,14 +478,16 @@ fn send_funds_back_after_they_have_been_rejected() {
 
 		assert_eq!(MockEgressBroadcasterBtc::get_pending_api_calls().len(), 0);
 		assert_eq!(
-			ScheduledTransactionsForRejection::<Test, Instance2>::get(System::block_number()).len(),
+			ScheduledTransactionsForRejection::<Test, Instance2>::get(System::block_number() + 1)
+				.len(),
 			1
 		);
 
-		BitcoinIngressEgress::on_finalize(1);
+		BitcoinIngressEgress::on_finalize(System::block_number() + 1);
 
 		assert_eq!(
-			ScheduledTransactionsForRejection::<Test, Instance2>::get(System::block_number()).len(),
+			ScheduledTransactionsForRejection::<Test, Instance2>::get(System::block_number() + 1)
+				.len(),
 			0
 		);
 
@@ -674,7 +678,9 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 		);
 
 		assert_eq!(
-			ScheduledTransactionsForRejection::<Test, Instance2>::decode_len(System::block_number()),
+			ScheduledTransactionsForRejection::<Test, Instance2>::decode_len(
+				System::block_number() + 1
+			),
 			Some(1)
 		);
 	});
