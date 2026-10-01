@@ -948,7 +948,13 @@ pub fn register_refund_addresses(account_id: &AccountId) {
 	for encoded_address in [
 		EncodedAddress::Eth(Default::default()),
 		EncodedAddress::Dot(Default::default()),
-		EncodedAddress::Btc("bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec()),
+		EncodedAddress::Btc(
+			"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw"
+				.as_bytes()
+				.to_vec()
+				.try_into()
+				.unwrap(),
+		),
 		EncodedAddress::Sol(Default::default()),
 	] {
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
