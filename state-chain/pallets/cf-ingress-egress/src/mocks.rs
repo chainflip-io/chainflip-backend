@@ -281,21 +281,22 @@ impl_test_helpers! {
 			deposit_channel_lifetime: 100,
 			witness_safety_margin: Some(2),
 			dust_limits: Default::default(),
+			rejection_delay_blocks: 0,
 		},
 		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: 100,
 			witness_safety_margin: Some(2),
 			dust_limits: Default::default(),
+			rejection_delay_blocks: 0,
 		},
 		election_managed_ingress_egress: ElectionManagedIngressEgressConfig {
 			deposit_channel_lifetime: 100,
 			witness_safety_margin: Some(2),
 			dust_limits: Default::default(),
+			rejection_delay_blocks: 0,
 		},
 	},
 	|| {
-		crate::RejectionDelayBlocks::<Test, Instance1>::set(0);
-		crate::RejectionDelayBlocks::<Test, Instance2>::set(0);
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Bitcoin>::set_tracked_data(
 			BitcoinTrackedData { btc_fee_info: Default::default() }
 		);
