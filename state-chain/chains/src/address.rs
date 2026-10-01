@@ -17,7 +17,7 @@
 extern crate alloc;
 
 use crate::{
-	btc::ScriptPubkey,
+	btc::{ScriptPubkey, MAX_BTC_ADDRESS_LENGTH},
 	dot::PolkadotAccountId,
 	evm::Address as EvmAddress,
 	sol::{self, SolAddress, SolPubkey},
@@ -34,6 +34,8 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use sp_core::ConstU32;
+use sp_runtime::BoundedVec;
 use sp_std::{fmt::Debug, vec::Vec};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -137,7 +139,7 @@ impl ForeignChainAddress {
 pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),
-	Btc(Vec<u8>),
+	Btc(BoundedVec<u8, ConstU32<MAX_BTC_ADDRESS_LENGTH>>),
 	Arb([u8; 20]),
 	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
 	Hub([u8; 32]),
@@ -316,7 +318,9 @@ impl EncodedAddress {
 				address.copy_from_slice(&bytes);
 				Ok(EncodedAddress::Dot(address))
 			},
-			ForeignChain::Bitcoin => Ok(EncodedAddress::Btc(bytes)),
+			ForeignChain::Bitcoin => Ok(EncodedAddress::Btc(
+				bytes.try_into().map_err(|_| "Invalid Bitcoin address length")?,
+			)),
 			ForeignChain::Arbitrum => {
 				if bytes.len() != 20 {
 					return Err("Invalid Arbitrum address length")
@@ -364,7 +368,7 @@ impl EncodedAddress {
 			EncodedAddress::Arb(bytes) => bytes.to_vec(),
 			EncodedAddress::Sol(bytes) => bytes.to_vec(),
 			EncodedAddress::Dot(bytes) => bytes.to_vec(),
-			EncodedAddress::Btc(byte_vec) => byte_vec,
+			EncodedAddress::Btc(byte_vec) => byte_vec.into_inner(),
 			EncodedAddress::Hub(bytes) => bytes.to_vec(),
 			EncodedAddress::Tron(bytes) => bytes.to_vec(),
 		}
@@ -385,9 +389,10 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 	match address {
 		ForeignChainAddress::Eth(address) => EncodedAddress::Eth(address.0),
 		ForeignChainAddress::Dot(address) => EncodedAddress::Dot(*address.aliased_ref()),
-		ForeignChainAddress::Btc(script_pubkey) => EncodedAddress::Btc(
-			script_pubkey.to_address(&network_environment().into()).as_bytes().to_vec(),
-		),
+		// Never truncates: every ScriptPubkey renders within MAX_BTC_ADDRESS_LENGTH.
+		ForeignChainAddress::Btc(script_pubkey) => EncodedAddress::Btc(BoundedVec::truncate_from(
+			script_pubkey.to_address(&network_environment().into()).into_bytes(),
+		)),
 		ForeignChainAddress::Arb(address) => EncodedAddress::Arb(address.0),
 		ForeignChainAddress::Sol(address) => EncodedAddress::Sol(address.into()),
 		ForeignChainAddress::Hub(address) => EncodedAddress::Hub(*address.aliased_ref()),
@@ -632,7 +637,13 @@ pub fn clean_foreign_chain_address(
 		ForeignChain::Ethereum => EncodedAddress::Eth(clean_hex_address(address)?),
 		ForeignChain::Polkadot =>
 			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
-		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
+		ForeignChain::Bitcoin => EncodedAddress::Btc(
+			address
+				.as_bytes()
+				.to_vec()
+				.try_into()
+				.map_err(|_| anyhow::anyhow!("Bitcoin address is too long"))?,
+		),
 		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
 		ForeignChain::Solana => match SolAddress::from_str(address) {
 			Ok(sol_address) => EncodedAddress::Sol(sol_address.into()),
@@ -665,7 +676,7 @@ mod tests {
 		#[track_caller]
 		fn test(address: &str, case_sensitive: bool) {
 			let network = || NetworkEnvironment::Mainnet;
-			let encoded_addr = EncodedAddress::Btc(address.as_bytes().to_vec());
+			let encoded_addr = EncodedAddress::Btc(address.as_bytes().to_vec().try_into().unwrap());
 			let foreign_chain_addr =
 				try_from_encoded_address(encoded_addr.clone(), network).unwrap();
 			let recovered_addr = to_encoded_address(foreign_chain_addr, network);
@@ -749,5 +760,37 @@ mod tests {
 		let addr =
 			clean_foreign_chain_address(ForeignChain::Tron, &format!("0x{evm_hex}")).unwrap();
 		assert_eq!(addr, EncodedAddress::Tron(hex::decode(evm_hex).unwrap().try_into().unwrap()));
+	}
+
+	#[test]
+	fn oversized_btc_address_fails_to_decode() {
+		const BTC_VARIANT_INDEX: u8 = 2;
+		let encode = |len: usize| (BTC_VARIANT_INDEX, vec![b'z'; len]).encode();
+
+		assert!(EncodedAddress::decode(&mut &encode(MAX_BTC_ADDRESS_LENGTH as usize)[..]).is_ok());
+		assert!(
+			EncodedAddress::decode(&mut &encode(MAX_BTC_ADDRESS_LENGTH as usize + 1)[..]).is_err()
+		);
+	}
+
+	#[test]
+	fn longest_btc_address_fits_encoded_address() {
+		let script_pubkey =
+			ScriptPubkey::OtherSegwit { version: 16, program: vec![0xff; 40].try_into().unwrap() };
+		for network in [
+			NetworkEnvironment::Mainnet,
+			NetworkEnvironment::Testnet,
+			NetworkEnvironment::Development,
+		] {
+			let address = script_pubkey.to_address(&network.into());
+			assert!(address.len() <= MAX_BTC_ADDRESS_LENGTH as usize);
+			assert_eq!(
+				try_from_encoded_address(
+					to_encoded_address(ForeignChainAddress::Btc(script_pubkey.clone()), || network),
+					|| network
+				),
+				Ok(ForeignChainAddress::Btc(script_pubkey.clone()))
+			);
+		}
 	}
 }

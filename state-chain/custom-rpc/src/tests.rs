@@ -481,11 +481,11 @@ fn test_vault_addresses_custom_rpc() {
 	let val: VaultAddresses = VaultAddresses {
 		ethereum: EncodedAddress::Eth([0; 20]),
 		arbitrum: EncodedAddress::Arb([1; 20]),
-		bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
+		bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Default::default()))],
 		sol_swap_endpoint_program_data_account: EncodedAddress::Sol([2; 32]),
 		usdc_token_mint_pubkey: EncodedAddress::Sol([3; 32]),
 		sol_vault_program: EncodedAddress::Sol([4; 32]),
-		bitcoin_vault: Some(EncodedAddress::Btc([5; 32].into())),
+		bitcoin_vault: Some(EncodedAddress::Btc([5; 32].to_vec().try_into().unwrap())),
 		solana_sol_vault: Some(EncodedAddress::Sol([6; 32])),
 		solana_usdc_token_vault_ata: EncodedAddress::Sol([7; 32]),
 		solana_vault_swap_account: Some(EncodedAddress::Sol([8; 32])),

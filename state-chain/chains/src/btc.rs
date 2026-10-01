@@ -456,6 +456,8 @@ const INTERNAL_PUBKEY: &[u8] =
 pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
+	/// The address is longer than [MAX_BTC_ADDRESS_LENGTH]
+	AddressTooLong,
 }
 #[derive(
 	Encode,
@@ -625,6 +627,9 @@ const SEGWIT_VERSION_TAPROOT: u8 = 1;
 const SEGWIT_VERSION_MAX: u8 = 16;
 const MIN_SEGWIT_PROGRAM_BYTES: u32 = 2;
 const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
+/// BIP173 caps bech32 strings at 90 characters; base58 addresses are shorter. The longest address
+/// we can produce is a 40-byte segwit program on regtest (76 characters).
+pub const MAX_BTC_ADDRESS_LENGTH: u32 = 90;
 
 /// A Bitcoin output script (scriptPubKey), which is how Bitcoin accounts are represented in the
 /// State Chain: deposit channels, egress destinations, refund addresses and [Bitcoin::BURN_ADDRESS]
@@ -814,6 +819,11 @@ impl ScriptPubkey {
 	}
 
 	pub fn try_from_address(address: &str, network: &BitcoinNetwork) -> Result<Self, Error> {
+		// Base58 decoding is quadratic in the input length, so reject oversized input up front.
+		if address.len() > MAX_BTC_ADDRESS_LENGTH as usize {
+			return Err(Error::AddressTooLong)
+		}
+
 		// See https://en.bitcoin.it/wiki/Base58Check_encoding
 		fn try_decode_as_base58(address: &str, network: &BitcoinNetwork) -> Option<ScriptPubkey> {
 			const CHECKSUM_LENGTH: usize = 4;
@@ -1399,6 +1409,31 @@ mod test {
 			&hex_literal::hex!("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC30"),
 			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
 			&hex_literal::hex!("6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E17776969E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B")));
+	}
+
+	#[test]
+	fn try_from_address_rejects_oversized_input() {
+		let network = BitcoinNetwork::Regtest;
+		let longest = ScriptPubkey::OtherSegwit {
+			version: SEGWIT_VERSION_MAX,
+			program: vec![0xff; MAX_SEGWIT_PROGRAM_BYTES as usize].try_into().unwrap(),
+		};
+		let address = longest.to_address(&network);
+		assert_eq!(ScriptPubkey::try_from_address(&address, &network), Ok(longest));
+
+		// Padding breaks the checksum, so only the error tells us which check rejected it.
+		let padded_to = |len: usize| format!("{address}{}", "q".repeat(len - address.len()));
+		assert_eq!(
+			ScriptPubkey::try_from_address(&padded_to(MAX_BTC_ADDRESS_LENGTH as usize), &network),
+			Err(Error::InvalidAddress)
+		);
+		assert_eq!(
+			ScriptPubkey::try_from_address(
+				&padded_to(MAX_BTC_ADDRESS_LENGTH as usize + 1),
+				&network
+			),
+			Err(Error::AddressTooLong)
+		);
 	}
 
 	#[test]
