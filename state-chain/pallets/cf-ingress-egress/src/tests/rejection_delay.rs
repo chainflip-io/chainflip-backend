@@ -8,7 +8,7 @@ use crate::{
 };
 use cf_chains::{evm::DeploymentStatus, Bitcoin};
 use cf_traits::IngressSink;
-use frame_support::instances::Instance3;
+use frame_support::{instances::Instance3, traits::BuildGenesisConfig};
 
 fn empty_channel() -> (ChannelId, EthereumAddress) {
 	let (channel_id, address, _, _) = EthereumIngressEgress::request_liquidity_deposit_address(
@@ -43,6 +43,24 @@ fn witness_rejected_deposit(address: EthereumAddress) {
 		},
 		1,
 	);
+}
+
+#[test]
+fn rejection_delay_is_set_at_genesis_and_defaults_to_one_day() {
+	new_test_ext().execute_with(|| {
+		// The mock genesis sets a zero delay.
+		assert_eq!(RejectionDelayBlocks::<Test, Instance1>::get(), 0);
+
+		crate::GenesisConfig::<Test, Instance1> { rejection_delay_blocks: 7, ..Default::default() }
+			.build();
+		assert_eq!(RejectionDelayBlocks::<Test, Instance1>::get(), 7);
+
+		crate::GenesisConfig::<Test, Instance1>::default().build();
+		assert_eq!(
+			RejectionDelayBlocks::<Test, Instance1>::get(),
+			u64::from(DEFAULT_REJECTION_DELAY_BLOCKS)
+		);
+	});
 }
 
 #[test]
@@ -347,20 +365,24 @@ fn cleanup_leaves_unselected_addresses_due_for_the_next_block() {
 	});
 }
 
+fn election_managed_channel() -> (ChannelId, ScriptPubkey) {
+	let (channel_id, address, _, _) =
+		ElectionManagedIngressEgress::request_liquidity_deposit_address(
+			BROKER,
+			BROKER,
+			btc::Asset::Btc,
+			0,
+			ForeignChainAddress::Btc(ScriptPubkey::Taproot([2; 32])),
+			None,
+		)
+		.unwrap();
+	(channel_id, address.try_into().unwrap())
+}
+
 #[test]
 fn election_managed_channel_cleanup_retries_without_reusing_address() {
 	new_test_ext().execute_with(|| {
-		let (channel_id, address, _, _) =
-			ElectionManagedIngressEgress::request_liquidity_deposit_address(
-				BROKER,
-				BROKER,
-				btc::Asset::Btc,
-				0,
-				ForeignChainAddress::Btc(ScriptPubkey::Taproot([2; 32])),
-				None,
-			)
-			.unwrap();
-		let address: ScriptPubkey = address.try_into().unwrap();
+		let (channel_id, address) = election_managed_channel();
 		assert!(!DepositChannelRecycleBlocks::<Test, Instance3>::exists());
 		ScheduledEgressFetchOrTransfer::<Test, Instance3>::append(
 			FetchOrTransfer::<Bitcoin>::Fetch {
@@ -370,18 +392,78 @@ fn election_managed_channel_cleanup_retries_without_reusing_address() {
 				amount: 100_000,
 			},
 		);
+		ProcessedUpTo::<Test, Instance3>::set(10);
 		<ElectionManagedIngressEgress as IngressSink>::on_channel_closed(address.clone());
 		assert!(DepositChannelLookup::<Test, Instance3>::contains_key(&address));
-		assert_eq!(DepositChannelRecycleBlocks::<Test, Instance3>::get().len(), 1);
+		assert_eq!(
+			DepositChannelRecycleBlocks::<Test, Instance3>::get(),
+			vec![(10, address.clone())]
+		);
+
+		// The queued fetch keeps the channel until a later attempt.
+		ElectionManagedIngressEgress::on_idle(1, Weight::MAX);
+		assert!(DepositChannelLookup::<Test, Instance3>::contains_key(&address));
+		let retry_at = 10 + ChannelCleanupRetryBlocks::<Test, Instance3>::get();
+		assert_eq!(
+			DepositChannelRecycleBlocks::<Test, Instance3>::get(),
+			vec![(retry_at, address.clone())]
+		);
 
 		ElectionManagedIngressEgress::on_finalize(1);
 		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance3>::get().is_empty());
-		let retry_at = DepositChannelRecycleBlocks::<Test, Instance3>::get()[0].0;
 		ProcessedUpTo::<Test, Instance3>::set(retry_at);
 		ElectionManagedIngressEgress::on_idle(2, Weight::MAX);
 		assert!(!DepositChannelLookup::<Test, Instance3>::contains_key(&address));
 		assert!(!DepositChannelPool::<Test, Instance3>::contains_key(channel_id));
 		assert!(DepositChannelRecycleBlocks::<Test, Instance3>::get().is_empty());
+	});
+}
+
+#[test]
+fn election_managed_closures_are_cleaned_up_together_in_on_idle() {
+	new_test_ext().execute_with(|| {
+		let channels: Vec<_> = (0..3).map(|_| election_managed_channel()).collect();
+		for (_, address) in &channels {
+			<ElectionManagedIngressEgress as IngressSink>::on_channel_closed(address.clone());
+			assert!(DepositChannelLookup::<Test, Instance3>::contains_key(address));
+		}
+		assert_eq!(DepositChannelRecycleBlocks::<Test, Instance3>::get().len(), channels.len());
+
+		ElectionManagedIngressEgress::on_idle(1, Weight::MAX);
+		for (channel_id, address) in &channels {
+			assert!(!DepositChannelLookup::<Test, Instance3>::contains_key(address));
+			assert!(!DepositChannelPool::<Test, Instance3>::contains_key(channel_id));
+		}
+		assert!(DepositChannelRecycleBlocks::<Test, Instance3>::get().is_empty());
+	});
+}
+
+#[test]
+fn cleanup_retry_uses_the_height_on_idle_compares_against() {
+	new_test_ext().execute_with(|| {
+		let (_, address) = request_address_and_deposit(ALICE, EthAsset::Eth);
+		DepositChannelRecycleBlocks::<Test, Instance1>::kill();
+		ProcessedUpTo::<Test, Instance1>::set(100);
+		BlockHeightProvider::<MockEthereum>::set_block_height(200);
+
+		EthereumIngressEgress::recycle_channels(vec![address]);
+		assert_eq!(DepositChannelRecycleBlocks::<Test, Instance1>::get(), vec![(150, address)]);
+	});
+}
+
+#[test]
+fn zero_rejection_delay_is_processed_in_the_next_block() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(10);
+		RejectionDelayBlocks::<Test, Instance1>::set(0);
+		// Deposits can be processed after this pallet has finalised the current block.
+		EthereumIngressEgress::on_finalize(10);
+		rejected_channel();
+		assert!(!ScheduledTransactionsForRejection::<Test, Instance1>::contains_key(10));
+
+		EthereumIngressEgress::on_finalize(11);
+		assert_eq!(MockEgressBroadcasterEth::get_pending_api_calls().len(), 1);
+		assert!(ScheduledTransactionsForRejection::<Test, Instance1>::iter().next().is_none());
 	});
 }
 

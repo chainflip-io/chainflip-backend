@@ -1296,7 +1296,7 @@ mod delayed_boosting {
 
 				assert_eq!(
 					ScheduledTransactionsForRejection::<Test, Instance1>::get(
-						System::block_number()
+						System::block_number() + 1
 					)
 					.len(),
 					1
@@ -1311,7 +1311,7 @@ mod delayed_boosting {
 
 				assert_eq!(
 					ScheduledTransactionsForRejection::<Test, Instance1>::get(
-						System::block_number()
+						System::block_number() + 1
 					)
 					.len(),
 					1
@@ -1403,7 +1403,7 @@ mod delayed_boosting {
 
 				assert_eq!(
 					ScheduledTransactionsForRejection::<Test, Instance1>::get(
-						System::block_number()
+						System::block_number() + 1
 					)
 					.len(),
 					0
@@ -1418,7 +1418,7 @@ mod delayed_boosting {
 				);
 
 				assert!(matches!(
-					&ScheduledTransactionsForRejection::<Test, Instance1>::get(System::block_number())[..],
+					&ScheduledTransactionsForRejection::<Test, Instance1>::get(System::block_number() + 1)[..],
 					[TransactionRejectionDetails {
 						deposit_details: DepositDetails { tx_hashes: Some(tx_ids) },
 						..

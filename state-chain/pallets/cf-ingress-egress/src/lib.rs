@@ -750,6 +750,7 @@ pub mod pallet {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
+		pub rejection_delay_blocks: BlockNumberFor<T>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -758,6 +759,7 @@ pub mod pallet {
 				deposit_channel_lifetime: Default::default(),
 				witness_safety_margin: None,
 				dust_limits: Default::default(),
+				rejection_delay_blocks: DEFAULT_REJECTION_DELAY_BLOCKS.into(),
 			}
 		}
 	}
@@ -767,6 +769,7 @@ pub mod pallet {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
 			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
+			RejectionDelayBlocks::<T, I>::put(self.rejection_delay_blocks);
 
 			for (asset, dust_limit) in self.dust_limits.clone() {
 				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
@@ -1312,19 +1315,7 @@ pub mod pallet {
 		/// Recycle addresses if we can
 		fn on_idle(now: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
-
-			// Conservative external-chain progress height. It is not guaranteed to be
-			// current or reorg-safe, but is safe to use for channel/boost expiry.
-			let external_height = match TargetChainOf::<T, I>::get() {
-				ForeignChain::Arbitrum |
-				ForeignChain::Bitcoin |
-				ForeignChain::Ethereum |
-				ForeignChain::Tron |
-				ForeignChain::Bsc |
-				ForeignChain::Assethub => ProcessedUpTo::<T, I>::get(),
-				ForeignChain::Polkadot | ForeignChain::Solana =>
-					T::ChainTracking::get_block_height(),
-			};
+			let external_height = Self::external_chain_height();
 
 			let db_weight = frame_support::weights::constants::ParityDbWeight::get();
 			// Approximate per-address cost, including queued-work checks and cleanup retries.
@@ -1340,7 +1331,7 @@ pub mod pallet {
 				.unwrap_or_default()
 				.saturated_into::<usize>();
 
-			// Solana schedules entries here only when election-driven cleanup needs to be retried.
+			// For Solana, entries are only queued by election-driven channel closures.
 			if !recycle_queue.is_empty() && maximum_addresses_to_recycle > 0 {
 				let addresses_to_recycle = Self::take_recyclable_addresses(
 					&mut recycle_queue,
@@ -1851,7 +1842,8 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 	}
 
 	fn on_channel_closed(channel: Self::Account) {
-		Self::recycle_channels(vec![channel]);
+		// Deferred to `on_idle` so that all closures share a single pending-work lookup per block.
+		DepositChannelRecycleBlocks::<T, I>::append((Self::external_chain_height(), channel));
 	}
 }
 
@@ -1934,6 +1926,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Conservative external-chain progress height. It is not guaranteed to be current or
+	/// reorg-safe, but is safe to use for channel/boost expiry.
+	fn external_chain_height() -> TargetChainBlockNumber<T, I> {
+		match TargetChainOf::<T, I>::get() {
+			ForeignChain::Arbitrum |
+			ForeignChain::Bitcoin |
+			ForeignChain::Ethereum |
+			ForeignChain::Tron |
+			ForeignChain::Bsc |
+			ForeignChain::Assethub => ProcessedUpTo::<T, I>::get(),
+			ForeignChain::Polkadot | ForeignChain::Solana => T::ChainTracking::get_block_height(),
+		}
+	}
+
 	fn recycle_channels(addresses: Vec<TargetChainAccount<T, I>>) {
 		if addresses.is_empty() {
 			return;
@@ -1993,8 +1999,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if addresses.is_empty() {
 			return;
 		}
-		let retry_at = T::ChainTracking::get_block_height()
-			.saturating_add(ChannelCleanupRetryBlocks::<T, I>::get());
+		// Must match the height `on_idle` compares against, so retries wait exactly this long.
+		let retry_at =
+			Self::external_chain_height().saturating_add(ChannelCleanupRetryBlocks::<T, I>::get());
 		DepositChannelRecycleBlocks::<T, I>::mutate(|queue| {
 			for address in addresses {
 				if let Some((scheduled_at, _)) =
@@ -3199,7 +3206,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 					ScheduledTransactionsForRejection::<T, I>::append(
 						frame_system::Pallet::<T>::block_number()
-							.saturating_add(RejectionDelayBlocks::<T, I>::get()),
+							.saturating_add(RejectionDelayBlocks::<T, I>::get().max(One::one())),
 						TransactionRejectionDetails {
 							deposit_address: deposit_address.clone(),
 							refund_address,
