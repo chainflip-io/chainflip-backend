@@ -32,6 +32,9 @@ pub const AUCTION_PARAMETERS: SetSizeParameters = SetSizeParameters {
 /// Percent of the epoch we are allowed to redeem
 pub const REDEMPTION_PERIOD_AS_PERCENTAGE: u8 = 50;
 
+/// How long rejected deposits are held before their refund is initiated.
+pub const REJECTION_DELAY_BLOCKS: BlockNumber = 24 * HOURS;
+
 // This is equivalent to one reputation point for every minute of online time.
 pub const REPUTATION_PER_HEARTBEAT: i32 = 15;
 pub const ACCRUAL_RATIO: (i32, u32) = (REPUTATION_PER_HEARTBEAT, HEARTBEAT_BLOCK_INTERVAL);
