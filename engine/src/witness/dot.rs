@@ -47,6 +47,7 @@ use crate::{
 	witness::common::chain_source::extension::ChainSourceExt,
 };
 use engine_sc_client::{
+	chain_api::ChainApi,
 	extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi,
 	stream_api::{StreamApi, FINALIZED},
@@ -211,7 +212,7 @@ pub async fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: ChainApi + StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync
