@@ -18,6 +18,7 @@ import { testBrokerLevelScreening } from 'tests/broker_level_screening';
 import { testFundRedeem } from 'tests/fund_redeem';
 import { concurrentTest, serialTest } from 'shared/utils/vitest';
 import { testCcmSwapFundAccount, testDelegate } from 'tests/delegate_flip';
+import { testMultiDelegate } from 'tests/multi_delegate_flip';
 import { testSpecialBitcoinSwaps } from 'tests/special_btc_swaps';
 import { testSignedRuntimeCall } from 'tests/signed_runtime_call';
 import { lendingTest } from 'tests/lending';
@@ -60,6 +61,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('VaultSwaps', testVaultSwap, 340 * ciTimeoutFactor);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 250 * ciTimeoutFactor);
   concurrentTest('DelegateFlip', testDelegate, 325 * ciTimeoutFactor);
+  concurrentTest('MultiDelegateFlip', testMultiDelegate, 200 * ciTimeoutFactor);
   concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 240 * ciTimeoutFactor);
   concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 280 * ciTimeoutFactor);
   concurrentTest('Lending', lendingTest, 360 * ciTimeoutFactor);

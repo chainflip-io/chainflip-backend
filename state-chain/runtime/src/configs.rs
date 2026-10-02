@@ -147,6 +147,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinimumFunding = Funding;
 	type CfePeerRegistration = CfeInterface;
 	type GrandpaDelegation = Grandpa;
+	type MaxOperatorsPerDelegator = ConstU32<20>;
 }
 
 parameter_types! {

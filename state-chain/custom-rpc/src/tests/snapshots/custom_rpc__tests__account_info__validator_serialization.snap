@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests/account_info.rs
+assertion_line: 336
 expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
 ---
 {
@@ -52,8 +53,7 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     "0x6666666666666666666666666666666666666666": "0x4563918244f40000"
   },
   "current_delegation_status": {
-    "operator": "5F9ivoEHM7GSydYLC3cozfNwZEpJoTnLd96auGkjtqVUSM86",
-    "bid": "0x1158e460913d00000"
+    "5F9ivoEHM7GSydYLC3cozfNwZEpJoTnLd96auGkjtqVUSM86": "0x1158e460913d00000"
   },
   "role": "validator",
   "last_heartbeat": 150000,

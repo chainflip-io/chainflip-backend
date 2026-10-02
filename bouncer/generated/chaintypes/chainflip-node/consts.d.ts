@@ -183,6 +183,12 @@ export interface ChainConsts extends GenericChainConsts {
    **/
   validator: {
     /**
+     * The maximum number of operators a single delegator's plan can hold entries for at
+     * once.
+     **/
+    maxOperatorsPerDelegator: number;
+
+    /**
      * Generic pallet constant
      **/
     [name: string]: any;

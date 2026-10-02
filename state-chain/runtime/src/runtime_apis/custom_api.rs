@@ -412,16 +412,21 @@ decl_runtime_apis!(
 		#[changed_in(16)]
 		fn cf_common_account_info(
 			account_id: &AccountId32,
-		) -> before_version_16::RpcAccountInfoCommonItems<FlipBalance>;
+		) -> before_version_16::RpcAccountInfoCommonItems;
 		#[changed_in(17)]
 		fn cf_common_account_info(
 			account_id: &AccountId32,
-		) -> before_version_17::RpcAccountInfoCommonItems<FlipBalance>;
+		) -> before_version_17::RpcAccountInfoCommonItems;
 		#[changed_in(19)]
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 			should_sweep: ShouldSweep,
-		) -> before_version_19::RpcAccountInfoCommonItems<FlipBalance>;
+		) -> before_version_19::RpcAccountInfoCommonItems;
+		#[changed_in(21)]
+		fn cf_common_account_info(
+			account_id: &AccountId32,
+			should_sweep: ShouldSweep,
+		) -> before_version_21::RpcAccountInfoCommonItems;
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 			should_sweep: ShouldSweep,

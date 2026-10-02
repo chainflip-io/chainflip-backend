@@ -13,8 +13,6 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use state_chain_runtime::runtime_apis::types::DelegationInfo;
-
 use super::*;
 
 #[test]
@@ -45,14 +43,14 @@ fn test_no_account_serialization() {
 			estimated_redeemable_balance: 0u32.into(),
 			bound_redeem_address: None,
 			restricted_balances: BTreeMap::new(),
-			current_delegation_status: Some(DelegationInfo {
-				operator: AccountId32::new([0x77; 32]),
-				bid: 1000000000000000000u128.into(), // 1 FLIP
-			}),
-			upcoming_delegation_status: Some(DelegationInfo {
-				operator: AccountId32::new([0x99; 32]),
-				bid: 500000000000000000u128.into(), // 0.5 FLIP
-			}),
+			current_delegation_status: BTreeMap::from([(
+				AccountId32::new([0x77; 32]),
+				1000000000000000000u128.into(), // 1 FLIP
+			)]),
+			upcoming_delegation_status: BTreeMap::from([(
+				AccountId32::new([0x99; 32]),
+				500000000000000000u128.into(), // 0.5 FLIP
+			)]),
 		},
 		role_specific: RpcAccountInfo::Unregistered {},
 	};
@@ -112,8 +110,8 @@ fn test_broker_serialization() {
 			restricted_balances: BTreeMap::from_iter(vec![
 				(H160::from([0xbb; 20]), 2000000000000000000u128.into()), // 2 FLIP restricted
 			]),
-			current_delegation_status: None,
-			upcoming_delegation_status: None,
+			current_delegation_status: BTreeMap::new(),
+			upcoming_delegation_status: BTreeMap::new(),
 		},
 		role_specific: RpcAccountInfo::Broker {
 			earned_fees,
@@ -252,8 +250,8 @@ fn test_lp_serialization() {
 			estimated_redeemable_balance: 1000000000000000000u128.into(), // 1 FLIP
 			bound_redeem_address: None,
 			restricted_balances: BTreeMap::new(),
-			current_delegation_status: None,
-			upcoming_delegation_status: None,
+			current_delegation_status: BTreeMap::new(),
+			upcoming_delegation_status: BTreeMap::new(),
 		},
 		role_specific: RpcAccountInfo::LiquidityProvider {
 			refund_addresses,
@@ -313,11 +311,11 @@ fn test_validator_serialization() {
 				(H160::from([0x55; 20]), (FLIPPERINOS_PER_FLIP * 10).into()), // 10 FLIP
 				(H160::from([0x66; 20]), (FLIPPERINOS_PER_FLIP * 5).into()),  // 5 FLIP
 			]),
-			current_delegation_status: Some(DelegationInfo {
-				operator: AccountId32::new([0x88; 32]),
-				bid: (FLIPPERINOS_PER_FLIP * 20).into(), // 20 FLIP
-			}),
-			upcoming_delegation_status: None,
+			current_delegation_status: BTreeMap::from([(
+				AccountId32::new([0x88; 32]),
+				(FLIPPERINOS_PER_FLIP * 20).into(), // 20 FLIP
+			)]),
+			upcoming_delegation_status: BTreeMap::new(),
 		},
 		role_specific: RpcAccountInfo::Validator {
 			last_heartbeat: 150000,
@@ -350,8 +348,8 @@ fn test_all_account_infos_serialization() {
 			estimated_redeemable_balance: (FLIPPERINOS_PER_FLIP * 25).into(),
 			bound_redeem_address: None,
 			restricted_balances: BTreeMap::new(),
-			current_delegation_status: None,
-			upcoming_delegation_status: None,
+			current_delegation_status: BTreeMap::new(),
+			upcoming_delegation_status: BTreeMap::new(),
 		},
 		role_specific: RpcAccountInfo::Validator {
 			last_heartbeat: 150_000,

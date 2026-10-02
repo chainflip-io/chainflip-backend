@@ -19,12 +19,20 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 mod assign_lp_role_to_delegators;
+mod unify_delegation_choice;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
 		10,
 		11,
 		assign_lp_role_to_delegators::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		11,
+		12,
+		unify_delegation_choice::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
