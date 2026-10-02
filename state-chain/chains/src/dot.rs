@@ -432,8 +432,8 @@ pub struct PolkadotChannelState;
 
 /// Polkadot channels should always be recycled because we are limited to u16::MAX channels.
 impl ChannelLifecycleHooks for PolkadotChannelState {
-	fn maybe_recycle(self) -> Option<Self> {
-		Some(self)
+	fn maybe_recycle(&self) -> bool {
+		true
 	}
 }
 
