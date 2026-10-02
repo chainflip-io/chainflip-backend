@@ -425,7 +425,37 @@ where
 		max_retry_delay: Duration,
 		maximum_concurrent_submissions: u32,
 	) -> Self {
-		let (request_sender, mut request_receiver) = mpsc::channel::<RequestSent<Client>>(1);
+		Self::new_with_request_capacity(
+			scope,
+			name,
+			primary_client_fut,
+			backup_client_fut,
+			initial_request_timeout,
+			max_retry_delay,
+			maximum_concurrent_submissions,
+			1,
+		)
+	}
+
+	/// Like [Self::new], but buffers up to `request_capacity` requests that have not yet been
+	/// picked up by the retrier.
+	///
+	/// With a small capacity, a request future that is polled once and then neither polled nor
+	/// dropped can hold the only free slot, blocking every other request. Use a large capacity
+	/// for clients whose requests are made from within nested witnessing streams.
+	pub fn new_with_request_capacity<ClientFut: Future<Output = Client> + Send + 'static>(
+		scope: &Scope<'_, anyhow::Error>,
+		// The name of the retrier that appears in the logs.
+		name: &'static str,
+		primary_client_fut: ClientFut,
+		backup_client_fut: Option<ClientFut>,
+		initial_request_timeout: Duration,
+		max_retry_delay: Duration,
+		maximum_concurrent_submissions: u32,
+		request_capacity: usize,
+	) -> Self {
+		let (request_sender, mut request_receiver) =
+			mpsc::channel::<RequestSent<Client>>(request_capacity);
 
 		let mut request_holder = RequestHolder::new();
 
@@ -758,6 +788,63 @@ mod tests {
 							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 						)
 						.await
+				);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn requests_that_are_no_longer_polled_do_not_block_other_requests() {
+		task_scope(|scope| {
+			async move {
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
+
+				let retrier_client = RetrierClient::new_with_request_capacity(
+					scope,
+					"test",
+					async move {},
+					None,
+					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
+					100,
+					tokio::sync::Semaphore::MAX_PERMITS,
+				);
+
+				// Poll each request once and then abandon it without dropping it, as happens to a
+				// request made from within a stream that its consumer has stopped polling.
+				let mut abandoned = (0..3u32)
+					.map(|i| {
+						retrier_client
+							.request(
+								RequestLog::new(format!("abandoned {i}"), None),
+								specific_fut_closure(i, INITIAL_TIMEOUT),
+							)
+							.boxed()
+					})
+					.collect::<Vec<_>>();
+				for request in &mut abandoned {
+					assert!(futures::poll!(request).is_pending());
+				}
+				// Give the retrier a chance to receive requests.
+				tokio::time::sleep(INITIAL_TIMEOUT).await;
+
+				const REQUEST: u32 = 42;
+				assert_eq!(
+					REQUEST,
+					tokio::time::timeout(
+						Duration::from_secs(5),
+						retrier_client.request(
+							RequestLog::new("request".to_string(), None),
+							specific_fut_closure(REQUEST, INITIAL_TIMEOUT),
+						),
+					)
+					.await
+					.expect("Request should not be blocked by abandoned requests")
 				);
 
 				Ok(())
