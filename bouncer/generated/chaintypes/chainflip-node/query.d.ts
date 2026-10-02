@@ -4298,17 +4298,6 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Stores thresholds for each asset used in auto-sweeping: if after a swap the amount
-     * collectable from a limit order reaches/exceeds the threshold, the order it automatically
-     * swept
-     *
-     * @param {Callback<Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]>> =} callback
-     **/
-    limitOrderAutoSweepingThresholds: GenericStorageQuery<
-      () => Array<[CfPrimitivesChainsAssetsAnyAsset, bigint]>
-    >;
-
-    /**
      * Minimum amount of an asset that an order may hold, shared by limit and range orders. Set
      * per asset by governance. A value of `0` disables the check for that asset.
      *

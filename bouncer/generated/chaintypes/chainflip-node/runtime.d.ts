@@ -1297,14 +1297,12 @@ export interface RuntimeApis extends GenericRuntimeApis {
      * @param {CfPrimitivesChainsAssetsAnyAsset} base_asset
      * @param {CfPrimitivesChainsAssetsAnyAsset} quote_asset
      * @param {AccountId32Like | undefined} lp
-     * @param {boolean} filled_orders
      **/
     cfPoolOrders: GenericRuntimeApiMethod<
       (
         baseAsset: CfPrimitivesChainsAssetsAnyAsset,
         quoteAsset: CfPrimitivesChainsAssetsAnyAsset,
-        lp: AccountId32Like | undefined,
-        filledOrders: boolean,
+        lp?: AccountId32Like | undefined,
       ) => Promise<
         Result<
           PalletCfPoolsPoolOrders,

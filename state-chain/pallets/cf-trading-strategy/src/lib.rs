@@ -1017,7 +1017,6 @@ impl<T: Config> Pallet<T> {
 		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
 		thresholds: &BTreeMap<Asset, AssetAmount>,
 	) {
-		// This relies on autosweeping for limit orders
 		let orders_total_quote: AssetAmount = existing_orders
 			.iter()
 			.map(|order| if order.side == Side::Buy { order.amount } else { 0 })

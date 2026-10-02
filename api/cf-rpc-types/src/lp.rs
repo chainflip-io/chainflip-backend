@@ -58,6 +58,7 @@ pub struct LimitOrder {
 	pub id: U256,
 	pub tick: Tick,
 	pub sell_amount_total: U256,
+	// Collected fees is always 0 here. See LimitOrderFilled events instead.
 	pub collected_fees: U256,
 	pub bought_amount: U256,
 	pub sell_amount_change: Option<IncreaseOrDecrease<U256>>,
