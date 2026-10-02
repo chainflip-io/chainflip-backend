@@ -27,7 +27,7 @@ use futures::FutureExt;
 use jsonrpsee::RpcModule;
 use sc_client_api::{Backend, BlockBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
-use sc_consensus_grandpa::SharedVoterState;
+use sc_consensus_grandpa::{GrandpaPruningFilter, SharedVoterState};
 use sc_keystore::Keystore;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpSyncConfig};
 use sc_telemetry::{Telemetry, TelemetryWorker};
@@ -82,6 +82,7 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 			config,
 			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
 			executor,
+			vec![Arc::new(GrandpaPruningFilter)],
 		)?;
 	let client = Arc::new(client);
 
@@ -180,6 +181,8 @@ pub fn new_full<
 		<Block as sp_runtime::traits::Block>::Hash,
 		N,
 	>::new(&config.network, config.prometheus_registry().cloned());
+	// Warp sync from a single peer (upstream default: 3). See PRO-3098.
+	net_config.network_config.min_peers_to_start_warp_sync = Some(1);
 	let metrics = N::register_notification_metrics(config.prometheus_registry());
 
 	let peer_store_handle = net_config.peer_store_handle();
@@ -201,18 +204,20 @@ pub fn new_full<
 		Vec::default(),
 	));
 
-	let (network, system_rpc_tx, tx_handler_controller, sync_service) =
+	let (network, system_rpc_tx, tx_handler_controller, sync_service, _bitswap_handle) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			net_config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
+			spawn_essential_handle: task_manager.spawn_essential_handle(),
 			import_queue,
 			block_announce_validator_builder: None,
 			warp_sync_config: Some(WarpSyncConfig::WithProvider(warp_sync)),
 			block_relay: None,
 			metrics,
+			gap_sync_body_policy: None,
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -258,7 +263,6 @@ pub fn new_full<
 		let client = client.clone();
 		let backend = backend.clone();
 		let pool = transaction_pool.clone();
-		let executor = Arc::new(task_manager.spawn_handle());
 		let keystore = keystore_container.local_keystore().clone();
 		let keystore_ptr = keystore_container.keystore();
 
@@ -306,7 +310,7 @@ pub fn new_full<
 			log::info!("🗝️ Lp key found in the keystore, enabling LP-related RPCs");
 		}
 
-		Box::new(move |subscription_executor| {
+		Box::new(move |subscription_executor: Arc<dyn sp_core::traits::SpawnNamed>| {
 			let build = || {
 				let mut module = RpcModule::new(());
 
@@ -322,7 +326,7 @@ pub fn new_full<
 
 				module.merge(
 					Grandpa::new(
-						subscription_executor,
+						subscription_executor.clone(),
 						shared_authority_set.clone(),
 						shared_voter_state.clone(),
 						justification_stream.clone(),
@@ -335,14 +339,14 @@ pub fn new_full<
 				module.merge(CustomApiServer::into_rpc(CustomRpc::new(
 					client.clone(),
 					backend.clone(),
-					executor.clone(),
+					subscription_executor.clone(),
 				)))?;
 
 				// Implement custom RPC extensions
 				module.merge(MonitoringApiServer::into_rpc(CustomRpc::new(
 					client.clone(),
 					backend.clone(),
-					executor.clone(),
+					subscription_executor.clone(),
 				)))?;
 
 				// Add broker RPCs if broker key was found
@@ -350,7 +354,7 @@ pub fn new_full<
 					module.merge(BrokerRpcApiServer::into_rpc(BrokerSignedRpc::new(
 						client.clone(),
 						backend.clone(),
-						executor.clone(),
+						subscription_executor.clone(),
 						pool.clone(),
 						pair.clone(),
 					)))?;
@@ -361,7 +365,7 @@ pub fn new_full<
 					module.merge(LpRpcApiServer::into_rpc(LpSignedRpc::new(
 						client.clone(),
 						backend.clone(),
-						executor.clone(),
+						subscription_executor.clone(),
 						pool.clone(),
 						pair.clone(),
 					)))?;
@@ -394,6 +398,7 @@ pub fn new_full<
 		sync_service: sync_service.clone(),
 		config,
 		telemetry: telemetry.as_mut(),
+		tracing_execute_block: None,
 	})?;
 
 	if role.is_authority() {

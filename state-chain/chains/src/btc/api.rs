@@ -47,7 +47,7 @@ pub type SelectedUtxosAndChangeAmount = (Vec<Utxo>, BtcAmount);
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,

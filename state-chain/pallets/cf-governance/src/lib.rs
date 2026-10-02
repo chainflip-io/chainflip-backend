@@ -71,8 +71,8 @@ pub mod pallet {
 	use codec::Encode;
 	use frame_support::{
 		dispatch::GetDispatchInfo,
-		error::BadOrigin,
 		pallet_prelude::*,
+		sp_runtime::traits::BadOrigin,
 		traits::{UnfilteredDispatchable, UnixTime},
 		DefaultNoBound,
 	};
@@ -82,7 +82,7 @@ pub mod pallet {
 	use super::{GovCallHash, WeightInfo};
 
 	#[derive(
-		Default, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq,
+		Default, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq,
 	)]
 	pub enum ExecutionMode {
 		#[default]
@@ -91,7 +91,7 @@ pub mod pallet {
 	}
 
 	#[derive(
-		Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq,
+		Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Copy, Debug, PartialEq, Eq,
 	)]
 	pub struct ActiveProposal {
 		pub proposal_id: ProposalId,
@@ -99,9 +99,7 @@ pub mod pallet {
 	}
 
 	/// Proposal struct
-	#[derive(
-		Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq,
-	)]
+	#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
 		/// Encoded representation of a extrinsic.
 		pub call: OpaqueCall,
@@ -112,15 +110,7 @@ pub mod pallet {
 	}
 
 	#[derive(
-		Encode,
-		Decode,
-		DecodeWithMemTracking,
-		TypeInfo,
-		Clone,
-		RuntimeDebug,
-		PartialEq,
-		Eq,
-		DefaultNoBound,
+		Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq, DefaultNoBound,
 	)]
 	pub struct GovernanceCouncil<AccountId> {
 		/// Set of accounts which are members of governance.
@@ -495,15 +485,7 @@ pub mod pallet {
 
 	/// The raw origin enum for this pallet.
 	#[derive(
-		PartialEq,
-		Eq,
-		Clone,
-		RuntimeDebug,
-		Encode,
-		Decode,
-		DecodeWithMemTracking,
-		TypeInfo,
-		MaxEncodedLen,
+		PartialEq, Eq, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
 	)]
 	pub enum RawOrigin {
 		GovernanceApproval,

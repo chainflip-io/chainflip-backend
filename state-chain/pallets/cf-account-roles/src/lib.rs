@@ -33,12 +33,11 @@ use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, DeregistrationHooks, SpawnAccount, VanityName};
 use frame_support::{
 	dispatch::GetDispatchInfo,
-	error::BadOrigin,
 	pallet_prelude::{DispatchResult, StorageVersion},
 	traits::{EnsureOrigin, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait},
 };
 
-use sp_runtime::traits::Dispatchable;
+use sp_runtime::traits::{BadOrigin, Dispatchable};
 
 pub type SubAccountIndex = u8;
 

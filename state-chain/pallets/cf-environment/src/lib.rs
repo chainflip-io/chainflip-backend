@@ -96,7 +96,7 @@ type SignatureNonce = u64;
 	MaxEncodedLen,
 	TypeInfo,
 	Clone,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEq,
 	Eq,
 	Default,
@@ -122,6 +122,8 @@ pub enum PalletConfigUpdate {
 }
 
 #[frame_support::pallet]
+// The `#[pallet::validate_unsigned]` deprecation warning expands to a unit `let` binding.
+#[expect(clippy::let_unit_value)]
 pub mod pallet {
 	use crate::submit_runtime_call::ChainflipExtrinsic;
 

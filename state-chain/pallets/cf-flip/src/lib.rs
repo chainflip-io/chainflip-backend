@@ -50,7 +50,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Zero},
-		DispatchError, Permill, RuntimeDebug,
+		DispatchError, Permill,
 	},
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
@@ -63,7 +63,7 @@ pub use pallet::*;
 #[derive(
 	CloneNoBound,
 	Copy,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEqNoBound,
 	EqNoBound,
 	Encode,
@@ -80,7 +80,7 @@ pub enum PalletConfigUpdate {
 	SetFeeRewardsActivationEpoch(EpochIndex),
 }
 
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Debug)]
 #[scale_info(skip_type_params(T))]
 pub struct OpaqueCallIndex<T: Config>(pub(crate) Vec<u8>, PhantomData<T>);
 
@@ -319,7 +319,7 @@ pub mod pallet {
 	PartialEq,
 	Eq,
 	Default,
-	RuntimeDebug,
+	Debug,
 )]
 pub struct FlipAccount<Amount> {
 	/// Total amount of funds in account. Includes any bonded and vesting funds. Excludes any funds

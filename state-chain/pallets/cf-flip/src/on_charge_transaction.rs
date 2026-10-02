@@ -25,14 +25,11 @@ use cf_traits::{AccountInfo, WaivedFees};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
-	sp_runtime::{
-		traits::{DispatchInfoOf, Zero},
-		RuntimeDebug,
-	},
+	sp_runtime::traits::{DispatchInfoOf, Zero},
 	traits::Imbalance,
 };
 use frame_system::Config;
-use pallet_transaction_payment::{Config as TxConfig, OnChargeTransaction};
+use pallet_transaction_payment::{Config as TxConfig, OnChargeTransaction, TxCreditHold};
 use scale_info::TypeInfo;
 use sp_runtime::traits::Saturating;
 use sp_std::marker::PhantomData;
@@ -49,6 +46,11 @@ pub const UP_FRONT_ESCROW_FEE: FlipBalance = FLIPPERINOS_PER_FLIP;
 pub type CallIndexFor<T> = <<T as crate::Config>::CallIndexer as CallIndexer<
 	<T as frame_system::Config>::RuntimeCall,
 >>::CallIndex;
+
+impl<T: TxConfig + FlipConfig + Config> TxCreditHold<T> for FlipTransactionPayment<T> {
+	// Fees are burned on withdrawal, so no credit is carried through the transaction.
+	type Credit = ();
+}
 
 impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransactionPayment<T> {
 	type Balance = <T as FlipConfig>::Balance;
@@ -184,7 +186,7 @@ impl<Call> CallIndexer<Call> for () {
 	Copy,
 	PartialEq,
 	Eq,
-	RuntimeDebug,
+	Debug,
 	Default,
 )]
 pub enum FeeScalingRateConfig {

@@ -554,7 +554,7 @@ impl<T: Config> SwapRequest<T> {
 
 #[derive(
 	Clone,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEq,
 	Eq,
 	Encode,

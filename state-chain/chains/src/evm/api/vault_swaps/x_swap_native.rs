@@ -21,13 +21,12 @@ use crate::{
 use cf_primitives::Asset;
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use ethabi::Token;
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'XSwapNative'
 /// function.
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub struct XSwapNative {
 	/// The destination chain according to Chainflip Protocol's nomenclature.
 	dst_chain: u32,

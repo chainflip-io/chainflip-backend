@@ -2695,14 +2695,16 @@ export type SpConsensusGrandpaAppSignature = FixedBytes<64>;
 export type PalletSessionCall =
   /**
    * Sets the session key(s) of the function caller to `keys`.
+   *
    * Allows an account to set its session key prior to becoming a validator.
    * This doesn't take effect until the next session.
    *
-   * The dispatch origin of this function must be signed.
-   *
-   * ## Complexity
-   * - `O(1)`. Actual cost depends on the number of length of `T::Keys::key_ids()` which is
-   * fixed.
+   * - `origin`: The dispatch origin of this function must be signed.
+   * - `keys`: The new session keys to set. These are the public keys of all sessions keys
+   * setup in the runtime.
+   * - `proof`: The proof that `origin` has access to the private keys of `keys`. See
+   * [`impl_opaque_keys`](sp_runtime::impl_opaque_keys) for more information about the
+   * proof format.
    **/
   | { name: 'SetKeys'; params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: Bytes } }
   /**
@@ -2714,24 +2716,22 @@ export type PalletSessionCall =
    * convertible to a validator ID using the chain's typical addressing system (this usually
    * means being a controller account) or directly convertible into a validator ID (which
    * usually means being a stash account).
-   *
-   * ## Complexity
-   * - `O(1)` in number of key types. Actual cost depends on the number of length of
-   * `T::Keys::key_ids()` which is fixed.
    **/
   | { name: 'PurgeKeys' };
 
 export type PalletSessionCallLike =
   /**
    * Sets the session key(s) of the function caller to `keys`.
+   *
    * Allows an account to set its session key prior to becoming a validator.
    * This doesn't take effect until the next session.
    *
-   * The dispatch origin of this function must be signed.
-   *
-   * ## Complexity
-   * - `O(1)`. Actual cost depends on the number of length of `T::Keys::key_ids()` which is
-   * fixed.
+   * - `origin`: The dispatch origin of this function must be signed.
+   * - `keys`: The new session keys to set. These are the public keys of all sessions keys
+   * setup in the runtime.
+   * - `proof`: The proof that `origin` has access to the private keys of `keys`. See
+   * [`impl_opaque_keys`](sp_runtime::impl_opaque_keys) for more information about the
+   * proof format.
    **/
   | { name: 'SetKeys'; params: { keys: StateChainRuntimeOpaqueSessionKeys; proof: BytesLike } }
   /**
@@ -2743,10 +2743,6 @@ export type PalletSessionCallLike =
    * convertible to a validator ID using the chain's typical addressing system (this usually
    * means being a controller account) or directly convertible into a validator ID (which
    * usually means being a stash account).
-   *
-   * ## Complexity
-   * - `O(1)` in number of key types. Actual cost depends on the number of length of
-   * `T::Keys::key_ids()` which is fixed.
    **/
   | { name: 'PurgeKeys' };
 
@@ -13015,7 +13011,8 @@ export type StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes =
 export type SpRuntimeMultiSignature =
   | { type: 'Ed25519'; value: FixedBytes<64> }
   | { type: 'Sr25519'; value: FixedBytes<64> }
-  | { type: 'Ecdsa'; value: FixedBytes<65> };
+  | { type: 'Ecdsa'; value: FixedBytes<65> }
+  | { type: 'Eth'; value: FixedBytes<65> };
 
 export type FrameSystemExtensionsAuthorizeCall = {};
 
@@ -13145,9 +13142,9 @@ export type FrameSystemEvent =
       data: { dispatchError: DispatchError; dispatchInfo: FrameSystemDispatchEventInfo };
     }
   /**
-   * `:code` was updated.
+   * `:code` was updated to the code with the given hash.
    **/
-  | { name: 'CodeUpdated' }
+  | { name: 'CodeUpdated'; data: { hash: H256 } }
   /**
    * A new account was created.
    **/
@@ -17735,7 +17732,10 @@ export type FrameSystemLimitsWeightsPerClass = {
   reserved?: SpWeightsWeightV2Weight | undefined;
 };
 
-export type FrameSystemLimitsBlockLength = { max: FrameSupportDispatchPerDispatchClassU32 };
+export type FrameSystemLimitsBlockLength = {
+  max: FrameSupportDispatchPerDispatchClassU32;
+  maxHeaderSize?: number | undefined;
+};
 
 export type FrameSupportDispatchPerDispatchClassU32 = {
   normal: number;
@@ -22009,6 +22009,13 @@ export type PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeConsen
     | { type: 'D'; value: CfChainsHubAssethubTrackedData }
     | { type: 'Ee'; value: Array<AccountId32> };
 
+export type SpRuntimeBlockLazyBlock = {
+  header: Header;
+  extrinsics: Array<SpRuntimeOpaqueExtrinsic>;
+};
+
+export type SpRuntimeOpaqueExtrinsic = Bytes;
+
 export type SpRuntimeExtrinsicInclusionMode = 'AllExtrinsics' | 'OnlyInherents';
 
 export type SpCoreOpaqueMetadata = Bytes;
@@ -22056,6 +22063,8 @@ export type SpRuntimeTransactionValidityValidTransaction = {
 };
 
 export type SpConsensusSlotsSlotDuration = bigint;
+
+export type SpSessionRuntimeApiOpaqueGeneratedSessionKeys = { keys: Bytes; proof: Bytes };
 
 export type SpRuntimeOpaqueValue = Bytes;
 

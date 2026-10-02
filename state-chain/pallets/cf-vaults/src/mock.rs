@@ -146,15 +146,7 @@ parameter_types! {
 }
 
 #[derive(
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Clone,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, Debug,
 )]
 pub enum MockRuntimeSafeMode {
 	CodeRed,
