@@ -9136,6 +9136,7 @@ dependencies = [
  "frame-system",
  "log",
  "parity-scale-codec",
+ "proptest",
  "scale-info",
  "sp-core",
  "sp-io",

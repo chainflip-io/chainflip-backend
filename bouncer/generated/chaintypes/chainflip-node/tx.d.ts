@@ -50,6 +50,7 @@ import type {
   SpConsensusGrandpaEquivocationProof,
   StateChainRuntimeChainflipKeyOwnerProofCurrentSessionProof,
   PalletCfGovernanceExecutionMode,
+  PalletCfGovernanceCouncil,
   PalletCfTokenholderGovernanceProposal,
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
@@ -2022,32 +2023,6 @@ export interface ChainTx<
     >;
 
     /**
-     * Sets a new set of governance members
-     * **Can only be called via the Governance Origin**
-     *
-     * Sets a new set of governance members. Note that this can be called with an empty vector
-     * to remove the possibility to govern the chain at all.
-     *
-     * @param {Array<AccountId32Like>} newMembers
-     * @param {number} newThreshold
-     **/
-    newMembershipSet: GenericTxCall<
-      (
-        newMembers: Array<AccountId32Like>,
-        newThreshold: number,
-      ) => ChainSubmittableExtrinsic<
-        {
-          pallet: 'Governance';
-          palletCall: {
-            name: 'NewMembershipSet';
-            params: { newMembers: Array<AccountId32Like>; newThreshold: number };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
      * Performs a runtime upgrade of the Chainflip runtime
      * **Can only be called via the Governance Origin**
      *
@@ -2164,6 +2139,27 @@ export interface ChainTx<
           palletCall: {
             name: 'DispatchWhitelistedCall';
             params: { approvedId: number };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Replaces the council.
+     * **Can only be called via the Governance Origin**
+     *
+     * Expires all active proposals, since they were approved under the old council.
+     *
+     * @param {PalletCfGovernanceCouncil} newCouncil
+     **/
+    setCouncil: GenericTxCall<
+      (newCouncil: PalletCfGovernanceCouncil) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Governance';
+          palletCall: {
+            name: 'SetCouncil';
+            params: { newCouncil: PalletCfGovernanceCouncil };
           };
         },
         ChainKnownTypes
