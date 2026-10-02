@@ -187,7 +187,7 @@ where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
 		+ ChainEnvironment<(), AggKey>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		deposit_details: <Bitcoin as Chain>::DepositDetails,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 		_fetch: FetchForRejection<Bitcoin>,

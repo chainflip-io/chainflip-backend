@@ -1007,3 +1007,120 @@ fn test_encode_tx_fetch() {
 	let expected_serialized_tx = hex_literal::hex!("0194b38e57e31dc130acdec802f60b2095b72916a44834f8b0a40b7e4949661c9e4e05aa3fa5a3dc3e285c8d16c8eaab079d4477daa76e9e4a1915603eda58bc0c80010009162e8944a76efbece296221e736627f4528a947578263a1172a9786410702d2ef2114f68f4ee9add615457c9a7791269b4d4ab3168d43d5da0e018e2d547d8be92287f3b39b93c6699d704cb3d3edcf633cb8068010c5e5f6e64583078f5cd370e3e1cb8c1bfc20346cebcaa28a53b234acf92771f72151b2d6aaa1d765be4b93c45f3121cddc0bab152917a22710c9fab5be66d121bf2474d4d484f0f2eed97804813c8373d2bfc1592855e2d93b70ecd407fe9338b11ff0bb10650716709f6a7491102d3be1d348108b41a801904392e50cd5b443a0991f3c1db0427634627da5d89a80ca1700def3a784b845b59f9c2a61bb07941ddcb4fd2d709c3243c135079c03bceb9ddea819e956b2b332e87fbbf49fc8968df78488e88cfaa366f3036c9b5b17535d2dcb7a1a505fbadc9ea27cddada4b7c144e549cf880e8db046d77ca586493b85289057a8661f9f2a81e546fcf8cc6f5c9df1f5441c822f6fabfc9e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864efe57cc00ff8edda422ba876d38f5905694bfbef1c35deaea90295968dc1333900000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee872b635a1da73cd5bf15a26f1170f49366f0f48d28b0a8b1cebc5f98c75e475e6842be1bb8dfd763b0e83541c9767712ad0d89cecea13b46504370096a20c762fb72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00b9a5e41fc2cbe01a629ce980d5c6aa9c0a8b7be9d83ac835586feba35181d4246080d030b0f0004040000000e0009030a000000000000000e000502a71903001409150012090811100a0d16494710642cb0c646080000001e00000000000000fd061405150003010d158e24658f6c59298c080000001400000000000000fd14091500130c081110020d16494710642cb0c646080000000e00000000000000ff061405150004060d158e24658f6c59298c080000000f00000000000000fb1405150007050d158e24658f6c59298c080000000500000000000000fe00").to_vec();
 	check_tx_encoding(serialized_tx, expected_serialized_tx.to_vec());
 }
+
+mod reject_call {
+	use crate::{
+		sol::{
+			api::{
+				AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
+				CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, SolanaApi,
+				SolanaEnvironment,
+			},
+			sol_tx_core::sol_test_values,
+			SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolAsset,
+			VaultSwapOrDepositChannelId,
+		},
+		ChainEnvironment, FetchForRejection, RejectCall, RejectError, TransferForRejection,
+	};
+	use sp_std::collections::btree_set::BTreeSet;
+
+	/// Tracks how many durable nonces the environment handed out. The runtime marks a nonce
+	/// account as unavailable on every lookup, so a lookup that isn't followed by a broadcast
+	/// leaks the account.
+	const NONCES_HANDED_OUT: &[u8] = b"test:sol:nonces_handed_out";
+
+	fn nonces_handed_out() -> u32 {
+		frame_support::storage::unhashed::get_or_default(NONCES_HANDED_OUT)
+	}
+
+	struct MockSolEnvironment;
+
+	impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment {
+		fn lookup(_s: ApiEnvironment) -> Option<SolApiEnvironment> {
+			Some(sol_test_values::api_env())
+		}
+	}
+	impl ChainEnvironment<CurrentAggKey, SolAddress> for MockSolEnvironment {
+		fn lookup(_s: CurrentAggKey) -> Option<SolAddress> {
+			Some(sol_test_values::agg_key())
+		}
+	}
+	impl ChainEnvironment<CurrentOnChainKey, SolAddress> for MockSolEnvironment {
+		fn lookup(_s: CurrentOnChainKey) -> Option<SolAddress> {
+			Some(sol_test_values::agg_key())
+		}
+	}
+	impl ChainEnvironment<ComputePrice, SolAmount> for MockSolEnvironment {
+		fn lookup(_s: ComputePrice) -> Option<SolAmount> {
+			Some(sol_test_values::compute_price())
+		}
+	}
+	impl ChainEnvironment<DurableNonce, DurableNonceAndAccount> for MockSolEnvironment {
+		fn lookup(_s: DurableNonce) -> Option<DurableNonceAndAccount> {
+			frame_support::storage::unhashed::put(
+				NONCES_HANDED_OUT,
+				&nonces_handed_out().saturating_add(1),
+			);
+			Some(sol_test_values::durable_nonce())
+		}
+	}
+	impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for MockSolEnvironment {
+		fn lookup(_s: AllNonceAccounts) -> Option<Vec<DurableNonceAndAccount>> {
+			Some(vec![sol_test_values::durable_nonce()])
+		}
+	}
+	impl
+		ChainEnvironment<
+			BTreeSet<SolAddress>,
+			AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+		> for MockSolEnvironment
+	{
+		fn lookup(
+			_alts: BTreeSet<SolAddress>,
+		) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+			None
+		}
+	}
+	impl SolanaEnvironment for MockSolEnvironment {}
+
+	fn vault_swap() -> VaultSwapOrDepositChannelId {
+		VaultSwapOrDepositChannelId::VaultSwapAccount((
+			sol_test_values::EVENT_AND_SENDER_ACCOUNTS[0].vault_swap_account,
+			0u64,
+		))
+	}
+
+	#[test]
+	fn ccm_refund_no_op_doesnt_consume_a_nonce() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			assert_eq!(
+				SolanaApi::<MockSolEnvironment>::new_unsigned(
+					vault_swap(),
+					SolAsset::Sol,
+					FetchForRejection::NotRequired,
+					TransferForRejection::TransferWillBeCcmCallAndIsHandledSeparately,
+				)
+				.map(|_| ()),
+				Err(RejectError::NotRequired)
+			);
+			assert_eq!(nonces_handed_out(), 0);
+		});
+	}
+
+	#[test]
+	fn vault_swap_refund_consumes_a_nonce() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			assert!(SolanaApi::<MockSolEnvironment>::new_unsigned(
+				vault_swap(),
+				SolAsset::Sol,
+				FetchForRejection::NotRequired,
+				TransferForRejection::Transfer {
+					address: sol_test_values::TRANSFER_TO_ACCOUNT,
+					amount: sol_test_values::TRANSFER_AMOUNT,
+				},
+			)
+			.is_ok());
+			assert_eq!(nonces_handed_out(), 1);
+		});
+	}
+}
