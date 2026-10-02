@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
-use super::{primitives::NonemptyContinuousHeaders, BHWTypes, HeightWitnesserProperties};
+use super::{
+	primitives::{BHWVote, NonemptyContinuousHeaders},
+	BHWTypes, HeightWitnesserProperties,
+};
 use crate::electoral_systems::state_machine::consensus::{
 	ConsensusMechanism, StagedConsensus, StagedVote, SuccessThreshold, SupermajorityConsensus,
 };
@@ -31,12 +34,12 @@ impl<T: BHWTypes> Default for BlockHeightWitnesserConsensus<T> {
 }
 
 impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
-	type Vote = NonemptyContinuousHeaders<T::Chain>;
+	type Vote = BHWVote<T>;
 	type Result = NonemptyContinuousHeaders<T::Chain>;
 	type Settings = (SuccessThreshold, HeightWitnesserProperties<T::Chain>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
-		self.votes.push(vote);
+		self.votes.push(vote.into());
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
@@ -61,7 +64,7 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 		} else {
 			// This is the actual consensus finding, once the engine is running
 
-			let mut consensus: StagedConsensus<SupermajorityConsensus<Self::Vote>, usize> =
+			let mut consensus: StagedConsensus<SupermajorityConsensus<Self::Result>, usize> =
 				StagedConsensus::new();
 
 			for mut vote in self.votes.clone() {
@@ -86,12 +89,13 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 	}
 
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
-		vote.clone()
+		vote.clone().into()
 	}
 
 	#[cfg(test)]
 	fn is_supported_by_vote(consensus: &Self::Result, vote: &Self::Vote) -> bool {
-		consensus.get_headers().iter().all(|header| vote.get_headers().contains(header))
+		let vote = NonemptyContinuousHeaders::from(vote.clone()).get_headers();
+		consensus.get_headers().iter().all(|header| vote.contains(header))
 	}
 
 	#[cfg(test)]
