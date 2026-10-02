@@ -225,7 +225,7 @@ fn dont_burn_flip_below_threshold() {
 		);
 		assert_eq!(
 			MockFlipBurnOrMoveInfo::peek_flip_to_burn(),
-			FLIP_TO_BURN,
+			FLIP_TO_BURN as i128,
 			"Expected flip to remain available."
 		);
 	});

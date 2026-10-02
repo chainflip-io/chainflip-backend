@@ -204,6 +204,6 @@ cf_test_utilities::impl_test_helpers! {
 	|| {
 		MockEpochInfo::add_authorities(1);
 		MockEpochInfo::add_authorities(2);
-		MockFlipBurnOrMoveInfo::set_flip_to_burn(FLIP_TO_BURN);
+		MockFlipBurnOrMoveInfo::set_flip_to_burn(FLIP_TO_BURN as i128);
 	}
 }

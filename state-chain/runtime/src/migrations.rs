@@ -16,5 +16,6 @@
 
 //! Chainflip runtime storage migrations.
 
+pub mod flip_accumulators_to_flip_pallet;
 pub mod housekeeping;
 pub mod safe_mode;

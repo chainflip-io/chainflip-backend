@@ -45,6 +45,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		balance_api::MockBalance,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
+		flip_burn_info::MockFlipBurnOrMoveInfo,
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		pool_price_api::MockPoolPriceApi,
@@ -2259,8 +2260,8 @@ mod credit_flip_and_transfer {
 
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
-				assert_eq!(FlipToBurn::<Test>::get(), 0);
-				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
+				assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_burn(), 0);
+				assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), 0);
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
 			.then_execute_with(|_| {
@@ -2277,7 +2278,7 @@ mod credit_flip_and_transfer {
 				);
 
 				assert_eq!(
-					FlipToBurn::<Test>::get(),
+					MockFlipBurnOrMoveInfo::peek_flip_to_burn(),
 					0i128.saturating_sub(
 						INITIAL_FLIP_FUNDING
 							.saturating_sub(EXPECTED_OUTPUT_AMOUNT)
@@ -2287,7 +2288,7 @@ mod credit_flip_and_transfer {
 				);
 				// The deficit path never funds the account, so no earmark originates here - the
 				// account's initial funding was already earmarked when the deposit was credited.
-				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
+				assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(), 0);
 			});
 	}
 }

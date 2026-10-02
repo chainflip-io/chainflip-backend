@@ -21,7 +21,7 @@
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
 use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
-	impl_pallet_safe_mode, Broadcaster, EgressApi, EpochInfo, FlipBurnOrMoveInfo, Issuance,
+	impl_pallet_safe_mode, Broadcaster, EgressApi, EpochInfo, FlipBurnOrMove, Issuance,
 	RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
@@ -106,7 +106,7 @@ pub mod pallet {
 		type EthEnvironment: StateChainGatewayAddressProvider;
 
 		/// The interface for accessing the amount of Flip we want burn.
-		type FlipToBurnOrMove: FlipBurnOrMoveInfo;
+		type FlipToBurnOrMove: FlipBurnOrMove;
 
 		/// API for handling asset egress. Emissions only interacts with Ethereum.
 		type EgressHandler: EgressApi<Ethereum>;
