@@ -54,22 +54,31 @@ macro_rules! polkadot_source {
 					while let Ok(Some(result)) =
 						tokio::time::timeout(TIMEOUT, state.stream.next()).await
 					{
-						if let Ok((hash, header)) = result {
-							let Some(events) = unwrap_events(
-								state.client.events(hash, header.parent_hash, $retry_limit).await,
-							) else {
-								continue
-							};
+						match result {
+							Ok((hash, header)) => {
+								let Some(events) = unwrap_events(
+									state
+										.client
+										.events(hash, header.parent_hash, $retry_limit)
+										.await,
+								) else {
+									continue
+								};
 
-							return Some((
-								Header {
-									index: header.number,
-									hash,
-									parent_hash: Some(header.parent_hash),
-									data: events,
-								},
-								state,
-							))
+								return Some((
+									Header {
+										index: header.number,
+										hash,
+										parent_hash: Some(header.parent_hash),
+										data: events,
+									},
+									state,
+								))
+							},
+							Err(e) => tracing::warn!(
+								"Error in Polkadot {} stream, skipping item: {e:#}",
+								stringify!($func)
+							),
 						}
 					}
 					// We don't want to spam retries if the node returns a stream that's empty
