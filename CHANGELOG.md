@@ -2,6 +2,14 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.17] - 2026-10-02
+
+### Fixes
+
+- Fix a deadlock in the Assethub RPC client that could stall Assethub chain tracking, deposit witnessing and broadcasting until the engine was restarted.
+- Assethub chain tracking: never treat an unfinalized block as finalized when filling gaps in the finalized head subscription, witness a deterministic subset of finalized blocks so validators vote on the same heights, skip heights too far behind to matter, and wait longer for finality before restarting the subscription.
+- Use the actual 2s Assethub block time for the genesis broadcast timeout and deposit channel lifetimes.
+
 ## [2.2.16] - 2026-10-01
 
 - bound EncodedAddress::Btc length
