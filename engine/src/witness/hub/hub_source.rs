@@ -48,7 +48,9 @@ impl<C> HubUnfinalisedSource<C> {
 	}
 }
 
-const TIMEOUT: Duration = Duration::from_secs(36);
+// Both sources follow finality, which can pause for well over the ~2s block time, so allow for
+// that before assuming the subscription is dead and restarting it.
+const TIMEOUT: Duration = Duration::from_secs(120);
 const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 #[async_trait::async_trait]
