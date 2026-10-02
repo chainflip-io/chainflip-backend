@@ -47,7 +47,7 @@ pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14;
 pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 24 * 3600 * 10 / 4;
-pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 / 12;
+pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 * 1000 / MILLISECONDS_PER_BLOCK_ASSETHUB;
 pub const TRON_EXPIRY_BLOCKS: u32 = 24 * 3600 / 3;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
