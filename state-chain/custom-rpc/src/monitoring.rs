@@ -251,15 +251,19 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(Offence, u32)>> {
-		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
-			if api_version < 5 {
-				#[expect(deprecated)]
-				api.cf_suspended_validators_before_version_5(hash)
-					.map(before_version_21::into_current_offences)
-			} else {
-				api.cf_suspended_validators(hash)
-			}
-		})
+		self.rpc_backend
+			.with_versioned_api::<dyn MonitoringRuntimeApi<state_chain_runtime::Block>, _, _>(
+				at,
+				|api, hash, api_version| {
+					if api_version < 5 {
+						#[expect(deprecated)]
+						api.cf_suspended_validators_before_version_5(hash)
+							.map(before_version_21::into_current_offences)
+					} else {
+						api.cf_suspended_validators(hash)
+					}
+				},
+			)
 	}
 
 	fn cf_monitoring_data(
@@ -267,17 +271,20 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcMonitoringData> {
 		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, api_version| {
-				if api_version < 3 {
-					#[expect(deprecated)]
-					api.cf_monitoring_data_before_version_3(hash).map(MonitoringDataV2::from)
-				} else if api_version < 5 {
-					#[expect(deprecated)]
-					api.cf_monitoring_data_before_version_5(hash).map(MonitoringDataV2::from)
-				} else {
-					api.cf_monitoring_data(hash)
-				}
-			})
+			.with_versioned_api::<dyn MonitoringRuntimeApi<state_chain_runtime::Block>, _, _>(
+				at,
+				|api, hash, api_version| {
+					if api_version < 3 {
+						#[expect(deprecated)]
+						api.cf_monitoring_data_before_version_3(hash).map(MonitoringDataV2::from)
+					} else if api_version < 5 {
+						#[expect(deprecated)]
+						api.cf_monitoring_data_before_version_5(hash).map(MonitoringDataV2::from)
+					} else {
+						api.cf_monitoring_data(hash)
+					}
+				},
+			)
 			.map(Into::into)
 	}
 
@@ -295,16 +302,20 @@ where
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>> {
-		let accounts_info =
-			self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
-				if api_version < 4 {
-					#[expect(deprecated)]
-					api.cf_accounts_info_before_version_4(hash, accounts)
-						.map(|accounts| accounts.into_iter().map(Into::into).collect())
-				} else {
-					api.cf_accounts_info(hash, accounts)
-				}
-			})?;
+		let accounts_info = self
+			.rpc_backend
+			.with_versioned_api::<dyn MonitoringRuntimeApi<state_chain_runtime::Block>, _, _>(
+				at,
+				|api, hash, api_version| {
+					if api_version < 4 {
+						#[expect(deprecated)]
+						api.cf_accounts_info_before_version_4(hash, accounts)
+							.map(|accounts| accounts.into_iter().map(Into::into).collect())
+					} else {
+						api.cf_accounts_info(hash, accounts)
+					}
+				},
+			)?;
 		Ok(accounts_info
 			.into_iter()
 			.map(|account_info| RpcAccountInfoV2 {
