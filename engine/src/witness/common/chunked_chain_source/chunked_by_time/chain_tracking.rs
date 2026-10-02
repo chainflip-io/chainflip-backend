@@ -21,7 +21,10 @@ use cf_chains::{instances::ChainInstanceFor, ChainState};
 use crate::witness::common::{chain_source::Header, RuntimeCallHasChain, RuntimeHasChain};
 use cf_chains::Chain;
 use cf_utilities::metrics::CHAIN_TRACKING;
-use engine_sc_client::extrinsic_api::signed::SignedExtrinsicApi;
+use engine_sc_client::{
+	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	STATE_CHAIN_CONNECTION,
+};
 
 use super::{builder::ChunkedByTimeBuilder, ChunkedByTime};
 
@@ -31,6 +34,19 @@ pub trait GetTrackedData<C: cf_chains::Chain, Hash, Data>: Send + Sync + Clone {
 		&self,
 		header: &Header<C::ChainBlockNumber, Hash, Data>,
 	) -> Result<C::TrackedData, anyhow::Error>;
+
+	/// Whether to witness chain tracking at this height. Must be deterministic so that all
+	/// validators vote on the same heights.
+	fn should_witness(_index: C::ChainBlockNumber) -> bool {
+		true
+	}
+
+	/// Whether this height is too far behind the State Chain's tracked height for a vote to
+	/// matter: it can neither advance chain tracking nor arrive within the late-witness grace
+	/// period.
+	fn is_stale(_index: C::ChainBlockNumber, _tracked_height: C::ChainBlockNumber) -> bool {
+		false
+	}
 }
 
 impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
@@ -41,16 +57,35 @@ impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 	) -> ChunkedByTimeBuilder<impl ChunkedByTime>
 	where
 		Inner: ChunkedByTime,
-		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
+		StateChainClient: ChainApi + StorageApi + SignedExtrinsicApi + Send + Sync + 'static,
 		TrackedDataClient: GetTrackedData<Inner::Chain, Inner::Hash, Inner::Data>,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		self.latest_then(move |epoch, header| {
+		// Witness every header selected by `should_witness` rather than only the latest: skipping
+		// depends on local timing, so validators would otherwise vote on different heights. This
+		// is cheap because `finalize_signed_extrinsic` only queues the extrinsic; we don't await
+		// `until_finalized`.
+		self.then(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();
 			let tracked_data_client = tracked_data_client.clone();
 			async move {
+				if !TrackedDataClient::should_witness(header.index) {
+					return Ok(header.data)
+				}
+				if let Some(tracked) = state_chain_client
+					.storage_value::<pallet_cf_chain_tracking::CurrentChainState<
+						state_chain_runtime::Runtime,
+						ChainInstanceFor<Inner::Chain>,
+					>>(state_chain_client.latest_finalized_block().hash)
+					.await
+					.expect(STATE_CHAIN_CONNECTION)
+				{
+					if TrackedDataClient::is_stale(header.index, tracked.block_height) {
+						return Ok(header.data)
+					}
+				}
 				let call: Box<state_chain_runtime::RuntimeCall> = Box::new(
 					pallet_cf_chain_tracking::Call::<
 						state_chain_runtime::Runtime,

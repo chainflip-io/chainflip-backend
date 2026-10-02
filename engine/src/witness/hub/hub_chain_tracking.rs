@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_chains::hub::AssethubTrackedData;
+use cf_primitives::PolkadotBlockNumber;
 use subxt::events::Phase;
 
 use crate::{dot::retry_rpc::DotRetryRpcApi, witness::hub::EventWrapper, PolkadotHash};
@@ -54,4 +55,17 @@ impl<T: DotRetryRpcApi + Send + Sync + Clone>
 			runtime_version: self.runtime_version(None).await,
 		})
 	}
+
+	/// Finality advances several blocks at a time, so only witness every few blocks (~12s).
+	fn should_witness(index: PolkadotBlockNumber) -> bool {
+		index.is_multiple_of(CHAIN_TRACKING_INTERVAL)
+	}
+
+	fn is_stale(index: PolkadotBlockNumber, tracked_height: PolkadotBlockNumber) -> bool {
+		index.saturating_add(STALE_AFTER) < tracked_height
+	}
 }
+
+const CHAIN_TRACKING_INTERVAL: PolkadotBlockNumber = 6;
+/// ~60s at 2s blocks, matching the State Chain's late-witness grace period.
+const STALE_AFTER: PolkadotBlockNumber = 30;
