@@ -243,11 +243,12 @@ fn rejection_retries_next_block_without_losing_future_entries() {
 }
 
 #[test]
-fn cleanup_retains_queued_and_pending_fetches_and_deduplicates_retries() {
+fn cleanup_retains_queued_and_pending_fetches() {
 	new_test_ext().execute_with(|| {
 		let (channel_id, address) = request_address_and_deposit(ALICE, EthAsset::Eth);
 		let channel = DepositChannelLookup::<Test, Instance1>::get(address).unwrap();
-		EthereumIngressEgress::recycle_channels(vec![address]);
+		// `on_idle` removes the due entry before calling `recycle_channels`.
+		DepositChannelRecycleBlocks::<Test, Instance1>::kill();
 		EthereumIngressEgress::recycle_channels(vec![address]);
 		assert_eq!(DepositChannelLookup::<Test, Instance1>::get(address), Some(channel));
 		assert!(!DepositChannelPool::<Test, Instance1>::contains_key(channel_id));
