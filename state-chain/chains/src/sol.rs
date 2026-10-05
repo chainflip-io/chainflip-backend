@@ -802,7 +802,7 @@ mod test {
 	#[test]
 	fn solana_channel_recycling_is_assumed_to_be_deactivated() {
 		assert!(
-			<<Solana as Chain>::DepositChannelState as ChannelLifecycleHooks>::maybe_recycle(0).is_none(),
+			!<<Solana as Chain>::DepositChannelState as ChannelLifecycleHooks>::maybe_recycle(&0),
 			"It looks like Solana channel recycling is active. If this is intentional, ensure that the corresponding
 			unsynchronised state map in the delta_based_ingress election is not deleted when channels are closed."
 		);

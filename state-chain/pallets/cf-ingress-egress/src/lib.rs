@@ -73,10 +73,16 @@ use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::UniqueSaturatedInto;
-use sp_std::{boxed::Box, collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{
+	boxed::Box,
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec,
+	vec::Vec,
+};
 pub use weights::WeightInfo;
 
 const MARKED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
+const DEFAULT_REJECTION_DELAY_BLOCKS: u32 = 24 * 3600 / SECONDS_PER_BLOCK as u32;
 
 struct ChannelLifecycle<T: Config<I>, I: 'static> {
 	opened_at: TargetChainBlockNumber<T, I>,
@@ -380,7 +386,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const STORAGE_VERSION_U16: u16 = 31;
+pub const STORAGE_VERSION_U16: u16 = 32;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 impl_pallet_safe_mode! {
@@ -453,6 +459,12 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	},
 	SetIngressDelay {
 		delay_blocks: BlockNumberFor<T>,
+	},
+	SetRejectionDelay {
+		delay_blocks: BlockNumberFor<T>,
+	},
+	SetChannelCleanupRetry {
+		retry_blocks: TargetChainBlockNumber<T, I>,
 	},
 }
 
@@ -738,6 +750,7 @@ pub mod pallet {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
+		pub rejection_delay_blocks: BlockNumberFor<T>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -746,6 +759,7 @@ pub mod pallet {
 				deposit_channel_lifetime: Default::default(),
 				witness_safety_margin: None,
 				dust_limits: Default::default(),
+				rejection_delay_blocks: DEFAULT_REJECTION_DELAY_BLOCKS.into(),
 			}
 		}
 	}
@@ -755,6 +769,7 @@ pub mod pallet {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
 			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
+			RejectionDelayBlocks::<T, I>::put(self.rejection_delay_blocks);
 
 			for (asset, dust_limit) in self.dust_limits.clone() {
 				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
@@ -930,6 +945,26 @@ pub mod pallet {
 	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChannelRecycleQueue<T, I>, ValueQuery>;
 
+	#[pallet::type_value]
+	pub fn DefaultChannelCleanupRetry<T: Config<I>, I: 'static>() -> TargetChainBlockNumber<T, I> {
+		// Target about ten minutes using nominal block/slot times. Governance can tune each chain.
+		let blocks: u32 = match TargetChainOf::<T, I>::get() {
+			ForeignChain::Ethereum => 50, // 12 seconds per block.
+			ForeignChain::Arbitrum | ForeignChain::Solana => 2_400, // 250 milliseconds per block/slot.
+			ForeignChain::Tron => 200,    // 3 seconds per block.
+			ForeignChain::Bsc => 1_334,   // 450 milliseconds per block, rounded up.
+			ForeignChain::Bitcoin => 1,   // 10 minutes per block.
+			ForeignChain::Polkadot | ForeignChain::Assethub => 1,
+		};
+		blocks.into()
+	}
+
+	/// External-chain blocks between channel cleanup attempts.
+	/// Defaults to roughly ten minutes on chains supporting transaction rejection.
+	#[pallet::storage]
+	pub type ChannelCleanupRetryBlocks<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery, DefaultChannelCleanupRetry<T, I>>;
+
 	// Election based witnessing: Determines the number of block confirmations required for a block
 	// to be considered safe and all contained transactions to be forwarded to the ingress egress
 	// pallet.
@@ -961,6 +996,16 @@ pub mod pallet {
 	pub type IngressDelayBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
+	#[pallet::type_value]
+	pub fn DefaultRejectionDelay<T: Config<I>, I: 'static>() -> BlockNumberFor<T> {
+		DEFAULT_REJECTION_DELAY_BLOCKS.into()
+	}
+
+	/// How many State Chain blocks to hold a rejected deposit before initiating its refund.
+	#[pallet::storage]
+	pub type RejectionDelayBlocks<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery, DefaultRejectionDelay<T, I>>;
+
 	/// Stores the latest prewitnessed deposit id used.
 	#[pallet::storage]
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
@@ -989,10 +1034,15 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Stores the details of transactions that are scheduled for rejecting.
+	/// Transactions scheduled for rejection, keyed by their State Chain processing block.
 	#[pallet::storage]
-	pub type ScheduledTransactionsForRejection<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
+	pub type ScheduledTransactionsForRejection<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		BlockNumberFor<T>,
+		Vec<TransactionRejectionDetails<T, I>>,
+		ValueQuery,
+	>;
 
 	/// Stores the details of transactions that failed to be rejected.
 	#[pallet::storage]
@@ -1265,62 +1315,38 @@ pub mod pallet {
 		/// Recycle addresses if we can
 		fn on_idle(now: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
+			let external_height = Self::external_chain_height();
 
-			// Conservative external-chain progress height. It is not guaranteed to be
-			// current or reorg-safe, but is safe to use for channel/boost expiry.
-			let external_height = match TargetChainOf::<T, I>::get() {
-				ForeignChain::Arbitrum |
-				ForeignChain::Bitcoin |
-				ForeignChain::Ethereum |
-				ForeignChain::Tron |
-				ForeignChain::Bsc |
-				ForeignChain::Assethub => ProcessedUpTo::<T, I>::get(),
-				ForeignChain::Polkadot | ForeignChain::Solana =>
-					T::ChainTracking::get_block_height(),
-			};
-
-			// Approximate weight calculation: r/w DepositChannelLookup + w DepositChannelPool
-			let recycle_weight_per_address =
-				frame_support::weights::constants::ParityDbWeight::get().reads_writes(1, 2);
+			let db_weight = frame_support::weights::constants::ParityDbWeight::get();
+			// Approximate per-address cost, including queued-work checks and cleanup retries.
+			let recycle_weight_per_address = db_weight.reads_writes(6, 3);
+			let mut recycle_queue = DepositChannelRecycleBlocks::<T, I>::get();
+			used_weight = used_weight.saturating_add(db_weight.reads(1));
 
 			let maximum_addresses_to_recycle = remaining_weight
+				.saturating_sub(used_weight)
+				.saturating_sub(db_weight.writes(1))
 				.ref_time()
 				.checked_div(recycle_weight_per_address.ref_time())
 				.unwrap_or_default()
 				.saturated_into::<usize>();
 
-			// In some instances, like Solana, the channel lifetime is managed by the electoral
-			// system (channels are recycled via `IngressSink::on_channel_closed` instead).
-			if T::MANAGE_CHANNEL_LIFETIME {
-				if matches!(TargetChainOf::<T, I>::get(), ForeignChain::Solana) {
-					log_or_panic!("MANAGE_CHANNEL_LIFETIME = false for solana, this branch should be unreachable");
-				}
-
-				let addresses_to_recycle =
-					DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
-						if recycle_queue.is_empty() {
-							vec![]
-						} else {
-							Self::take_recyclable_addresses(
-								recycle_queue,
-								maximum_addresses_to_recycle,
-								external_height,
-							)
-						}
-					});
-
-				// Add weight for the DepositChannelRecycleBlocks read/write plus the
-				// DepositChannelLookup read/writes in the for loop below
-				used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::ParityDbWeight::get().reads_writes(
-						(addresses_to_recycle.len() + 1) as u64,
-						(addresses_to_recycle.len() + 1) as u64,
-					),
+			// For Solana, entries are only queued by election-driven channel closures.
+			if !recycle_queue.is_empty() && maximum_addresses_to_recycle > 0 {
+				let addresses_to_recycle = Self::take_recyclable_addresses(
+					&mut recycle_queue,
+					maximum_addresses_to_recycle,
+					external_height,
 				);
-
-				for address in addresses_to_recycle {
-					Self::recycle_channel(&mut used_weight, address);
+				if !addresses_to_recycle.is_empty() {
+					DepositChannelRecycleBlocks::<T, I>::put(recycle_queue);
+					used_weight = used_weight.saturating_add(db_weight.writes(1)).saturating_add(
+						recycle_weight_per_address
+							.saturating_mul(addresses_to_recycle.len() as u64),
+					);
 				}
+
+				Self::recycle_channels(addresses_to_recycle);
 			}
 
 			// For boosted vault deposits (which have no channel to recycle) we check for their
@@ -1455,7 +1481,7 @@ pub mod pallet {
 		}
 
 		/// Take all scheduled Egress and send them out
-		fn on_finalize(_n: BlockNumberFor<T>) {
+		fn on_finalize(block_number: BlockNumberFor<T>) {
 			// Send all fetch/transfer requests as a batch. Revert storage if failed.
 			if let Err(error) = Self::do_egress_scheduled_fetch_transfer() {
 				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall { error });
@@ -1575,7 +1601,7 @@ pub mod pallet {
 					})
 				};
 
-				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
+				for tx in ScheduledTransactionsForRejection::<T, I>::take(block_number) {
 					match try {
 						Self::try_broadcast_rejection_refund(
 							tx.clone(),
@@ -1602,7 +1628,12 @@ pub mod pallet {
 					}
 				}
 
-				ScheduledTransactionsForRejection::<T, I>::put(deferred_rejections);
+				if !deferred_rejections.is_empty() {
+					ScheduledTransactionsForRejection::<T, I>::mutate(
+						block_number.saturating_add(One::one()),
+						|scheduled| scheduled.extend(deferred_rejections),
+					);
+				}
 			}
 		}
 	}
@@ -1722,6 +1753,12 @@ pub mod pallet {
 					PalletConfigUpdate::SetIngressDelay { delay_blocks } => {
 						IngressDelayBlocks::<T, I>::set(delay_blocks);
 					},
+					PalletConfigUpdate::SetRejectionDelay { delay_blocks } => {
+						RejectionDelayBlocks::<T, I>::set(delay_blocks);
+					},
+					PalletConfigUpdate::SetChannelCleanupRetry { retry_blocks } => {
+						ChannelCleanupRetryBlocks::<T, I>::set(retry_blocks);
+					},
 					PalletConfigUpdate::SetMaximumPreallocatedChannels {
 						account_role,
 						num_channels,
@@ -1805,7 +1842,8 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 	}
 
 	fn on_channel_closed(channel: Self::Account) {
-		Self::recycle_channel(&mut Weight::zero(), channel);
+		// Deferred to `on_idle` so that all closures share a single pending-work lookup per block.
+		DepositChannelRecycleBlocks::<T, I>::append((Self::external_chain_height(), channel));
 	}
 }
 
@@ -1888,32 +1926,87 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	fn recycle_channel(used_weight: &mut Weight, address: TargetChainAccount<T, I>) {
-		if let Some(DepositChannelDetails { deposit_channel, boost_status, .. }) =
-			DepositChannelLookup::<T, I>::take(address)
-		{
-			if let Some(state) = deposit_channel.state.maybe_recycle() {
-				DepositChannelPool::<T, I>::insert(
-					deposit_channel.channel_id,
-					DepositChannel { state, ..deposit_channel },
-				);
-				*used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::ParityDbWeight::get().reads_writes(0, 1),
-				);
+	/// Conservative external-chain progress height. It is not guaranteed to be current or
+	/// reorg-safe, but is safe to use for channel/boost expiry.
+	fn external_chain_height() -> TargetChainBlockNumber<T, I> {
+		match TargetChainOf::<T, I>::get() {
+			ForeignChain::Arbitrum |
+			ForeignChain::Bitcoin |
+			ForeignChain::Ethereum |
+			ForeignChain::Tron |
+			ForeignChain::Bsc |
+			ForeignChain::Assethub => ProcessedUpTo::<T, I>::get(),
+			ForeignChain::Polkadot | ForeignChain::Solana => T::ChainTracking::get_block_height(),
+		}
+	}
+
+	fn recycle_channels(addresses: Vec<TargetChainAccount<T, I>>) {
+		if addresses.is_empty() {
+			return;
+		}
+		let mut pending_channels: BTreeSet<_> =
+			ScheduledTransactionsForRejection::<T, I>::iter_values()
+				.flatten()
+				.filter_map(|tx| tx.deposit_address)
+				.collect();
+		pending_channels.extend(
+			ScheduledEgressFetchOrTransfer::<T, I>::get().into_iter().filter_map(|request| {
+				match request {
+					FetchOrTransfer::Fetch { deposit_address, .. } => Some(deposit_address),
+					FetchOrTransfer::Transfer { .. } => None,
+				}
+			}),
+		);
+		let mut retry_addresses = Vec::new();
+		for address in addresses {
+			if pending_channels.contains(&address) {
+				retry_addresses.push(address);
+				continue;
 			}
 
-			if let BoostStatus::Boosted { prewitnessed_deposit_id, amount } = boost_status {
-				T::BoostApi::process_deposit_as_lost(
-					prewitnessed_deposit_id,
-					deposit_channel.asset.into(),
-				);
+			if let Some(details) = DepositChannelLookup::<T, I>::take(&address) {
+				if details.deposit_channel.state.maybe_recycle() {
+					if !details.deposit_channel.state.can_fetch() {
+						DepositChannelLookup::<T, I>::insert(&address, details);
+						retry_addresses.push(address);
+						continue;
+					}
+					DepositChannelPool::<T, I>::insert(
+						details.deposit_channel.channel_id,
+						&details.deposit_channel,
+					);
+				}
 
-				Self::deposit_event(Event::<T, I>::BoostedDepositLost {
-					prewitnessed_deposit_id,
-					amount,
-				})
+				if let BoostStatus::Boosted { prewitnessed_deposit_id, amount } =
+					details.boost_status
+				{
+					T::BoostApi::process_deposit_as_lost(
+						prewitnessed_deposit_id,
+						details.deposit_channel.asset.into(),
+					);
+
+					Self::deposit_event(Event::<T, I>::BoostedDepositLost {
+						prewitnessed_deposit_id,
+						amount,
+					})
+				}
 			}
 		}
+		Self::schedule_channel_cleanup_retry(retry_addresses);
+	}
+
+	fn schedule_channel_cleanup_retry(addresses: Vec<TargetChainAccount<T, I>>) {
+		if addresses.is_empty() {
+			return;
+		}
+		// Must match the height `on_idle` compares against, so retries wait exactly this long.
+		let retry_at =
+			Self::external_chain_height().saturating_add(ChannelCleanupRetryBlocks::<T, I>::get());
+		DepositChannelRecycleBlocks::<T, I>::mutate(|queue| {
+			// Entries are removed before cleanup and each channel closure is queued once, so
+			// retrying cannot introduce duplicate addresses.
+			queue.extend(addresses.into_iter().map(|address| (retry_at, address)));
+		});
 	}
 
 	/// Deems boosted vault swaps lost once their timeout height is reached, within the given weight
@@ -3106,6 +3199,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					};
 
 					ScheduledTransactionsForRejection::<T, I>::append(
+						frame_system::Pallet::<T>::block_number()
+							.saturating_add(RejectionDelayBlocks::<T, I>::get().max(One::one())),
 						TransactionRejectionDetails {
 							deposit_address: deposit_address.clone(),
 							refund_address,

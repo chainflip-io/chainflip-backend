@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_primitives::AuthorityCount;
-use state_chain_runtime::SetSizeParameters;
+use state_chain_runtime::{BlockNumber, SetSizeParameters};
 
 pub use super::common::*;
 
@@ -42,3 +42,6 @@ pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
 pub const TRON_SAFETY_MARGIN: u64 = 19;
+
+/// Short enough to keep bouncer screening tests fast, while still exercising the delay.
+pub const REJECTION_DELAY_BLOCKS: BlockNumber = 2;

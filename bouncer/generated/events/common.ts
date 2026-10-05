@@ -1132,6 +1132,8 @@ export const palletCfEthereumIngressEgressPalletConfigUpdateEthereum = z.discrim
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayEthereum'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayEthereum'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryEthereum'), retryBlocks: numberOrHex }),
   ],
 );
 
@@ -1260,6 +1262,8 @@ export const palletCfPolkadotIngressEgressPalletConfigUpdatePolkadot = z.discrim
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayPolkadot'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayPolkadot'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryPolkadot'), retryBlocks: z.number() }),
   ],
 );
 
@@ -1388,6 +1392,8 @@ export const palletCfBitcoinIngressEgressPalletConfigUpdateBitcoin = z.discrimin
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayBitcoin'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayBitcoin'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryBitcoin'), retryBlocks: numberOrHex }),
   ],
 );
 
@@ -1574,6 +1580,8 @@ export const palletCfArbitrumIngressEgressPalletConfigUpdateArbitrum = z.discrim
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayArbitrum'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayArbitrum'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryArbitrum'), retryBlocks: numberOrHex }),
   ],
 );
 
@@ -1748,6 +1756,8 @@ export const palletCfSolanaIngressEgressPalletConfigUpdateSolana = z.discriminat
     numChannels: z.number(),
   }),
   z.object({ __kind: z.literal('SetIngressDelaySolana'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetRejectionDelaySolana'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetChannelCleanupRetrySolana'), retryBlocks: numberOrHex }),
 ]);
 
 export const palletCfElectionsElectoralSystemsCompositeTuple7ImplsCompositeElectionIdentifierExtra =
@@ -1926,6 +1936,8 @@ export const palletCfAssethubIngressEgressPalletConfigUpdateAssethub = z.discrim
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayAssethub'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayAssethub'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryAssethub'), retryBlocks: z.number() }),
   ],
 );
 
@@ -2283,6 +2295,8 @@ export const palletCfTronIngressEgressPalletConfigUpdateTron = z.discriminatedUn
     numChannels: z.number(),
   }),
   z.object({ __kind: z.literal('SetIngressDelayTron'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetRejectionDelayTron'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetChannelCleanupRetryTron'), retryBlocks: numberOrHex }),
 ]);
 
 export const palletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionIdentifierExtra =
@@ -2420,6 +2434,8 @@ export const palletCfBscIngressEgressPalletConfigUpdateBsc = z.discriminatedUnio
     numChannels: z.number(),
   }),
   z.object({ __kind: z.literal('SetIngressDelayBsc'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetRejectionDelayBsc'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetChannelCleanupRetryBsc'), retryBlocks: numberOrHex }),
 ]);
 
 export const cfChainsWitnessPeriodBlockWitnessRangeBsc = z.object({ root: numberOrHex });
