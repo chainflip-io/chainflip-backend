@@ -55,10 +55,9 @@ jobs:
     secrets: inherit
   publish:
     needs: [package]
-    uses: ./.github/workflows/_30_publish.yml
+    uses: ./.github/workflows/_31_publish.yml
     with:
-      version: "perseverance/"
-      environment: "production"
+      network: "perseverance"
     secrets: inherit
   release:
     needs: [publish]
