@@ -1405,7 +1405,7 @@ pub mod pallet {
 		}
 
 		/// Take all scheduled Egress and send them out
-		fn on_finalize(n: BlockNumberFor<T>) {
+		fn on_finalize(block_number: BlockNumberFor<T>) {
 			// Send all fetch/transfer requests as a batch. Revert storage if failed.
 			if let Err(error) = Self::do_egress_scheduled_fetch_transfer() {
 				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall { error });
@@ -1529,7 +1529,7 @@ pub mod pallet {
 					})
 				};
 
-				for tx in ScheduledTransactionsForRejection::<T, I>::take(n) {
+				for tx in ScheduledTransactionsForRejection::<T, I>::take(block_number) {
 					match try {
 						Self::try_broadcast_rejection_refund(
 							tx.clone(),
@@ -1558,7 +1558,7 @@ pub mod pallet {
 
 				if !deferred_rejections.is_empty() {
 					ScheduledTransactionsForRejection::<T, I>::mutate(
-						n.saturating_add(One::one()),
+						block_number.saturating_add(One::one()),
 						|scheduled| scheduled.extend(deferred_rejections),
 					);
 				}
@@ -1928,15 +1928,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let retry_at =
 			Self::external_chain_height().saturating_add(ChannelCleanupRetryBlocks::<T, I>::get());
 		DepositChannelRecycleBlocks::<T, I>::mutate(|queue| {
-			for address in addresses {
-				if let Some((scheduled_at, _)) =
-					queue.iter_mut().find(|(_, queued)| queued == &address)
-				{
-					*scheduled_at = (*scheduled_at).max(retry_at);
-				} else {
-					queue.push((retry_at, address));
-				}
-			}
+			// Entries are removed before cleanup and each channel closure is queued once, so
+			// retrying cannot introduce duplicate addresses.
+			queue.extend(addresses.into_iter().map(|address| (retry_at, address)));
 		});
 	}
 
