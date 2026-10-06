@@ -1399,7 +1399,7 @@ pub mod pallet {
 				Error::<T>::DelegationAmountBelowMinimum
 			);
 
-			DelegationChoice::<T>::insert(&delegator, (operator.clone(), new_max_bid));
+			DelegationChoice::<T>::insert(&delegator, (operator, new_max_bid));
 
 			Ok(())
 		}
@@ -2245,7 +2245,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Only accounts without Validator or Operator roles can be sourced from `DelegationChoice`.
+	/// Only an LP can delegate
 	pub(crate) fn is_delegation_eligible(account_id: &T::AccountId) -> bool {
 		T::AccountRoleRegistry::has_account_role(account_id, AccountRole::LiquidityProvider)
 	}

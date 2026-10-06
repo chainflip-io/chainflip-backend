@@ -1274,7 +1274,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
     }
     if (Number(balance) === 0) {
       const chain = chainFromAsset(asset);
-      if (chain === 'Ethereum' || chain === 'Arbitrum') {
+      if (isEvmChain(chain)) {
         if ((await getWeb3(chain).eth.getCode(address)) === '0x') {
           throw new Error('EVM address has no bytecode');
         }
