@@ -2056,7 +2056,7 @@ export type PalletCfFundingCall =
     }
   /**
    * Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
-   * process the deposit since those two are independant actions.
+   * process the deposit since those two are independent actions.
    **/
   | {
       name: 'ExecuteScCall';
@@ -2141,7 +2141,7 @@ export type PalletCfFundingCallLike =
     }
   /**
    * Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
-   * process the deposit since those two are independant actions.
+   * process the deposit since those two are independent actions.
    **/
   | {
       name: 'ExecuteScCall';

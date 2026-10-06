@@ -921,7 +921,7 @@ pub mod pallet {
 		}
 
 		/// Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
-		/// process the deposit since those two are independant actions.
+		/// process the deposit since those two are independent actions.
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::execute_sc_call().saturating_add(
 			T::EthereumSCApi::decode(&mut &deposit_and_call.call[..])
