@@ -2111,11 +2111,12 @@ pub mod pallet {
 					)
 				};
 
-				// Sum the deltas or just use a single leg delta if the other leg doesn't have
-				// an oracle price.
+				// Compound the deltas or just use a single leg delta if the other leg doesn't have
+				// an oracle price. The deltas must not be summed: legs that deviate in opposite
+				// directions would cancel out and hide a large loss on the route as a whole.
 				let total_delta = match (to_stable_delta, from_stable_delta) {
 					(Ok(Some(to_stable)), Ok(Some(from_stable))) =>
-						Ok(Some(to_stable.saturating_add(&from_stable))),
+						Ok(Some(to_stable.compound(&from_stable))),
 					// Use the one sided slippage as long as that side is not USDC.
 					(Ok(Some(delta)), Ok(None)) if swap.input_asset() != STABLE_ASSET =>
 						Ok(Some(delta)),
