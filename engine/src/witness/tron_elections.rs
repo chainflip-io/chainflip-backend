@@ -428,6 +428,45 @@ impl VoterApi<TronLiveness> for TronLivenessVoter {
 }
 
 // ------------------------------------------
+// ---    Historical balance support      ---
+// ------------------------------------------
+
+/// How far behind the tip the support check queries, so that it tolerates the HTTP API endpoint
+/// lagging behind the JSON-RPC endpoint it is paired with.
+const HISTORICAL_BALANCE_CHECK_BLOCK_DEPTH: u64 = 20;
+
+/// Deposit witnessing reads per-block balance traces, so the HTTP API endpoint must have the
+/// historical balance query feature enabled.
+///
+/// Checked from inside the Tron witnessing task rather than when the client is built, so that an
+/// endpoint without the feature only stops Tron witnessing and leaves the rest of the engine
+/// running.
+async fn check_historical_balance_queries_supported(
+	client: &impl TronRetryRpcApiWithResult,
+) -> Result<()> {
+	let block_number = client
+		.get_block_number()
+		.await
+		.context("Failed to get block number")?
+		.saturating_sub(HISTORICAL_BALANCE_CHECK_BLOCK_DEPTH.into());
+	let block_hash = client
+		.block(block_number)
+		.await
+		.context("Failed to get block")?
+		.hash
+		.context("Block has no hash")?;
+
+	client
+		.get_block_balances(i64::try_from(block_number.low_u64())?, block_hash)
+		.await
+		.context(
+			"HTTP API node does not support getBlockBalance — ensure the node has the historical balance query feature enabled",
+		)?;
+
+	Ok(())
+}
+
+// ------------------------------------------
 // ---    starting all tron voters        ---
 // ------------------------------------------
 
@@ -504,6 +543,8 @@ where
 			async move {
 				task_scope::task_scope(|scope| {
 					async {
+						check_historical_balance_queries_supported(&client).await?;
+
 						crate::elections::Voter::new(
 							scope,
 							state_chain_client,
@@ -546,4 +587,60 @@ where
 	);
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tron::{
+		cached_rpc::mocks::MockTronCachingClient,
+		rpc_client_api::{BlockBalance, BlockIdentifier},
+	};
+	use ethers::types::{Block, H256, U64};
+
+	const TIP: u64 = 1_000;
+
+	fn block_balance(hash: H256, number: i64) -> BlockBalance {
+		BlockBalance {
+			timestamp: 0,
+			block_identifier: BlockIdentifier { hash, number: Some(number) },
+			transaction_balance_trace: vec![],
+		}
+	}
+
+	/// The HTTP API endpoint may lag the JSON-RPC endpoint that reports the tip, so the queried
+	/// block is behind it.
+	#[tokio::test]
+	async fn historical_balance_check_queries_block_behind_the_tip() {
+		let queried_number = TIP - HISTORICAL_BALANCE_CHECK_BLOCK_DEPTH;
+		let block_hash = H256::repeat_byte(1);
+
+		let mut client = MockTronCachingClient::new();
+		client.expect_get_block_number().return_once(|| Ok(U64::from(TIP)));
+		client
+			.expect_block()
+			.withf(move |number| *number == U64::from(queried_number))
+			.return_once(move |_| Ok(Block { hash: Some(block_hash), ..Default::default() }));
+		client
+			.expect_get_block_balances()
+			.withf(move |number, hash| *number == queried_number as i64 && *hash == block_hash)
+			.return_once(move |number, hash| Ok(block_balance(hash, number)));
+
+		check_historical_balance_queries_supported(&client).await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn historical_balance_check_fails_when_endpoint_lacks_the_feature() {
+		let mut client = MockTronCachingClient::new();
+		client.expect_get_block_number().return_once(|| Ok(U64::from(TIP)));
+		client
+			.expect_block()
+			.return_once(|_| Ok(Block { hash: Some(H256::repeat_byte(1)), ..Default::default() }));
+		client
+			.expect_get_block_balances()
+			.return_once(|_, _| Err(anyhow::anyhow!("not found")));
+
+		let error = check_historical_balance_queries_supported(&client).await.unwrap_err();
+		assert!(format!("{error:#}").contains("historical balance query"));
+	}
 }
