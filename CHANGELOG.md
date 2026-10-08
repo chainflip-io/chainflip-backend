@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.18] - 2026-10-08
+
+## Fixes
+
+- Correct compound per-leg oracle deltas for Live Price Protection
+
 ## [2.2.17] - 2026-10-02
 
 ### Fixes
