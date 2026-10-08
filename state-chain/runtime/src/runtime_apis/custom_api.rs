@@ -276,6 +276,8 @@ decl_runtime_apis!(
 		fn cf_safe_mode_statuses() -> types::before_version_17::RuntimeSafeMode;
 		#[changed_in(19)]
 		fn cf_safe_mode_statuses() -> types::before_version_19::RuntimeSafeMode;
+		#[changed_in(22)]
+		fn cf_safe_mode_statuses() -> types::before_version_22::RuntimeSafeMode;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
@@ -435,6 +437,10 @@ decl_runtime_apis!(
 		fn cf_all_account_infos(
 			roles: Option<Vec<AccountRole>>,
 		) -> Vec<before_version_19::RuntimeApiAccountInfoWrapper>;
+		#[changed_in(22)]
+		fn cf_all_account_infos(
+			roles: Option<Vec<AccountRole>>,
+		) -> Vec<before_version_22::RuntimeApiAccountInfoWrapper>;
 		fn cf_all_account_infos(
 			roles: Option<Vec<AccountRole>>,
 		) -> Vec<RuntimeApiAccountInfoWrapper>;

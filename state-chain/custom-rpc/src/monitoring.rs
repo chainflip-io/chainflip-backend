@@ -301,6 +301,10 @@ where
 					#[expect(deprecated)]
 					api.cf_accounts_info_before_version_4(hash, accounts)
 						.map(|accounts| accounts.into_iter().map(Into::into).collect())
+				} else if api_version < 6 {
+					#[expect(deprecated)]
+					api.cf_accounts_info_before_version_6(hash, accounts)
+						.map(|accounts| accounts.into_iter().map(Into::into).collect())
 				} else {
 					api.cf_accounts_info(hash, accounts)
 				}

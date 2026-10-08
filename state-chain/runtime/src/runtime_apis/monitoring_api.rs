@@ -22,7 +22,7 @@ use sp_api::decl_runtime_apis;
 use types::*;
 
 decl_runtime_apis!(
-	#[api_version(5)]
+	#[api_version(6)]
 	pub trait MonitoringRuntimeApi {
 		fn cf_authorities() -> AuthoritiesInfo;
 		#[changed_in(3)]
@@ -64,6 +64,10 @@ decl_runtime_apis!(
 		fn cf_accounts_info(
 			accounts: BoundedVec<AccountId, sp_core::ConstU32<10>>,
 		) -> Vec<super::custom_api::types::before_version_19::ValidatorInfo>;
+		#[changed_in(6)]
+		fn cf_accounts_info(
+			accounts: BoundedVec<AccountId, sp_core::ConstU32<10>>,
+		) -> Vec<super::custom_api::types::before_version_22::ValidatorInfo>;
 		fn cf_accounts_info(
 			accounts: BoundedVec<AccountId, sp_core::ConstU32<10>>,
 		) -> Vec<ValidatorInfo>;

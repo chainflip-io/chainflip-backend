@@ -421,22 +421,6 @@ impl From<WitnesserCallPermission> for crate::safe_mode::WitnesserCallPermission
 	}
 }
 
-// The emissions pallet was removed once FLIP 2.1 activated; this frozen shim preserves the
-// encoding of its PalletSafeMode (a single `emissions_sync_enabled: bool` flag) for decoding
-// blocks from before the pallet was removed.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
-pub struct EmissionsSafeMode {
-	pub emissions_sync_enabled: bool,
-}
-
-impl Default for EmissionsSafeMode {
-	fn default() -> Self {
-		Self { emissions_sync_enabled: true }
-	}
-}
-
 // The liquidity provider safe mode before `flip_to_on_chain_balance_enabled` was added.
 #[derive(
 	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,

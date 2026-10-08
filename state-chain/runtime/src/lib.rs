@@ -537,7 +537,10 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-pub type MigrationsForV2_4 = (migrations::remove_emissions_storage::RemoveEmissionsStorage,);
+pub type MigrationsForV2_4 = (
+	migrations::remove_emissions_storage::RemoveEmissionsStorage,
+	migrations::safe_mode::SafeModeMigration,
+);
 
 #[cfg(test)]
 mod test {

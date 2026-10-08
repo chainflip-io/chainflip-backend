@@ -1856,6 +1856,9 @@ where
 			} else if version < 19 {
 				#[expect(deprecated)]
 				Ok(api.cf_safe_mode_statuses_before_version_19(hash)?.into())
+			} else if version < 22 {
+				#[expect(deprecated)]
+				Ok(api.cf_safe_mode_statuses_before_version_22(hash)?.into())
 			} else {
 				api.cf_safe_mode_statuses(hash)
 			}
@@ -2128,6 +2131,12 @@ where
 					let account_infos = if api_version < 19 {
 						#[expect(deprecated)]
 						api.cf_all_account_infos_before_version_19(hash, roles)?
+							.into_iter()
+							.map(Into::into)
+							.collect::<Vec<_>>()
+					} else if api_version < 22 {
+						#[expect(deprecated)]
+						api.cf_all_account_infos_before_version_22(hash, roles)?
 							.into_iter()
 							.map(Into::into)
 							.collect::<Vec<_>>()
@@ -2516,7 +2525,7 @@ where
 							} = if api_version < 19 {
 								#[expect(deprecated)]
 								api.cf_validator_info_before_version_19(hash, &account_id)?.into()
-							} else if api_version < 21 {
+							} else if api_version < 22 {
 								#[expect(deprecated)]
 								api.cf_validator_info_before_version_22(hash, &account_id)?.into()
 							} else {
@@ -2552,9 +2561,21 @@ where
 		account_id: state_chain_runtime::AccountId,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<RpcAccountInfoV2> {
-		let account_info = self
-			.rpc_backend
-			.with_runtime_api(at, |api, hash| api.cf_validator_info(hash, &account_id))?;
+		let account_info =
+			self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+				if api_version < 7 {
+					#[expect(deprecated)]
+					api.cf_validator_info_before_version_7(hash, &account_id).map(Into::into)
+				} else if api_version < 19 {
+					#[expect(deprecated)]
+					api.cf_validator_info_before_version_19(hash, &account_id).map(Into::into)
+				} else if api_version < 22 {
+					#[expect(deprecated)]
+					api.cf_validator_info_before_version_22(hash, &account_id).map(Into::into)
+				} else {
+					api.cf_validator_info(hash, &account_id)
+				}
+			})?;
 
 		Ok(RpcAccountInfoV2 {
 			balance: account_info.balance.into(),
