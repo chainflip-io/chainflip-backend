@@ -1154,6 +1154,10 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::block_delegator())]
 		pub fn block_delegator(origin: OriginFor<T>, delegator: T::AccountId) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
+			ensure!(
+				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
+				Error::<T>::RotationInProgress
+			);
 
 			// If the delegator is currently delegating to this operator, we need to
 			// undelegate them first.
@@ -1268,6 +1272,10 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_operator())]
 		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
+			ensure!(
+				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
+				Error::<T>::RotationInProgress
+			);
 
 			for (validator, ()) in Self::get_all_associations_by_operator(
 				&operator,
@@ -2554,6 +2562,14 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 		ensure!(
 			!DelegationChoice::<T>::contains_key(source.into_ref()),
 			Error::<T>::DelegatorTransferRestricted
+		);
+
+		// Once the auction is resolved, bidders' funds must stay put until the new epoch bonds
+		// them. This applies to all bidders since the auction may be re-resolved mid-rotation.
+		ensure!(
+			CurrentRotationPhase::<T>::get() == RotationPhase::Idle ||
+				!Self::is_bidding(source.into_ref()),
+			Error::<T>::StillBidding
 		);
 
 		if Self::ensure_not_active_bidder_during_auction(source).is_ok() ||
