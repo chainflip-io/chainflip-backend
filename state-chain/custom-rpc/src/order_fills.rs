@@ -14,14 +14,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+mod legacy;
+
 use std::collections::HashSet;
 
 use super::*;
 
-use cf_amm::{common::AssetPair, input_amount_from_fee};
+use cf_amm::{
+	common::AssetPair, input_amount_from_fee, limit_orders::legacy_support::PoolStateV10, PoolState,
+};
 use cf_primitives::{AccountId, OrderId};
 use cf_rpc_apis::{OrderFilled, OrderFills};
-use pallet_cf_pools::Pool;
+use frame_support::traits::StorageVersion;
 use state_chain_runtime::{chainflip::get_header_timestamp, Runtime};
 
 pub(crate) fn order_fills_for_block<C, B, BE>(
@@ -52,29 +56,27 @@ where
 			internal_error(format!("Could not fetch block header for block {:?}", hash))
 		})?;
 
-	let pools: BTreeMap<_, _> = StorageQueryApi::new(client)
-		.collect_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, _>(hash)?;
-
-	let prev_pools: BTreeMap<_, _> = StorageQueryApi::new(client)
-		.collect_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, _>(header.parent_hash)?;
+	let pools = pools_at_block(client, hash)?;
+	let previous_pools = pools_at_block(client, header.parent_hash)?;
 
 	// Pools present now but missing from the previous block can't yield a fill delta, so they're
-	// skipped below. Log why rather than dropping them silently: across a runtime upgrade the
-	// parent block's pool storage may not decode under the current `Pool` type.
+	// skipped below. Log why rather than dropping them silently: a pool whose value fails to
+	// decode looks the same here as one that didn't exist yet.
 	let new_or_undecodable_pools = pools
+		.pool_states
 		.keys()
-		.filter(|pair| !prev_pools.contains_key(*pair))
+		.filter(|pair| !previous_pools.pool_states.contains_key(*pair))
 		.copied()
 		.collect::<Vec<_>>();
 	if !new_or_undecodable_pools.is_empty() {
-		// Key present in the parent but value missing from `prev_pools` => decode failure;
-		// key absent => pool newly created. Only scan keys in this rare branch.
-		let prev_pool_keys = StorageQueryApi::new(client)
+		// Key present in the parent but value missing => decode failure; key absent => pool newly
+		// created. Only scan keys in this rare branch.
+		let previous_pool_keys = StorageQueryApi::new(client)
 			.collect_keys_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, HashSet<_>>(
 				header.parent_hash,
 			)?;
 		for pair in new_or_undecodable_pools {
-			if prev_pool_keys.contains(&pair) {
+			if previous_pool_keys.contains(&pair) {
 				log::warn!(
 					"order_fills: previous pool state for {pair:?} failed to decode at block #{} \
 					 ({hash:?}); skipping its order fills for this block.",
@@ -95,121 +97,148 @@ where
 		block_hash: hash,
 		block_number: header.number,
 		timestamp: get_header_timestamp(&header).unwrap_or_default(),
-		data: order_fills_from_block_updates(&prev_pools, &pools, lp_events),
+		data: order_fills_from_block_updates(&previous_pools, &pools, lp_events),
 	})
 }
 
-fn order_fills_for_pool<'a>(
+/// A block's pools, read in whichever shape that block's storage holds them.
+pub struct PoolsAtBlock {
+	/// Each pool's amm state. For a block predating the removal of fixed pools this carries the
+	/// range orders only: its limit orders are in `legacy_limit_orders`, in a representation this
+	/// one cannot express.
+	pool_states: BTreeMap<AssetPair, PoolState<(AccountId, OrderId)>>,
+	/// The limit orders of a block predating that removal, which fills have to be derived from by
+	/// hand. `None` from the upgrade block onwards, where the pool reports each fill as an event.
+	legacy_limit_orders: Option<BTreeMap<AssetPair, PoolStateV10<(AccountId, OrderId)>>>,
+}
+
+impl PoolsAtBlock {
+	/// The pools of a block from the removal of fixed pools onwards.
+	pub fn current(pools: BTreeMap<AssetPair, pallet_cf_pools::Pool<Runtime>>) -> Self {
+		Self {
+			pool_states: pools
+				.into_iter()
+				.map(|(asset_pair, pool)| (asset_pair, pool.pool_state))
+				.collect(),
+			legacy_limit_orders: None,
+		}
+	}
+
+	/// The pools of a block predating that removal.
+	fn legacy(pools: BTreeMap<AssetPair, legacy::Pool>) -> Self {
+		let (pool_states, legacy_limit_orders) = pools
+			.into_iter()
+			.map(|(asset_pair, pool)| {
+				let (pool_state, limit_orders) = pool.split();
+				((asset_pair, pool_state), (asset_pair, limit_orders))
+			})
+			.unzip();
+
+		Self { pool_states, legacy_limit_orders: Some(legacy_limit_orders) }
+	}
+}
+
+fn pools_at_block<C, B>(client: &C, hash: Hash) -> RpcResult<PoolsAtBlock>
+where
+	B: BlockT<Hash = Hash>,
+	C: Send + Sync + 'static + CallApiAt<B>,
+{
+	let storage = StorageQueryApi::<C, B>::new(client);
+
+	let pools_storage_version = storage
+		.with_state_backend(hash, StorageVersion::get::<pallet_cf_pools::Pallet<Runtime>>)?;
+
+	if legacy::pools_are_legacy(pools_storage_version) {
+		Ok(PoolsAtBlock::legacy(storage.collect_from_storage_map::<legacy::Pools, _, _, _>(hash)?))
+	} else {
+		Ok(PoolsAtBlock::current(
+			storage.collect_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, _>(hash)?,
+		))
+	}
+}
+
+/// Limit order fills are reported by the pool after swap execution.
+fn limit_order_fills_from_events(
+	events: &[pallet_cf_pools::Event<Runtime>],
+) -> impl Iterator<Item = OrderFilled> + '_ {
+	events.iter().filter_map(|event| match event {
+		pallet_cf_pools::Event::LimitOrderFilled {
+			lp,
+			base_asset,
+			quote_asset,
+			side,
+			id,
+			tick,
+			sold_amount,
+			bought_amount,
+			remaining_amount,
+		} => Some(OrderFilled::LimitOrder {
+			lp: lp.clone(),
+			base_asset: *base_asset,
+			quote_asset: *quote_asset,
+			side: *side,
+			id: (*id).into(),
+			tick: *tick,
+			sold: (*sold_amount).into(),
+			bought: (*bought_amount).into(),
+			fees: Default::default(),
+			remaining: (*remaining_amount).into(),
+		}),
+		_ => None,
+	})
+}
+
+fn range_order_fills_for_pool<'a>(
 	asset_pair: &'a AssetPair,
-	pool: &'a Pool<Runtime>,
-	previous_pool: &'a Pool<Runtime>,
+	pool_state: &'a PoolState<(AccountId, OrderId)>,
+	previous_pool_state: &'a PoolState<(AccountId, OrderId)>,
 	updated_range_orders: &'a HashSet<(AccountId, AssetPair, OrderId)>,
-	updated_limit_orders: &'a HashSet<(AccountId, AssetPair, Side, OrderId)>,
 ) -> impl IntoIterator<Item = OrderFilled> + 'a {
-	[Side::Sell, Side::Buy]
-		.into_iter()
-		.flat_map(move |side| {
-			pool.pool_state.limit_orders(side).filter_map(
-				move |((lp, id), tick, collected, position_info)| {
-					let (sold, bought) = {
-						let option_previous_order_state = if updated_limit_orders.contains(&(
-							lp.clone(),
-							*asset_pair,
-							side,
-							id,
-						)) {
-							None
-						} else {
-							previous_pool.pool_state.limit_order(&(lp.clone(), id), side, tick).ok()
-						};
-
-						if let Some((previous_collected, _)) = option_previous_order_state {
-							(
-								collected
-									.sold_amount
-									.checked_sub(previous_collected.sold_amount)
-									.unwrap_or_else(|| {
-										log::info!(
-											"Ignored dust sold_amount underflow. Current: {}, Previous: {}",
-											collected.sold_amount,
-											previous_collected.sold_amount
-										);
-										0.into()
-									}),
-								collected.bought_amount - previous_collected.bought_amount,
-							)
-						} else {
-							(collected.sold_amount, collected.bought_amount)
-						}
-					};
-
-					if sold.is_zero() && bought.is_zero() {
+	pool_state
+		.range_orders()
+		.filter_map(move |((lp, id), range, collected, position_info)| {
+			let fees = {
+				let option_previous_order_state =
+					if updated_range_orders.contains(&(lp.clone(), *asset_pair, id)) {
 						None
 					} else {
-						Some(OrderFilled::LimitOrder {
-							lp,
-							base_asset: asset_pair.base(),
-							quote_asset: asset_pair.quote(),
-							side,
-							id: id.into(),
-							tick,
-							sold,
-							bought,
-							fees: Default::default(),
-							remaining: position_info.amount,
-						})
-					}
-				},
-			)
-		})
-		.chain(pool.pool_state.range_orders().filter_map(
-			move |((lp, id), range, collected, position_info)| {
-				let fees = {
-					let option_previous_order_state =
-						if updated_range_orders.contains(&(lp.clone(), *asset_pair, id)) {
-							None
-						} else {
-							previous_pool
-								.pool_state
-								.range_order(&(lp.clone(), id), range.clone())
-								.ok()
-						};
+						previous_pool_state.range_order(&(lp.clone(), id), range.clone()).ok()
+					};
 
-					if let Some((previous_collected, _)) = option_previous_order_state {
-						collected
-							.fees
-							.zip(previous_collected.fees)
-							.map(|(fees, previous_fees)| fees.overflowing_sub(previous_fees).0)
-					} else {
-						Default::default()
-					}
-				};
-
-				let fee_hundredth_pips = pool.pool_state.range_order_fee();
-
-				if fees == Default::default() {
-					None
+				if let Some((previous_collected, _)) = option_previous_order_state {
+					collected
+						.fees
+						.zip(previous_collected.fees)
+						.map(|(fees, previous_fees)| fees.overflowing_sub(previous_fees).0)
 				} else {
-					Some(OrderFilled::RangeOrder {
-						lp: lp.clone(),
-						base_asset: asset_pair.base(),
-						quote_asset: asset_pair.quote(),
-						id: id.into(),
-						bought_amounts: fees.map(|amount| {
-							input_amount_from_fee(amount, fee_hundredth_pips).unwrap_or_default()
-						}),
-						range: range.clone(),
-						fees: fees.map(|fees| fees),
-						liquidity: position_info.liquidity.into(),
-					})
+					Default::default()
 				}
-			},
-		))
+			};
+
+			let fee_hundredth_pips = pool_state.range_order_fee();
+
+			if fees == Default::default() {
+				None
+			} else {
+				Some(OrderFilled::RangeOrder {
+					lp: lp.clone(),
+					base_asset: asset_pair.base(),
+					quote_asset: asset_pair.quote(),
+					id: id.into(),
+					bought_amounts: fees.map(|amount| {
+						input_amount_from_fee(amount, fee_hundredth_pips).unwrap_or_default()
+					}),
+					range: range.clone(),
+					fees: fees.map(|fees| fees),
+					liquidity: position_info.liquidity.into(),
+				})
+			}
+		})
 }
 
 pub fn order_fills_from_block_updates(
-	previous_pools: &BTreeMap<AssetPair, Pool<Runtime>>,
-	pools: &BTreeMap<AssetPair, Pool<Runtime>>,
+	previous_pools: &PoolsAtBlock,
+	pools: &PoolsAtBlock,
 	events: Vec<pallet_cf_pools::Event<Runtime>>,
 ) -> OrderFills {
 	let updated_range_orders = events
@@ -217,38 +246,39 @@ pub fn order_fills_from_block_updates(
 		.filter_map(|event| match event {
 			pallet_cf_pools::Event::RangeOrderUpdated {
 				lp, base_asset, quote_asset, id, ..
-			} => Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *id)),
+			} => Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset)?, *id)),
 			_ => None,
 		})
 		.collect::<HashSet<_>>();
 
-	let updated_limit_orders = events
-		.iter()
-		.filter_map(|event| match event {
-			pallet_cf_pools::Event::LimitOrderUpdated {
-				lp,
-				base_asset,
-				quote_asset,
-				side,
-				id,
-				..
-			} => Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *side, *id)),
-			_ => None,
-		})
-		.collect::<HashSet<_>>();
+	// Both sides predating the removal of fixed pools is the only case where the difference
+	// between them is meaningful. From the upgrade block onwards — including that block, whose
+	// swaps ran under the new pool — every fill is in the events.
+	let limit_order_fills = match (&previous_pools.legacy_limit_orders, &pools.legacy_limit_orders)
+	{
+		(Some(previous_limit_orders), Some(limit_orders)) =>
+			legacy::limit_order_fills(previous_limit_orders, limit_orders, &events),
+		_ => limit_order_fills_from_events(&events).collect(),
+	};
 
-	let order_fills = pools
-		.iter()
-		.filter_map(|(asset_pair, pool)| Some((asset_pair, pool, previous_pools.get(asset_pair)?)))
-		.flat_map(|(asset_pair, pool, previous_pool)| {
-			order_fills_for_pool(
-				asset_pair,
-				pool,
-				previous_pool,
-				&updated_range_orders,
-				&updated_limit_orders,
-			)
-		})
+	let order_fills = limit_order_fills
+		.into_iter()
+		.chain(
+			pools
+				.pool_states
+				.iter()
+				.filter_map(|(asset_pair, pool_state)| {
+					Some((asset_pair, pool_state, previous_pools.pool_states.get(asset_pair)?))
+				})
+				.flat_map(|(asset_pair, pool_state, previous_pool_state)| {
+					range_order_fills_for_pool(
+						asset_pair,
+						pool_state,
+						previous_pool_state,
+						&updated_range_orders,
+					)
+				}),
+		)
 		.collect::<Vec<_>>();
 
 	OrderFills { fills: order_fills }

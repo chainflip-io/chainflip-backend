@@ -121,8 +121,7 @@ fn basic_usage() {
 				balances[BASE_ASSET] > AMOUNT * 2 - swap_input_amount,
 				"Should see increase due to tick"
 			);
-			const ROUNDING_ERROR: AssetAmount = 2;
-			assert_eq!(balances[QUOTE_ASSET], swap_input_amount - ROUNDING_ERROR);
+			assert_eq!(balances[QUOTE_ASSET], swap_input_amount);
 
 	});
 }
@@ -259,8 +258,9 @@ fn inventory_based_strategy_basic_usage() {
                 balances[BASE_ASSET] > AMOUNT * 2 - swap_input_amount,
                 "Should see increase due to tick",
             );
-            const ROUNDING_ERROR: AssetAmount = 2;
-            assert_eq!(balances[QUOTE_ASSET], swap_input_amount - ROUNDING_ERROR);
+            // The limit orders take exactly what the swap paid in, so the whole input reaches
+            // the strategy.
+            assert_eq!(balances[QUOTE_ASSET], swap_input_amount);
         });
 }
 #[test]

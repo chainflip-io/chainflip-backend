@@ -1,0 +1,900 @@
+---
+source: state-chain/pallets/cf-pools/src/tests.rs
+expression: "scale_info::PortableRegistry::from(registry)"
+---
+{
+  "types": [
+    {
+      "id": 0,
+      "type": {
+        "path": [
+          "pallet_cf_pools",
+          "pallet",
+          "Pool"
+        ],
+        "params": [
+          {
+            "name": "T",
+            "type": null
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "range_orders_cache",
+                "type": 1,
+                "typeName": "BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>"
+              },
+              {
+                "name": "limit_orders_cache",
+                "type": 10,
+                "typeName": "PoolPairsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>"
+              },
+              {
+                "name": "pool_state",
+                "type": 17,
+                "typeName": "PoolState<(T::AccountId, OrderId)>"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 1,
+      "type": {
+        "path": [
+          "BTreeMap"
+        ],
+        "params": [
+          {
+            "name": "K",
+            "type": 2
+          },
+          {
+            "name": "V",
+            "type": 3
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 8
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": {
+        "def": {
+          "primitive": "u64"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": {
+        "path": [
+          "BTreeMap"
+        ],
+        "params": [
+          {
+            "name": "K",
+            "type": 2
+          },
+          {
+            "name": "V",
+            "type": 4
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 6
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": {
+        "path": [
+          "Range"
+        ],
+        "params": [
+          {
+            "name": "Idx",
+            "type": 5
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "start",
+                "type": 5,
+                "typeName": "Idx"
+              },
+              {
+                "name": "end",
+                "type": 5,
+                "typeName": "Idx"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": {
+        "def": {
+          "primitive": "i32"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 7
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": {
+        "def": {
+          "tuple": [
+            2,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 9
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": {
+        "def": {
+          "tuple": [
+            2,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": {
+        "path": [
+          "cf_amm",
+          "common",
+          "PoolPairsMap"
+        ],
+        "params": [
+          {
+            "name": "T",
+            "type": 11
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "base",
+                "type": 11,
+                "typeName": "T"
+              },
+              {
+                "name": "quote",
+                "type": 11,
+                "typeName": "T"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": {
+        "path": [
+          "BTreeMap"
+        ],
+        "params": [
+          {
+            "name": "K",
+            "type": 2
+          },
+          {
+            "name": "V",
+            "type": 12
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 15
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": {
+        "path": [
+          "BTreeMap"
+        ],
+        "params": [
+          {
+            "name": "K",
+            "type": 2
+          },
+          {
+            "name": "V",
+            "type": 5
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 13
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 14
+          }
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": {
+        "def": {
+          "tuple": [
+            2,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 16
+          }
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": {
+        "def": {
+          "tuple": [
+            2,
+            12
+          ]
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": {
+        "path": [
+          "cf_amm",
+          "PoolState"
+        ],
+        "params": [
+          {
+            "name": "LiquidityProvider",
+            "type": 18
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "limit_orders",
+                "type": 19,
+                "typeName": "limit_orders::PoolState<LiquidityProvider>"
+              },
+              {
+                "name": "range_orders",
+                "type": 32,
+                "typeName": "range_orders::PoolState<LiquidityProvider>"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 18,
+      "type": {
+        "def": {
+          "tuple": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": {
+        "path": [
+          "cf_amm",
+          "limit_orders",
+          "PoolState"
+        ],
+        "params": [
+          {
+            "name": "LiquidityProvider",
+            "type": 18
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "orders",
+                "type": 20,
+                "typeName": "PoolPairsMap<BTreeMap<SqrtPrice, Orders<LiquidityProvider>>>"
+              },
+              {
+                "name": "total_swap_inputs",
+                "type": 31,
+                "typeName": "PoolPairsMap<Amount>"
+              },
+              {
+                "name": "total_swap_outputs",
+                "type": 31,
+                "typeName": "PoolPairsMap<Amount>"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": {
+        "path": [
+          "cf_amm",
+          "common",
+          "PoolPairsMap"
+        ],
+        "params": [
+          {
+            "name": "T",
+            "type": 21
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "base",
+                "type": 21,
+                "typeName": "T"
+              },
+              {
+                "name": "quote",
+                "type": 21,
+                "typeName": "T"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": {
+        "path": [
+          "BTreeMap"
+        ],
+        "params": [
+          {
+            "name": "K",
+            "type": 22
+          },
+          {
+            "name": "V",
+            "type": 25
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 29
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": {
+        "path": [
+          "cf_amm_math",
+          "SqrtPrice"
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 23,
+                "typeName": "U256"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 23,
+      "type": {
+        "path": [
+          "primitive_types",
+          "U256"
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 24,
+                "typeName": "[u64; 4]"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": {
+        "def": {
+          "array": {
+            "len": 4,
+            "type": 2
+          }
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": {
+        "path": [
+          "BTreeMap"
+        ],
+        "params": [
+          {
+            "name": "K",
+            "type": 18
+          },
+          {
+            "name": "V",
+            "type": 26
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 27
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": {
+        "path": [
+          "cf_amm",
+          "limit_orders",
+          "Position"
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "amount",
+                "type": 23,
+                "typeName": "Amount"
+              },
+              {
+                "name": "original_amount",
+                "type": 23,
+                "typeName": "Amount"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 27,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 28
+          }
+        }
+      }
+    },
+    {
+      "id": 28,
+      "type": {
+        "def": {
+          "tuple": [
+            18,
+            26
+          ]
+        }
+      }
+    },
+    {
+      "id": 29,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 30
+          }
+        }
+      }
+    },
+    {
+      "id": 30,
+      "type": {
+        "def": {
+          "tuple": [
+            22,
+            25
+          ]
+        }
+      }
+    },
+    {
+      "id": 31,
+      "type": {
+        "path": [
+          "cf_amm",
+          "common",
+          "PoolPairsMap"
+        ],
+        "params": [
+          {
+            "name": "T",
+            "type": 23
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "base",
+                "type": 23,
+                "typeName": "T"
+              },
+              {
+                "name": "quote",
+                "type": 23,
+                "typeName": "T"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 32,
+      "type": {
+        "path": [
+          "cf_amm",
+          "range_orders",
+          "PoolState"
+        ],
+        "params": [
+          {
+            "name": "LiquidityProvider",
+            "type": 18
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "fee_hundredth_pips",
+                "type": 33,
+                "typeName": "u32"
+              },
+              {
+                "name": "current_sqrt_price",
+                "type": 22,
+                "typeName": "SqrtPrice"
+              },
+              {
+                "name": "current_tick",
+                "type": 5,
+                "typeName": "Tick"
+              },
+              {
+                "name": "current_liquidity",
+                "type": 34,
+                "typeName": "Liquidity"
+              },
+              {
+                "name": "global_fee_growth",
+                "type": 31,
+                "typeName": "PoolPairsMap<FeeGrowthQ128F128>"
+              },
+              {
+                "name": "liquidity_map",
+                "type": 35,
+                "typeName": "BTreeMap<Tick, TickDelta>"
+              },
+              {
+                "name": "positions",
+                "type": 40,
+                "typeName": "BTreeMap<(LiquidityProvider, Tick, Tick), Position>"
+              },
+              {
+                "name": "total_fees_earned",
+                "type": 31,
+                "typeName": "PoolPairsMap<Amount>"
+              },
+              {
+                "name": "total_swap_inputs",
+                "type": 31,
+                "typeName": "PoolPairsMap<Amount>"
+              },
+              {
+                "name": "total_swap_outputs",
+                "type": 31,
+                "typeName": "PoolPairsMap<Amount>"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 33,
+      "type": {
+        "def": {
+          "primitive": "u32"
+        }
+      }
+    },
+    {
+      "id": 34,
+      "type": {
+        "def": {
+          "primitive": "u128"
+        }
+      }
+    },
+    {
+      "id": 35,
+      "type": {
+        "path": [
+          "BTreeMap"
+        ],
+        "params": [
+          {
+            "name": "K",
+            "type": 5
+          },
+          {
+            "name": "V",
+            "type": 36
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 38
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 36,
+      "type": {
+        "path": [
+          "cf_amm",
+          "range_orders",
+          "TickDelta"
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "liquidity_delta",
+                "type": 37,
+                "typeName": "i128"
+              },
+              {
+                "name": "liquidity_gross",
+                "type": 34,
+                "typeName": "u128"
+              },
+              {
+                "name": "fee_growth_outside",
+                "type": 31,
+                "typeName": "PoolPairsMap<FeeGrowthQ128F128>"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 37,
+      "type": {
+        "def": {
+          "primitive": "i128"
+        }
+      }
+    },
+    {
+      "id": 38,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 39
+          }
+        }
+      }
+    },
+    {
+      "id": 39,
+      "type": {
+        "def": {
+          "tuple": [
+            5,
+            36
+          ]
+        }
+      }
+    },
+    {
+      "id": 40,
+      "type": {
+        "path": [
+          "BTreeMap"
+        ],
+        "params": [
+          {
+            "name": "K",
+            "type": 41
+          },
+          {
+            "name": "V",
+            "type": 42
+          }
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "type": 43
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 41,
+      "type": {
+        "def": {
+          "tuple": [
+            18,
+            5,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "id": 42,
+      "type": {
+        "path": [
+          "cf_amm",
+          "range_orders",
+          "Position"
+        ],
+        "def": {
+          "composite": {
+            "fields": [
+              {
+                "name": "liquidity",
+                "type": 34,
+                "typeName": "Liquidity"
+              },
+              {
+                "name": "last_fee_growth_inside",
+                "type": 31,
+                "typeName": "PoolPairsMap<FeeGrowthQ128F128>"
+              },
+              {
+                "name": "accumulative_fees",
+                "type": 31,
+                "typeName": "PoolPairsMap<Amount>"
+              },
+              {
+                "name": "original_sqrt_price",
+                "type": 22,
+                "typeName": "SqrtPrice"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 43,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 44
+          }
+        }
+      }
+    },
+    {
+      "id": 44,
+      "type": {
+        "def": {
+          "tuple": [
+            41,
+            42
+          ]
+        }
+      }
+    }
+  ]
+}

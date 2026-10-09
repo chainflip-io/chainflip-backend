@@ -46,7 +46,8 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 mod benchmarks {
 	use super::*;
 
-	// Create some orders so the cost of sweeping is taken into account
+	// Create some orders so the cost of decoding the pool, and of sweeping the caller's range
+	// orders, is taken into account.
 	fn create_some_orders<T: Config>(caller: T::AccountId) {
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000_000);
