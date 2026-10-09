@@ -1010,11 +1010,18 @@ impl<T: Config> Pallet<T> {
 							Self::consolidation_parameters(),
 						);
 
-						Self::consolidation_transaction_change_amount(
+						match Self::consolidation_transaction_change_amount(
 							&selected_utxo[..],
 							&bitcoin_fee_info,
-						)
-						.map(|change_amount| (selected_utxo, change_amount))
+						) {
+							Some(change_amount) => Some((selected_utxo, change_amount)),
+							None => {
+								// The fee exceeds the selected amount, so there is nothing to
+								// consolidate. The selected utxos must go back to the pool.
+								available_utxos.extend(selected_utxo);
+								None
+							},
+						}
 					} else {
 						None
 					}
