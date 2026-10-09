@@ -4214,6 +4214,8 @@ dependencies = [
  "ethabi 18.0.0 (git+https://github.com/chainflip-io/ethabi?tag=chainflip-substrate-compat-1.18)",
  "ethers-core",
  "parity-scale-codec",
+ "proptest",
+ "proptest-derive",
  "scale-info",
  "scale-value",
  "serde",
