@@ -59,7 +59,7 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_runtime::DispatchError;
+use sp_runtime::{traits::ConstU32, BoundedVec, DispatchError};
 use sp_std::{
 	cmp::{max, min},
 	collections::btree_map::BTreeMap,
@@ -981,7 +981,7 @@ pub mod pallet {
 				Err(_) => {
 					Self::deposit_event(Event::SCCallCannotBeDecoded {
 						caller: caller_account_id,
-						sc_call_bytes: deposit_and_call.call,
+						sc_call_bytes: deposit_and_call.call.into_inner(),
 						eth_tx_hash,
 					});
 				},
@@ -1224,11 +1224,19 @@ impl<T: Config> GetMinimumFunding for Pallet<T> {
 	}
 }
 
+/// The maximum length of an encoded call submitted through the SC Utils contract. The runtime
+/// checks in a test that every supported call fits.
+pub const MAX_SC_CALL_LENGTH: u32 = 100;
+
+/// Bounded so that a single Ethereum transaction can't push arbitrarily large payloads through
+/// witnessing, which copies them once per authority.
+pub type ScCallBytes = BoundedVec<u8, ConstU32<MAX_SC_CALL_LENGTH>>;
+
 derive_common_traits! {
 	#[derive(PartialOrd, Ord, TypeInfo)]
 	pub struct EthereumDepositAndSCCall {
 		pub deposit: EthereumDeposit,
-		pub call: Vec<u8>,
+		pub call: ScCallBytes,
 	}
 }
 

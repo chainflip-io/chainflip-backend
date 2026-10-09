@@ -149,3 +149,16 @@ impl GetDispatchInfo for EthereumSCApi<FlipBalance> {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn all_calls_fit_within_the_sc_call_length_limit() {
+		assert!(
+			EthereumSCApi::<FlipBalance>::max_encoded_len() <=
+				pallet_cf_funding::MAX_SC_CALL_LENGTH as usize
+		);
+	}
+}
