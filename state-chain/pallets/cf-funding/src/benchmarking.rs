@@ -163,7 +163,7 @@ mod benchmarks {
 		let call = Call::<T>::execute_sc_call {
 			deposit_and_call: EthereumDepositAndSCCall {
 				deposit: EthereumDeposit::FlipToSCGateway { amount: 10 * INITIAL_FLIP_FUNDING },
-				call: vec![0], //will correctly decode to EmptyCall
+				call: vec![0].try_into().unwrap(), //will correctly decode to EmptyCall
 			},
 			caller,
 			caller_account_id,
