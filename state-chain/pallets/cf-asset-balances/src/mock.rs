@@ -28,10 +28,11 @@ use cf_traits::{
 	mocks::{
 		egress_handler::MockEgressHandler, key_provider::MockKeyProvider, pool_api::MockPoolApi,
 	},
+	AssetWithholding, EgressApi, ScheduledEgressDetails,
 };
 use frame_support::{derive_impl, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
-use sp_runtime::traits::IdentityLookup;
+use sp_runtime::{traits::IdentityLookup, DispatchError};
 
 use cf_chains::ForeignChainAddress;
 
@@ -69,8 +70,33 @@ pub const SOL_ADDR: ForeignChainAddress =
 
 impl_mock_runtime_safe_mode!(refunding: PalletSafeMode);
 
+/// Withholds the egress fee, as the ingress-egress pallet does.
+pub struct WithholdingEgressHandler;
+
+impl EgressApi<AnyChain> for WithholdingEgressHandler {
+	type EgressError = DispatchError;
+
+	fn schedule_egress(
+		asset: cf_primitives::Asset,
+		amount: cf_primitives::AssetAmount,
+		destination_address: ForeignChainAddress,
+		maybe_ccm_deposit_metadata: Option<
+			cf_chains::CcmDepositMetadataChecked<ForeignChainAddress>,
+		>,
+	) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
+		let details = MockEgressHandler::<AnyChain>::schedule_egress(
+			asset,
+			amount,
+			destination_address,
+			maybe_ccm_deposit_metadata,
+		)?;
+		AssetBalances::withhold_assets(asset, details.fee_withheld);
+		Ok(details)
+	}
+}
+
 impl crate::Config for Test {
-	type EgressHandler = MockEgressHandler<AnyChain>;
+	type EgressHandler = WithholdingEgressHandler;
 	type PolkadotKeyProvider = MockKeyProvider<PolkadotCrypto>;
 	type PoolApi = MockPoolApi<AccountId>;
 	type SafeMode = MockRuntimeSafeMode;
