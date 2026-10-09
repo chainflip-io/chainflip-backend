@@ -1059,7 +1059,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn kill_account_if_zero_balance(account_id: &T::AccountId) {
-		if T::Flip::balance(account_id).is_zero() {
+		// An account with a pending redemption is kept alive: if the redemption expires, the
+		// funds return to it, and they must still be subject to its bound redeem address.
+		if T::Flip::balance(account_id).is_zero() &&
+			!PendingRedemptions::<T>::contains_key(account_id)
+		{
 			frame_system::Provider::<T>::killed(account_id).unwrap_or_else(|e| {
 				log::error!(
 					"Unexpected reference count error while reaping the account {:?}: {:?}.",
