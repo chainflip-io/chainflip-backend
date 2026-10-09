@@ -254,6 +254,24 @@ fn configured_refund_fee_multiple_is_respected() {
 	});
 }
 
+#[test]
+pub fn egress_fee_withheld_during_reconciliation_is_kept() {
+	new_test_ext().execute_with(|| {
+		const REFUND_AMOUNT: u128 = 1_000;
+		const EGRESS_FEE: u128 = 1;
+		payed_gas(ForeignChain::Ethereum, REFUND_AMOUNT, ETH_ADDR_1.clone());
+		MockEgressHandler::<AnyChain>::set_fee(EGRESS_FEE);
+
+		Pallet::<Test>::trigger_reconciliation();
+
+		assert_egress(1, None);
+		assert!(Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).is_empty());
+		// The refund used up everything that was withheld, but the refund's own egress fee was
+		// withheld again while reconciling.
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), EGRESS_FEE);
+	});
+}
+
 #[track_caller]
 fn test_refund_validators_with_checks(
 	chain: ForeignChain,
