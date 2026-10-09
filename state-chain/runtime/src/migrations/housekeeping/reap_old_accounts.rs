@@ -22,6 +22,7 @@ use codec::Encode;
 #[cfg(feature = "try-runtime")]
 use frame_support::sp_runtime::DispatchError;
 use frame_support::{
+	storage::with_storage_layer,
 	traits::{HandleLifetime, OnRuntimeUpgrade, OriginTrait},
 	weights::Weight,
 };
@@ -56,7 +57,9 @@ impl OnRuntimeUpgrade for Migration {
 
 				if account_info.providers == 1 && account_info.consumers == 1 {
 					let _ = match AccountRoles::<Runtime>::get(&account_id) {
-						Some(role) => match role {
+						// Each deregistration is called directly rather than dispatched, so it runs
+						// in its own storage layer to undo partial changes if it fails.
+						Some(role) => with_storage_layer(|| match role {
 							AccountRole::Unregistered => Err("Account is unregistered".into()),
 							AccountRole::Validator => {
 								// To compensate for the consumer that we *should* have added.
@@ -84,7 +87,7 @@ impl OnRuntimeUpgrade for Migration {
 									OriginTrait::signed(account_id.clone()),
 								)
 							},
-						}
+						})
 						.inspect_err(|e| {
 							log::error!(
 								"❗️ Failed to deregister {:?} account {}: {:?}",
