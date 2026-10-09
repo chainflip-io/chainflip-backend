@@ -176,7 +176,7 @@ impl<E> RejectCall<Tron> for TronApi<E>
 where
 	E: EvmEnvironmentProvider<Tron> + ReplayProtectionProvider<Tron>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_deposit_details: <Tron as Chain>::DepositDetails,
 		asset: <Tron as Chain>::ChainAsset,
 		fetch: FetchForRejection<Tron>,
