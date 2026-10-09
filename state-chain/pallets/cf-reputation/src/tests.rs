@@ -284,6 +284,33 @@ fn suspensions() {
 }
 
 #[test]
+fn repeated_suspensions_keep_one_entry_per_validator() {
+	new_test_ext().execute_with(|| {
+		const OFFENCE: AllOffences = AllOffences::ForgettingYourYubiKey;
+
+		let long_suspension_until = System::block_number() + 100;
+		ReputationPallet::suspend_all([1, 2], &OFFENCE, 100);
+		for _ in 0..10 {
+			advance_by_block();
+			ReputationPallet::suspend_all([1, 1], &OFFENCE, 10);
+		}
+
+		let suspensions = Suspensions::<Test>::get(OFFENCE);
+		assert_eq!(suspensions.len(), 2);
+		// A shorter suspension doesn't cut an existing longer one short.
+		assert!(suspensions.contains(&(long_suspension_until, 1)));
+		assert!(suspensions.contains(&(long_suspension_until, 2)));
+
+		let current_block = System::block_number();
+
+		ReputationPallet::suspend_all([1], &OFFENCE, 200);
+		let suspensions = Suspensions::<Test>::get(OFFENCE);
+		assert_eq!(suspensions.len(), 2);
+		assert!(suspensions.contains(&(current_block + 200, 1)));
+	});
+}
+
+#[test]
 fn forgiveness() {
 	#[expect(non_local_definitions)]
 	impl OffenceList<Test> for AllOffences {
