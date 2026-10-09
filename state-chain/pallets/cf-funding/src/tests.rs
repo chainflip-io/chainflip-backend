@@ -1989,7 +1989,7 @@ pub mod ethereum_sc_calls {
 				RuntimeOrigin::root(),
 				EthereumDepositAndSCCall {
 					deposit: EthereumDeposit::FlipToSCGateway { amount: FUND_AMOUNT },
-					call: VALID_CALL_BYTES.to_vec()
+					call: VALID_CALL_BYTES.to_vec().try_into().unwrap()
 				},
 				CALLER,
 				CALLER_32,
@@ -2020,7 +2020,7 @@ pub mod ethereum_sc_calls {
 				RuntimeOrigin::root(),
 				EthereumDepositAndSCCall {
 					deposit: EthereumDeposit::FlipToSCGateway { amount: FUND_AMOUNT },
-					call: INVALID_CALL_BYTES.to_vec()
+					call: INVALID_CALL_BYTES.to_vec().try_into().unwrap()
 				},
 				CALLER,
 				CALLER_32,
@@ -2051,7 +2051,7 @@ pub mod ethereum_sc_calls {
 				RuntimeOrigin::root(),
 				EthereumDepositAndSCCall {
 					deposit: EthereumDeposit::NoDeposit,
-					call: VALID_CALL_BYTES.to_vec()
+					call: VALID_CALL_BYTES.to_vec().try_into().unwrap()
 				},
 				CALLER,
 				CALLER_32,
