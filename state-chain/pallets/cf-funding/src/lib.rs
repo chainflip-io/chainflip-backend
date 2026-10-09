@@ -35,6 +35,7 @@ mod tests;
 
 use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
@@ -53,6 +54,7 @@ use frame_support::{
 		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OriginTrait, StorageVersion,
 		UnfilteredDispatchable, UnixTime,
 	},
+	transactional,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -1060,6 +1062,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	#[transactional]
 	pub fn redemption_expired(
 		account_id: AccountId<T>,
 		tx_hash: EthTransactionHash,
@@ -1067,8 +1070,9 @@ impl<T: Config> Pallet<T> {
 		let pending_redemption =
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
 
-		T::Flip::revert_redemption(&account_id)
-			.expect("Pending Redemption should exist since the corresponding redemption existed");
+		T::Flip::revert_redemption(&account_id).inspect_err(|e| {
+			log_or_panic!("Pending redemption for {account_id:?} has no reserve: {e:?}");
+		})?;
 
 		// If the address is still restricted, we update the restricted balances again.
 		if RestrictedAddresses::<T>::contains_key(pending_redemption.redeem_address) {
@@ -1084,6 +1088,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	#[transactional]
 	pub fn redeemed(
 		account_id: AccountId<T>,
 		redeemed_amount: FlipBalance<T>,
@@ -1092,8 +1097,10 @@ impl<T: Config> Pallet<T> {
 		let _ =
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
 
-		T::Flip::finalize_redemption(&account_id)
-			.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
+		// Called from an on_finalize hook, so this must not panic.
+		T::Flip::finalize_redemption(&account_id).inspect_err(|e| {
+			log_or_panic!("Pending redemption for {account_id:?} has no reserve: {e:?}");
+		})?;
 
 		Self::kill_account_if_zero_balance(&account_id);
 
