@@ -348,3 +348,49 @@ fn authority_removes_and_re_adds_itself_from_contributing_set() {
 		.submit_votes(&[1], VOTE, Ok(()))
 		.expect_consensus(ConsensusStatus::Changed { previous: 2, new: 3 });
 }
+
+#[test]
+fn governance_clear_election_votes_ignores_declared_components() {
+	let setup = TestSetup::default();
+	let authorities = setup.all_authorities();
+	let election_identifier =
+		|ctx: &TestContext| ElectionIdentifierOf::<MockElectoralSystemRunner>::new(ctx.umis[0], ());
+
+	election_test_ext(setup)
+		.new_election()
+		.submit_votes(&authorities[..], AuthorityVote::Vote(()), Ok(()))
+		// The individual components now stored are ones the election claims it cannot have.
+		.update_settings(&[BehaviourUpdate::ComponentStorageKind(Some(
+			vote_storage::ComponentStorageKind::BitmapOnly,
+		))])
+		.then_execute_with_keep_context(|ctx| {
+			assert!(IndividualComponents::<Test, Instance1>::iter_prefix(ctx.umis[0])
+				.next()
+				.is_some());
+
+			// The internal path narrows to the declared components, and so leaves them behind.
+			RunnerStorageAccess::<Test, Instance1>::clear_election_votes(
+				election_identifier(ctx),
+				false,
+			);
+			assert!(IndividualComponents::<Test, Instance1>::iter_prefix(ctx.umis[0])
+				.next()
+				.is_some());
+		})
+		.then_apply_extrinsics(|ctx| {
+			[(
+				OriginTrait::root(),
+				Call::<Test, Instance1>::clear_election_votes {
+					election_identifier: election_identifier(ctx),
+					ignore_corrupt_storage: CorruptStorageAdherance::Heed,
+					check_election_exists: true,
+				},
+				Ok(()),
+			)]
+		})
+		.then_execute_with_keep_context(|ctx| {
+			assert!(IndividualComponents::<Test, Instance1>::iter_prefix(ctx.umis[0])
+				.next()
+				.is_none());
+		});
+}
