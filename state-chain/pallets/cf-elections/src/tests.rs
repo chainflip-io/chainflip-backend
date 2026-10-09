@@ -348,3 +348,137 @@ fn authority_removes_and_re_adds_itself_from_contributing_set() {
 		.submit_votes(&[1], VOTE, Ok(()))
 		.expect_consensus(ConsensusStatus::Changed { previous: 2, new: 3 });
 }
+
+/// Against a real `CompositeRunner`: a single validator must not be able to reach the composite's
+/// variant-mismatch arms, which report corrupt storage and pause the whole instance.
+mod composite {
+	use crate::{
+		electoral_systems::composite::tuple_5_impls::CompositeElectionIdentifierExtra,
+		mock::composite::{
+			new_test_ext, CompositeTest, MockCompositeRunner, MockEpochInfo, TestRunner,
+		},
+		vote_storage::{
+			composite::tuple_5_impls::{CompositePartialVote, CompositeSharedData, CompositeVote},
+			AuthorityVote,
+		},
+		AuthorityVoteOf, BitmapComponents, Call, ElectionIdentifierOf, ElectionPalletStatus,
+		ElectionProperties, InitialStateOf, Pallet, SharedData, SharedDataHash, Status,
+	};
+	use cf_traits::{mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry};
+	use frame_support::{
+		assert_ok, instances::Instance1, storage::bounded_btree_map::BoundedBTreeMap,
+		traits::OriginTrait,
+	};
+	use std::collections::BTreeMap;
+
+	const AUTHORITIES: [u64; 3] = [0, 1, 2];
+	const ATTACKER: u64 = 0;
+
+	/// Each electoral system opens an election when the authorities start contributing.
+	fn composite_test_ext() -> TestRunner<()> {
+		new_test_ext()
+			.execute_with(|| {
+				assert_ok!(Pallet::<CompositeTest, Instance1>::internally_initialize(
+					InitialStateOf::<CompositeTest, Instance1> {
+						unsynchronised_state: Default::default(),
+						unsynchronised_settings: Default::default(),
+						settings: Default::default(),
+						shared_data_reference_lifetime: 10,
+					}
+				));
+				for id in AUTHORITIES {
+					<MockAccountRoleRegistry as AccountRoleRegistry<CompositeTest>>::register_as_validator(&id)
+						.unwrap();
+				}
+				MockEpochInfo::next_epoch(AUTHORITIES.to_vec());
+			})
+			.then_apply_extrinsics(|_| {
+				AUTHORITIES.map(|id| {
+					(
+						OriginTrait::signed(id),
+						Call::<CompositeTest, Instance1>::stop_ignoring_my_votes {},
+						Ok(()),
+					)
+				})
+			})
+	}
+
+	fn election_of_a() -> ElectionIdentifierOf<MockCompositeRunner> {
+		ElectionProperties::<CompositeTest, Instance1>::iter_keys()
+			.find(|id| matches!(id.extra(), CompositeElectionIdentifierExtra::A(())))
+			.expect("electoral system A opens an election")
+	}
+
+	fn vote(
+		election: ElectionIdentifierOf<MockCompositeRunner>,
+		vote: AuthorityVoteOf<MockCompositeRunner>,
+	) -> Call<CompositeTest, Instance1> {
+		Call::vote {
+			authority_votes: Box::new(
+				BoundedBTreeMap::try_from(BTreeMap::from([(election, vote)])).unwrap(),
+			),
+		}
+	}
+
+	fn assert_running() {
+		assert_eq!(Status::<CompositeTest, Instance1>::get(), Some(ElectionPalletStatus::Running));
+	}
+
+	/// PRO-3168: vote with the hash of another variant's shared data, then provide that data.
+	#[test]
+	fn shared_data_of_another_variant_does_not_pause_the_instance() {
+		let other_variant_data = CompositeSharedData::B(7u32);
+		composite_test_ext()
+			.then_apply_extrinsics(|_| {
+				[
+					(
+						OriginTrait::signed(ATTACKER),
+						vote(
+							election_of_a(),
+							AuthorityVote::PartialVote(CompositePartialVote::A(
+								SharedDataHash::of(&other_variant_data),
+							)),
+						),
+						Ok(()),
+					),
+					(
+						OriginTrait::signed(ATTACKER),
+						Call::provide_shared_data {
+							shared_data: Box::new(other_variant_data.clone()),
+						},
+						Ok(()),
+					),
+				]
+			})
+			.then_process_next_block()
+			.then_execute_with(|_| {
+				assert_running();
+				// Provision is not rejected: rejecting data because a reference is of another
+				// variant would let an attacker block honest data by referencing its hash.
+				assert!(SharedData::<CompositeTest, Instance1>::contains_key(SharedDataHash::of(
+					&other_variant_data
+				)));
+			});
+	}
+
+	/// Relies on `check_vote_mismatch` running before any electoral system sees the vote.
+	#[test]
+	fn vote_of_another_variant_is_ignored() {
+		composite_test_ext()
+			.then_apply_extrinsics(|_| {
+				[(
+					OriginTrait::signed(ATTACKER),
+					vote(election_of_a(), AuthorityVote::Vote(CompositeVote::B(7u32))),
+					Ok(()),
+				)]
+			})
+			.then_process_next_block()
+			.then_execute_with(|_| {
+				assert_running();
+				assert!(
+					BitmapComponents::<CompositeTest, Instance1>::iter().next().is_none(),
+					"The mismatched vote should not have been stored"
+				);
+			});
+	}
+}
