@@ -286,7 +286,6 @@ pub enum RpcAccountInfo {
 		is_qualified: bool,
 		is_online: bool,
 		is_bidding: bool,
-		apy_bp: Option<u32>,
 		bid: U256,
 		max_bid: Option<U256>,
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -364,7 +363,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 				is_online,
 				is_bidding,
 				bound_redeem_address,
-				apy_bp,
+				apy_bp: _,
 				restricted_balances,
 				estimated_redeemable_balance,
 			} => Self {
@@ -386,7 +385,6 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					is_qualified,
 					is_online,
 					is_bidding,
-					apy_bp,
 					bid: flip_balance.into(),
 					max_bid: None,
 					operator: None,
@@ -500,6 +498,7 @@ pub mod account_info_before_api_v7 {
 				reputation_points: info.reputation_points,
 				keyholder_epochs: info.keyholder_epochs,
 				is_current_authority: info.is_current_authority,
+				#[expect(deprecated)]
 				is_current_backup: info.is_current_backup,
 				is_qualified: info.is_qualified,
 				is_online: info.is_online,
@@ -530,7 +529,6 @@ pub struct RpcAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EvmAddress>,
-	pub apy_bp: Option<u32>,
 	pub restricted_balances: BTreeMap<EvmAddress, u128>,
 	pub estimated_redeemable_balance: NumberOrHex,
 }
@@ -1691,8 +1689,9 @@ fn handle_dynamic_event_error(
 
 #[macro_export]
 macro_rules! pass_through {
-	($( $name:ident ( $( $arg:ident: $argt:ty ),* $(,)? ) -> $result_type:ty $([map: $mapping:expr])? ),+ $(,)?) => {
+	($( $(#[$attr:meta])? $name:ident ( $( $arg:ident: $argt:ty ),* $(,)? ) -> $result_type:ty $([map: $mapping:expr])? ),+ $(,)?) => {
 		$(
+			$(#[$attr])?
 			fn $name(&self, $( $arg: $argt, )* at: Option<state_chain_runtime::Hash>,) -> RpcResult<$result_type> {
 				self.rpc_backend.with_runtime_api(at, |api, hash| api.$name(hash, $($arg),* ))
 					$(.map($mapping))?
@@ -1758,7 +1757,9 @@ where
 		cf_current_epoch() -> u32,
 		cf_epoch_duration() -> u32,
 		cf_current_epoch_started_at() -> u32,
+		#[expect(deprecated)]
 		cf_authority_emission_per_block() -> NumberOrHex [map: Into::into],
+		#[expect(deprecated)]
 		cf_backup_emission_per_block() -> NumberOrHex [map: Into::into],
 		cf_flip_supply() -> (NumberOrHex, NumberOrHex) [map: |(issuance, offchain_supply)| (issuance.into(), offchain_supply.into())],
 		cf_accounts() -> Vec<(state_chain_runtime::AccountId, String)> [map: |accounts| {
@@ -1855,6 +1856,9 @@ where
 			} else if version < 19 {
 				#[expect(deprecated)]
 				Ok(api.cf_safe_mode_statuses_before_version_19(hash)?.into())
+			} else if version < 22 {
+				#[expect(deprecated)]
+				Ok(api.cf_safe_mode_statuses_before_version_22(hash)?.into())
 			} else {
 				api.cf_safe_mode_statuses(hash)
 			}
@@ -2130,6 +2134,12 @@ where
 							.into_iter()
 							.map(Into::into)
 							.collect::<Vec<_>>()
+					} else if api_version < 22 {
+						#[expect(deprecated)]
+						api.cf_all_account_infos_before_version_22(hash, roles)?
+							.into_iter()
+							.map(Into::into)
+							.collect::<Vec<_>>()
 					} else {
 						api.cf_all_account_infos(hash, roles)?
 					};
@@ -2229,7 +2239,6 @@ where
 										is_qualified,
 										is_online,
 										is_bidding,
-										apy_bp,
 										bid,
 										max_bid,
 										operator,
@@ -2244,7 +2253,6 @@ where
 										is_qualified,
 										is_online,
 										is_bidding,
-										apy_bp,
 										bid: bid.into(),
 										max_bid: max_bid.map(Into::into),
 										operator,
@@ -2510,7 +2518,6 @@ where
 								is_qualified,
 								is_online,
 								is_bidding,
-								apy_bp,
 								max_bid,
 								bid,
 								operator,
@@ -2518,6 +2525,9 @@ where
 							} = if api_version < 19 {
 								#[expect(deprecated)]
 								api.cf_validator_info_before_version_19(hash, &account_id)?.into()
+							} else if api_version < 22 {
+								#[expect(deprecated)]
+								api.cf_validator_info_before_version_22(hash, &account_id)?.into()
 							} else {
 								api.cf_validator_info(hash, &account_id)?
 							};
@@ -2530,7 +2540,6 @@ where
 								is_qualified,
 								is_online,
 								is_bidding,
-								apy_bp,
 								max_bid: max_bid.map(Into::into),
 								bid: bid.into(),
 								operator,
@@ -2552,9 +2561,21 @@ where
 		account_id: state_chain_runtime::AccountId,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<RpcAccountInfoV2> {
-		let account_info = self
-			.rpc_backend
-			.with_runtime_api(at, |api, hash| api.cf_validator_info(hash, &account_id))?;
+		let account_info =
+			self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+				if api_version < 7 {
+					#[expect(deprecated)]
+					api.cf_validator_info_before_version_7(hash, &account_id).map(Into::into)
+				} else if api_version < 19 {
+					#[expect(deprecated)]
+					api.cf_validator_info_before_version_19(hash, &account_id).map(Into::into)
+				} else if api_version < 22 {
+					#[expect(deprecated)]
+					api.cf_validator_info_before_version_22(hash, &account_id).map(Into::into)
+				} else {
+					api.cf_validator_info(hash, &account_id)
+				}
+			})?;
 
 		Ok(RpcAccountInfoV2 {
 			balance: account_info.balance.into(),
@@ -2569,7 +2590,6 @@ where
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
-			apy_bp: account_info.apy_bp,
 			restricted_balances: account_info.restricted_balances,
 			estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 		})

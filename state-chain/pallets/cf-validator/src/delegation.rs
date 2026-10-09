@@ -356,15 +356,6 @@ where
 	type Balance = T::Amount;
 	type AccountId = T::AccountId;
 
-	fn distribute(
-		epoch_index: EpochIndex,
-		reward_amount: Self::Balance,
-		beneficiary: &Self::AccountId,
-		settle: impl FnMut(&T::AccountId, T::Amount),
-	) {
-		distribute::<T>(epoch_index, beneficiary, reward_amount, settle);
-	}
-
 	fn distribute_all(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,

@@ -23,9 +23,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DepositApi, EgressApi,
-	FeePayment, FundAccount, FundingSource, GetMinimumFunding, LpStatsApi, PoolApi,
-	RefundAddressRegistry, ScheduledEgressDetails, SwapRequestHandler,
-	WithdrawalAddressRestriction,
+	FundAccount, FundingSource, GetMinimumFunding, LpStatsApi, PoolApi, RefundAddressRegistry,
+	ScheduledEgressDetails, SwapRequestHandler, WithdrawalAddressRestriction,
 };
 use frame_support::{
 	fail,
@@ -298,8 +297,6 @@ pub mod pallet {
 		InternalSwapsDisabled,
 		/// Transfers to the on-chain balance are disabled due to safe mode.
 		FlipTransferToOnChainBalanceDisabled,
-		/// Transfers to the on-chain balance are only available once Flip 2.1 is active.
-		FlipTransferToOnChainBalanceUnavailable,
 		/// The transferred amount is below the minimum funding amount.
 		BelowMinimumFunding,
 	}
@@ -609,14 +606,6 @@ pub mod pallet {
 				Error::<T>::FlipTransferToOnChainBalanceDisabled
 			);
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			// The on-chain balance is backed by Flip in the State Chain Gateway, whereas the free
-			// balance is backed by Flip in the Vault. Earmarked Flip is only egressed from the
-			// Vault to the Gateway at the end of an epoch, and only while Flip 2.1 is active.
-			ensure!(
-				T::FeePayment::is_flip_2_1_activated(),
-				Error::<T>::FlipTransferToOnChainBalanceUnavailable
-			);
 
 			ensure!(
 				amount >= T::MinimumFunding::get_min_funding_amount(),
