@@ -17,7 +17,7 @@
 use pallet_cf_reputation::HeartbeatQualification;
 use sp_std::collections::btree_set::BTreeSet;
 
-use crate::mock_runtime::{ExtBuilder, CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL};
+use crate::mock_runtime::ExtBuilder;
 
 use super::*;
 use cf_primitives::AccountRole;
@@ -96,8 +96,6 @@ fn state_of_genesis_is_as_expected() {
 			);
 		}
 
-		assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
-
 		assert_eq!(EvmThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
 		assert_eq!(PolkadotThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
 		assert_eq!(BitcoinThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
@@ -119,12 +117,6 @@ fn state_of_genesis_is_as_expected() {
 			pallet_cf_governance::ProposalIdCounter::<Runtime>::get(),
 			0,
 			"no proposal for governance"
-		);
-
-		assert_eq!(
-			Emissions::current_authority_emission_inflation(),
-			CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-			"invalid emission inflation for authorities"
 		);
 
 		for account in &accounts {

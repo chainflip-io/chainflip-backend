@@ -45,6 +45,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		balance_api::MockBalance,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
+		fee_payment::MockFeePayment,
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		pool_price_api::MockPoolPriceApi,
@@ -2259,7 +2260,7 @@ mod credit_flip_and_transfer {
 
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
-				assert_eq!(FlipToBurn::<Test>::get(), 0);
+				assert_eq!(MockFeePayment::<Test>::get_offchain_flip_to_be_distributed(), 0);
 				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
@@ -2277,7 +2278,7 @@ mod credit_flip_and_transfer {
 				);
 
 				assert_eq!(
-					FlipToBurn::<Test>::get(),
+					MockFeePayment::<Test>::get_offchain_flip_to_be_distributed(),
 					0i128.saturating_sub(
 						INITIAL_FLIP_FUNDING
 							.saturating_sub(EXPECTED_OUTPUT_AMOUNT)

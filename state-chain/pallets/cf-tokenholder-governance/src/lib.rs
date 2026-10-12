@@ -59,7 +59,7 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// Burns the proposal fee from the accounts.
+		/// Takes the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
 		/// Broadcasts the community key.
 		type CommKeyBroadcaster: CommKeyBroadcaster;

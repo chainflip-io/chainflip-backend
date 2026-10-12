@@ -28,7 +28,7 @@ use cf_utilities::assert_matches;
 use pallet_cf_environment::{AssethubVaultAccountId, SafeModeUpdate};
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	AssethubInstance, BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip,
+	AssethubInstance, BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner,
 	PolkadotCryptoInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin, SolanaInstance,
 	SolanaThresholdSigner, Validator,
 };
@@ -156,50 +156,6 @@ fn authority_rotates_with_correct_sequence() {
 				GENESIS_EPOCH + 2,
 				Validator::epoch_index(),
 				"We should be in the next epoch."
-			);
-		});
-}
-
-#[test]
-fn authorities_earn_rewards_for_authoring_blocks() {
-	// We want to have at least one heartbeat within our reduced epoch
-	const EPOCH_BLOCKS: u32 = 1000;
-	// Reduce our validating set and hence the number of nodes we need to have a backup
-	// set
-	const MAX_AUTHORITIES: AuthorityCount = 3;
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.build()
-		.execute_with(|| {
-			let genesis_authorities = Validator::current_authorities();
-			let (mut testnet, _) = network::Network::create(0, &genesis_authorities);
-
-			let funded_amounts = || {
-				genesis_authorities
-					.iter()
-					.map(|id| (id.clone(), Flip::total_balance_of(id)))
-					.collect()
-			};
-
-			let funded_amounts_before: Vec<(AccountId32, u128)> = funded_amounts();
-
-			// each authority should author a block and mint FLIP to themselves
-			testnet.move_forward_blocks(MAX_AUTHORITIES);
-
-			// Each node should have more rewards now than before, since they've each authored a
-			// block
-			let funded_amounts_after = funded_amounts();
-
-			// Ensure all nodes have increased the same amount
-			let first_amount = funded_amounts_after.first().unwrap().1;
-			funded_amounts_after.iter().all(|(_node, amount)| amount == &first_amount);
-
-			// Ensure all nodes have a higher balance than before
-			funded_amounts_before.into_iter().zip(funded_amounts_after).for_each(
-				|((_node, amount_before), (_node2, amount_after))| {
-					assert!(amount_before < amount_after)
-				},
 			);
 		});
 }

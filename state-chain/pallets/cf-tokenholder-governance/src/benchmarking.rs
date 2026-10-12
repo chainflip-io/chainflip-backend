@@ -40,7 +40,7 @@ mod benchmarks {
 		Proposals::<T>::insert(BlockNumberFor::<T>::from(1u32), proposal.clone());
 		let backers = (0..a).map(|i| account("doogle", i, 0)).collect::<BTreeSet<_>>();
 		for account in &backers {
-			T::FeePayment::mint_to_account(
+			T::FeePayment::credit_to_account(
 				account,
 				<T as Chainflip>::Amount::unique_saturated_from(50_000_000_000_000_000_000_000u128),
 			);
@@ -73,7 +73,7 @@ mod benchmarks {
 	#[benchmark]
 	fn submit_proposal() {
 		let caller: T::AccountId = whitelisted_caller();
-		T::FeePayment::mint_to_account(&caller, T::ProposalFee::get());
+		T::FeePayment::credit_to_account(&caller, T::ProposalFee::get());
 
 		#[extrinsic_call]
 		submit_proposal(RawOrigin::Signed(whitelisted_caller()), generate_proposal());

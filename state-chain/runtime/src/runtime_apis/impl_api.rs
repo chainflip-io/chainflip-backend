@@ -95,7 +95,6 @@ mod benches {
 		[pallet_timestamp, Timestamp]
 		[pallet_cf_environment, Environment]
 		[pallet_cf_flip, Flip]
-		[pallet_cf_emissions, Emissions]
 		[pallet_cf_funding, Funding]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
@@ -744,7 +743,7 @@ impl_runtime_apis! {
 			Validator::current_epoch_started_at()
 		}
 		fn cf_authority_emission_per_block() -> u128 {
-			Emissions::current_authority_emission_per_block()
+			0 // Emissions don't exist any more.
 		}
 		fn cf_backup_emission_per_block() -> u128 {
 			0 // Backups don't exist any more.
@@ -850,13 +849,6 @@ impl_runtime_apis! {
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
 			let is_bidding = Validator::is_bidding(account_id);
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
-			// Once FLIP 2.1 is active, we dont return apy anymore. We move to cf_reward_distribution_estimate
-			// for estimating rewards which can be used to calculate apy.
-			let apy_bp = if Flip::is_flip_2_1_activated() {
-				None
-			} else {
-				calculate_account_apy(account_id)
-			};
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
@@ -876,7 +868,6 @@ impl_runtime_apis! {
 				is_online: HeartbeatQualification::<Runtime>::is_qualified(account_id),
 				is_bidding,
 				bound_redeem_address,
-				apy_bp,
 				restricted_balances,
 				estimated_redeemable_balance,
 				operator: pallet_cf_validator::OperatorChoice::<Runtime>::get(account_id),
@@ -915,8 +906,6 @@ impl_runtime_apis! {
 
 		/// Projects each operator/validator/delegator's cumulative FLIP 2.1 fee-reward cut for the
 		/// in-progress epoch, as if the currently accumulated reserve were distributed right now.
-		/// Returns an empty reward pool (and zeroed pool amounts) if FLIP 2.1's fee-reward
-		/// distribution has not yet been activated for the current epoch.
 		fn cf_reward_distribution_estimate() -> RewardDistributionEstimate<FlipBalance> {
 			let epoch_index = Validator::current_epoch();
 			let current_block = System::block_number();
@@ -926,10 +915,8 @@ impl_runtime_apis! {
 			let authorities = pallet_cf_validator::CurrentAuthorities::<Runtime>::get();
 			let authority_count = authorities.len() as u32;
 
-			let is_active = epoch_index >= pallet_cf_flip::FeeRewardsActivationEpoch::<Runtime>::get();
-
 			let (total_rewards, per_authority_share, reward_pool) =
-				if is_active && authority_count > 0 {
+				if authority_count > 0 {
 					let total_rewards = Flip::pending_rewards();
 					let per_authority_share = total_rewards / authority_count as FlipBalance;
 

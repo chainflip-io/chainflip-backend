@@ -395,20 +395,20 @@ where
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>> {
-		let accounts_info = self
-			.rpc_backend
-			.with_versioned_api::<dyn MonitoringRuntimeApi<state_chain_runtime::Block>, _, _>(
-				at,
-				|api, hash, api_version| {
-					if api_version < 4 {
-						#[expect(deprecated)]
-						api.cf_accounts_info_before_version_4(hash, accounts)
-							.map(|accounts| accounts.into_iter().map(Into::into).collect())
-					} else {
-						api.cf_accounts_info(hash, accounts)
-					}
-				},
-			)?;
+		let accounts_info =
+			self.rpc_backend.with_versioned_runtime_api::<dyn MonitoringRuntimeApi<state_chain_runtime::Block>, _, _>(at, |api, hash, api_version| {
+				if api_version < 4 {
+					#[expect(deprecated)]
+					api.cf_accounts_info_before_version_4(hash, accounts)
+						.map(|accounts| accounts.into_iter().map(Into::into).collect())
+				} else if api_version < 6 {
+					#[expect(deprecated)]
+					api.cf_accounts_info_before_version_6(hash, accounts)
+						.map(|accounts| accounts.into_iter().map(Into::into).collect())
+				} else {
+					api.cf_accounts_info(hash, accounts)
+				}
+			})?;
 		Ok(accounts_info
 			.into_iter()
 			.map(|account_info| RpcAccountInfoV2 {
@@ -424,7 +424,6 @@ where
 				is_online: account_info.is_online,
 				is_bidding: account_info.is_bidding,
 				bound_redeem_address: account_info.bound_redeem_address,
-				apy_bp: account_info.apy_bp,
 				restricted_balances: account_info.restricted_balances,
 				estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 			})

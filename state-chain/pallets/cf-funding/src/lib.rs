@@ -334,7 +334,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
-	use cf_traits::{Issuance, RedemptionCheck};
+	use cf_traits::RedemptionCheck;
 	use frame_support::{pallet_prelude::*, storage::with_transaction, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -400,8 +400,7 @@ pub mod pallet {
 		/// The Flip token implementation.
 		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Amount>
 			+ AccountInfo<AccountId = Self::AccountId, Amount = Self::Amount>
-			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>
-			+ Issuance<Balance = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
+			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterRedemption>;
 
@@ -944,7 +943,7 @@ pub mod pallet {
 						amount < MinimumFunding::<T>::get().into()
 					{
 						// Insufficient funds to create an account.
-						T::Flip::burn_or_reserve_offchain(amount.into());
+						T::Flip::bridge_in_to_onchain_reserve(amount.into());
 						Self::deposit_event(Event::FailedFundingAttempt {
 							account_id: caller_account_id,
 							withdrawal_address: caller,

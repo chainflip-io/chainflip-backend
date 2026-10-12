@@ -99,12 +99,6 @@ pub mod common {
 	/// equivalent to 15 minutes.
 	pub const HEARTBEAT_BLOCK_INTERVAL: BlockNumber = 150;
 
-	/// The interval at which we update the per-block emission rate.
-	///
-	/// **Important**: If this constant is changed, we must also change
-	/// [CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL].
-	pub const COMPOUNDING_INTERVAL: u32 = HEARTBEAT_BLOCK_INTERVAL;
-
 	/// The multiplier used to convert transaction weight into fees paid by the validators.
 	///
 	/// This can be used to estimate the value we put on our block execution times. We have 6

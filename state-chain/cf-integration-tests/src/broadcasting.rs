@@ -18,13 +18,14 @@ use super::*;
 use cf_chains::{
 	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo},
 	eth::api::EthereumApi,
-	AllBatch, ApiCall, Bitcoin, ForeignChain, TransferAssetParams, UpdateFlipSupply,
+	AllBatch, ApiCall, Bitcoin, ForeignChain, RegisterRedemption, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::btc, AuthorityCount, BroadcastId};
 use cf_traits::{Broadcaster, EpochInfo};
 use pallet_cf_broadcast::{AwaitingBroadcast, DelayedBroadcastRetryQueue, PendingBroadcasts};
 use state_chain_runtime::{
-	BitcoinBroadcaster, BitcoinInstance, BitcoinThresholdSigner, Environment, Runtime, Validator,
+	chainflip::EvmEnvironment, BitcoinBroadcaster, BitcoinInstance, BitcoinThresholdSigner,
+	Environment, Runtime, Validator,
 };
 
 #[test]
@@ -135,17 +136,19 @@ fn bitcoin_broadcast_delay_works() {
 #[test]
 fn refresh_replay_protection() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
-		let mut api_call = <<Runtime as pallet_cf_emissions::Config>::ApiCall as UpdateFlipSupply<_>>::new_unsigned(1_000_000, 1);
+		let mut api_call = <EthereumApi<EvmEnvironment> as RegisterRedemption>::new_unsigned(
+			&[0u8; 32], 1_000_000, &[0u8; 20], 0, None,
+		);
 
 		let old_replay_protection = match &api_call {
-			EthereumApi::UpdateFlipSupply(call) => call.replay_protection(),
-			_ => unreachable!("Expected EthereumApi::UpdateFlipSupply"),
+			EthereumApi::RegisterRedemption(call) => call.replay_protection(),
+			_ => unreachable!("Expected EthereumApi::RegisterRedemption"),
 		};
 
 		api_call.refresh_replay_protection();
 		let new_replay_protection = match &api_call {
-			EthereumApi::UpdateFlipSupply(call) => call.replay_protection(),
-			_ => unreachable!("Expected EthereumApi::UpdateFlipSupply"),
+			EthereumApi::RegisterRedemption(call) => call.replay_protection(),
+			_ => unreachable!("Expected EthereumApi::RegisterRedemption"),
 		};
 
 		assert_ne!(old_replay_protection, new_replay_protection);

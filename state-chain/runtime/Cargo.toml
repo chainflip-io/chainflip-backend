@@ -44,7 +44,6 @@ pallet-cf-asset-balances = { workspace = true }
 pallet-cf-broadcast = { workspace = true }
 pallet-cf-chain-tracking = { workspace = true }
 pallet-cf-elections = { workspace = true }
-pallet-cf-emissions = { workspace = true }
 pallet-cf-environment = { workspace = true }
 pallet-cf-flip = { workspace = true }
 pallet-cf-governance = { workspace = true }
@@ -146,7 +145,6 @@ runtime-benchmarks = [
 	"pallet-cf-asset-balances/runtime-benchmarks",
 	"pallet-cf-broadcast/runtime-benchmarks",
 	"pallet-cf-chain-tracking/runtime-benchmarks",
-	"pallet-cf-emissions/runtime-benchmarks",
 	"pallet-cf-environment/runtime-benchmarks",
 	"pallet-cf-elections/runtime-benchmarks",
 	"pallet-cf-flip/runtime-benchmarks",
@@ -195,7 +193,6 @@ std = [
 	"pallet-cf-broadcast/std",
 	"pallet-cf-chain-tracking/std",
 	"pallet-cf-elections/std",
-	"pallet-cf-emissions/std",
 	"pallet-cf-environment/std",
 	"pallet-cf-flip/std",
 	"pallet-cf-funding/std",
@@ -249,7 +246,6 @@ try-runtime = [
 	"pallet-cf-broadcast/try-runtime",
 	"pallet-cf-chain-tracking/try-runtime",
 	"pallet-cf-elections/try-runtime",
-	"pallet-cf-emissions/try-runtime",
 	"pallet-cf-environment/try-runtime",
 	"pallet-cf-flip/try-runtime",
 	"pallet-cf-governance/try-runtime",
