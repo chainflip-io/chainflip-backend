@@ -59,7 +59,7 @@ use pallet_cf_elections::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use sp_core::{Decode, Encode, Get};
+use sp_core::{Decode, Encode, Get, H256};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
@@ -82,9 +82,10 @@ pub type AssethubWitnessBatchNumber = BlockWitnessRange<Assethub>;
 define_empty_struct! { pub struct AssethubChain; }
 impl ChainTypes for AssethubChain {
 	type ChainBlockNumber = AssethubWitnessBatchNumber;
-	// block numbers are unique identifiers because we only use finalized blocks,
-	// so we can use them for the purpose of "hashes"
-	type ChainBlockHash = AssethubWitnessBatchNumber;
+	// The hash of a witness range is the hash of its last block, and its parent hash is the parent
+	// hash of its first block. Even though we only witness finalized blocks, real hashes keep the
+	// reorg detection of the BHW and the hash checks of the BW meaningful.
+	type ChainBlockHash = H256;
 	const NAME: &'static str = "Assethub";
 }
 
