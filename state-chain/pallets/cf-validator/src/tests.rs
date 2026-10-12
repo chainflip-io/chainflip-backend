@@ -2224,6 +2224,30 @@ mod operator {
 	}
 
 	#[test]
+	fn cannot_accept_claim_of_deregistered_operator() {
+		const OP: u64 = 1001;
+		const V: u64 = 2001;
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V)));
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP), V));
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(OP)));
+
+			assert_noop!(
+				ValidatorPallet::accept_operator(OriginTrait::signed(V), OP),
+				Error::<Test>::NotOperator
+			);
+			assert!(OperatorChoice::<Test>::get(V).is_none());
+			assert!(ManagedValidators::<Test>::get(OP).is_empty());
+		});
+	}
+
+	#[test]
 	fn max_validators_per_operator_cannot_be_bypassed_via_accept() {
 		const OP: u64 = 1001;
 		// One more than the cap, to prove the bound holds.

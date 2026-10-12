@@ -1059,6 +1059,11 @@ pub mod pallet {
 				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
 			);
+			// Claims outlive the claimant's deregistration as operator.
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&operator, AccountRole::Operator),
+				Error::<T>::NotOperator
+			);
 			ensure!(
 				ManagedValidators::<T>::get(&operator).len() < MAX_VALIDATORS_PER_OPERATOR,
 				Error::<T>::TooManyValidators
