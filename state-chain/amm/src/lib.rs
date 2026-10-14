@@ -70,6 +70,37 @@ pub struct SwapOutcome<LiquidityProvider> {
 	/// Consumed input left over after rounding limit-order proceeds. The caller must account for
 	/// it as protocol-owned surplus; it is not owed to an LP or available for another swap.
 	pub limit_order_input_dust: Amount,
+	/// How many limit orders where ignored because they where too small and the anti-spam measures
+	/// activated.
+	pub excluded_limit_order_count: u32,
+	/// The worst price the swap traded at, which is where its last fill was. Limit orders the
+	/// swap passed over can leave the pool's price better than this. `None` if it traded nothing.
+	pub last_sqrt_price: Option<SqrtPrice>,
+}
+
+/// Whether to limit the number of orders the swap execution can use in total.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MaxFills {
+	/// Limit to [limit_orders::MAX_FILLS_PER_SWAP] in total. Anti-spam measures enabled.
+	Bounded,
+	/// No limit. Used for a true pool simulation, not for normal operation. Anti-spam measures
+	/// disabled.
+	Unbounded,
+}
+
+/// What one swap has taken from the pool's limit orders so far, and what it will take next.
+struct LimitOrderSwaps<LiquidityProvider> {
+	/// Track the number of fills the swap has used so far
+	quota: limit_orders::FillQuota,
+	/// The best price the limit orders still offer this swap, `None` once they offer it nothing.
+	best_sqrt_price: Option<SqrtPrice>,
+	/// The fills that need to be paid out
+	fills: Vec<limit_orders::Fill<LiquidityProvider>>,
+	/// Collected rounding dust to go to the protocol
+	input_dust: Amount,
+	/// How many limit orders where ignored because they where too small and the anti-spam measures
+	/// activated.
+	excluded_orders: u32,
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
@@ -241,10 +272,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		sold_amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
+		max_fills: MaxFills,
 	) -> SwapOutcome<LiquidityProvider> {
 		match order.to_sold_pair() {
-			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, sqrt_price_limit),
-			Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, sqrt_price_limit),
+			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, sqrt_price_limit, max_fills),
+			Pairs::Quote =>
+				self.inner_swap::<QuoteToBase>(sold_amount, sqrt_price_limit, max_fills),
 		}
 	}
 
@@ -254,20 +287,31 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
+		max_fills: MaxFills,
 	) -> SwapOutcome<LiquidityProvider> {
 		let mut total_output_amount = Amount::zero();
-		let mut limit_order_fills = Vec::new();
-		let mut limit_order_input_dust = Amount::zero();
 
 		let range_orders_fee = self.range_orders.fee_hundredth_pips;
 
+		// Track the Limit order fills and the best price.
+		let mut progress = LimitOrderSwaps {
+			best_sqrt_price: self.limit_orders.current_sqrt_price::<SD>(),
+			quota: limit_orders::FillQuota::new(max_fills),
+			fills: Vec::new(),
+			input_dust: Amount::zero(),
+			excluded_orders: 0,
+		};
+		let mut last_sqrt_price = None;
+
 		while !amount.is_zero() {
-			let limit_orders_sqrt_price =
-				self.limit_orders.current_sqrt_price::<SD>().filter(|sqrt_price| {
-					sqrt_price_limit.is_none_or(|sqrt_price_limit| {
-						!SD::sqrt_price_op_more_than(*sqrt_price, sqrt_price_limit)
-					})
-				});
+			let state_before =
+				(progress.best_sqrt_price, self.range_orders.raw_current_sqrt_price(), amount);
+
+			let limit_orders_sqrt_price = progress.best_sqrt_price.filter(|sqrt_price| {
+				sqrt_price_limit.is_none_or(|sqrt_price_limit| {
+					!SD::sqrt_price_op_more_than(*sqrt_price, sqrt_price_limit)
+				})
+			});
 
 			let range_orders_sqrt_price =
 				self.range_orders.current_sqrt_price::<SD>().filter(|sqrt_price| {
@@ -287,14 +331,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				)
 			});
 
-			let (output_amount, remaining_amount) =
+			let (output_amount, remaining_amount, last_traded_sqrt_price) =
 				match (limit_orders_sqrt_price, range_orders_sqrt_price) {
 					(Some(limit_order_sqrt_price), Some(range_orders_sqrt_price)) => {
 						if SD::sqrt_price_op_more_than(
 							limit_order_sqrt_price,
 							range_orders_sqrt_price,
 						) {
-							self.range_orders.swap::<SD>(amount, Some(limit_order_sqrt_price))
+							self.swap_range_orders::<SD>(amount, Some(limit_order_sqrt_price))
 						} else {
 							// Note it is important that in the equal price case we prefer to swap
 							// limit orders as if we do a swap with range_orders where the
@@ -307,8 +351,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 								amount,
 								Some(range_orders_sqrt_price),
 								range_orders_fee,
-								&mut limit_order_fills,
-								&mut limit_order_input_dust,
+								&mut progress,
 							)
 						}
 					},
@@ -316,22 +359,32 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						amount,
 						sqrt_price_limit,
 						range_orders_fee,
-						&mut limit_order_fills,
-						&mut limit_order_input_dust,
+						&mut progress,
 					),
-					(None, Some(_)) => self.range_orders.swap::<SD>(amount, sqrt_price_limit),
+					(None, Some(_)) => self.swap_range_orders::<SD>(amount, sqrt_price_limit),
 					(None, None) => break,
 				};
 
+			last_sqrt_price = last_traded_sqrt_price.or(last_sqrt_price);
 			amount = remaining_amount;
 			total_output_amount = total_output_amount.saturating_add(output_amount);
+
+			// Every iteration either spends input or moves a sub-pool's price, so if neither
+			// happens, we are done.
+			if state_before ==
+				(progress.best_sqrt_price, self.range_orders.raw_current_sqrt_price(), amount)
+			{
+				break
+			}
 		}
 
 		SwapOutcome {
 			output_amount: total_output_amount,
 			remaining_input_amount: amount,
-			limit_order_fills,
-			limit_order_input_dust,
+			limit_order_fills: progress.fills,
+			limit_order_input_dust: progress.input_dust,
+			excluded_limit_order_count: progress.excluded_orders,
+			last_sqrt_price,
 		}
 	}
 
@@ -340,13 +393,40 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
 		range_orders_fee: u32,
-		fills: &mut Vec<limit_orders::Fill<LiquidityProvider>>,
-		input_dust: &mut Amount,
-	) -> (Amount, Amount) {
-		let outcome = self.limit_orders.swap::<SD>(amount, sqrt_price_limit, range_orders_fee);
-		fills.extend(outcome.limit_order_fills);
-		*input_dust = input_dust.saturating_add(outcome.limit_order_input_dust);
-		(outcome.output_amount, outcome.remaining_input_amount)
+		progress: &mut LimitOrderSwaps<LiquidityProvider>,
+	) -> (Amount, Amount, Option<SqrtPrice>) {
+		let limit_orders::SwapOutcome { outcome, next_fillable_sqrt_price } =
+			self.limit_orders.swap::<SD>(
+				amount,
+				sqrt_price_limit,
+				range_orders_fee,
+				&mut progress.quota,
+				progress.best_sqrt_price,
+			);
+
+		progress.best_sqrt_price = next_fillable_sqrt_price;
+		progress.fills.extend(outcome.limit_order_fills);
+		progress.input_dust = progress.input_dust.saturating_add(outcome.limit_order_input_dust);
+		progress.excluded_orders =
+			progress.excluded_orders.saturating_add(outcome.excluded_limit_order_count);
+
+		(outcome.output_amount, outcome.remaining_input_amount, outcome.last_sqrt_price)
+	}
+
+	fn swap_range_orders<SD: range_orders::SwapDirection>(
+		&mut self,
+		amount: Amount,
+		sqrt_price_limit: Option<SqrtPrice>,
+	) -> (Amount, Amount, Option<SqrtPrice>) {
+		let (output_amount, remaining_amount) =
+			self.range_orders.swap::<SD>(amount, sqrt_price_limit);
+		// Range orders trade along their curve, so where they are left is the last price traded.
+		let last_sqrt_price = if remaining_amount != amount {
+			Some(self.range_orders.raw_current_sqrt_price())
+		} else {
+			None
+		};
+		(output_amount, remaining_amount, last_sqrt_price)
 	}
 
 	/// Adds `sold_amount` to the lp's order at the given tick, creating it if it doesn't exist
@@ -467,7 +547,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		order: Side,
 		tick: Tick,
-	) -> Result<Option<limit_orders::Position>, limit_orders::PositionError> {
+	) -> Option<limit_orders::Position> {
 		match order {
 			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
 			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),
