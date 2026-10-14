@@ -24,12 +24,14 @@ use sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+pub mod fund_recovery;
 pub mod liveness_election_state;
 pub mod reap_old_accounts;
 pub mod solana_remove_unused_channels_state;
 
 pub type Migration = (
 	NetworkSpecificHousekeeping,
+	fund_recovery::Migration,
 	reap_old_accounts::Migration,
 	// Can be removed once Solana address re-use is activated.
 	solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
