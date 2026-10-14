@@ -28,6 +28,16 @@ jobs:
           pattern: chainflip-backend-bin*
           merge-multiple: false
 
+      # download-artifact (v5+) skips the per-artifact directory when the pattern matches a single
+      # artifact. Callers depend on `build`, so a lone match is always chainflip-backend-bin.
+      - name: Nest single artifact 📁
+        run: |
+          if [[ ! -d artifacts/chainflip-backend-bin ]]; then
+            mv artifacts chainflip-backend-bin
+            mkdir artifacts
+            mv chainflip-backend-bin artifacts/
+          fi
+
       - name: Set Version 🔦
         id: version
         run: |
