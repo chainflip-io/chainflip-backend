@@ -1498,6 +1498,12 @@ export interface ChainErrors extends GenericChainErrors {
     BelowMinimumFunding: GenericPalletError;
 
     /**
+     * An account with a withdrawal whitelist must bind a whitelisted redeem address before
+     * moving Flip to its on-chain balance.
+     **/
+    RedeemAddressNotBound: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
