@@ -88,6 +88,9 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0258: h2 unbounded empty DATA frames. Low severity DoS. Patched where possible, but still some transitive dependencies are unpatched.
 # - RUSTSEC-2026-0269: Wasmtime issue that relies on accessing the file system and the presence of symlinks with trailing slashes.
 # - RUSTSEC-2026-0316: Wasmtime component model record lifting can allocate beyond the hostcall fuel limit. Low severity; the `component-model` feature is not enabled and we don't control the wasmtime version. Dependency of substrate.
+# - RUSTSEC-2026-0344: ruzstd decompression bomb. Only required by `smoldot`, which is in the lockfile but never compiled.
+# - RUSTSEC-2026-0346: rustls 0.21 `Debug` of client session values leaks secrets. Only affects custom `ClientSessionStore`s; 0.21 is pulled in by reqwest 0.11 via our ethers fork, which uses the default store.
+# - RUSTSEC-2026-0349: rustls 0.21 ServerHello downgrade from post-quantum key exchange. 0.21 has no post-quantum groups, so there is nothing to downgrade from.
 
 #
 cf-audit = '''
@@ -143,6 +146,9 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0258
 	--ignore RUSTSEC-2026-0269
 	--ignore RUSTSEC-2026-0316
+	--ignore RUSTSEC-2026-0344
+	--ignore RUSTSEC-2026-0346
+	--ignore RUSTSEC-2026-0349
 '''
 
 [build]
