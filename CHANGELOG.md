@@ -2,6 +2,23 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.19] - 2026-10-14
+
+### Fixes
+
+- Keep pending auction stake locked until the new epoch bonds it.
+- Don't panic on a missing redemption reserve when witnessing a redemption.
+- Don't panic when delegating to an operator with missing settings.
+- Keep accounts with a pending redemption alive until the redemption is settled.
+- Return UTXOs to the pool when consolidating them isn't worth the fee.
+- Keep egress fees withheld during reconciliation.
+- Engine: don't panic on a `SignatureAccepted` event from a contract creation (EVM and Tron).
+- Only accept GRANDPA equivocation reports against the current validators.
+- Limit SC Utils calls to 100 bytes.
+- Refund the fee of an external transaction at most once.
+- Don't let a single authority set the `MonotonicChange` block height.
+- Don't let a validator accept a deregistered operator.
+
 ## [2.2.18] - 2026-10-08
 
 ## Fixes
