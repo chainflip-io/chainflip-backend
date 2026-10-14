@@ -1165,6 +1165,26 @@ mod transfer_flip_to_on_chain_balance {
 		});
 	}
 
+	#[test]
+	fn withdrawal_safe_mode_prevents_transfers() {
+		new_test_ext().execute_with(|| {
+			setup(min_funding());
+
+			MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+				liquidity_provider: PalletSafeMode {
+					withdrawal_enabled: false,
+					..PalletSafeMode::code_green()
+				},
+			});
+			assert_err!(transfer(min_funding()), Error::<Test>::WithdrawalsDisabled);
+
+			MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+				liquidity_provider: PalletSafeMode::code_green(),
+			});
+			assert_ok!(transfer(min_funding()));
+		});
+	}
+
 	mod restricted_account {
 		use super::*;
 		use cf_chains::AccountOrAddress;

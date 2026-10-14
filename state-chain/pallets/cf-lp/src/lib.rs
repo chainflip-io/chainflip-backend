@@ -618,6 +618,9 @@ pub mod pallet {
 				T::SafeMode::get().flip_to_on_chain_balance_enabled,
 				Error::<T>::FlipTransferToOnChainBalanceDisabled
 			);
+			// Funds on the on-chain balance can be redeemed, so the transfer is also a way out of
+			// the free balance.
+			ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			ensure!(
