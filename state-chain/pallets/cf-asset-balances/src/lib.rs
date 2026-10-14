@@ -773,6 +773,29 @@ impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
 		Ok(())
 	}
 
+	fn is_restricted(owner: &Self::AccountId) -> bool {
+		WithdrawalWhitelists::<T>::contains_key(owner)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_worst_case_whitelist(owner: &Self::AccountId, allowed: ForeignChainAddress) {
+		let max_entries = MaxWhitelistEntries::<T>::get();
+		Self::mutate_whitelist(owner, |whitelist| {
+			for i in 0..max_entries.saturating_sub(1) {
+				let _ = whitelist.apply_change(
+					&WhitelistChange::Allow(AccountOrAddress::InternalAccount(
+						frame_benchmarking::account("filler", i, 0),
+					)),
+					max_entries,
+				);
+			}
+			let _ = whitelist.apply_change(
+				&WhitelistChange::Allow(AccountOrAddress::ExternalAddress(allowed)),
+				max_entries,
+			);
+		});
+	}
+
 	fn bind_broker_withdrawal_address(
 		owner: &Self::AccountId,
 		address: cf_chains::evm::Address,
