@@ -18,6 +18,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Refund the fee of an external transaction at most once.
 - Don't let a single authority set the `MonotonicChange` block height.
 - Don't let a validator accept a deregistered operator.
+- Refresh Solana ingress election totals after ready consensus changes, so a temporary balance regression does not leave a stale vote baseline that suppresses fresh ingress votes.
 
 ## [2.2.18] - 2026-10-08
 
