@@ -584,6 +584,11 @@ export const cfChainsChainStateEthereum = z.object({
   trackedData: cfChainsEthEthereumTrackedData,
 });
 
+export const palletCfChainTrackingPalletConfigUpdate = z.object({
+  __kind: z.literal('FeeMultiplier'),
+  multiplier: numberOrHex,
+});
+
 export const cfChainsDotRuntimeVersion = z.object({
   specVersion: z.number(),
   transactionVersion: z.number(),

@@ -17,7 +17,6 @@ import type {
   AccountId32Like,
   FixedBytes,
   Percent,
-  FixedU128,
   Result,
 } from 'dedot/codecs';
 import type {
@@ -54,6 +53,7 @@ import type {
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
   CfChainsChainState,
+  PalletCfChainTrackingPalletConfigUpdate,
   CfChainsChainStatePolkadot,
   CfChainsChainStateBitcoin,
   CfChainsEvmAggKey,
@@ -2293,19 +2293,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'EthereumChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -2340,19 +2340,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'PolkadotChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -2387,19 +2387,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'BitcoinChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -5245,19 +5245,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'ArbitrumChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -6725,19 +6725,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'SolanaChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -6840,19 +6840,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'AssethubChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -9056,19 +9056,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'TronChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -9884,19 +9884,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'BscChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
