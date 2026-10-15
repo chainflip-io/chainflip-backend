@@ -1631,7 +1631,7 @@ dependencies = [
  "chainflip-node",
  "custom-rpc",
  "frame-executive",
- "frame-metadata 16.0.0",
+ "frame-metadata",
  "frame-metadata-hash-extension",
  "frame-support",
  "frame-system",
@@ -1703,7 +1703,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-traits",
- "frame-metadata 16.0.0",
+ "frame-metadata",
  "frame-metadata-hash-extension",
  "frame-support",
  "frame-system",
@@ -2104,7 +2104,7 @@ dependencies = [
  "engine-sc-client",
  "engine-upgrade-utils",
  "ethers",
- "frame-metadata 16.0.0",
+ "frame-metadata",
  "frame-metadata-hash-extension",
  "frame-support",
  "frame-system",
@@ -4974,7 +4974,7 @@ version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e56c0e51972d7b26ff76966c4d0f2307030df9daa5ce0885149ece1ab7ca5ad"
 dependencies = [
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "parity-scale-codec",
  "scale-decode",
  "scale-info",
@@ -4988,7 +4988,7 @@ version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9a9e93cab13c8e9a6accf029997d19943cf54fea5f5eb028a1133b7179d06aa"
 dependencies = [
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "parity-scale-codec",
  "scale-decode",
  "scale-encode",
@@ -5048,18 +5048,6 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata"
-version = "16.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87cf1549fba25a6fcac22785b61698317d958e96cac72a59102ea45b9ae64692"
-dependencies = [
- "cfg-if",
- "parity-scale-codec",
- "scale-info",
- "serde",
-]
-
-[[package]]
-name = "frame-metadata"
 version = "23.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ba5be0edbdb824843a0f9c6f0906ecfc66c5316218d74457003218b24909ed0"
@@ -5112,7 +5100,7 @@ dependencies = [
  "derive-where",
  "docify",
  "environmental",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "frame-support-procedural",
  "impl-trait-for-tuples",
  "k256",
@@ -8147,7 +8135,7 @@ checksum = "b3e3e3f549d27d2dc054372f320ddf68045a833fab490563ff70d4cf1b9d91ea"
 dependencies = [
  "array-bytes 9.3.0",
  "blake3",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "parity-scale-codec",
  "scale-decode",
  "scale-info",
@@ -14865,7 +14853,7 @@ version = "0.6.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
 dependencies = [
  "derive-where",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "parity-scale-codec",
  "scale-info",
 ]
@@ -15641,7 +15629,7 @@ dependencies = [
  "cargo_metadata 0.15.4",
  "console",
  "filetime",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "jobserver",
  "merkleized-metadata",
  "parity-scale-codec",
@@ -15682,7 +15670,7 @@ dependencies = [
  "async-trait",
  "derive-where",
  "either",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "futures",
  "hex",
  "jsonrpsee",
@@ -15720,7 +15708,7 @@ dependencies = [
  "derive-where",
  "either",
  "frame-decode 0.18.1",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "futures",
  "hex",
  "impl-serde 0.5.0",
@@ -15793,7 +15781,7 @@ dependencies = [
  "blake2 0.10.6",
  "derive-where",
  "frame-decode 0.8.3",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "hashbrown 0.14.5",
  "hex",
  "impl-serde 0.5.0",
@@ -15888,7 +15876,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "243990ca4e0cdb74ef7458f1d5070a1bd5144d744cc146f23a32ab56d23e1db7"
 dependencies = [
  "frame-decode 0.8.3",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "hashbrown 0.14.5",
  "parity-scale-codec",
  "scale-info",
@@ -15903,7 +15891,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "359dd3c5fd2dc4ec70411e7e0bb5ebd4c529acbafc2c932030e3181672b1149f"
 dependencies = [
  "frame-decode 0.18.1",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "hashbrown 0.14.5",
  "parity-scale-codec",
  "scale-info",
@@ -15920,7 +15908,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55313e3652f5360b5ed878bfe1d62fe181ecb8c130c81278ab89d1580f89a7ed"
 dependencies = [
  "derive-where",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "futures",
  "hex",
  "impl-serde 0.5.0",
@@ -15944,7 +15932,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae25b936ce2002aeaf42b8a8c7e3bb8f20dfd9213fec33971163239097bd1d47"
 dependencies = [
  "derive-where",
- "frame-metadata 23.0.1",
+ "frame-metadata",
  "futures",
  "hex",
  "impl-serde 0.5.0",
