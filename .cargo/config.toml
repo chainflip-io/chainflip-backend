@@ -88,6 +88,10 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0258: h2 unbounded empty DATA frames. Low severity DoS. Patched where possible, but still some transitive dependencies are unpatched.
 # - RUSTSEC-2026-0269: Wasmtime issue that relies on accessing the file system and the presence of symlinks with trailing slashes.
 # - RUSTSEC-2026-0316: Wasmtime component model record lifting can allocate beyond the hostcall fuel limit. Low severity; the `component-model` feature is not enabled and we don't control the wasmtime version. Dependency of substrate.
+# - RUSTSEC-2026-0344: ruzstd decompression bomb. Only reachable via `subxt-lightclient` -> `smoldot`, which we don't compile; smoldot pins ruzstd below the patched 0.9.1.
+# - RUSTSEC-2026-0346: rustls `Debug` impls of client session values expose secrets. Only affects custom `ClientSessionStore`s that log them, which we don't have. 0.23 is patched; the unpatched 0.21 comes from our ethers fork.
+# - RUSTSEC-2026-0349: rustls key-share prediction can downgrade from post-quantum to classical key exchange. We only use the `ring` provider, which has no post-quantum group. 0.23 is patched; the unpatched 0.21 comes from our ethers fork.
+# - RUSTSEC-2026-0363: Wasmtime component-model handle tables are uncapped. The `component-model` feature is not enabled and we don't control the wasmtime version. Dependency of substrate.
 
 #
 cf-audit = '''
@@ -143,6 +147,10 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0258
 	--ignore RUSTSEC-2026-0269
 	--ignore RUSTSEC-2026-0316
+	--ignore RUSTSEC-2026-0344
+	--ignore RUSTSEC-2026-0346
+	--ignore RUSTSEC-2026-0349
+	--ignore RUSTSEC-2026-0363
 '''
 
 [build]
