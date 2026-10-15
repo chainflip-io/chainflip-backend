@@ -7,6 +7,8 @@
 // --semver_restriction <json>: JSON semver restriction, e.g. '{"major":1,"minor":2,"patch":3}'. Optional.
 // --percent_nodes <number>: Percentage of nodes that must be on the new binary before the upgrade proceeds. Optional.
 // --try_runtime: Run try-runtime checks before submitting the upgrade. Defaults to false.
+// --warmer_lead_time_ms <number>: Approve via a temporary two-member council after this delay,
+//   giving the node's runtime warmer time to pre-compile the new runtime. Optional.
 //
 // Examples:
 // ./commands/submit_runtime_upgrade.ts --runtime ./state_chain_runtime.compact.compressed.wasm
@@ -16,6 +18,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
 import { runWithTimeoutAndExit } from 'shared/utils';
+import { submitRuntimeUpgradeWithWarmerLeadTime } from 'shared/upgrade_network';
 import { globalLogger } from 'shared/utils/logger';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 
@@ -40,6 +43,10 @@ async function main() {
       type: 'boolean',
       default: false,
     })
+    .option('warmer_lead_time_ms', {
+      describe: 'Approve via a two-member council after this delay so the runtime warmer can run',
+      type: 'number',
+    })
     .help().argv;
 
   const semverRestriction = argv.semver_restriction
@@ -47,6 +54,15 @@ async function main() {
     : undefined;
 
   const cf = await newChainflipIO(globalLogger, []);
+  if (argv.warmer_lead_time_ms !== undefined) {
+    await submitRuntimeUpgradeWithWarmerLeadTime(
+      cf,
+      argv.runtime,
+      argv.try_runtime,
+      argv.warmer_lead_time_ms,
+    );
+    return;
+  }
   await submitRuntimeUpgradeWithRestrictions(
     cf,
     argv.runtime,

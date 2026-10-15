@@ -212,17 +212,14 @@ export async function restartDepositMonitorAndLpAndBrokerApi(
 // warmer time to pre-compile the new wasm before `set_code` runs.
 const RUNTIME_WARMER_LEAD_TIME_MS = 30_000;
 
-async function upgradeNoBuild<A = []>(
+// Submits a runtime upgrade via a temporary two-member council, so the proposal sits in
+// `Proposals` for `leadTimeMs` before execution and the node's runtime warmer can pre-compile it.
+export async function submitRuntimeUpgradeWithWarmerLeadTime<A = []>(
   cf: ChainflipIO<A>,
-  localnetInitPath: string,
-  binaryPath: string,
   runtimePath: string,
-  numberOfNodes: 1 | 3 = 1,
+  tryRuntime: boolean,
+  leadTimeMs = RUNTIME_WARMER_LEAD_TIME_MS,
 ) {
-  await upgradeBinaries(cf, localnetInitPath, binaryPath, numberOfNodes);
-
-  // Expand to a two-member council so the upgrade proposal sits in `Proposals`
-  // long enough for the warmer to pre-compile the new wasm.
   cf.info(
     `Expanding governance council to {snowWhite, ${secondGovernanceMember.address}} (threshold 2).`,
   );
@@ -233,9 +230,9 @@ async function upgradeNoBuild<A = []>(
   });
 
   try {
-    await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, true, {
+    await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, tryRuntime, {
       account: secondGovernanceMember,
-      leadTimeMs: RUNTIME_WARMER_LEAD_TIME_MS,
+      leadTimeMs,
     });
   } finally {
     // Restore single-member council. `cf.submitGovernance` assumes 1/1 approvals
@@ -248,6 +245,18 @@ async function upgradeNoBuild<A = []>(
     await submitGovernanceApproval(restoreProposalId, secondGovernanceMember, cf.logger);
     await cf.stepUntilEvent(governanceNewGovernanceCouncilEvent);
   }
+}
+
+async function upgradeNoBuild<A = []>(
+  cf: ChainflipIO<A>,
+  localnetInitPath: string,
+  binaryPath: string,
+  runtimePath: string,
+  numberOfNodes: 1 | 3 = 1,
+) {
+  await upgradeBinaries(cf, localnetInitPath, binaryPath, numberOfNodes);
+
+  await submitRuntimeUpgradeWithWarmerLeadTime(cf, runtimePath, true);
 
   await restartDepositMonitorAndLpAndBrokerApi(localnetInitPath, binaryPath, cf.logger);
 }
