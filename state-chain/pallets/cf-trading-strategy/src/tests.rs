@@ -668,6 +668,32 @@ fn strategy_deployment_validation() {
 				Error::<Test>::InvalidTick
 			);
 		}
+
+		// TickZeroCentered and SimpleBuySell require the base asset to have the same decimals as
+		// the quote asset.
+		{
+			assert_ne!(Asset::Btc.decimals(), QUOTE_ASSET.decimals());
+			for strategy in [
+				TradingStrategy::TickZeroCentered {
+					spread_tick: SPREAD_TICK,
+					base_asset: Asset::Btc,
+				},
+				TradingStrategy::SimpleBuySell {
+					buy_tick: -10,
+					sell_tick: 10,
+					base_asset: Asset::Btc,
+				},
+			] {
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						strategy,
+						[(Asset::Btc, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidAssetsForStrategy
+				);
+			}
+		}
 		// Inventory based strategy & oracle
 		{
 			// Invalid tick ranges
@@ -797,6 +823,52 @@ fn strategy_deployment_validation() {
 				),
 				Error::<Test>::InvalidAssetsForStrategy
 			);
+		}
+	});
+}
+
+#[test]
+fn strategy_ticks_must_be_near_zero() {
+	const MAX: Tick = MAX_STRATEGY_TICK;
+
+	let strategies = |low: Tick, high: Tick| {
+		[
+			TradingStrategy::TickZeroCentered { spread_tick: high, base_asset: BASE_ASSET },
+			TradingStrategy::SimpleBuySell {
+				buy_tick: low,
+				sell_tick: high,
+				base_asset: BASE_ASSET,
+			},
+			TradingStrategy::InventoryBased {
+				min_buy_tick: low,
+				max_buy_tick: 0,
+				min_sell_tick: 0,
+				max_sell_tick: high,
+				base_asset: BASE_ASSET,
+			},
+			TradingStrategy::OracleTracking {
+				min_buy_offset_tick: low,
+				max_buy_offset_tick: 0,
+				min_sell_offset_tick: 0,
+				max_sell_offset_tick: high,
+				base_asset: BASE_ASSET,
+				quote_asset: QUOTE_ASSET,
+			},
+		]
+	};
+
+	new_test_ext().execute_with(|| {
+		MockPriceFeedApi::set_price_usd(BASE_ASSET, 1);
+
+		for strategy in strategies(-MAX, MAX) {
+			assert_ok!(strategy.validate_params::<Test>());
+		}
+		// TickZeroCentered has no negative tick, so only the upper bound applies to it.
+		for strategy in strategies(-MAX, MAX + 1)
+			.into_iter()
+			.chain(strategies(-MAX - 1, MAX).into_iter().skip(1))
+		{
+			assert!(matches!(strategy.validate_params::<Test>(), Err(Error::<Test>::InvalidTick)));
 		}
 	});
 }

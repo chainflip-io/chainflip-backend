@@ -68,6 +68,19 @@ const STRATEGY_ORDER_ID_1: OrderId = 1;
 /// for the other pallets' `on_idle` hooks (which run after this one on the remainder).
 const ON_IDLE_WEIGHT_PERCENT: u64 = 50;
 
+/// Strategies assume the two assets are roughly equal in value (or, for `OracleTracking`, that
+/// ticks are offsets from the oracle price), so configured ticks must stay close to zero. ~10%.
+/// Even non-oracle InventoryBased strategies using assets of different decimals are adjusted to be
+/// equivalent in value, so the tick ranges are still relative to the 1:1 price and must stay close
+/// to zero.
+pub const MAX_STRATEGY_TICK: Tick = 1_000;
+
+/// An absolute limit on the ticks that can be configured for a strategy. This is a sanity check to
+/// prevent misconfiguration.
+fn is_strategy_tick_valid(tick: Tick) -> bool {
+	(-MAX_STRATEGY_TICK..=MAX_STRATEGY_TICK).contains(&tick)
+}
+
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
 
 #[derive(Debug, PartialEq, Eq)]
@@ -186,21 +199,30 @@ impl TradingStrategy {
 	fn validate_params<T: Config>(&self) -> Result<(), Error<T>> {
 		match self {
 			TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
-				if *spread_tick < 0 || *spread_tick > cf_amm_math::MAX_TICK {
+				if *spread_tick < 0 || !is_strategy_tick_valid(*spread_tick) {
 					return Err(Error::<T>::InvalidTick)
 				}
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+				// Centering on tick zero assumes both assets have the same decimals.
+				ensure!(
+					base_asset.decimals() == STABLE_ASSET.decimals(),
+					Error::<T>::InvalidAssetsForStrategy
+				);
 			},
 			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } => {
 				if buy_tick >= sell_tick ||
-					*buy_tick > cf_amm_math::MAX_TICK ||
-					*sell_tick > cf_amm_math::MAX_TICK ||
-					*buy_tick < cf_amm_math::MIN_TICK ||
-					*sell_tick < cf_amm_math::MIN_TICK
+					!is_strategy_tick_valid(*buy_tick) ||
+					!is_strategy_tick_valid(*sell_tick)
 				{
 					return Err(Error::<T>::InvalidTick)
 				}
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+				// Absolute ticks are easily mistaken for being relative to price parity, which only
+				// holds when both assets have the same decimals.
+				ensure!(
+					base_asset.decimals() == STABLE_ASSET.decimals(),
+					Error::<T>::InvalidAssetsForStrategy
+				);
 			},
 			TradingStrategy::InventoryBased {
 				min_buy_tick,
@@ -1162,10 +1184,9 @@ fn validate_inventory_tick_ranges<T: Config>(
 		min_sell_tick > max_sell_tick ||
 		min_sell_tick < average_buy_tick ||
 		max_buy_tick > average_sell_tick ||
-		max_buy_tick > cf_amm_math::MAX_TICK ||
-		max_sell_tick > cf_amm_math::MAX_TICK ||
-		min_buy_tick < cf_amm_math::MIN_TICK ||
-		min_sell_tick < cf_amm_math::MIN_TICK
+		![min_buy_tick, max_buy_tick, min_sell_tick, max_sell_tick]
+			.into_iter()
+			.all(is_strategy_tick_valid)
 	{
 		return Err(Error::<T>::InvalidTick)
 	}
