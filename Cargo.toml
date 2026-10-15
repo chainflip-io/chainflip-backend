@@ -215,7 +215,7 @@ pallet-staking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag
 frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4-alpha.2", default-features = false }
 frame-benchmarking-cli = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4-alpha.2", default-features = false }
 frame-executive = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4-alpha.2", default-features = false }
-frame-metadata = { version = "16.0.0", default-features = false }
+frame-metadata = { version = "23.0.1", default-features = false }
 frame-metadata-hash-extension = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4-alpha.2", default-features = false }
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4-alpha.2", default-features = false }
 frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4-alpha.2", default-features = false }
