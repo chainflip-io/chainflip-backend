@@ -26,12 +26,13 @@
 //! The latter is required for single-member councils where approval happens in the same block as
 //! the proposal.
 //!
-//! For each `chainflip_runtime_upgrade { code, .. }` call found, the warmer compiles the WASM in
-//! two phases: `uncached_call` runs the heavy compile lock-free (block production's executor
-//! lookups aren't blocked while we work), then `with_instance` populates the in-memory
-//! `RuntimeCache` LRU under the same `(code_hash, heap_alloc_strategy, wasm_method)` key block
-//! production looks up later. When `set_code` finally runs the LRU is hit and there's no
-//! compilation work to do.
+//! For each `chainflip_runtime_upgrade { code, .. }` call found, the warmer calls `with_instance`
+//! on a clone of the node's executor. This compiles the WASM and inserts it into the shared
+//! in-memory `RuntimeCache` under the same `(code_hash, heap_alloc_strategy, wasm_method)` key
+//! block production looks up later, and also populates the on-disk wasmtime cache. Our
+//! polkadot-sdk fork locks each cache entry separately, so the compile doesn't block lookups of
+//! the current runtime, and a lookup of the new runtime during an in-flight warm-up waits for it
+//! instead of starting a second compile.
 //!
 //! The `code_hash` we set on `RuntimeCode` matches what `BackendRuntimeCode` produces from
 //! `storage_hash(:code:)`: blake2-256 of the compressed bytes that get stored under `:code:`.
@@ -40,7 +41,6 @@ use codec::Decode;
 use futures::StreamExt;
 use sc_client_api::{BlockchainEvents, StorageProvider};
 use sc_executor::{HeapAllocStrategy, WasmExecutor};
-use sc_executor_common::runtime_blob::RuntimeBlob;
 use sc_service::SpawnTaskHandle;
 use sp_blockchain::HeaderBackend;
 use sp_core::{
@@ -242,13 +242,8 @@ where
 	calls
 }
 
-/// Compile `code` and populate both the on-disk wasmtime artifact cache and the
-/// executor's in-memory `RuntimeCache`.
-///
-/// Two phases: `uncached_call` does the heavy ~12s compile lock-free (writes the
-/// artifact to disk; block production's executor lookups aren't blocked), then
-/// `with_instance` briefly takes the cache mutex to deserialise from disk and
-/// insert into the LRU. `compile_lock` serialises across proposals.
+/// Compile `code` into the executor's in-memory `RuntimeCache` (and the on-disk wasmtime cache).
+/// `compile_lock` serialises across proposals.
 fn warm(
 	executor: &WasmExecutor<sp_io::SubstrateHostFunctions>,
 	compile_lock: &Mutex<()>,
@@ -261,34 +256,6 @@ fn warm(
 	let _guard = compile_lock.lock().unwrap_or_else(|poison| poison.into_inner());
 	let started = std::time::Instant::now();
 
-	// Phase 1: lock-free compile to disk cache.
-	let blob = match RuntimeBlob::uncompress_if_needed(&code) {
-		Ok(b) => b,
-		Err(e) => {
-			log::warn!(
-				target: LOG_TARGET,
-				"Runtime warm-up skipped (hash=0x{}): blob decompression failed: {:?}",
-				hash_hex, e,
-			);
-			return;
-		},
-	};
-	// `uncached_call` populates the on-disk cache as a side effect, as long as the cache_path is
-	// set during initialisation of the executor.
-	let mut ext = BasicExternalities::default();
-	if let Err(e) = executor.uncached_call(blob, &mut ext, false, "Core_version", &[]) {
-		log::warn!(
-			target: LOG_TARGET,
-			"Runtime warm-up failed during disk-cache compile (hash=0x{}, took={}ms): {:?}",
-			hash_hex,
-			started.elapsed().as_millis(),
-			e,
-		);
-		return;
-	}
-	let disk_done = started.elapsed();
-
-	// Phase 2: brief mutex hold, deserialises from disk cache and populates LRU.
 	let wrapped = WrappedRuntimeCode(Cow::Borrowed(code.as_slice()));
 	let runtime_code = RuntimeCode {
 		code_fetcher: &wrapped,
@@ -298,10 +265,9 @@ fn warm(
 		heap_pages: None,
 	};
 
-	let mut ext = BasicExternalities::default();
-	let result: sc_executor_common::error::Result<()> = executor.with_instance(
+	let result: sc_executor::error::Result<()> = executor.with_instance(
 		&runtime_code,
-		&mut ext,
+		&mut BasicExternalities::default(),
 		heap_alloc_strategy,
 		// Compile + cache insert happens before `f` is called; closure is a no-op.
 		|_module, _instance, _version, _ext| Ok(Ok(())),
@@ -310,17 +276,15 @@ fn warm(
 	match result {
 		Ok(()) => log::info!(
 			target: LOG_TARGET,
-			"Runtime warm-up complete (hash=0x{}, disk_compile={}ms, lru_populate={}ms).",
+			"Runtime warm-up complete (hash=0x{}, took={}ms).",
 			hash_hex,
-			disk_done.as_millis(),
-			(started.elapsed() - disk_done).as_millis(),
+			started.elapsed().as_millis(),
 		),
 		Err(e) => log::warn!(
 			target: LOG_TARGET,
-			"Runtime warm-up failed during LRU populate (hash=0x{}, disk_compile={}ms, lru_attempt={}ms): {:?}",
+			"Runtime warm-up failed (hash=0x{}, took={}ms): {:?}",
 			hash_hex,
-			disk_done.as_millis(),
-			(started.elapsed() - disk_done).as_millis(),
+			started.elapsed().as_millis(),
 			e,
 		),
 	}
