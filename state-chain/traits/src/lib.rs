@@ -1277,9 +1277,9 @@ pub trait WithdrawalAddressRestriction {
 		dest: cf_chains::AccountOrAddress<&Self::AccountId, &cf_chains::ForeignChainAddress>,
 	) -> DispatchResult;
 
-	/// Whether `owner` has an active restriction, i.e. may only send funds to whitelisted
-	/// destinations.
-	fn is_restricted(owner: &Self::AccountId) -> bool;
+	/// Whether `owner` has a withdrawal whitelist, limiting it to whitelisted destinations. Other
+	/// restrictions, such as a bound broker withdrawal address, aren't reflected here.
+	fn has_whitelist(owner: &Self::AccountId) -> bool;
 
 	/// Restrict `owner` to a whitelist of the maximum size that includes `allowed`.
 	#[cfg(feature = "runtime-benchmarks")]

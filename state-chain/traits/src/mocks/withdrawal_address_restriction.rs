@@ -99,7 +99,7 @@ impl<AccountId: Encode + Decode + Ord + Clone> WithdrawalAddressRestriction
 		}
 	}
 
-	fn is_restricted(owner: &Self::AccountId) -> bool {
+	fn has_whitelist(owner: &Self::AccountId) -> bool {
 		Self::allowed(owner).is_some()
 	}
 

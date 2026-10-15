@@ -631,7 +631,7 @@ pub mod pallet {
 			// An account with a withdrawal whitelist must have a bound redeem address that the
 			// whitelist allows: redemptions don't check the whitelist, but they do respect the
 			// binding.
-			if T::WithdrawalRestriction::is_restricted(&account_id) {
+			if T::WithdrawalRestriction::has_whitelist(&account_id) {
 				let redeem_address = T::RedeemAddressBinding::bound_redeem_address(&account_id)
 					.ok_or(Error::<T>::RedeemAddressNotBound)?;
 				T::WithdrawalRestriction::ensure_withdrawal_allowed_to(

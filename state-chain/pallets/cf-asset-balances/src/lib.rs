@@ -773,7 +773,7 @@ impl<T: Config> WithdrawalAddressRestriction for Pallet<T> {
 		Ok(())
 	}
 
-	fn is_restricted(owner: &Self::AccountId) -> bool {
+	fn has_whitelist(owner: &Self::AccountId) -> bool {
 		WithdrawalWhitelists::<T>::contains_key(owner)
 	}
 
