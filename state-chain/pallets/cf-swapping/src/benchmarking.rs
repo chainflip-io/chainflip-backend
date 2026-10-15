@@ -44,7 +44,7 @@ mod benchmarks {
 		.unwrap();
 
 		// A non-zero balance is required to pay for the channel opening fee.
-		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
 		let origin = RawOrigin::Signed(caller.clone());
 		let call = Call::<T>::request_swap_deposit_address {
@@ -77,7 +77,7 @@ mod benchmarks {
 		.unwrap();
 
 		// A non-zero balance is required to pay for the channel opening fee.
-		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
 		let affiliate_fees = (0..4)
 			.map(|i| {
@@ -164,7 +164,7 @@ mod benchmarks {
 
 		let caller = OriginFor::<T>::signed(broker_id.clone());
 
-		T::FeePayment::mint_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
 
 		#[block]
 		{
@@ -184,7 +184,7 @@ mod benchmarks {
 
 		let caller = OriginFor::<T>::signed(broker_id.clone());
 
-		T::FeePayment::mint_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
 
 		assert_ok!(Pallet::<T>::open_private_btc_channel(caller.clone()));
 
@@ -315,7 +315,7 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
 		let origin = RawOrigin::Signed(caller.clone());
 		let require_channel_call = Call::<T>::request_swap_deposit_address {

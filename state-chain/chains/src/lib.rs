@@ -812,11 +812,6 @@ pub trait SetCommKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(new_comm_key: <C as ChainCrypto>::GovKey) -> Self;
 }
 
-/// Constructs the `UpdateFlipSupply` api call.
-pub trait UpdateFlipSupply<C: ChainCrypto>: ApiCall<C> {
-	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self;
-}
-
 /// Constructs the `RegisterRedemption` api call.
 pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 	fn new_unsigned(

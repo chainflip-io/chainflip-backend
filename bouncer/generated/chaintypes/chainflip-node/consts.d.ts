@@ -102,17 +102,6 @@ export interface ChainConsts extends GenericChainConsts {
     [name: string]: any;
   };
   /**
-   * Pallet `Emissions`'s constants
-   **/
-  emissions: {
-    compoundingInterval: number;
-
-    /**
-     * Generic pallet constant
-     **/
-    [name: string]: any;
-  };
-  /**
    * Pallet `Funding`'s constants
    **/
   funding: {

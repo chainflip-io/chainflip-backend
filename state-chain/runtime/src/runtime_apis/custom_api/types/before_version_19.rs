@@ -259,7 +259,6 @@ impl From<ValidatorInfo> for super::ValidatorInfo {
 			is_online: old.is_online,
 			is_bidding: old.is_bidding,
 			bound_redeem_address: old.bound_redeem_address,
-			apy_bp: old.apy_bp,
 			restricted_balances: old.restricted_balances,
 			estimated_redeemable_balance: old.estimated_redeemable_balance,
 			operator: old.operator,
@@ -284,7 +283,7 @@ impl From<super::ValidatorInfo> for ValidatorInfo {
 			is_online: current.is_online,
 			is_bidding: current.is_bidding,
 			bound_redeem_address: current.bound_redeem_address,
-			apy_bp: current.apy_bp,
+			apy_bp: None,
 			restricted_balances: current.restricted_balances,
 			estimated_redeemable_balance: current.estimated_redeemable_balance,
 			operator: current.operator,
@@ -461,7 +460,7 @@ impl From<LiquidityProviderSafeMode> for pallet_cf_lp::PalletSafeMode {
 	frame_support::pallet_prelude::RuntimeDebug,
 )]
 pub struct RuntimeSafeMode {
-	pub emissions: pallet_cf_emissions::PalletSafeMode,
+	pub emissions: super::before_version_22::EmissionsSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,
 	pub swapping: pallet_cf_swapping::PalletSafeMode,
 	pub liquidity_provider: LiquidityProviderSafeMode,
@@ -514,7 +513,6 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 				pallet_cf_witnesser::PalletSafeMode::CodeAmber(old_perms.into()),
 		};
 		Self {
-			emissions: old.emissions,
 			funding: old.funding,
 			swapping: old.swapping,
 			liquidity_provider: old.liquidity_provider.into(),

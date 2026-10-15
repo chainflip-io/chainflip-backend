@@ -932,11 +932,15 @@ fn can_batch() {
 #[cfg(test)]
 mod validate_unsigned_tests {
 	use super::*;
-	use crate::{submit_runtime_call::ChainflipExtrinsic, Call, ChainflipNetworkName, Pallet};
+	use crate::{
+		submit_runtime_call::ChainflipExtrinsic, Call, ChainflipNetworkName, Pallet,
+		MAX_NON_NATIVE_CALL_SIZE,
+	};
 	use cf_chains::sol::{
 		signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolSignature,
 	};
 	use cf_primitives::ChainflipNetwork;
+	use codec::Encode;
 	use frame_support::{
 		assert_err,
 		pallet_prelude::{InvalidTransaction, TransactionSource, ValidateUnsigned},
@@ -947,16 +951,29 @@ mod validate_unsigned_tests {
 
 	/// Build a Solana-signed `non_native_signed_call` with a real, valid signature.
 	fn valid_call(nonce: u32) -> (Call<Test>, u64) {
-		let signing_key = SolSigningKey::new();
-		signed_call_with_key(&signing_key, nonce)
+		signed_call_with_key(&SolSigningKey::new(), nonce, remark(vec![]))
+	}
+
+	fn remark(bytes: Vec<u8>) -> <Test as crate::Config>::RuntimeCall {
+		frame_system::Call::remark { remark: bytes }.into()
+	}
+
+	/// A validly signed remark whose inner call encodes to exactly `size` bytes.
+	fn call_of_size(size: usize) -> (Call<Test>, u64) {
+		// Pallet index, call index and a two-byte compact length prefix.
+		let inner_call = remark(vec![0; size - 4]);
+		assert_eq!(inner_call.encoded_size(), size);
+		signed_call_with_key(&SolSigningKey::new(), 0, inner_call)
 	}
 
 	/// Build a Solana-signed `non_native_signed_call` using the provided key.
-	fn signed_call_with_key(signing_key: &SolSigningKey, nonce: u32) -> (Call<Test>, u64) {
+	fn signed_call_with_key(
+		signing_key: &SolSigningKey,
+		nonce: u32,
+		inner_call: <Test as crate::Config>::RuntimeCall,
+	) -> (Call<Test>, u64) {
 		let signer = SolAddress(signing_key.pubkey().0);
 		let transaction_metadata = TransactionMetadata { nonce, expiry_block: EXPIRY_BLOCK };
-		let inner_call: <Test as crate::Config>::RuntimeCall =
-			frame_system::Call::remark { remark: vec![] }.into();
 
 		// Mock `frame_system::Config::Version` is `()`, whose `RuntimeVersion` has
 		// `spec_version: 0`. `is_valid_signature` must be passed the same spec_version
@@ -1015,13 +1032,27 @@ mod validate_unsigned_tests {
 	}
 
 	#[test]
+	fn call_at_size_cap_is_accepted_by_both_paths() {
+		new_test_ext().execute_with(|| {
+			let (call, account) = call_of_size(MAX_NON_NATIVE_CALL_SIZE);
+			create_account(account);
+			assert!(<Pallet<Test> as ValidateUnsigned>::validate_unsigned(
+				TransactionSource::External,
+				&call,
+			)
+			.is_ok());
+			assert_ok!(<Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call));
+		});
+	}
+
+	#[test]
 	fn pre_dispatch_rejects_signer_mismatch() {
 		new_test_ext().execute_with(|| {
 			// Sign with key A but claim key B as the signer. The signature is valid for A's
 			// payload, so B's verification must fail.
 			let key_a = SolSigningKey::new();
 			let key_b = SolSigningKey::new();
-			let (mut call, _) = signed_call_with_key(&key_a, 0);
+			let (mut call, _) = signed_call_with_key(&key_a, 0, remark(vec![]));
 
 			if let Call::non_native_signed_call {
 				signature_data: SignatureData::Solana { signer, .. },
@@ -1069,6 +1100,12 @@ mod validate_unsigned_tests {
 					let (c, _) = valid_call(0);
 					c
 				}),
+			),
+			(
+				// Rejected before any other check, so the signer need not exist.
+				"call over the size cap",
+				InvalidTransaction::ExhaustsResources,
+				Box::new(|| call_of_size(MAX_NON_NATIVE_CALL_SIZE + 1).0),
 			),
 			(
 				"wrong call variant",

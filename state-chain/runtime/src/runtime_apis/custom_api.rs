@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(21)]
+	#[api_version(22)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -97,6 +97,7 @@ decl_runtime_apis!(
 		fn cf_current_compatibility_version() -> SemVer;
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
+		#[deprecated(note = "Emissions no longer exist; this always returns 0.")]
 		fn cf_authority_emission_per_block() -> u128;
 		#[deprecated(note = "The notion of backup nodes is no longer used.")]
 		fn cf_backup_emission_per_block() -> u128;
@@ -108,6 +109,8 @@ decl_runtime_apis!(
 		fn cf_validator_info(account_id: &AccountId32) -> validator_info_before_v7::ValidatorInfo;
 		#[changed_in(19)]
 		fn cf_validator_info(account_id: &AccountId32) -> before_version_19::ValidatorInfo;
+		#[changed_in(22)]
+		fn cf_validator_info(account_id: &AccountId32) -> before_version_22::ValidatorInfo;
 		fn cf_validator_info(account_id: &AccountId32) -> ValidatorInfo;
 		#[changed_in(7)]
 		fn cf_operator_info();
@@ -273,6 +276,8 @@ decl_runtime_apis!(
 		fn cf_safe_mode_statuses() -> types::before_version_17::RuntimeSafeMode;
 		#[changed_in(19)]
 		fn cf_safe_mode_statuses() -> types::before_version_19::RuntimeSafeMode;
+		#[changed_in(22)]
+		fn cf_safe_mode_statuses() -> types::before_version_22::RuntimeSafeMode;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
@@ -432,6 +437,10 @@ decl_runtime_apis!(
 		fn cf_all_account_infos(
 			roles: Option<Vec<AccountRole>>,
 		) -> Vec<before_version_19::RuntimeApiAccountInfoWrapper>;
+		#[changed_in(22)]
+		fn cf_all_account_infos(
+			roles: Option<Vec<AccountRole>>,
+		) -> Vec<before_version_22::RuntimeApiAccountInfoWrapper>;
 		fn cf_all_account_infos(
 			roles: Option<Vec<AccountRole>>,
 		) -> Vec<RuntimeApiAccountInfoWrapper>;

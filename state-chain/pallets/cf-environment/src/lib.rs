@@ -24,7 +24,7 @@ use crate::submit_runtime_call::{
 };
 pub use crate::submit_runtime_call::{
 	build_domain_data, is_valid_signature, BatchedCalls, EthEncodingType, SolEncodingType,
-	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
+	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS, MAX_NON_NATIVE_CALL_SIZE,
 };
 use cf_chains::{
 	btc::{
@@ -1307,6 +1307,8 @@ impl<T: Config> Pallet<T> {
 			signature_data,
 		} = call
 		{
+			let call_size = inner_call.encoded_size();
+			ensure!(call_size <= MAX_NON_NATIVE_CALL_SIZE, InvalidTransaction::ExhaustsResources);
 			let Ok(signer_account) = signature_data.signer_account::<T::AccountId>() else {
 				return Err(InvalidTransaction::BadSigner.into());
 			};
@@ -1318,7 +1320,7 @@ impl<T: Config> Pallet<T> {
 				OriginTrait::signed(signer_account.clone()),
 				inner_call,
 				&inner_call.get_dispatch_info(),
-				inner_call.encoded_size(),
+				call_size,
 				(),
 				&TxBaseImplication(()),
 				source,

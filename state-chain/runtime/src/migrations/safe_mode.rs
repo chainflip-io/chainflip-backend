@@ -19,36 +19,46 @@ use frame_support::{storage::unhashed, traits::OnRuntimeUpgrade, weights::Weight
 
 use crate::{safe_mode::RuntimeSafeMode, Runtime};
 
-pub struct SafeModeMigration;
+use crate::runtime_apis::custom_api::types::before_version_22::RuntimeSafeMode as OldRuntimeSafeMode;
 
-use crate::runtime_apis::custom_api::types::before_version_19::RuntimeSafeMode as OldRuntimeSafeMode;
+/// Drops the `emissions` entry from the stored runtime safe mode. Without this, the pre-upgrade
+/// encoding would be decoded shifted by one byte, silently scrambling every pallet's safe mode.
+pub struct SafeModeMigration;
 
 impl OnRuntimeUpgrade for SafeModeMigration {
 	fn on_runtime_upgrade() -> Weight {
 		let storage_key = pallet_cf_environment::RuntimeSafeMode::<Runtime>::hashed_key();
-		if unhashed::get_raw(&storage_key)
-			.is_some_and(|encoded| RuntimeSafeMode::decode_all(&mut encoded.as_slice()).is_ok())
-		{
-			return Weight::zero()
-		}
+		let Some(encoded) = unhashed::get_raw(&storage_key) else { return Weight::zero() };
 
-		let _ = pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
-			|maybe_old: Option<OldRuntimeSafeMode>| maybe_old.map(Into::into),
-		)
-		.map_err(|_| {
+		// Check the old format first: a shifted decode of the old encoding into the current
+		// format is not guaranteed to fail.
+		if let Ok(old) = OldRuntimeSafeMode::decode_all(&mut encoded.as_slice()) {
+			pallet_cf_environment::RuntimeSafeMode::<Runtime>::put(RuntimeSafeMode::from(old));
+		} else if RuntimeSafeMode::decode_all(&mut encoded.as_slice()).is_err() {
 			log::warn!(
 				"Safe mode migration was not able to interpret the existing storage in the old format!"
 			);
-		});
+		}
 
 		Weight::zero()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(_state: sp_std::vec::Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+		let storage_key = pallet_cf_environment::RuntimeSafeMode::<Runtime>::hashed_key();
+		if let Some(encoded) = unhashed::get_raw(&storage_key) {
+			frame_support::ensure!(
+				RuntimeSafeMode::decode_all(&mut encoded.as_slice()).is_ok(),
+				"RuntimeSafeMode storage is not in the current format"
+			);
+		}
+		Ok(())
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::runtime_apis::custom_api::types::before_version_19::LiquidityProviderSafeMode as OldLiquidityProviderSafeMode;
 	use cf_traits::SafeMode;
 	use codec::Encode;
 
@@ -61,12 +71,14 @@ mod tests {
 					// Deliberately neither code green nor code red: the storage item is
 					// `ValueQuery`, so a migration that silently wiped it would read back as code
 					// green and a uniform fixture couldn't tell the two apart.
-					liquidity_provider: OldLiquidityProviderSafeMode {
+					liquidity_provider: pallet_cf_lp::PalletSafeMode {
 						deposit_enabled: false,
 						withdrawal_enabled: true,
 						internal_swaps_enabled: false,
+						flip_to_on_chain_balance_enabled: true,
 					},
 					funding: pallet_cf_funding::PalletSafeMode::code_red(),
+					witnesser: pallet_cf_witnesser::PalletSafeMode::code_green(),
 					..Default::default()
 				}
 				.encode(),
@@ -85,6 +97,8 @@ mod tests {
 				}
 			);
 			assert_eq!(migrated.funding, pallet_cf_funding::PalletSafeMode::code_red());
+			assert_eq!(migrated.swapping, pallet_cf_swapping::PalletSafeMode::code_green());
+			assert_eq!(migrated.witnesser, pallet_cf_witnesser::PalletSafeMode::code_green());
 		});
 	}
 

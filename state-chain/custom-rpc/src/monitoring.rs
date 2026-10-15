@@ -301,6 +301,10 @@ where
 					#[expect(deprecated)]
 					api.cf_accounts_info_before_version_4(hash, accounts)
 						.map(|accounts| accounts.into_iter().map(Into::into).collect())
+				} else if api_version < 6 {
+					#[expect(deprecated)]
+					api.cf_accounts_info_before_version_6(hash, accounts)
+						.map(|accounts| accounts.into_iter().map(Into::into).collect())
 				} else {
 					api.cf_accounts_info(hash, accounts)
 				}
@@ -320,7 +324,6 @@ where
 				is_online: account_info.is_online,
 				is_bidding: account_info.is_bidding,
 				bound_redeem_address: account_info.bound_redeem_address,
-				apy_bp: account_info.apy_bp,
 				restricted_balances: account_info.restricted_balances,
 				estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 			})
