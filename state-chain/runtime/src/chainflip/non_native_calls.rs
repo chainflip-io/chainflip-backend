@@ -167,13 +167,13 @@ classify_calls! {
 			update_limit_order,
 			set_range_order,
 			update_range_order,
+			cancel_orders_batch,
 		],
 		denied: [
 			new_pool,
 			set_pool_fees,
 			set_maximum_price_impact,
 			update_pallet_config,
-			cancel_orders_batch,
 		],
 	},
 	LiquidityProvider(pallet_cf_lp) {
@@ -410,5 +410,23 @@ mod tests {
 		let full_batch = batch(vec![limit_order; MAX_BATCHED_CALLS as usize]);
 		assert!(AllowedNonNativeCalls::contains(&full_batch));
 		assert!(full_batch.encoded_size() <= MAX_NON_NATIVE_CALL_SIZE);
+
+		// The LP app cancels many orders at once.
+		let cancel_orders: RuntimeCall = PoolsCall::cancel_orders_batch {
+			orders: vec![
+				pallet_cf_pools::CloseOrder::Limit {
+					base_asset: Asset::Btc,
+					quote_asset: Asset::Usdc,
+					side: Side::Buy,
+					id: u64::MAX,
+				};
+				80
+			]
+			.try_into()
+			.unwrap(),
+		}
+		.into();
+		assert!(AllowedNonNativeCalls::contains(&cancel_orders));
+		assert!(cancel_orders.encoded_size() <= MAX_NON_NATIVE_CALL_SIZE);
 	}
 }
