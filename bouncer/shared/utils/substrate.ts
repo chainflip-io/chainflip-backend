@@ -269,8 +269,8 @@ export const { getClient: getChainflipApi, clearCache: clearChainflipClientCache
   makeCachedDedotClientFactory(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
 
 // The node serves HTTP and WS on the same RPC port, so CF_NODE_ENDPOINT alone is enough to point
-// HTTP callers at a remote network; CF_NODE_HTTP_ENDPOINT overrides it for split setups.
-export const CHAINFLIP_HTTP_ENDPOINT = process.env.CF_NODE_HTTP_ENDPOINT ?? resolveHttpEndpoint({});
+// HTTP callers at a remote network.
+export const CHAINFLIP_HTTP_ENDPOINT = resolveHttpEndpoint({});
 
 export const { cachedDisposableFactory: getPolkadotApi } = getCachedSubstrateApi(
   process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9947',
