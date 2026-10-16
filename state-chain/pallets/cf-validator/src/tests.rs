@@ -4038,6 +4038,53 @@ fn distribute_all_matches_looped_distribute() {
 	});
 }
 
+mod zero_bond {
+	use super::*;
+	use crate::delegation::{distribute, DelegatedRewardsDistribution};
+	use cf_traits::RewardsDistribution;
+
+	const EPOCH: u32 = 10;
+	const VALIDATOR: u64 = 100;
+	const OPERATOR: u64 = 200;
+	const DELEGATOR: u64 = 300;
+
+	/// Registers a delegated snapshot for `EPOCH` without recording a bond for it.
+	fn setup() {
+		crate::CurrentEpoch::<Test>::put(EPOCH);
+		crate::HistoricalAuthorities::<Test>::insert(EPOCH, vec![VALIDATOR]);
+		DelegationSnapshot::<u64, u128> {
+			operator: OPERATOR,
+			validators: [(VALIDATOR, 200_000u128)].into_iter().collect(),
+			delegators: [(DELEGATOR, 800_000u128)].into_iter().collect(),
+			delegation_fee_bps: 2000,
+		}
+		.register_for_epoch::<Test>(EPOCH);
+		assert!(crate::HistoricalBonds::<Test>::try_get(EPOCH).is_err());
+	}
+
+	#[test]
+	#[should_panic(expected = "No bond recorded for epoch 10; skipping reward distribution.")]
+	fn distribute_all_skips_epoch_without_bond() {
+		new_test_ext().execute_with(|| {
+			setup();
+			DelegatedRewardsDistribution::<Test>::distribute_all(EPOCH, 100_000, |_, _| {
+				panic!("nothing should be settled without a bond")
+			});
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "No bond recorded for epoch 10. Settling directly with validator")]
+	fn distribute_settles_with_validator_without_bond() {
+		new_test_ext().execute_with(|| {
+			setup();
+			distribute::<Test>(EPOCH, &VALIDATOR, 100_000, |account, amount| {
+				assert_eq!((*account, amount), (VALIDATOR, 100_000));
+			});
+		});
+	}
+}
+
 #[cfg(test)]
 mod keygen_failure_with_delegation {
 	use super::*;
