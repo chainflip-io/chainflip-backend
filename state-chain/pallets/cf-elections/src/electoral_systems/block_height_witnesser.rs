@@ -21,6 +21,7 @@ use crate::{
 };
 use cf_chains::witness_period::SaturatingStep;
 use cf_traits::{Hook, HookType, Validate};
+use frame_support::traits::Get;
 use generic_typeinfo_derive::GenericTypeInfo;
 #[cfg(test)]
 use proptest_derive::Arbitrary;
@@ -56,6 +57,9 @@ pub trait BHWTypes: Ord + Clone + Debug + Sized + 'static {
 	type Chain: ChainTypes;
 	type BlockHeightChangeHook: Hook<HookTypeFor<Self, BlockHeightChangeHook>> + CommonTraits;
 	type ReorgHook: Hook<HookTypeFor<Self, ReorgHook>> + CommonTraits;
+
+	/// Maximum number of headers in a vote. See `BHWVote`.
+	type MaxVoteHeaders: Get<u32> + 'static;
 }
 
 pub struct BlockHeightChangeHook;
