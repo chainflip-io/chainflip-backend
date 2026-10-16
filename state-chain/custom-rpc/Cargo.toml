@@ -76,3 +76,5 @@ insta = { workspace = true, features = ["json"] }
 serde_json = { workspace = true, default-features = true }
 pallet-cf-trading-strategy = { workspace = true, default-features = true }
 cf-amm-math = { workspace = true, features = ["test"] }
+cf-amm = { workspace = true, default-features = true, features = ["test"] }
+reqwest = { workspace = true, features = ["blocking", "json"] }
