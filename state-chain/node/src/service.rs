@@ -28,6 +28,7 @@ use jsonrpsee::RpcModule;
 use sc_client_api::{Backend, BlockBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 use sc_consensus_grandpa::SharedVoterState;
+use sc_executor::{HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY};
 use sc_keystore::Keystore;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpSyncConfig};
 use sc_telemetry::{Telemetry, TelemetryWorker};
@@ -75,7 +76,23 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 		})
 		.transpose()?;
 
-	let executor = sc_service::new_wasm_executor::<sp_io::SubstrateHostFunctions>(&config.executor);
+	let heap_alloc_strategy = config
+		.executor
+		.default_heap_pages
+		.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |p| HeapAllocStrategy::Static { extra_pages: p as _ });
+	let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::builder()
+		.with_execution_method(config.executor.wasm_method)
+		.with_onchain_heap_alloc_strategy(heap_alloc_strategy)
+		.with_offchain_heap_alloc_strategy(heap_alloc_strategy)
+		.with_max_runtime_instances(config.executor.max_runtime_instances)
+		.with_runtime_cache_size(config.executor.runtime_cache_size)
+		// Configure a wasmtime cache directory to speed up runtime instantiation.
+		.with_cache_path(config.data_path.join("wasm_cache"))
+		.build();
+
+	// Cloned executors share the underlying Arc-wrapped caches, so the warmer
+	// populates the same caches block production uses.
+	let warmer_executor = executor.clone();
 
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, _>(
@@ -84,6 +101,14 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 			executor,
 		)?;
 	let client = Arc::new(client);
+
+	// Pre-compile pending runtime upgrades during the governance approval window.
+	crate::runtime_warmer::spawn(
+		client.clone(),
+		warmer_executor,
+		heap_alloc_strategy,
+		task_manager.spawn_handle(),
+	);
 
 	let telemetry = telemetry.map(|(worker, telemetry)| {
 		task_manager.spawn_handle().spawn("telemetry", None, worker.run());
