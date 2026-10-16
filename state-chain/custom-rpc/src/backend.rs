@@ -92,16 +92,26 @@ where
 	where
 		CfApiError: From<E>,
 	{
+		self.with_versioned_api::<dyn CustomRuntimeApi<state_chain_runtime::Block>, _, _>(at, f)
+	}
+
+	/// Like `with_versioned_runtime_api`, but passes the version of the runtime API trait `Api`.
+	pub fn with_versioned_api<Api: sp_api::RuntimeApiInfo + ?Sized, E, R>(
+		&self,
+		at: Option<Hash>,
+		f: impl FnOnce(&C::Api, Hash, u32) -> Result<R, E>,
+	) -> Result<R, RpcApiError>
+	where
+		CfApiError: From<E>,
+	{
 		use sp_api::ApiExt;
 		self.with_runtime_api::<CfApiError, _>(at, |api, hash| {
-			let api_version = api
-				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)?
-				.ok_or_else(|| {
-					call_error(
-						"CfApiError::UnsupportedRuntimeApiVersion",
-						CfErrorCode::UnsupportedRuntimeApiVersion,
-					)
-				})?;
+			let api_version = api.api_version::<Api>(hash)?.ok_or_else(|| {
+				call_error(
+					"CfApiError::UnsupportedRuntimeApiVersion",
+					CfErrorCode::UnsupportedRuntimeApiVersion,
+				)
+			})?;
 
 			Ok(f(api, hash, api_version)?)
 		})
