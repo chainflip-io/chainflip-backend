@@ -4419,6 +4419,10 @@ export interface ChainTx<
      * The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
      * external address.
      *
+     * Redemptions don't consult the withdrawal whitelist, so an account with a whitelist must
+     * first bind its redeem address (see the funding pallet) to a destination the whitelist
+     * allows.
+     *
      * @param {bigint} amount
      **/
     transferFlipToOnChainBalance: GenericTxCall<
