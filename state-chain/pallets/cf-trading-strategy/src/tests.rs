@@ -669,31 +669,41 @@ fn strategy_deployment_validation() {
 			);
 		}
 
-		// TickZeroCentered and SimpleBuySell require the base asset to have the same decimals as
-		// the quote asset.
-		{
-			assert_ne!(Asset::Btc.decimals(), QUOTE_ASSET.decimals());
-			for strategy in [
+		// TickZeroCentered requires the base asset to have the same decimals as the quote asset.
+		assert_ne!(Asset::Btc.decimals(), QUOTE_ASSET.decimals());
+		assert_err!(
+			TradingStrategyPallet::deploy_strategy(
+				RuntimeOrigin::signed(LP),
 				TradingStrategy::TickZeroCentered {
 					spread_tick: SPREAD_TICK,
-					base_asset: Asset::Btc,
+					base_asset: Asset::Btc
 				},
+				[(Asset::Btc, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+			),
+			Error::<Test>::InvalidAssetsForStrategy
+		);
+
+		// SimpleBuySell supports any decimals, but its ticks must be near the parity tick.
+		let btc_parity = parity_tick(Asset::Btc, QUOTE_ASSET).unwrap();
+		assert_err!(
+			TradingStrategyPallet::deploy_strategy(
+				RuntimeOrigin::signed(LP),
 				TradingStrategy::SimpleBuySell {
 					buy_tick: -10,
 					sell_tick: 10,
-					base_asset: Asset::Btc,
+					base_asset: Asset::Btc
 				},
-			] {
-				assert_err!(
-					TradingStrategyPallet::deploy_strategy(
-						RuntimeOrigin::signed(LP),
-						strategy,
-						[(Asset::Btc, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
-					),
-					Error::<Test>::InvalidAssetsForStrategy
-				);
-			}
+				[(Asset::Btc, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+			),
+			Error::<Test>::InvalidTick
+		);
+		assert_ok!(TradingStrategy::SimpleBuySell {
+			buy_tick: btc_parity - 10,
+			sell_tick: btc_parity + 10,
+			base_asset: Asset::Btc,
 		}
+		.validate_params::<Test>());
+
 		// Inventory based strategy & oracle
 		{
 			// Invalid tick ranges
@@ -828,7 +838,7 @@ fn strategy_deployment_validation() {
 }
 
 #[test]
-fn strategy_ticks_must_be_near_zero() {
+fn strategy_ticks_must_be_within_range() {
 	const MAX: Tick = MAX_STRATEGY_TICK;
 
 	let strategies = |low: Tick, high: Tick| {
@@ -868,6 +878,33 @@ fn strategy_ticks_must_be_near_zero() {
 			.into_iter()
 			.chain(strategies(-MAX - 1, MAX).into_iter().skip(1))
 		{
+			assert!(matches!(strategy.validate_params::<Test>(), Err(Error::<Test>::InvalidTick)));
+		}
+
+		// With different decimals the 1:1 price isn't at tick zero, so ticks are measured from it.
+		// 1 BscUsdt (10^18 units) = 1 Usdc (10^6 units), so the price is 10^6 / 10^18 = 10^-12,
+		// and the tick is log_1.0001(10^-12) = -12 * ln(10) / ln(1.0001) ≈ -276_324.03.
+		let parity: Tick = -276_324;
+		assert_eq!(parity_tick(Asset::BscUsdt, QUOTE_ASSET), Some(parity));
+		let inventory = |min_buy_tick, max_sell_tick| TradingStrategy::InventoryBased {
+			min_buy_tick,
+			max_buy_tick: parity,
+			min_sell_tick: parity,
+			max_sell_tick,
+			base_asset: Asset::BscUsdt,
+		};
+		assert_ok!(inventory(parity - MAX, parity + MAX).validate_params::<Test>());
+		for strategy in [
+			inventory(parity - MAX - 1, parity + MAX),
+			inventory(parity - MAX, parity + MAX + 1),
+			TradingStrategy::InventoryBased {
+				min_buy_tick: -10,
+				max_buy_tick: 0,
+				min_sell_tick: 0,
+				max_sell_tick: 10,
+				base_asset: Asset::BscUsdt,
+			},
+		] {
 			assert!(matches!(strategy.validate_params::<Test>(), Err(Error::<Test>::InvalidTick)));
 		}
 	});
@@ -1569,8 +1606,8 @@ mod inventory_based_strategy {
 		const BSC_USDT_AMOUNT: AssetAmount = 100 * ONE_BSC_USDT;
 		const USDC_AMOUNT: AssetAmount = 100 * ONE_USDC;
 
-		// Every configured tick is shifted by the tick at which the two starting balances are
-		// worth the same, i.e. the price at which the assets trade 1:1.
+		// Ticks are absolute, so they must be configured around the tick at which the two starting
+		// balances are worth the same, i.e. the price at which the assets trade 1:1.
 		let decimals_tick =
 			cf_amm_math::Price::from_amounts(USDC_AMOUNT.into(), BSC_USDT_AMOUNT.into())
 				.unwrap()
@@ -1602,10 +1639,10 @@ mod inventory_based_strategy {
 					RuntimeOrigin::signed(LP),
 					TradingStrategy::InventoryBased {
 						base_asset: BSC_USDT,
-						min_buy_tick: MIN_BUY_TICK,
-						max_buy_tick: MAX_BUY_TICK,
-						min_sell_tick: MIN_SELL_TICK,
-						max_sell_tick: MAX_SELL_TICK,
+						min_buy_tick: decimals_tick + MIN_BUY_TICK,
+						max_buy_tick: decimals_tick + MAX_BUY_TICK,
+						min_sell_tick: decimals_tick + MIN_SELL_TICK,
+						max_sell_tick: decimals_tick + MAX_SELL_TICK,
 					},
 					initial_amounts,
 				));
@@ -1615,7 +1652,7 @@ mod inventory_based_strategy {
 			})
 			.then_execute_at_next_block(|strategy_id| {
 				// The two sides hold equal value, so each gets a single order at the average tick
-				// of its range, shifted by the decimals offset, holding that side's full balance.
+				// of its range, holding that side's full balance.
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
