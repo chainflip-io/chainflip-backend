@@ -387,6 +387,10 @@ impl BrokerRpcApiServer for RpcServerImpl {
 	async fn bind_fee_withdrawal_address(&self, address: EthereumAddress) -> RpcResult<H256> {
 		Ok(self.api.broker_api().bind_fee_withdrawal_address(address).await?)
 	}
+
+	async fn link_recovery_account(&self, recovery_account: AccountId32) -> RpcResult<H256> {
+		Ok(self.api.broker_api().link_recovery_account(recovery_account).await?)
+	}
 }
 
 #[derive(Parser, Debug, Clone, Default)]
