@@ -68,17 +68,17 @@ const STRATEGY_ORDER_ID_1: OrderId = 1;
 /// for the other pallets' `on_idle` hooks (which run after this one on the remainder).
 const ON_IDLE_WEIGHT_PERCENT: u64 = 50;
 
-/// Strategies assume the two assets are roughly equal in value (or, for `OracleTracking`, that
-/// ticks are offsets from the oracle price), so configured ticks must stay close to zero. ~10%.
-/// Even non-oracle InventoryBased strategies using assets of different decimals are adjusted to be
-/// equivalent in value, so the tick ranges are still relative to the 1:1 price and must stay close
-/// to zero.
+/// Strategies assume the two assets are roughly equal in value, so configured ticks must stay
+/// within this distance (~10%) of the 1:1 price. For assets with different decimals the 1:1 price
+/// is far from tick zero (see [`parity_tick`]). `OracleTracking` ticks are offsets from the oracle
+/// price, so they must stay this close to zero.
 pub const MAX_STRATEGY_TICK: Tick = 1_000;
 
-/// An absolute limit on the ticks that can be configured for a strategy. This is a sanity check to
-/// prevent misconfiguration.
-fn is_strategy_tick_valid(tick: Tick) -> bool {
-	(-MAX_STRATEGY_TICK..=MAX_STRATEGY_TICK).contains(&tick)
+/// A sanity check against misconfiguration: `tick` must be within [`MAX_STRATEGY_TICK`] of
+/// `parity_tick`.
+fn is_strategy_tick_valid(tick: Tick, parity_tick: Tick) -> bool {
+	cf_amm_math::is_tick_valid(tick) &&
+		tick.abs_diff(parity_tick) <= MAX_STRATEGY_TICK.unsigned_abs()
 }
 
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
@@ -199,30 +199,26 @@ impl TradingStrategy {
 	fn validate_params<T: Config>(&self) -> Result<(), Error<T>> {
 		match self {
 			TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
-				if *spread_tick < 0 || !is_strategy_tick_valid(*spread_tick) {
-					return Err(Error::<T>::InvalidTick)
-				}
-				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
 				// Centering on tick zero assumes both assets have the same decimals.
 				ensure!(
 					base_asset.decimals() == STABLE_ASSET.decimals(),
 					Error::<T>::InvalidAssetsForStrategy
 				);
+				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+				if *spread_tick < 0 || !is_strategy_tick_valid(*spread_tick, 0) {
+					return Err(Error::<T>::InvalidTick)
+				}
 			},
 			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } => {
+				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+				let parity_tick = parity_tick(*base_asset, STABLE_ASSET)
+					.ok_or(Error::<T>::InvalidAssetsForStrategy)?;
 				if buy_tick >= sell_tick ||
-					!is_strategy_tick_valid(*buy_tick) ||
-					!is_strategy_tick_valid(*sell_tick)
+					!is_strategy_tick_valid(*buy_tick, parity_tick) ||
+					!is_strategy_tick_valid(*sell_tick, parity_tick)
 				{
 					return Err(Error::<T>::InvalidTick)
 				}
-				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
-				// Absolute ticks are easily mistaken for being relative to price parity, which only
-				// holds when both assets have the same decimals.
-				ensure!(
-					base_asset.decimals() == STABLE_ASSET.decimals(),
-					Error::<T>::InvalidAssetsForStrategy
-				);
 			},
 			TradingStrategy::InventoryBased {
 				min_buy_tick,
@@ -231,28 +227,20 @@ impl TradingStrategy {
 				max_sell_tick,
 				base_asset,
 			} => {
+				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+				// The strategy values one unit of each asset equally, so it only makes sense for
+				// stablecoin pairs. Ticks are absolute, so with different decimals they are centred
+				// on the parity tick rather than zero.
+				ensure!(base_asset.is_usd_stablecoin(), Error::<T>::InvalidAssetsForStrategy);
+				let parity_tick = parity_tick(*base_asset, STABLE_ASSET)
+					.ok_or(Error::<T>::InvalidAssetsForStrategy)?;
 				validate_inventory_tick_ranges::<T>(
 					*min_buy_tick,
 					*max_buy_tick,
 					*min_sell_tick,
 					*max_sell_tick,
+					parity_tick,
 				)?;
-				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
-				// The strategy values one unit of each asset equally, so it only makes sense for
-				// stablecoin pairs. A difference in decimals is absorbed into a fixed tick offset.
-				ensure!(base_asset.is_usd_stablecoin(), Error::<T>::InvalidAssetsForStrategy);
-				let pricing = PricingMode::equivalent(*base_asset, STABLE_ASSET)
-					.ok_or(Error::<T>::InvalidAssetsForStrategy)?;
-				// The configured ticks are shifted by that offset, so the shifted range must still
-				// be within the valid tick range.
-				ensure!(
-					[*min_buy_tick, *max_buy_tick, *min_sell_tick, *max_sell_tick].into_iter().all(
-						|tick| cf_amm_math::is_tick_valid(
-							tick.saturating_add(pricing.relative_tick)
-						)
-					),
-					Error::<T>::InvalidTick
-				);
 			},
 			TradingStrategy::OracleTracking {
 				min_buy_offset_tick,
@@ -267,6 +255,8 @@ impl TradingStrategy {
 					*max_buy_offset_tick,
 					*min_sell_offset_tick,
 					*max_sell_offset_tick,
+					0, /* OracleTracking ticks are offsets from the oracle price, so they must
+					    * stay close to zero */
 				)?;
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
 				ensure!(*quote_asset == STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
@@ -719,11 +709,12 @@ struct PricingMode {
 	/// Price of the base asset denominated in the quote asset, expressed in fine amounts, so it
 	/// also accounts for any difference in the two assets' decimals.
 	relative_price: Price,
-	/// The tick closest to `relative_price`, applied as an offset to the configured tick ranges.
-	/// Rounded to the nearest tick rather than truncated, so the whole order grid isn't
-	/// systematically shifted below the price it is meant to be centred on.
-	relative_tick: Tick,
-	/// Whether orders should also be refreshed when `relative_tick` moves. Only oracle prices
+	/// Applied to the configured tick ranges. For oracle pricing it is the tick closest to
+	/// `relative_price`, rounded to the nearest tick rather than truncated so the whole order grid
+	/// isn't systematically shifted below the price it is meant to be centred on. Zero otherwise,
+	/// since `InventoryBased` ticks are configured as absolute ticks.
+	tick_offset: Tick,
+	/// Whether orders should also be refreshed when `tick_offset` moves. Only oracle prices
 	/// move; the fixed 1:1 price does not.
 	tracks_oracle: bool,
 }
@@ -732,10 +723,9 @@ impl PricingMode {
 	/// Values one unit of the base asset as one unit of the quote asset, scaled for any difference
 	/// in their decimals. Used by `InventoryBased`, which is restricted to stablecoin pairs.
 	fn equivalent(base_asset: Asset, quote_asset: Asset) -> Option<Self> {
-		let relative_price = equivalent_value_price(base_asset, quote_asset)?;
 		Some(Self {
-			relative_price,
-			relative_tick: relative_price.into_nearest_tick()?,
+			relative_price: equivalent_value_price(base_asset, quote_asset)?,
+			tick_offset: 0,
 			tracks_oracle: false,
 		})
 	}
@@ -745,7 +735,7 @@ impl PricingMode {
 	fn oracle(relative_price: Price) -> Option<Self> {
 		Some(Self {
 			relative_price,
-			relative_tick: relative_price.into_nearest_tick()?,
+			tick_offset: relative_price.into_nearest_tick()?,
 			tracks_oracle: true,
 		})
 	}
@@ -776,6 +766,12 @@ fn equivalent_value_price(base_asset: Asset, quote_asset: Asset) -> Option<Price
 		Amount::from(10u128).pow(quote_asset.decimals().into()),
 		Amount::from(10u128).pow(base_asset.decimals().into()),
 	)
+}
+
+/// The tick at which one unit of `base_asset` is worth one unit of `quote_asset`: zero when their
+/// decimals match.
+fn parity_tick(base_asset: Asset, quote_asset: Asset) -> Option<Tick> {
+	equivalent_value_price(base_asset, quote_asset)?.into_nearest_tick()
 }
 
 impl<T: Config> Pallet<T> {
@@ -932,8 +928,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Execute the InventoryBased strategy.
 	///
-	/// Values the base and quote assets 1:1, so the only price adjustment is the fixed offset that
-	/// accounts for a difference in the two assets' decimals.
+	/// Values the base and quote assets 1:1 when sizing orders. Ticks are used as configured, so
+	/// any difference in the two assets' decimals must already be reflected in them.
 	fn execute_inventory_based(
 		base_asset: Asset,
 		min_buy_tick: Tick,
@@ -1073,7 +1069,7 @@ impl<T: Config> Pallet<T> {
 			pricing.base_to_quote(base_threshold).unwrap_or(u128::MAX).min(quote_threshold);
 
 		// Use the balance of assets to calculate the desired limit orders
-		let tick_offset = pricing.relative_tick;
+		let tick_offset = pricing.tick_offset;
 		let total = total_quote.saturating_add(total_base);
 		let new_orders: Vec<_> = inventory_based_strategy_logic(
 			total_quote,
@@ -1176,6 +1172,7 @@ fn validate_inventory_tick_ranges<T: Config>(
 	max_buy_tick: Tick,
 	min_sell_tick: Tick,
 	max_sell_tick: Tick,
+	parity_tick: Tick,
 ) -> Result<(), Error<T>> {
 	let average_buy_tick = average_tick(min_buy_tick, max_buy_tick, false /* round down */);
 	let average_sell_tick = average_tick(min_sell_tick, max_sell_tick, true /* round up */);
@@ -1186,7 +1183,7 @@ fn validate_inventory_tick_ranges<T: Config>(
 		max_buy_tick > average_sell_tick ||
 		![min_buy_tick, max_buy_tick, min_sell_tick, max_sell_tick]
 			.into_iter()
-			.all(is_strategy_tick_valid)
+			.all(|tick| is_strategy_tick_valid(tick, parity_tick))
 	{
 		return Err(Error::<T>::InvalidTick)
 	}
