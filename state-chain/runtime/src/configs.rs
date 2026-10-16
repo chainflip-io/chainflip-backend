@@ -210,6 +210,7 @@ impl ChainflipWithTargetChain<Instance8> for Runtime {
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
+	type AllowedNonNativeCalls = chainflip::non_native_calls::AllowedNonNativeCalls;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
