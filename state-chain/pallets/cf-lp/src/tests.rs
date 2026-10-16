@@ -1166,6 +1166,80 @@ mod transfer_flip_to_on_chain_balance {
 	}
 
 	#[test]
+	fn withdrawal_safe_mode_prevents_transfers() {
+		new_test_ext().execute_with(|| {
+			setup(min_funding());
+
+			MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+				liquidity_provider: PalletSafeMode {
+					withdrawal_enabled: false,
+					..PalletSafeMode::code_green()
+				},
+			});
+			assert_err!(transfer(min_funding()), Error::<Test>::WithdrawalsDisabled);
+
+			MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+				liquidity_provider: PalletSafeMode::code_green(),
+			});
+			assert_ok!(transfer(min_funding()));
+		});
+	}
+
+	mod restricted_account {
+		use super::*;
+		use cf_chains::AccountOrAddress;
+		use cf_traits::mocks::withdrawal_address_restriction::MockWithdrawalAddressRestriction;
+		use sp_runtime::DispatchError;
+
+		const WHITELISTED: [u8; 20] = [0xaa; 20];
+
+		fn restrict() {
+			setup(min_funding());
+			MockWithdrawalAddressRestriction::restrict_to(
+				&LP_ACCOUNT,
+				vec![AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
+					WHITELISTED.into(),
+				))],
+			);
+		}
+
+		#[test]
+		fn requires_a_bound_redeem_address() {
+			new_test_ext().execute_with(|| {
+				restrict();
+
+				assert_noop!(transfer(min_funding()), Error::<Test>::RedeemAddressNotBound);
+			});
+		}
+
+		#[test]
+		fn requires_the_bound_redeem_address_to_be_whitelisted() {
+			new_test_ext().execute_with(|| {
+				restrict();
+				MockFundingInfo::<Test>::set_bound_redeem_address(&LP_ACCOUNT, [0xbb; 20].into());
+
+				assert_noop!(
+					transfer(min_funding()),
+					DispatchError::Other(
+						"MockWithdrawalAddressRestriction: destination not allowed"
+					)
+				);
+			});
+		}
+
+		#[test]
+		fn succeeds_with_a_whitelisted_bound_redeem_address() {
+			new_test_ext().execute_with(|| {
+				restrict();
+				MockFundingInfo::<Test>::set_bound_redeem_address(&LP_ACCOUNT, WHITELISTED.into());
+
+				assert_ok!(transfer(min_funding()));
+				assert_eq!(MockFundingInfo::<Test>::total_balance_of(&LP_ACCOUNT), min_funding());
+			});
+		}
+	}
+
+	#[test]
 	fn only_liquidity_providers_can_transfer() {
 		new_test_ext().execute_with(|| {
 			MockBalanceApi::insert_balance(NON_LP_ACCOUNT, Asset::Flip, min_funding());
