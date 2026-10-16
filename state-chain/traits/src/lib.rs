@@ -1328,6 +1328,14 @@ pub trait WithdrawalAddressRestriction {
 		dest: cf_chains::AccountOrAddress<&Self::AccountId, &cf_chains::ForeignChainAddress>,
 	) -> DispatchResult;
 
+	/// Whether `owner` has a withdrawal whitelist, limiting it to whitelisted destinations. Other
+	/// restrictions, such as a bound broker withdrawal address, aren't reflected here.
+	fn has_whitelist(owner: &Self::AccountId) -> bool;
+
+	/// Restrict `owner` to a whitelist of the maximum size that includes `allowed`.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_worst_case_whitelist(owner: &Self::AccountId, allowed: cf_chains::ForeignChainAddress);
+
 	/// Permanently bind `owner` to `address`: from here on, Ethereum withdrawals are allowed only
 	/// to it, overriding the whitelist. Bindings are immutable, so this fails with
 	/// [`AlreadyBound`] rather than repointing an existing one.
@@ -1343,6 +1351,18 @@ pub trait WithdrawalAddressRestriction {
 /// Error returned when trying to set a bound withdrawal address when the binding already exists.
 #[derive(Debug, PartialEq, Eq)]
 pub struct WithdrawalAddressAlreadyBound;
+
+/// Read access to the funding pallet's permanent redeem address binding.
+pub trait RedeemAddressBinding {
+	type AccountId;
+
+	/// The account's bound redeem address, if any. A bound on-chain balance can only be redeemed
+	/// to that address (restricted funds excepted) or rebalanced to accounts bound to the same one.
+	fn bound_redeem_address(account_id: &Self::AccountId) -> Option<cf_chains::evm::Address>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn bind_redeem_address(account_id: &Self::AccountId, address: cf_chains::evm::Address);
+}
 
 pub trait DerivedIngressSink<Account, DepositDetails> {
 	fn derive_deposit_details(account: Account) -> DepositDetails;
