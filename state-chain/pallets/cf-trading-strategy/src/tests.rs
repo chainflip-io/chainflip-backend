@@ -669,38 +669,46 @@ fn strategy_deployment_validation() {
 			);
 		}
 
-		// TickZeroCentered requires the base asset to have the same decimals as the quote asset.
-		assert_ne!(Asset::Btc.decimals(), QUOTE_ASSET.decimals());
-		assert_err!(
-			TradingStrategyPallet::deploy_strategy(
-				RuntimeOrigin::signed(LP),
-				TradingStrategy::TickZeroCentered {
-					spread_tick: SPREAD_TICK,
-					base_asset: Asset::Btc
-				},
-				[(Asset::Btc, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
-			),
-			Error::<Test>::InvalidAssetsForStrategy
-		);
+		// Non-oracle strategies value the assets 1:1, so the base asset must be a USD stablecoin.
+		for base_asset in [Asset::Btc, Asset::Trx] {
+			for strategy in [
+				TradingStrategy::TickZeroCentered { spread_tick: SPREAD_TICK, base_asset },
+				TradingStrategy::SimpleBuySell { buy_tick: -10, sell_tick: 10, base_asset },
+			] {
+				assert!(matches!(
+					strategy.validate_params::<Test>(),
+					Err(Error::<Test>::InvalidAssetsForStrategy)
+				));
+			}
+		}
+
+		// TickZeroCentered is always centred on tick zero, so it also requires the base asset to
+		// have the same decimals as the quote asset.
+		assert_ne!(Asset::BscUsdt.decimals(), QUOTE_ASSET.decimals());
+		assert!(matches!(
+			TradingStrategy::TickZeroCentered {
+				spread_tick: SPREAD_TICK,
+				base_asset: Asset::BscUsdt
+			}
+			.validate_params::<Test>(),
+			Err(Error::<Test>::InvalidAssetsForStrategy)
+		));
 
 		// SimpleBuySell supports any decimals, but its ticks must be near the parity tick.
-		let btc_parity = parity_tick(Asset::Btc, QUOTE_ASSET).unwrap();
-		assert_err!(
-			TradingStrategyPallet::deploy_strategy(
-				RuntimeOrigin::signed(LP),
-				TradingStrategy::SimpleBuySell {
-					buy_tick: -10,
-					sell_tick: 10,
-					base_asset: Asset::Btc
-				},
-				[(Asset::Btc, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
-			),
-			Error::<Test>::InvalidTick
-		);
+		let parity = parity_tick(Asset::BscUsdt, QUOTE_ASSET).unwrap();
+		assert!(matches!(
+			TradingStrategy::SimpleBuySell {
+				buy_tick: -10,
+				sell_tick: 10,
+				base_asset: Asset::BscUsdt
+			}
+			.validate_params::<Test>(),
+			Err(Error::<Test>::InvalidTick)
+		));
 		assert_ok!(TradingStrategy::SimpleBuySell {
-			buy_tick: btc_parity - 10,
-			sell_tick: btc_parity + 10,
-			base_asset: Asset::Btc,
+			buy_tick: parity - 10,
+			sell_tick: parity + 10,
+			base_asset: Asset::BscUsdt,
 		}
 		.validate_params::<Test>());
 

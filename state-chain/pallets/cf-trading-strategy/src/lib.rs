@@ -205,12 +205,14 @@ impl TradingStrategy {
 					Error::<T>::InvalidAssetsForStrategy
 				);
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+				ensure!(base_asset.is_usd_stablecoin(), Error::<T>::InvalidAssetsForStrategy);
 				if *spread_tick < 0 || !is_strategy_tick_valid(*spread_tick, 0) {
 					return Err(Error::<T>::InvalidTick)
 				}
 			},
 			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } => {
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+				ensure!(base_asset.is_usd_stablecoin(), Error::<T>::InvalidAssetsForStrategy);
 				let parity_tick = parity_tick(*base_asset, STABLE_ASSET)
 					.ok_or(Error::<T>::InvalidAssetsForStrategy)?;
 				if buy_tick >= sell_tick ||
