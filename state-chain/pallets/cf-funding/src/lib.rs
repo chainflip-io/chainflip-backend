@@ -37,8 +37,8 @@ use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, AccountRole, AssetAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	FundAccount, Funding, FundingSource, GetMinimumFunding, MoveFlipToGateway, RedemptionCheck,
-	SpawnAccount,
+	FundAccount, Funding, FundingSource, GetMinimumFunding, MoveFlipToGateway,
+	RedeemAddressBinding, RedemptionCheck, SpawnAccount,
 };
 use cf_utilities::derive_common_traits;
 use codec::{Decode, DecodeWithMemTracking, Encode};
@@ -1235,6 +1235,19 @@ impl<T: Config> FundAccount for Pallet<T> {
 			funds_added: amount,
 			total_balance,
 		});
+	}
+}
+
+impl<T: Config> RedeemAddressBinding for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn bound_redeem_address(account_id: &Self::AccountId) -> Option<EthereumAddress> {
+		BoundRedeemAddress::<T>::get(account_id)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn bind_redeem_address(account_id: &Self::AccountId, address: EthereumAddress) {
+		BoundRedeemAddress::<T>::insert(account_id, address);
 	}
 }
 
