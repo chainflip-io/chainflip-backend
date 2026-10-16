@@ -61,6 +61,7 @@ pub trait WeightInfo {
 	fn set_vault_swap_minimum_broker_fee() -> Weight;
 	fn request_account_creation_deposit_address() -> Weight;
 	fn bind_broker_fee_withdrawal_address() -> Weight;
+	fn link_recovery_account() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -395,6 +396,19 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	/// Storage: `AccountRoles::AccountRoles` (r:2 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::BrokerRecoveryAccount` (r:1 w:1)
+	/// Proof: `Swapping::BrokerRecoveryAccount` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn link_recovery_account() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `787`
+		//  Estimated: `6727`
+		// Minimum execution time: 15_000_000 picoseconds.
+		Weight::from_parts(15_000_000, 6727)
+			.saturating_add(T::DbWeight::get().reads(3_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -726,6 +740,19 @@ impl WeightInfo for () {
 		// Minimum execution time: 22_024_000 picoseconds.
 		Weight::from_parts(22_689_000, 4138)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+	/// Storage: `AccountRoles::AccountRoles` (r:2 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::BrokerRecoveryAccount` (r:1 w:1)
+	/// Proof: `Swapping::BrokerRecoveryAccount` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn link_recovery_account() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `787`
+		//  Estimated: `6727`
+		// Minimum execution time: 15_000_000 picoseconds.
+		Weight::from_parts(15_000_000, 6727)
+			.saturating_add(ParityDbWeight::get().reads(3_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 }

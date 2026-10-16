@@ -204,6 +204,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type SolanaBroadcaster = SolanaBroadcaster;
 	type TransactionPayments = pallet_transaction_payment::ChargeTransactionPayment<Self>;
 	type GetTransactionPayments = GetTransactionPayments;
+	type FailedDepositRecovery = chainflip::FailedDepositRecoveryRouter;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -330,6 +331,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type LpRegistrationApi = LiquidityProvider;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -361,6 +363,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type LpRegistrationApi = LiquidityProvider;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -392,6 +395,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type LpRegistrationApi = LiquidityProvider;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -423,6 +427,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type LpRegistrationApi = LiquidityProvider;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -454,6 +459,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type LpRegistrationApi = LiquidityProvider;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
@@ -485,6 +491,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type LpRegistrationApi = LiquidityProvider;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
@@ -516,6 +523,7 @@ impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type LpRegistrationApi = LiquidityProvider;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_pools::Config for Runtime {
