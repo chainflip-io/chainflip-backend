@@ -42,6 +42,7 @@ use cf_traits::{
 		broadcaster::MockBroadcaster,
 		ccm_additional_data_handler::MockCcmAdditionalDataHandler,
 		chain_tracking::ChainTracker,
+		failed_deposit_recovery::MockBrokerRecoveryApi,
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		lending_pools::MockBoostApi,
@@ -156,6 +157,7 @@ impl Config<Instance1> for Test {
 	type BoostApi = MockBoostApi;
 	type FundAccount = MockFundingInfo<Test>;
 	type LpRegistrationApi = MockLpRegistration;
+	type BrokerRecoveryApi = MockBrokerRecoveryApi;
 }
 
 impl ChainflipWithTargetChain<Instance2> for Test {
@@ -191,6 +193,7 @@ impl Config<Instance2> for Test {
 	type BoostApi = MockBoostApi;
 	type FundAccount = MockFundingInfo<Test>;
 	type LpRegistrationApi = MockLpRegistration;
+	type BrokerRecoveryApi = MockBrokerRecoveryApi;
 }
 
 impl_mock_chainflip!(Test);

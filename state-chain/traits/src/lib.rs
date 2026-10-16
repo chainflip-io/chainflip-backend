@@ -1368,6 +1368,49 @@ pub trait AffiliateRegistry {
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
 }
 
+/// Looks up the LP account a broker has linked to receive its failed deposits.
+pub trait BrokerRecoveryApi {
+	type AccountId;
+
+	/// The broker's recovery account, if it has linked one that still has the LP role.
+	fn recovery_account(broker: &Self::AccountId) -> Option<Self::AccountId>;
+}
+
+/// Opaque reference to a failed deposit, e.g. its transaction id or hash.
+pub type FailedDepositReference = BoundedVec<u8, ConstU32<64>>;
+
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub enum FailedDepositRecoveryOutcome {
+	/// Egressed to the recovery account's refund address for the asset's chain.
+	Egressed {
+		egress_id: EgressId,
+		destination: ForeignChainAddress,
+		egress_amount: AssetAmount,
+		fee_withheld: AssetAmount,
+	},
+	/// Credited to the recovery account's free balance.
+	Credited,
+}
+
+/// Pays out a failed deposit to the recovery account of the broker it is attributed to.
+pub trait FailedDepositRecovery {
+	type AccountId;
+
+	/// Egresses the funds to the recovery account's refund address, if it has one for the asset's
+	/// chain and the amount covers the egress fee. Otherwise credits the recovery account.
+	///
+	/// Fails if the broker has no recovery account, leaving storage unchanged.
+	fn route_failed_deposit(
+		broker: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<(Self::AccountId, FailedDepositRecoveryOutcome), DispatchError>;
+
+	/// Links a recovery account to the broker, with an Ethereum refund address.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark(_broker: &Self::AccountId) {}
+}
+
 pub trait MinimumDeposit {
 	fn get(asset: Asset) -> AssetAmount;
 }

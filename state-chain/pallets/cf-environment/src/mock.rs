@@ -36,7 +36,8 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	mocks::{failed_deposit_recovery::MockFailedDepositRecovery, key_provider::MockKeyProvider},
+	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{
 	derive_impl,
@@ -320,6 +321,7 @@ impl pallet_cf_environment::Config for Test {
 	type SolanaBroadcaster = MockSolanaBroadcaster;
 	type TransactionPayments = MockPayment<Self>;
 	type GetTransactionPayments = ();
+	type FailedDepositRecovery = MockFailedDepositRecovery;
 	type WeightInfo = ();
 }
 
@@ -419,6 +421,7 @@ pub mod benchmarks_mock {
 		type SolanaBroadcaster = MockSolanaBroadcaster;
 		type TransactionPayments = MockPayment<Self>;
 		type GetTransactionPayments = ();
+		type FailedDepositRecovery = MockFailedDepositRecovery;
 		type WeightInfo = ();
 	}
 
