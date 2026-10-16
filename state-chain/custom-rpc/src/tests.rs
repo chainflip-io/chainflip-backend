@@ -441,7 +441,10 @@ fn test_environment_serialization() {
 				limit_order_total_fees_earned: Default::default(),
 			}
 			.into();
-			PoolsEnvironment { fees: asset_map(Some(pool_info)) }
+			PoolsEnvironment {
+				fees: asset_map(Some(pool_info)),
+				minimum_order_amounts: asset_map(1_000u32.into()),
+			}
 		},
 	};
 
