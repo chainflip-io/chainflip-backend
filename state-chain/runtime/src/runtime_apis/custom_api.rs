@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(22)]
+	#[api_version(23)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -284,6 +284,11 @@ decl_runtime_apis!(
 		fn cf_swap_limits() -> SwapLimits;
 		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>>;
 		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount;
+		#[changed_in(23)]
+		fn cf_minimum_order_amount();
+		/// Minimum amount of `asset` that a limit or range order may hold. `0` means no minimum
+		/// is enforced for that asset.
+		fn cf_minimum_order_amount(asset: Asset) -> AssetAmount;
 		fn cf_validate_dca_params(
 			number_of_chunks: u32,
 			chunk_interval: u32,
