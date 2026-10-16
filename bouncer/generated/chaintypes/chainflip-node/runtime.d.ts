@@ -1575,6 +1575,17 @@ export interface RuntimeApis extends GenericRuntimeApis {
     >;
 
     /**
+     * Minimum amount of `asset` that a limit or range order may hold. `0` means no minimum
+     * is enforced for that asset.
+     *
+     * @callname: CustomRuntimeApi_cf_minimum_order_amount
+     * @param {CfPrimitivesChainsAssetsAnyAsset} asset
+     **/
+    cfMinimumOrderAmount: GenericRuntimeApiMethod<
+      (asset: CfPrimitivesChainsAssetsAnyAsset) => Promise<bigint>
+    >;
+
+    /**
      *
      * @callname: CustomRuntimeApi_cf_validate_dca_params
      * @param {number} number_of_chunks
