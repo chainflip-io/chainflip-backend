@@ -110,12 +110,12 @@ macro_rules! generate_vote_storage_tuple_impls {
                     }
                 }
 
-                fn component_storage_kind(partial_vote: &Self::PartialVote) -> ComponentStorageKind {
-                    match partial_vote {
-                        $(
-                            CompositePartialVote::$t(partial_vote) => <$t as VoteStorage>::component_storage_kind(partial_vote),
-                        )*
-                    }
+                fn component_storage_kind() -> ComponentStorageKind {
+                    // A composite's components depend on which member electoral system the election
+                    // belongs to, which only the election's identifier names, so it has to report
+                    // `Both` here. Callers with an identifier should use
+                    // `ElectoralSystemRunner::election_component_storage_kind`.
+                    ComponentStorageKind::Both
                 }
 
                 fn components_into_authority_vote<GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>>(
