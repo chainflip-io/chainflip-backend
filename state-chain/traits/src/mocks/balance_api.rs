@@ -123,6 +123,7 @@ impl MockPallet for MockLpRegistration {
 }
 
 const REFUND_ADDRESS_REGISTRATION: &[u8] = b"IS_REGISTERED_FOR_ASSET";
+const REFUND_ADDRESSES: &[u8] = b"REFUND_ADDRESSES";
 
 impl MockLpRegistration {
 	pub fn register_refund_address(account_id: DefaultAccountId, chain: ForeignChain) {
@@ -144,6 +145,14 @@ impl LpRegistration for MockLpRegistration {
 		address: cf_chains::ForeignChainAddress,
 	) {
 		Self::register_refund_address(*who, address.chain());
+		Self::put_storage(REFUND_ADDRESSES, (*who, address.chain()), address);
+	}
+
+	fn liquidity_refund_address(
+		who: &Self::AccountId,
+		chain: ForeignChain,
+	) -> Option<cf_chains::ForeignChainAddress> {
+		Self::get_storage(REFUND_ADDRESSES, (*who, chain))
 	}
 
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult {

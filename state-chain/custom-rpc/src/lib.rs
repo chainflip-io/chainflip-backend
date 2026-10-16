@@ -261,6 +261,8 @@ pub enum RpcAccountInfo {
 		btc_vault_deposit_address: Option<String>,
 		#[serde(skip_serializing_if = "Option::is_none")]
 		bound_fee_withdrawal_address: Option<EvmAddress>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		recovery_account: Option<AccountId32>,
 	},
 	LiquidityProvider {
 		refund_addresses: BTreeMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
@@ -320,6 +322,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					affiliates,
 					btc_vault_deposit_address: btc_vault_deposit_address.map(Into::into),
 					bound_fee_withdrawal_address: None,
+					recovery_account: None,
 				},
 			},
 			OldRpcAccountInfo::LiquidityProvider {
@@ -1455,6 +1458,22 @@ where
 	}
 }
 
+/// The broker's recovery account. Read from storage so that it doesn't depend on the runtime API
+/// version. `None` on runtimes that predate it.
+fn broker_recovery_account<C, B>(
+	client: &C,
+	hash: <B as BlockT>::Hash,
+	broker: &AccountId32,
+) -> Result<Option<AccountId32>, CfApiError>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash>,
+	C: CallApiAt<B>,
+{
+	Ok(client.state_at(hash).map_err(CfApiError::from)?.inspect_state(|| {
+		pallet_cf_swapping::BrokerRecoveryAccount::<state_chain_runtime::Runtime>::get(broker)
+	}))
+}
+
 pub struct StorageQueryApi<'a, C, B>(&'a C, PhantomData<B>);
 
 impl<'a, C, B> StorageQueryApi<'a, C, B>
@@ -2056,6 +2075,18 @@ where
 											.btc_vault_deposit_address,
 										bound_fee_withdrawal_address: broker_info
 											.bound_fee_withdrawal_address,
+										recovery_account: common_items
+											.account_id
+											.as_ref()
+											.map(|broker| {
+												broker_recovery_account(
+													&*self.rpc_backend.client,
+													hash,
+													broker,
+												)
+											})
+											.transpose()?
+											.flatten(),
 									}
 								},
 								RuntimeApiAccountInfo::LiquidityProvider(lp_info) =>
@@ -2272,6 +2303,11 @@ where
 								affiliates: affiliates.into_iter().map(Into::into).collect(),
 								btc_vault_deposit_address,
 								bound_fee_withdrawal_address,
+								recovery_account: broker_recovery_account(
+									&*self.rpc_backend.client,
+									hash,
+									&account_id,
+								)?,
 							}
 						},
 						AccountRole::LiquidityProvider => {

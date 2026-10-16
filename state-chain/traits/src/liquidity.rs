@@ -90,6 +90,12 @@ pub trait LpRegistration {
 		address: cf_chains::ForeignChainAddress,
 	);
 
+	/// The refund address registered by the given account for the given chain.
+	fn liquidity_refund_address(
+		who: &Self::AccountId,
+		chain: cf_chains::ForeignChain,
+	) -> Option<cf_chains::ForeignChainAddress>;
+
 	/// Ensure that the given account has a refund address set for the given asset.
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult;
 

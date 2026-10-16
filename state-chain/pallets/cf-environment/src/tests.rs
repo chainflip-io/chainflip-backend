@@ -1143,3 +1143,134 @@ mod validate_unsigned_tests {
 		}
 	}
 }
+
+mod recover_failed_deposits {
+	use super::*;
+	use crate::{Error, FailedDepositRecoveryRequest};
+	use cf_primitives::Asset;
+	use cf_traits::{
+		mocks::failed_deposit_recovery::{MockBrokerRecoveryApi, MockFailedDepositRecovery},
+		FailedDepositRecoveryOutcome,
+	};
+	use frame_support::sp_runtime::DispatchError;
+
+	const LINKED_BROKER: u64 = 10;
+	const RECOVERY_ACCOUNT: u64 = 11;
+	const UNLINKED_BROKER: u64 = 12;
+	// The mock's error, as stored in events, which drop the message.
+	const NO_RECOVERY_ACCOUNT: DispatchError = DispatchError::Other("");
+
+	fn request(broker: u64, asset: Asset, reference: &[u8]) -> FailedDepositRecoveryRequest<u64> {
+		FailedDepositRecoveryRequest {
+			broker,
+			asset,
+			amount: 1_000,
+			reference: reference.to_vec().try_into().unwrap(),
+		}
+	}
+
+	fn recover(
+		requests: Vec<FailedDepositRecoveryRequest<u64>>,
+	) -> frame_support::dispatch::DispatchResult {
+		Environment::recover_failed_deposits(OriginTrait::root(), requests.try_into().unwrap())
+	}
+
+	fn recovered(request: &FailedDepositRecoveryRequest<u64>) -> RuntimeEvent {
+		RuntimeEvent::Environment(Event::FailedDepositRecovered {
+			broker: request.broker,
+			recovery_account: RECOVERY_ACCOUNT,
+			asset: request.asset,
+			amount: request.amount,
+			outcome: FailedDepositRecoveryOutcome::Credited,
+			reference: request.reference.clone(),
+		})
+	}
+
+	fn failed(request: &FailedDepositRecoveryRequest<u64>, error: DispatchError) -> RuntimeEvent {
+		RuntimeEvent::Environment(Event::FailedDepositRecoveryFailed {
+			broker: request.broker,
+			asset: request.asset,
+			amount: request.amount,
+			reference: request.reference.clone(),
+			// Error messages are not stored in events.
+			error: error.stripped(),
+		})
+	}
+
+	#[test]
+	fn requires_governance() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Environment::recover_failed_deposits(
+					OriginTrait::signed(LINKED_BROKER),
+					vec![request(LINKED_BROKER, Asset::Eth, b"tx")].try_into().unwrap()
+				),
+				DispatchError::BadOrigin
+			);
+		});
+	}
+
+	#[test]
+	fn batch_of_mixed_outcomes() {
+		new_test_ext().execute_with(|| {
+			MockBrokerRecoveryApi::link(LINKED_BROKER, RECOVERY_ACCOUNT);
+
+			let requests = vec![
+				request(LINKED_BROKER, Asset::Eth, b"eth-tx"),
+				request(UNLINKED_BROKER, Asset::Usdc, b"usdc-tx"),
+				// The same reference on another chain is a different deposit.
+				request(LINKED_BROKER, Asset::Sol, b"eth-tx"),
+			];
+			assert_ok!(recover(requests.clone()));
+
+			assert_eq!(
+				System::events().into_iter().map(|record| record.event).collect::<Vec<_>>(),
+				vec![
+					recovered(&requests[0]),
+					failed(&requests[1], NO_RECOVERY_ACCOUNT),
+					recovered(&requests[2]),
+				]
+			);
+			assert_eq!(
+				MockFailedDepositRecovery::recoveries(),
+				vec![(RECOVERY_ACCOUNT, Asset::Eth, 1_000), (RECOVERY_ACCOUNT, Asset::Sol, 1_000)]
+			);
+		});
+	}
+
+	#[test]
+	fn rejects_a_deposit_repeated_within_the_batch() {
+		new_test_ext().execute_with(|| {
+			MockBrokerRecoveryApi::link(LINKED_BROKER, RECOVERY_ACCOUNT);
+
+			assert_noop!(
+				recover(vec![
+					request(LINKED_BROKER, Asset::Eth, b"eth-tx"),
+					request(LINKED_BROKER, Asset::Btc, b"btc-tx"),
+					// Same chain and reference, even if the asset differs.
+					request(UNLINKED_BROKER, Asset::Usdc, b"eth-tx"),
+				]),
+				Error::<Test>::DuplicateFailedDeposit
+			);
+		});
+	}
+
+	#[test]
+	fn failed_recovery_can_be_retried() {
+		new_test_ext().execute_with(|| {
+			let unlinked = request(UNLINKED_BROKER, Asset::Usdc, b"usdc-tx");
+			assert_ok!(recover(vec![unlinked.clone()]));
+			System::assert_last_event(failed(&unlinked, NO_RECOVERY_ACCOUNT));
+			assert!(MockFailedDepositRecovery::recoveries().is_empty());
+
+			MockBrokerRecoveryApi::link(UNLINKED_BROKER, RECOVERY_ACCOUNT);
+			assert_ok!(recover(vec![unlinked.clone()]));
+
+			System::assert_last_event(recovered(&unlinked));
+			assert_eq!(
+				MockFailedDepositRecovery::recoveries(),
+				vec![(RECOVERY_ACCOUNT, Asset::Usdc, 1_000)]
+			);
+		});
+	}
+}

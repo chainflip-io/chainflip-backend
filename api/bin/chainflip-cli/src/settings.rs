@@ -16,7 +16,7 @@
 
 use chainflip_api::{
 	primitives::{state_chain_runtime, Asset, EpochIndex, ForeignChain},
-	AddressString, BasisPoints,
+	AccountId32, AddressString, BasisPoints,
 };
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
@@ -112,6 +112,11 @@ pub enum BrokerSubcommands {
 	DeregisterAccount,
 	/// Set bound fee withdrawal address.
 	BindFeeWithdrawalAddress(EthereumAddressString),
+	/// Link the LP account that receives this broker's failed deposits. Can only be set once.
+	LinkRecoveryAccount {
+		#[clap(help = "The SS58 address of the LP account")]
+		recovery_account: AccountId32,
+	},
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]

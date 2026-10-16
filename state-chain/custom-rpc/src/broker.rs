@@ -797,4 +797,20 @@ where
 
 		Ok(tx_hash)
 	}
+
+	async fn link_recovery_account(&self, recovery_account: AccountId32) -> RpcResult<H256> {
+		let ExtrinsicData { tx_hash, .. } = self
+			.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_swapping::Call::link_recovery_account {
+					recovery_account,
+				}),
+				true,
+				true,
+			)
+			.await
+			.map_err(CfApiError::from)?;
+
+		Ok(tx_hash)
+	}
 }
