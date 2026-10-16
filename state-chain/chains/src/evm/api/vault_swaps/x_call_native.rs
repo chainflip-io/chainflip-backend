@@ -21,14 +21,13 @@ use crate::{
 use cf_primitives::{Asset, AssetAmount};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use ethabi::Token;
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'XCallNative'
 /// function.
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub struct XCallNative {
 	/// The destination chain according to Chainflip Protocol's nomenclature.
 	dst_chain: u32,

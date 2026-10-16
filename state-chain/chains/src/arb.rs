@@ -29,7 +29,7 @@ pub use cf_primitives::chains::Arbitrum;
 use cf_primitives::{chains::assets, AssetAmount, IngressOrEgress};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
-	sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug},
+	sp_runtime::{traits::Zero, FixedPointNumber, FixedU64},
 	Parameter,
 };
 use scale_info::TypeInfo;
@@ -79,7 +79,7 @@ impl Chain for Arbitrum {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,

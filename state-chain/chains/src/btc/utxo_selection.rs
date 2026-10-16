@@ -16,7 +16,6 @@
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
-use sp_core::RuntimeDebug;
 use sp_std::vec::Vec;
 
 use super::{BitcoinFeeInfo, BtcAmount, Utxo};
@@ -30,7 +29,7 @@ pub enum UtxoSelectionError {
 }
 
 #[derive(
-	Encode, Decode, DecodeWithMemTracking, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug,
+	Encode, Decode, DecodeWithMemTracking, Default, PartialEq, Copy, Clone, TypeInfo, Debug,
 )]
 pub struct ConsolidationParameters {
 	/// Consolidate when total UTXO count reaches this threshold

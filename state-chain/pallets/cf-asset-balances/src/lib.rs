@@ -59,7 +59,7 @@ use whitelist::*;
 pub const STORAGE_VERSION_U16: u16 = 3;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub enum ExternalOwner {
 	Vault,
 	AggKey,
@@ -868,7 +868,7 @@ impl<T: Config> RefundAddressRegistry for Pallet<T> {
 	Clone,
 	PartialEq,
 	Eq,
-	RuntimeDebug,
+	Debug,
 	Serialize,
 	Deserialize,
 )]

@@ -18,13 +18,51 @@
 
 use crate::network;
 use cf_chains::evm::Address as EvmAddress;
+use cf_primitives::AccountRole;
 use cf_traits::EpochInfo;
-use frame_support::assert_noop;
+use codec::{Decode, Encode};
+use frame_support::{assert_noop, assert_ok};
 use pallet_cf_account_roles::VanityNames;
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_reputation::Reputations;
 use pallet_cf_validator::{AccountPeerMapping, MappedPeers};
-use state_chain_runtime::{Funding, Reputation, Runtime, Validator};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
+use sp_session::{runtime_decl_for_session_keys::SessionKeysV2, OpaqueGeneratedSessionKeys};
+use state_chain_runtime::{
+	opaque::SessionKeys, AccountId, Block, Funding, Reputation, Runtime, RuntimeOrigin, Validator,
+};
+
+/// Keys and proof as the node's `author_rotateKeysWithOwner` RPC produces them for the CLI: via
+/// the runtime API, with the SCALE-encoded account id as the owner.
+#[test]
+fn can_set_session_keys_generated_by_runtime_api() {
+	let mut ext = super::genesis::with_test_defaults().build();
+	ext.as_mut().register_extension(KeystoreExt::new(MemoryKeystore::new()));
+	ext.execute_with(|| {
+		let validator = AccountId::from([0xde; 32]);
+		network::new_account(&validator, AccountRole::Validator);
+
+		let generate = |owner: &AccountId| {
+			let OpaqueGeneratedSessionKeys { keys, proof } =
+				<Runtime as SessionKeysV2<Block>>::generate_session_keys(owner.encode(), None);
+			(SessionKeys::decode(&mut &keys[..]).unwrap(), proof)
+		};
+
+		let (keys, proof) = generate(&AccountId::from(crate::BOB));
+		assert_noop!(
+			Validator::set_keys(RuntimeOrigin::signed(validator.clone()), keys, proof),
+			pallet_session::Error::<Runtime>::InvalidProof
+		);
+
+		let (keys, proof) = generate(&validator);
+		assert_ok!(Validator::set_keys(
+			RuntimeOrigin::signed(validator.clone()),
+			keys.clone(),
+			proof
+		));
+		assert_eq!(pallet_session::NextKeys::<Runtime>::get(&validator), Some(keys));
+	});
+}
 
 #[test]
 fn account_deletion_removes_relevant_storage_items() {
