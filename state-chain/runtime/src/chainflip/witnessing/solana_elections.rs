@@ -266,8 +266,8 @@ impl
 )]
 pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
-	// It is possible for a contract call to be reverted due to contract's internal error.
-	// This field is set to `true` if the contract call executed successfully without error.
+	// A transaction can be included on-chain and still fail to execute. This field is set to
+	// `true` only if the transaction executed without error.
 	pub transaction_successful: bool,
 }
 
@@ -282,36 +282,49 @@ impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWit
 		TransactionSuccessDetails { tx_fee, transaction_successful }: TransactionSuccessDetails,
 	) -> Option<((), ())> {
 		use cf_traits::KeyProvider;
-		if !transaction_successful {
-			// On CCM failure, we need to refund the user using their fallback info.
-			if let Some((broadcast_id, ccm_tx)) =
-				SolanaBroadcaster::pending_api_call_from_out_id(signature)
-			{
-				// Only Ccm calls support fallback.
-				if let SolanaTransactionType::CcmTransfer { fallback } = ccm_tx.call_type {
-					SolanaIngressEgress::do_ccm_fallback(broadcast_id, fallback);
-				}
-			} else {
-				log::error!("Ccm fallback failed: Reported Solana contract call revert, but the ApiCall does not exist in storage. Tx_out_id: : {:?}", signature);
-			}
-		}
+		let confirmation = TransactionConfirmation {
+			tx_out_id: signature,
+			// Assign any owed fees to the current key.
+			signer_id: SolanaThresholdSigner::active_epoch_key().map(|e| e.key).unwrap_or_default(),
+			tx_fee,
+			tx_metadata: (),
+			transaction_ref: signature,
+		};
 
-		if let Err(err) = SolanaBroadcaster::egress_success(
-			TransactionConfirmation {
-				tx_out_id: signature,
-				// Assign any owed fees to the current key.
-				signer_id: SolanaThresholdSigner::active_epoch_key()
-					.map(|e| e.key)
-					.unwrap_or_default(),
-				tx_fee,
-				tx_metadata: (),
-				transaction_ref: signature,
-			},
+		let result = if transaction_successful {
 			// Solana doesn't use this block number; it's primarily for EVM chains.
-			Default::default(),
-		) {
+			SolanaBroadcaster::egress_success(confirmation, Default::default())
+		} else {
+			match SolanaBroadcaster::pending_api_call_from_out_id(signature) {
+				Some((
+					broadcast_id,
+					SolanaApi {
+						call_type: SolanaTransactionType::CcmTransfer { fallback }, ..
+					},
+				)) => {
+					// The fallback transfer completes the egress.
+					SolanaIngressEgress::do_ccm_fallback(broadcast_id, fallback);
+					SolanaBroadcaster::egress_success(confirmation, Default::default())
+				},
+				Some((broadcast_id, api_call)) => {
+					log::error!(
+						"Solana {:?} transaction {:?} failed to execute, aborting broadcast {}.",
+						api_call.call_type,
+						signature,
+						broadcast_id
+					);
+					SolanaBroadcaster::egress_execution_failed(confirmation)
+				},
+				None => {
+					log::error!("Reported Solana transaction failure, but the ApiCall does not exist in storage. Tx_out_id: {:?}", signature);
+					SolanaBroadcaster::egress_success(confirmation, Default::default())
+				},
+			}
+		};
+
+		if let Err(err) = result {
 			log::error!(
-				"Failed to execute egress success: TxOutId: {:?}, Error: {:?}",
+				"Failed to process Solana egress outcome: TxOutId: {:?}, Error: {:?}",
 				signature,
 				err
 			)
