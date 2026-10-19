@@ -136,8 +136,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 		hash: sp_core::H256,
 		height: AssethubWitnessBatchNumber,
 	) -> Result<Self::BlockQuery> {
-		let block_query = self.block_query_from_height(height).await?;
-		let query_hash = witness_range_hash(&block_query)?;
+		let (block_query, query_hash) = self.block_query_and_hash_from_height(height).await?;
 		if query_hash != hash {
 			return Err(anyhow::anyhow!(
 				"Block hash from RPC ({query_hash}) doesn't match election block hash: {hash}"
@@ -200,7 +199,11 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 		height: AssethubWitnessBatchNumber,
 	) -> Result<(Self::BlockQuery, sp_core::H256)> {
 		let block_query = self.block_query_from_height(height).await?;
-		let hash = witness_range_hash(&block_query)?;
+		// The hash of a witness range is the hash of its last block.
+		let hash = block_query
+			.last()
+			.map(|header| header.block_hash)
+			.ok_or_else(|| anyhow::anyhow!("Block query contains no blocks"))?;
 		Ok((block_query, hash))
 	}
 }
@@ -240,14 +243,6 @@ impl AssethubVoter {
 
 		Ok(headers)
 	}
-}
-
-/// The hash of a witness range is the hash of its last block.
-fn witness_range_hash(block_query: &[AssethubBlockHeader]) -> Result<sp_core::H256> {
-	block_query
-		.last()
-		.map(|header| header.block_hash)
-		.ok_or_else(|| anyhow::anyhow!("Block query contains no blocks"))
 }
 
 #[async_trait::async_trait]
