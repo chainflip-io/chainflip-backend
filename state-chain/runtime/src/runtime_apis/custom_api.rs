@@ -191,6 +191,7 @@ decl_runtime_apis!(
 			liquidity: Liquidity,
 		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 
+		#[deprecated(note = "The maximum swap amount no longer exists; this always returns None.")]
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount;

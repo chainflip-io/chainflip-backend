@@ -666,6 +666,7 @@ pub struct FundingEnvironment {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SwappingEnvironment {
+	#[deprecated(note = "The maximum swap amount no longer exists.")]
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
 	#[deprecated(note = "Use network_fees field instead")]
 	network_fee_hundredth_pips: Permill,
@@ -1072,6 +1073,7 @@ pub trait CustomApi {
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 
+	#[deprecated(note = "The maximum swap amount no longer exists.")]
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>>;
 	#[subscription(name = "subscribe_pool_price", item = BlockUpdate<PoolPriceV1>)]
@@ -2066,6 +2068,7 @@ where
 	}
 
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>> {
+		#[expect(deprecated)]
 		self.rpc_backend
 			.with_runtime_api(None, |api, hash| api.cf_max_swap_amount(hash, asset))
 	}
@@ -2806,6 +2809,7 @@ where
 				api.cf_network_fees(hash)?
 			};
 			Ok::<_, CfApiError>(SwappingEnvironment {
+				#[expect(deprecated)]
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
@@ -2813,6 +2817,7 @@ where
 					{
 						return Ok(None);
 					}
+					#[expect(deprecated)]
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
 				#[expect(deprecated)]
