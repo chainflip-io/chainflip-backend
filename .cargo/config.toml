@@ -92,6 +92,9 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0346: rustls `Debug` impls of client session values expose secrets. Only affects custom `ClientSessionStore`s that log them, which we don't have. 0.23 is patched; the unpatched 0.21 comes from our ethers fork.
 # - RUSTSEC-2026-0349: rustls key-share prediction can downgrade from post-quantum to classical key exchange. We only use the `ring` provider, which has no post-quantum group. 0.23 is patched; the unpatched 0.21 comes from our ethers fork.
 # - RUSTSEC-2026-0363: Wasmtime component-model handle tables are uncapped. The `component-model` feature is not enabled and we don't control the wasmtime version. Dependency of substrate.
+# - RUSTSEC-2026-0367: zip 0.6.6 preserves SUID/SGID bits on extraction. Only reachable via `svm-rs`, an optional dependency of our ethers fork's `ethers-solc`, which no crate enables: it is in Cargo.lock but never compiled.
+# - RUSTSEC-2026-0368: zip 0.6.6 extracts symlinks pointing outside the destination. Same as RUSTSEC-2026-0367: never compiled.
+# - RUSTSEC-2026-0369: zip 0.6.6 applies permissions through symlinks on extraction. Same as RUSTSEC-2026-0367: never compiled.
 
 #
 cf-audit = '''
@@ -151,6 +154,9 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0346
 	--ignore RUSTSEC-2026-0349
 	--ignore RUSTSEC-2026-0363
+	--ignore RUSTSEC-2026-0367
+	--ignore RUSTSEC-2026-0368
+	--ignore RUSTSEC-2026-0369
 '''
 
 [build]
