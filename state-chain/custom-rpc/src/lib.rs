@@ -1460,7 +1460,7 @@ where
 
 /// The broker's recovery account. Read from storage so that it doesn't depend on the runtime API
 /// version. `None` on runtimes that predate it.
-fn broker_recovery_account<C, B>(
+pub(crate) fn broker_recovery_account<C, B>(
 	client: &C,
 	hash: <B as BlockT>::Hash,
 	broker: &AccountId32,

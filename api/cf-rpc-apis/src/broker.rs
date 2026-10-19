@@ -159,4 +159,7 @@ pub trait BrokerRpcApi {
 	/// Links the LP account that receives the broker's failed deposits. Can only be set once.
 	#[method(name = "link_recovery_account", aliases = ["broker_linkRecoveryAccount"])]
 	async fn link_recovery_account(&self, recovery_account: AccountId32) -> RpcResult<H256>;
+	/// The LP account linked to receive the broker's failed deposits, if any.
+	#[method(name = "recovery_account", aliases = ["broker_recoveryAccount"])]
+	async fn recovery_account(&self) -> RpcResult<Option<AccountId32>>;
 }
