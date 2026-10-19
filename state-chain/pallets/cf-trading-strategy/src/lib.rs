@@ -56,7 +56,7 @@ use weights::WeightInfo;
 
 pub use pallet::*;
 
-pub const STORAGE_VERSION_U16: u16 = 1;
+pub const STORAGE_VERSION_U16: u16 = 2;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 // Note that strategies can only create a limited number of orders per asset/side so we can just
@@ -106,16 +106,10 @@ pub struct StrategyLimitOrder<AccountId> {
 	PartialEq,
 	Eq,
 )]
+// Indices 0 and 1 are retired and must not be reused: they would decode historical calls and
+// events as the wrong strategy. Explicit indices also keep stored strategies decodable.
 pub enum TradingStrategy {
-	TickZeroCentered {
-		spread_tick: Tick,
-		base_asset: Asset,
-	},
-	SimpleBuySell {
-		buy_tick: Tick,
-		sell_tick: Tick,
-		base_asset: Asset,
-	},
+	#[codec(index = 2)]
 	InventoryBased {
 		min_buy_tick: Tick,
 		max_buy_tick: Tick,
@@ -123,6 +117,7 @@ pub enum TradingStrategy {
 		max_sell_tick: Tick,
 		base_asset: Asset,
 	},
+	#[codec(index = 3)]
 	OracleTracking {
 		min_buy_offset_tick: Tick,
 		max_buy_offset_tick: Tick,
@@ -168,8 +163,6 @@ impl TradingStrategy {
 
 	pub fn supported_assets(&self) -> BTreeSet<Asset> {
 		match self {
-			TradingStrategy::TickZeroCentered { base_asset, .. } |
-			TradingStrategy::SimpleBuySell { base_asset, .. } |
 			TradingStrategy::InventoryBased { base_asset, .. } =>
 				BTreeSet::from_iter([*base_asset, STABLE_ASSET]),
 			TradingStrategy::OracleTracking { base_asset, quote_asset, .. } =>
@@ -180,48 +173,15 @@ impl TradingStrategy {
 	/// Returns the asset pair this strategy operates on.
 	pub fn asset_pair(&self) -> Option<AssetPair> {
 		match self {
-			TradingStrategy::TickZeroCentered { base_asset, .. } |
-			TradingStrategy::SimpleBuySell { base_asset, .. } |
-			TradingStrategy::InventoryBased { base_asset, .. } => AssetPair::new(*base_asset, STABLE_ASSET),
+			TradingStrategy::InventoryBased { base_asset, .. } =>
+				AssetPair::new(*base_asset, STABLE_ASSET),
 			TradingStrategy::OracleTracking { base_asset, quote_asset, .. } =>
 				AssetPair::new(*base_asset, *quote_asset),
 		}
 	}
 
-	/// Whether this strategy needs existing pool orders fetched before execution.
-	fn needs_order_prefetch(&self) -> bool {
-		matches!(
-			self,
-			TradingStrategy::InventoryBased { .. } | TradingStrategy::OracleTracking { .. }
-		)
-	}
-
 	fn validate_params<T: Config>(&self) -> Result<(), Error<T>> {
 		match self {
-			TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
-				// Centering on tick zero assumes both assets have the same decimals.
-				ensure!(
-					base_asset.decimals() == STABLE_ASSET.decimals(),
-					Error::<T>::InvalidAssetsForStrategy
-				);
-				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
-				ensure!(base_asset.is_usd_stablecoin(), Error::<T>::InvalidAssetsForStrategy);
-				if *spread_tick < 0 || !is_strategy_tick_valid(*spread_tick, 0) {
-					return Err(Error::<T>::InvalidTick)
-				}
-			},
-			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } => {
-				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
-				ensure!(base_asset.is_usd_stablecoin(), Error::<T>::InvalidAssetsForStrategy);
-				let parity_tick = parity_tick(*base_asset, STABLE_ASSET)
-					.ok_or(Error::<T>::InvalidAssetsForStrategy)?;
-				if buy_tick >= sell_tick ||
-					!is_strategy_tick_valid(*buy_tick, parity_tick) ||
-					!is_strategy_tick_valid(*sell_tick, parity_tick)
-				{
-					return Err(Error::<T>::InvalidTick)
-				}
-			},
 			TradingStrategy::InventoryBased {
 				min_buy_tick,
 				max_buy_tick,
@@ -408,18 +368,16 @@ pub mod pallet {
 			};
 
 			// Read at most `max_strategies` from storage (the bounded scan) and group the
-			// prefetch strategies by asset pair for efficient order fetching.
+			// strategies by asset pair for efficient order fetching.
 			let batch = iter
 				.by_ref()
 				.take(max_strategies)
 				.map(|(_, strategy_id, strategy)| {
-					if strategy.needs_order_prefetch() {
-						if let Some(asset_pair) = strategy.asset_pair() {
-							fetch_orders_for_strategies
-								.entry(asset_pair)
-								.or_default()
-								.insert(strategy_id.clone());
-						}
+					if let Some(asset_pair) = strategy.asset_pair() {
+						fetch_orders_for_strategies
+							.entry(asset_pair)
+							.or_default()
+							.insert(strategy_id.clone());
 					}
 					(strategy_id, strategy)
 				})
@@ -437,64 +395,56 @@ pub mod pallet {
 
 			// Execute each strategy in the batch.
 			for (strategy_id, strategy) in batch {
-				// Populate the order cache for strategies that require existing pool orders.
-				let existing_orders: Vec<&StrategyLimitOrder<T::AccountId>> = if strategy
-					.needs_order_prefetch()
-				{
-					let Some(asset_pair) = strategy.asset_pair() else {
-						log_or_panic!(
-							"Failed to determine asset pair for strategy {:?}, skipping",
-							strategy_id
-						);
-						continue;
-					};
-					let base_asset = asset_pair.base();
-					let quote_asset = asset_pair.quote();
-					if let btree_map::Entry::Vacant(entry) = order_cache.entry(asset_pair) {
-						match T::PoolApi::limit_orders(
-							base_asset,
-							quote_asset,
-							fetch_orders_for_strategies
-								.get(&asset_pair)
-								.unwrap_or(&BTreeSet::new()),
-						) {
-							Ok(pool_orders) => {
-								entry.insert(
-									pool_orders
-										.into_iter()
-										.map(|(side, order)| StrategyLimitOrder {
-											base_asset,
-											quote_asset,
-											account_id: order.lp,
-											side,
-											order_id: order.id.saturated_into(),
-											tick: order.tick,
-											amount: order.sell_amount.saturated_into(),
-										})
-										.collect(),
-								);
-							},
-							Err(e) => {
-								log_or_panic!(
-									"Failed to get limit orders for asset {:?}: {:?}",
-									base_asset,
-									e
-								);
-								continue;
-							},
-						}
-					}
-
-					// Grab the orders for this strategy.
-					order_cache
-						.get(&asset_pair)
-						.map(|orders| {
-							orders.iter().filter(|order| order.account_id == strategy_id).collect()
-						})
-						.unwrap_or_default()
-				} else {
-					Default::default()
+				// Populate the order cache with the existing pool orders for this asset pair.
+				let Some(asset_pair) = strategy.asset_pair() else {
+					log_or_panic!(
+						"Failed to determine asset pair for strategy {:?}, skipping",
+						strategy_id
+					);
+					continue;
 				};
+				let base_asset = asset_pair.base();
+				let quote_asset = asset_pair.quote();
+				if let btree_map::Entry::Vacant(entry) = order_cache.entry(asset_pair) {
+					match T::PoolApi::limit_orders(
+						base_asset,
+						quote_asset,
+						fetch_orders_for_strategies.get(&asset_pair).unwrap_or(&BTreeSet::new()),
+					) {
+						Ok(pool_orders) => {
+							entry.insert(
+								pool_orders
+									.into_iter()
+									.map(|(side, order)| StrategyLimitOrder {
+										base_asset,
+										quote_asset,
+										account_id: order.lp,
+										side,
+										order_id: order.id.saturated_into(),
+										tick: order.tick,
+										amount: order.sell_amount.saturated_into(),
+									})
+									.collect(),
+							);
+						},
+						Err(e) => {
+							log_or_panic!(
+								"Failed to get limit orders for asset {:?}: {:?}",
+								base_asset,
+								e
+							);
+							continue;
+						},
+					}
+				}
+
+				// Grab the orders for this strategy.
+				let existing_orders: Vec<&StrategyLimitOrder<T::AccountId>> = order_cache
+					.get(&asset_pair)
+					.map(|orders| {
+						orders.iter().filter(|order| order.account_id == strategy_id).collect()
+					})
+					.unwrap_or_default();
 
 				Self::execute_strategy(
 					&strategy,
@@ -609,26 +559,7 @@ pub mod pallet {
 			let strategy =
 				Strategies::<T>::take(lp, &strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
 
-			T::PoolApi::cancel_all_limit_orders(&strategy_id)?;
-
-			for asset in strategy.supported_assets() {
-				let balance = T::BalanceApi::get_balance(&strategy_id, asset);
-				T::BalanceApi::transfer(&strategy_id, lp, asset, balance)?;
-			}
-
-			frame_system::Provider::<T>::killed(&strategy_id).unwrap_or_else(|e| {
-				// This shouldn't happen, and not much we can do if it does except fix it on a
-				// subsequent release. Consequences are minor.
-				log::error!(
-					"Unexpected reference count error while closing a strategy {:?}: {:?}.",
-					strategy_id,
-					e
-				);
-			});
-
-			Self::deposit_event(Event::<T>::StrategyClosed { strategy_id: strategy_id.clone() });
-
-			Ok(())
+			Self::wind_down_strategy(lp, &strategy_id, strategy.supported_assets())
 		}
 
 		#[pallet::call_index(3)]
@@ -777,6 +708,35 @@ fn parity_tick(base_asset: Asset, quote_asset: Asset) -> Option<Tick> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Cancels the strategy's orders, returns its balances to the owner and releases its account.
+	/// The caller is responsible for removing the strategy from storage.
+	pub(crate) fn wind_down_strategy(
+		lp: &T::AccountId,
+		strategy_id: &T::AccountId,
+		assets: BTreeSet<Asset>,
+	) -> DispatchResult {
+		T::PoolApi::cancel_all_limit_orders(strategy_id)?;
+
+		for asset in assets {
+			let balance = T::BalanceApi::get_balance(strategy_id, asset);
+			T::BalanceApi::transfer(strategy_id, lp, asset, balance)?;
+		}
+
+		frame_system::Provider::<T>::killed(strategy_id).unwrap_or_else(|e| {
+			// This shouldn't happen, and not much we can do if it does except fix it on a
+			// subsequent release. Consequences are minor.
+			log::error!(
+				"Unexpected reference count error while closing a strategy {:?}: {:?}.",
+				strategy_id,
+				e
+			);
+		});
+
+		Self::deposit_event(Event::<T>::StrategyClosed { strategy_id: strategy_id.clone() });
+
+		Ok(())
+	}
+
 	fn add_funds_to_existing_strategy(
 		lp: &T::AccountId,
 		strategy_id: &T::AccountId,
@@ -840,22 +800,6 @@ impl<T: Config> Pallet<T> {
 		thresholds: &BTreeMap<Asset, AssetAmount>,
 	) {
 		match strategy {
-			TradingStrategy::TickZeroCentered { spread_tick, base_asset } =>
-				Self::execute_simple_order(
-					*base_asset,
-					-spread_tick,
-					*spread_tick,
-					strategy_id,
-					thresholds,
-				),
-			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } =>
-				Self::execute_simple_order(
-					*base_asset,
-					*buy_tick,
-					*sell_tick,
-					strategy_id,
-					thresholds,
-				),
 			TradingStrategy::InventoryBased {
 				min_buy_tick,
 				max_buy_tick,
@@ -890,41 +834,6 @@ impl<T: Config> Pallet<T> {
 				existing_orders,
 				thresholds,
 			),
-		}
-	}
-
-	/// Execute a simple fixed-tick strategy (TickZeroCentered or SimpleBuySell).
-	///
-	/// For each side, if the free balance exceeds the threshold, place or update a single limit
-	/// order at the given tick with the full free balance.
-	fn execute_simple_order(
-		base_asset: Asset,
-		buy_tick: Tick,
-		sell_tick: Tick,
-		strategy_id: &T::AccountId,
-		thresholds: &BTreeMap<Asset, AssetAmount>,
-	) {
-		for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
-			let sell_asset = if side == Side::Buy { STABLE_ASSET } else { base_asset };
-
-			let balance = T::BalanceApi::get_balance(strategy_id, sell_asset);
-
-			// Minimum threshold of 1 to prevent updating with 0 amounts
-			let threshold =
-				core::cmp::max(thresholds.get(&sell_asset).copied().unwrap_or(u128::MAX), 1);
-
-			if balance >= threshold {
-				// We expect this to fail if the pool does not exist
-				let _result = T::PoolApi::update_limit_order(
-					strategy_id,
-					base_asset,
-					STABLE_ASSET,
-					side,
-					STRATEGY_ORDER_ID_0,
-					Some(tick),
-					IncreaseOrDecrease::Increase(balance),
-				);
-			}
 		}
 	}
 

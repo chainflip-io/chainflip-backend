@@ -36,12 +36,19 @@ const QUOTE_AMOUNT: AssetAmount = 50_000;
 
 const THRESHOLD: AssetAmount = 1_000;
 
-const SPREAD_TICK: Tick = 1;
-
 type AccountId = u64;
 
-const STRATEGY: TradingStrategy =
-	TradingStrategy::TickZeroCentered { spread_tick: SPREAD_TICK, base_asset: BASE_ASSET };
+const fn inventory_strategy(base_asset: Asset) -> TradingStrategy {
+	TradingStrategy::InventoryBased {
+		min_buy_tick: -2,
+		max_buy_tick: -1,
+		min_sell_tick: 1,
+		max_sell_tick: 2,
+		base_asset,
+	}
+}
+
+const STRATEGY: TradingStrategy = inventory_strategy(BASE_ASSET);
 
 macro_rules! assert_balances {
 	($account_id:expr, $base_amount:expr, $quote_amount:expr) => {
@@ -264,7 +271,7 @@ fn refund_addresses_are_required() {
 		let deploy = || {
 			TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
-				TradingStrategy::TickZeroCentered { spread_tick: SPREAD_TICK, base_asset },
+				inventory_strategy(base_asset),
 				[(base_asset, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into(),
 			)
 		};
@@ -285,213 +292,13 @@ fn refund_addresses_are_required() {
 }
 
 #[test]
-fn automated_strategy_basic_usage() {
-	const ADDITIONAL_BASE_AMOUNT: AssetAmount = 5_000;
-
-	new_test_ext()
-		.then_execute_at_next_block(|_| deploy_strategy())
-		.then_execute_at_next_block(|strategy_id| {
-			// The strategy should have created two limit orders:
-			assert_eq!(
-				MockPoolApi::get_limit_orders(),
-				vec![
-					MockLimitOrder {
-						base_asset: BASE_ASSET,
-						quote_asset: STABLE_ASSET,
-						account_id: strategy_id,
-						side: Side::Buy,
-						order_id: STRATEGY_ORDER_ID_0,
-						tick: -SPREAD_TICK,
-						amount: QUOTE_AMOUNT
-					},
-					MockLimitOrder {
-						base_asset: BASE_ASSET,
-						quote_asset: STABLE_ASSET,
-						account_id: strategy_id,
-						side: Side::Sell,
-						order_id: STRATEGY_ORDER_ID_0,
-						tick: SPREAD_TICK,
-						amount: BASE_AMOUNT
-					}
-				]
-			);
-
-			let amounts_to_add: BTreeMap<_, _> = [(BASE_ASSET, ADDITIONAL_BASE_AMOUNT)].into();
-
-			// Add additional funds by calling the add funds extrinsic.
-			MockBalance::credit_account(&LP, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
-			assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
-				RuntimeOrigin::signed(LP),
-				strategy_id,
-				amounts_to_add.clone()
-			));
-
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::TradingStrategyPallet(Event::<Test>::FundsAddedToStrategy {
-					strategy_id: id,
-					amounts: ref amounts_in_event
-
-				}) if id == strategy_id && amounts_in_event == &amounts_to_add,
-			);
-
-			// Update the threshold to check that limit orders won't be updated
-			// if the threshold is not reached:
-			LimitOrderUpdateThresholds::<Test>::mutate(|thresholds| {
-				thresholds.insert(BASE_ASSET, ADDITIONAL_BASE_AMOUNT * 2);
-			});
-
-			assert_balances!(LP, 0, 0);
-			assert_balances!(strategy_id, ADDITIONAL_BASE_AMOUNT, 0);
-
-			strategy_id
-		})
-		.then_execute_at_next_block(|strategy_id| {
-			// The funds have not been added to the limit order yet
-			assert_balances!(strategy_id, ADDITIONAL_BASE_AMOUNT, 0);
-
-			// This time we credit the strategy directly (which is what would happen
-			// if our limit order is executed in the pools pallet). Now the strategy
-			// should have enough free balance in BASE ASSET to update the limit order:
-			MockBalance::credit_account(&strategy_id, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
-
-			strategy_id
-		})
-		.then_execute_at_next_block(|strategy_id| {
-			// The should now have been used to update the limit order:
-			assert_balances!(strategy_id, 0, 0);
-
-			assert_eq!(
-				MockPoolApi::get_limit_orders(),
-				vec![
-					MockLimitOrder {
-						base_asset: BASE_ASSET,
-						quote_asset: STABLE_ASSET,
-						account_id: strategy_id,
-						side: Side::Buy,
-						order_id: STRATEGY_ORDER_ID_0,
-						tick: -SPREAD_TICK,
-						amount: QUOTE_AMOUNT
-					},
-					MockLimitOrder {
-						base_asset: BASE_ASSET,
-						quote_asset: STABLE_ASSET,
-						account_id: strategy_id,
-						side: Side::Sell,
-						order_id: STRATEGY_ORDER_ID_0,
-						tick: SPREAD_TICK,
-						amount: BASE_AMOUNT + ADDITIONAL_BASE_AMOUNT * 2
-					}
-				]
-			);
-		});
-}
-
-#[test]
-fn can_create_asymmetric_buy_sell_strategy() {
-	const BUY_TICK: Tick = -5;
-	const SELL_TICK: Tick = 10;
-
-	new_test_ext()
-		.then_execute_at_next_block(|_| {
-			set_thresholds(0);
-
-			let initial_amounts: BTreeMap<_, _> =
-				[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
-
-			for (asset, amount) in initial_amounts.clone() {
-				MockRefundAddressRegistry::register_refund_address(LP, asset.into());
-				MockBalance::credit_account(&LP, asset, amount);
-			}
-
-			assert_ok!(TradingStrategyPallet::deploy_strategy(
-				RuntimeOrigin::signed(LP),
-				TradingStrategy::SimpleBuySell {
-					buy_tick: BUY_TICK,
-					sell_tick: SELL_TICK,
-					base_asset: BASE_ASSET
-				},
-				initial_amounts.clone(),
-			));
-
-			// An entry for the trading agent is created:
-			let (lp_id, strategy_id, strategy) = Strategies::<Test>::iter().next().unwrap();
-			assert_eq!(
-				strategy,
-				TradingStrategy::SimpleBuySell {
-					buy_tick: BUY_TICK,
-					sell_tick: SELL_TICK,
-					base_asset: BASE_ASSET
-				}
-			);
-			assert_eq!(lp_id, LP);
-
-			assert!(
-				frame_system::Account::<Test>::contains_key(strategy_id),
-				"Account not created"
-			);
-
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::System(frame_system::Event::NewAccount { .. }),
-				RuntimeEvent::TradingStrategyPallet(Event::<Test>::StrategyDeployed {
-					account_id: LP,
-					strategy_id: id,
-					strategy: TradingStrategy::SimpleBuySell {
-						buy_tick: BUY_TICK,
-						sell_tick: SELL_TICK,
-						base_asset: BASE_ASSET
-					},
-				}) if id == strategy_id,
-				RuntimeEvent::TradingStrategyPallet(Event::<Test>::FundsAddedToStrategy {
-					strategy_id: id,
-					amounts: ref amounts_in_event
-
-				}) if id == strategy_id && amounts_in_event == &initial_amounts,
-			);
-
-			// The funds are moved from the LP to the strategy:
-			assert_balances!(strategy_id, BASE_AMOUNT, QUOTE_AMOUNT);
-			assert_balances!(LP, 0, 0);
-
-			strategy_id
-		})
-		.then_execute_at_next_block(|strategy_id| {
-			// The strategy should have created two limit orders:
-			assert_eq!(
-				MockPoolApi::get_limit_orders(),
-				vec![
-					MockLimitOrder {
-						base_asset: BASE_ASSET,
-						quote_asset: STABLE_ASSET,
-						account_id: strategy_id,
-						side: Side::Buy,
-						order_id: STRATEGY_ORDER_ID_0,
-						tick: BUY_TICK,
-						amount: QUOTE_AMOUNT
-					},
-					MockLimitOrder {
-						base_asset: BASE_ASSET,
-						quote_asset: STABLE_ASSET,
-						account_id: strategy_id,
-						side: Side::Sell,
-						order_id: STRATEGY_ORDER_ID_0,
-						tick: SELL_TICK,
-						amount: BASE_AMOUNT
-					}
-				]
-			);
-		});
-}
-
-#[test]
 fn closing_strategy() {
 	const ADDITIONAL_BASE_AMOUNT: AssetAmount = 5_000;
 	new_test_ext()
 		.then_execute_at_next_block(|_| deploy_strategy())
 		.then_execute_at_next_block(|strategy_id| {
-			// Two orders must have been created:
-			assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 2);
+			// Orders must have been created:
+			assert!(!MockPoolApi::<AccountId>::get_limit_orders().is_empty());
 
 			// Credit the strategy account so has a non-zero free balance:
 			MockBalance::credit_account(&LP, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
@@ -577,140 +384,18 @@ fn strategy_deployment_validation() {
 		}
 
 		// Minimum not set for an asset should always fail
-		const DISABLED_ASSET: Asset = Asset::Eth;
+		const DISABLED_ASSET: Asset = Asset::SolUsdc;
 		assert!(!MinimumDeploymentAmountForStrategy::<Test>::get().contains_key(&DISABLED_ASSET));
+		MockRefundAddressRegistry::register_refund_address(LP, DISABLED_ASSET.into());
 		MockBalance::credit_account(&LP, DISABLED_ASSET, MIN_BASE_AMOUNT * 10);
 		assert_err!(
 			TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
-				TradingStrategy::TickZeroCentered {
-					spread_tick: SPREAD_TICK,
-					base_asset: DISABLED_ASSET
-				},
+				inventory_strategy(DISABLED_ASSET),
 				[(DISABLED_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
 			),
 			Error::<Test>::InvalidAssetsForStrategy
 		);
-
-		// TickZeroCentered strategy validation
-		{
-			// Invalid spread
-			for tick in [-1, i32::MAX, cf_amm_math::MAX_TICK + 1] {
-				assert_err!(
-					TradingStrategyPallet::deploy_strategy(
-						RuntimeOrigin::signed(LP),
-						TradingStrategy::TickZeroCentered {
-							spread_tick: tick,
-							base_asset: BASE_ASSET
-						},
-						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
-					),
-					Error::<Test>::InvalidTick
-				);
-			}
-		}
-
-		// SimpleBuySell strategy validation
-		{
-			// Invalid buy/sell ticks
-			for tick in [i32::MAX, cf_amm_math::MAX_TICK + 1, cf_amm_math::MIN_TICK - 1] {
-				assert_err!(
-					TradingStrategyPallet::deploy_strategy(
-						RuntimeOrigin::signed(LP),
-						TradingStrategy::SimpleBuySell {
-							buy_tick: -tick,
-							sell_tick: 0,
-							base_asset: BASE_ASSET
-						},
-						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
-					),
-					Error::<Test>::InvalidTick
-				);
-				assert_err!(
-					TradingStrategyPallet::deploy_strategy(
-						RuntimeOrigin::signed(LP),
-						TradingStrategy::SimpleBuySell {
-							buy_tick: 0,
-							sell_tick: tick,
-							base_asset: BASE_ASSET
-						},
-						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
-					),
-					Error::<Test>::InvalidTick
-				);
-			}
-
-			// Buy must be smaller than sell
-			assert_err!(
-				TradingStrategyPallet::deploy_strategy(
-					RuntimeOrigin::signed(LP),
-					TradingStrategy::SimpleBuySell {
-						buy_tick: 10,
-						sell_tick: -10,
-						base_asset: BASE_ASSET
-					},
-					[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
-				),
-				Error::<Test>::InvalidTick
-			);
-
-			// Buy cannot be equal to sell
-			assert_err!(
-				TradingStrategyPallet::deploy_strategy(
-					RuntimeOrigin::signed(LP),
-					TradingStrategy::SimpleBuySell {
-						buy_tick: 0,
-						sell_tick: 0,
-						base_asset: BASE_ASSET
-					},
-					[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
-				),
-				Error::<Test>::InvalidTick
-			);
-		}
-
-		// Non-oracle strategies value the assets 1:1, so the base asset must be a USD stablecoin.
-		for base_asset in [Asset::Btc, Asset::Trx] {
-			for strategy in [
-				TradingStrategy::TickZeroCentered { spread_tick: SPREAD_TICK, base_asset },
-				TradingStrategy::SimpleBuySell { buy_tick: -10, sell_tick: 10, base_asset },
-			] {
-				assert!(matches!(
-					strategy.validate_params::<Test>(),
-					Err(Error::<Test>::InvalidAssetsForStrategy)
-				));
-			}
-		}
-
-		// TickZeroCentered is always centred on tick zero, so it also requires the base asset to
-		// have the same decimals as the quote asset.
-		assert_ne!(Asset::BscUsdt.decimals(), QUOTE_ASSET.decimals());
-		assert!(matches!(
-			TradingStrategy::TickZeroCentered {
-				spread_tick: SPREAD_TICK,
-				base_asset: Asset::BscUsdt
-			}
-			.validate_params::<Test>(),
-			Err(Error::<Test>::InvalidAssetsForStrategy)
-		));
-
-		// SimpleBuySell supports any decimals, but its ticks must be near the parity tick.
-		let parity = parity_tick(Asset::BscUsdt, QUOTE_ASSET).unwrap();
-		assert!(matches!(
-			TradingStrategy::SimpleBuySell {
-				buy_tick: -10,
-				sell_tick: 10,
-				base_asset: Asset::BscUsdt
-			}
-			.validate_params::<Test>(),
-			Err(Error::<Test>::InvalidTick)
-		));
-		assert_ok!(TradingStrategy::SimpleBuySell {
-			buy_tick: parity - 10,
-			sell_tick: parity + 10,
-			base_asset: Asset::BscUsdt,
-		}
-		.validate_params::<Test>());
 
 		// Inventory based strategy & oracle
 		{
@@ -851,12 +536,6 @@ fn strategy_ticks_must_be_within_range() {
 
 	let strategies = |low: Tick, high: Tick| {
 		[
-			TradingStrategy::TickZeroCentered { spread_tick: high, base_asset: BASE_ASSET },
-			TradingStrategy::SimpleBuySell {
-				buy_tick: low,
-				sell_tick: high,
-				base_asset: BASE_ASSET,
-			},
 			TradingStrategy::InventoryBased {
 				min_buy_tick: low,
 				max_buy_tick: 0,
@@ -881,11 +560,7 @@ fn strategy_ticks_must_be_within_range() {
 		for strategy in strategies(-MAX, MAX) {
 			assert_ok!(strategy.validate_params::<Test>());
 		}
-		// TickZeroCentered has no negative tick, so only the upper bound applies to it.
-		for strategy in strategies(-MAX, MAX + 1)
-			.into_iter()
-			.chain(strategies(-MAX - 1, MAX).into_iter().skip(1))
-		{
+		for strategy in strategies(-MAX, MAX + 1).into_iter().chain(strategies(-MAX - 1, MAX)) {
 			assert!(matches!(strategy.validate_params::<Test>(), Err(Error::<Test>::InvalidTick)));
 		}
 
@@ -1257,7 +932,7 @@ mod safe_mode {
 				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_code_green();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 2);
+				assert!(!MockPoolApi::<AccountId>::get_limit_orders().is_empty());
 			});
 	}
 }

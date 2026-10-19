@@ -357,6 +357,10 @@ decl_runtime_apis!(
 		fn cf_vault_addresses() -> before_version_19::VaultAddresses;
 		fn cf_vault_addresses() -> VaultAddresses;
 		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
+		#[changed_in(22)]
+		fn cf_get_trading_strategies(
+			lp_id: Option<AccountId32>,
+		) -> Vec<before_version_22::TradingStrategyInfo<AssetAmount>>;
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;

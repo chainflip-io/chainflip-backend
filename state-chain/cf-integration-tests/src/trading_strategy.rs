@@ -75,8 +75,13 @@ fn basic_usage() {
 			// Start trading strategy
 			register_refund_addresses(&DORIS);
 			credit_account(&DORIS, BASE_ASSET, AMOUNT);
-			const STRATEGY: TradingStrategy =
-				TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: BASE_ASSET };
+			const STRATEGY: TradingStrategy = TradingStrategy::InventoryBased {
+				min_buy_tick: -1,
+				max_buy_tick: -1,
+				min_sell_tick: 1,
+				max_sell_tick: 1,
+				base_asset: BASE_ASSET,
+			};
 			assert_ok!(TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(DORIS),
 				STRATEGY.clone(),
@@ -145,8 +150,13 @@ fn can_close_strategy_with_fully_executed_orders() {
 			// Start trading strategy
 			register_refund_addresses(&DORIS);
 			credit_account(&DORIS, BASE_ASSET, AMOUNT * 4);
-			const STRATEGY: TradingStrategy =
-				TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: BASE_ASSET };
+			const STRATEGY: TradingStrategy = TradingStrategy::InventoryBased {
+				min_buy_tick: -1,
+				max_buy_tick: -1,
+				min_sell_tick: 1,
+				max_sell_tick: 1,
+				base_asset: BASE_ASSET,
+			};
 			assert_ok!(TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(DORIS),
 				STRATEGY.clone(),

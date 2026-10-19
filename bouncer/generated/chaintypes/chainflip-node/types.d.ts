@@ -8847,14 +8847,6 @@ export type PalletCfTradingStrategyCallLike =
 
 export type PalletCfTradingStrategyTradingStrategy =
   | {
-      type: 'TickZeroCentered';
-      value: { spreadTick: number; baseAsset: CfPrimitivesChainsAssetsAnyAsset };
-    }
-  | {
-      type: 'SimpleBuySell';
-      value: { buyTick: number; sellTick: number; baseAsset: CfPrimitivesChainsAssetsAnyAsset };
-    }
-  | {
       type: 'InventoryBased';
       value: {
         minBuyTick: number;
