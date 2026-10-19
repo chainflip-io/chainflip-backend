@@ -154,6 +154,7 @@ impl crate::Config for Test {
 	type MinimumDeposit = MockMinimumDepositProvider;
 	type FundAccount = MockFundingInfo<Self>;
 	type MinimumFunding = MockMinimumFundingProvider;
+	type RedeemAddressBinding = MockFundingInfo<Self>;
 }
 
 pub const LP_ACCOUNT: AccountId = 1;
