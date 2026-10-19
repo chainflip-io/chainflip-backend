@@ -105,7 +105,7 @@ jobs:
         run: cargo llvm-cov --coverage-host-only --lib --features "${TEST_FEATURES}" --workspace --codecov --output-path lcov.info
 
       - name: Upload coverage to Codecov 📊
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
           files: lcov.info
