@@ -532,7 +532,7 @@ fn strategy_deployment_validation() {
 
 #[test]
 fn strategy_ticks_must_be_within_range() {
-	const MAX: Tick = MAX_STRATEGY_TICK;
+	const MAX: Tick = MAX_STRATEGY_TICK_OFFSET as Tick;
 
 	let strategies = |low: Tick, high: Tick| {
 		[

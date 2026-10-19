@@ -72,13 +72,12 @@ const ON_IDLE_WEIGHT_PERCENT: u64 = 50;
 /// within this distance (~10%) of the 1:1 price. For assets with different decimals the 1:1 price
 /// is far from tick zero (see [`parity_tick`]). `OracleTracking` ticks are offsets from the oracle
 /// price, so they must stay this close to zero.
-pub const MAX_STRATEGY_TICK: Tick = 1_000;
+pub const MAX_STRATEGY_TICK_OFFSET: u32 = 1_000;
 
-/// A sanity check against misconfiguration: `tick` must be within [`MAX_STRATEGY_TICK`] of
+/// A sanity check against misconfiguration: `tick` must be within [`MAX_STRATEGY_TICK_OFFSET`] of
 /// `parity_tick`.
 fn is_strategy_tick_valid(tick: Tick, parity_tick: Tick) -> bool {
-	cf_amm_math::is_tick_valid(tick) &&
-		tick.abs_diff(parity_tick) <= MAX_STRATEGY_TICK.unsigned_abs()
+	cf_amm_math::is_tick_valid(tick) && tick.abs_diff(parity_tick) <= MAX_STRATEGY_TICK_OFFSET
 }
 
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
