@@ -34,7 +34,7 @@ jobs:
           path: packages
 
       - name: Configure AWS credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
