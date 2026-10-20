@@ -31,7 +31,8 @@ use cf_chains::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::{self, select_utxos_for_consolidation, select_utxos_from_pool},
-		AggKey, Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		AggKey, Bitcoin, BitcoinUtxoDiscardReason, BtcAmount, DiscardedBitcoinUtxo, Utxo, UtxoId,
+		BITCOIN_DUST_LIMIT, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	evm::{verify_evm_signature, Address as EvmAddress, Signature as EthereumSignature},
@@ -274,6 +275,16 @@ pub mod pallet {
 	#[pallet::storage]
 	/// The set of available UTXOs available in our Bitcoin Vault.
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
+
+	#[pallet::storage]
+	/// UTXOs removed from the available pool, retained for inspection and possible recovery.
+	pub type BitcoinDiscardedUtxos<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		UtxoId,
+		DiscardedBitcoinUtxo<BlockNumberFor<T>>,
+		OptionQuery,
+	>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn consolidation_parameters)]
@@ -967,6 +978,37 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
+	fn filter_unusable_utxos(available_utxos: &mut Vec<Utxo>, aggkey: Option<&AggKey>) {
+		let discarded_at = frame_system::Pallet::<T>::block_number();
+		let mut stale_utxos = Vec::new();
+		available_utxos.retain(|utxo| {
+			let reason = if aggkey.is_some_and(|aggkey| {
+				aggkey.previous.is_some_and(|previous| {
+					utxo.deposit_address.pubkey_x != aggkey.current &&
+						utxo.deposit_address.pubkey_x != previous
+				})
+			}) {
+				BitcoinUtxoDiscardReason::StaleKey
+			} else if utxo.amount < BITCOIN_DUST_LIMIT {
+				BitcoinUtxoDiscardReason::BelowDustLimit
+			} else {
+				return true
+			};
+
+			stale_utxos.push(utxo.clone());
+			BitcoinDiscardedUtxos::<T>::insert(
+				&utxo.id,
+				DiscardedBitcoinUtxo { utxo: utxo.clone(), reason, discarded_at },
+			);
+			false
+		});
+
+		if !stale_utxos.is_empty() {
+			log::warn!("Stale utxos detected: {:?}", stale_utxos);
+			Self::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale_utxos });
+		}
+	}
+
 	// Calculate the selection of utxos, return them and remove them from the list. The fee required
 	// to spend the input utxos are accounted for while selection. The fee required to include
 	// outputs and the minimum constant tx fee is incorporated by adding to the output amount. The
@@ -979,60 +1021,23 @@ impl<T: Config> Pallet<T> {
 		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
 		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
 
-		fn filter_stale_utxos<T: Config>(available_utxos: &mut Vec<Utxo>, aggkey: &AggKey) {
-			if let Some(previous) = aggkey.previous {
-				let stale = available_utxos
-					.extract_if(.., |utxo| {
-						utxo.deposit_address.pubkey_x != aggkey.current &&
-							utxo.deposit_address.pubkey_x != previous
-					})
-					.collect::<Vec<_>>();
-				if !stale.is_empty() {
-					log::warn!("Stale utxos detected: {:?}", stale);
-					Pallet::<T>::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale });
-				}
-			}
-		}
+		// Selection failures preserve all remaining inputs. Cleanup persists unless an outer
+		// transaction (such as AllBatch) rolls it back.
+		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
+			let aggkey = T::BitcoinKeyProvider::active_epoch_key().map(|epoch_key| epoch_key.key);
+			Self::filter_unusable_utxos(available_utxos, aggkey.as_ref());
 
-		match utxo_selection_type {
-			UtxoSelectionType::SelectForConsolidation =>
-				BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
-					if let Some(cf_traits::EpochKey {
-						key: aggkey @ AggKey { previous, .. }, ..
-					}) = T::BitcoinKeyProvider::active_epoch_key()
-					{
-						filter_stale_utxos::<T>(available_utxos, &aggkey);
-
-						let selected_utxo = select_utxos_for_consolidation(
-							previous,
-							available_utxos,
-							&bitcoin_fee_info,
-							Self::consolidation_parameters(),
-						);
-
-						match Self::consolidation_transaction_change_amount(
-							&selected_utxo[..],
-							&bitcoin_fee_info,
-						) {
-							Some(change_amount) => Some((selected_utxo, change_amount)),
-							None => {
-								// The fee exceeds the selected amount, so there is nothing to
-								// consolidate. The selected utxos must go back to the pool.
-								available_utxos.extend(selected_utxo);
-								None
-							},
-						}
-					} else {
-						None
-					}
-				}),
-			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
-				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
-					if let Some(cf_traits::EpochKey { key: aggkey, .. }) =
-						T::BitcoinKeyProvider::active_epoch_key()
-					{
-						filter_stale_utxos::<T>(available_utxos, &aggkey);
-					}
+			match utxo_selection_type {
+				UtxoSelectionType::SelectForConsolidation => {
+					let AggKey { previous, .. } = aggkey?;
+					select_utxos_for_consolidation(
+						previous,
+						available_utxos,
+						&bitcoin_fee_info,
+						Self::consolidation_parameters(),
+					)
+				},
+				UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 					select_utxos_from_pool(
 						available_utxos,
 						&bitcoin_fee_info,
@@ -1041,39 +1046,15 @@ impl<T: Config> Pallet<T> {
 							min_fee_required_per_tx,
 						Some(Self::consolidation_parameters().consolidation_threshold),
 					)
-					.map_err(|error| {
+					.inspect_err(|error| {
 						log::warn!(
 							"Unable to select desired amount from available utxos. Error: {:?}",
 							error
 						);
-						error
 					})
-				})
-				.ok()
-				.map(|(selected_utxos, total_input_spendable_amount)| {
-					(
-						selected_utxos,
-						total_input_spendable_amount -
-							output_amount - number_of_outputs * fee_per_output_utxo -
-							min_fee_required_per_tx,
-					)
-				}),
-		}
-	}
-
-	fn consolidation_transaction_change_amount(
-		spendable_utxos: &[Utxo],
-		fee_info: &cf_chains::btc::BitcoinFeeInfo,
-	) -> Option<BtcAmount> {
-		if spendable_utxos.is_empty() {
-			return None
-		}
-
-		spendable_utxos.iter().map(|utxo| utxo.amount).sum::<BtcAmount>().checked_sub(
-			fee_info.fee_per_input_utxo() * spendable_utxos.len() as BtcAmount +
-				fee_info.min_fee_required_per_tx() +
-				fee_info.fee_per_output_utxo(),
-		)
+					.ok(),
+			}
+		})
 	}
 
 	pub fn get_sol_nonce_and_account() -> Option<DurableNonceAndAccount> {

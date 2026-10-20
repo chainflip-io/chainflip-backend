@@ -27,8 +27,8 @@ use crate::{
 };
 use cf_chains::{
 	btc::{
-		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
-		BitcoinFeeInfo, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
+		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey, BtcAmount,
+		Utxo, CHANGE_ADDRESS_SALT,
 	},
 	sol::{
 		api::{SolanaGovCall, SolanaTransactionType},
@@ -191,11 +191,12 @@ fn utxos_selected_for_consolidation_are_kept_if_change_cannot_cover_the_fee() {
 			consolidation_size: 2,
 		});
 
-		// A previous-epoch utxo worth just more than its own input fee is selected to move into
-		// the new vault, but can't also cover the transaction and output fees.
+		// A previous-epoch UTXO at or above dust covers its input fee, but not the transaction
+		// and output fees.
 		let fee_info = MockBitcoinFeeInfo::bitcoin_fee_info();
 		let mut previous_epoch_utxo = utxo(0, CHANGE_ADDRESS_SALT, Some(epoch_1));
-		previous_epoch_utxo.amount = fee_info.fee_for_utxo(&previous_epoch_utxo) + 1;
+		previous_epoch_utxo.amount = (fee_info.fee_for_utxo(&previous_epoch_utxo) + 1)
+			.max(cf_chains::btc::BITCOIN_DUST_LIMIT);
 		let utxos = vec![previous_epoch_utxo, utxo_with_key(epoch_2)];
 		BitcoinAvailableUtxos::<Test>::set(utxos.clone());
 
@@ -379,33 +380,6 @@ fn do_nothing_with_no_key_set() {
 		);
 		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(6));
 	});
-}
-
-#[test]
-fn test_consolidation_change_amount() {
-	const INPUT_AMOUNT: BtcAmount = 10_000;
-	const NUM_INPUTS: usize = 3;
-
-	let utxos = std::iter::repeat_with(|| utxo(INPUT_AMOUNT, 0, None))
-		.take(NUM_INPUTS)
-		.collect::<Vec<_>>();
-
-	let fee_info = BitcoinFeeInfo::new(100);
-	assert_eq!(
-		crate::Pallet::<Test>::consolidation_transaction_change_amount(&utxos[..], &fee_info)
-			.unwrap(),
-		INPUT_AMOUNT * NUM_INPUTS as BtcAmount - // total available amount
-			fee_info.min_fee_required_per_tx() - // base fee
-			fee_info.fee_per_output_utxo() - // fee for the change output
-			NUM_INPUTS as u64 * fee_info.fee_per_input_utxo() // fee for each input
-	);
-
-	// If fees are too high, we cannot consolidate.
-	assert!(crate::Pallet::<Test>::consolidation_transaction_change_amount(
-		&utxos[..],
-		&BitcoinFeeInfo::new(100_000),
-	)
-	.is_none());
 }
 
 #[test]
