@@ -26,7 +26,7 @@ use crate::{
 };
 
 use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto};
-use cf_primitives::{FlipBalance, GENESIS_EPOCH};
+use cf_primitives::{CeremonyStageTimeouts, FlipBalance, GENESIS_EPOCH};
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
@@ -112,6 +112,7 @@ impl MockCfe {
 			key,
 			signatories,
 			payload,
+			stage_timeout_secs: _,
 		}) = event
 		{
 			match &self.behaviour {
@@ -783,6 +784,7 @@ fn keygen_request_emitted() {
 	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 	new_test_ext().execute_with(|| {
+		StageTimeouts::set(&CeremonyStageTimeouts { signing_secs: 7, keygen_secs: 40 });
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index();
 		<EvmThresholdSigner as KeyRotator>::keygen(btree_candidates.clone(), rotation_epoch);
 		// Confirm we have a new key rotation process running
@@ -794,6 +796,7 @@ fn keygen_request_emitted() {
 				ceremony_id: current_ceremony_id(),
 				participants: btree_candidates.clone(),
 				epoch_index: rotation_epoch,
+				stage_timeout_secs: 40,
 			})
 		);
 		assert_eq!(
@@ -840,7 +843,8 @@ fn keygen_handover_request_emitted() {
 				key_to_share: EvmThresholdSigner::active_epoch_key().unwrap().key,
 				sharing_participants: authorities.clone(),
 				receiving_participants: candidates.clone(),
-				new_key: Default::default()
+				new_key: Default::default(),
+				stage_timeout_secs: CeremonyStageTimeouts::DEFAULT.keygen_secs,
 			})
 		);
 		assert_eq!(
@@ -2013,6 +2017,25 @@ fn can_update_all_config_items() {
 			);
 		}
 	});
+}
+
+#[test]
+fn signature_request_carries_signing_stage_timeout() {
+	new_test_ext()
+		.with_authorities([1, 2, 3])
+		.with_nominees([1, 2])
+		.execute_with(|| {
+			StageTimeouts::set(&CeremonyStageTimeouts { signing_secs: 7, keygen_secs: 40 });
+			<EvmThresholdSigner as ThresholdSigner<_>>::request_signature(*b"OHAI");
+
+			assert_matches!(
+				&MockCfeInterface::take_events::<ValidatorId>()[..],
+				[MockCfeEvent::EvmThresholdSignatureRequest(ThresholdSignatureRequest {
+					stage_timeout_secs: 7,
+					..
+				})]
+			);
+		});
 }
 
 mod historical_signing {

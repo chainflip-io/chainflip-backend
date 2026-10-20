@@ -51,6 +51,7 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 			ceremony_id,
 			epoch_index: new_epoch_index,
 			participants: candidates.clone(),
+			stage_timeout_secs: T::CeremonyStageTimeouts::get().keygen_secs,
 		});
 
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest {
@@ -103,6 +104,7 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 							sharing_participants: sharing_participants.clone(),
 							receiving_participants: receiving_participants.clone(),
 							new_key: new_public_key,
+							stage_timeout_secs: T::CeremonyStageTimeouts::get().keygen_secs,
 						});
 
 						Self::deposit_event(Event::KeyHandoverRequest {

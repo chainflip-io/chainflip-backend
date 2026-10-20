@@ -33,7 +33,8 @@ mod response_status;
 
 use cf_chains::{instances::PalletInstanceAlias, ChainCrypto};
 use cf_primitives::{
-	AuthorityCount, CeremonyId, EpochIndex, FlipBalance, ThresholdSignatureRequestId as RequestId,
+	AuthorityCount, CeremonyId, CeremonyStageTimeouts, EpochIndex, FlipBalance,
+	ThresholdSignatureRequestId as RequestId,
 };
 use cf_runtime_utilities::{log_or_panic, EnumVariant};
 use cf_traits::{
@@ -481,6 +482,9 @@ pub mod pallet {
 		type CeremonyRetryDelay: Get<BlockNumberFor<Self>>;
 
 		type CfeMultisigRequest: CfeMultisigRequest<Self, Self::TargetChainCrypto>;
+
+		/// Stage timeouts that engines apply to the ceremonies this pallet requests.
+		type CeremonyStageTimeouts: Get<CeremonyStageTimeouts>;
 
 		/// Pallet weights
 		type Weights: WeightInfo;
@@ -1412,6 +1416,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					key,
 					signatories: participants.clone(),
 					payload: payload.clone(),
+					stage_timeout_secs: T::CeremonyStageTimeouts::get().signing_secs,
 				});
 
 				Event::<T, I>::ThresholdSignatureRequest {

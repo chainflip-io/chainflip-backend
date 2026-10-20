@@ -48,8 +48,8 @@ use cf_chains::{
 	Tron,
 };
 pub use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, OrderId,
-	SemVer, SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, CeremonyStageTimeouts,
+	FlipBalance, OrderId, SemVer, SwapOutput,
 };
 pub use cf_traits::{
 	AccountInfo, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
@@ -228,6 +228,13 @@ impl pallet_cf_environment::Config for Runtime {
 	type GetTransactionPayments = GetTransactionPayments;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 	type ElectionInstances = chainflip::elections::AllElectionInstances;
+}
+
+pub struct CeremonyStageTimeoutsGetter;
+impl Get<CeremonyStageTimeouts> for CeremonyStageTimeoutsGetter {
+	fn get() -> CeremonyStageTimeouts {
+		pallet_cf_environment::CeremonyStageTimeoutsConfig::<Runtime>::get()
+	}
 }
 
 parameter_types! {
@@ -852,6 +859,7 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
+	type CeremonyStageTimeouts = CeremonyStageTimeoutsGetter;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -867,6 +875,7 @@ impl pallet_cf_threshold_signature::Config<Instance15> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
+	type CeremonyStageTimeouts = CeremonyStageTimeoutsGetter;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -882,6 +891,7 @@ impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
+	type CeremonyStageTimeouts = CeremonyStageTimeoutsGetter;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -897,6 +907,7 @@ impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
+	type CeremonyStageTimeouts = CeremonyStageTimeoutsGetter;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
