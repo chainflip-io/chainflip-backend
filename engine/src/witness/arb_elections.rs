@@ -95,6 +95,19 @@ trait RangeWitnessConfig = ChainWitnessConfig<ChainBlockNumber = u64> + Sync + S
 trait EvmBlockRangeChainType<C: ChainWitnessConfig> =
 	ChainTypes<ChainBlockNumber = BlockWitnessRange<C>, ChainBlockHash = H256> + Sync + Send;
 
+fn last_complete_witness_range<W: ChainWitnessConfig<ChainBlockNumber = u64>>(
+	best_block: u64,
+) -> Result<BlockWitnessRange<W>> {
+	let range = block_witness_range(W::WITNESS_PERIOD, best_block);
+	let block_witness_range =
+		BlockWitnessRange::try_new(block_witness_root(W::WITNESS_PERIOD, best_block))
+			.map_err(|_| anyhow::anyhow!("Failed to build BlockWitnessRange"))?;
+	if best_block == *range.end() {
+		return Ok(block_witness_range);
+	}
+	Ok(block_witness_range.saturating_backward(1))
+}
+
 #[async_trait::async_trait]
 impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chain>
 	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
@@ -121,15 +134,13 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chai
 	}
 
 	async fn best_block_number(&self) -> Result<BlockWitnessRange<W>> {
-		let best_block = self.client.get_block_number().await?.low_u64();
-		let range = block_witness_range(W::WITNESS_PERIOD, best_block);
-		let block_witness_range =
-			BlockWitnessRange::try_new(block_witness_root(W::WITNESS_PERIOD, best_block))
-				.map_err(|_| anyhow::anyhow!("Failed to build BlockWitnessRange"))?;
-		if best_block == *range.end() {
-			return Ok(block_witness_range);
+		let best_block = if W::WITNESS_FINALIZED_BLOCKS {
+			self.client.get_finalized_block_number().await?
+		} else {
+			self.client.get_block_number().await?
 		}
-		Ok(block_witness_range.saturating_backward(1))
+		.low_u64();
+		last_complete_witness_range::<W>(best_block)
 	}
 
 	// --- BW methods ---
@@ -433,4 +444,27 @@ where
 	);
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use cf_chains::Bsc;
+
+	#[test]
+	fn reports_only_complete_witness_ranges() {
+		let period = Bsc::WITNESS_PERIOD;
+		let range_ending_at =
+			|end: u64| last_complete_witness_range::<Bsc>(end).unwrap().into_range_inclusive();
+
+		// Head exactly at the end of a range: that range is complete.
+		assert_eq!(range_ending_at(2 * period - 1), period..=(2 * period - 1));
+
+		// Head anywhere inside the next range: report the previous, complete one.
+		for best in (2 * period)..(3 * period - 1) {
+			assert_eq!(range_ending_at(best), period..=(2 * period - 1), "best={best}");
+		}
+
+		assert_eq!(range_ending_at(3 * period - 1), (2 * period)..=(3 * period - 1));
+	}
 }

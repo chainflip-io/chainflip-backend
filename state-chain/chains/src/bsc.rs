@@ -44,6 +44,9 @@ pub const CHAIN_ID_TESTNET: u64 = 97;
 impl ChainWitnessConfig for Bsc {
 	type ChainBlockNumber = u64;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 14;
+	// we only witness finalized blocks for BSC. finalized in BSC only lags behind latest for 1-2
+	// blocks due to BSC's fast finality
+	const WITNESS_FINALIZED_BLOCKS: bool = true;
 }
 
 impl Chain for Bsc {
