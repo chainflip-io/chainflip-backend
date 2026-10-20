@@ -95,6 +95,8 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0367: zip 0.6.6 preserves SUID/SGID bits on extraction. Only reachable via `svm-rs`, an optional dependency of our ethers fork's `ethers-solc`, which no crate enables: it is in Cargo.lock but never compiled.
 # - RUSTSEC-2026-0368: zip 0.6.6 extracts symlinks pointing outside the destination. Same as RUSTSEC-2026-0367: never compiled.
 # - RUSTSEC-2026-0369: zip 0.6.6 applies permissions through symlinks on extraction. Same as RUSTSEC-2026-0367: never compiled.
+# - RUSTSEC-2026-0379: Wasmtime critical issue allowing sandbox escape through a user-controller wasm module. The runtime is not user controlled, so safe to ignore.
+# - RUSTSEC-2026-0380: Wasmtime critical issue allowing sandbox escape through a user-controller wasm module. The runtime is not user controlled, so safe to ignore.
 
 #
 cf-audit = '''
@@ -157,6 +159,8 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0367
 	--ignore RUSTSEC-2026-0368
 	--ignore RUSTSEC-2026-0369
+	--ignore RUSTSEC-2026-0379
+	--ignore RUSTSEC-2026-0380
 '''
 
 [build]
