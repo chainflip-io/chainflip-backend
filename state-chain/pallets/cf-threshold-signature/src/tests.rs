@@ -445,8 +445,7 @@ fn fail_path_due_to_report_signature_failed() {
 
 			assert_eq!(
 				EvmThresholdSigner::ceremony_retry_queues(
-					timeout_block_for_next_retry +
-						threshold_signature_response_timeout()
+					timeout_block_for_next_retry + threshold_signature_response_timeout()
 				)
 				.len(),
 				1
@@ -1967,8 +1966,9 @@ fn can_update_all_config_items() {
 		assert_ne!(KeygenSlashAmount::<Test, Instance1>::get(), NEW_KEYGEN_SLASH_AMOUNT);
 
 		// Update all config items
-		let updates =
-			vec![PalletConfigUpdate::KeygenSlashAmount { amount_to_slash: NEW_KEYGEN_SLASH_AMOUNT }];
+		let updates = vec![PalletConfigUpdate::KeygenSlashAmount {
+			amount_to_slash: NEW_KEYGEN_SLASH_AMOUNT,
+		}];
 		for update in updates.clone() {
 			assert_ok!(EvmThresholdSigner::update_pallet_config(
 				OriginTrait::root(),
