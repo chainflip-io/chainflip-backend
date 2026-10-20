@@ -492,6 +492,21 @@ impl DepositDetailsToTransactionInId<BitcoinCrypto> for Utxo {
 }
 
 #[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq,
+)]
+pub enum BitcoinUtxoDiscardReason {
+	BelowDustLimit,
+	StaleKey,
+}
+
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct DiscardedBitcoinUtxo<BlockNumber> {
+	pub utxo: Utxo,
+	pub reason: BitcoinUtxoDiscardReason,
+	pub discarded_at: BlockNumber,
+}
+
+#[derive(
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
