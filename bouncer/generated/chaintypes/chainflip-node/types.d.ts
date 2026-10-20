@@ -4890,6 +4890,10 @@ export type PalletCfLpCall =
    *
    * The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
    * external address.
+   *
+   * Redemptions don't consult the withdrawal whitelist, so an account with a whitelist must
+   * first bind its redeem address (see the funding pallet) to a destination the whitelist
+   * allows.
    **/
   | { name: 'TransferFlipToOnChainBalance'; params: { amount: bigint } };
 
@@ -4962,6 +4966,10 @@ export type PalletCfLpCallLike =
    *
    * The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
    * external address.
+   *
+   * Redemptions don't consult the withdrawal whitelist, so an account with a whitelist must
+   * first bind its redeem address (see the funding pallet) to a destination the whitelist
+   * allows.
    **/
   | { name: 'TransferFlipToOnChainBalance'; params: { amount: bigint } };
 
@@ -19117,7 +19125,12 @@ export type PalletCfLpError =
   /**
    * The transferred amount is below the minimum funding amount.
    **/
-  | 'BelowMinimumFunding';
+  | 'BelowMinimumFunding'
+  /**
+   * An account with a withdrawal whitelist must bind a whitelisted redeem address before
+   * moving Flip to its on-chain balance.
+   **/
+  | 'RedeemAddressNotBound';
 
 export type PalletCfIngressEgressDepositChannelDetailsEthereum = {
   owner: AccountId32;

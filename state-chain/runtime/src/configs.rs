@@ -605,6 +605,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type MinimumDeposit = MinimumDepositProvider;
 	type FundAccount = Funding;
 	type MinimumFunding = Funding;
+	type RedeemAddressBinding = Funding;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
