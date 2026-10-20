@@ -34,7 +34,7 @@ use sp_api::CallApiAt;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use state_chain_runtime::{
 	chainflip::{get_header_timestamp, BlockUpdate},
-	runtime_apis::custom_api::CustomRuntimeApi,
+	runtime_apis::{custom_api::CustomRuntimeApi, monitoring_api::MonitoringRuntimeApi},
 	Hash, Header,
 };
 use std::{marker::PhantomData, num::NonZero, sync::Arc};
@@ -95,8 +95,18 @@ where
 		self.with_versioned_api::<dyn CustomRuntimeApi<state_chain_runtime::Block>, _, _>(at, f)
 	}
 
-	/// Like `with_versioned_runtime_api`, but passes the version of the runtime API trait `Api`.
-	pub fn with_versioned_api<Api: sp_api::RuntimeApiInfo + ?Sized, E, R>(
+	pub fn with_versioned_monitoring_api<E, R>(
+		&self,
+		at: Option<Hash>,
+		f: impl FnOnce(&C::Api, Hash, u32) -> Result<R, E>,
+	) -> Result<R, RpcApiError>
+	where
+		CfApiError: From<E>,
+	{
+		self.with_versioned_api::<dyn MonitoringRuntimeApi<state_chain_runtime::Block>, _, _>(at, f)
+	}
+
+	fn with_versioned_api<Api: sp_api::RuntimeApiInfo + ?Sized, E, R>(
 		&self,
 		at: Option<Hash>,
 		f: impl FnOnce(&C::Api, Hash, u32) -> Result<R, E>,
