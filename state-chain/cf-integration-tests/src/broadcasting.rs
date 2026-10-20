@@ -71,7 +71,11 @@ fn bitcoin_broadcast_delay_works() {
 				);
 			assert!(PendingBroadcasts::<Runtime, BitcoinInstance>::get().contains(&broadcast_id));
 			// Finish threshold signing.
-			testnet.move_forward_blocks(11);
+			testnet.move_forward_blocks(
+				pallet_cf_threshold_signature::signing_response_timeout_blocks(
+					cf_primitives::CeremonyStageTimeouts::DEFAULT.signing_secs,
+				) + 1,
+			);
 			assert!(AwaitingBroadcast::<Runtime, BitcoinInstance>::contains_key(broadcast_id));
 
 			let delay_sequence = [

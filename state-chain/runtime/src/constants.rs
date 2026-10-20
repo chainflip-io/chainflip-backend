@@ -16,8 +16,7 @@
 
 pub mod common {
 	use cf_primitives::{
-		AuthorityCount, BlockNumber, CeremonyStageTimeouts, FlipBalance, FLIPPERINOS_PER_FLIP,
-		MILLISECONDS_PER_BLOCK, SECONDS_PER_BLOCK,
+		AuthorityCount, BlockNumber, FlipBalance, FLIPPERINOS_PER_FLIP, MILLISECONDS_PER_BLOCK,
 	};
 
 	pub use cf_primitives::CHAINFLIP_SS58_PREFIX;
@@ -28,42 +27,6 @@ pub mod common {
 	};
 
 	pub const MAX_AUTHORITIES: AuthorityCount = 150;
-
-	// ======= Keygen and signing =======
-
-	const SIGNING_STAGE_DURATION_SECONDS: u32 = CeremonyStageTimeouts::DEFAULT.signing_secs;
-
-	const KEYGEN_STAGE_DURATION_SECONDS: u32 = CeremonyStageTimeouts::DEFAULT.keygen_secs;
-
-	const EXPECTED_FINALITY_DELAY_BLOCKS: u32 = 4;
-
-	/// The transaction with the ceremony outcome needs some
-	/// time to propagate to other nodes.
-	const NETWORK_DELAY_SECONDS: u32 = 6;
-	/// Buffer for final key computation.
-	const KEY_DERIVATION_DELAY_SECONDS: u32 = 120;
-
-	const TIMEOUT_BUFFER_SECONDS: u32 =
-		EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) + NETWORK_DELAY_SECONDS;
-
-	const KEYGEN_TIMEOUT_BUFFER_SECONDS: u32 =
-		TIMEOUT_BUFFER_SECONDS + KEY_DERIVATION_DELAY_SECONDS;
-
-	const NUM_THRESHOLD_SIGNING_STAGES: u32 = 4;
-
-	const NUM_KEYGEN_STAGES: u32 = 9;
-
-	/// The number of blocks to wait for a threshold signature ceremony to complete.
-	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 =
-		((SIGNING_STAGE_DURATION_SECONDS * NUM_THRESHOLD_SIGNING_STAGES) +
-			TIMEOUT_BUFFER_SECONDS) /
-			SECONDS_PER_BLOCK as u32;
-
-	/// The maximum number of blocks to wait for a keygen to complete.
-	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 = ((KEYGEN_STAGE_DURATION_SECONDS *
-		(NUM_KEYGEN_STAGES + NUM_THRESHOLD_SIGNING_STAGES)) +
-		KEYGEN_TIMEOUT_BUFFER_SECONDS) /
-		SECONDS_PER_BLOCK as u32;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.
