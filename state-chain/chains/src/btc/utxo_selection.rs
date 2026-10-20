@@ -183,14 +183,15 @@ pub fn select_utxos_for_consolidation(
 		return None
 	}
 
+	// Selected inputs are all spendable, so their net values already account for each input's fee.
 	let change_amount = selected_utxos
 		.iter()
-		.map(|utxo| utxo.amount)
+		.map(|utxo| utxo.net_value(fee_info))
 		.sum::<BtcAmount>()
 		.checked_sub(
-			fee_info.fee_per_input_utxo() * selected_utxos.len() as BtcAmount +
-				fee_info.min_fee_required_per_tx() +
-				fee_info.fee_per_output_utxo(),
+			fee_info
+				.min_fee_required_per_tx()
+				.saturating_add(fee_info.fee_per_output_utxo()),
 		)
 		.filter(|change| *change >= BITCOIN_DUST_LIMIT);
 
@@ -407,8 +408,10 @@ mod tests {
 				prop_assert!(change >= BITCOIN_DUST_LIMIT);
 				prop_assert_eq!(
 					change,
-					selected.iter().map(|utxo| utxo.amount).sum::<BtcAmount>() -
-						selected.len() as u64 * fee_info.fee_per_input_utxo() -
+					selected
+						.iter()
+						.map(|utxo| utxo.amount - fee_info.fee_for_utxo(utxo))
+						.sum::<BtcAmount>() -
 						fee_info.min_fee_required_per_tx() - fee_info.fee_per_output_utxo()
 				);
 				available.extend(selected);
@@ -424,8 +427,10 @@ mod tests {
 		let previous_key = [0xAA; 32];
 		let current_key = [0xBB; 32];
 		let fee_info = BitcoinFeeInfo::new(10_000);
+		// Candidates are vault UTXOs, which are cheaper to spend than deposit UTXOs.
+		let input_fee = fee_info.fee_per_vault_utxo();
 		for input_count in [1, 2] {
-			let total_fee = fee_info.fee_per_input_utxo() * input_count +
+			let total_fee = input_fee * input_count +
 				fee_info.min_fee_required_per_tx() +
 				fee_info.fee_per_output_utxo();
 			for (total_input, expected_change) in [
@@ -446,10 +451,11 @@ mod tests {
 					if input_count == 1 { (previous_key, 5) } else { (current_key, 2) };
 				let candidates = (0..input_count)
 					.map(|index| {
+						// Every extra input has a net value of 1, so it is spendable.
 						let amount = if index == 0 {
-							total_input - fee_info.fee_per_input_utxo() * (input_count - 1)
+							total_input - (input_fee + 1) * (input_count - 1)
 						} else {
-							fee_info.fee_per_input_utxo()
+							input_fee + 1
 						};
 						build_utxo(amount, 0, Some(key))
 					})
@@ -476,6 +482,29 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[test]
+	fn consolidation_accounts_for_vault_and_deposit_input_fees() {
+		let fee_info = BitcoinFeeInfo::new(10_000);
+		let inputs = vec![build_utxo(10_000, 0, None), build_utxo(10_000, 1, None)];
+		let mut available = inputs.clone();
+		let expected_change = 20_000 -
+			fee_info.fee_per_vault_utxo() -
+			fee_info.fee_per_input_utxo() -
+			fee_info.min_fee_required_per_tx() -
+			fee_info.fee_per_output_utxo();
+
+		assert_eq!(
+			select_utxos_for_consolidation(
+				None,
+				&mut available,
+				&fee_info,
+				ConsolidationParameters::new(2, 2),
+			),
+			Some((inputs, expected_change))
+		);
+		assert!(available.is_empty());
 	}
 
 	#[test]
@@ -513,7 +542,7 @@ mod tests {
 
 		assert_eq!(
 			select_utxos_for_consolidation(Some(key2), &mut utxos, &fee_info, params,),
-			Some((vec![build_utxo(1_000, 0, Some(key1)), build_utxo(2_000, 0, Some(key2))], 2_777))
+			Some((vec![build_utxo(1_000, 0, Some(key1)), build_utxo(2_000, 0, Some(key2))], 2_817))
 		);
 		assert_eq!(
 			utxos,
@@ -543,7 +572,7 @@ mod tests {
 		// Only previous key utxos should be selected:
 		assert_eq!(
 			select_utxos_for_consolidation(Some(key2), &mut utxos, &fee_info, parameter,),
-			Some((vec![build_utxo(2_000, 0, Some(key2)), build_utxo(3_000, 0, Some(key2))], 4_777))
+			Some((vec![build_utxo(2_000, 0, Some(key2)), build_utxo(3_000, 0, Some(key2))], 4_817))
 		);
 
 		// Note that some of previous key utxos still remain (due to consolidation size limit):
