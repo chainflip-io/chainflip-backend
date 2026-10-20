@@ -99,7 +99,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 				"Block height {height:?} is not yet finalized (highest finalized {finalized_height:?})"
 			))
 		}
-		let headers = self.linked_headers(height).await?;
+		let headers = self.continuous_headers_for_block_range(height).await?;
 		let (Some((_, first_header)), Some((last_hash, _))) = (headers.first(), headers.last())
 		else {
 			return Err(anyhow::anyhow!("Witness range {height:?} contains no blocks"))
@@ -149,7 +149,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 		&self,
 		witness_range: AssethubWitnessBatchNumber,
 	) -> Result<Self::BlockQuery> {
-		let headers = self.linked_headers(witness_range).await?;
+		let headers = self.continuous_headers_for_block_range(witness_range).await?;
 		let block_headers =
 			future::join_all(headers.into_iter().map(|(block_hash, header)| async move {
 				let finalized_block_height = header.number;
@@ -213,7 +213,7 @@ impl AssethubVoter {
 	/// the parent of the next. A witness range is identified by the hash of its last block, which
 	/// only commits to the earlier blocks if they are its ancestors. Blocks are fetched by number,
 	/// so a faulty RPC could otherwise mix blocks from different forks into one range.
-	async fn linked_headers(
+	async fn continuous_headers_for_block_range(
 		&self,
 		witness_range: AssethubWitnessBatchNumber,
 	) -> Result<Vec<(sp_core::H256, PolkadotHeader)>> {
