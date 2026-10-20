@@ -367,6 +367,14 @@ fn whitelisted_lp_can_only_move_flip_on_chain_once_bound_to_a_whitelisted_addres
 	};
 
 	super::genesis::with_test_defaults().build().execute_with(|| {
+		// Transfers to the on-chain balance are only available once Flip 2.1 is active.
+		assert_ok!(Flip::update_pallet_config(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			vec![PalletConfigUpdate::SetFeeRewardsActivationEpoch(Validator::epoch_index())]
+				.try_into()
+				.unwrap(),
+		));
+
 		for lp in [&UNBOUND_LP, &MISBOUND_LP, &BOUND_LP, &REFUND_BOUND_LP] {
 			network::new_account(lp, AccountRole::LiquidityProvider);
 			crate::swapping::credit_account(lp, Asset::Flip, AMOUNT);
