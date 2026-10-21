@@ -60,7 +60,7 @@ pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 24 * HOURS;
 
 /// How long rejected deposits are held before their refund is initiated.
-pub const REJECTION_DELAY_BLOCKS: BlockNumber = 24 * HOURS;
+pub const REJECTION_DELAY_BLOCKS: BlockNumber = 1;
 
 // This is equivalent to one reputation point for every minute of online time.
 pub const REPUTATION_PER_HEARTBEAT: i32 = 15;

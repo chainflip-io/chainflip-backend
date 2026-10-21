@@ -82,7 +82,7 @@ use sp_std::{
 pub use weights::WeightInfo;
 
 const MARKED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
-const DEFAULT_REJECTION_DELAY_BLOCKS: u32 = 24 * 3600 / SECONDS_PER_BLOCK as u32;
+const DEFAULT_REJECTION_DELAY_BLOCKS: u32 = 1;
 
 struct ChannelLifecycle<T: Config<I>, I: 'static> {
 	opened_at: TargetChainBlockNumber<T, I>,
@@ -1002,6 +1002,7 @@ pub mod pallet {
 	}
 
 	/// How many State Chain blocks to hold a rejected deposit before initiating its refund.
+	/// Zero is treated as one block, since deposits may arrive after this pallet's finalization.
 	#[pallet::storage]
 	pub type RejectionDelayBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery, DefaultRejectionDelay<T, I>>;
