@@ -121,6 +121,7 @@ pub fn select_utxos_from_pool(
 			last += 1usize;
 			cumulative_amount += available_utxos[last].net_value(fee_info);
 		}
+		// The insufficient-funds check above guarantees this subtraction cannot underflow.
 		let change_amount = cumulative_amount - amount_to_be_spent;
 
 		// Take all utxos from the `first` to `last` (inclusive).
