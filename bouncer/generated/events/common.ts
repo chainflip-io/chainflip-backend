@@ -339,6 +339,46 @@ export const cfChainsSolApiSolanaGovCall = z.discriminatedUnion('__kind', [
   }),
 ]);
 
+export const cfPrimitivesChainsForeignChain = simpleEnum([
+  'Ethereum',
+  'Polkadot',
+  'Bitcoin',
+  'Arbitrum',
+  'Solana',
+  'Assethub',
+  'Tron',
+]);
+
+export const cfChainsBtcScriptPubkey = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('P2PKH'), value: hexString }),
+  z.object({ __kind: z.literal('P2SH'), value: hexString }),
+  z.object({ __kind: z.literal('P2WPKH'), value: hexString }),
+  z.object({ __kind: z.literal('P2WSH'), value: hexString }),
+  z.object({ __kind: z.literal('Taproot'), value: hexString }),
+  z.object({ __kind: z.literal('OtherSegwit'), version: z.number(), program: hexString }),
+]);
+
+export const cfChainsAddressForeignChainAddress = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('Eth'), value: hexString }),
+  z.object({ __kind: z.literal('Dot'), value: hexString }),
+  z.object({ __kind: z.literal('Btc'), value: cfChainsBtcScriptPubkey }),
+  z.object({ __kind: z.literal('Arb'), value: hexString }),
+  z.object({ __kind: z.literal('Sol'), value: hexString }),
+  z.object({ __kind: z.literal('Hub'), value: hexString }),
+  z.object({ __kind: z.literal('Tron'), value: hexString }),
+]);
+
+export const cfTraitsFailedDepositRecoveryOutcome = z.discriminatedUnion('__kind', [
+  z.object({
+    __kind: z.literal('Egressed'),
+    egressId: z.tuple([cfPrimitivesChainsForeignChain, numberOrHex]),
+    destination: cfChainsAddressForeignChainAddress,
+    egressAmount: numberOrHex,
+    feeWithheld: numberOrHex,
+  }),
+  z.object({ __kind: z.literal('Credited') }),
+]);
+
 export const palletCfFlipImbalancesInternalSource = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Account'), value: accountId }),
   z.object({ __kind: z.literal('Reserve'), value: hexString }),
@@ -366,16 +406,6 @@ export const palletCfFlipPalletConfigUpdate = z.discriminatedUnion('__kind', [
     __kind: z.literal('SetFeeScalingRate'),
     value: palletCfFlipOnChargeTransactionFeeScalingRateConfig,
   }),
-]);
-
-export const cfPrimitivesChainsForeignChain = simpleEnum([
-  'Ethereum',
-  'Polkadot',
-  'Bitcoin',
-  'Arbitrum',
-  'Solana',
-  'Assethub',
-  'Tron',
 ]);
 
 export const cfTraitsFundingSource = z.discriminatedUnion('__kind', [
@@ -625,15 +655,6 @@ export const cfChainsDotPolkadotTransactionId = z.object({
 
 export const cfChainsBtcBitcoinTransactionData = z.object({ encodedTransaction: hexString });
 
-export const cfChainsBtcScriptPubkey = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('P2PKH'), value: hexString }),
-  z.object({ __kind: z.literal('P2SH'), value: hexString }),
-  z.object({ __kind: z.literal('P2WPKH'), value: hexString }),
-  z.object({ __kind: z.literal('P2WSH'), value: hexString }),
-  z.object({ __kind: z.literal('Taproot'), value: hexString }),
-  z.object({ __kind: z.literal('OtherSegwit'), version: z.number(), program: hexString }),
-]);
-
 export const cfChainsAddressEncodedAddress = z
   .object({ __kind: z.enum(['Eth', 'Dot', 'Btc', 'Arb', 'Sol', 'Hub', 'Tron']), value: hexString })
   .transform(({ __kind, value }) => {
@@ -765,16 +786,6 @@ export const cfTraitsSwappingSwapRequestTypeGeneric = z.discriminatedUnion('__ki
 ]);
 
 export const cfPrimitivesBeneficiaryAccountId32 = z.object({ account: accountId, bps: z.number() });
-
-export const cfChainsAddressForeignChainAddress = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('Eth'), value: hexString }),
-  z.object({ __kind: z.literal('Dot'), value: hexString }),
-  z.object({ __kind: z.literal('Btc'), value: cfChainsBtcScriptPubkey }),
-  z.object({ __kind: z.literal('Arb'), value: hexString }),
-  z.object({ __kind: z.literal('Sol'), value: hexString }),
-  z.object({ __kind: z.literal('Hub'), value: hexString }),
-  z.object({ __kind: z.literal('Tron'), value: hexString }),
-]);
 
 export const cfChainsRefundParametersAccountOrAddress = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('InternalAccount'), value: accountId }),
