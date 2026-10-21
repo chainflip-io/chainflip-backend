@@ -302,13 +302,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	/// UTXOs removed from the available pool, retained for inspection and possible recovery.
-	pub type BitcoinDiscardedUtxos<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		UtxoId,
-		DiscardedBitcoinUtxo<BlockNumberFor<T>>,
-		OptionQuery,
-	>;
+	pub type BitcoinDiscardedUtxos<T: Config> =
+		StorageMap<_, Twox64Concat, UtxoId, DiscardedBitcoinUtxo<BlockNumberFor<T>>, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn consolidation_parameters)]
@@ -1151,6 +1146,7 @@ impl<T: Config> Pallet<T> {
 				return true
 			};
 
+			log::warn!("Discarding Bitcoin UTXO {:?} (reason: {:?})", utxo, reason);
 			stale_utxos.push(utxo.clone());
 			BitcoinDiscardedUtxos::<T>::insert(
 				&utxo.id,
@@ -1160,7 +1156,6 @@ impl<T: Config> Pallet<T> {
 		});
 
 		if !stale_utxos.is_empty() {
-			log::warn!("Stale utxos detected: {:?}", stale_utxos);
 			Self::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale_utxos });
 		}
 	}
