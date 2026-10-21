@@ -46,11 +46,10 @@ jobs:
         if: steps.previous.outputs.conclusion != 'failure'
         env:
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           # Discord @Protocol role.
           PROTOCOL_ROLE_ID: "960793434170458112"
         run: |
-          jq -n --arg url "$RUN_URL" --arg role "$PROTOCOL_ROLE_ID" '{
+          jq -n --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --arg role "$PROTOCOL_ROLE_ID" '{
             username: "Cargo Audit",
             content: ("<@&" + $role + "> 🕵️ `cargo cf-audit` is failing on `main`: new RUSTSEC advisories need fixing or ignoring.\n🔗 Link to job: <" + $url + ">"),
             allowed_mentions: { roles: [$role] }
