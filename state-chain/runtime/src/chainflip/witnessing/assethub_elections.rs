@@ -19,7 +19,7 @@ use crate::{
 	AssethubChainTracking, AssethubIngressEgress, Runtime,
 };
 use cf_chains::{
-	dot::PolkadotSignature,
+	dot::{PolkadotHash, PolkadotSignature},
 	hub::AssethubTrackedData,
 	instances::AssethubInstance,
 	witness_period::{BlockWitnessRange, SaturatingStep},
@@ -59,7 +59,7 @@ use pallet_cf_elections::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use sp_core::{Decode, Encode, Get, H256};
+use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
@@ -85,7 +85,7 @@ impl ChainTypes for AssethubChain {
 	// The hash of a witness range is the hash of its last block, and its parent hash is the parent
 	// hash of its first block. Even though we only witness finalized blocks, real hashes keep the
 	// reorg detection of the BHW and the hash checks of the BW meaningful.
-	type ChainBlockHash = H256;
+	type ChainBlockHash = PolkadotHash;
 	const NAME: &'static str = "Assethub";
 }
 
@@ -245,7 +245,7 @@ pub type AssethubLiveness = Liveness<
 	u64, /* we can't use the actual AssethubWitnessBatchNumber because that's based on u32 and
 	      * the Liveness ES requires inter-convertibility with u64 due to the underlying
 	      * randomness library. */
-	sp_core::H256,
+	PolkadotHash,
 	ReportFailedLivenessCheck<Assethub>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
