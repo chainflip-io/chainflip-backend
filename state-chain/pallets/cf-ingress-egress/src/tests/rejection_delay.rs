@@ -4,7 +4,7 @@
 use super::*;
 use crate::{
 	ChannelCleanupRetryBlocks, DepositChannelRecycleBlocks, RejectionDelayBlocks,
-	ScheduledTransactionsForRejection, DEFAULT_REJECTION_DELAY_BLOCKS,
+	ScheduledTransactionsForRejection,
 };
 use cf_chains::{evm::DeploymentStatus, Bitcoin};
 use cf_traits::IngressSink;
@@ -46,7 +46,7 @@ fn witness_rejected_deposit(address: EthereumAddress) {
 }
 
 #[test]
-fn rejection_delay_is_set_at_genesis_and_defaults_to_one_day() {
+fn rejection_delay_is_set_at_genesis_and_defaults_to_one_block() {
 	new_test_ext().execute_with(|| {
 		// The mock genesis sets a zero delay.
 		assert_eq!(RejectionDelayBlocks::<Test, Instance1>::get(), 0);
@@ -56,21 +56,15 @@ fn rejection_delay_is_set_at_genesis_and_defaults_to_one_day() {
 		assert_eq!(RejectionDelayBlocks::<Test, Instance1>::get(), 7);
 
 		crate::GenesisConfig::<Test, Instance1>::default().build();
-		assert_eq!(
-			RejectionDelayBlocks::<Test, Instance1>::get(),
-			u64::from(DEFAULT_REJECTION_DELAY_BLOCKS)
-		);
+		assert_eq!(RejectionDelayBlocks::<Test, Instance1>::get(), 1);
 	});
 }
 
 #[test]
-fn rejection_delay_defaults_to_one_day_and_is_governance_configurable() {
+fn rejection_delay_defaults_to_one_block_and_is_governance_configurable() {
 	new_test_ext().execute_with(|| {
 		RejectionDelayBlocks::<Test, Instance1>::kill();
-		assert_eq!(
-			RejectionDelayBlocks::<Test, Instance1>::get(),
-			u64::from(DEFAULT_REJECTION_DELAY_BLOCKS)
-		);
+		assert_eq!(RejectionDelayBlocks::<Test, Instance1>::get(), 1);
 		assert_noop!(
 			EthereumIngressEgress::update_pallet_config(
 				RuntimeOrigin::signed(BROKER),
