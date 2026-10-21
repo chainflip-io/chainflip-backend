@@ -199,8 +199,11 @@ Run the generator manually only if:
 - You suspect committed schemas are stale relative to a running localnet.
 
 ```bash
-cd bouncer
-./commands/generate_event_schemas.ts   # requires a running localnet
+# No localnet needed: boots a throwaway dev node (~15s), regenerates, formats, stops the node.
+cargo build -p chainflip-node && ./localnet/generate_event_schemas.sh
+
+# Against an already-running localnet
+cd bouncer && ./commands/generate_event_schemas.ts
 ```
 
 The generator deletes `bouncer/generated/events/` and rewrites it. After regeneration, run `pnpm prettier:write` and commit the diff alongside your pallet changes. Tests importing schemas that no longer exist (e.g. event renamed) need to be updated.
