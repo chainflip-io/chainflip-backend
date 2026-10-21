@@ -94,7 +94,6 @@ pub type KeyHandoverResponseStatus<T, I> =
 )]
 pub enum PalletConfigUpdate {
 	/// Set the amount of FLIP (in Flipperinos) that is slashed for an agreed reported party.
-	#[codec(index = 2)]
 	KeygenSlashAmount { amount_to_slash: FlipBalance },
 }
 
