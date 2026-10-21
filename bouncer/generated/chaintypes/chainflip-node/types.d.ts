@@ -958,7 +958,7 @@ export type PalletCfFundingCall =
    * - If the source account has a bound redeem address, the destination account must also
    * have the same bound redeem address.
    * - If the source account is currently bidding, the destination account must also be
-   * bidding.
+   * bidding. Bidding accounts cannot rebalance at all while a rotation is in progress.
    * - If the funds to be transferred are associated with a restricted address, the
    * restrictions will be transferred to the destination account.
    **/
@@ -1043,7 +1043,7 @@ export type PalletCfFundingCallLike =
    * - If the source account has a bound redeem address, the destination account must also
    * have the same bound redeem address.
    * - If the source account is currently bidding, the destination account must also be
-   * bidding.
+   * bidding. Bidding accounts cannot rebalance at all while a rotation is in progress.
    * - If the funds to be transferred are associated with a restricted address, the
    * restrictions will be transferred to the destination account.
    **/
