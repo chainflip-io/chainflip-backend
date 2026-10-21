@@ -36,6 +36,7 @@ import type {
   CfPrimitivesSemVer,
   CfPrimitivesNetworkEnvironment,
   CfPrimitivesChainflipNetwork,
+  CfPrimitivesCeremonyStageTimeouts,
   PalletCfFlipFlipAccount,
   PalletCfFlipOpaqueCallIndex,
   PalletCfFlipOnChargeTransactionFeeScalingRateConfig,
@@ -844,6 +845,14 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<boolean> =} callback
      **/
     electionVoteBatchingDisabled: GenericStorageQuery<() => boolean>;
+
+    /**
+     * Stage timeouts that engines apply to every multisig ceremony, carried in each request so
+     * that all participants use the same values.
+     *
+     * @param {Callback<CfPrimitivesCeremonyStageTimeouts> =} callback
+     **/
+    ceremonyStageTimeoutsConfig: GenericStorageQuery<() => CfPrimitivesCeremonyStageTimeouts>;
 
     /**
      * Generic pallet storage query
@@ -2095,13 +2104,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -2174,12 +2176,6 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<number> =} callback
      **/
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
-
-    /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
 
     /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
@@ -2272,13 +2268,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -2351,12 +2340,6 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<number> =} callback
      **/
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
-
-    /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
 
     /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
@@ -2449,13 +2432,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -2528,12 +2504,6 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<number> =} callback
      **/
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
-
-    /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
 
     /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
@@ -4918,13 +4888,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -4997,12 +4960,6 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<number> =} callback
      **/
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
-
-    /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
 
     /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
