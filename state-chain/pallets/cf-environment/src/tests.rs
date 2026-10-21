@@ -21,14 +21,15 @@ use crate::{
 	submit_runtime_call::{
 		is_valid_signature, ChainflipExtrinsic, EthEncodingType, SolEncodingType,
 	},
-	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
-	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
+	BitcoinAvailableUtxos, BitcoinDiscardedUtxos, ConsolidationParameters, Event, EvmAddress,
+	RuntimeSafeMode, SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
 use cf_chains::{
 	btc::{
-		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey, BtcAmount,
-		Utxo, CHANGE_ADDRESS_SALT,
+		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
+		BitcoinUtxoDiscardReason, BtcAmount, DiscardedBitcoinUtxo, Utxo, BITCOIN_DUST_LIMIT,
+		CHANGE_ADDRESS_SALT,
 	},
 	sol::{
 		api::{SolanaGovCall, SolanaTransactionType},
@@ -266,6 +267,35 @@ fn can_discard_stale_utxos() {
 		System::assert_has_event(RuntimeEvent::Environment(Event::StaleUtxosDiscarded {
 			utxos: vec![utxo_with_key(epoch_1)],
 		}));
+	});
+}
+
+#[test]
+fn discarded_utxos_are_archived_with_reason_and_block() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(42);
+		let current_key = [0xBB; 32];
+		let aggkey = AggKey { current: current_key, previous: Some([0xAA; 32]) };
+		let mut stale = utxo_with_key([0xCC; 32]);
+		stale.id.vout = 1;
+		let mut dust = utxo(BITCOIN_DUST_LIMIT - 1, CHANGE_ADDRESS_SALT, Some(current_key));
+		dust.id.vout = 2;
+		let retained = utxo_with_key(current_key);
+		let mut available = vec![stale.clone(), dust.clone(), retained.clone()];
+
+		Environment::filter_unusable_utxos(&mut available, Some(&aggkey));
+
+		assert_eq!(available, vec![retained]);
+		assert_eq!(BitcoinDiscardedUtxos::<Test>::iter().count(), 2);
+		for (utxo, reason) in [
+			(stale, BitcoinUtxoDiscardReason::StaleKey),
+			(dust, BitcoinUtxoDiscardReason::BelowDustLimit),
+		] {
+			assert_eq!(
+				BitcoinDiscardedUtxos::<Test>::get(&utxo.id),
+				Some(DiscardedBitcoinUtxo { utxo, reason, discarded_at: 42 })
+			);
+		}
 	});
 }
 
