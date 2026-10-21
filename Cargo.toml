@@ -111,8 +111,9 @@ ethabi = { git = "https://github.com/chainflip-io/ethabi", tag = "chainflip-subs
 ethbloom = { version = "0.14.1" }
 # NOTE: the chainflip-substrate-compat-1.18 tag exists to ensure aligment of ethereum primitive types
 # between ethabi, ethers, ethers-core, and the 1.18 version of Substrate.
-ethers = { git = "https://github.com/chainflip-io/ethers-rs", tag = "chainflip-substrate-compat-1.18" }
-ethers-core = { git = "https://github.com/chainflip-io/ethers-rs", tag = "chainflip-substrate-compat-1.18" }
+# The -reqwest-0.12 variant also moves ethers' HTTP/WS transports to reqwest 0.12 / rustls 0.23.
+ethers = { git = "https://github.com/chainflip-io/ethers-rs", tag = "chainflip-substrate-compat-1.18-reqwest-0.12" }
+ethers-core = { git = "https://github.com/chainflip-io/ethers-rs", tag = "chainflip-substrate-compat-1.18-reqwest-0.12" }
 fs_extra = { version = "1.3.0" }
 futures = { version = "0.3.30" }
 futures-core = { version = "0.3.30" }
