@@ -53,7 +53,6 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2025-0055: logging injection vulnerability, requires display of arbitrary user input. Fixing this causes color sequence to be escaped and displayed in logs.
 # - RUSTSEC-2025-0057: fxhash is unmaintained, but we can't remove it because it's used in substrate.
 # - RUSTSEC-2025-0118: Unsound API access to a WebAssembly shared linear memory.
-# - RUSTSEC-2025-0134: Unmaintained rustls-pemfile crate (version 1.0.4 and 2.2.0). Substrate dependency.
 # - RUSTSEC-2025-0141: Unmaintained bincode crate. Wasmtime dependency.
 # - RUSTSEC-2025-0161: Unmaintained libsecp256k1 crate. Substrate dependency.
 # - RUSTSEC-2026-0002: Unsoundness in the lru crate. Our immediate dependency is patched, but not the transitive dependency, which is limited to libp2p-identify and smoldot crates.
@@ -89,16 +88,11 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0269: Wasmtime issue that relies on accessing the file system and the presence of symlinks with trailing slashes.
 # - RUSTSEC-2026-0316: Wasmtime component model record lifting can allocate beyond the hostcall fuel limit. Low severity; the `component-model` feature is not enabled and we don't control the wasmtime version. Dependency of substrate.
 # - RUSTSEC-2026-0344: ruzstd decompression bomb. Only reachable via `subxt-lightclient` -> `smoldot`, which we don't compile; smoldot pins ruzstd below the patched 0.9.1.
-# - RUSTSEC-2026-0346: rustls `Debug` impls of client session values expose secrets. Only affects custom `ClientSessionStore`s that log them, which we don't have. 0.23 is patched; the unpatched 0.21 is only in Cargo.lock via `svm-rs` (see RUSTSEC-2026-0367) and is never compiled.
-# - RUSTSEC-2026-0349: rustls key-share prediction can downgrade from post-quantum to classical key exchange. We only use the `ring` provider, which has no post-quantum group. 0.23 is patched; the unpatched 0.21 is only in Cargo.lock via `svm-rs` (see RUSTSEC-2026-0367) and is never compiled.
 # - RUSTSEC-2026-0363: Wasmtime component-model handle tables are uncapped. The `component-model` feature is not enabled and we don't control the wasmtime version. Dependency of substrate.
-# - RUSTSEC-2026-0367: zip 0.6.6 preserves SUID/SGID bits on extraction. Only reachable via `svm-rs`, an optional dependency of our ethers fork's `ethers-solc`, which no crate enables: it is in Cargo.lock but never compiled.
-# - RUSTSEC-2026-0368: zip 0.6.6 extracts symlinks pointing outside the destination. Same as RUSTSEC-2026-0367: never compiled.
-# - RUSTSEC-2026-0369: zip 0.6.6 applies permissions through symlinks on extraction. Same as RUSTSEC-2026-0367: never compiled.
 # - RUSTSEC-2026-0379: Wasmtime critical issue allowing sandbox escape through a user-controller wasm module. The runtime is not user controlled, so safe to ignore.
 # - RUSTSEC-2026-0380: Wasmtime critical issue allowing sandbox escape through a user-controller wasm module. The runtime is not user controlled, so safe to ignore.
 # - RUSTSEC-2026-0381: webpki-roots bundles the distrusted emSign ECC root. 1.x is patched; the unpatched 0.25.4 comes from substrate's `libp2p-websocket`, which is only used by the opt-in libp2p network backend (the node defaults to litep2p), and then only to dial `/wss` peers.
-# - RUSTSEC-2026-0382: rustls-webpki accepts distrusted emSign intermediates. 0.103 is patched; the unpatched 0.101.7 belongs to rustls 0.21, which is only in Cargo.lock via `svm-rs` and is never compiled (see RUSTSEC-2026-0346).
+# - RUSTSEC-2026-0382: rustls-webpki accepts distrusted emSign intermediates. 0.103 is patched; the unpatched 0.101.7 is only in Cargo.lock via `libp2p-tls`, from substrate's optional `libp2p-quic`, and is never compiled.
 
 #
 cf-audit = '''
@@ -119,7 +113,6 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2025-0055
 	--ignore RUSTSEC-2025-0057
 	--ignore RUSTSEC-2025-0118
-	--ignore RUSTSEC-2025-0134
 	--ignore RUSTSEC-2025-0141
 	--ignore RUSTSEC-2025-0161
 	--ignore RUSTSEC-2026-0002
@@ -155,12 +148,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0269
 	--ignore RUSTSEC-2026-0316
 	--ignore RUSTSEC-2026-0344
-	--ignore RUSTSEC-2026-0346
-	--ignore RUSTSEC-2026-0349
 	--ignore RUSTSEC-2026-0363
-	--ignore RUSTSEC-2026-0367
-	--ignore RUSTSEC-2026-0368
-	--ignore RUSTSEC-2026-0369
 	--ignore RUSTSEC-2026-0379
 	--ignore RUSTSEC-2026-0380
 	--ignore RUSTSEC-2026-0381
