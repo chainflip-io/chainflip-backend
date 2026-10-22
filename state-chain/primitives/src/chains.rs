@@ -24,7 +24,7 @@ pub mod assets_migrations;
 macro_rules! chains {
 	( $( $chain:ident = $index:literal),+ ) => {
 		$(
-			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Ord, PartialOrd)]
+			#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Ord, PartialOrd)]
 			pub struct $chain;
 
 			impl AsRef<ForeignChain> for $chain {

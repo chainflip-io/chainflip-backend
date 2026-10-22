@@ -45,8 +45,6 @@ use sp_runtime::generic;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_std::prelude::*;
-#[cfg(feature = "std")]
-use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 // Make the WASM binary available.
@@ -106,12 +104,6 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	transaction_version: 13,
 	system_version: 1,
 };
-
-/// The version information used to identify this runtime when compiled natively.
-#[cfg(feature = "std")]
-pub fn native_version() -> NativeVersion {
-	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
-}
 
 #[frame_support::runtime]
 mod runtime {

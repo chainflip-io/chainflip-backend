@@ -48,6 +48,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2024-0436: Paste is no longer maintained. This is a pre-processor macro, so not an immediate security concern.
 # - RUSTSEC-2024-0438: Wasmtime security issue for Windows devices, so not applicable. Dependency of substrate.
 # - RUSTSEC-2024-0442: Wasmtime jit debugger issue.
+# - RUSTSEC-2024-0449: Unmaintained `unsafe-libyaml` crate. Transitive dependency of `subxt` (via `frame-decode` and `serde_yaml`), which substrate's `frame-benchmarking-cli` depends on.
 # - RUSTSEC-2025-0009: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
 # - RUSTSEC-2025-0010: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
 # - RUSTSEC-2025-0055: logging injection vulnerability, requires display of arbitrary user input. Fixing this causes color sequence to be escaped and displayed in logs.
@@ -83,6 +84,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0119: DoS vector in hickory-proto which is used by libp2p. Dependency of substrate, related to DNS resolution. Low risk.
 # - RUSTSEC-2026-0173: proc-macro-error2 unmaintained. Build-time proc-macro helper, transitive dependency of `subxt-macro`. Not a runtime security concern.
 # - RUSTSEC-2026-0186: Unsound pointer arithmetic in memmap2. Transitive dependency of parity-db - out of our control.
+# - RUSTSEC-2026-0215: Unmaintained `smallstr` crate. Transitive dependency of `subxt` (via `scale-info-legacy`), which substrate's `frame-benchmarking-cli` depends on.
 # - RUSTSEC-2026-0222: Wasmtime type-index mixup between multiple engines. Low severity embedder-API-misuse issue; we only execute the trusted runtime wasm and don't control the wasmtime version (pinned by polkadot-sdk). Dependency of substrate.
 # - RUSTSEC-2026-0253: Unsoundness in `lru::LruCache::pop()` when the key's `Drop` panics. Our own dependency is on the patched 0.18.2; the remaining 0.12.5 is pinned by libp2p, where `libp2p-identify` doesn't use `lru` at all and `libp2p-swarm`'s only `pop()` is keyed by `Multiaddr`, which has no `Drop` impl.
 # - RUSTSEC-2026-0258: h2 unbounded empty DATA frames. Low severity DoS. Patched where possible, but still some transitive dependencies are unpatched.
@@ -112,6 +114,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2024-0436
 	--ignore RUSTSEC-2024-0438
 	--ignore RUSTSEC-2024-0442
+	--ignore RUSTSEC-2024-0449
 	--ignore RUSTSEC-2025-0009
 	--ignore RUSTSEC-2025-0010
 	--ignore RUSTSEC-2025-0055
@@ -147,6 +150,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0119
 	--ignore RUSTSEC-2026-0173
 	--ignore RUSTSEC-2026-0186
+	--ignore RUSTSEC-2026-0215
 	--ignore RUSTSEC-2026-0222
 	--ignore RUSTSEC-2026-0253
 	--ignore RUSTSEC-2026-0258

@@ -3,8 +3,8 @@
 import type { GenericChainEvents, GenericPalletEvent } from 'dedot/types';
 import type {
   DispatchError,
-  AccountId32,
   H256,
+  AccountId32,
   H160,
   FixedBytes,
   Bytes,
@@ -190,9 +190,9 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * `:code` was updated.
+     * `:code` was updated to the code with the given hash.
      **/
-    CodeUpdated: GenericPalletEvent<'System', 'CodeUpdated', null>;
+    CodeUpdated: GenericPalletEvent<'System', 'CodeUpdated', { hash: H256 }>;
 
     /**
      * A new account was created.

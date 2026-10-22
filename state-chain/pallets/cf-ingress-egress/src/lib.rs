@@ -102,7 +102,7 @@ pub enum BoostStatus<ChainAmount, BlockNumber> {
 
 #[derive(
 	CloneNoBound,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
@@ -143,18 +143,14 @@ impl<T: Config<I>, I: 'static> BoostStatusLookup<T, I> {
 	}
 }
 
-#[derive(
-	Clone, RuntimeDebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq,
-)]
+#[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 #[scale_info(skip_type_params(T, I))]
 pub struct PendingPrewitnessedDepositEntry<T: Config<I>, I: 'static> {
 	pub boost_status_lookup: BoostStatusLookup<T, I>,
 	pub deposit: PendingPrewitnessedDeposit<T, I>,
 }
 
-#[derive(
-	Clone, RuntimeDebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq,
-)]
+#[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 #[scale_info(skip_type_params(T, I))]
 pub struct PendingPrewitnessedDeposit<T: Config<I>, I: 'static> {
 	pub block_height: TargetChainBlockNumber<T, I>,
@@ -178,7 +174,7 @@ pub struct TransactionRejectionStatus<BlockNumber> {
 }
 
 /// Enum wrapper for fetch and egress requests.
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum FetchOrTransfer<C: Chain> {
 	Fetch {
 		asset: C::ChainAsset,
@@ -203,7 +199,7 @@ impl<C: Chain> FetchOrTransfer<C> {
 	}
 }
 
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum DepositFailedReason {
 	BelowMinimumDeposit,
 	/// The deposit was ignored because the amount provided was not high enough to pay for the fees
@@ -214,7 +210,7 @@ pub enum DepositFailedReason {
 	Unrefundable,
 }
 
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum RefundReason {
 	InvalidBrokerFees,
 	InvalidRefundParameters,
@@ -330,14 +326,7 @@ pub use deposit_origin::DepositOrigin;
 
 /// Holds information about a transaction that is marked for rejection.
 #[derive(
-	RuntimeDebug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	GenericTypeInfo,
-	CloneNoBound,
+	Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo, CloneNoBound,
 )]
 #[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
@@ -352,15 +341,7 @@ pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 
 /// Cross-chain messaging requests.
 #[derive(
-	RuntimeDebug,
-	Eq,
-	PartialEq,
-	Clone,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
+	Debug, Eq, PartialEq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
 )]
 pub struct CrossChainMessage<C: Chain> {
 	pub egress_id: EgressId,
@@ -394,7 +375,7 @@ impl_pallet_safe_mode! {
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
 /// User can use information stored here to query for relevant information to broadcast
 /// the call themselves.
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct FailedForeignChainCall {
 	/// Broadcast ID used in the broadcast pallet. Use it to query broadcast information,
 	/// such as the threshold signature, the API call etc.
@@ -404,7 +385,7 @@ pub struct FailedForeignChainCall {
 }
 
 /// Describes the action to take when a broadcast completes (succeeds or is aborted).
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BroadcastAction<ChainAccount> {
 	/// On success: finalise fetch for these deposit addresses.
 	/// On abort: no-op.
@@ -416,7 +397,7 @@ pub enum BroadcastAction<ChainAccount> {
 
 #[derive(
 	CloneNoBound,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEqNoBound,
 	EqNoBound,
 	Encode,
@@ -482,7 +463,7 @@ pub mod pallet {
 
 	#[derive(
 		Clone,
-		RuntimeDebug,
+		Debug,
 		PartialEq,
 		Eq,
 		Encode,
@@ -505,7 +486,7 @@ pub mod pallet {
 
 	#[derive(
 		CloneNoBound,
-		RuntimeDebugNoBound,
+		DebugNoBound,
 		PartialEqNoBound,
 		EqNoBound,
 		Encode,
@@ -600,7 +581,7 @@ pub mod pallet {
 
 	#[derive(
 		CloneNoBound,
-		RuntimeDebugNoBound,
+		DebugNoBound,
 		PartialEqNoBound,
 		EqNoBound,
 		Encode,
@@ -617,14 +598,7 @@ pub mod pallet {
 	}
 
 	#[derive(
-		CloneNoBound,
-		RuntimeDebug,
-		PartialEq,
-		Eq,
-		Encode,
-		Decode,
-		DecodeWithMemTracking,
-		GenericTypeInfo,
+		CloneNoBound, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
 	)]
 	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
@@ -664,9 +638,7 @@ pub mod pallet {
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
-	#[derive(
-		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
-	)]
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 	#[n_functor::derive_n_functor(CcmMetadata = ccm_metadata)]
 	#[scale_info(skip_type_params(C))]
 	pub enum ChannelAction<AccountId, ChainAccount, CcmMetadata = CcmChannelMetadataChecked> {
@@ -700,7 +672,7 @@ pub mod pallet {
 	/// particular deposit.
 	#[derive(
 		CloneNoBound,
-		RuntimeDebugNoBound,
+		DebugNoBound,
 		PartialEqNoBound,
 		Eq,
 		Encode,

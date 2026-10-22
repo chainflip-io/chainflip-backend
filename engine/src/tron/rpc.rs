@@ -549,7 +549,7 @@ impl<RpcClient: TronRpcApi> TronSigningRpcApi for TronRpcSigningClient<RpcClient
 
 	fn sign_raw_bytes(&self, bytes: Vec<u8>) -> anyhow::Result<Signature> {
 		// Hash the raw data with SHA256 (TRON uses SHA256, not Keccak256)
-		let hash = sp_core::hashing::sha2_256(&bytes);
+		let hash = sp_crypto_hashing::sha2_256(&bytes);
 
 		// Sign the hash using the wallet
 		let signature = self

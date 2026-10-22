@@ -273,7 +273,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 
 #[derive(
 	Clone,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEq,
 	Eq,
 	Encode,
