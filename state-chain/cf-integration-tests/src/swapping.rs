@@ -896,9 +896,9 @@ fn can_handle_failed_vault_transfer() {
 				},
 			));
 			testnet.move_forward_blocks(
-				pallet_cf_threshold_signature::signing_response_timeout_blocks(
-					cf_primitives::CeremonyStageTimeouts::DEFAULT.signing_secs,
-				) + 1,
+				pallet_cf_threshold_signature::CeremonyStageTimeouts::DEFAULT
+					.signing_response_timeout_blocks() +
+					1,
 			);
 
 			// Transfer Fallback call is constructed, but not broadcasted.

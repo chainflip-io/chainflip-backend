@@ -49,7 +49,7 @@ use cf_primitives::{
 		arb::Asset as ArbAsset, bsc::Asset as BscAsset, eth::Asset as EthAsset,
 		tron::Asset as TrxAsset,
 	},
-	BlockNumber, BroadcastId, CeremonyStageTimeouts, ChainflipNetwork, NetworkEnvironment, SemVer,
+	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	elections::{authorise_voter, ElectionInstance, ElectionInstancesVoting},
@@ -119,8 +119,6 @@ pub enum PalletConfigUpdate {
 	/// Stop validators batching their election votes into one extrinsic, or let them resume.
 	/// See [`ElectionVoteBatchingDisabled`].
 	ElectionVoteBatching { disabled: bool },
-	/// Set the multisig ceremony stage timeouts for all chains. See [`CeremonyStageTimeouts`].
-	CeremonyStageTimeouts { timeouts: CeremonyStageTimeouts },
 }
 
 #[frame_support::pallet]
@@ -451,11 +449,6 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Whether validators should stop batching their all election instances votes or not
 	pub type ElectionVoteBatchingDisabled<T> = StorageValue<_, bool, ValueQuery>;
-
-	#[pallet::storage]
-	/// Stage timeouts that engines apply to every multisig ceremony, carried in each request so
-	/// that all participants use the same values.
-	pub type CeremonyStageTimeoutsConfig<T> = StorageValue<_, CeremonyStageTimeouts, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -945,9 +938,6 @@ pub mod pallet {
 				match update {
 					PalletConfigUpdate::ElectionVoteBatching { disabled } => {
 						ElectionVoteBatchingDisabled::<T>::set(disabled);
-					},
-					PalletConfigUpdate::CeremonyStageTimeouts { timeouts } => {
-						CeremonyStageTimeoutsConfig::<T>::set(timeouts);
 					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });

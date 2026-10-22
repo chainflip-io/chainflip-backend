@@ -18,14 +18,15 @@ use core::marker::PhantomData;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-	mock::*, AttemptCount, AuthorityCount, CeremonyContext, CeremonyId, CurrentEpochIndex, Error,
-	Event, KeyHandoverResolutionPendingSince, KeyRotationStatus, KeygenFailureVoters,
-	KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenSlashAmount, KeygenSuccessVoters,
-	PalletConfigUpdate, PalletOffence, PendingKeyRotation, RequestContext, RequestId,
+	mock::*, AttemptCount, AuthorityCount, CeremonyContext, CeremonyId, CeremonyStageTimeouts,
+	CurrentEpochIndex, Error, Event, KeyHandoverResolutionPendingSince, KeyRotationStatus,
+	KeygenFailureVoters, KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenSlashAmount,
+	KeygenSuccessVoters, PalletConfigUpdate, PalletOffence, PendingKeyRotation, RequestContext,
+	RequestId, StageTimeouts,
 };
 
 use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto};
-use cf_primitives::{CeremonyStageTimeouts, FlipBalance, GENESIS_EPOCH};
+use cf_primitives::{FlipBalance, GENESIS_EPOCH};
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
@@ -782,7 +783,10 @@ fn keygen_request_emitted() {
 	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 	new_test_ext().execute_with(|| {
-		StageTimeouts::set(&CeremonyStageTimeouts { signing_secs: 7, keygen_secs: 40 });
+		StageTimeouts::<Test, Instance1>::put(CeremonyStageTimeouts {
+			signing_secs: 7,
+			keygen_secs: 40,
+		});
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index();
 		<EvmThresholdSigner as KeyRotator>::keygen(btree_candidates.clone(), rotation_epoch);
 		// Confirm we have a new key rotation process running
@@ -1961,14 +1965,18 @@ fn can_recover_from_abort_key_rotation_after_key_handover_failed() {
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
 		const NEW_KEYGEN_SLASH_AMOUNT: FlipBalance = 102;
+		const NEW_STAGE_TIMEOUTS: CeremonyStageTimeouts =
+			CeremonyStageTimeouts { signing_secs: 15, keygen_secs: 45 };
 
 		// Check that the default values are different from the new ones
 		assert_ne!(KeygenSlashAmount::<Test, Instance1>::get(), NEW_KEYGEN_SLASH_AMOUNT);
+		assert_ne!(StageTimeouts::<Test, Instance1>::get(), NEW_STAGE_TIMEOUTS);
 
 		// Update all config items
-		let updates = vec![PalletConfigUpdate::KeygenSlashAmount {
-			amount_to_slash: NEW_KEYGEN_SLASH_AMOUNT,
-		}];
+		let updates = vec![
+			PalletConfigUpdate::KeygenSlashAmount { amount_to_slash: NEW_KEYGEN_SLASH_AMOUNT },
+			PalletConfigUpdate::CeremonyStageTimeouts { timeouts: NEW_STAGE_TIMEOUTS },
+		];
 		for update in updates.clone() {
 			assert_ok!(EvmThresholdSigner::update_pallet_config(
 				OriginTrait::root(),
@@ -1982,6 +1990,7 @@ fn can_update_all_config_items() {
 
 		// Check that the new values were set
 		assert_eq!(KeygenSlashAmount::<Test, Instance1>::get(), NEW_KEYGEN_SLASH_AMOUNT);
+		assert_eq!(StageTimeouts::<Test, Instance1>::get(), NEW_STAGE_TIMEOUTS);
 
 		// Make sure that only governance can update the config
 		for update in updates {
@@ -1999,7 +2008,10 @@ fn signature_request_carries_signing_stage_timeout() {
 		.with_authorities([1, 2, 3])
 		.with_nominees([1, 2])
 		.execute_with(|| {
-			StageTimeouts::set(&CeremonyStageTimeouts { signing_secs: 7, keygen_secs: 40 });
+			StageTimeouts::<Test, Instance1>::put(CeremonyStageTimeouts {
+				signing_secs: 7,
+				keygen_secs: 40,
+			});
 			<EvmThresholdSigner as ThresholdSigner<_>>::request_signature(*b"OHAI");
 
 			assert_matches!(

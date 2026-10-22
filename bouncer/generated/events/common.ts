@@ -374,18 +374,10 @@ export const cfTraitsElectionsElectionInstance = z.discriminatedUnion('__kind', 
   z.object({ __kind: z.literal('Chain'), value: cfPrimitivesChainsForeignChain }),
 ]);
 
-export const cfPrimitivesCeremonyStageTimeouts = z.object({
-  signingSecs: z.number(),
-  keygenSecs: z.number(),
+export const palletCfEnvironmentPalletConfigUpdate = z.object({
+  __kind: z.literal('ElectionVoteBatching'),
+  disabled: z.boolean(),
 });
-
-export const palletCfEnvironmentPalletConfigUpdate = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('ElectionVoteBatching'), disabled: z.boolean() }),
-  z.object({
-    __kind: z.literal('CeremonyStageTimeouts'),
-    timeouts: cfPrimitivesCeremonyStageTimeouts,
-  }),
-]);
 
 export const palletCfFlipImbalancesInternalSource = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Account'), value: accountId }),
@@ -630,10 +622,18 @@ export const dispatchResult = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Err'), value: spRuntimeDispatchError }),
 ]);
 
-export const palletCfThresholdSignaturePalletConfigUpdate = z.object({
-  __kind: z.literal('KeygenSlashAmount'),
-  amountToSlash: numberOrHex,
+export const palletCfThresholdSignatureCeremonyStageTimeouts = z.object({
+  signingSecs: z.number(),
+  keygenSecs: z.number(),
 });
+
+export const palletCfThresholdSignaturePalletConfigUpdate = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('KeygenSlashAmount'), amountToSlash: numberOrHex }),
+  z.object({
+    __kind: z.literal('CeremonyStageTimeouts'),
+    timeouts: palletCfThresholdSignatureCeremonyStageTimeouts,
+  }),
+]);
 
 export const cfChainsBtcPreviousOrCurrent = simpleEnum(['Previous', 'Current']);
 

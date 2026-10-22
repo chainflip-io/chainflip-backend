@@ -425,39 +425,6 @@ impl core::fmt::Display for SemVer {
 	}
 }
 
-/// How long each stage of a multisig ceremony may last. Engines add the stage timeout to a
-/// cumulative deadline on entering each stage, so unused time carries over to later stages.
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-)]
-pub struct CeremonyStageTimeouts {
-	pub signing_secs: u32,
-	/// Also used for key handover.
-	pub keygen_secs: u32,
-}
-
-impl CeremonyStageTimeouts {
-	/// Signing is ~3x the honest message arrival tail measured on mainnet: lower risks
-	/// honest-but-slow peers being blamed for non-receipt. Keygen broadcast stages carry ~0.5MB
-	/// per peer at max authority count, so they need much longer.
-	pub const DEFAULT: Self = Self { signing_secs: 10, keygen_secs: 30 };
-}
-
-impl Default for CeremonyStageTimeouts {
-	fn default() -> Self {
-		Self::DEFAULT
-	}
-}
-
 /// The network environment, used to determine which chains the Chainflip network is connected to.
 #[derive(
 	PartialEq,

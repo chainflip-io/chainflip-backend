@@ -1361,17 +1361,3 @@ mod submit_elections_votes {
 		);
 	}
 }
-
-#[test]
-fn ceremony_stage_timeouts_can_be_updated() {
-	new_test_ext().execute_with(|| {
-		let timeouts = cf_primitives::CeremonyStageTimeouts { signing_secs: 15, keygen_secs: 45 };
-		assert_ok!(Environment::update_pallet_config(
-			OriginTrait::root(),
-			vec![crate::PalletConfigUpdate::CeremonyStageTimeouts { timeouts }]
-				.try_into()
-				.unwrap(),
-		));
-		assert_eq!(crate::CeremonyStageTimeoutsConfig::<Test>::get(), timeouts);
-	});
-}

@@ -54,7 +54,6 @@ use crate::{
 	// (we make arbitrary choice to use eth)
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
-use cf_primitives::CeremonyStageTimeouts;
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 use signing::{LocalSig3, SigningCommitment};
 use state_chain_runtime::AccountId;
@@ -80,10 +79,8 @@ pub const INITIAL_LATEST_CEREMONY_ID: CeremonyId = 0;
 pub const DEFAULT_KEYGEN_CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
 pub const DEFAULT_SIGNING_CEREMONY_ID: CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID + 1;
 
-pub const SIGNING_STAGE_TIMEOUT: Duration =
-	Duration::from_secs(CeremonyStageTimeouts::DEFAULT.signing_secs as u64);
-pub const KEYGEN_STAGE_TIMEOUT: Duration =
-	Duration::from_secs(CeremonyStageTimeouts::DEFAULT.keygen_secs as u64);
+pub const SIGNING_STAGE_TIMEOUT: Duration = Duration::from_secs(10);
+pub const KEYGEN_STAGE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Time it takes to cause a signing ceremony timeout (2 stages) with a small delay to allow for
 /// processing

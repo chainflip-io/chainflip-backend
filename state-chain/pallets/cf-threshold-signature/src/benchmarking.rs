@@ -232,9 +232,9 @@ mod benchmarks {
 			));
 		}
 
-		let retry_block = BlockNumberFor::<T>::from(signing_response_timeout_blocks(
-			T::CeremonyStageTimeouts::get().signing_secs,
-		));
+		let retry_block = BlockNumberFor::<T>::from(
+			StageTimeouts::<T, I>::get().signing_response_timeout_blocks(),
+		);
 		assert_eq!(
 			CeremonyRetryQueues::<T, I>::decode_len(retry_block).unwrap_or_default(),
 			r as usize,

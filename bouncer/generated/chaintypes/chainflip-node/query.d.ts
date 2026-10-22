@@ -36,7 +36,6 @@ import type {
   CfPrimitivesSemVer,
   CfPrimitivesNetworkEnvironment,
   CfPrimitivesChainflipNetwork,
-  CfPrimitivesCeremonyStageTimeouts,
   PalletCfFlipFlipAccount,
   PalletCfFlipOpaqueCallIndex,
   PalletCfFlipOnChargeTransactionFeeScalingRateConfig,
@@ -76,6 +75,7 @@ import type {
   PalletCfThresholdSignatureSignerAndSignatureResultEvmCrypto,
   CfChainsEvmAggKey,
   PalletCfThresholdSignatureKeyRotationStatusEvmCrypto,
+  PalletCfThresholdSignatureCeremonyStageTimeouts,
   PalletCfThresholdSignatureCeremonyContextPolkadotCrypto,
   PalletCfThresholdSignatureRequestInstructionPolkadotCrypto,
   PalletCfThresholdSignatureSignerAndSignatureResultPolkadotCrypto,
@@ -845,14 +845,6 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<boolean> =} callback
      **/
     electionVoteBatchingDisabled: GenericStorageQuery<() => boolean>;
-
-    /**
-     * Stage timeouts that engines apply to every multisig ceremony, carried in each request so
-     * that all participants use the same values.
-     *
-     * @param {Callback<CfPrimitivesCeremonyStageTimeouts> =} callback
-     **/
-    ceremonyStageTimeoutsConfig: GenericStorageQuery<() => CfPrimitivesCeremonyStageTimeouts>;
 
     /**
      * Generic pallet storage query
@@ -2186,6 +2178,14 @@ export interface ChainStorage extends GenericChainStorage {
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
 
     /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
+
+    /**
      * Counter for generating unique ceremony ids.
      *
      * @param {Callback<bigint> =} callback
@@ -2350,6 +2350,14 @@ export interface ChainStorage extends GenericChainStorage {
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
 
     /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
+
+    /**
      * Counter for generating unique ceremony ids.
      *
      * @param {Callback<bigint> =} callback
@@ -2512,6 +2520,14 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.
@@ -4968,6 +4984,14 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.

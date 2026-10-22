@@ -24,9 +24,7 @@ use cf_chains::{
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
-use cf_primitives::{
-	AuthorityCount, CeremonyId, CeremonyStageTimeouts, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH,
-};
+use cf_primitives::{AuthorityCount, CeremonyId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -154,15 +152,18 @@ pub const INVALID_SIGNATURE: <MockEthereumChainCrypto as ChainCrypto>::Threshold
 
 parameter_types! {
 	pub const CeremonyRetryDelay: BlockNumberFor<Test> = 4;
-	pub storage StageTimeouts: CeremonyStageTimeouts = CeremonyStageTimeouts::DEFAULT;
 }
 
 pub fn threshold_signature_response_timeout() -> BlockNumberFor<Test> {
-	crate::signing_response_timeout_blocks(StageTimeouts::get().signing_secs).into()
+	crate::StageTimeouts::<Test, Instance1>::get()
+		.signing_response_timeout_blocks()
+		.into()
 }
 
 pub fn keygen_response_timeout() -> BlockNumberFor<Test> {
-	crate::keygen_response_timeout_blocks(StageTimeouts::get().keygen_secs).into()
+	crate::StageTimeouts::<Test, Instance1>::get()
+		.keygen_response_timeout_blocks()
+		.into()
 }
 
 pub type MockOffenceReporter =
@@ -182,7 +183,6 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Slasher = MockFlipSlasher<Test>;
 	type SafeMode = MockRuntimeSafeMode;
 	type CfeMultisigRequest = MockCfeInterface;
-	type CeremonyStageTimeouts = StageTimeouts;
 	type Weights = ();
 }
 

@@ -1915,11 +1915,10 @@ export type PalletCfVaultsVaultKeyRotatedExternallyBsc = {
   txId: H256;
 };
 
-export type PalletCfEnvironmentPalletConfigUpdate =
-  | { type: 'ElectionVoteBatching'; value: { disabled: boolean } }
-  | { type: 'CeremonyStageTimeouts'; value: { timeouts: CfPrimitivesCeremonyStageTimeouts } };
-
-export type CfPrimitivesCeremonyStageTimeouts = { signingSecs: number; keygenSecs: number };
+export type PalletCfEnvironmentPalletConfigUpdate = {
+  type: 'ElectionVoteBatching';
+  value: { disabled: boolean };
+};
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -3439,9 +3438,16 @@ export type PalletCfThresholdSignatureCallLike =
       params: { update: PalletCfThresholdSignaturePalletConfigUpdate };
     };
 
-export type PalletCfThresholdSignaturePalletConfigUpdate = {
-  type: 'KeygenSlashAmount';
-  value: { amountToSlash: bigint };
+export type PalletCfThresholdSignaturePalletConfigUpdate =
+  | { type: 'KeygenSlashAmount'; value: { amountToSlash: bigint } }
+  | {
+      type: 'CeremonyStageTimeouts';
+      value: { timeouts: PalletCfThresholdSignatureCeremonyStageTimeouts };
+    };
+
+export type PalletCfThresholdSignatureCeremonyStageTimeouts = {
+  signingSecs: number;
+  keygenSecs: number;
 };
 
 /**
