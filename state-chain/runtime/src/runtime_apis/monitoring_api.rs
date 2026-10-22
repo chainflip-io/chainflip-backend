@@ -28,6 +28,9 @@ decl_runtime_apis!(
 		#[changed_in(3)]
 		fn cf_external_chains_block_height(
 		) -> types::before_monitoring_v3::ExternalChainsBlockHeight;
+		#[changed_in(5)]
+		fn cf_external_chains_block_height(
+		) -> types::before_monitoring_v5::ExternalChainsBlockHeight;
 		fn cf_external_chains_block_height() -> ExternalChainsBlockHeight;
 		fn cf_btc_utxos() -> BtcUtxos;
 		fn cf_dot_aggkey() -> PolkadotAccountId;
@@ -39,18 +42,26 @@ decl_runtime_apis!(
 		fn cf_redemptions() -> RedemptionsInfo;
 		#[changed_in(3)]
 		fn cf_pending_broadcasts_count() -> types::before_monitoring_v3::PendingBroadcasts;
+		#[changed_in(5)]
+		fn cf_pending_broadcasts_count() -> types::before_monitoring_v5::PendingBroadcasts;
 		fn cf_pending_broadcasts_count() -> PendingBroadcasts;
 		fn cf_pending_tss_ceremonies_count() -> PendingTssCeremonies;
 		fn cf_pending_swaps_count() -> u32;
 		#[changed_in(3)]
 		fn cf_open_deposit_channels_count() -> types::before_monitoring_v3::OpenDepositChannels;
+		#[changed_in(5)]
+		fn cf_open_deposit_channels_count() -> types::before_monitoring_v5::OpenDepositChannels;
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels;
 		#[changed_in(3)]
 		fn cf_fee_imbalance() -> types::before_monitoring_v3::FeeImbalance<AssetAmount>;
+		#[changed_in(5)]
+		fn cf_fee_imbalance() -> types::before_monitoring_v5::FeeImbalance<AssetAmount>;
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount>;
 		fn cf_build_version() -> LastRuntimeUpgradeInfo;
 		#[changed_in(3)]
 		fn cf_rotation_broadcast_ids() -> types::before_monitoring_v3::ActivateKeysBroadcastIds;
+		#[changed_in(5)]
+		fn cf_rotation_broadcast_ids() -> types::before_monitoring_v5::ActivateKeysBroadcastIds;
 		fn cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds;
 		fn cf_sol_nonces() -> SolanaNonces;
 		fn cf_sol_aggkey() -> SolAddress;
