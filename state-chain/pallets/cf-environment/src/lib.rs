@@ -973,16 +973,13 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	fn filter_unusable_utxos(available_utxos: &mut Vec<Utxo>, aggkey: Option<&AggKey>) {
+	fn filter_unusable_utxos(available_utxos: &mut Vec<Utxo>, aggkey: &AggKey) {
 		let discarded_at = frame_system::Pallet::<T>::block_number();
 		let mut stale_utxos = Vec::new();
 		available_utxos.retain(|utxo| {
-			let reason = if aggkey.is_some_and(|aggkey| {
-				aggkey.previous.is_some_and(|previous| {
-					utxo.deposit_address.pubkey_x != aggkey.current &&
-						utxo.deposit_address.pubkey_x != previous
-				})
-			}) {
+			let reason = if utxo.deposit_address.pubkey_x != aggkey.current &&
+				Some(utxo.deposit_address.pubkey_x) != aggkey.previous
+			{
 				BitcoinUtxoDiscardReason::StaleKey
 			} else if utxo.amount < BITCOIN_DUST_LIMIT {
 				BitcoinUtxoDiscardReason::BelowDustLimit
@@ -1015,23 +1012,20 @@ impl<T: Config> Pallet<T> {
 		let bitcoin_fee_info = T::BitcoinFeeInfo::bitcoin_fee_info();
 		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
 		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
+		let aggkey = T::BitcoinKeyProvider::active_epoch_key().map(|epoch_key| epoch_key.key)?;
 
 		// Selection failures preserve all remaining inputs. Cleanup persists unless an outer
 		// transaction (such as AllBatch) rolls it back.
 		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
-			let aggkey = T::BitcoinKeyProvider::active_epoch_key().map(|epoch_key| epoch_key.key);
-			Self::filter_unusable_utxos(available_utxos, aggkey.as_ref());
+			Self::filter_unusable_utxos(available_utxos, &aggkey);
 
 			match utxo_selection_type {
-				UtxoSelectionType::SelectForConsolidation => {
-					let AggKey { previous, .. } = aggkey?;
-					select_utxos_for_consolidation(
-						previous,
-						available_utxos,
-						&bitcoin_fee_info,
-						Self::consolidation_parameters(),
-					)
-				},
+				UtxoSelectionType::SelectForConsolidation => select_utxos_for_consolidation(
+					aggkey.previous,
+					available_utxos,
+					&bitcoin_fee_info,
+					Self::consolidation_parameters(),
+				),
 				UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 					select_utxos_from_pool(
 						available_utxos,

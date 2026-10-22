@@ -74,6 +74,7 @@ fn genesis_config() {
 #[test]
 fn test_btc_utxo_selection() {
 	new_test_ext().execute_with(|| {
+		MockBitcoinKeyProvider::set_key(AggKey { current: Default::default(), previous: None });
 		// add some UTXOs to the available utxos list.
 		add_utxo_amount(10000, 0);
 		add_utxo_amount(5000, 1);
@@ -223,21 +224,25 @@ fn can_discard_stale_utxos() {
 			consolidation_size: 2,
 		});
 
-		// Does not discard UTXOs if previous key not set:
+		// Without a previous key, only current-key UTXOs are retained.
 		MockBitcoinKeyProvider::set_key(AggKey { current: epoch_2, previous: None });
 
-		BitcoinAvailableUtxos::<Test>::set(vec![
+		let available_utxos = vec![
 			utxo_with_key(epoch_1),
 			utxo_with_key(epoch_1),
 			utxo_with_key(epoch_2),
 			utxo_with_key(epoch_3),
-		]);
+		];
+		BitcoinAvailableUtxos::<Test>::set(available_utxos.clone());
 
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
 			None
 		);
+		assert_eq!(BitcoinAvailableUtxos::<Test>::get(), vec![utxo_with_key(epoch_2)]);
 
+		// Restore the pool to check discarding with a previous key as well.
+		BitcoinAvailableUtxos::<Test>::set(available_utxos);
 		// Have not reached threshold, but will still move previous epoch UTXO into the new vault
 		// as part of "consolidation". Epoch 1 utxos are discarded.
 		MockBitcoinKeyProvider::set_key(AggKey { current: epoch_3, previous: Some(epoch_2) });
@@ -283,7 +288,7 @@ fn discarded_utxos_are_archived_with_reason_and_block() {
 		let retained = utxo_with_key(current_key);
 		let mut available = vec![stale.clone(), dust.clone(), retained.clone()];
 
-		Environment::filter_unusable_utxos(&mut available, Some(&aggkey));
+		Environment::filter_unusable_utxos(&mut available, &aggkey);
 
 		assert_eq!(available, vec![retained]);
 		assert_eq!(BitcoinDiscardedUtxos::<Test>::iter().count(), 2);
