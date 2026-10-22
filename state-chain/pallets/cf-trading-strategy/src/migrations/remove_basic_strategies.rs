@@ -29,9 +29,13 @@ use crate::weights::WeightInfo;
 use frame_support::traits::Get;
 
 #[cfg(feature = "try-runtime")]
+use cf_primitives::AssetAmount;
+#[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
+#[cfg(feature = "try-runtime")]
+use sp_std::collections::btree_map::BTreeMap;
 
 pub mod old {
 	use crate::{Config, Pallet};
@@ -125,16 +129,55 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let remaining = old::Strategies::<T>::iter_values()
-			.filter(|strategy| strategy.removed_base_asset().is_none())
-			.count() as u32;
-		Ok(remaining.encode())
+		use cf_traits::{BalanceApi, PoolApi};
+
+		use frame_support::storage::{with_transaction_unchecked, TransactionOutcome};
+
+		let mut remaining: u32 = 0;
+		let mut closed_strategies = Vec::new();
+		// Owners can hold several removed strategies, so their expected balances are aggregated.
+		let mut expected_owner_balances = BTreeMap::<(T::AccountId, Asset), AssetAmount>::new();
+		for (lp, strategy_id, strategy) in old::Strategies::<T>::iter() {
+			let Some(base_asset) = strategy.removed_base_asset() else {
+				remaining += 1;
+				continue;
+			};
+			// Unswept order proceeds are part of what the owner gets back, but only show up in the
+			// free balance after a sweep. The sweep is rolled back to keep pre_upgrade read-only.
+			let strategy_balances = with_transaction_unchecked(|| {
+				let swept = T::PoolApi::sweep(&strategy_id).map(|()| {
+					let open_orders = T::PoolApi::open_order_balances(&strategy_id);
+					[base_asset, STABLE_ASSET].map(|asset| {
+						(
+							asset,
+							T::BalanceApi::get_balance(&strategy_id, asset)
+								.saturating_add(open_orders[asset]),
+						)
+					})
+				});
+				TransactionOutcome::Rollback(swept)
+			})?;
+			for (asset, amount) in strategy_balances {
+				let expected = expected_owner_balances
+					.entry((lp.clone(), asset))
+					.or_insert_with(|| T::BalanceApi::get_balance(&lp, asset));
+				*expected = expected.saturating_add(amount);
+			}
+			closed_strategies.push((strategy_id, base_asset));
+		}
+		Ok((remaining, closed_strategies, expected_owner_balances).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let remaining = u32::decode(&mut &state[..])
-			.map_err(|_| DispatchError::Other("Failed to decode pre-upgrade state"))?;
+		use cf_traits::{BalanceApi, PoolApi};
+
+		let (remaining, closed_strategies, expected_owner_balances) = <(
+			u32,
+			Vec<(T::AccountId, Asset)>,
+			BTreeMap<(T::AccountId, Asset), AssetAmount>,
+		)>::decode(&mut &state[..])
+		.map_err(|_| DispatchError::Other("Failed to decode pre-upgrade state"))?;
 		// Counting keys and decoded values separately catches any entry that no longer decodes.
 		frame_support::ensure!(
 			Strategies::<T>::iter_keys().count() as u32 == remaining,
@@ -144,6 +187,26 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			Strategies::<T>::iter_values().count() as u32 == remaining,
 			"Some strategies no longer decode"
 		);
+		for (strategy_id, base_asset) in closed_strategies {
+			frame_support::ensure!(
+				T::PoolApi::open_order_balances(&strategy_id)
+					.iter()
+					.all(|(_, amount)| *amount == 0),
+				"Closed strategy still has open orders"
+			);
+			for asset in [base_asset, STABLE_ASSET] {
+				frame_support::ensure!(
+					T::BalanceApi::get_balance(&strategy_id, asset) == 0,
+					"Closed strategy still holds funds"
+				);
+			}
+		}
+		for ((lp, asset), expected_balance) in expected_owner_balances {
+			frame_support::ensure!(
+				T::BalanceApi::get_balance(&lp, asset) == expected_balance,
+				"Owner did not receive the funds of their closed strategy"
+			);
+		}
 		Ok(())
 	}
 }
@@ -203,7 +266,11 @@ mod tests {
 			)
 			.is_ok());
 
+			#[cfg(feature = "try-runtime")]
+			let state = Migration::<Test>::pre_upgrade().unwrap();
 			Migration::<Test>::on_runtime_upgrade();
+			#[cfg(feature = "try-runtime")]
+			Migration::<Test>::post_upgrade(state).unwrap();
 
 			// The remaining strategy is untouched and decodes as the new type.
 			assert_eq!(

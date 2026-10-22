@@ -189,10 +189,11 @@ impl TradingStrategy {
 				base_asset,
 			} => {
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
-				// The strategy values one unit of each asset equally, so it only makes sense for
-				// stablecoin pairs. Ticks are absolute, so with different decimals they are centred
-				// on the parity tick rather than zero.
+				// The strategy values one whole unit of each asset equally, all strategies are
+				// paired with USDC, therefore it must be a USD stablecoin.
 				ensure!(base_asset.is_usd_stablecoin(), Error::<T>::InvalidAssetsForStrategy);
+				// Ticks are absolute, so if they have different decimals they are centred on the
+				// parity tick rather than zero.
 				let parity_tick = parity_tick(*base_asset, STABLE_ASSET)
 					.ok_or(Error::<T>::InvalidAssetsForStrategy)?;
 				validate_inventory_tick_ranges::<T>(
