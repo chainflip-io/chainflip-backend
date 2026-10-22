@@ -552,6 +552,7 @@ pub fn inner_cf_development_chain_spec(
 			devnet::ARBITRUM_SAFETY_MARGIN,
 			devnet::SOLANA_SAFETY_MARGIN,
 			devnet::TRON_SAFETY_MARGIN,
+			devnet::BSC_SAFETY_MARGIN,
 			SolanaElectionsConfig {
 				option_initial_state: Some(solana_elections::initial_state(
 					sol_vault_program,
@@ -785,6 +786,7 @@ macro_rules! network_spec {
 						ARBITRUM_SAFETY_MARGIN,
 						SOLANA_SAFETY_MARGIN,
 						TRON_SAFETY_MARGIN,
+						BSC_SAFETY_MARGIN,
 						SolanaElectionsConfig {
 							option_initial_state: Some(solana_elections::initial_state(
 								sol_vault_program,
@@ -870,6 +872,7 @@ fn testnet_genesis(
 	arbitrum_safety_margin: u64,
 	solana_safety_margin: u64,
 	tron_safety_margin: u64,
+	bsc_safety_margin: u64,
 	solana_elections: state_chain_runtime::SolanaElectionsConfig,
 	bitcoin_elections: state_chain_runtime::BitcoinElectionsConfig,
 	generic_elections: state_chain_runtime::GenericElectionsConfig,
@@ -1166,6 +1169,7 @@ fn testnet_genesis(
 		},
 		bsc_ingress_egress: state_chain_runtime::BscIngressEgressConfig {
 			deposit_channel_lifetime: bsc_deposit_channel_lifetime.into(),
+			witness_safety_margin: Some(bsc_safety_margin),
 			..Default::default()
 		},
 		solana_elections,
