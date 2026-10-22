@@ -858,6 +858,17 @@ fn lp_events_serialization() {
 			collected_fees: 123,
 			bought_amount: 456,
 		},
+		PoolEvent::LimitOrderFilled {
+			lp: ID_1,
+			base_asset: Asset::Btc,
+			quote_asset: Asset::Usdc,
+			side: Side::Sell,
+			id: 1234,
+			tick: -100,
+			sold_amount: 4321,
+			bought_amount: 456,
+			remaining_amount: 23456,
+		},
 		PoolEvent::AssetSwapped {
 			from: Asset::Btc,
 			to: Asset::Usdc,
@@ -884,12 +895,6 @@ fn lp_events_serialization() {
 			order: CloseOrder::Range { base_asset: Asset::Btc, quote_asset: Asset::Usdc, id: 1234 },
 		},
 		PoolEvent::PalletConfigUpdated {
-			update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
-				asset: Asset::Btc,
-				amount: 100_000,
-			},
-		},
-		PoolEvent::PalletConfigUpdated {
 			update: PalletConfigUpdate::SetMinimumOrderAmount {
 				asset: Asset::Btc,
 				amount: 100_000,
@@ -904,6 +909,7 @@ fn lp_events_serialization() {
 			PoolEvent::NewPoolCreated { .. } |
 			PoolEvent::RangeOrderUpdated { .. } |
 			PoolEvent::LimitOrderUpdated { .. } |
+			PoolEvent::LimitOrderFilled { .. } |
 			PoolEvent::AssetSwapped { .. } |
 			PoolEvent::PoolFeeSet { .. } |
 			PoolEvent::ScheduledLimitOrderUpdateDispatchSuccess { .. } |
