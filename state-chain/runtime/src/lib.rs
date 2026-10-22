@@ -551,6 +551,7 @@ pub type MigrationsForV2_3 = (
 	migrations::bsc_integration::BscBroadcasterInit,
 	migrations::broker_withdrawal_addresses_to_asset_balances::Migration,
 	migrations::refund_addresses_to_asset_balances::Migration,
+	migrations::bsc_witness_safety_margin::BscWitnessSafetyMargin,
 );
 
 #[cfg(test)]
