@@ -47,14 +47,32 @@ jobs:
       upload-name: "chainflip-backend-bin-try-runtime"
       binary-subdir: release
 
+  provision-bouncer-runner:
+    needs: pre-check
+    uses: ./.github/workflows/_39_provision_bouncer_runner.yml
+    secrets: inherit
   post-check:
-    needs: [build]
+    needs: [build, provision-bouncer-runner]
+    # Runs even when the build fails, so that the provisioned runner is destroyed.
+    if: ${{ always() && needs.provision-bouncer-runner.result != 'skipped' }}
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
       full-bouncer: true
+      build-result: ${{ needs.build.result }}
+      runner-label: ${{ needs.provision-bouncer-runner.outputs.runner-label }}
+      runner-name: ${{ needs.provision-bouncer-runner.outputs.runner-name }}
+      server-id: ${{ needs.provision-bouncer-runner.outputs.server-id }}
+  provision-bouncer-runner-old-rpcs:
+    needs: pre-check
+    uses: ./.github/workflows/_39_provision_bouncer_runner.yml
+    secrets: inherit
+    with:
+      log-postfix: "-post-check-old-rpcs"
   post-check-old-rpcs:
-    needs: [build]
+    needs: [build, provision-bouncer-runner-old-rpcs]
+    # Runs even when the build fails, so that the provisioned runner is destroyed.
+    if: ${{ always() && needs.provision-bouncer-runner-old-rpcs.result != 'skipped' }}
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
@@ -62,6 +80,10 @@ jobs:
       broker-endpoint: "http://127.0.0.1:10997"
       lp-endpoint: "http://127.0.0.1:10589"
       log-postfix: "-post-check-old-rpcs"
+      build-result: ${{ needs.build.result }}
+      runner-label: ${{ needs.provision-bouncer-runner-old-rpcs.outputs.runner-label }}
+      runner-name: ${{ needs.provision-bouncer-runner-old-rpcs.outputs.runner-name }}
+      server-id: ${{ needs.provision-bouncer-runner-old-rpcs.outputs.server-id }}
 
   upgrade-check:
     needs: [build-try-runtime]
