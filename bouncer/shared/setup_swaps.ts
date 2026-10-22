@@ -2,6 +2,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity, registerLiquidityRefundAddressForChain } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
+import { setupIngressEgressPallet } from 'shared/setup_elections';
 import { Asset } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
@@ -201,7 +202,7 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
       ]);
 
   cf.info('Setting up range orders');
-  await cf.all([lp1RangeOrders]);
+  await cf.all([lp1RangeOrders, setupIngressEgressPallet]);
 
   cf.debug('Range orders placed');
 
