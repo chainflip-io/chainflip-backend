@@ -268,7 +268,7 @@ impl<E> RejectCall<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_deposit_details: <Ethereum as Chain>::DepositDetails,
 		asset: <Ethereum as Chain>::ChainAsset,
 		fetch: FetchForRejection<Ethereum>,
