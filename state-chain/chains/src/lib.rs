@@ -310,10 +310,6 @@ pub trait ChainWitnessConfig {
 		+ BenchmarkValue;
 
 	const WITNESS_PERIOD: Self::ChainBlockNumber;
-
-	/// Whether we should witness the chain's finalized head as opposed to the latest (which is the
-	/// default behaviour).
-	const WITNESS_FINALIZED_BLOCKS: bool = false;
 }
 
 /// A trait representing all the types and constants that need to be implemented for supported

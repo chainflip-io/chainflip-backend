@@ -41,12 +41,12 @@ use self::evm::EvmCrypto;
 pub const CHAIN_ID_MAINNET: u64 = 56;
 pub const CHAIN_ID_TESTNET: u64 = 97;
 
+// BSC's fast finality means the finalized head only lags latest by 1-2 blocks.
+pub const WITNESS_FINALIZED_BLOCKS: bool = true;
+
 impl ChainWitnessConfig for Bsc {
 	type ChainBlockNumber = u64;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 14;
-	// we only witness finalized blocks for BSC. finalized in BSC only lags behind latest for 1-2
-	// blocks due to BSC's fast finality
-	const WITNESS_FINALIZED_BLOCKS: bool = true;
 }
 
 impl Chain for Bsc {
