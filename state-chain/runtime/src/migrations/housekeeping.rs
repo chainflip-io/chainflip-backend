@@ -22,7 +22,6 @@ use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
-pub mod assethub_elections_reset;
 pub mod liveness_election_state;
 pub mod reap_old_accounts;
 pub mod solana_remove_unused_channels_state;
@@ -33,9 +32,6 @@ pub type Migration = (
 	// Can be removed once Solana address re-use is activated.
 	solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
 	liveness_election_state::LivenessElectionStateMigration,
-	// Remove after the 2.4 release: it isn't version-gated, so every later upgrade would reset
-	// Assethub elections again.
-	assethub_elections_reset::ResetAssethubElections,
 );
 
 pub struct NetworkSpecificHousekeeping;
