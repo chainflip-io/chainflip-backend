@@ -1338,9 +1338,7 @@ pub mod pallet {
 
 			ensure!(
 				match OperatorSettingsLookup::<T>::get(&operator)
-					.expect(
-						"operator is forced to set valid preferences during account registration"
-					)
+					.unwrap_or_default()
 					.delegation_acceptance
 				{
 					DelegationAcceptance::Allow =>
