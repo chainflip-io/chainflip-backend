@@ -2,7 +2,6 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity, registerLiquidityRefundAddressForChain } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
-import { setupIngressEgressPallet } from 'shared/setup_elections';
 import { Asset } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
@@ -61,6 +60,20 @@ export const price = new Map<Asset, number>([
   ['HubUsdc', 1],
   ['HubUsdt', 1],
 ]);
+
+// Must only be applied after the setup's liquidity deposits are credited: the delay would add
+// 15 blocks to each of the Solana deposits, which are the slowest part of the setup.
+async function setSolanaIngressDelay<A>(cf: ChainflipIO<A>) {
+  await cf.submitGovernance({
+    extrinsic: (api) =>
+      api.tx.solanaIngressEgress.updatePalletConfig([
+        {
+          type: 'SetIngressDelaySolana',
+          value: { delayBlocks: 15 },
+        },
+      ]),
+  });
+}
 
 export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up for swaps');
@@ -202,7 +215,7 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
       ]);
 
   cf.info('Setting up range orders');
-  await cf.all([lp1RangeOrders, setupIngressEgressPallet]);
+  await cf.all([lp1RangeOrders, setSolanaIngressDelay]);
 
   cf.debug('Range orders placed');
 

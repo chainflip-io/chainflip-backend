@@ -2,20 +2,6 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { hasPallet } from 'shared/utils/dedot';
 
-// Must only be applied after the setup's liquidity deposits are credited: the delay would add
-// 15 blocks to each of the Solana deposits, which are the slowest part of the setup.
-export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
-  await cf.submitGovernance({
-    extrinsic: (api) =>
-      api.tx.solanaIngressEgress.updatePalletConfig([
-        {
-          type: 'SetIngressDelaySolana',
-          value: { delayBlocks: 15 },
-        },
-      ]),
-  });
-}
-
 export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up elections');
 
