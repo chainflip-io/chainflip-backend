@@ -3499,49 +3499,129 @@ mod evm_transaction_rejection {
 		});
 	}
 
+	fn schedule_rejection_refund(with_ccm: bool) -> (ChannelId, EthereumAddress) {
+		let (channel_id, deposit_address, block, _) =
+			EthereumIngressEgress::request_swap_deposit_address(
+				ETH,
+				Asset::Flip,
+				ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+				Default::default(),
+				BROKER,
+				None,
+				0,
+				ChannelRefundParametersForChain::<Ethereum> {
+					retry_duration: 0,
+					refund_address: ALICE_ETH_ADDRESS,
+					min_price: Price::zero(),
+					refund_ccm_metadata: with_ccm.then(|| CcmChannelMetadataUnchecked {
+						message: vec![0x01].try_into().unwrap(),
+						gas_budget: 1_000,
+						ccm_additional_data: Default::default(),
+					}),
+					max_oracle_price_slippage: None,
+				},
+				None,
+			)
+			.unwrap();
+		let deposit_address: <Ethereum as Chain>::ChainAccount =
+			deposit_address.try_into().unwrap();
+
+		assert_ok!(EthereumIngressEgress::mark_deposit_channel_for_rejection(
+			OriginTrait::signed(BROKER),
+			deposit_address,
+		));
+
+		EthereumIngressEgress::process_channel_deposit_full_witness(
+			DepositWitness {
+				deposit_address,
+				asset: ETH,
+				amount: 10_000,
+				deposit_details: DepositDetails { tx_hashes: None },
+			},
+			block,
+		);
+		assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+		(channel_id, deposit_address)
+	}
+
+	#[test]
+	fn failed_rejection_call_does_not_mark_channel_pending() {
+		for with_ccm in [false, true] {
+			new_test_ext().execute_with(|| {
+				ChainTracker::<Ethereum>::set_fee(100);
+				let (_, deposit_address) = schedule_rejection_refund(with_ccm);
+				let channel_before = DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+					.unwrap()
+					.deposit_channel;
+				assert_eq!(channel_before.state, cf_chains::evm::DeploymentStatus::Undeployed);
+				assert_eq!(MockAssetWithholding::withheld_assets(Asset::Eth), 0);
+				MockEthereumApiCall::set_reject_call_success(false);
+
+				EthereumIngressEgress::on_finalize(2);
+
+				assert_eq!(
+					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+						.unwrap()
+						.deposit_channel,
+					channel_before
+				);
+				assert!(MockEgressBroadcasterEth::get_pending_api_calls().is_empty());
+				assert!(BroadcastActions::<Test, Instance1>::iter().next().is_none());
+				assert!(ScheduledTransactionsForRejection::<Test, Instance1>::get().is_empty());
+				assert_eq!(FailedRejections::<Test, Instance1>::get().len(), 1);
+				assert_eq!(MockAssetWithholding::withheld_assets(Asset::Eth), 200);
+			});
+		}
+	}
+
+	#[test]
+	fn failed_ccm_rejection_refund_preserves_scheduled_fetch() {
+		new_test_ext().execute_with(|| {
+			let (channel_id, deposit_address) = schedule_rejection_refund(true);
+			MockEthereumApiCall::set_ccm_call_success(false);
+
+			EthereumIngressEgress::on_finalize(2);
+
+			let pending_api_calls = MockEgressBroadcasterEth::get_pending_api_calls();
+			assert_eq!(pending_api_calls.len(), 1);
+			assert_matches!(
+				pending_api_calls.first(),
+				Some(MockEthereumApiCall::RejectCall {
+					fetch: FetchForRejection::Fetch {
+						deposit_fetch_id: EvmFetchId::DeployAndFetch(id),
+					},
+					..
+				}) if *id == channel_id
+			);
+			assert!(ScheduledTransactionsForRejection::<Test, Instance1>::get().is_empty());
+			assert_eq!(FailedRejections::<Test, Instance1>::get().len(), 1);
+			assert_eq!(
+				DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+					.unwrap()
+					.deposit_channel
+					.state,
+				cf_chains::evm::DeploymentStatus::Pending
+			);
+			let mut actions = BroadcastActions::<Test, Instance1>::iter();
+			let (broadcast_id, action) = actions.next().unwrap();
+			assert_eq!(action, BroadcastAction::FinaliseFetch(vec![deposit_address]));
+			assert!(actions.next().is_none());
+
+			EthereumIngressEgress::on_broadcast_success(broadcast_id, 42);
+			assert_eq!(
+				DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+					.unwrap()
+					.deposit_channel
+					.state,
+				cf_chains::evm::DeploymentStatus::Deployed { at_block_height: 42 }
+			);
+		});
+	}
+
 	#[test]
 	fn ccm_rejection_refund_does_not_finalise_fetch() {
 		new_test_ext().execute_with(|| {
-			let (_, deposit_address, block, _) =
-				EthereumIngressEgress::request_swap_deposit_address(
-					ETH,
-					Asset::Flip,
-					ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
-					Default::default(),
-					BROKER,
-					None,
-					0,
-					ChannelRefundParametersForChain::<Ethereum> {
-						retry_duration: 0,
-						refund_address: ALICE_ETH_ADDRESS,
-						min_price: Price::zero(),
-						refund_ccm_metadata: Some(CcmChannelMetadataUnchecked {
-							message: vec![0x01].try_into().unwrap(),
-							gas_budget: 1_000,
-							ccm_additional_data: Default::default(),
-						}),
-						max_oracle_price_slippage: None,
-					},
-					None,
-				)
-				.unwrap();
-			let deposit_address: <Ethereum as Chain>::ChainAccount =
-				deposit_address.try_into().unwrap();
-
-			assert_ok!(EthereumIngressEgress::mark_deposit_channel_for_rejection(
-				OriginTrait::signed(BROKER),
-				deposit_address,
-			));
-
-			EthereumIngressEgress::process_channel_deposit_full_witness(
-				DepositWitness {
-					deposit_address,
-					asset: ETH,
-					amount: 10_000,
-					deposit_details: DepositDetails { tx_hashes: None },
-				},
-				block,
-			);
+			let (_, deposit_address) = schedule_rejection_refund(true);
 			EthereumIngressEgress::on_finalize(2);
 
 			let pending_api_calls = MockEgressBroadcasterEth::get_pending_api_calls();
