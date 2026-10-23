@@ -46,6 +46,10 @@ jobs:
       profile: "try-runtime"
       upload-name: "chainflip-backend-bin-try-runtime"
       binary-subdir: release
+  check-generated-bouncer-dependencies:
+    needs: [build]
+    uses: ./.github/workflows/_23_check_generated_bouncer_dependencies.yml
+    secrets: inherit
 
   post-check:
     needs: [build]
