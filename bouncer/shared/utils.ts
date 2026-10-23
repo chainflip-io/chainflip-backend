@@ -907,7 +907,7 @@ export function getWeb3(chain: Chain): Web3 {
 
 export function getSolConnection(): Connection {
   return new Connection(process.env.SOL_HTTP_ENDPOINT ?? 'http://127.0.0.1:8899', {
-    commitment: 'confirmed',
+    commitment: 'finalized',
     wsEndpoint: process.env.SOL_WS_ENDPOINT ?? 'ws://127.0.0.1:8900',
   });
 }
