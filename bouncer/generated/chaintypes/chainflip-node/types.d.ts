@@ -3073,11 +3073,14 @@ export type PalletCfChainTrackingCall =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainState } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type PalletCfChainTrackingCallLike =
   /**
@@ -3085,11 +3088,14 @@ export type PalletCfChainTrackingCallLike =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainState } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type CfChainsChainState = {
   blockHeight: bigint;
@@ -3097,6 +3103,11 @@ export type CfChainsChainState = {
 };
 
 export type CfPrimitivesChainsEthereum = {};
+
+export type PalletCfChainTrackingPalletConfigUpdate = {
+  type: 'FeeMultiplier';
+  value: { multiplier: FixedU128 };
+};
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -3107,11 +3118,14 @@ export type PalletCfChainTrackingCall002 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStatePolkadot } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type PalletCfChainTrackingCallLike002 =
   /**
@@ -3119,11 +3133,14 @@ export type PalletCfChainTrackingCallLike002 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStatePolkadot } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type CfChainsChainStatePolkadot = {
   blockHeight: number;
@@ -3146,11 +3163,14 @@ export type PalletCfChainTrackingCall003 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateBitcoin } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type PalletCfChainTrackingCallLike003 =
   /**
@@ -3158,11 +3178,14 @@ export type PalletCfChainTrackingCallLike003 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateBitcoin } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type CfChainsChainStateBitcoin = {
   blockHeight: bigint;
@@ -5728,11 +5751,14 @@ export type PalletCfChainTrackingCall004 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateArbitrum } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type PalletCfChainTrackingCallLike004 =
   /**
@@ -5740,11 +5766,14 @@ export type PalletCfChainTrackingCallLike004 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateArbitrum } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type CfChainsChainStateArbitrum = {
   blockHeight: bigint;
@@ -6827,11 +6856,14 @@ export type PalletCfChainTrackingCall005 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateSolana } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type PalletCfChainTrackingCallLike005 =
   /**
@@ -6839,11 +6871,14 @@ export type PalletCfChainTrackingCallLike005 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateSolana } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type CfChainsChainStateSolana = {
   blockHeight: bigint;
@@ -6915,11 +6950,14 @@ export type PalletCfChainTrackingCall006 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateAssethub } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type PalletCfChainTrackingCallLike006 =
   /**
@@ -6927,11 +6965,14 @@ export type PalletCfChainTrackingCallLike006 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateAssethub } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type CfChainsChainStateAssethub = {
   blockHeight: number;
@@ -10940,11 +10981,14 @@ export type PalletCfChainTrackingCall007 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateTron } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type PalletCfChainTrackingCallLike007 =
   /**
@@ -10952,11 +10996,14 @@ export type PalletCfChainTrackingCallLike007 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateTron } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type CfChainsChainStateTron = {
   blockHeight: bigint;
@@ -11753,11 +11800,14 @@ export type PalletCfChainTrackingCall008 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateBsc } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type PalletCfChainTrackingCallLike008 =
   /**
@@ -11765,11 +11815,14 @@ export type PalletCfChainTrackingCallLike008 =
    **/
   | { name: 'UpdateChainState'; params: { newChainState: CfChainsChainStateBsc } }
   /**
-   * Update the fee multiplier with the provided value
+   * Apply a list of configuration updates to the pallet.
    *
    * Requires Governance.
    **/
-  | { name: 'UpdateFeeMultiplier'; params: { newFeeMultiplier: FixedU128 } };
+  | {
+      name: 'UpdatePalletConfig';
+      params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
+    };
 
 export type CfChainsChainStateBsc = { blockHeight: bigint; trackedData: CfChainsBscBscTrackedData };
 
@@ -13820,9 +13873,9 @@ export type PalletCfChainTrackingEvent =
    **/
   | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainState } }
   /**
-   * The fee multiplier for this chain has been updated.
+   * A pallet config item has been updated.
    **/
-  | { name: 'FeeMultiplierUpdated'; data: { newFeeMultiplier: FixedU128 } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfChainTrackingPalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -13833,9 +13886,9 @@ export type PalletCfChainTrackingEvent002 =
    **/
   | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStatePolkadot } }
   /**
-   * The fee multiplier for this chain has been updated.
+   * A pallet config item has been updated.
    **/
-  | { name: 'FeeMultiplierUpdated'; data: { newFeeMultiplier: FixedU128 } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfChainTrackingPalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -13846,9 +13899,9 @@ export type PalletCfChainTrackingEvent003 =
    **/
   | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateBitcoin } }
   /**
-   * The fee multiplier for this chain has been updated.
+   * A pallet config item has been updated.
    **/
-  | { name: 'FeeMultiplierUpdated'; data: { newFeeMultiplier: FixedU128 } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfChainTrackingPalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -15746,9 +15799,9 @@ export type PalletCfChainTrackingEvent004 =
    **/
   | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateArbitrum } }
   /**
-   * The fee multiplier for this chain has been updated.
+   * A pallet config item has been updated.
    **/
-  | { name: 'FeeMultiplierUpdated'; data: { newFeeMultiplier: FixedU128 } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfChainTrackingPalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -16385,9 +16438,9 @@ export type PalletCfChainTrackingEvent005 =
    **/
   | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateSolana } }
   /**
-   * The fee multiplier for this chain has been updated.
+   * A pallet config item has been updated.
    **/
-  | { name: 'FeeMultiplierUpdated'; data: { newFeeMultiplier: FixedU128 } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfChainTrackingPalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -16490,9 +16543,9 @@ export type PalletCfChainTrackingEvent006 =
    **/
   | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateAssethub } }
   /**
-   * The fee multiplier for this chain has been updated.
+   * A pallet config item has been updated.
    **/
-  | { name: 'FeeMultiplierUpdated'; data: { newFeeMultiplier: FixedU128 } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfChainTrackingPalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -17108,9 +17161,9 @@ export type PalletCfChainTrackingEvent007 =
    **/
   | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateTron } }
   /**
-   * The fee multiplier for this chain has been updated.
+   * A pallet config item has been updated.
    **/
-  | { name: 'FeeMultiplierUpdated'; data: { newFeeMultiplier: FixedU128 } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfChainTrackingPalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
@@ -17401,9 +17454,9 @@ export type PalletCfChainTrackingEvent008 =
    **/
   | { name: 'ChainStateUpdated'; data: { newChainState: CfChainsChainStateBsc } }
   /**
-   * The fee multiplier for this chain has been updated.
+   * A pallet config item has been updated.
    **/
-  | { name: 'FeeMultiplierUpdated'; data: { newFeeMultiplier: FixedU128 } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfChainTrackingPalletConfigUpdate } };
 
 /**
  * The `Event` enum of this pallet
