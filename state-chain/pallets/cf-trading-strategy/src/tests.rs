@@ -301,8 +301,8 @@ fn closing_strategy() {
 			assert!(!MockPoolApi::<AccountId>::get_limit_orders().is_empty());
 
 			// Credit the strategy account so has a non-zero free balance:
-			MockBalance::credit_account(&LP, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
-			assert_balances!(LP, ADDITIONAL_BASE_AMOUNT, 0);
+			MockBalance::credit_account(&strategy_id, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
+			assert_balances!(LP, 0, 0);
 
 			// Closing the strategy
 			assert_ok!(TradingStrategyPallet::close_strategy(
@@ -327,6 +327,9 @@ fn closing_strategy() {
 			assert!(MockPoolApi::<AccountId>::get_limit_orders().is_empty());
 			assert_eq!(Strategies::<Test>::iter().count(), 0);
 			assert_balances!(strategy_id, 0, 0);
+
+			// Funds from both the cancelled orders and the free balance are returned to the LP:
+			assert_balances!(LP, BASE_AMOUNT + ADDITIONAL_BASE_AMOUNT, QUOTE_AMOUNT);
 		});
 }
 
