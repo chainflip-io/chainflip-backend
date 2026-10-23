@@ -622,10 +622,17 @@ export const dispatchResult = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Err'), value: spRuntimeDispatchError }),
 ]);
 
+export const palletCfThresholdSignatureCeremonyStageTimeouts = z.object({
+  signingSecs: z.number(),
+  keygenSecs: z.number(),
+});
+
 export const palletCfThresholdSignaturePalletConfigUpdate = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('ThresholdSignatureResponseTimeout'), newTimeout: z.number() }),
-  z.object({ __kind: z.literal('KeygenResponseTimeout'), newTimeout: z.number() }),
   z.object({ __kind: z.literal('KeygenSlashAmount'), amountToSlash: numberOrHex }),
+  z.object({
+    __kind: z.literal('CeremonyStageTimeouts'),
+    timeouts: palletCfThresholdSignatureCeremonyStageTimeouts,
+  }),
 ]);
 
 export const cfChainsBtcPreviousOrCurrent = simpleEnum(['Previous', 'Current']);
