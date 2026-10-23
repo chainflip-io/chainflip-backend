@@ -27,7 +27,7 @@ use crate::{
 		gen_keygen_data_hash_comm1, get_key_data_for_test,
 		helpers::{
 			ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
-			INITIAL_LATEST_CEREMONY_ID,
+			INITIAL_LATEST_CEREMONY_ID, KEYGEN_STAGE_TIMEOUT, SIGNING_STAGE_TIMEOUT,
 		},
 		CeremonyRequest, CeremonyRequestDetails, KeygenRequestDetails, MultisigData,
 		SigningRequestDetails,
@@ -71,6 +71,7 @@ async fn run_on_request_to_sign<Chain: ChainSigning>(
 					<Chain::CryptoScheme as CryptoScheme>::signing_payload_for_test(),
 				)],
 				Rng::from_seed(DEFAULT_SIGNING_SEED),
+				SIGNING_STAGE_TIMEOUT,
 				result_sender,
 				scope,
 			);
@@ -115,6 +116,7 @@ fn send_signing_request<C: CryptoScheme>(
 				C::signing_payload_for_test(),
 			)],
 			rng: Rng::from_seed(DEFAULT_SIGNING_SEED),
+			stage_timeout: SIGNING_STAGE_TIMEOUT,
 			result_sender,
 		})),
 	};
@@ -160,6 +162,7 @@ async fn should_panic_keygen_request_if_not_participating() {
 				INITIAL_LATEST_CEREMONY_ID + 1,
 				BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 				Rng::from_seed(DEFAULT_KEYGEN_SEED),
+				KEYGEN_STAGE_TIMEOUT,
 				result_sender,
 				scope,
 			);
@@ -436,6 +439,7 @@ async fn should_route_p2p_message() {
 		details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails {
 			rng: Rng::from_seed(DEFAULT_KEYGEN_SEED),
 			participants,
+			stage_timeout: KEYGEN_STAGE_TIMEOUT,
 			result_sender,
 			resharing_context: None,
 		})),

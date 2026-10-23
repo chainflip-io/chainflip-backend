@@ -534,8 +534,6 @@ pub fn inner_cf_development_chain_spec(
 			devnet::ACCRUAL_RATIO,
 			Percent::from_percent(devnet::REDEMPTION_PERIOD_AS_PERCENTAGE),
 			devnet::PENALTIES.to_vec(),
-			devnet::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
-			devnet::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 			dot_runtime_version,
 			hub_runtime_version,
 			// Bitcoin block times on localnets are much faster, so we account for that here.
@@ -768,8 +766,6 @@ macro_rules! network_spec {
 						ACCRUAL_RATIO,
 						Percent::from_percent(REDEMPTION_PERIOD_AS_PERCENTAGE),
 						PENALTIES.to_vec(),
-						KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
-						THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 						dot_runtime_version,
 						hub_runtime_version,
 						BITCOIN_EXPIRY_BLOCKS,
@@ -853,8 +849,6 @@ fn testnet_genesis(
 	accrual_ratio: (i32, u32),
 	redemption_period_as_percentage: Percent,
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
-	keygen_ceremony_timeout_blocks: BlockNumber,
-	threshold_signature_ceremony_timeout_blocks: BlockNumber,
 	dot_runtime_version: RuntimeVersion,
 	hub_runtime_version: RuntimeVersion,
 	bitcoin_deposit_channel_lifetime: u32,
@@ -1046,26 +1040,19 @@ fn testnet_genesis(
 
 		evm_threshold_signer: state_chain_runtime::EvmThresholdSignerConfig {
 			key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			..Default::default()
 		},
 		polkadot_threshold_signer: state_chain_runtime::PolkadotThresholdSignerConfig {
-			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			..Default::default()
 		},
 		bitcoin_threshold_signer: state_chain_runtime::BitcoinThresholdSignerConfig {
-			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			..Default::default()
 		},
 		solana_threshold_signer: state_chain_runtime::SolanaThresholdSignerConfig {
 			key: sol_init_agg_key,
-			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			..Default::default()
 		},
