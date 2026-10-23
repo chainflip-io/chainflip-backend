@@ -16,7 +16,7 @@
 
 use crate::{
 	backend::CustomRpcBackend,
-	get_preallocated_channels, handle_dynamic_event_error,
+	broker_recovery_account, get_preallocated_channels, handle_dynamic_event_error,
 	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
 	CfApiError,
 };
@@ -796,5 +796,28 @@ where
 			.map_err(CfApiError::from)?;
 
 		Ok(tx_hash)
+	}
+
+	async fn link_recovery_account(&self, recovery_account: AccountId32) -> RpcResult<H256> {
+		let ExtrinsicData { tx_hash, .. } = self
+			.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_swapping::Call::link_recovery_account {
+					recovery_account,
+				}),
+				true,
+				true,
+			)
+			.await
+			.map_err(CfApiError::from)?;
+
+		Ok(tx_hash)
+	}
+	async fn recovery_account(&self) -> RpcResult<Option<AccountId32>> {
+		Ok(broker_recovery_account(
+			&*self.rpc_backend.client,
+			self.rpc_backend.client.info().best_hash,
+			&self.signed_pool_client.account_id(),
+		)?)
 	}
 }

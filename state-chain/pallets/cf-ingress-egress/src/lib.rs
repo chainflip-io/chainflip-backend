@@ -56,12 +56,13 @@ use cf_traits::{
 	impl_pallet_safe_mode,
 	lending::{BoostApi, BoostOutcome, BoostSource},
 	AccountRoleRegistry, AdditionalDepositAction, AdjustedFeeEstimationApi, AffiliateRegistry,
-	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
-	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
-	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
-	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit,
-	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, TargetChainOf, INITIAL_FLIP_FUNDING,
+	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, BrokerRecoveryApi,
+	CcmAdditionalDataHandler, Chainflip, ChannelIdAllocator, DepositApi, EgressApi, EpochInfo,
+	FailedDepositRecovery, FailedDepositRecoveryOutcome, FeePayment, FetchesTransfersLimitProvider,
+	FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
+	LpRegistration, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
+	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType, TargetChainOf,
+	INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -840,6 +841,9 @@ pub mod pallet {
 		>;
 
 		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
+
+		/// For looking up the recovery account of the broker a failed deposit is attributed to.
+		type BrokerRecoveryApi: BrokerRecoveryApi<AccountId = Self::AccountId>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -1231,6 +1235,10 @@ pub mod pallet {
 		ChainDeprecated,
 		/// A channel is marked by an invalid account (not owner and not whitelisted)
 		CannotMarkChannel,
+		/// The broker has not linked a recovery account.
+		NoRecoveryAccount,
+		/// The amount is not valid for the chain.
+		InvalidAmount,
 	}
 
 	#[pallet::hooks]
@@ -3754,6 +3762,65 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				},
 			}
 		})
+	}
+}
+
+impl<T: Config<I>, I: 'static> FailedDepositRecovery for Pallet<T, I> {
+	type AccountId = T::AccountId;
+
+	#[transactional]
+	fn route_failed_deposit(
+		broker: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<(Self::AccountId, FailedDepositRecoveryOutcome), DispatchError> {
+		let recovery_account = T::BrokerRecoveryApi::recovery_account(broker)
+			.ok_or(Error::<T, I>::NoRecoveryAccount)?;
+		let chain_asset =
+			TargetChainAsset::<T, I>::try_from(asset).map_err(|_| Error::<T, I>::AssetMismatch)?;
+		let chain_amount = TargetChainAmount::<T, I>::try_from(amount)
+			.map_err(|_| Error::<T, I>::InvalidAmount)?;
+
+		if let Some(destination) = T::LpRegistrationApi::liquidity_refund_address(
+			&recovery_account,
+			ForeignChain::from(asset),
+		) {
+			if let Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =
+				Self::egress_failed_deposit(chain_asset, chain_amount, destination.clone())
+			{
+				return Ok((
+					recovery_account,
+					FailedDepositRecoveryOutcome::Egressed {
+						egress_id,
+						destination,
+						egress_amount: egress_amount.into(),
+						fee_withheld: fee_withheld.into(),
+					},
+				));
+			}
+		}
+
+		T::Balance::credit_account(&recovery_account, asset, amount);
+		Ok((recovery_account, FailedDepositRecoveryOutcome::Credited))
+	}
+}
+
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Rolled back, fees included, if the amount doesn't cover the egress fee.
+	#[transactional]
+	fn egress_failed_deposit(
+		asset: TargetChainAsset<T, I>,
+		amount: TargetChainAmount<T, I>,
+		destination: ForeignChainAddress,
+	) -> Result<ScheduledEgressDetails<T::TargetChain>, DispatchError> {
+		let details = Self::schedule_egress(
+			asset,
+			amount,
+			destination.try_into().map_err(|_| Error::<T, I>::AssetMismatch)?,
+			None,
+		)?;
+		ensure!(!details.egress_amount.is_zero(), Error::<T, I>::BelowEgressDustLimit);
+		Ok(details)
 	}
 }
 

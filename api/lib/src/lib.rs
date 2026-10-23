@@ -809,6 +809,24 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			extrinsic_data.tx_hash
 		)
 	}
+
+	async fn link_recovery_account(&self, recovery_account: AccountId32) -> Result<H256> {
+		let extrinsic_data = self
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_swapping::Call::link_recovery_account {
+				recovery_account,
+			})
+			.await?
+			.until_in_block()
+			.await?;
+
+		extract_event!(
+			extrinsic_data.events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::RecoveryAccountLinked,
+			{ .. },
+			extrinsic_data.tx_hash
+		)
+	}
 }
 
 #[async_trait]
