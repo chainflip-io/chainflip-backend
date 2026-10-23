@@ -3431,9 +3431,20 @@ where
 			let strategies = if api_version < 4 {
 				// Strategies didn't exist in earlier versions:
 				vec![]
-			} else {
-				api.cf_get_trading_strategies(hash, lp)
+			} else if api_version < 22 {
+				// Strategies of the removed types are omitted.
+				#[expect(deprecated)]
+				api.cf_get_trading_strategies_before_version_22(hash, lp)
 					.map_err(CfApiError::from)?
+					.into_iter()
+					.filter_map(|info| info.into_current())
+					.collect()
+			} else {
+				api.cf_get_trading_strategies(hash, lp).map_err(CfApiError::from)?
+			};
+
+			Ok::<_, CfApiError>(
+				strategies
 					.into_iter()
 					.map(|info| TradingStrategyInfo {
 						lp_id: info.lp_id,
@@ -3445,10 +3456,8 @@ where
 							.map(|(asset, amount)| (asset, amount.into()))
 							.collect(),
 					})
-					.collect()
-			};
-
-			Ok::<_, CfApiError>(strategies)
+					.collect::<Vec<_>>(),
+			)
 		})
 	}
 
