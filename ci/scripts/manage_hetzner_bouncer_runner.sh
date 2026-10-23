@@ -82,6 +82,22 @@ create_hcloud_server() {
   done
 }
 
+# Distinguishes a server that never booted from a bootstrap script that failed.
+report_runner_state() {
+  local runner_name=$1
+  local server_id=$2
+
+  echo "Hetzner server $server_id:" >&2
+  hcloud_api "$HCLOUD_API_URL/servers/$server_id" \
+    | jq --compact-output '.server | {status, created, ipv4: .public_net.ipv4.ip}' >&2 || true
+  hcloud_api "$HCLOUD_API_URL/servers/$server_id/actions?sort=started" \
+    | jq --compact-output '.actions[] | {command, status, started, finished, error}' >&2 || true
+  echo "GitHub runner $runner_name:" >&2
+  github_api "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runners?name=$runner_name" \
+    | jq --compact-output --arg name "$runner_name" \
+      '[.runners[] | select(.name == $name) | {status, busy}]' >&2 || true
+}
+
 delete_hcloud_resource() {
   local resource=$1
   local resource_id=$2
@@ -333,6 +349,7 @@ EOF
   done
 
   echo "Timed out waiting for ephemeral runner $runner_name" >&2
+  report_runner_state "$runner_name" "$server_id"
   return 1
 }
 
