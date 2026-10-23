@@ -1435,6 +1435,10 @@ impl_runtime_apis! {
 			Swapping::minimum_chunk_size(asset)
 		}
 
+		fn cf_minimum_order_amount(asset: Asset) -> AssetAmount {
+			pallet_cf_pools::MinimumOrderAmount::<Runtime>::get(asset)
+		}
+
 		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
 			assert_eq!(quote_asset, STABLE_ASSET, "Only USDC is supported as quote asset");
 			assert_ne!(base_asset, quote_asset, "Invalid asset pair: base and quote asset must be different");

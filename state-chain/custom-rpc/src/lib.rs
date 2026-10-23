@@ -643,6 +643,7 @@ impl From<pallet_cf_pools::before_v13::PoolInfo> for RpcPoolInfo {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PoolsEnvironment {
 	pub fees: any::AssetMap<Option<RpcPoolInfo>>,
+	pub minimum_order_amounts: any::AssetMap<NumberOrHex>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -2869,7 +2870,7 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			Ok::<_, CfApiError>(PoolsEnvironment {
 				fees: {
 					let mut map = AssetMap::default();
@@ -2880,6 +2881,15 @@ where
 							.map(Into::into);
 					}
 					map
+				},
+				// Runtimes before version 23 have no api to read these, so they report `0`, the
+				// same value the api returns for an asset with no minimum configured.
+				minimum_order_amounts: if version < 23 {
+					any::AssetMap::from_fn(|_| 0u128.into())
+				} else {
+					any::AssetMap::try_from_fn(|asset| {
+						api.cf_minimum_order_amount(hash, asset).map(Into::into)
+					})?
 				},
 			})
 		})
