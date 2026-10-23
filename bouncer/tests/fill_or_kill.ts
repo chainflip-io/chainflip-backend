@@ -244,6 +244,11 @@ export async function testFillOrKill(testContext: TestContext) {
     (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 1000, true, true),
     (subcf) => testMinPriceRefund(subcf, Assets.Trx, 1000, true, true),
     (subcf) => testMinPriceRefund(subcf, Assets.TrxUsdt, 500, true, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Bnb, 1),
+    (subcf) => testMinPriceRefund(subcf, Assets.BscUsdt, 1000),
+    (subcf) => testMinPriceRefund(subcf, Assets.Bnb, 1, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.BscUsdt, 500, false, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.BscUsdt, 500, true, true),
     (subcf) => testOracleSwapsFoK(subcf),
   ]);
 }
