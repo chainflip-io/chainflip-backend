@@ -570,7 +570,13 @@ fn test_trading_strategies_custom_rpc() {
 	let val = TradingStrategyInfoHexAmounts {
 		lp_id: ID_1,
 		strategy_id: ID_2,
-		strategy: TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: Asset::Usdt },
+		strategy: TradingStrategy::InventoryBased {
+			min_buy_tick: -2,
+			max_buy_tick: -1,
+			min_sell_tick: 1,
+			max_sell_tick: 2,
+			base_asset: Asset::Usdt,
+		},
 		balance: vec![(Asset::Usdc, 500u128.into()), (Asset::Usdt, 1_000u128.into())],
 	};
 	insta::assert_json_snapshot!(val);

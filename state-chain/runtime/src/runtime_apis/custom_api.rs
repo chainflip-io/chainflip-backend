@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(21)]
+	#[api_version(22)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -352,6 +352,10 @@ decl_runtime_apis!(
 		fn cf_vault_addresses() -> before_version_19::VaultAddresses;
 		fn cf_vault_addresses() -> VaultAddresses;
 		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
+		#[changed_in(22)]
+		fn cf_get_trading_strategies(
+			lp_id: Option<AccountId32>,
+		) -> Vec<before_version_22::TradingStrategyInfo<AssetAmount>>;
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
