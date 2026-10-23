@@ -887,11 +887,6 @@ export const palletCfSwappingSwapFailureReason = simpleEnum([
 export const cfPrimitivesSwapLeg = simpleEnum(['FromStable', 'ToStable']);
 
 export const palletCfSwappingPalletConfigUpdate = z.discriminatedUnion('__kind', [
-  z.object({
-    __kind: z.literal('MaximumSwapAmount'),
-    asset: cfPrimitivesChainsAssetsAnyAsset,
-    amount: numberOrHex.nullish(),
-  }),
   z.object({ __kind: z.literal('SwapRetryDelay'), delay: z.number() }),
   z.object({ __kind: z.literal('FlipBuyInterval'), interval: z.number() }),
   z.object({ __kind: z.literal('SetMaxSwapRetryDuration'), blocks: z.number() }),
