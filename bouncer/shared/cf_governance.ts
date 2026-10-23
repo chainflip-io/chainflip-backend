@@ -1,4 +1,5 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
+import type { IKeyringPair } from 'dedot/types';
 import Keyring from 'polkadot/keyring';
 import { cfMutex, waitForExt } from 'shared/utils';
 import {
@@ -23,6 +24,12 @@ const snowWhiteUri =
 const keyring = new Keyring({ type: 'sr25519' });
 
 export const snowWhite = keyring.createFromUri(snowWhiteUri);
+
+/// Secondary council member for tests that need a multi-member council.
+/// The account is materialised on first use via `inc_sufficients` when added
+/// by `new_membership_set`; governance members don't pay fees so it doesn't
+/// need funding.
+export const secondGovernanceMember = keyring.createFromUri('//cf-governance-2');
 
 async function findProposalId(
   logger: Logger,
@@ -113,4 +120,27 @@ export async function submitGovernanceExtrinsic(
   logger.debug(`Governance extrinsic tx hash: ${txHash}, tx block: ${txBlockNumber}`);
 
   return findProposalId(logger, txHash, txBlockNumber);
+}
+
+/// Submit `governance.approve(proposalId)` signed by `approver`.
+export async function submitGovernanceApproval(
+  proposalId: number,
+  approver: IKeyringPair,
+  logger: Logger = globalLogger,
+): Promise<void> {
+  await using client = await getChainflipApi();
+
+  logger.debug(
+    `Submitting governance approval for proposal ${proposalId} from ${approver.address}`,
+  );
+
+  await signSendAndWait(
+    client,
+    client.tx.governance.approve(proposalId),
+    approver,
+    approver.address,
+    undefined,
+    true,
+  );
+  logger.debug(`Governance approval for proposal ${proposalId} finalised`);
 }

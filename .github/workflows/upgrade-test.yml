@@ -267,7 +267,8 @@ jobs:
           pnpm install --frozen-lockfile
           ./commands/submit_runtime_upgrade.ts \
             --runtime ./../upgrade-to-runtime/state_chain_runtime.compact.compressed.wasm \
-            --try_runtime
+            --try_runtime \
+            --warmer_lead_time_ms 30000
 
           ./commands/start_dm_localnet_apis.ts \
             --bins ./../upgrade-to-bins \
