@@ -15,19 +15,30 @@ require_environment() {
   : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 }
 
+# Callers capture the response, so the error body has to go to stderr to reach the job log.
 hcloud_api() {
-  curl --fail-with-body --silent --show-error \
+  local body
+  if ! body=$(curl --fail-with-body --silent --show-error \
     --header "Authorization: Bearer $CF_HETZNER_API_TOKEN" \
     --header "Content-Type: application/json" \
-    "$@"
+    "$@"); then
+    echo "Hetzner API request failed: $body" >&2
+    return 1
+  fi
+  printf '%s\n' "$body"
 }
 
 github_api() {
-  curl --fail-with-body --silent --show-error \
+  local body
+  if ! body=$(curl --fail-with-body --silent --show-error \
     --header "Accept: application/vnd.github+json" \
     --header "Authorization: Bearer $CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN" \
     --header "X-GitHub-Api-Version: 2022-11-28" \
-    "$@"
+    "$@"); then
+    echo "GitHub API request failed: $body" >&2
+    return 1
+  fi
+  printf '%s\n' "$body"
 }
 
 delete_hcloud_resource() {
