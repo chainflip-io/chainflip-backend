@@ -1931,17 +1931,6 @@ export const palletCfAssethubIngressEgressPalletConfigUpdateAssethub = z.discrim
 
 export const palletCfTradingStrategyTradingStrategy = z.discriminatedUnion('__kind', [
   z.object({
-    __kind: z.literal('TickZeroCentered'),
-    spreadTick: z.number(),
-    baseAsset: cfPrimitivesChainsAssetsAnyAsset,
-  }),
-  z.object({
-    __kind: z.literal('SimpleBuySell'),
-    buyTick: z.number(),
-    sellTick: z.number(),
-    baseAsset: cfPrimitivesChainsAssetsAnyAsset,
-  }),
-  z.object({
     __kind: z.literal('InventoryBased'),
     minBuyTick: z.number(),
     maxBuyTick: z.number(),
