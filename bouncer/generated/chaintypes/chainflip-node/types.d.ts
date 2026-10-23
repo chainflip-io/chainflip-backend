@@ -17765,6 +17765,14 @@ export type SpRuntimeBlakeTwo256 = {};
 
 export type SpRuntimeBlock = { header: Header; extrinsics: Array<UncheckedExtrinsic> };
 
+export type CfChainsBtcDiscardedBitcoinUtxo = {
+  utxo: CfChainsBtcUtxo;
+  reason: CfChainsBtcBitcoinUtxoDiscardReason;
+  discardedAt: number;
+};
+
+export type CfChainsBtcBitcoinUtxoDiscardReason = 'BelowDustLimit' | 'StaleKey';
+
 export type CfChainsSolSolApiEnvironment = {
   vaultProgram: SolPrimAddress;
   vaultProgramDataAccount: SolPrimAddress;

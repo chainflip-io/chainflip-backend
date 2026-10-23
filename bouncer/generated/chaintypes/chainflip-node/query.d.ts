@@ -25,6 +25,8 @@ import type {
   CfPrimitivesChainsAssetsEthAsset,
   CfChainsDotPolkadotAccountId,
   CfChainsBtcUtxo,
+  CfChainsBtcDiscardedBitcoinUtxo,
+  CfChainsBtcUtxoId,
   CfChainsBtcUtxoSelectionConsolidationParameters,
   CfPrimitivesChainsAssetsArbAsset,
   CfPrimitivesChainsAssetsBscAsset,
@@ -618,6 +620,17 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<Array<CfChainsBtcUtxo>> =} callback
      **/
     bitcoinAvailableUtxos: GenericStorageQuery<() => Array<CfChainsBtcUtxo>>;
+
+    /**
+     * UTXOs removed from the available pool, retained for inspection and possible recovery.
+     *
+     * @param {CfChainsBtcUtxoId} arg
+     * @param {Callback<CfChainsBtcDiscardedBitcoinUtxo | undefined> =} callback
+     **/
+    bitcoinDiscardedUtxos: GenericStorageQuery<
+      (arg: CfChainsBtcUtxoId) => CfChainsBtcDiscardedBitcoinUtxo | undefined,
+      CfChainsBtcUtxoId
+    >;
 
     /**
      *
