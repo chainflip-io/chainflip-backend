@@ -61,7 +61,7 @@ use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
 	pallet_prelude::{InvalidTransaction, *},
 	sp_runtime::{traits::Get, AccountId32, DispatchError},
-	traits::{IsSubType, StorageVersion, UnfilteredDispatchable},
+	traits::{Contains, IsSubType, StorageVersion, UnfilteredDispatchable},
 	unsigned::{TransactionValidity, ValidateUnsigned},
 };
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
@@ -195,6 +195,11 @@ pub mod pallet {
 			+ GetDispatchInfo
 			+ IsSubType<Call<Self>>
 			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
+
+		/// The calls that may be submitted as non-native signed calls. Validating one builds its
+		/// signed payload before the signature is checked, so only calls whose payloads are
+		/// cheap to build should be allowed.
+		type AllowedNonNativeCalls: Contains<<Self as Config>::RuntimeCall>;
 
 		/// Handles fee processing.
 		type TransactionPayments: TransactionExtension<<Self as Config>::RuntimeCall, Implicit = ()>;
@@ -1309,6 +1314,7 @@ impl<T: Config> Pallet<T> {
 		{
 			let call_size = inner_call.encoded_size();
 			ensure!(call_size <= MAX_NON_NATIVE_CALL_SIZE, InvalidTransaction::ExhaustsResources);
+			ensure!(T::AllowedNonNativeCalls::contains(inner_call), InvalidTransaction::Call);
 			let Ok(signer_account) = signature_data.signer_account::<T::AccountId>() else {
 				return Err(InvalidTransaction::BadSigner.into());
 			};
