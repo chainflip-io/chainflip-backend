@@ -34,7 +34,7 @@ use sp_api::CallApiAt;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use state_chain_runtime::{
 	chainflip::{get_header_timestamp, BlockUpdate},
-	runtime_apis::custom_api::CustomRuntimeApi,
+	runtime_apis::{custom_api::CustomRuntimeApi, monitoring_api::MonitoringRuntimeApi},
 	Hash, Header,
 };
 use std::{marker::PhantomData, num::NonZero, sync::Arc};
@@ -92,16 +92,36 @@ where
 	where
 		CfApiError: From<E>,
 	{
+		self.with_versioned_api::<dyn CustomRuntimeApi<state_chain_runtime::Block>, _, _>(at, f)
+	}
+
+	pub fn with_versioned_monitoring_api<E, R>(
+		&self,
+		at: Option<Hash>,
+		f: impl FnOnce(&C::Api, Hash, u32) -> Result<R, E>,
+	) -> Result<R, RpcApiError>
+	where
+		CfApiError: From<E>,
+	{
+		self.with_versioned_api::<dyn MonitoringRuntimeApi<state_chain_runtime::Block>, _, _>(at, f)
+	}
+
+	fn with_versioned_api<Api: sp_api::RuntimeApiInfo + ?Sized, E, R>(
+		&self,
+		at: Option<Hash>,
+		f: impl FnOnce(&C::Api, Hash, u32) -> Result<R, E>,
+	) -> Result<R, RpcApiError>
+	where
+		CfApiError: From<E>,
+	{
 		use sp_api::ApiExt;
 		self.with_runtime_api::<CfApiError, _>(at, |api, hash| {
-			let api_version = api
-				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)?
-				.ok_or_else(|| {
-					call_error(
-						"CfApiError::UnsupportedRuntimeApiVersion",
-						CfErrorCode::UnsupportedRuntimeApiVersion,
-					)
-				})?;
+			let api_version = api.api_version::<Api>(hash)?.ok_or_else(|| {
+				call_error(
+					"CfApiError::UnsupportedRuntimeApiVersion",
+					CfErrorCode::UnsupportedRuntimeApiVersion,
+				)
+			})?;
 
 			Ok(f(api, hash, api_version)?)
 		})

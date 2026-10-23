@@ -53,6 +53,16 @@ mod benchmarks {
 		MinimumAddedFundsToStrategy::<T>::set(zero_thresholds);
 	}
 
+	fn strategy() -> TradingStrategy {
+		TradingStrategy::InventoryBased {
+			min_buy_tick: -2,
+			max_buy_tick: -1,
+			min_sell_tick: 1,
+			max_sell_tick: 2,
+			base_asset: ASSET,
+		}
+	}
+
 	#[benchmark]
 	fn deploy_strategy() {
 		let caller = new_lp_account::<T>();
@@ -73,7 +83,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		deploy_strategy(
 			RawOrigin::Signed(caller.clone()),
-			TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: ASSET },
+			strategy(),
 			BTreeMap::from_iter([(Asset::Usdt, 1000), (STABLE_ASSET, 1000)]),
 		);
 
@@ -97,7 +107,7 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T>::deploy_strategy(
 			RawOrigin::Signed(caller.clone()).into(),
-			TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: ASSET },
+			strategy(),
 			BTreeMap::from_iter([(ASSET, 1000), (STABLE_ASSET, 1000)]),
 		));
 
@@ -129,7 +139,7 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T>::deploy_strategy(
 			RawOrigin::Signed(caller.clone()).into(),
-			TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: ASSET },
+			strategy(),
 			BTreeMap::from_iter([(ASSET, 1000), (STABLE_ASSET, 1000)]),
 		));
 

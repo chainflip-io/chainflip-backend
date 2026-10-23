@@ -19,8 +19,6 @@ use super::*;
 #[test]
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
-		const NEW_MAX_SWAP_AMOUNT_BTC: Option<AssetAmount> = Some(100);
-		const NEW_MAX_SWAP_AMOUNT_DOT: Option<AssetAmount> = Some(69);
 		let new_swap_retry_delay = BlockNumberFor::<Test>::from(1234u32);
 		let new_flip_buy_interval = BlockNumberFor::<Test>::from(5678u32);
 		const NEW_MAX_SWAP_RETRY_DURATION: u32 = 69_u32;
@@ -35,8 +33,6 @@ fn can_update_all_config_items() {
 		const NEW_DEFAULT_ORACLE_PRICE_SLIPPAGE_PROTECTION: u16 = 500;
 
 		// Check that the default values are different from the new ones
-		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
-		assert!(MaximumSwapAmount::<Test>::get(Asset::Dot).is_none());
 		assert_ne!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
 		assert_ne!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
 		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
@@ -58,14 +54,6 @@ fn can_update_all_config_items() {
 
 		// Define the updates in a reusable vec
 		let updates = vec![
-			PalletConfigUpdate::MaximumSwapAmount {
-				asset: Asset::Btc,
-				amount: NEW_MAX_SWAP_AMOUNT_BTC,
-			},
-			PalletConfigUpdate::MaximumSwapAmount {
-				asset: Asset::Dot,
-				amount: NEW_MAX_SWAP_AMOUNT_DOT,
-			},
 			PalletConfigUpdate::SwapRetryDelay { delay: new_swap_retry_delay },
 			PalletConfigUpdate::FlipBuyInterval { interval: new_flip_buy_interval },
 			PalletConfigUpdate::SetMaxSwapRetryDuration { blocks: NEW_MAX_SWAP_RETRY_DURATION },
@@ -104,8 +92,6 @@ fn can_update_all_config_items() {
 		));
 
 		// Check that the new values were set
-		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Btc), NEW_MAX_SWAP_AMOUNT_BTC);
-		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), NEW_MAX_SWAP_AMOUNT_DOT);
 		assert_eq!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
 		assert_eq!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
 		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
@@ -145,141 +131,6 @@ fn can_update_all_config_items() {
 		assert_noop!(
 			Swapping::update_pallet_config(OriginTrait::signed(ALICE), vec![].try_into().unwrap()),
 			sp_runtime::traits::BadOrigin
-		);
-	});
-}
-
-#[test]
-fn max_swap_amount_can_be_removed() {
-	new_test_ext().execute_with(|| {
-		let max_swap = 100;
-		let amount = 1_000;
-		let from: Asset = Asset::Usdc;
-		let to: Asset = Asset::Flip;
-
-		// Initial max swap amount is set.
-		set_maximum_swap_amount(from, Some(max_swap));
-
-		let initiate_swap = || {
-			Swapping::init_swap_request(
-				from,
-				amount,
-				to,
-				SwapRequestType::Regular {
-					output_action: SwapOutputAction::Egress {
-						output_address: ForeignChainAddress::Eth([1; 20].into()),
-						ccm_deposit_metadata: None,
-					},
-				},
-				Default::default(),
-				None,
-				None,
-				SwapOrigin::Vault {
-					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
-				},
-			);
-		};
-
-		initiate_swap();
-
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900u128);
-
-		// Reset event and confiscated funds.
-		CollectedRejectedFunds::<Test>::set(from, 0u128);
-		System::reset_events();
-
-		// Max is removed.
-		set_maximum_swap_amount(from, None);
-
-		initiate_swap();
-
-		let execute_at = System::block_number() + SWAP_DELAY_BLOCKS as u64;
-
-		assert_eq!(
-			ScheduledSwaps::<Test>::get(),
-			BTreeMap::from([
-				(1.into(), Swap::new(1.into(), 1.into(), from, to, max_swap, None, execute_at),),
-				(2.into(), Swap::new(2.into(), 2.into(), from, to, amount, None, execute_at),),
-			])
-		);
-		// No no funds are confiscated.
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
-	});
-}
-
-#[test]
-fn can_set_maximum_swap_amount() {
-	new_test_ext().execute_with(|| {
-		let asset = Asset::Eth;
-		let amount = Some(1_000u128);
-		assert!(MaximumSwapAmount::<Test>::get(asset).is_none());
-
-		// Set the new maximum swap_amount
-		set_maximum_swap_amount(asset, amount);
-
-		assert_eq!(MaximumSwapAmount::<Test>::get(asset), amount);
-		assert_eq!(Swapping::maximum_swap_amount(asset), amount);
-
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::PalletConfigUpdated {
-			update: PalletConfigUpdate::MaximumSwapAmount { asset, amount },
-		}));
-
-		// Can remove maximum swap amount
-		set_maximum_swap_amount(asset, None);
-		assert!(MaximumSwapAmount::<Test>::get(asset).is_none());
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::PalletConfigUpdated {
-			update: PalletConfigUpdate::MaximumSwapAmount { asset, amount: None },
-		}));
-	});
-}
-
-#[test]
-fn can_swap_below_max_amount() {
-	new_test_ext().execute_with(|| {
-		let max_swap = 1_001u128;
-		let amount = 1_000u128;
-		let from: Asset = Asset::Usdc;
-		let to: Asset = Asset::Flip;
-
-		// Initial max swap amount is set.
-		set_maximum_swap_amount(from, Some(max_swap));
-
-		Swapping::init_swap_request(
-			from,
-			amount,
-			to,
-			SwapRequestType::Regular {
-				output_action: SwapOutputAction::Egress {
-					output_address: ForeignChainAddress::Eth([1; 20].into()),
-					ccm_deposit_metadata: None,
-				},
-			},
-			Default::default(),
-			None,
-			None,
-			SwapOrigin::Vault {
-				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-				broker_id: Some(BROKER),
-			},
-		);
-
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0u128);
-
-		assert_eq!(
-			ScheduledSwaps::<Test>::get(),
-			BTreeMap::from([(
-				1.into(),
-				Swap::new(
-					1.into(),
-					1.into(),
-					from,
-					to,
-					amount,
-					None,
-					System::block_number() + SWAP_DELAY_BLOCKS as u64
-				)
-			)])
 		);
 	});
 }
