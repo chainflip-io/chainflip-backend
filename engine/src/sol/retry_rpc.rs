@@ -217,7 +217,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			} else {
 				// 'Confirmed' for preflight commitment is enough, no need for
 				// 'Finalised' when broadcasting.
-				Some(CommitmentLevel::Confirmed)
+				Some(CommitmentLevel::Finalized)
 			},
 			encoding: Some(UiTransactionEncoding::Base64),
 			max_retries: None,
@@ -459,7 +459,7 @@ mod tests {
 					&signature,
 					RpcTransactionConfig {
 						encoding: Some(UiTransactionEncoding::JsonParsed),
-						commitment: Some(CommitmentConfig::confirmed()),
+						commitment: Some(CommitmentConfig::finalized()),
 						max_supported_transaction_version: Some(0),
 					},
 				)

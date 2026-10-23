@@ -184,7 +184,7 @@ async function testGasLimitSwapToSolana<A = []>(
   cf.debug(`${tag} CCM event emitted!`);
 
   const transaction = await connection.getTransaction(txSignature, {
-    commitment: 'confirmed',
+    commitment: 'finalized',
     maxSupportedTransactionVersion: 0,
   });
   // Checking that the compute limit is set correctly (and < MAX_CAP) is cumbersome without manually parsing instructions
