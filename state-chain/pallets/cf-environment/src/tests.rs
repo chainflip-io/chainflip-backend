@@ -21,8 +21,8 @@ use crate::{
 	submit_runtime_call::{
 		is_valid_signature, ChainflipExtrinsic, EthEncodingType, SolEncodingType,
 	},
-	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
-	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
+	BatchedCalls, BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress,
+	RuntimeSafeMode, SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
 use cf_chains::{
@@ -35,7 +35,8 @@ use cf_chains::{
 		SolAddress, SolHash,
 	},
 };
-use cf_traits::{BalanceApi, GetBitcoinFeeInfo, SafeMode};
+use cf_primitives::ForeignChain;
+use cf_traits::{elections::ElectionInstance, BalanceApi, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{assert_noop, assert_ok, sp_runtime::BoundedVec, traits::OriginTrait};
 use std::str::FromStr;
 
@@ -728,6 +729,10 @@ fn ensure_governance_origin_checks() {
 			sp_runtime::traits::BadOrigin,
 		);
 		assert_noop!(
+			Environment::update_pallet_config(non_gov_origin.clone(), Default::default()),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
 			Environment::force_recover_sol_nonce(non_gov_origin, Default::default(), None),
 			sp_runtime::traits::BadOrigin,
 		);
@@ -898,7 +903,7 @@ fn can_batch() {
 
 		let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
 		let calls = vec![remark_call.clone().into(), remark_call.clone().into()];
-		let bounded_vec_calls: BoundedVec<_, sp_core::ConstU32<10>> = calls.clone().try_into().unwrap();
+		let bounded_vec_calls: BatchedCalls<Test> = calls.clone().try_into().unwrap();
 
 		assert_noop!(
 			Environment::batch(RuntimeOrigin::none(), bounded_vec_calls.clone()),
@@ -934,7 +939,8 @@ fn can_batch() {
 		};
 		let mut new_calls = calls;
 		new_calls.push(failing_call.into());
-		let bounded_vec_calls: BoundedVec<_, sp_core::ConstU32<10>> = new_calls.try_into().expect("3 calls is within the bound of 10");
+		let bounded_vec_calls: BatchedCalls<Test> =
+			new_calls.try_into().expect("3 calls is within MAX_BATCHED_CALLS");
 
 		assert_noop!(
 			Environment::batch(RuntimeOrigin::none(), bounded_vec_calls.clone()),
@@ -955,11 +961,15 @@ fn can_batch() {
 #[cfg(test)]
 mod validate_unsigned_tests {
 	use super::*;
-	use crate::{submit_runtime_call::ChainflipExtrinsic, Call, ChainflipNetworkName, Pallet};
+	use crate::{
+		submit_runtime_call::ChainflipExtrinsic, Call, ChainflipNetworkName, Pallet,
+		MAX_NON_NATIVE_CALL_SIZE,
+	};
 	use cf_chains::sol::{
 		signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolSignature,
 	};
 	use cf_primitives::ChainflipNetwork;
+	use codec::Encode;
 	use frame_support::{
 		assert_err,
 		pallet_prelude::{InvalidTransaction, TransactionSource, ValidateUnsigned},
@@ -970,16 +980,29 @@ mod validate_unsigned_tests {
 
 	/// Build a Solana-signed `non_native_signed_call` with a real, valid signature.
 	fn valid_call(nonce: u32) -> (Call<Test>, u64) {
-		let signing_key = SolSigningKey::new();
-		signed_call_with_key(&signing_key, nonce)
+		signed_call_with_key(&SolSigningKey::new(), nonce, remark(vec![]))
+	}
+
+	fn remark(bytes: Vec<u8>) -> <Test as crate::Config>::RuntimeCall {
+		frame_system::Call::remark { remark: bytes }.into()
+	}
+
+	/// A validly signed remark whose inner call encodes to exactly `size` bytes.
+	fn call_of_size(size: usize) -> (Call<Test>, u64) {
+		// Pallet index, call index and a two-byte compact length prefix.
+		let inner_call = remark(vec![0; size - 4]);
+		assert_eq!(inner_call.encoded_size(), size);
+		signed_call_with_key(&SolSigningKey::new(), 0, inner_call)
 	}
 
 	/// Build a Solana-signed `non_native_signed_call` using the provided key.
-	fn signed_call_with_key(signing_key: &SolSigningKey, nonce: u32) -> (Call<Test>, u64) {
+	fn signed_call_with_key(
+		signing_key: &SolSigningKey,
+		nonce: u32,
+		inner_call: <Test as crate::Config>::RuntimeCall,
+	) -> (Call<Test>, u64) {
 		let signer = SolAddress(signing_key.pubkey().0);
 		let transaction_metadata = TransactionMetadata { nonce, expiry_block: EXPIRY_BLOCK };
-		let inner_call: <Test as crate::Config>::RuntimeCall =
-			frame_system::Call::remark { remark: vec![] }.into();
 
 		// Mock `frame_system::Config::Version` is `()`, whose `RuntimeVersion` has
 		// `spec_version: 0`. `is_valid_signature` must be passed the same spec_version
@@ -1038,13 +1061,27 @@ mod validate_unsigned_tests {
 	}
 
 	#[test]
+	fn call_at_size_cap_is_accepted_by_both_paths() {
+		new_test_ext().execute_with(|| {
+			let (call, account) = call_of_size(MAX_NON_NATIVE_CALL_SIZE);
+			create_account(account);
+			assert!(<Pallet<Test> as ValidateUnsigned>::validate_unsigned(
+				TransactionSource::External,
+				&call,
+			)
+			.is_ok());
+			assert_ok!(<Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call));
+		});
+	}
+
+	#[test]
 	fn pre_dispatch_rejects_signer_mismatch() {
 		new_test_ext().execute_with(|| {
 			// Sign with key A but claim key B as the signer. The signature is valid for A's
 			// payload, so B's verification must fail.
 			let key_a = SolSigningKey::new();
 			let key_b = SolSigningKey::new();
-			let (mut call, _) = signed_call_with_key(&key_a, 0);
+			let (mut call, _) = signed_call_with_key(&key_a, 0, remark(vec![]));
 
 			if let Call::non_native_signed_call {
 				signature_data: SignatureData::Solana { signer, .. },
@@ -1094,6 +1131,12 @@ mod validate_unsigned_tests {
 				}),
 			),
 			(
+				// Rejected before any other check, so the signer need not exist.
+				"call over the size cap",
+				InvalidTransaction::ExhaustsResources,
+				Box::new(|| call_of_size(MAX_NON_NATIVE_CALL_SIZE + 1).0),
+			),
+			(
 				"wrong call variant",
 				InvalidTransaction::Call,
 				Box::new(|| Call::<Test>::batch { calls: BoundedVec::default() }),
@@ -1141,5 +1184,209 @@ mod validate_unsigned_tests {
 				);
 			});
 		}
+	}
+}
+
+mod submit_elections_votes {
+	use super::*;
+	use crate::{Call, Error};
+	use cf_primitives::AccountRole;
+	use cf_test_utilities::{assert_has_matching_event, assert_no_matching_event};
+	use cf_traits::{
+		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, EpochInfo,
+	};
+	use frame_support::{assert_err, dispatch::GetDispatchInfo, pallet_prelude::DispatchResult};
+
+	const AUTHORITY: u64 = 7;
+	const NOT_AN_AUTHORITY: u64 = 8;
+
+	/// A registered validator that is in the current authority set, at a non-zero index so a
+	/// test can tell a real index apart from a default.
+	fn setup_authority() {
+		let epoch = MockEpochInfo::epoch_index();
+		MockEpochInfo::set_authorities(vec![99, AUTHORITY]);
+		// `authority_index` reads this map, and it is what `authorise_voter` checks; note
+		// `NOT_AN_AUTHORITY` is deliberately left out of it.
+		MockEpochInfo::set_authority_indices(epoch, vec![99, AUTHORITY]);
+		for id in [AUTHORITY, NOT_AN_AUTHORITY] {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_account_role(
+				&id,
+				AccountRole::Validator,
+			)
+			.unwrap();
+		}
+	}
+
+	fn submit(who: u64, votes: Vec<MockInstanceVotes>) -> DispatchResult {
+		Environment::submit_elections_votes(RuntimeOrigin::signed(who), Box::new(votes))
+	}
+
+	#[test]
+	fn records_votes_in_every_instance() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			assert_ok!(submit(
+				AUTHORITY,
+				vec![
+					MockInstanceVotes::accept(3),
+					MockInstanceVotes::accept(1),
+					MockInstanceVotes::accept(5),
+				]
+			));
+
+			// Every instance reached, in order, each handed the caller's authority index - the
+			// context established once by `authorise_voter` rather than per instance.
+			assert_eq!(
+				MockElectionInstances::<Test>::recorded_votes(),
+				vec![(0, 3, 1), (1, 1, 1), (2, 5, 1)],
+			);
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::Environment(Event::ElectionInstanceVotesRejected { .. })
+			);
+		});
+	}
+
+	#[test]
+	fn a_rejecting_instance_does_not_stop_the_others() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			// Instance 1 refuses; 0 and 2 must still be reached, and the call must succeed -
+			// this is what a validator gets today from separate per-instance extrinsics.
+			assert_ok!(submit(
+				AUTHORITY,
+				vec![
+					MockInstanceVotes::accept(2),
+					MockInstanceVotes::reject(4),
+					MockInstanceVotes::accept(6),
+				]
+			));
+
+			assert_eq!(
+				MockElectionInstances::<Test>::recorded_votes(),
+				vec![(0, 2, 1), (1, 4, 1), (2, 6, 1)],
+			);
+			// Only the instance is asserted: `DispatchError::Other`'s message is `#[codec(skip)]`,
+			// so the mock's error arrives here as `Other("")`. Real instances fail with `Module`
+			// errors, which do survive the event's encoding.
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Environment(Event::ElectionInstanceVotesRejected {
+					instance: ElectionInstance::Chain(ForeignChain::Ethereum),
+					..
+				})
+			);
+		});
+	}
+
+	#[test]
+	fn every_rejection_is_reported_with_its_own_instance() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			assert_ok!(submit(
+				AUTHORITY,
+				vec![
+					MockInstanceVotes::reject(1),
+					MockInstanceVotes::accept(1),
+					MockInstanceVotes::reject(1),
+				]
+			));
+
+			assert_eq!(
+				System::events()
+					.into_iter()
+					.filter_map(|record| match record.event {
+						RuntimeEvent::Environment(Event::ElectionInstanceVotesRejected {
+							instance,
+							..
+						}) => Some(instance),
+						_ => None,
+					})
+					.collect::<Vec<_>>(),
+				vec![MOCK_INSTANCES[0], MOCK_INSTANCES[2]],
+			);
+		});
+	}
+
+	#[test]
+	fn non_authorities_cannot_vote() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			// Registered as a validator, but not in the current authority set.
+			assert_err!(
+				submit(NOT_AN_AUTHORITY, vec![MockInstanceVotes::accept(1)]),
+				Error::<Test>::NotAnAuthority
+			);
+			assert!(MockElectionInstances::<Test>::recorded_votes().is_empty());
+		});
+	}
+
+	#[test]
+	fn non_validators_cannot_vote() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			assert!(submit(123, vec![MockInstanceVotes::accept(1)]).is_err());
+			assert!(MockElectionInstances::<Test>::recorded_votes().is_empty());
+		});
+	}
+
+	#[test]
+	fn the_switch_closes_the_batched_path() {
+		new_test_ext().execute_with(|| {
+			setup_authority();
+
+			assert_ok!(Environment::update_pallet_config(
+				OriginTrait::root(),
+				vec![crate::PalletConfigUpdate::ElectionVoteBatching { disabled: true }]
+					.try_into()
+					.unwrap(),
+			));
+
+			// The flip is in the event stream, so an operator can see when it happened without
+			// decoding the governance proposal that carried it.
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Environment(Event::PalletConfigUpdated {
+					update: crate::PalletConfigUpdate::ElectionVoteBatching { disabled: true },
+				})
+			);
+
+			// Rejected before reaching any instance: an engine that has not yet seen the switch
+			// must not be able to keep using the batched path.
+			assert_err!(
+				submit(AUTHORITY, vec![MockInstanceVotes::accept(1)]),
+				Error::<Test>::VoteBatchingDisabled
+			);
+			assert!(MockElectionInstances::<Test>::recorded_votes().is_empty());
+
+			assert_ok!(Environment::update_pallet_config(
+				OriginTrait::root(),
+				vec![crate::PalletConfigUpdate::ElectionVoteBatching { disabled: false }]
+					.try_into()
+					.unwrap(),
+			));
+			assert_ok!(submit(AUTHORITY, vec![MockInstanceVotes::accept(1)]));
+			assert_eq!(MockElectionInstances::<Test>::recorded_votes(), vec![(0, 1, 1)]);
+		});
+	}
+
+	#[test]
+	fn weight_scales_with_the_votes_carried() {
+		let weight_of = |votes: Vec<MockInstanceVotes>| {
+			Call::<Test>::submit_elections_votes { votes: Box::new(votes) }
+				.get_dispatch_info()
+				.call_weight
+		};
+		let ref_time = |votes| weight_of(votes).ref_time();
+		assert!(ref_time(vec![MockInstanceVotes::accept(10)]) > ref_time(vec![]));
+		assert!(
+			ref_time(vec![MockInstanceVotes::accept(1), MockInstanceVotes::accept(1)]) >
+				ref_time(vec![MockInstanceVotes::accept(1)])
+		);
 	}
 }

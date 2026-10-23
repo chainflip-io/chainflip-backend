@@ -227,6 +227,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type TransactionPayments = pallet_transaction_payment::ChargeTransactionPayment<Self>;
 	type GetTransactionPayments = GetTransactionPayments;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
+	type ElectionInstances = chainflip::elections::AllElectionInstances;
 }
 
 parameter_types! {
@@ -604,6 +605,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type MinimumDeposit = MinimumDepositProvider;
 	type FundAccount = Funding;
 	type MinimumFunding = Funding;
+	type RedeemAddressBinding = Funding;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {

@@ -100,7 +100,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	impl_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 2_03_02,
+	spec_version: 2_03_03,
 	impl_version: 1,
 	apis: crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -551,6 +551,7 @@ pub type MigrationsForV2_3 = (
 	migrations::bsc_integration::BscBroadcasterInit,
 	migrations::broker_withdrawal_addresses_to_asset_balances::Migration,
 	migrations::refund_addresses_to_asset_balances::Migration,
+	migrations::bsc_witness_safety_margin::BscWitnessSafetyMargin,
 );
 
 #[cfg(test)]

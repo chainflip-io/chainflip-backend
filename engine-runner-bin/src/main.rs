@@ -19,7 +19,7 @@ use engine_upgrade_utils::{CStrArray, NEW_VERSION, OLD_VERSION};
 
 // Declare the entrypoints into each version of the engine
 mod old {
-	#[engine_proc_macros::link_engine_library_version("2.2.13")]
+	#[engine_proc_macros::link_engine_library_version("2.2.19")]
 	extern "C" {
 		pub fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,
@@ -29,7 +29,7 @@ mod old {
 }
 
 mod new {
-	#[engine_proc_macros::link_engine_library_version("2.3.2")]
+	#[engine_proc_macros::link_engine_library_version("2.3.3")]
 	extern "C" {
 		fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,
@@ -161,6 +161,7 @@ mod tests {
 			"--sol.rpc.http_endpoint=http://localhost:8899".to_string(),
 			"--sol.backup_rpc.http_endpoint=http://localhost:8899".to_string(),
 			// Hub
+			// Legacy WS flags must remain accepted while 2.2 and 2.3 share arguments.
 			"--hub.rpc.ws_endpoint=ws://localhost:8545".to_string(),
 			"--hub.backup_rpc.ws_endpoint=ws://localhost:8546".to_string(),
 			"--hub.rpc.http_endpoint=http://localhost:8545".to_string(),

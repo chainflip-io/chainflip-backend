@@ -101,6 +101,17 @@ export interface ChainErrors extends GenericChainErrors {
     FailedToProcessFee: GenericPalletError;
 
     /**
+     * The caller is not in the current authority set, so cannot vote in elections.
+     **/
+    NotAnAuthority: GenericPalletError;
+
+    /**
+     * Vote batching is disabled; vote through the per-instance
+     * `pallet_cf_elections::Call::vote` extrinsic instead.
+     **/
+    VoteBatchingDisabled: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -1506,6 +1517,12 @@ export interface ChainErrors extends GenericChainErrors {
     BelowMinimumFunding: GenericPalletError;
 
     /**
+     * An account with a withdrawal whitelist must bind a whitelisted redeem address before
+     * moving Flip to its on-chain balance.
+     **/
+    RedeemAddressNotBound: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -1897,7 +1914,7 @@ export interface ChainErrors extends GenericChainErrors {
     OpenOrdersRemaining: GenericPalletError;
 
     /**
-     * The resulting limit order amount is below the configured per-asset minimum.
+     * The resulting order amount is below the configured per-asset minimum.
      **/
     BelowMinimumOrderAmount: GenericPalletError;
 

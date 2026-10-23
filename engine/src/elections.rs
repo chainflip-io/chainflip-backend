@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod vote_submitter;
 pub mod voter_api;
 
 use engine_sc_client::{
@@ -39,6 +40,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tracing::Level;
+use vote_submitter::VoteSubmitter;
 use voter_api::CompositeVoterApi;
 
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
@@ -59,12 +61,13 @@ pub struct Voter<
 	voter: RetrierClient<VoterClient>,
 	voter_name: &'static str,
 	cache_invalidation_senders: Option<Vec<mpsc::Sender<()>>>,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 	_phantom: core::marker::PhantomData<Instance>,
 }
 
 impl<
-		Instance: Send + Sync + 'static,
-		StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi,
+		Instance: state_chain_runtime::chainflip::elections::BatchedInstance + Send + Sync + 'static,
+		StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi + Send + Sync + 'static,
 		VoterClient: CompositeVoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner> + Clone + Send + Sync + 'static,
 	> Voter<Instance, StateChainClient, VoterClient>
 where
@@ -79,6 +82,7 @@ where
 		voter: VoterClient,
 		cache_invalidation_senders: Option<Vec<mpsc::Sender<()>>>,
 		voter_name: &'static str,
+		vote_submitter: VoteSubmitter<StateChainClient>,
 	) -> Self {
 		Self {
 			state_chain_client,
@@ -93,6 +97,7 @@ where
 			),
 			voter_name,
 			cache_invalidation_senders,
+			vote_submitter,
 			_phantom: Default::default(),
 		}
 	}
@@ -186,15 +191,13 @@ where
 						})
 					}))
 				}).chunks(MAXIMUM_VOTES_PER_EXTRINSIC as usize).for_each_concurrent(None, |votes| {
-					let state_chain_client = &self.state_chain_client;
 					async move {
 						for (election_identifier, _) in votes.iter() {
 							self.log(Level::DEBUG, &format!("Submitting vote for election: '{:?}'", election_identifier));
 						}
-						// TODO: Use block hash you got this vote tasks details from as the based of the mortal of the extrinsic
-						state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::vote {
-							authority_votes: Box::new(BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/)),
-						}).await;
+						let votes = BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/);
+
+						self.vote_submitter.submit::<Instance>(votes).await;
 					}
 				}).await;
 			},

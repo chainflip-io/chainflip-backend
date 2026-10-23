@@ -425,3 +425,98 @@ fn full_redemption_deregisters_liquidity_provider() {
 			.is_none());
 	});
 }
+
+#[test]
+fn whitelisted_lp_can_only_move_flip_on_chain_once_bound_to_a_whitelisted_address() {
+	use cf_chains::{address::EncodedAddress, AccountOrAddress};
+	use cf_primitives::{AccountRole, Asset};
+	use pallet_cf_asset_balances::whitelist::WhitelistChange;
+	use state_chain_runtime::{AssetBalances, LiquidityProvider};
+
+	const UNBOUND_LP: AccountId = AccountId::new([0xe2; 32]);
+	const MISBOUND_LP: AccountId = AccountId::new([0xe3; 32]);
+	const BOUND_LP: AccountId = AccountId::new([0xe4; 32]);
+	const REFUND_BOUND_LP: AccountId = AccountId::new([0xe5; 32]);
+	const WHITELISTED: EvmAddress = EvmAddress::repeat_byte(0xaa);
+	const AMOUNT: FlipBalance = 3 * MIN_FUNDING;
+
+	let transfer = |lp: &AccountId| {
+		LiquidityProvider::transfer_flip_to_on_chain_balance(
+			RuntimeOrigin::signed(lp.clone()),
+			AMOUNT,
+		)
+	};
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		// Transfers to the on-chain balance are only available once Flip 2.1 is active.
+		assert_ok!(Flip::update_pallet_config(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			vec![PalletConfigUpdate::SetFeeRewardsActivationEpoch(Validator::epoch_index())]
+				.try_into()
+				.unwrap(),
+		));
+
+		for lp in [&UNBOUND_LP, &MISBOUND_LP, &BOUND_LP, &REFUND_BOUND_LP] {
+			network::new_account(lp, AccountRole::LiquidityProvider);
+			crate::swapping::credit_account(lp, Asset::Flip, AMOUNT);
+			assert_ok!(AssetBalances::update_whitelist(
+				RuntimeOrigin::signed(lp.clone()),
+				WhitelistChange::Allow(AccountOrAddress::ExternalAddress(EncodedAddress::Eth(
+					WHITELISTED.0
+				))),
+			));
+		}
+
+		assert_noop!(transfer(&UNBOUND_LP), pallet_cf_lp::Error::<Runtime>::RedeemAddressNotBound);
+
+		assert_ok!(Funding::bind_redeem_address(
+			RuntimeOrigin::signed(MISBOUND_LP.clone()),
+			ETH_DUMMY_ADDR
+		));
+		assert_noop!(
+			transfer(&MISBOUND_LP),
+			pallet_cf_asset_balances::Error::<Runtime>::DestinationNotAllowed
+		);
+
+		assert_ok!(Funding::bind_redeem_address(
+			RuntimeOrigin::signed(BOUND_LP.clone()),
+			WHITELISTED
+		));
+		assert_ok!(transfer(&BOUND_LP));
+
+		// The registered Ethereum refund address is implicitly whitelisted, so it can be bound to
+		// without a whitelist entry.
+		let refund_address = pallet_cf_asset_balances::RefundAddresses::<Runtime>::get(
+			&REFUND_BOUND_LP,
+			cf_chains::ForeignChain::Ethereum,
+		)
+		.and_then(|address| match address {
+			cf_chains::ForeignChainAddress::Eth(address) => Some(address),
+			_ => None,
+		})
+		.unwrap();
+		assert_ne!(refund_address, WHITELISTED);
+		assert_ok!(Funding::bind_redeem_address(
+			RuntimeOrigin::signed(REFUND_BOUND_LP.clone()),
+			refund_address
+		));
+		assert_ok!(transfer(&REFUND_BOUND_LP));
+
+		// The Flip that is now on-chain can only be redeemed to the whitelisted address.
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(BOUND_LP.clone()),
+				RedemptionAmount::Exact(MIN_FUNDING),
+				ETH_DUMMY_ADDR,
+				None,
+			),
+			Error::<Runtime>::AccountBindingRestrictionViolated
+		);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(BOUND_LP.clone()),
+			RedemptionAmount::Exact(MIN_FUNDING),
+			WHITELISTED,
+			None,
+		));
+	});
+}

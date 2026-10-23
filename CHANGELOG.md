@@ -2,6 +2,39 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.3.3] - 2026-10-20
+
+### Features
+
+- Batch election instances votes into one engine extrinsic call ([#6844](https://github.com/chainflip-io/chainflip-backend/issues/6844))
+- Range order minimum ([#6892](https://github.com/chainflip-io/chainflip-backend/issues/6892))
+
+### Fixes
+
+- Transfer flip on chain checks whitelist ([#6946](https://github.com/chainflip-io/chainflip-backend/issues/6946))
+- Use the actual 2s Assethub block time ([#6934](https://github.com/chainflip-io/chainflip-backend/issues/6934))
+- Bound the cost of validating non-native signed calls ([#6918](https://github.com/chainflip-io/chainflip-backend/issues/6918))
+- Reject eth_getLogs responses that don't match the filter ([#6910](https://github.com/chainflip-io/chainflip-backend/issues/6910))
+- Derive affiliate account id from the withdrawal address ([#6909](https://github.com/chainflip-io/chainflip-backend/issues/6909))
+- Always update solana delta ingress properties
+- Don't let a validator accept a deregistered operator
+- Don't let a single authority set the MonotonicChange block height
+- Refund the fee of an external transaction at most once
+- Bound the length of SC Utils calls
+- Only accept GRANDPA equivocation reports against the current validators
+- Don't panic on a SignatureAccepted event from a contract creation
+- Don't drop egress fees withheld during reconciliation
+- Return utxos to the pool when consolidation isn't worth the fee
+- Keep accounts with a pending redemption alive
+- Don't panic in `delegate` when operator settings are missing
+- Don't panic on a missing redemption reserve in the witnessed redemption paths
+- Keep pending auction stake locked until the new epoch bonds it
+- Compound per-leg oracle deltas in live price protection
+- Prevent abandoned requests from deadlocking the Assethub RPC client
+- Bound EncodedAddress::Btc length
+- Assign BTC UTXOs to the correct key
+- Reject non-standard Bitcoin refund scripts
+
 ## [2.3.2] - 2026-09-17
 
 ### Features
@@ -102,6 +135,52 @@ All notable changes included in each Chainflip release will be documented in thi
 - Cleanup oracle and inventory based ASS ([#6617](https://github.com/chainflip-io/chainflip-backend/issues/6617))
 - Zero price defense ([#6596](https://github.com/chainflip-io/chainflip-backend/issues/6596))
 - Is oracle supported function for price feed api ([#6607](https://github.com/chainflip-io/chainflip-backend/issues/6607))
+
+## [2.2.19] - 2026-10-14
+
+### Fixes
+
+- Keep pending auction stake locked until the new epoch bonds it.
+- Don't panic on a missing redemption reserve when witnessing a redemption.
+- Don't panic when delegating to an operator with missing settings.
+- Keep accounts with a pending redemption alive until the redemption is settled.
+- Return UTXOs to the pool when consolidating them isn't worth the fee.
+- Keep egress fees withheld during reconciliation.
+- Engine: don't panic on a `SignatureAccepted` event from a contract creation (EVM and Tron).
+- Only accept GRANDPA equivocation reports against the current validators.
+- Limit SC Utils calls to 100 bytes.
+- Refund the fee of an external transaction at most once.
+- Don't let a single authority set the `MonotonicChange` block height.
+- Don't let a validator accept a deregistered operator.
+- Refresh Solana ingress election totals after ready consensus changes, so a temporary balance regression does not leave a stale vote baseline that suppresses fresh ingress votes.
+
+## [2.2.18] - 2026-10-08
+
+### Fixes
+
+- Correct compound per-leg oracle deltas for Live Price Protection
+
+## [2.2.17] - 2026-10-02
+
+### Fixes
+
+- Fix a deadlock in the Assethub RPC client that could stall Assethub chain tracking, deposit witnessing and broadcasting until the engine was restarted.
+- Assethub chain tracking: never treat an unfinalized block as finalized when filling gaps in the finalized head subscription, witness a deterministic subset of finalized blocks so validators vote on the same heights, skip heights too far behind to matter, and wait longer for finality before restarting the subscription.
+- Use the actual 2s Assethub block time for the genesis broadcast timeout and deposit channel lifetimes.
+
+## [2.2.16] - 2026-10-01
+
+- bound EncodedAddress::Btc length
+
+## [2.2.15] - 2026-09-24
+
+### Fixes
+
+- Preserve the correct signing key when recording Bitcoin vault outputs as available UTXOs.
+- Reject non-standard bitcoin scripts.
+- Use finalized block subscription for assethub chain tracking
+
+## [2.2.14] - 2026-09-16
 
 ## [2.2.13] - 2026-09-11
 

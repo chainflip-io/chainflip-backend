@@ -91,17 +91,6 @@ impl TryFrom<Value> for MinimizedScaleValue {
 }
 
 impl MinimizedScaleValue {
-	pub fn get_struct_field(&self, field_name: String) -> Result<Self, String> {
-		match &self {
-			Self::NamedStruct(fs) => fs
-				.iter()
-				.find(|(name, _)| *name == field_name)
-				.ok_or(format!("field with this name not found: {:?}", field_name))
-				.map(|(_, v)| (*v).clone()),
-			_ => Err("this value is not a struct".to_string()),
-		}
-	}
-
 	#[expect(clippy::result_unit_err)]
 	pub fn extract_hex_bytes(&self) -> Result<Vec<u8>, ()> {
 		if let Self::Primitive(MinimizedPrimitive::String(s)) = self.clone() {

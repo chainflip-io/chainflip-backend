@@ -47,7 +47,7 @@ pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14;
 pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 24 * 3600 * 10 / 4;
-pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 / 12;
+pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 * 1000 / MILLISECONDS_PER_BLOCK_ASSETHUB;
 pub const TRON_EXPIRY_BLOCKS: u32 = 24 * 3600 / 3;
 pub const BSC_EXPIRY_BLOCKS: u32 = 24 * 3600 * 1000 / 450; // 450ms block time
 
@@ -462,3 +462,4 @@ pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
 pub const TRON_SAFETY_MARGIN: u64 = 19;
+pub const BSC_SAFETY_MARGIN: u64 = 2;

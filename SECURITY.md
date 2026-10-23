@@ -41,8 +41,6 @@ Issues in which an attacker has no direct financial incentive to conduct the att
 
 Rewards will be issued in FLIP tokens unless otherwise agreed upon with the researcher.
 
-Chainflip Labs may recognize the contributions of security researchers in our security hall of fame or by mentioning them on our website, blog, or social media channels, subject to the researcher's consent.
-
 ## Responsible Research
 
 Researchers participating in the Bug Bounty Program must adhere to the following guidelines:

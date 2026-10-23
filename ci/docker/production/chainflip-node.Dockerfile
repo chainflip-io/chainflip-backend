@@ -31,6 +31,6 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-USER flip
+USER 1000:1000
 
 CMD ["/usr/local/bin/chainflip-node"]

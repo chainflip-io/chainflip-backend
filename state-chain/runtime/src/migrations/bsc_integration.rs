@@ -61,10 +61,9 @@ impl OnRuntimeUpgrade for BscElectionsInit {
 	}
 }
 
-/// Initialize Bsc ingress-egress pallet values (deposit channel lifetime and whitelisted brokers).
-/// These are normally set via GenesisConfig but must be set via migration when adding a new chain.
-/// Note: WitnessSafetyMargin is deprecated for chains using elections-based witnessing (see
-/// comment on WitnessSafetyMargin storage item), so we only set the channel lifetime here.
+/// Initialize Bsc ingress-egress pallet values (deposit channel lifetime, witness safety margin and
+/// whitelisted brokers). These are normally set via GenesisConfig but must be set via migration
+/// when adding a new chain.
 pub struct BscIngressEgressInit;
 
 impl OnRuntimeUpgrade for BscIngressEgressInit {
@@ -88,6 +87,13 @@ impl OnRuntimeUpgrade for BscIngressEgressInit {
 			deposit_channel_lifetime,
 		);
 
+		pallet_cf_ingress_egress::WitnessSafetyMargin::<Runtime, BscInstance>::put(
+			crate::chainflip::witnessing::bsc_elections::initial_state()
+				.unsynchronised_settings
+				.1
+				.safety_margin as u64,
+		);
+
 		for id in
 			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, BitcoinInstance>::iter_keys()
 		{
@@ -102,6 +108,10 @@ impl OnRuntimeUpgrade for BscIngressEgressInit {
 		let lifetime =
 			pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, BscInstance>::get();
 		frame_support::ensure!(lifetime > 0, "Bsc deposit channel lifetime must be non-zero");
+		frame_support::ensure!(
+			pallet_cf_ingress_egress::WitnessSafetyMargin::<Runtime, BscInstance>::get().is_some(),
+			"Bsc witness safety margin must be set"
+		);
 
 		frame_support::ensure!(
 			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, BscInstance>::iter_keys()

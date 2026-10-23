@@ -22,7 +22,7 @@ use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTran
 use futures_core::Future;
 
 use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use cf_utilities::make_periodic_tick;
 use std::{path::PathBuf, str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
@@ -76,6 +76,33 @@ impl EvmRpcClient {
 	}
 }
 
+/// Witnessing attributes logs to a contract purely on the basis of the filter, which is applied by
+/// the node. This catches a faulty node or proxy that doesn't honour the filter, in which case the
+/// whole response is rejected. It is not a defence against a dishonest node, which can fabricate
+/// logs that match: that relies on witnessing consensus.
+fn ensure_logs_match_filter(filter: &Filter, logs: &[Log]) -> Result<()> {
+	for log in logs {
+		if let Some(addresses) = &filter.address {
+			let matches = match addresses {
+				ValueOrArray::Value(address) => *address == log.address,
+				ValueOrArray::Array(addresses) => addresses.contains(&log.address),
+			};
+			if !matches {
+				bail!("log emitted by {:?} does not match the address filter", log.address);
+			}
+		}
+		if let FilterBlockOption::AtBlockHash(block_hash) = filter.block_option {
+			if log.block_hash != Some(block_hash) {
+				bail!("log from block {:?}, expected {block_hash:?}", log.block_hash);
+			}
+		}
+		if log.removed == Some(true) {
+			bail!("log in tx {:?} was removed by a reorg", log.transaction_hash);
+		}
+	}
+	Ok(())
+}
+
 #[async_trait::async_trait]
 impl EvmRpcApi for EvmRpcClient {
 	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256> {
@@ -86,7 +113,10 @@ impl EvmRpcApi for EvmRpcClient {
 	}
 
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-		Ok(self.provider.get_logs(&filter).await?)
+		let logs = self.provider.get_logs(&filter).await?;
+		ensure_logs_match_filter(&filter, &logs)
+			.map_err(|e| anyhow!("Rejecting {} eth_getLogs response: {e}", self.chain_name))?;
+		Ok(logs)
 	}
 
 	async fn chain_id(&self) -> Result<U256> {
@@ -332,6 +362,30 @@ mod tests {
 	use crate::settings::Settings;
 
 	use super::*;
+
+	#[test]
+	fn logs_must_match_filter() {
+		let (contract, block_hash) = (H160::repeat_byte(1), H256::repeat_byte(2));
+		let filter = Filter::new().address(contract).at_block_hash(block_hash);
+		let log = Log { address: contract, block_hash: Some(block_hash), ..Default::default() };
+
+		assert!(ensure_logs_match_filter(&filter, &[]).is_ok());
+		assert!(ensure_logs_match_filter(&filter, &[log.clone(), log.clone()]).is_ok());
+		assert!(ensure_logs_match_filter(
+			&Filter::new().address(vec![H160::zero(), contract]).from_block(1).to_block(2),
+			std::slice::from_ref(&log)
+		)
+		.is_ok());
+
+		for invalid in [
+			Log { address: H160::repeat_byte(3), ..log.clone() },
+			Log { block_hash: Some(H256::repeat_byte(3)), ..log.clone() },
+			Log { block_hash: None, ..log.clone() },
+			Log { removed: Some(true), ..log.clone() },
+		] {
+			assert!(ensure_logs_match_filter(&filter, &[log.clone(), invalid]).is_err());
+		}
+	}
 
 	#[tokio::test]
 	#[ignore = "Requires correct settings"]
