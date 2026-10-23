@@ -288,12 +288,18 @@ create_runner() {
 Description=Ephemeral GitHub Actions runner
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=900
+StartLimitBurst=3
 
 [Service]
 Type=simple
 EnvironmentFile=/etc/actions-runner.env
 ExecStart=/usr/local/sbin/start-ephemeral-github-runner
 TimeoutStartSec=0
+# The bootstrap is idempotent until registration, after which the env file is removed and a
+# restart fails fast.
+Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target

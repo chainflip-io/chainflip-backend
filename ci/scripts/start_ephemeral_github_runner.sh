@@ -10,8 +10,12 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-apt-get update
-apt-get install --yes \
+# First boot races cloud-init and apt-daily for the dpkg lock, and mirrors fail transiently.
+# The lock timeout matches the provisioner's 10-minute registration wait: failing sooner can't
+# be observed from outside, so it would only turn a late success into a failure.
+apt_options=(-o Acquire::Retries=5 -o DPkg::Lock::Timeout=600)
+apt-get "${apt_options[@]}" update
+apt-get "${apt_options[@]}" install --yes \
   build-essential \
   ca-certificates \
   curl \
@@ -39,7 +43,7 @@ npm install --global pnpm@10
 
 runner_root=/opt/actions-runner
 install --directory --owner runner --group runner "$runner_root"
-curl --fail --location --silent --show-error "$RUNNER_DOWNLOAD_URL" \
+curl --fail --location --silent --show-error --retry 5 --retry-all-errors "$RUNNER_DOWNLOAD_URL" \
   --output "$runner_root/actions-runner.tar.gz"
 tar --extract --gzip --file "$runner_root/actions-runner.tar.gz" --directory "$runner_root"
 rm "$runner_root/actions-runner.tar.gz"
