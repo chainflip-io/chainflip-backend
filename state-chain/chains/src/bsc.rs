@@ -229,3 +229,29 @@ impl FeeRefundCalculator<Bsc> for evm::Transaction {
 		.saturating_mul(fee_paid.gas_used)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use frame_support::sp_runtime::traits::One;
+
+	// The runtime builds BSC transactions with a unit multiplier
+	// (`BSC_PRIORITY_FEE_MULTIPLIER`), so the fee per gas we pay is the fee we charge.
+	#[test]
+	fn fee_paid_per_gas_matches_fee_charged() {
+		for priority_fee in [0, MIN_FEE_PER_GAS / 2, MIN_FEE_PER_GAS, MIN_FEE_PER_GAS * 10] {
+			let tracked_data = BscTrackedData { priority_fee };
+			assert_eq!(
+				tracked_data.max_fee_per_gas(FixedU64::one()),
+				tracked_data.calculate_transaction_fee(1),
+			);
+		}
+	}
+
+	#[test]
+	fn fee_per_gas_is_floored_at_the_minimum() {
+		let tracked_data = BscTrackedData { priority_fee: MIN_FEE_PER_GAS / 2 };
+		assert_eq!(tracked_data.max_fee_per_gas(FixedU64::one()), MIN_FEE_PER_GAS);
+		assert_eq!(tracked_data.calculate_transaction_fee(3), MIN_FEE_PER_GAS * 3);
+	}
+}

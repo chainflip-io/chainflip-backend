@@ -160,8 +160,10 @@ impl cf_traits::WaivedFees for WaivedFees {
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 /// Arbitrum has smaller variability so we are willing to pay at most 1.5x the base fee.
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
-/// we use same multiplier as arb.
-const BSC_PRIORITY_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
+/// BSC's base fee is 0, so the fee per gas we send is the price actually paid, not headroom over
+/// a base fee. It therefore has to match the fee charged to users in
+/// `BscTrackedData::calculate_transaction_fee`, which uses the tracked priority fee as-is.
+const BSC_PRIORITY_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(1, 1);
 
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
