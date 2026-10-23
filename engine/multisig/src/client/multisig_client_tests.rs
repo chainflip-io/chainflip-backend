@@ -23,6 +23,7 @@ use crate::{
 		common::SigningFailureReason,
 		helpers::{
 			new_nodes, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
+			KEYGEN_STAGE_TIMEOUT, SIGNING_STAGE_TIMEOUT,
 		},
 		CeremonyRequestDetails, KeyId,
 	},
@@ -58,6 +59,7 @@ async fn should_ignore_rts_for_unknown_key() {
 		DEFAULT_SIGNING_CEREMONY_ID,
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		vec![(KeyId::new(GENESIS_EPOCH, [0u8; 32]), EvmCryptoScheme::signing_payload_for_test())],
+		SIGNING_STAGE_TIMEOUT,
 	);
 
 	// Check that the signing request fails immediately with an "unknown key" error
@@ -103,6 +105,7 @@ async fn should_save_key_after_keygen() {
 		DEFAULT_KEYGEN_CEREMONY_ID,
 		GENESIS_EPOCH,
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+		KEYGEN_STAGE_TIMEOUT,
 	);
 
 	// Get the oneshot channel that is linked to the keygen request
