@@ -177,6 +177,15 @@ impl EvmRpcApi for EvmRpcClient {
 	async fn get_block_number(&self) -> Result<U64> {
 		Ok(self.provider.get_block_number().await?)
 	}
+
+	async fn get_finalized_block_number(&self) -> Result<U64> {
+		self.provider
+			.get_block(BlockNumber::Finalized)
+			.await?
+			.ok_or_else(|| anyhow!("Getting {} finalized block returned None", self.chain_name))?
+			.number
+			.ok_or_else(|| anyhow!("{} finalized block has no number", self.chain_name))
+	}
 }
 
 #[derive(Clone)]
@@ -276,6 +285,10 @@ pub trait EvmRpcApi: Send + Sync + Clone + 'static {
 
 	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction>;
 	async fn get_block_number(&self) -> Result<U64>;
+
+	/// Errors if the endpoint doesn't support the `finalized` tag. Callers must not fall back to
+	/// `latest`, since that would silently drop the finality guarantee.
+	async fn get_finalized_block_number(&self) -> Result<U64>;
 }
 
 #[async_trait::async_trait]
@@ -333,6 +346,10 @@ impl EvmRpcApi for EvmRpcSigningClient {
 
 	async fn get_block_number(&self) -> Result<U64> {
 		self.rpc_client.get_block_number().await
+	}
+
+	async fn get_finalized_block_number(&self) -> Result<U64> {
+		self.rpc_client.get_finalized_block_number().await
 	}
 }
 

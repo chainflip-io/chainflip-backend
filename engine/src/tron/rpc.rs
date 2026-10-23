@@ -283,6 +283,10 @@ impl EvmRpcApi for TronRpcClient {
 	async fn get_block_number(&self) -> anyhow::Result<U64> {
 		self.evm_rpc_client.get_block_number().await
 	}
+
+	async fn get_finalized_block_number(&self) -> anyhow::Result<U64> {
+		self.evm_rpc_client.get_finalized_block_number().await
+	}
 }
 
 #[async_trait::async_trait]
@@ -538,6 +542,10 @@ impl<RpcClient: EvmRpcApi> EvmRpcApi for TronRpcSigningClient<RpcClient> {
 
 	async fn get_block_number(&self) -> anyhow::Result<ethers::types::U64> {
 		self.rpc_client.get_block_number().await
+	}
+
+	async fn get_finalized_block_number(&self) -> anyhow::Result<ethers::types::U64> {
+		self.rpc_client.get_finalized_block_number().await
 	}
 }
 

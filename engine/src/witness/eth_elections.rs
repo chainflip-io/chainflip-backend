@@ -49,7 +49,8 @@ use crate::{
 			key_manager::KeyManagerEvents,
 			vault::VaultEvents,
 			EvmAddressStateClient, EvmBlockQuery, EvmDepositChannelWitnessingConfig,
-			EvmEventClient, EvmKeyManagerWitnessingConfig, EvmVoter, VaultDepositWitnessingConfig,
+			EvmEventClient, EvmKeyManagerWitnessingConfig, EvmVoter, EvmWitnessingConfig,
+			VaultDepositWitnessingConfig,
 		},
 	},
 };
@@ -117,7 +118,7 @@ impl EvmBlockQuery for EvmSingleBlockQuery {
 	}
 }
 trait EvmSingleBlockChainTypes =
-	ChainTypes<ChainBlockNumber = u64, ChainBlockHash = H256> + Sync + Send;
+	ChainTypes<ChainBlockNumber = u64, ChainBlockHash = H256> + EvmWitnessingConfig + Sync + Send;
 
 #[async_trait::async_trait]
 impl<Chain: EvmSingleBlockChainTypes> WitnessClient<Chain>
@@ -126,12 +127,11 @@ impl<Chain: EvmSingleBlockChainTypes> WitnessClient<Chain>
 	type BlockQuery = EvmSingleBlockQuery;
 
 	async fn best_block_number(&self) -> Result<u64> {
-		Ok(self.client.get_block_number().await?.low_u64())
+		self.best_evm_block_number().await
 	}
 
 	async fn best_block_header(&self) -> Result<Header<Chain>> {
-		let best_number = self.client.get_block_number().await?;
-		Ok(self.block_header_by_height(best_number.low_u64()).await?)
+		self.block_header_by_height(self.best_evm_block_number().await?).await
 	}
 
 	async fn block_header_by_height(&self, height: u64) -> Result<Header<Chain>> {

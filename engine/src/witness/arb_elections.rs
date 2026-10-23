@@ -25,7 +25,7 @@ use crate::{
 			key_manager::KeyManagerEvents,
 			vault::VaultEvents,
 			EvmDepositChannelWitnessingConfig, EvmKeyManagerWitnessingConfig, EvmVoter,
-			VaultDepositWitnessingConfig,
+			EvmWitnessingConfig, VaultDepositWitnessingConfig,
 		},
 	},
 };
@@ -96,8 +96,8 @@ trait EvmBlockRangeChainType<C: ChainWitnessConfig> =
 	ChainTypes<ChainBlockNumber = BlockWitnessRange<C>, ChainBlockHash = H256> + Sync + Send;
 
 #[async_trait::async_trait]
-impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chain>
-	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConfig>
+	WitnessClient<Chain> for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	type BlockQuery = EvmBlockRangeQuery<W>;
 
@@ -121,7 +121,7 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chai
 	}
 
 	async fn best_block_number(&self) -> Result<BlockWitnessRange<W>> {
-		let best_block = self.client.get_block_number().await?.low_u64();
+		let best_block = self.best_evm_block_number().await?;
 		let range = block_witness_range(W::WITNESS_PERIOD, best_block);
 		let block_witness_range =
 			BlockWitnessRange::try_new(block_witness_root(W::WITNESS_PERIOD, best_block))
@@ -183,8 +183,8 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chai
 }
 
 #[async_trait::async_trait]
-impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmEventClient<Chain>
-	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConfig>
+	EvmEventClient<Chain> for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	async fn events_from_block_query<Data: std::fmt::Debug>(
 		&self,
@@ -213,8 +213,8 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmEventClient<Cha
 }
 
 #[async_trait::async_trait]
-impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmAddressStateClient<Chain>
-	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConfig>
+	EvmAddressStateClient<Chain> for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	async fn address_states(
 		&self,
