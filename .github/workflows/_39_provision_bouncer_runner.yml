@@ -1,0 +1,57 @@
+name: Provision bouncer runner
+
+# Provisions the ephemeral Hetzner runner used by `_40_post_check.yml`. This is a separate
+# workflow so that callers can start it in parallel with the build, and the runner can install
+# the localnet dependencies and pre-pull docker images while the binaries are compiling.
+# `_40_post_check.yml` destroys the runner.
+
+on:
+  workflow_call:
+    inputs:
+      node-count:
+        type: number
+        default: 1
+      log-postfix:
+        type: string
+        default: "-post-check"
+    outputs:
+      runner-label:
+        value: ${{ jobs.provision-bouncer-runner.outputs.runner-label }}
+      runner-name:
+        value: ${{ jobs.provision-bouncer-runner.outputs.runner-name }}
+      server-id:
+        value: ${{ jobs.provision-bouncer-runner.outputs.server-id }}
+
+env:
+  SOLANA_VERSION: v2.1.13
+
+permissions:
+  contents: read
+
+jobs:
+  provision-bouncer-runner:
+    runs-on: namespace-profile-default-light
+    timeout-minutes: 15
+    outputs:
+      runner-label: ${{ steps.provision.outputs.runner-label }}
+      runner-name: ${{ steps.provision.outputs.runner-name }}
+      server-id: ${{ steps.provision.outputs.server-id }}
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
+
+      - name: Provision ephemeral Hetzner runner ☁️
+        id: provision
+        env:
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+          LOG_POSTFIX: ${{ inputs.log-postfix }}
+          LOCALNET_COMPOSE_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/localnet/docker-compose.yml
+          LOCALNET_NODE_COUNT: "${{ inputs.node-count }}-node"
+        run: |
+          suffix=$(tr --complement --delete '[:alnum:]-' <<<"$LOG_POSTFIX")
+          runner_name="bouncer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}${suffix}"
+          runner_label="${runner_name}-cpx52"
+          ./ci/scripts/manage_hetzner_bouncer_runner.sh create "$runner_name" "$runner_label"
