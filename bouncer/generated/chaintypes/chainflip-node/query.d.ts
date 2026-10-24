@@ -3040,17 +3040,6 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Maximum amount allowed to be put into a swap. Excess amounts are confiscated.
-     *
-     * @param {CfPrimitivesChainsAssetsAnyAsset} arg
-     * @param {Callback<bigint | undefined> =} callback
-     **/
-    maximumSwapAmount: GenericStorageQuery<
-      (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint | undefined,
-      CfPrimitivesChainsAssetsAnyAsset
-    >;
-
-    /**
      * FLIP ready to be sent to gateway.
      *
      * @param {Callback<bigint> =} callback
