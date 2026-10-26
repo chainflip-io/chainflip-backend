@@ -48,7 +48,7 @@ impl<T: Parameter + Member> VoteStorage for BitmapNoHash<T> {
 	) -> Result<VoteComponents<Self>, CorruptStorageError> {
 		Ok(VoteComponents { bitmap_component: Some(partial_vote), individual_component: None })
 	}
-	fn component_storage_kind(_partial_vote: &Self::PartialVote) -> ComponentStorageKind {
+	fn component_storage_kind() -> ComponentStorageKind {
 		ComponentStorageKind::BitmapOnly
 	}
 	fn components_into_authority_vote<
