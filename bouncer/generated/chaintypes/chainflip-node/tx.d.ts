@@ -154,7 +154,7 @@ import type {
   PalletCfElectionsInitialState004,
   StateChainRuntimeChainflipWitnessingEthereumElectionsElectionTypes,
   PalletCfElectionsVoteStorageAuthorityVote004,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
   PalletCfElectionsInitialState005,
   CfChainsWitnessPeriodBlockWitnessRange,
   StateChainRuntimeChainflipWitnessingArbitrumElectionsElectionTypes,
@@ -178,12 +178,12 @@ import type {
   PalletCfIngressEgressPalletConfigUpdateBsc,
   PalletCfIngressEgressVaultDepositWitnessBsc,
   PalletCfElectionsVoteStorageAuthorityVote008,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
   PalletCfElectionsInitialState007,
   CfChainsWitnessPeriodBlockWitnessRangeBsc,
   StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes,
   PalletCfElectionsVoteStorageAuthorityVote006,
-  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
   PalletCfElectionsInitialState008,
   CfChainsWitnessPeriodBlockWitnessRangeAssethub,
   StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes,
@@ -8775,18 +8775,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'ArbitrumElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum;
             };
           };
         },
@@ -10439,18 +10439,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'BscElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc;
             };
           };
         },
@@ -10782,18 +10782,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'AssethubElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub;
             };
           };
         },
