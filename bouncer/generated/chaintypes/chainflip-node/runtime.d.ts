@@ -1341,6 +1341,8 @@ export interface RuntimeApis extends GenericRuntimeApis {
      *
      * @callname: CustomRuntimeApi_cf_max_swap_amount
      * @param {CfPrimitivesChainsAssetsAnyAsset} asset
+     *
+     * @deprecated The maximum swap amount no longer exists; this always returns None.
      **/
     cfMaxSwapAmount: GenericRuntimeApiMethod<
       (asset: CfPrimitivesChainsAssetsAnyAsset) => Promise<bigint | undefined>
