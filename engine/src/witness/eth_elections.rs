@@ -130,11 +130,12 @@ impl<Chain: EvmSingleBlockChainTypes> WitnessClient<Chain>
 	type BlockQuery = EvmSingleBlockQuery;
 
 	async fn best_block_number(&self) -> Result<u64> {
-		self.best_evm_block_number().await
+		self.highest_witnessable_block_number().await
 	}
 
 	async fn best_block_header(&self) -> Result<Header<Chain>> {
-		self.block_header_by_height(self.best_evm_block_number().await?).await
+		self.block_header_by_height(self.highest_witnessable_block_number().await?)
+			.await
 	}
 
 	async fn block_header_by_height(&self, height: u64) -> Result<Header<Chain>> {

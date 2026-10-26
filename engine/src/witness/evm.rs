@@ -103,7 +103,10 @@ impl<CT: ChainTypes, BlockQuery> EvmVoter<CT, BlockQuery> {
 }
 
 impl<CT: ChainTypes + EvmWitnessingConfig, BlockQuery> EvmVoter<CT, BlockQuery> {
-	pub async fn best_evm_block_number(&self) -> Result<u64> {
+	// This function returns the highest block number we can safely witness according to our rules
+	// for this chain's witnessing. Specifically, whether we witnesss finalized blocks or the best
+	// unfinalized block.
+	pub async fn highest_witnessable_block_number(&self) -> Result<u64> {
 		Ok(if CT::WITNESS_FINALIZED_BLOCKS {
 			self.client.get_finalized_block_number().await?
 		} else {

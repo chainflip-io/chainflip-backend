@@ -122,7 +122,7 @@ impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConf
 	}
 
 	async fn best_block_number(&self) -> Result<BlockWitnessRange<W>> {
-		let best_block = self.best_evm_block_number().await?;
+		let best_block = self.highest_witnessable_block_number().await?;
 		let range = block_witness_range(W::WITNESS_PERIOD, best_block);
 		let block_witness_range =
 			BlockWitnessRange::try_new(block_witness_root(W::WITNESS_PERIOD, best_block))
