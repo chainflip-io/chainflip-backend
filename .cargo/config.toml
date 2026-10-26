@@ -94,6 +94,8 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0381: webpki-roots bundles the distrusted emSign ECC root. 1.x is patched; the unpatched 0.25.4 comes from substrate's `libp2p-websocket`, which is only used by the opt-in libp2p network backend (the node defaults to litep2p), and then only to dial `/wss` peers.
 # - RUSTSEC-2026-0382: rustls-webpki accepts distrusted emSign intermediates. 0.103 is patched; the unpatched 0.101.7 is only in Cargo.lock via `libp2p-tls`, from substrate's optional `libp2p-quic`, and is never compiled.
 # - RUSTSEC-2026-0387: crypto-bigint timing variability in operations meant to be constant-time; only fixed in 0.7.6. Our 0.5.5 is pinned by `k256` 0.13 (substrate and ethers). The runtime and the node keystore never sign with `k256` (the host side of `sp-core` uses `secp256k1`), nor does threshold signing. The one secret it touches is each engine's own EVM/Tron broadcast key, via the ethers `LocalWallet`, and exploiting that needs local side-channel access to the validator host.
+# - RUSTSEC-2026-0391, RUSTSEC-2026-0398, RUSTSEC-2026-0403: zstd / zstd-safe memory-safety bugs in stream-context reuse, `Seekable` and legacy-frame streaming decompression; only fixed in zstd 0.14.3 / zstd-safe 8.2.0. Our zstd 0.12.4 and 0.13.3 are pinned by substrate (`sp-maybe-compressed-blob`) and wasmtime (`wasmtime-internal-cache`). They only ever see the on-chain runtime code, which governance controls, and wasmtime's local cache of compiled modules, which the node writes itself. Substrate creates a fresh `zstd::Encoder`/`Decoder` each time and never uses `Seekable`.
+# - RUSTSEC-2026-0395, RUSTSEC-2026-0396, RUSTSEC-2026-0397, RUSTSEC-2026-0399, RUSTSEC-2026-0400, RUSTSEC-2026-0401, RUSTSEC-2026-0402, RUSTSEC-2026-0404, RUSTSEC-2026-0405, RUSTSEC-2026-0406: zstd-safe unsound APIs (`StableInBuffer`, `Seekable`, `OutBuffer::around_pos`, dictionaries, `train_from_buffer`, context cloning, multithreaded contexts, out-of-range `InBuffer::pos`). Same pinned versions as above, and neither substrate nor wasmtime calls any of these APIs.
 
 #
 cf-audit = '''
@@ -155,6 +157,19 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0381
 	--ignore RUSTSEC-2026-0382
 	--ignore RUSTSEC-2026-0387
+	--ignore RUSTSEC-2026-0391
+	--ignore RUSTSEC-2026-0395
+	--ignore RUSTSEC-2026-0396
+	--ignore RUSTSEC-2026-0397
+	--ignore RUSTSEC-2026-0398
+	--ignore RUSTSEC-2026-0399
+	--ignore RUSTSEC-2026-0400
+	--ignore RUSTSEC-2026-0401
+	--ignore RUSTSEC-2026-0402
+	--ignore RUSTSEC-2026-0403
+	--ignore RUSTSEC-2026-0404
+	--ignore RUSTSEC-2026-0405
+	--ignore RUSTSEC-2026-0406
 '''
 
 [build]
