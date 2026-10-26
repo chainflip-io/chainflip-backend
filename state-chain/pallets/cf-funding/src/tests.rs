@@ -1989,7 +1989,7 @@ pub mod ethereum_sc_calls {
 				RuntimeOrigin::root(),
 				EthereumDepositAndSCCall {
 					deposit: EthereumDeposit::FlipToSCGateway { amount: FUND_AMOUNT },
-					call: VALID_CALL_BYTES.to_vec()
+					call: VALID_CALL_BYTES.to_vec().try_into().unwrap()
 				},
 				CALLER,
 				CALLER_32,
@@ -2020,7 +2020,7 @@ pub mod ethereum_sc_calls {
 				RuntimeOrigin::root(),
 				EthereumDepositAndSCCall {
 					deposit: EthereumDeposit::FlipToSCGateway { amount: FUND_AMOUNT },
-					call: INVALID_CALL_BYTES.to_vec()
+					call: INVALID_CALL_BYTES.to_vec().try_into().unwrap()
 				},
 				CALLER,
 				CALLER_32,
@@ -2051,7 +2051,7 @@ pub mod ethereum_sc_calls {
 				RuntimeOrigin::root(),
 				EthereumDepositAndSCCall {
 					deposit: EthereumDeposit::NoDeposit,
-					call: VALID_CALL_BYTES.to_vec()
+					call: VALID_CALL_BYTES.to_vec().try_into().unwrap()
 				},
 				CALLER,
 				CALLER_32,
@@ -2615,6 +2615,74 @@ pub mod rebalancing {
 			assert_eq!(
 				AMOUNT + MIN_FUNDING, // MIN_FUNDING is the initial balance of BOB
 				on_chain_balance_alice + on_chain_balance_bob + successful_redemption_amount + TAX
+			);
+		});
+	}
+
+	const BOUND_ADDRESS: EthereumAddress = H160([0x01; 20]);
+	const REDEEMED_AMOUNT: u128 = 50;
+
+	/// ALICE requests a redemption, then rebalances the rest of her balance away to BOB.
+	fn empty_account_with_pending_redemption() {
+		assert_ok!(setup_test(
+			vec![
+				AccountSetup::new(ALICE)
+					.with_balance(2 * REDEEMED_AMOUNT, None)
+					.with_bound_redeem_address(BOUND_ADDRESS),
+				AccountSetup::new(BOB)
+					.with_balance(2 * REDEEMED_AMOUNT, None)
+					.with_bound_redeem_address(BOUND_ADDRESS),
+			],
+			vec![]
+		));
+
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			RedemptionAmount::Exact(REDEEMED_AMOUNT),
+			BOUND_ADDRESS,
+			Default::default()
+		));
+
+		// Emptying the account must not reap it while the redemption is pending, otherwise its
+		// bound redeem address would be dropped before the funds return on expiry.
+		assert_ok!(Funding::rebalance(
+			OriginTrait::signed(ALICE),
+			BOB,
+			None,
+			RedemptionAmount::Max
+		));
+		assert_eq!(Flip::total_balance_of(&ALICE), 0);
+		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
+		assert_eq!(BoundRedeemAddress::<Test>::get(ALICE), Some(BOUND_ADDRESS));
+	}
+
+	#[test]
+	fn account_emptied_with_pending_redemption_is_reaped_once_redeemed() {
+		new_test_ext().execute_with(|| {
+			empty_account_with_pending_redemption();
+
+			assert_ok!(Funding::redeemed(ALICE, REDEEMED_AMOUNT, Default::default()));
+			assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
+		});
+	}
+
+	#[test]
+	fn account_emptied_with_pending_redemption_keeps_its_binding_if_redemption_expires() {
+		new_test_ext().execute_with(|| {
+			const OTHER_ADDRESS: EthereumAddress = H160([0x02; 20]);
+
+			empty_account_with_pending_redemption();
+
+			assert_ok!(Funding::redemption_expired(ALICE, Default::default()));
+			assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
+			assert_noop!(
+				Funding::redeem(
+					OriginTrait::signed(ALICE),
+					RedemptionAmount::Max,
+					OTHER_ADDRESS,
+					Default::default()
+				),
+				Error::<Test>::AccountBindingRestrictionViolated
 			);
 		});
 	}
