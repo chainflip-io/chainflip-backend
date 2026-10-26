@@ -266,7 +266,7 @@ import type {
   PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
   PalletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectionState,
   PalletCfElectionsConsensusHistory004,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
   PalletCfElectionsBitmapComponentsElectionBitmapComponentsArbitrum,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeIndividualComponentArbitrumTrackedData,
   PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserArbitrum,
@@ -313,7 +313,7 @@ import type {
   PalletCfIngressEgressPendingPrewitnessedDepositEntry008,
   PalletCfIngressEgressDepositWitnessBsc,
   PalletCfIngressEgressVaultDepositWitnessBsc,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
   PalletCfElectionsBitmapComponentsElectionBitmapComponentsBsc,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeIndividualComponentBscTrackedData,
   PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserBsc,
@@ -323,7 +323,7 @@ import type {
   CfChainsBscBscTrackedData,
   PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesBsc,
   PalletCfElectionsConsensusHistory007,
-  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
   PalletCfElectionsBitmapComponentsElectionBitmapComponentsAssethub,
   PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeIndividualComponentAssethubTrackedData,
   PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserAssethub,
@@ -7309,13 +7309,13 @@ export interface ChainStorage extends GenericChainStorage {
      * choose to submit it, where the probability increases over time.
      *
      * @param {PalletCfElectionsSharedDataHash} arg
-     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum | undefined> =} callback
+     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum | undefined> =} callback
      **/
     sharedData: GenericStorageQuery<
       (
         arg: PalletCfElectionsSharedDataHash,
       ) =>
-        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum
+        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum
         | undefined,
       PalletCfElectionsSharedDataHash
     >;
@@ -8808,13 +8808,13 @@ export interface ChainStorage extends GenericChainStorage {
      * choose to submit it, where the probability increases over time.
      *
      * @param {PalletCfElectionsSharedDataHash} arg
-     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc | undefined> =} callback
+     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc | undefined> =} callback
      **/
     sharedData: GenericStorageQuery<
       (
         arg: PalletCfElectionsSharedDataHash,
       ) =>
-        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc
+        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc
         | undefined,
       PalletCfElectionsSharedDataHash
     >;
@@ -9049,13 +9049,13 @@ export interface ChainStorage extends GenericChainStorage {
      * choose to submit it, where the probability increases over time.
      *
      * @param {PalletCfElectionsSharedDataHash} arg
-     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub | undefined> =} callback
+     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub | undefined> =} callback
      **/
     sharedData: GenericStorageQuery<
       (
         arg: PalletCfElectionsSharedDataHash,
       ) =>
-        | PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub
+        | PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub
         | undefined,
       PalletCfElectionsSharedDataHash
     >;
