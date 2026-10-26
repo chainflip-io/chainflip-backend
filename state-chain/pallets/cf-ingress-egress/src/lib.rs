@@ -935,7 +935,9 @@ pub mod pallet {
 	// pallet.
 	//
 	// This value is mirrored to the `safety_margin` setting of all ingress related BlockWitnesser
-	// instances in the respective elections pallet.
+	// instances in the respective elections pallet. For chains witnessed in block ranges (e.g. Bsc)
+	// the unit is therefore ranges, not blocks, and it must stay below the BlockWitnesser's
+	// `safety_buffer`, otherwise block data is pruned before it is ever processed.
 	//
 	// Legacy witnessing (only used for Assethub): Determines the number of block confirmations
 	// required for a block on an external chain before CFE can submit any witness extrinsics for
