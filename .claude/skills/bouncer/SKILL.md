@@ -189,21 +189,29 @@ You'll get something like:
 
 That's enough to report the result without re-reading the full log. To re-run a single failed `AllSwaps` case, use `./commands/run_test.ts <swap_number> <seed>` — grab the seed from the `AllSwaps generated with seed …` line in the same run's log, since the swap number only maps to that swap for that seed (see "A single test" above).
 
-## 5. Regenerating event schemas
+## 5. Regenerating event schemas and chaintypes
 
-`bouncer/generated/events/` contains zod schemas auto-generated from the runtime metadata. **Schemas are regenerated automatically on every localnet boot** — `localnet/common.sh`'s `build-localnet` invokes `generate_event_schemas.ts` after starting the LP API. `build_and_run.sh`, `recreate.sh`, and `manage.sh build-localnet` all produce fresh schemas.
+Two directories are auto-generated from the runtime metadata:
 
-Run the generator manually only if:
+- `bouncer/generated/events/`: zod event schemas (`generate_event_schemas.ts`)
+- `bouncer/generated/chaintypes/`: dedot chain types for calls, storage and runtime APIs (`generate_chaintypes.ts`)
 
-- You changed a pallet event and want fresh schemas without recreating the localnet, or
-- You suspect committed schemas are stale relative to a running localnet.
+**Both are regenerated automatically on every localnet boot** by `localnet/common.sh`'s `build-localnet`. `build_and_run.sh`, `recreate.sh` and `manage.sh build-localnet` all produce fresh types.
+
+CI's `check-generated-bouncer-dependencies` fails if either directory is out of date. **Any PR that changes runtime events, storage, calls, types or runtime APIs must commit the regenerated output.** Regenerate manually if:
+
+- You changed the runtime and want fresh types without recreating the localnet, or
+- You suspect the committed types are stale.
 
 ```bash
-cd bouncer
-./commands/generate_event_schemas.ts   # requires a running localnet
+# No localnet needed: boots a throwaway dev node (~10s), regenerates both, stops the node.
+cargo build -p chainflip-node && ./localnet/generate_bouncer_types.sh
+
+# Against an already-running localnet
+cd bouncer && ./commands/generate_event_schemas.ts && ./commands/generate_chaintypes.ts
 ```
 
-The generator deletes `bouncer/generated/events/` and rewrites it. After regeneration, run `pnpm prettier:write` and commit the diff alongside your pallet changes. Tests importing schemas that no longer exist (e.g. event renamed) need to be updated.
+The generators delete and rewrite their output directories, and they already format it with prettier, so the output matches what CI checks. Don't format it differently. Commit the diff alongside your runtime changes. Tests importing schemas that no longer exist (e.g. a renamed event) need to be updated.
 
 ## 6. Debugging a failure
 
