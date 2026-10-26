@@ -1780,14 +1780,28 @@ fn transfer_check_works() {
 			Error::<Test>::StillBidding
 		);
 
-		// Source and dest both restricted in the same way: allowed (lock is
-		// preserved across the hop).
+		// Source and dest both bidding during a rotation: blocked, since the auction has been
+		// resolved and the source may be a winner that is not yet bonded.
 		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(dest));
-		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
+		assert_noop!(
+			ValidatorPallet::ensure_can_transfer(&source, &dest),
+			Error::<Test>::StillBidding
+		);
 
 		// Source unrestricted, dest restricted: allowed (we don't gate based
 		// on the recipient's state when the source is free to move funds).
 		ActiveBidder::<Test>::mutate(|bidders| bidders.remove(&source));
+		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
+
+		// Source and dest both bidding during the auction phase, before the auction is
+		// resolved: allowed (lock is preserved across the hop).
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+		CurrentEpochStartedAt::<Test>::set(1_000);
+		EpochDuration::<Test>::set(100);
+		RedemptionPeriodAsPercentage::<Test>::set(Percent::from_percent(85));
+		System::set_block_number(1085);
+		assert!(ValidatorPallet::is_auction_phase());
+		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(source));
 		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
 	});
 }
@@ -2345,6 +2359,39 @@ mod operator {
 			// After expiring the epoch, deregistration should succeed
 			ValidatorPallet::expire_epoch(current_epoch);
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
+		});
+	}
+
+	#[test]
+	fn cannot_remove_delegations_during_rotation() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&BOB, MockMinimumFundingProvider::get_min_funding_amount());
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
+
+			// The delegation may be part of a pending snapshot, so it must stay in place until
+			// the rotation completes and the delegator is bonded.
+			CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+			assert_noop!(
+				ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB),
+				Error::<Test>::RotationInProgress
+			);
+			assert_noop!(
+				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
+				Error::<Test>::RotationInProgress
+			);
+
+			CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(!DelegationChoice::<Test>::contains_key(BOB));
 		});
 	}
 
