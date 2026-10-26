@@ -25,7 +25,7 @@ use std::sync::LazyLock;
 use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
-	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
+	CollectedRejectedFunds, Error, Event, Pallet, Swap, SwapOrigin, SwapType,
 };
 use cf_amm_math::Price;
 use cf_chains::{
@@ -74,15 +74,6 @@ const OUTPUT_ASSET: Asset = Asset::Eth;
 
 static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
-
-fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
-	assert_ok!(Swapping::update_pallet_config(
-		OriginTrait::root(),
-		vec![PalletConfigUpdate::MaximumSwapAmount { asset, amount }]
-			.try_into()
-			.unwrap()
-	));
-}
 
 struct TestSwapParams {
 	input_asset: Asset,
@@ -833,47 +824,6 @@ fn can_handle_swaps_with_zero_outputs() {
 				"No egresses should be scheduled."
 			);
 		});
-}
-
-#[test]
-fn swap_excess_are_confiscated() {
-	const MAX_SWAP: AssetAmount = 100;
-	const AMOUNT: AssetAmount = 1_000;
-	const CONFISCATED_AMOUNT: AssetAmount = AMOUNT - MAX_SWAP;
-
-	new_test_ext().execute_with(|| {
-		let from: Asset = Asset::Usdc;
-		let to: Asset = Asset::Flip;
-
-		set_maximum_swap_amount(from, Some(MAX_SWAP));
-
-		swap_with_custom_broker_fee(from, to, AMOUNT, bounded_vec![]);
-
-		// Excess fee is confiscated
-		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountConfiscated {
-			swap_request_id: SwapRequestId(1),
-			asset: from,
-			total_amount: AMOUNT,
-			confiscated_amount: CONFISCATED_AMOUNT,
-		}));
-
-		assert_eq!(
-			ScheduledSwaps::<Test>::get(),
-			BTreeMap::from([(
-				1.into(),
-				Swap::new(
-					1.into(),
-					1.into(),
-					from,
-					to,
-					MAX_SWAP,
-					None,
-					System::block_number() + SWAP_DELAY_BLOCKS as u64
-				)
-			)])
-		);
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
-	});
 }
 
 #[test]

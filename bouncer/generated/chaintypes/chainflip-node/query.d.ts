@@ -75,6 +75,7 @@ import type {
   PalletCfThresholdSignatureSignerAndSignatureResultEvmCrypto,
   CfChainsEvmAggKey,
   PalletCfThresholdSignatureKeyRotationStatusEvmCrypto,
+  PalletCfThresholdSignatureCeremonyStageTimeouts,
   PalletCfThresholdSignatureCeremonyContextPolkadotCrypto,
   PalletCfThresholdSignatureRequestInstructionPolkadotCrypto,
   PalletCfThresholdSignatureSignerAndSignatureResultPolkadotCrypto,
@@ -2095,13 +2096,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -2176,18 +2170,20 @@ export interface ChainStorage extends GenericChainStorage {
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
 
     /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
      * (2/3 must agree the node was an offender) on keygen failure.
      *
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.
@@ -2272,13 +2268,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -2353,18 +2342,20 @@ export interface ChainStorage extends GenericChainStorage {
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
 
     /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
      * (2/3 must agree the node was an offender) on keygen failure.
      *
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.
@@ -2449,13 +2440,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -2530,18 +2514,20 @@ export interface ChainStorage extends GenericChainStorage {
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
 
     /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
      * (2/3 must agree the node was an offender) on keygen failure.
      *
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.
@@ -3050,17 +3036,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     collectedRejectedFunds: GenericStorageQuery<
       (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint,
-      CfPrimitivesChainsAssetsAnyAsset
-    >;
-
-    /**
-     * Maximum amount allowed to be put into a swap. Excess amounts are confiscated.
-     *
-     * @param {CfPrimitivesChainsAssetsAnyAsset} arg
-     * @param {Callback<bigint | undefined> =} callback
-     **/
-    maximumSwapAmount: GenericStorageQuery<
-      (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint | undefined,
       CfPrimitivesChainsAssetsAnyAsset
     >;
 
@@ -4918,13 +4893,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -4999,18 +4967,20 @@ export interface ChainStorage extends GenericChainStorage {
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
 
     /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
      * (2/3 must agree the node was an offender) on keygen failure.
      *
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.
