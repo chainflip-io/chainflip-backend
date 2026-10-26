@@ -4794,10 +4794,6 @@ export type CfChainsRefundParametersChannelRefundParametersEncodedAddress = {
 };
 
 export type PalletCfSwappingPalletConfigUpdate =
-  | {
-      type: 'MaximumSwapAmount';
-      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount?: bigint | undefined };
-    }
   | { type: 'SwapRetryDelay'; value: { delay: number } }
   | { type: 'FlipBuyInterval'; value: { interval: number } }
   | { type: 'SetMaxSwapRetryDuration'; value: { blocks: number } }
@@ -14694,15 +14690,6 @@ export type PalletCfSwappingEvent =
         asset: CfPrimitivesChainsAssetsAnyAsset;
         direction: CfPrimitivesSwapLeg;
         amount: bigint;
-      };
-    }
-  | {
-      name: 'SwapAmountConfiscated';
-      data: {
-        swapRequestId: CfPrimitivesSwapRequestId;
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        totalAmount: bigint;
-        confiscatedAmount: bigint;
       };
     }
   | {
