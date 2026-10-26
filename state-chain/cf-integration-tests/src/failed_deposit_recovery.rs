@@ -20,7 +20,7 @@ use crate::{genesis, network::register_refund_addresses};
 use cf_chains::ForeignChainAddress;
 use cf_primitives::{AccountId, AccountRole, Asset, FLIPPERINOS_PER_FLIP};
 use cf_traits::FailedDepositRecoveryOutcome;
-use frame_support::assert_ok;
+use frame_support::{assert_ok, traits::OnKilledAccount};
 use pallet_cf_asset_balances::FreeBalances;
 use pallet_cf_environment::FailedDepositRecoveryRequest;
 use pallet_cf_ingress_egress::{FetchOrTransfer, ScheduledEgressFetchOrTransfer};
@@ -144,5 +144,25 @@ fn batch_of_mixed_outcomes() {
 				ARB_USDC_AMOUNT
 			);
 			assert_eq!(FreeBalances::<Runtime>::get(&RECOVERY_ACCOUNT, Asset::Usdc), 0);
+		});
+}
+
+#[test]
+fn link_is_removed_when_the_broker_account_is_killed() {
+	genesis::with_test_defaults()
+		.with_additional_accounts(&[
+			(BROKER, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			(RECOVERY_ACCOUNT, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			assert_ok!(Swapping::link_recovery_account(
+				RuntimeOrigin::signed(BROKER),
+				RECOVERY_ACCOUNT
+			));
+
+			<Runtime as frame_system::Config>::OnKilledAccount::on_killed_account(&BROKER);
+
+			assert_eq!(pallet_cf_swapping::BrokerRecoveryAccount::<Runtime>::get(&BROKER), None);
 		});
 }

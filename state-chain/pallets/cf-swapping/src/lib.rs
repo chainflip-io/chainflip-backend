@@ -48,7 +48,7 @@ use frame_support::{
 		DispatchError, Permill, TransactionOutcome,
 	},
 	storage::with_transaction_unchecked,
-	traits::HandleLifetime,
+	traits::{HandleLifetime, OnKilledAccount},
 	transactional, CloneNoBound, Hashable,
 };
 use frame_system::pallet_prelude::*;
@@ -791,6 +791,8 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, T::AccountId, EthereumAddress, OptionQuery>;
 
 	/// The LP account each broker has linked to receive its failed deposits.
+	///
+	/// Kept when the broker deregisters and only removed when the account is reaped.
 	#[pallet::storage]
 	pub type BrokerRecoveryAccount<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
@@ -1407,7 +1409,6 @@ pub mod pallet {
 			// With this the broker has no longer access to the affiliate's account.
 			let _ = AffiliateAccountDetails::<T>::clear_prefix(&account_id, u32::MAX, None);
 			let _ = AffiliateIdMapping::<T>::clear_prefix(&account_id, u32::MAX, None);
-			BrokerRecoveryAccount::<T>::remove(&account_id);
 
 			Ok(())
 		}
@@ -3619,6 +3620,16 @@ impl<T: Config> BrokerRecoveryApi for Pallet<T> {
 				AccountRole::LiquidityProvider,
 			)
 		})
+	}
+}
+
+/// Removes the recovery account link when the broker account is reaped. Deregistering as a broker
+/// keeps the link, so it can't be cleared by deregistering and registering again.
+pub struct DeleteRecoveryAccount<T: Config>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteRecoveryAccount<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		BrokerRecoveryAccount::<T>::remove(who);
 	}
 }
 

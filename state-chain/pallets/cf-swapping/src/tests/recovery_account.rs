@@ -15,9 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::BrokerRecoveryAccount;
+use crate::{BrokerRecoveryAccount, DeleteRecoveryAccount};
 use cf_primitives::AccountRole;
 use cf_traits::{mocks::account_role_registry::MockAccountRoleRegistry, BrokerRecoveryApi};
+use frame_support::traits::OnKilledAccount;
 
 const LP: u64 = 1_001;
 const OTHER_LP: u64 = 1_002;
@@ -100,12 +101,28 @@ fn deregistered_recovery_account_is_ignored() {
 }
 
 #[test]
-fn link_is_removed_when_the_broker_deregisters() {
+fn link_survives_broker_deregistration() {
 	new_test_ext().execute_with(|| {
 		register_lps();
 		assert_ok!(link(BROKER, LP));
 
 		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)));
+		assert_eq!(BrokerRecoveryAccount::<Test>::get(BROKER), Some(LP));
+
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&BROKER)
+			.unwrap();
+		assert_noop!(link(BROKER, OTHER_LP), Error::<Test>::RecoveryAccountAlreadyLinked);
+		assert_eq!(Swapping::recovery_account(&BROKER), Some(LP));
+	});
+}
+
+#[test]
+fn link_is_removed_when_the_broker_account_is_killed() {
+	new_test_ext().execute_with(|| {
+		register_lps();
+		assert_ok!(link(BROKER, LP));
+
+		DeleteRecoveryAccount::<Test>::on_killed_account(&BROKER);
 
 		assert_eq!(BrokerRecoveryAccount::<Test>::get(BROKER), None);
 	});

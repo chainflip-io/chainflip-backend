@@ -622,6 +622,7 @@ impl frame_system::Config for Runtime {
 		pallet_cf_pools::DeleteHistoricalEarnedFees<Self>,
 		pallet_cf_asset_balances::DeleteAccount<Self>,
 		pallet_cf_validator::DelegatedAccountCleanup<Self>,
+		pallet_cf_swapping::DeleteRecoveryAccount<Self>,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
