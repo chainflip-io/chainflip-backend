@@ -49,12 +49,15 @@ use crate::{
 			key_manager::KeyManagerEvents,
 			vault::VaultEvents,
 			EvmAddressStateClient, EvmBlockQuery, EvmDepositChannelWitnessingConfig,
-			EvmEventClient, EvmKeyManagerWitnessingConfig, EvmVoter, EvmWitnessingConfig,
-			VaultDepositWitnessingConfig,
+			EvmEventClient, EvmKeyManagerWitnessingConfig, EvmVoter, VaultDepositWitnessingConfig,
 		},
 	},
 };
-use cf_chains::{assets, eth::EthereumTrackedData, evm::ToAccountId32};
+use cf_chains::{
+	assets,
+	eth::EthereumTrackedData,
+	evm::{EvmWitnessingConfig, ToAccountId32},
+};
 use cf_primitives::chains::assets::eth::Asset as EthAsset;
 use cf_utilities::{
 	context,

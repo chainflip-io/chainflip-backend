@@ -43,8 +43,6 @@ use self::evm::EvmCrypto;
 pub const CHAIN_ID_MAINNET: u64 = 42161;
 pub const CHAIN_ID_ARBITRUM_SEPOLIA: u64 = 421614;
 
-pub const WITNESS_FINALIZED_BLOCKS: bool = false;
-
 impl ChainWitnessConfig for Arbitrum {
 	type ChainBlockNumber = u64;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;

@@ -90,6 +90,12 @@ impl ChainTypes for BscChain {
 	const NAME: &'static str = "Bsc";
 }
 
+impl evm::EvmWitnessingConfig for BscChain {
+	const WITNESS_FINALIZED_BLOCKS: bool = BSC_WITNESS_FINALIZED_BLOCKS;
+}
+
+// BSC's fast finality means the finalized head only lags latest by 1-2 blocks.
+pub const BSC_WITNESS_FINALIZED_BLOCKS: bool = true;
 pub const BSC_MAINNET_SAFETY_BUFFER: u32 = 4;
 pub const BSC_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 

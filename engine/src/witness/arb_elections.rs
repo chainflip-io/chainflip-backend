@@ -25,13 +25,14 @@ use crate::{
 			key_manager::KeyManagerEvents,
 			vault::VaultEvents,
 			EvmDepositChannelWitnessingConfig, EvmKeyManagerWitnessingConfig, EvmVoter,
-			EvmWitnessingConfig, VaultDepositWitnessingConfig,
+			VaultDepositWitnessingConfig,
 		},
 	},
 };
 use cf_chains::{
 	arb::ArbitrumTrackedData,
 	assets,
+	evm::EvmWitnessingConfig,
 	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange, SaturatingStep},
 	Arbitrum, ChainWitnessConfig,
 };

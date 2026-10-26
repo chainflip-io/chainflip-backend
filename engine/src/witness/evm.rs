@@ -25,15 +25,15 @@ use derive_where::derive_where;
 use ethers::types::{Transaction, TransactionReceipt};
 use itertools::Itertools;
 use sp_runtime::AccountId32;
-use state_chain_runtime::chainflip::witnessing::{
-	arbitrum_elections::ArbitrumChain,
-	bsc_elections::BscChain,
-	ethereum_elections::EthereumChain,
-	pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
+use state_chain_runtime::chainflip::witnessing::pallet_hooks::{
+	self, EvmKeyManagerEvent, EvmVaultContractEvent,
 };
 use std::{collections::HashMap, fmt::Debug};
 
-use cf_chains::{evm::EvmChain, Chain, DepositChannel};
+use cf_chains::{
+	evm::{EvmChain, EvmWitnessingConfig},
+	Chain, DepositChannel,
+};
 use pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H160, H256};
@@ -90,24 +90,6 @@ pub trait EvmTransactionClient {
 	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction>;
 }
 
-/// Engine-side witnessing parameters for chains witnessed via [`EvmVoter`].
-pub trait EvmWitnessingConfig: ChainTypes {
-	/// Whether to witness up to the chain's finalized head rather than the latest block.
-	const WITNESS_FINALIZED_BLOCKS: bool;
-}
-
-impl EvmWitnessingConfig for EthereumChain {
-	const WITNESS_FINALIZED_BLOCKS: bool = cf_chains::eth::WITNESS_FINALIZED_BLOCKS;
-}
-
-impl EvmWitnessingConfig for ArbitrumChain {
-	const WITNESS_FINALIZED_BLOCKS: bool = cf_chains::arb::WITNESS_FINALIZED_BLOCKS;
-}
-
-impl EvmWitnessingConfig for BscChain {
-	const WITNESS_FINALIZED_BLOCKS: bool = cf_chains::bsc::WITNESS_FINALIZED_BLOCKS;
-}
-
 #[derive_where(Clone; )]
 pub struct EvmVoter<CT: ChainTypes, BlockQuery> {
 	pub client: EvmCachingClient<EvmRpcSigningClient>,
@@ -120,7 +102,7 @@ impl<CT: ChainTypes, BlockQuery> EvmVoter<CT, BlockQuery> {
 	}
 }
 
-impl<CT: EvmWitnessingConfig, BlockQuery> EvmVoter<CT, BlockQuery> {
+impl<CT: ChainTypes + EvmWitnessingConfig, BlockQuery> EvmVoter<CT, BlockQuery> {
 	pub async fn best_evm_block_number(&self) -> Result<u64> {
 		Ok(if CT::WITNESS_FINALIZED_BLOCKS {
 			self.client.get_finalized_block_number().await?
