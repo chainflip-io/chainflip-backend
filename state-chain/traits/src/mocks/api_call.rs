@@ -132,9 +132,21 @@ impl MockEthAllBatch<MockEvmEnvironment> {
 	}
 }
 
+impl MockEthereumApiCall<MockEvmEnvironment> {
+	pub fn set_reject_call_success(success: bool) {
+		RejectCallSuccess::set(&success);
+	}
+
+	pub fn set_ccm_call_success(success: bool) {
+		CcmCallSuccess::set(&success);
+	}
+}
+
 parameter_types! {
 	storage AllBatchSuccess: bool = true;
 	pub storage ShouldConsolidate: bool = false;
+	storage RejectCallSuccess: bool = true;
+	storage CcmCallSuccess: bool = true;
 }
 
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
@@ -206,7 +218,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
-		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
+		if !CcmCallSuccess::get() || MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockEthExecutexSwapAndCall {
@@ -456,6 +468,9 @@ impl RejectCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		fetch: FetchForRejection<Ethereum>,
 		transfer: TransferForRejection<Ethereum>,
 	) -> Result<Self, RejectError> {
+		if !RejectCallSuccess::get() {
+			return Err(RejectError::FailedToBuildRejection);
+		}
 		Ok(Self::RejectCall { deposit_details, asset, fetch, transfer })
 	}
 }
