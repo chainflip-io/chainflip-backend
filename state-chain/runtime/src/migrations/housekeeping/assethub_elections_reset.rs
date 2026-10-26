@@ -16,7 +16,8 @@
 
 //! The Assethub `ChainBlockHash` changed from the witness batch number to `H256`, which changes
 //! the encoding of most of the Assethub elections storage. Assethub elections aren't live on
-//! Berghain, so instead of translating the state we reset and re-initialize it everywhere else.
+//! Berghain, so instead of translating the state we reset and re-initialize it on Perseverance and
+//! Sisyphos.
 //! Any Assethub blocks between the last witnessed block and the block the restarted BHW starts
 //! from will not be witnessed.
 //!
@@ -33,25 +34,21 @@ use sp_std::vec::Vec;
 
 pub struct ResetAssethubElections;
 
-impl ResetAssethubElections {
-	fn should_reset() -> bool {
-		genesis_hashes::genesis_hash::<Runtime>() != genesis_hashes::BERGHAIN
-	}
-}
-
 impl OnRuntimeUpgrade for ResetAssethubElections {
 	fn on_runtime_upgrade() -> Weight {
-		if !Self::should_reset() {
-			log::info!("Assethub elections are not live on Berghain, skipping reset.");
-			return Weight::zero()
-		}
-
-		pallet_cf_elections::Pallet::<Runtime, AssethubInstance>::reset();
-		if let Err(err) =
-			pallet_cf_elections::Pallet::<Runtime, AssethubInstance>::internally_initialize(
-				assethub_elections::initial_state(),
-			) {
-			log::error!("Failed to re-initialize Assethub elections after reset: {err:?}");
+		if matches!(
+			genesis_hashes::genesis_hash::<Runtime>(),
+			genesis_hashes::PERSEVERANCE | genesis_hashes::SISYPHOS
+		) {
+			pallet_cf_elections::Pallet::<Runtime, AssethubInstance>::reset();
+			if let Err(err) =
+				pallet_cf_elections::Pallet::<Runtime, AssethubInstance>::internally_initialize(
+					assethub_elections::initial_state(),
+				) {
+				log::error!("Failed to re-initialize Assethub elections after reset: {err:?}");
+			}
+		} else {
+			log::info!("Not on Perseverance or Sisyphos, skipping Assethub elections reset.");
 		}
 
 		Weight::zero()
@@ -64,31 +61,32 @@ impl OnRuntimeUpgrade for ResetAssethubElections {
 			SharedDataReferenceLifetime,
 		};
 
-		if !Self::should_reset() {
-			return Ok(())
+		if matches!(
+			genesis_hashes::genesis_hash::<Runtime>(),
+			genesis_hashes::PERSEVERANCE | genesis_hashes::SISYPHOS
+		) {
+			let initial_state = assethub_elections::initial_state();
+
+			frame_support::ensure!(
+				ElectoralUnsynchronisedState::<Runtime, AssethubInstance>::get() ==
+					Some(initial_state.unsynchronised_state),
+				"Assethub elections unsynchronised state was not reset"
+			);
+			frame_support::ensure!(
+				ElectoralUnsynchronisedSettings::<Runtime, AssethubInstance>::get() ==
+					Some(initial_state.unsynchronised_settings),
+				"Assethub elections unsynchronised settings were not reset"
+			);
+			frame_support::ensure!(
+				SharedDataReferenceLifetime::<Runtime, AssethubInstance>::get() ==
+					initial_state.shared_data_reference_lifetime,
+				"Assethub elections shared data reference lifetime was not reset"
+			);
+			frame_support::ensure!(
+				ElectionProperties::<Runtime, AssethubInstance>::iter_keys().next().is_none(),
+				"Assethub elections still has elections"
+			);
 		}
-
-		let initial_state = assethub_elections::initial_state();
-
-		frame_support::ensure!(
-			ElectoralUnsynchronisedState::<Runtime, AssethubInstance>::get() ==
-				Some(initial_state.unsynchronised_state),
-			"Assethub elections unsynchronised state was not reset"
-		);
-		frame_support::ensure!(
-			ElectoralUnsynchronisedSettings::<Runtime, AssethubInstance>::get() ==
-				Some(initial_state.unsynchronised_settings),
-			"Assethub elections unsynchronised settings were not reset"
-		);
-		frame_support::ensure!(
-			SharedDataReferenceLifetime::<Runtime, AssethubInstance>::get() ==
-				initial_state.shared_data_reference_lifetime,
-			"Assethub elections shared data reference lifetime was not reset"
-		);
-		frame_support::ensure!(
-			ElectionProperties::<Runtime, AssethubInstance>::iter_keys().next().is_none(),
-			"Assethub elections still has elections"
-		);
 
 		Ok(())
 	}
