@@ -27,7 +27,7 @@ $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chai
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/BROKER_API) --key-type=brok --scheme=sr25519
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/$NODE_NAME/signing_key_file) --key-type=aura --scheme=sr25519
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/$NODE_NAME/signing_key_file) --key-type=gran --scheme=ed25519
-RUST_LOG=runtime=debug $BINARY_ROOT_PATH/chainflip-node --chain=$CHAIN \
+RUST_LOG=runtime=debug,runtime-warmer=debug,wasm-runtime=debug $BINARY_ROOT_PATH/chainflip-node --chain=$CHAIN \
   --base-path=/tmp/chainflip/$NODE_NAME/chaindata \
   --node-key-file=$KEYS_DIR/$NODE_NAME/node_key_file \
   --validator \

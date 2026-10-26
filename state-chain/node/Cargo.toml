@@ -64,14 +64,18 @@ sp-consensus-grandpa = { workspace = true, default-features = true }
 sc-client-api = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
+sp-state-machine = { workspace = true, default-features = true }
 sp-timestamp = { workspace = true, default-features = true }
 sp-inherents = { workspace = true, default-features = true }
 sp-keyring = { workspace = true, default-features = true }
+codec = { workspace = true, default-features = true }
+tokio = { workspace = true, default-features = true }
 
 # FRAME dependencies
 frame-metadata-hash-extension = { workspace = true }
 frame-system = { workspace = true, default-features = true }
 pallet-transaction-payment = { workspace = true, default-features = true }
+pallet-cf-governance = { workspace = true, default-features = true }
 
 # These dependencies are used for the node template"s RPCs
 jsonrpsee = { workspace = true, features = ["full"] }
