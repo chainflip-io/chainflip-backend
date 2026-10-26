@@ -148,7 +148,7 @@ fn batch_of_mixed_outcomes() {
 }
 
 #[test]
-fn link_is_removed_when_the_broker_account_is_killed() {
+fn link_survives_deregistration_and_is_removed_when_the_account_is_killed() {
 	genesis::with_test_defaults()
 		.with_additional_accounts(&[
 			(BROKER, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
@@ -160,6 +160,12 @@ fn link_is_removed_when_the_broker_account_is_killed() {
 				RuntimeOrigin::signed(BROKER),
 				RECOVERY_ACCOUNT
 			));
+
+			assert_ok!(Swapping::deregister_as_broker(RuntimeOrigin::signed(BROKER)));
+			assert_eq!(
+				pallet_cf_swapping::BrokerRecoveryAccount::<Runtime>::get(&BROKER),
+				Some(RECOVERY_ACCOUNT)
+			);
 
 			<Runtime as frame_system::Config>::OnKilledAccount::on_killed_account(&BROKER);
 
