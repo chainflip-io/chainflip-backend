@@ -3822,7 +3822,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination.try_into().map_err(|_| Error::<T, I>::AssetMismatch)?,
 			None,
 		)?;
-		// `schedule_egress` skips its dust check in benchmark builds.
+		// Redundant in production, but `schedule_egress` skips its dust check when built with
+		// `runtime-benchmarks` (outside of its own unit tests), so it would schedule a zero egress.
 		ensure!(!details.egress_amount.is_zero(), Error::<T, I>::BelowEgressDustLimit);
 		Ok(details)
 	}
