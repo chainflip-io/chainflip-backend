@@ -4063,7 +4063,10 @@ mod zero_bond {
 	}
 
 	#[test]
-	#[should_panic(expected = "No bond recorded for epoch 10; skipping reward distribution.")]
+	#[cfg_attr(
+		debug_assertions,
+		should_panic(expected = "No bond recorded for epoch 10; skipping reward distribution.")
+	)]
 	fn distribute_all_skips_epoch_without_bond() {
 		new_test_ext().execute_with(|| {
 			setup();
@@ -4074,13 +4077,18 @@ mod zero_bond {
 	}
 
 	#[test]
-	#[should_panic(expected = "No bond recorded for epoch 10. Settling directly with validator")]
+	#[cfg_attr(
+		debug_assertions,
+		should_panic(expected = "No bond recorded for epoch 10. Settling directly with validator")
+	)]
 	fn distribute_settles_with_validator_without_bond() {
 		new_test_ext().execute_with(|| {
 			setup();
+			let mut settled = vec![];
 			distribute::<Test>(EPOCH, &VALIDATOR, 100_000, |account, amount| {
-				assert_eq!((*account, amount), (VALIDATOR, 100_000));
+				settled.push((*account, amount));
 			});
+			assert_eq!(settled, vec![(VALIDATOR, 100_000)]);
 		});
 	}
 }
