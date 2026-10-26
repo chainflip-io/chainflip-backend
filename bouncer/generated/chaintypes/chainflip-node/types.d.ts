@@ -2023,7 +2023,7 @@ export type PalletCfFundingCall =
     }
   /**
    * Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
-   * process the deposit since those two are independant actions.
+   * process the deposit since those two are independent actions.
    **/
   | {
       name: 'ExecuteScCall';
@@ -2108,7 +2108,7 @@ export type PalletCfFundingCallLike =
     }
   /**
    * Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
-   * process the deposit since those two are independant actions.
+   * process the deposit since those two are independent actions.
    **/
   | {
       name: 'ExecuteScCall';
@@ -3439,9 +3439,16 @@ export type PalletCfThresholdSignatureCallLike =
     };
 
 export type PalletCfThresholdSignaturePalletConfigUpdate =
-  | { type: 'ThresholdSignatureResponseTimeout'; value: { newTimeout: number } }
-  | { type: 'KeygenResponseTimeout'; value: { newTimeout: number } }
-  | { type: 'KeygenSlashAmount'; value: { amountToSlash: bigint } };
+  | { type: 'KeygenSlashAmount'; value: { amountToSlash: bigint } }
+  | {
+      type: 'CeremonyStageTimeouts';
+      value: { timeouts: PalletCfThresholdSignatureCeremonyStageTimeouts };
+    };
+
+export type PalletCfThresholdSignatureCeremonyStageTimeouts = {
+  signingSecs: number;
+  keygenSecs: number;
+};
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -4787,10 +4794,6 @@ export type CfChainsRefundParametersChannelRefundParametersEncodedAddress = {
 };
 
 export type PalletCfSwappingPalletConfigUpdate =
-  | {
-      type: 'MaximumSwapAmount';
-      value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount?: bigint | undefined };
-    }
   | { type: 'SwapRetryDelay'; value: { delay: number } }
   | { type: 'FlipBuyInterval'; value: { interval: number } }
   | { type: 'SetMaxSwapRetryDuration'; value: { blocks: number } }
@@ -8846,14 +8849,6 @@ export type PalletCfTradingStrategyCallLike =
     };
 
 export type PalletCfTradingStrategyTradingStrategy =
-  | {
-      type: 'TickZeroCentered';
-      value: { spreadTick: number; baseAsset: CfPrimitivesChainsAssetsAnyAsset };
-    }
-  | {
-      type: 'SimpleBuySell';
-      value: { buyTick: number; sellTick: number; baseAsset: CfPrimitivesChainsAssetsAnyAsset };
-    }
   | {
       type: 'InventoryBased';
       value: {
@@ -14698,15 +14693,6 @@ export type PalletCfSwappingEvent =
       };
     }
   | {
-      name: 'SwapAmountConfiscated';
-      data: {
-        swapRequestId: CfPrimitivesSwapRequestId;
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        totalAmount: bigint;
-        confiscatedAmount: bigint;
-      };
-    }
-  | {
       name: 'SwapEgressIgnored';
       data: {
         swapRequestId: CfPrimitivesSwapRequestId;
@@ -19950,6 +19936,7 @@ export type CfeEventsThresholdSignatureRequest = {
   key: CfChainsEvmAggKey;
   signatories: Array<AccountId32>;
   payload: H256;
+  stageTimeoutSecs: number;
 };
 
 export type CfeEventsThresholdSignatureRequest002 = {
@@ -19958,6 +19945,7 @@ export type CfeEventsThresholdSignatureRequest002 = {
   key: CfChainsDotPolkadotAccountId;
   signatories: Array<AccountId32>;
   payload: CfChainsDotEncodedPolkadotPayload;
+  stageTimeoutSecs: number;
 };
 
 export type CfeEventsThresholdSignatureRequest003 = {
@@ -19966,12 +19954,14 @@ export type CfeEventsThresholdSignatureRequest003 = {
   key: CfChainsBtcAggKey;
   signatories: Array<AccountId32>;
   payload: Array<[CfChainsBtcPreviousOrCurrent, FixedBytes<32>]>;
+  stageTimeoutSecs: number;
 };
 
 export type CfeEventsKeygenRequest = {
   ceremonyId: bigint;
   epochIndex: number;
   participants: Array<AccountId32>;
+  stageTimeoutSecs: number;
 };
 
 export type CfeEventsKeyHandoverRequest = {
@@ -19982,6 +19972,7 @@ export type CfeEventsKeyHandoverRequest = {
   sharingParticipants: Array<AccountId32>;
   receivingParticipants: Array<AccountId32>;
   newKey: CfChainsBtcAggKey;
+  stageTimeoutSecs: number;
 };
 
 export type CfeEventsTxBroadcastRequest = {
@@ -20008,6 +19999,7 @@ export type CfeEventsThresholdSignatureRequest004 = {
   key: SolPrimAddress;
   signatories: Array<AccountId32>;
   payload: SolPrimTransactionVersionedMessage;
+  stageTimeoutSecs: number;
 };
 
 export type CfeEventsTxBroadcastRequest004 = {

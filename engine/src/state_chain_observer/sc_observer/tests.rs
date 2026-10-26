@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use crate::{
 	btc::retry_rpc::mocks::MockBtcRetryRpcClient, dot::retry_rpc::mocks::MockDotRpcClient,
@@ -53,6 +53,8 @@ use multisig::{
 use engine_sc_client::{mocks::MockStateChainClient, stream_api::StreamApi, StateChainClient};
 
 use super::{crypto_compat::CryptoCompat, get_ceremony_id_counters_before_block};
+
+const STAGE_TIMEOUT: Duration = Duration::from_secs(7);
 
 async fn start_sc_observer<BlockStream: StreamApi<FINALIZED>>(
 	state_chain_client: MockStateChainClient,
@@ -181,9 +183,10 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 			eq(ceremony_id_2),
 			eq(BTreeSet::from_iter([our_account_id.clone()])),
 			eq(vec![(key_id.clone(), payload.clone())]),
+			eq(STAGE_TIMEOUT),
 		)
 		.once()
-		.return_once(|_, _, _| {
+		.return_once(|_, _, _, _| {
 			futures::future::ready(Err((
 				BTreeSet::new(),
 				SigningFailureReason::InvalidParticipants,
@@ -214,9 +217,10 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 			eq(ceremony_id_3),
 			eq(BTreeSet::from_iter([our_account_id.clone()])),
 			eq(vec![(key_id.clone(), payload.clone())]),
+			eq(STAGE_TIMEOUT),
 		)
 		.once()
-		.return_once(move |_, _, _| futures::future::ready(Ok(signatures_clone)).boxed());
+		.return_once(move |_, _, _, _| futures::future::ready(Ok(signatures_clone)).boxed());
 	state_chain_client
 		.expect_submit_unsigned_extrinsic()
 		.with(eq(pallet_cf_threshold_signature::Call::<Runtime, I>::signature_success {
@@ -237,6 +241,7 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 				ceremony_id_1,
 				BTreeSet::from_iter([not_our_account_id.clone()]),
 				vec![(key_id.clone(), payload.clone())],
+				STAGE_TIMEOUT,
 			)
 			.await;
 
@@ -249,6 +254,7 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 				ceremony_id_2,
 				BTreeSet::from_iter([our_account_id.clone()]),
 				vec![(key_id.clone(), payload.clone())],
+				STAGE_TIMEOUT,
 			)
 			.await;
 
@@ -261,6 +267,7 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 				ceremony_id_3,
 				BTreeSet::from_iter([our_account_id]),
 				vec![(key_id, payload)],
+				STAGE_TIMEOUT,
 			)
 			.await;
 
@@ -339,9 +346,10 @@ where
 			eq(next_ceremony_id),
 			eq(GENESIS_EPOCH),
 			eq(BTreeSet::from_iter([our_account_id.clone()])),
+			eq(STAGE_TIMEOUT),
 		)
 		.once()
-		.return_once(|_, _, _| {
+		.return_once(|_, _, _, _| {
 			futures::future::ready(Err((BTreeSet::new(), KeygenFailureReason::InvalidParticipants)))
 				.boxed()
 		});
@@ -356,6 +364,7 @@ where
 				first_ceremony_id,
 				GENESIS_EPOCH,
 				BTreeSet::from_iter([not_our_account_id.clone()]),
+				STAGE_TIMEOUT,
 			)
 			.await;
 
@@ -367,6 +376,7 @@ where
 				next_ceremony_id,
 				GENESIS_EPOCH,
 				BTreeSet::from_iter([our_account_id]),
+				STAGE_TIMEOUT,
 			)
 			.await;
 			Ok(())
@@ -433,9 +443,10 @@ where
 			eq(GENESIS_EPOCH + 1),
 			eq(BTreeSet::from_iter([our_account_id.clone()])),
 			eq(BTreeSet::from_iter([our_account_id.clone()])),
+			eq(STAGE_TIMEOUT),
 		)
 		.once()
-		.return_once(|_, _, _, _, _| {
+		.return_once(|_, _, _, _, _, _| {
 			futures::future::ready(Err((BTreeSet::new(), KeygenFailureReason::InvalidParticipants)))
 				.boxed()
 		});
@@ -465,6 +476,7 @@ where
 				BTreeSet::from_iter([not_our_account_id.clone()]),
 				key_to_share,
 				Default::default(),
+				STAGE_TIMEOUT,
 			)
 			.await;
 
@@ -480,6 +492,7 @@ where
 				BTreeSet::from_iter([our_account_id.clone()]),
 				key_to_share,
 				Default::default(),
+				STAGE_TIMEOUT,
 			)
 			.await;
 			Ok(())
@@ -569,6 +582,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 				key: Default::default(),
 				signatories: Default::default(),
 				payload: Default::default(),
+				stage_timeout_secs: 10,
 			}),
 			CfeEvent::<Runtime>::DotThresholdSignatureRequest(ThresholdSignatureRequest::<
 				Runtime,
@@ -579,6 +593,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 				key: Default::default(),
 				signatories: Default::default(),
 				payload: cf_chains::dot::EncodedPolkadotPayload(vec![]),
+				stage_timeout_secs: 10,
 			}),
 			CfeEvent::<Runtime>::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<
 				Runtime,
@@ -589,6 +604,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 				key: Default::default(),
 				signatories: Default::default(),
 				payload: Default::default(),
+				stage_timeout_secs: 10,
 			}),
 			CfeEvent::<Runtime>::SolThresholdSignatureRequest(ThresholdSignatureRequest::<
 				Runtime,
@@ -599,6 +615,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 				key: Default::default(),
 				signatories: Default::default(),
 				payload: Default::default(),
+				stage_timeout_secs: 10,
 			}),
 		],
 		// Test 2: 1 keygen request for each chain
@@ -607,21 +624,25 @@ async fn test_get_ceremony_id_counters_with_events() {
 				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
+				stage_timeout_secs: 30,
 			}),
 			CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
+				stage_timeout_secs: 30,
 			}),
 			CfeEvent::<Runtime>::BtcKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
+				stage_timeout_secs: 30,
 			}),
 			CfeEvent::<Runtime>::SolKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: SOL_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
+				stage_timeout_secs: 30,
 			}),
 		],
 		// Test 3: 1 key handover request for BTC (and keygen requests for the other chains to
@@ -631,11 +652,13 @@ async fn test_get_ceremony_id_counters_with_events() {
 				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
+				stage_timeout_secs: 30,
 			}),
 			CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
+				stage_timeout_secs: 30,
 			}),
 			CfeEvent::<Runtime>::BtcKeyHandoverRequest(KeyHandoverRequest::<Runtime, _> {
 				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
@@ -645,11 +668,13 @@ async fn test_get_ceremony_id_counters_with_events() {
 				sharing_participants: Default::default(),
 				receiving_participants: Default::default(),
 				new_key: cf_chains::btc::AggKey::default(),
+				stage_timeout_secs: 30,
 			}),
 			CfeEvent::<Runtime>::SolKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: SOL_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
+				stage_timeout_secs: 30,
 			}),
 		],
 	];

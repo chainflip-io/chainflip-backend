@@ -30,7 +30,7 @@ mod multisig_client_tests;
 
 pub mod ceremony_manager;
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, time::Duration};
 
 use cf_utilities::{format_iterator, threshold_from_share_count};
 
@@ -137,6 +137,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		ceremony_id: CeremonyId,
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
+		stage_timeout: Duration,
 	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
 	fn initiate_key_handover(
@@ -146,6 +147,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		epoch_index: EpochIndex,
 		sharing_participants: BTreeSet<AccountId>,
 		new_participants: BTreeSet<AccountId>,
+		stage_timeout: Duration,
 	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
 	fn initiate_signing(
@@ -153,6 +155,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
 		signing_info: Vec<(KeyId, C::SigningPayload)>,
+		stage_timeout: Duration,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
@@ -178,6 +181,7 @@ where
 pub struct KeygenRequestDetails<C: CryptoScheme> {
 	pub participants: BTreeSet<AccountId>,
 	pub rng: Rng,
+	pub stage_timeout: Duration,
 	pub result_sender: CeremonyResultSender<KeygenCeremony<C>>,
 	/// If not `None`, the participant will use an existing key share
 	/// in an attempt to re-share an existing key
@@ -192,6 +196,7 @@ where
 	pub participants: BTreeSet<AccountId>,
 	pub signing_info: Vec<(KeygenResultInfo<C>, C::SigningPayload)>,
 	pub rng: Rng,
+	pub stage_timeout: Duration,
 	pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
 }
 
@@ -224,6 +229,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClient<C, KeyStore> {
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
 		resharing_context: Option<ResharingContext<C::CryptoScheme>>,
+		stage_timeout: Duration,
 	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		use rand::SeedableRng;
 		let rng = Rng::from_entropy();
@@ -235,6 +241,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClient<C, KeyStore> {
 				details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails {
 					participants,
 					rng,
+					stage_timeout,
 					result_sender,
 					resharing_context,
 				})),
@@ -272,6 +279,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 		// The epoch the key will be associated with if successful.
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
+		stage_timeout: Duration,
 	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
 		let span =
@@ -283,9 +291,15 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 			"Received a keygen request"
 		);
 
-		self.start_keygen_with_resharing_context(ceremony_id, epoch_index, participants, None)
-			.instrument(span.clone())
-			.boxed()
+		self.start_keygen_with_resharing_context(
+			ceremony_id,
+			epoch_index,
+			participants,
+			None,
+			stage_timeout,
+		)
+		.instrument(span.clone())
+		.boxed()
 	}
 
 	fn initiate_key_handover(
@@ -295,6 +309,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 		epoch_index: EpochIndex,
 		sharing_participants: BTreeSet<AccountId>,
 		receiving_participants: BTreeSet<AccountId>,
+		stage_timeout: Duration,
 	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		let span =
 			info_span!("Key Handover Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
@@ -328,6 +343,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 			epoch_index,
 			sharing_participants.union(&receiving_participants).cloned().collect(),
 			Some(resharing_context),
+			stage_timeout,
 		)
 		.instrument(span.clone())
 		.boxed()
@@ -338,6 +354,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
 		signing_info: Vec<(KeyId, SigningPayload<C>)>,
+		stage_timeout: Duration,
 	) -> BoxFuture<'_, Result<Vec<Signature<C>>, (BTreeSet<AccountId>, SigningFailureReason)>> {
 		let span =
 			info_span!("Signing Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
@@ -372,6 +389,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 						participants: signers,
 						signing_info,
 						rng,
+						stage_timeout,
 						result_sender,
 					})),
 				})

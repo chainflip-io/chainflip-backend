@@ -231,7 +231,14 @@ fn lp_total_balances_sums_all_categories() {
 			credit_account(&LP, ASSET, STRATEGY_AMOUNT);
 			assert_ok!(TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
-				Strategy::TickZeroCentered { spread_tick: 1, base_asset: ASSET },
+				Strategy::OracleTracking {
+					min_buy_offset_tick: -10,
+					max_buy_offset_tick: 2,
+					min_sell_offset_tick: 2,
+					max_sell_offset_tick: 10,
+					base_asset: ASSET,
+					quote_asset: Asset::Usdc,
+				},
 				BTreeMap::from_iter([(ASSET, STRATEGY_AMOUNT)]),
 			));
 
