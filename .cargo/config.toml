@@ -93,6 +93,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0380: Wasmtime critical issue allowing sandbox escape through a user-controller wasm module. The runtime is not user controlled, so safe to ignore.
 # - RUSTSEC-2026-0381: webpki-roots bundles the distrusted emSign ECC root. 1.x is patched; the unpatched 0.25.4 comes from substrate's `libp2p-websocket`, which is only used by the opt-in libp2p network backend (the node defaults to litep2p), and then only to dial `/wss` peers.
 # - RUSTSEC-2026-0382: rustls-webpki accepts distrusted emSign intermediates. 0.103 is patched; the unpatched 0.101.7 is only in Cargo.lock via `libp2p-tls`, from substrate's optional `libp2p-quic`, and is never compiled.
+# - RUSTSEC-2026-0387: crypto-bigint timing variability in operations meant to be constant-time; only fixed in 0.7.6. Our 0.5.5 is pinned by `k256` 0.13 (substrate and ethers). The runtime and the node keystore never sign with `k256` (the host side of `sp-core` uses `secp256k1`), nor does threshold signing. The one secret it touches is each engine's own EVM/Tron broadcast key, via the ethers `LocalWallet`, and exploiting that needs local side-channel access to the validator host.
 
 #
 cf-audit = '''
@@ -153,6 +154,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0380
 	--ignore RUSTSEC-2026-0381
 	--ignore RUSTSEC-2026-0382
+	--ignore RUSTSEC-2026-0387
 '''
 
 [build]
