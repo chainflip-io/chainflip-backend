@@ -1563,6 +1563,61 @@ fn failed_ccm_is_stored() {
 }
 
 #[test]
+fn late_success_after_ccm_abort_clears_failed_call() {
+	new_test_ext().execute_with(|| {
+		let epoch = MockEpochInfo::epoch_index();
+		let broadcast_id = 1;
+		let other_broadcast_id = 2;
+		// fail two broadcasts in the same
+		for id in [broadcast_id, other_broadcast_id] {
+			BroadcastActions::<Test, Instance1>::insert(id, BroadcastAction::CcmBroadcast);
+			EthereumIngressEgress::on_broadcast_aborted(id);
+		}
+
+		// late success for one of them
+		EthereumIngressEgress::on_broadcast_success(broadcast_id, 42);
+
+		// Check that the failure is removed and the other one is still there.
+		assert!(BroadcastActions::<Test, Instance1>::get(broadcast_id).is_none());
+		assert_eq!(
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
+			vec![FailedForeignChainCall {
+				broadcast_id: other_broadcast_id,
+				original_epoch: epoch
+			}]
+		);
+
+		// Late success for final one, that should clear the whole epoch's failed calls.
+		EthereumIngressEgress::on_broadcast_success(other_broadcast_id, 42);
+		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch));
+	});
+}
+
+#[test]
+fn late_success_clears_failed_ccm_resigned_in_next_epoch() {
+	new_test_ext().execute_with(|| {
+		let epoch = 1u32;
+		MockEpochInfo::set_epoch(epoch);
+		let broadcast_id = 1;
+		BroadcastActions::<Test, Instance1>::insert(broadcast_id, BroadcastAction::CcmBroadcast);
+		EthereumIngressEgress::on_broadcast_aborted(broadcast_id);
+
+		// The next epoch's on_finalize re-signs the call and moves it under the new epoch.
+		MockEpochInfo::set_epoch(epoch + 1);
+		EthereumIngressEgress::on_finalize(1);
+		assert_eq!(
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch + 1),
+			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
+		);
+
+		EthereumIngressEgress::on_broadcast_success(broadcast_id, 42);
+
+		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch));
+		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch + 1));
+	});
+}
+
+#[test]
 fn failed_ccm_is_recorded_on_repeated_aborts() {
 	new_test_ext().execute_with(|| {
 		let epoch = MockEpochInfo::epoch_index();
