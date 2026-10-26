@@ -545,6 +545,7 @@ pub type MigrationsForV2_3 = (
 	migrations::safe_mode::SafeModeMigration,
 	migrations::assethub_deposit_details::Migration,
 	migrations::assethub_elections::AssethubElectionsInit,
+	migrations::assethub_elections::ResetAssethubElections,
 	migrations::bsc_integration::BscElectionsInit,
 	migrations::bsc_integration::BscIngressEgressInit,
 	migrations::bsc_integration::BscChainstate,
