@@ -3816,12 +3816,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		destination: ForeignChainAddress,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, DispatchError> {
-		Ok(Self::schedule_egress(
+		let details = Self::schedule_egress(
 			asset,
 			amount,
 			destination.try_into().map_err(|_| Error::<T, I>::AssetMismatch)?,
 			None,
-		)?)
+		)?;
+		// `schedule_egress` skips its dust check in benchmark builds.
+		ensure!(!details.egress_amount.is_zero(), Error::<T, I>::BelowEgressDustLimit);
+		Ok(details)
 	}
 }
 
