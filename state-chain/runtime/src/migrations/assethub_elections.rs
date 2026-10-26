@@ -67,14 +67,20 @@ impl OnRuntimeUpgrade for AssethubElectionsInit {
 /// the encoding of most of the Assethub elections storage. Assethub elections aren't live on
 /// Berghain, so instead of translating the state we reset and re-initialize it on Perseverance and
 /// Sisyphos.
+///
+/// Gated on the target spec version rather than a storage version: migrations only run when the
+/// spec version changes, so this runs exactly once, on the upgrade to [`RESET_SPEC_VERSION`].
 pub struct ResetAssethubElections;
+
+const RESET_SPEC_VERSION: u32 = 2_03_03;
 
 impl OnRuntimeUpgrade for ResetAssethubElections {
 	fn on_runtime_upgrade() -> Weight {
-		if matches!(
-			genesis_hashes::genesis_hash::<Runtime>(),
-			genesis_hashes::PERSEVERANCE | genesis_hashes::SISYPHOS
-		) {
+		if crate::VERSION.spec_version == RESET_SPEC_VERSION &&
+			matches!(
+				genesis_hashes::genesis_hash::<Runtime>(),
+				genesis_hashes::PERSEVERANCE | genesis_hashes::SISYPHOS
+			) {
 			pallet_cf_elections::Pallet::<Runtime, AssethubInstance>::reset();
 			if let Err(err) =
 				pallet_cf_elections::Pallet::<Runtime, AssethubInstance>::internally_initialize(
@@ -83,7 +89,7 @@ impl OnRuntimeUpgrade for ResetAssethubElections {
 				log::error!("Failed to re-initialize Assethub elections after reset: {err:?}");
 			}
 		} else {
-			log::info!("Not on Perseverance or Sisyphos, skipping Assethub elections reset.");
+			log::info!("Skipping Assethub elections reset.");
 		}
 
 		Weight::zero()
@@ -96,10 +102,11 @@ impl OnRuntimeUpgrade for ResetAssethubElections {
 			SharedDataReferenceLifetime,
 		};
 
-		if matches!(
-			genesis_hashes::genesis_hash::<Runtime>(),
-			genesis_hashes::PERSEVERANCE | genesis_hashes::SISYPHOS
-		) {
+		if crate::VERSION.spec_version == RESET_SPEC_VERSION &&
+			matches!(
+				genesis_hashes::genesis_hash::<Runtime>(),
+				genesis_hashes::PERSEVERANCE | genesis_hashes::SISYPHOS
+			) {
 			let initial_state = crate::chainflip::witnessing::assethub_elections::initial_state();
 
 			frame_support::ensure!(
