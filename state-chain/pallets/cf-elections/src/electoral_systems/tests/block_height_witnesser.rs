@@ -16,7 +16,7 @@
 use crate::electoral_systems::{
 	block_height_witnesser::{
 		consensus::BlockHeightWitnesserConsensus,
-		primitives::{Header, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
+		primitives::{BHWVote, Header, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
 		state_machine::{BlockHeightWitnesser, VoteValidationError},
 		BHWTypes, ChainTypes, HeightWitnesserProperties,
 	},
@@ -27,6 +27,7 @@ use crate::electoral_systems::{
 };
 use cf_traits::hook_test_utils::EmptyHook;
 use cf_utilities::define_empty_struct;
+use frame_support::traits::{ConstU32, Get};
 
 define_empty_struct! { struct BHTypes; }
 
@@ -41,6 +42,8 @@ impl BHWTypes for BHTypes {
 	type BlockHeightChangeHook = EmptyHook;
 
 	type ReorgHook = EmptyHook;
+
+	type MaxVoteHeaders = ConstU32<4>;
 }
 
 const BHW_PROPERTIES_STARTUP: HeightWitnesserProperties<BHTypes> =
@@ -227,4 +230,27 @@ fn test_validate_vote_and_height() {
 			NonemptyContinuousHeadersError::continuous_heights
 		)
 	);
+}
+
+#[test]
+fn votes_are_bounded_on_decode() {
+	use codec::{Decode, Encode};
+
+	let headers = |n: u64| -> NonemptyContinuousHeaders<BHTypes> {
+		(5..5 + n)
+			.map(|height| Header { block_height: height, hash: height, parent_hash: height - 1 })
+			.collect::<Vec<_>>()
+			.into()
+	};
+	let max_vote_headers = <<BHTypes as BHWTypes>::MaxVoteHeaders as Get<u32>>::get() as u64;
+
+	let within_bound = headers(max_vote_headers);
+	let vote = BHWVote::<BHTypes>::try_from(within_bound.clone()).unwrap();
+	assert_eq!(vote.encode(), within_bound.encode());
+	assert_eq!(BHWVote::<BHTypes>::decode(&mut &within_bound.encode()[..]), Ok(vote.clone()));
+	assert_eq!(NonemptyContinuousHeaders::from(vote), within_bound);
+
+	let over_bound = headers(max_vote_headers + 1);
+	assert_eq!(BHWVote::<BHTypes>::try_from(over_bound.clone()), Err(over_bound.clone()));
+	assert!(BHWVote::<BHTypes>::decode(&mut &over_bound.encode()[..]).is_err());
 }

@@ -2570,16 +2570,6 @@ export interface ChainEvents extends GenericChainEvents {
       'BatchSwapFailed',
       { asset: CfPrimitivesChainsAssetsAnyAsset; direction: CfPrimitivesSwapLeg; amount: bigint }
     >;
-    SwapAmountConfiscated: GenericPalletEvent<
-      'Swapping',
-      'SwapAmountConfiscated',
-      {
-        swapRequestId: CfPrimitivesSwapRequestId;
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        totalAmount: bigint;
-        confiscatedAmount: bigint;
-      }
-    >;
     SwapEgressIgnored: GenericPalletEvent<
       'Swapping',
       'SwapEgressIgnored',
