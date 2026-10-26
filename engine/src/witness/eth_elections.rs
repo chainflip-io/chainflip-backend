@@ -75,7 +75,7 @@ use pallet_cf_elections::{
 	},
 	ElectoralSystemTypes, VoteOf,
 };
-use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
+use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall, ScCallBytes};
 use sp_core::{H160, H256};
 use state_chain_runtime::{
 	chainflip::witnessing::ethereum_elections::{
@@ -314,6 +314,19 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScGatewayEvent>>
 }
 
 // --- sc utils witnessing ---
+/// The runtime rejects calls longer than `MAX_SC_CALL_LENGTH`. A longer call is dropped, but the
+/// deposit is still witnessed so the funds are credited. Every engine must apply the same rule for
+/// the votes to agree.
+fn bounded_sc_call(sc_call: &[u8]) -> ScCallBytes {
+	sc_call.to_vec().try_into().unwrap_or_else(|_| {
+		tracing::warn!(
+			"Dropping SC Utils call of {} bytes, which exceeds the limit.",
+			sc_call.len()
+		);
+		Default::default()
+	})
+}
+
 #[derive(Clone)]
 pub struct EthereumScUtilsWitnessingConfig {
 	sc_utils: EvmEventSource<ScUtilsEvents>,
@@ -357,7 +370,7 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 						deposit: EthereumDeposit::FlipToSCGateway {
 							amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 						},
-						call: sc_call.to_vec(),
+						call: bounded_sc_call(&sc_call),
 					},
 					caller: sender,
 					// use 0 padded ethereum address as account_id which the flip funds
@@ -383,7 +396,7 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 									asset: *asset,
 									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 								},
-								call: sc_call.to_vec(),
+								call: bounded_sc_call(&sc_call),
 							},
 							caller: sender,
 							// use 0 padded ethereum address as account_id which the
@@ -415,7 +428,7 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 									destination: to,
 								},
-								call: sc_call.to_vec(),
+								call: bounded_sc_call(&sc_call),
 							},
 							caller: sender,
 							// use 0 padded ethereum address as account_id which the
@@ -432,7 +445,7 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 					.push(ScUtilsCall {
 						deposit_and_call: EthereumDepositAndSCCall {
 							deposit: EthereumDeposit::NoDeposit,
-							call: sc_call.to_vec(),
+							call: bounded_sc_call(&sc_call),
 						},
 						caller: sender,
 						// use 0 padded ethereum address as account_id which the
