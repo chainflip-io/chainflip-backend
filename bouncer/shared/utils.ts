@@ -1003,31 +1003,41 @@ export async function observeEVMEvent(
     if (stopObserve()) return undefined;
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
-      const events = await contract.getPastEvents(eventName, {
-        fromBlock: initBlockNumber,
-        toBlock: currentBlockNumber,
-      });
-      for (let j = 0; j < events.length; j++) {
-        if (Object.keys(events[j].returnValues).length / 2 !== parameterNames.length)
-          throw new Error('Unexpected event length');
-        for (let k = 0; k < parameterNames.length; k++) {
-          // Allow for wildcard matching
-          if (
-            events[j].returnValues[k] !== eventParametersExpected[k] &&
-            eventParametersExpected[k] !== '*'
-          ) {
-            break;
-          } else if (k === parameterNames.length - 1) {
-            return {
-              name: events[j].event,
-              address: events[j].address,
-              txHash: events[j].transactionHash,
-              returnValues: events[j].returnValues,
-            };
+      let events;
+      try {
+        events = await contract.getPastEvents(eventName, {
+          fromBlock: initBlockNumber,
+          toBlock: currentBlockNumber,
+        });
+      } catch {
+        // Log queries up to the head can briefly fail while the node's log indexer catches up
+        // with block import (seen on BSC: "failed to retrieve log value pointer"). Leave
+        // initBlockNumber unchanged so the same range is retried on the next iteration.
+        events = undefined;
+      }
+      if (events) {
+        for (let j = 0; j < events.length; j++) {
+          if (Object.keys(events[j].returnValues).length / 2 !== parameterNames.length)
+            throw new Error('Unexpected event length');
+          for (let k = 0; k < parameterNames.length; k++) {
+            // Allow for wildcard matching
+            if (
+              events[j].returnValues[k] !== eventParametersExpected[k] &&
+              eventParametersExpected[k] !== '*'
+            ) {
+              break;
+            } else if (k === parameterNames.length - 1) {
+              return {
+                name: events[j].event,
+                address: events[j].address,
+                txHash: events[j].transactionHash,
+                returnValues: events[j].returnValues,
+              };
+            }
           }
         }
+        initBlockNumber = currentBlockNumber + 1;
       }
-      initBlockNumber = currentBlockNumber + 1;
     }
     await sleep(2500);
   }
