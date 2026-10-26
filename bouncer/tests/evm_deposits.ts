@@ -531,6 +531,7 @@ export async function dotestEvmDeposits<A = []>(
     parentCf.all([
       (subcf) => testTxMultipleVaultSwaps(subcf, 'Eth', 'Flip'),
       (subcf) => testTxMultipleVaultSwaps(subcf, 'ArbEth', 'Flip'),
+      (subcf) => testTxMultipleVaultSwaps(subcf, 'Bnb', 'Flip'),
       // Disabled: we don't support vault swaps triggered via contract.
       // (subcf) => testTronTxMultipleVaultSwaps(subcf, 'Trx', 'ArbEth'),
       // (subcf) => testTronTxMultipleVaultSwaps(subcf, 'TrxUsdt', 'Usdc'),

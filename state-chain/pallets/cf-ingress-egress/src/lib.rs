@@ -409,7 +409,7 @@ pub enum BroadcastAction<ChainAccount> {
 	/// On success: finalise fetch for these deposit addresses.
 	/// On abort: no-op.
 	FinaliseFetch(Vec<ChainAccount>),
-	/// On success: no-op.
+	/// On success: clear any failed foreign chain call recorded by an earlier abort.
 	/// On abort: record as a failed foreign chain call.
 	CcmBroadcast,
 }
@@ -935,7 +935,9 @@ pub mod pallet {
 	// pallet.
 	//
 	// This value is mirrored to the `safety_margin` setting of all ingress related BlockWitnesser
-	// instances in the respective elections pallet.
+	// instances in the respective elections pallet. For chains witnessed in block ranges (e.g. Bsc)
+	// the unit is therefore ranges, not blocks, and it must stay below the BlockWitnesser's
+	// `safety_buffer`, otherwise block data is pruned before it is ever processed.
 	//
 	// Legacy witnessing (only used for Assethub): Determines the number of block confirmations
 	// required for a block on an external chain before CFE can submit any witness extrinsics for
@@ -4018,7 +4020,23 @@ impl<T: Config<I>, I: 'static> cf_traits::BroadcastOutcomeHandler<T::TargetChain
 					}
 				},
 				BroadcastAction::CcmBroadcast => {
-					// No success action for CCM broadcasts
+					// A success witness can arrive after the broadcast was aborted (an earlier
+					// attempt landed late), so drop any failed-call record left by the abort.
+					// Records live under the epoch they failed in, or the next one once re-signed.
+					let current_epoch = T::EpochInfo::epoch_index();
+					for epoch in [current_epoch.saturating_sub(1), current_epoch] {
+						let mut calls = FailedForeignChainCalls::<T, I>::get(epoch);
+						let len_before = calls.len();
+						calls.retain(|call| call.broadcast_id != broadcast_id);
+						// Only write when something was removed: this runs on every CCM success.
+						if calls.len() != len_before {
+							if calls.is_empty() {
+								FailedForeignChainCalls::<T, I>::remove(epoch);
+							} else {
+								FailedForeignChainCalls::<T, I>::insert(epoch, calls);
+							}
+						}
+					}
 				},
 			}
 		}
