@@ -70,7 +70,10 @@ impl DotRetryRpcClient {
 		let backup_rpc_client = nodes.backup.map(f_create_client).transpose()?;
 
 		Ok(DotRetryRpcClient {
-			rpc_retry_client: RetrierClient::new(
+			// Requests are made from within nested witnessing streams, which can stop polling a
+			// request after its first poll. A small request capacity would let such a request block
+			// all others indefinitely.
+			rpc_retry_client: RetrierClient::new_with_request_capacity(
 				scope,
 				"hub_rpc",
 				futures::future::ready(rpc_client),
@@ -78,6 +81,7 @@ impl DotRetryRpcClient {
 				POLKADOT_RPC_TIMEOUT,
 				MAX_RPC_RETRY_DELAY,
 				MAX_CONCURRENT_SUBMISSIONS,
+				tokio::sync::Semaphore::MAX_PERMITS,
 			),
 		})
 	}
