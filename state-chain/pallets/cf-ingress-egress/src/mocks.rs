@@ -132,6 +132,7 @@ impl Config<Instance1> for Test {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	const RE_SIGN_FAILED_CALLS: bool = true;
 	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Self>>;
 	type AddressDerivation = MockAddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -168,6 +169,7 @@ impl Config<Instance2> for Test {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Self>>;
 	type AddressDerivation = MockAddressDerivation;
 	type DepositChannelFreshness = MockBtcChannelFreshness;
@@ -207,6 +209,7 @@ impl Config<Instance3> for Test {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = false;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Self>>;
 	type AddressDerivation = MockAddressDerivation;
 	type DepositChannelFreshness = MockBtcChannelFreshness;

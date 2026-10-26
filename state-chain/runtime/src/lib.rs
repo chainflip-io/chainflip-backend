@@ -527,6 +527,17 @@ mod test {
 		);
 	}
 
+	#[test]
+	fn failed_calls_are_not_re_signed_on_non_evm_chains() {
+		use pallet_cf_ingress_egress::Config;
+		const {
+			assert!(!<Runtime as Config<PolkadotInstance>>::RE_SIGN_FAILED_CALLS);
+			assert!(!<Runtime as Config<BitcoinInstance>>::RE_SIGN_FAILED_CALLS);
+			assert!(!<Runtime as Config<SolanaInstance>>::RE_SIGN_FAILED_CALLS);
+			assert!(!<Runtime as Config<AssethubInstance>>::RE_SIGN_FAILED_CALLS);
+		}
+	}
+
 	// Introduced from polkadot
 	#[test]
 	fn call_size() {

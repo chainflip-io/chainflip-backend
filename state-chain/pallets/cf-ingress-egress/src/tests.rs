@@ -48,7 +48,9 @@ use cf_primitives::{
 	Beneficiary, ChannelId, DcaParameters, ForeignChain, PrewitnessedDepositId, SwapRequestId,
 	FLIPPERINOS_PER_FLIP, MAX_AFFILIATES, SWAP_DELAY_BLOCKS,
 };
-use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
+use cf_test_utilities::{
+	assert_events_eq, assert_has_event, assert_has_matching_event, assert_no_matching_event,
+};
 use cf_traits::{
 	mocks::{
 		self,
@@ -1720,6 +1722,43 @@ fn on_finalize_handles_failed_calls() {
 		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch));
 		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch + 1));
 		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch + 2));
+	});
+}
+
+#[test]
+fn failed_calls_are_not_re_signed_if_disabled() {
+	new_test_ext().execute_with(|| {
+		// The Bitcoin instance is configured with `RE_SIGN_FAILED_CALLS = false`.
+		const { assert!(!<Test as crate::Config<Instance2>>::RE_SIGN_FAILED_CALLS) };
+
+		let epoch = 1u32;
+		MockEpochInfo::set_epoch(epoch);
+		let broadcast_id = 1;
+		BroadcastActions::<Test, Instance2>::insert(broadcast_id, BroadcastAction::CcmBroadcast);
+		BitcoinIngressEgress::on_broadcast_aborted(broadcast_id);
+
+		// The call is carried over into the next epoch without being re-signed.
+		MockEpochInfo::set_epoch(epoch + 1);
+		BitcoinIngressEgress::on_finalize(1);
+		assert_eq!(MockEgressBroadcasterBtc::resigned_call(), None);
+		assert_no_matching_event!(
+			Test,
+			RuntimeEvent::BitcoinIngressEgress(Event::FailedForeignChainCallResigned { .. })
+		);
+		assert!(!FailedForeignChainCalls::<Test, Instance2>::contains_key(epoch));
+		assert_eq!(
+			FailedForeignChainCalls::<Test, Instance2>::get(epoch + 1),
+			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
+		);
+
+		// And still expires on schedule.
+		MockEpochInfo::set_epoch(epoch + 2);
+		BitcoinIngressEgress::on_finalize(2);
+		System::assert_last_event(RuntimeEvent::BitcoinIngressEgress(
+			Event::FailedForeignChainCallExpired { broadcast_id },
+		));
+		assert!(!FailedForeignChainCalls::<Test, Instance2>::contains_key(epoch + 1));
+		assert!(BroadcastActions::<Test, Instance2>::get(broadcast_id).is_none());
 	});
 }
 

@@ -787,6 +787,15 @@ pub mod pallet {
 		/// If true, pre-allocated channels will only be taken from the pool of recycled channels.
 		const ONLY_PREALLOCATE_FROM_POOL: bool;
 
+		/// If true, failed calls are re-signed with the new key in the epoch after they failed,
+		/// keeping their original nonce.
+		///
+		/// Only safe where the nonce persists across rotations (e.g. the EVM KeyManager's
+		/// used-nonce set), so the original and the re-signed call are mutually exclusive. Must
+		/// be false where the nonce is per key and resets on rotation (e.g. Assethub proxy
+		/// accounts), since both calls could then execute.
+		const RE_SIGN_FAILED_CALLS: bool;
+
 		/// A hook to tell witnesses to start witnessing an opened channel.
 		type IngressSource: IngressSource<
 			Chain = Self::TargetChain,
@@ -1507,6 +1516,10 @@ pub mod pallet {
 						Self::deposit_event(Event::<T, I>::FailedForeignChainCallExpired {
 							broadcast_id: call.broadcast_id,
 						});
+					},
+					// Not re-signed, but carried over so it expires on schedule.
+					1 if !T::RE_SIGN_FAILED_CALLS => {
+						FailedForeignChainCalls::<T, I>::append(current_epoch, call);
 					},
 					// Previous epoch, signature is invalid. Re-sign but don't broadcast.
 					1 => match T::Broadcaster::re_sign_broadcast(call.broadcast_id, false, false) {
