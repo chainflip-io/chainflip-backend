@@ -108,6 +108,7 @@ build-localnet() {
 
   echo "🌞 Waiting for TRON node to start"
   check_endpoint_health -s -X POST -H "Content-Type: application/json" http://localhost:8090/wallet/getnowblock >>$DEBUG_OUTPUT_DESTINATION
+  ./localnet/init/scripts/wait-for-tron-peer.sh
 
   echo "🚦 Waiting for polkadot nodes to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9947') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
