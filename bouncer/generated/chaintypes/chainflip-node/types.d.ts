@@ -998,7 +998,7 @@ export type CfChainsEthEthereumTrackedData = { baseFee: bigint; priorityFee: big
 export type PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeVote =
   | {
       type: 'A';
-      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersEthereum;
+      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteEthereum;
     }
   | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessEthereum>, H256 | undefined] }
   | {
@@ -1032,11 +1032,10 @@ export type PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeVote =
       ];
     };
 
-export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersEthereum =
-  {
-    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderEthereum;
-    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderEthereum>;
-  };
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteEthereum = {
+  first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderEthereum;
+  headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderEthereum>;
+};
 
 export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderEthereum = {
   blockHeight: bigint;
@@ -1258,7 +1257,7 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositePartialVote
 export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVote =
   | {
       type: 'A';
-      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBitcoin;
+      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteBitcoin;
     }
   | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBitcoin>, H256 | undefined] }
   | { type: 'C'; value: [Array<PalletCfIngressEgressVaultDepositWitnessBitcoin>, H256 | undefined] }
@@ -1266,11 +1265,10 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVote =
   | { type: 'Ee'; value: bigint }
   | { type: 'Ff'; value: H256 };
 
-export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBitcoin =
-  {
-    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBitcoin;
-    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBitcoin>;
-  };
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteBitcoin = {
+  first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBitcoin;
+  headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBitcoin>;
+};
 
 export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBitcoin = {
   blockHeight: bigint;
@@ -1349,7 +1347,7 @@ export type PalletCfElectionsVoteStorageAuthorityVote004 =
     }
   | {
       type: 'Vote';
-      value: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteNonemptyContinuousHeadersArbitrum;
+      value: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteBhwVoteArbitrum;
     };
 
 export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositePartialVoteArbitrumTrackedData =
@@ -1363,35 +1361,33 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositePartialVote
 
 export type CfChainsArbArbitrumTrackedData = { baseFee: bigint; l1BaseFeeEstimate: bigint };
 
-export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteNonemptyContinuousHeadersArbitrum =
+export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteBhwVoteArbitrum =
+  | {
+      type: 'A';
+      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteArbitrum;
+    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined] }
+  | {
+      type: 'C';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventArbitrum>,
+        H256 | undefined,
+      ];
+    }
+  | {
+      type: 'D';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventArbitrum>,
+        H256 | undefined,
+      ];
+    }
+  | { type: 'Ee'; value: CfChainsArbArbitrumTrackedData }
+  | { type: 'Ff'; value: H256 };
 
-    | {
-        type: 'A';
-        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersArbitrum;
-      }
-    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined] }
-    | {
-        type: 'C';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventArbitrum>,
-          H256 | undefined,
-        ];
-      }
-    | {
-        type: 'D';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventArbitrum>,
-          H256 | undefined,
-        ];
-      }
-    | { type: 'Ee'; value: CfChainsArbArbitrumTrackedData }
-    | { type: 'Ff'; value: H256 };
-
-export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersArbitrum =
-  {
-    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderArbitrum;
-    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderArbitrum>;
-  };
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteArbitrum = {
+  first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderArbitrum;
+  headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderArbitrum>;
+};
 
 export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderArbitrum = {
   blockHeight: CfChainsWitnessPeriodBlockWitnessRange;
@@ -1629,7 +1625,7 @@ export type CfChainsDotRuntimeVersion = { specVersion: number; transactionVersio
 export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVote =
   | {
       type: 'A';
-      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub;
+      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteAssethub;
     }
   | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessAssethub>, H256 | undefined] }
   | {
@@ -1639,11 +1635,10 @@ export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVote =
   | { type: 'D'; value: CfChainsHubAssethubTrackedData }
   | { type: 'Ee'; value: H256 };
 
-export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub =
-  {
-    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub;
-    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub>;
-  };
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteAssethub = {
+  first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub;
+  headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub>;
+};
 
 export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub = {
   blockHeight: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
@@ -1683,7 +1678,7 @@ export type PalletCfElectionsVoteStorageAuthorityVote007 =
     }
   | {
       type: 'Vote';
-      value: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVoteNonemptyContinuousHeadersTron;
+      value: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVoteBhwVoteTron;
     };
 
 export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositePartialVoteSharedDataHash =
@@ -1693,34 +1688,29 @@ export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositePartialVote
   | { type: 'D'; value: PalletCfElectionsSharedDataHash }
   | { type: 'Ee'; value: H256 };
 
-export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVoteNonemptyContinuousHeadersTron =
+export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVoteBhwVoteTron =
+  | { type: 'A'; value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteTron }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessTron>, H256 | undefined] }
+  | {
+      type: 'C';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventTron>,
+        H256 | undefined,
+      ];
+    }
+  | {
+      type: 'D';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventTron>,
+        H256 | undefined,
+      ];
+    }
+  | { type: 'Ee'; value: H256 };
 
-    | {
-        type: 'A';
-        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersTron;
-      }
-    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessTron>, H256 | undefined] }
-    | {
-        type: 'C';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventTron>,
-          H256 | undefined,
-        ];
-      }
-    | {
-        type: 'D';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventTron>,
-          H256 | undefined,
-        ];
-      }
-    | { type: 'Ee'; value: H256 };
-
-export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersTron =
-  {
-    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderTron;
-    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderTron>;
-  };
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteTron = {
+  first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderTron;
+  headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderTron>;
+};
 
 export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderTron = {
   blockHeight: bigint;
@@ -1803,7 +1793,7 @@ export type PalletCfElectionsVoteStorageAuthorityVote008 =
     }
   | {
       type: 'Vote';
-      value: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteNonemptyContinuousHeadersBsc;
+      value: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteBhwVoteBsc;
     };
 
 export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositePartialVoteBscTrackedData =
@@ -1816,35 +1806,30 @@ export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositePartialVote
 
 export type CfChainsBscBscTrackedData = { priorityFee: bigint };
 
-export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteNonemptyContinuousHeadersBsc =
+export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeVoteBhwVoteBsc =
+  | { type: 'A'; value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteBsc }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined] }
+  | {
+      type: 'C';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventBsc>,
+        H256 | undefined,
+      ];
+    }
+  | {
+      type: 'D';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventBsc>,
+        H256 | undefined,
+      ];
+    }
+  | { type: 'Ee'; value: CfChainsBscBscTrackedData }
+  | { type: 'Ff'; value: H256 };
 
-    | {
-        type: 'A';
-        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBsc;
-      }
-    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined] }
-    | {
-        type: 'C';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventBsc>,
-          H256 | undefined,
-        ];
-      }
-    | {
-        type: 'D';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventBsc>,
-          H256 | undefined,
-        ];
-      }
-    | { type: 'Ee'; value: CfChainsBscBscTrackedData }
-    | { type: 'Ff'; value: H256 };
-
-export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBsc =
-  {
-    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBsc;
-    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBsc>;
-  };
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteBsc = {
+  first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBsc;
+  headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBsc>;
+};
 
 export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBsc = {
   blockHeight: CfChainsWitnessPeriodBlockWitnessRangeBsc;
@@ -9226,7 +9211,7 @@ export type PalletCfElectionsCallLike002 =
 export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedData =
   | {
       type: 'A';
-      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBitcoin;
+      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteBitcoin;
     }
   | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBitcoin>, H256 | undefined] }
   | { type: 'C'; value: [Array<PalletCfIngressEgressVaultDepositWitnessBitcoin>, H256 | undefined] }
@@ -9278,6 +9263,12 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBhw
         witnessFrom: bigint;
       };
     };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBitcoin =
+  {
+    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBitcoin;
+    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBitcoin>;
+  };
 
 export type StateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinBlockHeightWitnesser = {};
 
@@ -9932,7 +9923,7 @@ export type PalletCfElectionsCallLike004 =
 export type PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData =
   | {
       type: 'A';
-      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersEthereum;
+      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteEthereum;
     }
   | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessEthereum>, H256 | undefined] }
   | {
@@ -10007,6 +9998,12 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBhw
         witnessFrom: bigint;
       };
     };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersEthereum =
+  {
+    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderEthereum;
+    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderEthereum>;
+  };
 
 export type StateChainRuntimeChainflipWitnessingEthereumElectionsEthereumBlockHeightWitnesser = {};
 
@@ -10462,7 +10459,7 @@ export type PalletCfElectionsCall005 =
   | {
       name: 'ProvideSharedData';
       params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum;
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum;
       };
     }
   | { name: 'IgnoreMyVotes' }
@@ -10535,7 +10532,7 @@ export type PalletCfElectionsCallLike005 =
   | {
       name: 'ProvideSharedData';
       params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum;
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum;
       };
     }
   | { name: 'IgnoreMyVotes' }
@@ -10596,29 +10593,28 @@ export type PalletCfElectionsCallLike005 =
       };
     };
 
-export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum =
-
-    | {
-        type: 'A';
-        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersArbitrum;
-      }
-    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined] }
-    | {
-        type: 'C';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventArbitrum>,
-          H256 | undefined,
-        ];
-      }
-    | {
-        type: 'D';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventArbitrum>,
-          H256 | undefined,
-        ];
-      }
-    | { type: 'Ee'; value: [] }
-    | { type: 'Ff'; value: [] };
+export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum =
+  | {
+      type: 'A';
+      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteArbitrum;
+    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessArbitrum>, H256 | undefined] }
+  | {
+      type: 'C';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventArbitrum>,
+        H256 | undefined,
+      ];
+    }
+  | {
+      type: 'D';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventArbitrum>,
+        H256 | undefined,
+      ];
+    }
+  | { type: 'Ee'; value: [] }
+  | { type: 'Ff'; value: [] };
 
 export type PalletCfElectionsInitialState005 = {
   unsynchronisedState: [
@@ -10657,6 +10653,12 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBhw
         witnessFrom: CfChainsWitnessPeriodBlockWitnessRange;
       };
     };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersArbitrum =
+  {
+    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderArbitrum;
+    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderArbitrum>;
+  };
 
 export type StateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumBlockHeightWitnesser = {};
 
@@ -11438,10 +11440,7 @@ export type PalletCfElectionsCallLike006 =
     };
 
 export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData =
-  | {
-      type: 'A';
-      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersTron;
-    }
+  | { type: 'A'; value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteTron }
   | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessTron>, H256 | undefined] }
   | {
       type: 'C';
@@ -11494,6 +11493,12 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBhw
         witnessFrom: bigint;
       };
     };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersTron =
+  {
+    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderTron;
+    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderTron>;
+  };
 
 export type StateChainRuntimeChainflipWitnessingTronElectionsTronBlockHeightWitnesser = {};
 
@@ -12113,7 +12118,7 @@ export type PalletCfElectionsCall007 =
   | {
       name: 'ProvideSharedData';
       params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc;
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc;
       };
     }
   | { name: 'IgnoreMyVotes' }
@@ -12186,7 +12191,7 @@ export type PalletCfElectionsCallLike007 =
   | {
       name: 'ProvideSharedData';
       params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc;
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc;
       };
     }
   | { name: 'IgnoreMyVotes' }
@@ -12247,29 +12252,25 @@ export type PalletCfElectionsCallLike007 =
       };
     };
 
-export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc =
-
-    | {
-        type: 'A';
-        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBsc;
-      }
-    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined] }
-    | {
-        type: 'C';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventBsc>,
-          H256 | undefined,
-        ];
-      }
-    | {
-        type: 'D';
-        value: [
-          Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventBsc>,
-          H256 | undefined,
-        ];
-      }
-    | { type: 'Ee'; value: [] }
-    | { type: 'Ff'; value: [] };
+export type PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc =
+  | { type: 'A'; value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteBsc }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessBsc>, H256 | undefined] }
+  | {
+      type: 'C';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEventBsc>,
+        H256 | undefined,
+      ];
+    }
+  | {
+      type: 'D';
+      value: [
+        Array<StateChainRuntimeChainflipWitnessingPalletHooksEvmKeyManagerEventBsc>,
+        H256 | undefined,
+      ];
+    }
+  | { type: 'Ee'; value: [] }
+  | { type: 'Ff'; value: [] };
 
 export type PalletCfElectionsInitialState007 = {
   unsynchronisedState: [
@@ -12308,6 +12309,12 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBhw
         witnessFrom: CfChainsWitnessPeriodBlockWitnessRangeBsc;
       };
     };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersBsc =
+  {
+    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBsc;
+    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderBsc>;
+  };
 
 export type StateChainRuntimeChainflipWitnessingBscElectionsBscBlockHeightWitnesser = {};
 
@@ -12604,7 +12611,7 @@ export type PalletCfElectionsCall008 =
   | {
       name: 'ProvideSharedData';
       params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub;
       };
     }
   | { name: 'IgnoreMyVotes' }
@@ -12676,7 +12683,7 @@ export type PalletCfElectionsCallLike008 =
   | {
       name: 'ProvideSharedData';
       params: {
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub;
       };
     }
   | { name: 'IgnoreMyVotes' }
@@ -12736,19 +12743,18 @@ export type PalletCfElectionsCallLike008 =
       };
     };
 
-export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub =
-
-    | {
-        type: 'A';
-        value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub;
-      }
-    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessAssethub>, H256 | undefined] }
-    | {
-        type: 'C';
-        value: [Array<PalletCfBroadcastTransactionConfirmationAssethub>, H256 | undefined];
-      }
-    | { type: 'D'; value: [] }
-    | { type: 'Ee'; value: [] };
+export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub =
+  | {
+      type: 'A';
+      value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteAssethub;
+    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessAssethub>, H256 | undefined] }
+  | {
+      type: 'C';
+      value: [Array<PalletCfBroadcastTransactionConfirmationAssethub>, H256 | undefined];
+    }
+  | { type: 'D'; value: [] }
+  | { type: 'Ee'; value: [] };
 
 export type PalletCfElectionsInitialState008 = {
   unsynchronisedState: [
@@ -12785,6 +12791,12 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBhw
         witnessFrom: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
       };
     };
+
+export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub =
+  {
+    first: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub;
+    headers: Array<PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub>;
+  };
 
 export type StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubBlockHeightWitnesser = {};
 
