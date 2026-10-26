@@ -3816,14 +3816,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		destination: ForeignChainAddress,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, DispatchError> {
-		let details = Self::schedule_egress(
+		Ok(Self::schedule_egress(
 			asset,
 			amount,
 			destination.try_into().map_err(|_| Error::<T, I>::AssetMismatch)?,
 			None,
-		)?;
-		ensure!(!details.egress_amount.is_zero(), Error::<T, I>::BelowEgressDustLimit);
-		Ok(details)
+		)?)
 	}
 }
 

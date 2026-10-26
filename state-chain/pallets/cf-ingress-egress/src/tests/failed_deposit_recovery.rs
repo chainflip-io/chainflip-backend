@@ -39,12 +39,12 @@ fn recovery_balance(asset: Asset) -> AssetAmount {
 	MockBalance::get_balance(&RECOVERY_ACCOUNT, asset)
 }
 
-fn scheduled_transfers() -> Vec<(EthAsset, AssetAmount, H160)> {
+fn scheduled_transfers() -> Vec<(EthAsset, AssetAmount, ForeignChainAddress)> {
 	ScheduledEgressFetchOrTransfer::<Test, Instance1>::get()
 		.into_iter()
 		.filter_map(|request| match request {
 			FetchOrTransfer::Transfer { asset, amount, destination_address, .. } =>
-				Some((asset, amount, destination_address)),
+				Some((asset, amount, ForeignChainAddress::Eth(destination_address))),
 			_ => None,
 		})
 		.collect()
@@ -78,7 +78,7 @@ fn egresses_to_the_refund_address() {
 		);
 		assert_eq!(
 			scheduled_transfers(),
-			vec![(EthAsset::Eth, AMOUNT - EGRESS_FEE, H160([7; 20]))]
+			vec![(EthAsset::Eth, AMOUNT - EGRESS_FEE, REFUND_ADDRESS)]
 		);
 		assert_eq!(recovery_balance(Asset::Eth), 0);
 	});
