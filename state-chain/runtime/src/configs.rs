@@ -338,6 +338,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	const RE_SIGN_FAILED_CALLS: bool = true;
 	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -370,6 +371,8 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	// Same immortal, fixed-nonce extrinsics as Assethub (see below).
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = DummyIngressSource<Polkadot, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -402,6 +405,8 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	// Bitcoin txs never need re-signing: the signature stays valid across rotations.
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = BtcDepositChannelFreshness;
@@ -434,6 +439,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	const RE_SIGN_FAILED_CALLS: bool = true;
 	type IngressSource = DummyIngressSource<Arbitrum, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -466,6 +472,8 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = false;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	// A plain re-sign keeps the old key as signer in the message, so it can never be valid.
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = SolanaIngress;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -498,6 +506,9 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	// Extrinsics are immortal and keep their nonce when re-signed, so a re-signed copy of a call
+	// that actually landed could be submitted later for a second payout.
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = DummyIngressSource<Assethub, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -530,6 +541,7 @@ impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	const RE_SIGN_FAILED_CALLS: bool = true;
 	type IngressSource = DummyIngressSource<Tron, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -562,6 +574,7 @@ impl pallet_cf_ingress_egress::Config<Instance8> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	const RE_SIGN_FAILED_CALLS: bool = true;
 	type IngressSource = DummyIngressSource<Bsc, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
