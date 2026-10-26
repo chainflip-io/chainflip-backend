@@ -29,6 +29,7 @@ use sc_client_api::{Backend, BlockBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 use sc_consensus_grandpa::{GrandpaPruningFilter, SharedVoterState};
 use sc_keystore::Keystore;
+use sc_rpc::SubscriptionTaskExecutor;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpSyncConfig};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
@@ -310,7 +311,7 @@ pub fn new_full<
 			log::info!("🗝️ Lp key found in the keystore, enabling LP-related RPCs");
 		}
 
-		Box::new(move |subscription_executor: Arc<dyn sp_core::traits::SpawnNamed>| {
+		Box::new(move |subscription_executor: SubscriptionTaskExecutor| {
 			let build = || {
 				let mut module = RpcModule::new(());
 
