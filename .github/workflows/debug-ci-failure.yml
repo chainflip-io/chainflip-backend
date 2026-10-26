@@ -73,7 +73,7 @@ jobs:
             -c "SELECT name, COUNT(*) FROM event GROUP BY name ORDER BY count DESC LIMIT 5"
 
       - name: Run Claude Code debugger
-        uses: anthropics/claude-code-action@6c690188da61cf16ee7debb28383ba67f02abb4c # v1.0.242
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         with:
           anthropic_api_key: ${{ secrets.CF_PROTOCOL_ANTHROPIC_API_KEY }}
           claude_args: >-
