@@ -2230,6 +2230,7 @@ dependencies = [
  "sc-keystore",
  "sc-network",
  "sc-offchain",
+ "sc-rpc",
  "sc-rpc-api",
  "sc-rpc-spec-v2",
  "sc-service",
