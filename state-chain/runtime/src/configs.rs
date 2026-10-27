@@ -143,24 +143,9 @@ parameter_types! {
 /// `pallet_transaction_payment::ChargeTransactionPayment`.
 pub struct GetTransactionPayments;
 
-impl
-	Get<(
-		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-		pallet_transaction_payment::Val<Runtime>,
-	)> for GetTransactionPayments
-{
-	fn get() -> (
-		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-		pallet_transaction_payment::Val<Runtime>,
-	) {
-		(
-			pallet_transaction_payment::ChargeTransactionPayment::from(Default::default()),
-			// Used as a default value for the implicit parameter in transaction payment validation
-			// for non-native signed calls. This parameter is currently ignored, pending
-			// replacement of the current legacy implementation with TransactionExtension based
-			// validation.
-			pallet_transaction_payment::Val::NoCharge,
-		)
+impl Get<pallet_transaction_payment::ChargeTransactionPayment<Runtime>> for GetTransactionPayments {
+	fn get() -> pallet_transaction_payment::ChargeTransactionPayment<Runtime> {
+		pallet_transaction_payment::ChargeTransactionPayment::from(Default::default())
 	}
 }
 

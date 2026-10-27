@@ -144,7 +144,7 @@ pub mod pallet {
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::{
 		dispatch::{DispatchInfo, PostDispatchInfo},
-		sp_runtime::traits::{Dispatchable, TransactionExtension},
+		sp_runtime::traits::{Dispatchable, TransactionExtension, TxBaseImplication},
 		traits::OriginTrait,
 		DefaultNoBound,
 	};
@@ -207,12 +207,7 @@ pub mod pallet {
 		type TransactionPayments: TransactionExtension<<Self as Config>::RuntimeCall, Implicit = ()>;
 
 		/// Required as a workaround because TransactionPayments doesn't implement Default.
-		type GetTransactionPayments: Get<(
-			Self::TransactionPayments,
-			<<Self as pallet::Config>::TransactionPayments as TransactionExtension<
-				<Self as Config>::RuntimeCall,
-			>>::Val,
-		)>;
+		type GetTransactionPayments: Get<Self::TransactionPayments>;
 
 		/// Pays out failed deposits to the recovery accounts of the brokers they are attributed to.
 		type FailedDepositRecovery: FailedDepositRecovery<
@@ -774,19 +769,25 @@ pub mod pallet {
 				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
 			// Pre-dispatch fee processing
-			let (fee_processor, val) = T::GetTransactionPayments::get();
+			let fee_processor = T::GetTransactionPayments::get();
 			let dispatch_info = chainflip_extrinsic.call.get_dispatch_info();
 			let len = chainflip_extrinsic.call.encoded_size();
 			// TODO: move this and unsigned validation into transaction extension and/or new
 			// AuthorizeCall extension.
-			let pre_dispatch_info = fee_processor
-				.prepare(
-					val,
-					&OriginTrait::signed(signer_account.clone()),
+			// `prepare` only withdraws the fee that `validate` computed, so both must run here.
+			let (_, val, signer_origin) = fee_processor
+				.validate(
+					<T as Config>::RuntimeOrigin::signed(signer_account.clone()),
 					&chainflip_extrinsic.call,
 					&dispatch_info,
 					len,
+					(),
+					&TxBaseImplication(()),
+					TransactionSource::InBlock,
 				)
+				.map_err(|_e| Error::<T>::FailedToProcessFee)?;
+			let pre_dispatch_info = fee_processor
+				.prepare(val, &signer_origin, &chainflip_extrinsic.call, &dispatch_info, len)
 				.map_err(|_e| Error::<T>::FailedToProcessFee)?;
 
 			// Dispatch the inner call
@@ -1238,7 +1239,7 @@ impl<T: Config> Pallet<T> {
 				frame_system::Account::<T>::contains_key(&signer_account),
 				InvalidTransaction::BadSigner
 			);
-			T::GetTransactionPayments::get().0.validate(
+			T::GetTransactionPayments::get().validate(
 				OriginTrait::signed(signer_account.clone()),
 				inner_call,
 				&inner_call.get_dispatch_info(),
