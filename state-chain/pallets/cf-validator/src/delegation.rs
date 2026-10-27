@@ -22,7 +22,10 @@ use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
-	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill, Saturating},
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, Zero},
+		Perquintill, Saturating,
+	},
 	traits::IsType,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -369,8 +372,17 @@ where
 		if authorities_to_reward.is_empty() {
 			return;
 		}
-		let per_authority_amount = total_amount / (authorities_to_reward.len() as u32).into();
 		let bond = HistoricalBonds::<T>::get(epoch_index);
+		if bond.is_zero() {
+			// Without a bond the validator/delegator split is meaningless. Settling nothing leaves
+			// the funds in the reserve for the next distribution.
+			cf_runtime_utilities::log_or_panic!(
+				"No bond recorded for epoch {}; skipping reward distribution.",
+				epoch_index
+			);
+			return;
+		}
+		let per_authority_amount = total_amount / (authorities_to_reward.len() as u32).into();
 
 		// Snapshots are registered for *all* operators at auction resolution, including those
 		// whose pooled stake didn't clear the bond: their last remaining validator is never
@@ -444,16 +456,25 @@ pub fn distribute<T: Config>(
 	total: T::Amount,
 	mut settle: impl FnMut(&T::AccountId, T::Amount),
 ) {
-	use frame_support::sp_runtime::traits::Zero;
 	if total.is_zero() {
 		return;
 	}
 
 	if let Some(operator) = ValidatorToOperator::<T>::get(epoch_index, validator) {
 		if let Some(snapshot) = DelegationSnapshots::<T>::get(epoch_index, &operator) {
-			snapshot
-				.distribute(total, HistoricalBonds::<T>::get(epoch_index))
-				.for_each(|(account, amount)| settle(account, amount));
+			let bond = HistoricalBonds::<T>::get(epoch_index);
+			if bond.is_zero() {
+				settle(validator, total);
+				cf_runtime_utilities::log_or_panic!(
+					"No bond recorded for epoch {}. Settling directly with validator {:?}.",
+					epoch_index,
+					validator
+				);
+			} else {
+				snapshot
+					.distribute(total, bond)
+					.for_each(|(account, amount)| settle(account, amount));
+			}
 		} else {
 			settle(validator, total);
 			cf_runtime_utilities::log_or_panic!(
