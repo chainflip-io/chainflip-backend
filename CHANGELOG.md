@@ -2,6 +2,23 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.20] - 2026-10-27
+
+### Features
+
+- Broker recovery accounts: a broker can link an LP account as its recovery account (`link_recovery_account`, also in the broker API and RPC). Governance can then recover failed deposits attributed to the broker with `recover_failed_deposits`. Each deposit is egressed to the LP's refund address, or credited to the LP's balance if it has none or the amount doesn't cover the egress fee.
+
+### Fixes
+
+- Only mark a deposit channel as pending once its fetch or deployment transaction has been built, so a failed rejection refund can no longer leave the channel pending.
+- Don't create a Bitcoin change output below the 600 sat dust limit when consolidating. If the inputs can't cover the fee and leave enough change, consolidation is skipped and the inputs return to the pool.
+- Engine: update the Assethub metadata for the Asset Hub 2.5.1 runtime upgrade.
+
+### Dependencies
+
+- Move the ethers fork to reqwest 0.12, which drops reqwest 0.11 and rustls 0.21 from the tree.
+- Security updates flagged by `cargo audit`: rustls 0.23.46, rustls-webpki 0.103.16, webpki-roots / webpki-root-certs 1.0.10 (distrusted emSign roots), quinn-proto 0.11.18, tokio 1.51.6 and zstd-sys 2.1.2.
+
 ## [2.2.19] - 2026-10-14
 
 ### Fixes
