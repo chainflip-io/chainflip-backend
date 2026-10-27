@@ -2,6 +2,22 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.21] - 2026-10-30
+
+### Features
+
+- Governance can delay the refund of rejected deposits by up to 600 State Chain blocks (`SetRejectionDelay`).
+
+### Fixes
+
+- Only re-sign failed calls on EVM chains, so an aborted Assethub call can't be paid out a second time.
+- Charge the transaction fee for non-native signed calls.
+- Don't let a delegator shed its bond before the next rotation: LPs can't deregister while bonded, brokers can't delegate, delegators can't register as brokers, and a bonded account can't open a private BTC channel.
+
+### Dependencies
+
+- Security update flagged by `cargo audit`: libz-sys 1.1.31.
+
 ## [2.2.20] - 2026-10-27
 
 ### Features
