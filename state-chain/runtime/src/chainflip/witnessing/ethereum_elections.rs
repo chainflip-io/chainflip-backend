@@ -89,6 +89,11 @@ impl ChainTypes for EthereumChain {
 	const NAME: &'static str = "Ethereum";
 }
 
+impl evm::EvmWitnessingConfig for EthereumChain {
+	const WITNESS_FINALIZED_BLOCKS: bool = ETHEREUM_WITNESS_FINALIZED_BLOCKS;
+}
+
+pub const ETHEREUM_WITNESS_FINALIZED_BLOCKS: bool = false;
 pub const ETHEREUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 pub const ETHEREUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 

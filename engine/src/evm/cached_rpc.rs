@@ -68,6 +68,8 @@ pub trait EvmRetryRpcApiWithResult: Clone {
 	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<Transaction>;
 
 	async fn get_block_number(&self) -> anyhow::Result<U64>;
+
+	async fn get_finalized_block_number(&self) -> anyhow::Result<U64>;
 }
 
 /// Tmp trait defined to allow having a finite retry impl (2 retries, one with main endpoint and
@@ -114,6 +116,7 @@ pub struct EvmCachingClient<Rpc: EvmRpcApi> {
 	query_price_feeds:
 		CachingRequest<(H160, Vec<H160>), (U256, U256, Vec<PriceFeedData>), EvmRetryRpcClient<Rpc>>,
 	get_block_number: CachingRequest<(), U64, EvmRetryRpcClient<Rpc>>,
+	get_finalized_block_number: CachingRequest<(), U64, EvmRetryRpcClient<Rpc>>,
 	gas_estimate_components: CachingRequest<(), (u64, u64, U256, U256), EvmRetryRpcClient<Rpc>>,
 
 	pub cache_invalidation_senders: Vec<mpsc::Sender<()>>,
@@ -171,6 +174,8 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 		>::new(scope, client.clone());
 		let (get_block_number, get_block_number_cache) =
 			CachingRequest::<(), U64, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
+		let (get_finalized_block_number, get_finalized_block_number_cache) =
+			CachingRequest::<(), U64, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
 		let (gas_estimate_components, gas_estimate_components_cache) =
 			CachingRequest::<(), (u64, u64, U256, U256), EvmRetryRpcClient<Rpc>>::new(
 				scope,
@@ -191,6 +196,7 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 			balances,
 			query_price_feeds,
 			get_block_number,
+			get_finalized_block_number,
 			gas_estimate_components,
 			cache_invalidation_senders: vec![
 				get_logs_cache,
@@ -206,6 +212,7 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 				balances_cache,
 				query_price_feeds_cache,
 				get_block_number_cache,
+				get_finalized_block_number_cache,
 				gas_estimate_components_cache,
 			],
 		}
@@ -329,6 +336,17 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 		self.get_block_number
 			.get_or_fetch(
 				Box::pin(move |client| Box::pin(async move { client.get_block_number().await })),
+				(),
+			)
+			.await
+	}
+
+	async fn get_finalized_block_number(&self) -> anyhow::Result<U64> {
+		self.get_finalized_block_number
+			.get_or_fetch(
+				Box::pin(move |client| {
+					Box::pin(async move { client.get_finalized_block_number().await })
+				}),
 				(),
 			)
 			.await
