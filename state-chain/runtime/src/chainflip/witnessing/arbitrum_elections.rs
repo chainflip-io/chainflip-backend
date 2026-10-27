@@ -89,6 +89,11 @@ impl ChainTypes for ArbitrumChain {
 	const NAME: &'static str = "Arbitrum";
 }
 
+impl evm::EvmWitnessingConfig for ArbitrumChain {
+	const WITNESS_FINALIZED_BLOCKS: bool = ARBITRUM_WITNESS_FINALIZED_BLOCKS;
+}
+
+pub const ARBITRUM_WITNESS_FINALIZED_BLOCKS: bool = false;
 pub const ARBITRUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 pub const ARBITRUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 
