@@ -5064,7 +5064,6 @@ export type PalletCfIngressEgressPalletConfigUpdateEthereum =
     }
   | { type: 'SetDepositChannelLifetimeEthereum'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginEthereum'; value: { margin: bigint } }
-  | { type: 'SetBoostDelayEthereum'; value: { delayBlocks: number } }
   | {
       type: 'SetMaximumPreallocatedChannelsEthereum';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
@@ -5208,7 +5207,6 @@ export type PalletCfIngressEgressPalletConfigUpdatePolkadot =
     }
   | { type: 'SetDepositChannelLifetimePolkadot'; value: { lifetime: number } }
   | { type: 'SetWitnessSafetyMarginPolkadot'; value: { margin: number } }
-  | { type: 'SetBoostDelayPolkadot'; value: { delayBlocks: number } }
   | {
       type: 'SetMaximumPreallocatedChannelsPolkadot';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
@@ -5355,7 +5353,6 @@ export type PalletCfIngressEgressPalletConfigUpdateBitcoin =
     }
   | { type: 'SetDepositChannelLifetimeBitcoin'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginBitcoin'; value: { margin: bigint } }
-  | { type: 'SetBoostDelayBitcoin'; value: { delayBlocks: number } }
   | {
       type: 'SetMaximumPreallocatedChannelsBitcoin';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
@@ -6024,7 +6021,6 @@ export type PalletCfIngressEgressPalletConfigUpdateArbitrum =
     }
   | { type: 'SetDepositChannelLifetimeArbitrum'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginArbitrum'; value: { margin: bigint } }
-  | { type: 'SetBoostDelayArbitrum'; value: { delayBlocks: number } }
   | {
       type: 'SetMaximumPreallocatedChannelsArbitrum';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
@@ -6580,7 +6576,6 @@ export type PalletCfIngressEgressPalletConfigUpdateSolana =
     }
   | { type: 'SetDepositChannelLifetimeSolana'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginSolana'; value: { margin: bigint } }
-  | { type: 'SetBoostDelaySolana'; value: { delayBlocks: number } }
   | {
       type: 'SetMaximumPreallocatedChannelsSolana';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
@@ -8745,7 +8740,6 @@ export type PalletCfIngressEgressPalletConfigUpdateAssethub =
     }
   | { type: 'SetDepositChannelLifetimeAssethub'; value: { lifetime: number } }
   | { type: 'SetWitnessSafetyMarginAssethub'; value: { margin: number } }
-  | { type: 'SetBoostDelayAssethub'; value: { delayBlocks: number } }
   | {
       type: 'SetMaximumPreallocatedChannelsAssethub';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
@@ -11265,7 +11259,6 @@ export type PalletCfIngressEgressPalletConfigUpdateTron =
     }
   | { type: 'SetDepositChannelLifetimeTron'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginTron'; value: { margin: bigint } }
-  | { type: 'SetBoostDelayTron'; value: { delayBlocks: number } }
   | {
       type: 'SetMaximumPreallocatedChannelsTron';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
@@ -12066,7 +12059,6 @@ export type PalletCfIngressEgressPalletConfigUpdateBsc =
     }
   | { type: 'SetDepositChannelLifetimeBsc'; value: { lifetime: bigint } }
   | { type: 'SetWitnessSafetyMarginBsc'; value: { margin: bigint } }
-  | { type: 'SetBoostDelayBsc'; value: { delayBlocks: number } }
   | {
       type: 'SetMaximumPreallocatedChannelsBsc';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
@@ -19160,8 +19152,7 @@ export type PalletCfIngressEgressBoostStatus =
       type: 'Boosted';
       value: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
-  | { type: 'NotBoosted' }
-  | { type: 'BoostPending'; value: { amount: bigint; processAtBlock: number } };
+  | { type: 'NotBoosted' };
 
 export type PalletCfIngressEgressFetchOrTransfer =
   | {
@@ -19218,77 +19209,6 @@ export type PalletCfIngressEgressTransactionRejectionDetailsEthereum = {
   depositDetails: CfChainsEvmDepositDetails;
   refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
 };
-
-export type PalletCfIngressEgressPendingPrewitnessedDepositEntry = {
-  boostStatusLookup: PalletCfIngressEgressBoostStatusLookup;
-  deposit: PalletCfIngressEgressPendingPrewitnessedDeposit;
-};
-
-export type PalletCfIngressEgressBoostStatusLookup =
-  | { type: 'Vault'; value: { txId: H256 } }
-  | { type: 'Channel'; value: { depositAddress: H160 } };
-
-export type PalletCfIngressEgressPendingPrewitnessedDeposit = {
-  blockHeight: bigint;
-  amount: bigint;
-  asset: CfPrimitivesChainsAssetsEthAsset;
-  depositDetails: CfChainsEvmDepositDetails;
-  depositAddress?: H160 | undefined;
-  action: PalletCfIngressEgressChannelActionCcmDepositMetadata;
-  boostFee: number;
-  channelId?: bigint | undefined;
-  origin: PalletCfIngressEgressDepositOrigin;
-};
-
-export type PalletCfIngressEgressChannelActionCcmDepositMetadata =
-  | {
-      type: 'Swap';
-      value: {
-        destinationAsset: CfPrimitivesChainsAssetsAnyAsset;
-        destinationAddress: CfChainsAddressForeignChainAddress;
-        brokerFees: Array<CfPrimitivesBeneficiary>;
-        channelMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-        refundParams: CfChainsRefundParametersChannelRefundParameters007;
-        dcaParams?: CfPrimitivesDcaParameters | undefined;
-      };
-    }
-  | {
-      type: 'LiquidityProvision';
-      value: {
-        lpAccount: AccountId32;
-        refundAddress: CfChainsAddressForeignChainAddress;
-        additionalAction?: CfTraitsAdditionalDepositAction | undefined;
-      };
-    }
-  | {
-      type: 'Refund';
-      value: {
-        reason: PalletCfIngressEgressRefundReason;
-        refundAddress: H160;
-        refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-      };
-    }
-  | { type: 'Unrefundable' };
-
-export type CfChainsRefundParametersChannelRefundParameters007 = {
-  retryDuration: number;
-  refundAddress: CfChainsAddressForeignChainAddress;
-  minPrice: CfAmmMathPrice;
-  refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-  maxOraclePriceSlippage?: number | undefined;
-};
-
-export type PalletCfIngressEgressDepositOrigin =
-  | {
-      type: 'DepositChannel';
-      value: {
-        depositAddress: H160;
-        channelId: bigint;
-        depositBlockHeight: bigint;
-        brokerId: AccountId32;
-      };
-    }
-  | { type: 'Vault'; value: { txId: H256; brokerId?: AccountId32 | undefined } };
 
 export type PalletCfIngressEgressBroadcastAction =
   | { type: 'FinaliseFetch'; value: Array<H160> }
@@ -19452,69 +19372,6 @@ export type PalletCfIngressEgressTransactionRejectionDetailsPolkadot = {
   refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
 };
 
-export type PalletCfIngressEgressPendingPrewitnessedDepositEntry002 = {
-  boostStatusLookup: PalletCfIngressEgressBoostStatusLookup002;
-  deposit: PalletCfIngressEgressPendingPrewitnessedDeposit002;
-};
-
-export type PalletCfIngressEgressBoostStatusLookup002 =
-  | { type: 'Vault'; value: { txId: CfPrimitivesTxId } }
-  | { type: 'Channel'; value: { depositAddress: CfChainsDotPolkadotAccountId } };
-
-export type PalletCfIngressEgressPendingPrewitnessedDeposit002 = {
-  blockHeight: number;
-  amount: bigint;
-  asset: CfPrimitivesChainsAssetsDotAsset;
-  depositDetails: number;
-  depositAddress?: CfChainsDotPolkadotAccountId | undefined;
-  action: PalletCfIngressEgressChannelAction004;
-  boostFee: number;
-  channelId?: bigint | undefined;
-  origin: PalletCfIngressEgressDepositOrigin002;
-};
-
-export type PalletCfIngressEgressChannelAction004 =
-  | {
-      type: 'Swap';
-      value: {
-        destinationAsset: CfPrimitivesChainsAssetsAnyAsset;
-        destinationAddress: CfChainsAddressForeignChainAddress;
-        brokerFees: Array<CfPrimitivesBeneficiary>;
-        channelMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-        refundParams: CfChainsRefundParametersChannelRefundParameters007;
-        dcaParams?: CfPrimitivesDcaParameters | undefined;
-      };
-    }
-  | {
-      type: 'LiquidityProvision';
-      value: {
-        lpAccount: AccountId32;
-        refundAddress: CfChainsAddressForeignChainAddress;
-        additionalAction?: CfTraitsAdditionalDepositAction | undefined;
-      };
-    }
-  | {
-      type: 'Refund';
-      value: {
-        reason: PalletCfIngressEgressRefundReason;
-        refundAddress: CfChainsDotPolkadotAccountId;
-        refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-      };
-    }
-  | { type: 'Unrefundable' };
-
-export type PalletCfIngressEgressDepositOrigin002 =
-  | {
-      type: 'DepositChannel';
-      value: {
-        depositAddress: CfChainsDotPolkadotAccountId;
-        channelId: bigint;
-        depositBlockHeight: bigint;
-        brokerId: AccountId32;
-      };
-    }
-  | { type: 'Vault'; value: { txId: CfPrimitivesTxId; brokerId?: AccountId32 | undefined } };
-
 export type PalletCfIngressEgressBroadcastActionPolkadotAccountId =
   | { type: 'FinaliseFetch'; value: Array<CfChainsDotPolkadotAccountId> }
   | { type: 'CcmBroadcast' };
@@ -19565,8 +19422,7 @@ export type PalletCfIngressEgressBoostStatusU64 =
       type: 'Boosted';
       value: { prewitnessedDepositId: CfPrimitivesPrewitnessedDepositId; amount: bigint };
     }
-  | { type: 'NotBoosted' }
-  | { type: 'BoostPending'; value: { amount: bigint; processAtBlock: number } };
+  | { type: 'NotBoosted' };
 
 export type PalletCfIngressEgressFetchOrTransferBitcoin =
   | {
@@ -19610,69 +19466,6 @@ export type PalletCfIngressEgressTransactionRejectionDetailsBitcoin = {
   depositDetails: CfChainsBtcUtxo;
   refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
 };
-
-export type PalletCfIngressEgressPendingPrewitnessedDepositEntry003 = {
-  boostStatusLookup: PalletCfIngressEgressBoostStatusLookup003;
-  deposit: PalletCfIngressEgressPendingPrewitnessedDeposit003;
-};
-
-export type PalletCfIngressEgressBoostStatusLookup003 =
-  | { type: 'Vault'; value: { txId: H256 } }
-  | { type: 'Channel'; value: { depositAddress: CfChainsBtcScriptPubkey } };
-
-export type PalletCfIngressEgressPendingPrewitnessedDeposit003 = {
-  blockHeight: bigint;
-  amount: bigint;
-  asset: CfPrimitivesChainsAssetsBtcAsset;
-  depositDetails: CfChainsBtcUtxo;
-  depositAddress?: CfChainsBtcScriptPubkey | undefined;
-  action: PalletCfIngressEgressChannelAction006;
-  boostFee: number;
-  channelId?: bigint | undefined;
-  origin: PalletCfIngressEgressDepositOrigin003;
-};
-
-export type PalletCfIngressEgressChannelAction006 =
-  | {
-      type: 'Swap';
-      value: {
-        destinationAsset: CfPrimitivesChainsAssetsAnyAsset;
-        destinationAddress: CfChainsAddressForeignChainAddress;
-        brokerFees: Array<CfPrimitivesBeneficiary>;
-        channelMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-        refundParams: CfChainsRefundParametersChannelRefundParameters007;
-        dcaParams?: CfPrimitivesDcaParameters | undefined;
-      };
-    }
-  | {
-      type: 'LiquidityProvision';
-      value: {
-        lpAccount: AccountId32;
-        refundAddress: CfChainsAddressForeignChainAddress;
-        additionalAction?: CfTraitsAdditionalDepositAction | undefined;
-      };
-    }
-  | {
-      type: 'Refund';
-      value: {
-        reason: PalletCfIngressEgressRefundReason;
-        refundAddress: CfChainsBtcScriptPubkey;
-        refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-      };
-    }
-  | { type: 'Unrefundable' };
-
-export type PalletCfIngressEgressDepositOrigin003 =
-  | {
-      type: 'DepositChannel';
-      value: {
-        depositAddress: CfChainsBtcScriptPubkey;
-        channelId: bigint;
-        depositBlockHeight: bigint;
-        brokerId: AccountId32;
-      };
-    }
-  | { type: 'Vault'; value: { txId: H256; brokerId?: AccountId32 | undefined } };
 
 export type PalletCfIngressEgressBroadcastActionScriptPubkey =
   | { type: 'FinaliseFetch'; value: Array<CfChainsBtcScriptPubkey> }
@@ -20063,23 +19856,6 @@ export type PalletCfIngressEgressTransactionRejectionDetailsArbitrum = {
   refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
 };
 
-export type PalletCfIngressEgressPendingPrewitnessedDepositEntry004 = {
-  boostStatusLookup: PalletCfIngressEgressBoostStatusLookup;
-  deposit: PalletCfIngressEgressPendingPrewitnessedDeposit004;
-};
-
-export type PalletCfIngressEgressPendingPrewitnessedDeposit004 = {
-  blockHeight: bigint;
-  amount: bigint;
-  asset: CfPrimitivesChainsAssetsArbAsset;
-  depositDetails: CfChainsEvmDepositDetails;
-  depositAddress?: H160 | undefined;
-  action: PalletCfIngressEgressChannelActionCcmDepositMetadata;
-  boostFee: number;
-  channelId?: bigint | undefined;
-  origin: PalletCfIngressEgressDepositOrigin;
-};
-
 export type PalletCfVaultsVaultActivationStatus004 =
   | { type: 'AwaitingActivation'; value: { newPublicKey: SolPrimAddress } }
   | { type: 'Complete' }
@@ -20281,72 +20057,6 @@ export type PalletCfIngressEgressTransactionRejectionDetailsSolana = {
   depositDetails: CfChainsSolVaultSwapOrDepositChannelId;
   refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
 };
-
-export type PalletCfIngressEgressPendingPrewitnessedDepositEntry005 = {
-  boostStatusLookup: PalletCfIngressEgressBoostStatusLookup004;
-  deposit: PalletCfIngressEgressPendingPrewitnessedDeposit005;
-};
-
-export type PalletCfIngressEgressBoostStatusLookup004 =
-  | { type: 'Vault'; value: { txId: [SolPrimAddress, bigint] } }
-  | { type: 'Channel'; value: { depositAddress: SolPrimAddress } };
-
-export type PalletCfIngressEgressPendingPrewitnessedDeposit005 = {
-  blockHeight: bigint;
-  amount: bigint;
-  asset: CfPrimitivesChainsAssetsSolAsset;
-  depositDetails: CfChainsSolVaultSwapOrDepositChannelId;
-  depositAddress?: SolPrimAddress | undefined;
-  action: PalletCfIngressEgressChannelAction008;
-  boostFee: number;
-  channelId?: bigint | undefined;
-  origin: PalletCfIngressEgressDepositOrigin004;
-};
-
-export type PalletCfIngressEgressChannelAction008 =
-  | {
-      type: 'Swap';
-      value: {
-        destinationAsset: CfPrimitivesChainsAssetsAnyAsset;
-        destinationAddress: CfChainsAddressForeignChainAddress;
-        brokerFees: Array<CfPrimitivesBeneficiary>;
-        channelMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-        refundParams: CfChainsRefundParametersChannelRefundParameters007;
-        dcaParams?: CfPrimitivesDcaParameters | undefined;
-      };
-    }
-  | {
-      type: 'LiquidityProvision';
-      value: {
-        lpAccount: AccountId32;
-        refundAddress: CfChainsAddressForeignChainAddress;
-        additionalAction?: CfTraitsAdditionalDepositAction | undefined;
-      };
-    }
-  | {
-      type: 'Refund';
-      value: {
-        reason: PalletCfIngressEgressRefundReason;
-        refundAddress: SolPrimAddress;
-        refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-      };
-    }
-  | { type: 'Unrefundable' };
-
-export type PalletCfIngressEgressDepositOrigin004 =
-  | {
-      type: 'DepositChannel';
-      value: {
-        depositAddress: SolPrimAddress;
-        channelId: bigint;
-        depositBlockHeight: bigint;
-        brokerId: AccountId32;
-      };
-    }
-  | {
-      type: 'Vault';
-      value: { txId: [SolPrimAddress, bigint]; brokerId?: AccountId32 | undefined };
-    };
 
 export type PalletCfIngressEgressBroadcastActionAddress =
   | { type: 'FinaliseFetch'; value: Array<SolPrimAddress> }
@@ -20667,39 +20377,6 @@ export type PalletCfIngressEgressTransactionRejectionDetailsAssethub = {
   depositDetails: CfPrimitivesTxId;
   refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
 };
-
-export type PalletCfIngressEgressPendingPrewitnessedDepositEntry006 = {
-  boostStatusLookup: PalletCfIngressEgressBoostStatusLookup005;
-  deposit: PalletCfIngressEgressPendingPrewitnessedDeposit006;
-};
-
-export type PalletCfIngressEgressBoostStatusLookup005 =
-  | { type: 'Vault'; value: { txId: CfPrimitivesTxId } }
-  | { type: 'Channel'; value: { depositAddress: CfChainsDotPolkadotAccountId } };
-
-export type PalletCfIngressEgressPendingPrewitnessedDeposit006 = {
-  blockHeight: number;
-  amount: bigint;
-  asset: CfPrimitivesChainsAssetsHubAsset;
-  depositDetails: CfPrimitivesTxId;
-  depositAddress?: CfChainsDotPolkadotAccountId | undefined;
-  action: PalletCfIngressEgressChannelAction004;
-  boostFee: number;
-  channelId?: bigint | undefined;
-  origin: PalletCfIngressEgressDepositOrigin005;
-};
-
-export type PalletCfIngressEgressDepositOrigin005 =
-  | {
-      type: 'DepositChannel';
-      value: {
-        depositAddress: CfChainsDotPolkadotAccountId;
-        channelId: bigint;
-        depositBlockHeight: bigint;
-        brokerId: AccountId32;
-      };
-    }
-  | { type: 'Vault'; value: { txId: CfPrimitivesTxId; brokerId?: AccountId32 | undefined } };
 
 /**
  * The `Error` enum of this pallet.
@@ -21509,23 +21186,6 @@ export type PalletCfIngressEgressTransactionRejectionDetailsTron = {
   refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
 };
 
-export type PalletCfIngressEgressPendingPrewitnessedDepositEntry007 = {
-  boostStatusLookup: PalletCfIngressEgressBoostStatusLookup;
-  deposit: PalletCfIngressEgressPendingPrewitnessedDeposit007;
-};
-
-export type PalletCfIngressEgressPendingPrewitnessedDeposit007 = {
-  blockHeight: bigint;
-  amount: bigint;
-  asset: CfPrimitivesChainsAssetsTronAsset;
-  depositDetails: CfChainsEvmDepositDetails;
-  depositAddress?: H160 | undefined;
-  action: PalletCfIngressEgressChannelActionCcmDepositMetadata;
-  boostFee: number;
-  channelId?: bigint | undefined;
-  origin: PalletCfIngressEgressDepositOrigin;
-};
-
 export type PalletCfElectionsBitmapComponentsElectionBitmapComponentsTron = {
   epoch: number;
   bitmaps: Array<
@@ -21710,23 +21370,6 @@ export type PalletCfIngressEgressTransactionRejectionDetailsBsc = {
   amount: bigint;
   depositDetails: CfChainsEvmDepositDetails;
   refundCcmMetadata?: CfChainsCcmDepositMetadataDecodedCcmAdditionalData | undefined;
-};
-
-export type PalletCfIngressEgressPendingPrewitnessedDepositEntry008 = {
-  boostStatusLookup: PalletCfIngressEgressBoostStatusLookup;
-  deposit: PalletCfIngressEgressPendingPrewitnessedDeposit008;
-};
-
-export type PalletCfIngressEgressPendingPrewitnessedDeposit008 = {
-  blockHeight: bigint;
-  amount: bigint;
-  asset: CfPrimitivesChainsAssetsBscAsset;
-  depositDetails: CfChainsEvmDepositDetails;
-  depositAddress?: H160 | undefined;
-  action: PalletCfIngressEgressChannelActionCcmDepositMetadata;
-  boostFee: number;
-  channelId?: bigint | undefined;
-  origin: PalletCfIngressEgressDepositOrigin;
 };
 
 export type PalletCfElectionsBitmapComponentsElectionBitmapComponentsBsc = {

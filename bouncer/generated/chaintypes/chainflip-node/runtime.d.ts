@@ -1919,15 +1919,6 @@ export interface RuntimeApis extends GenericRuntimeApis {
 
     /**
      *
-     * @callname: CustomRuntimeApi_cf_boost_delay
-     * @param {CfPrimitivesChainsForeignChain} chain
-     **/
-    cfBoostDelay: GenericRuntimeApiMethod<
-      (chain: CfPrimitivesChainsForeignChain) => Promise<number>
-    >;
-
-    /**
-     *
      * @callname: CustomRuntimeApi_cf_boost_config
      **/
     cfBoostConfig: GenericRuntimeApiMethod<() => Promise<PalletCfLendingPoolsBoostConfiguration>>;
