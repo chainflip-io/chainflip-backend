@@ -70,9 +70,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          conclusion=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/ci-main-e2e.yml/runs?branch=main&event=push&status=completed&per_page=20" \
-            | jq -r '[.workflow_runs[] | select(.conclusion == "success" or .conclusion == "failure")][0].conclusion // empty')
+          page=1
+          conclusion=
+          while :; do
+            runs=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/ci-main-e2e.yml/runs?branch=main&event=push&status=completed&per_page=100&page=$page")
+            conclusion=$(jq -r '[.workflow_runs[] | select(.conclusion == "success" or .conclusion == "failure")][0].conclusion // empty' <<< "$runs")
+            if [ -n "$conclusion" ] || [ "$(jq '.workflow_runs | length' <<< "$runs")" -lt 100 ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
           echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
 
       - name: Notify on failed check 📢
