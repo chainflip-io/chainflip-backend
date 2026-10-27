@@ -266,6 +266,29 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn recover_failed_deposits(n: Linear<1, MAX_FAILED_DEPOSIT_RECOVERIES>) {
+		let broker: T::AccountId = account("broker", 0, 0);
+		T::FailedDepositRecovery::setup_benchmark(&broker);
+		let requests = (0..n)
+			.map(|i| FailedDepositRecoveryRequest {
+				broker: broker.clone(),
+				asset: Asset::Eth,
+				amount: 1_000_000_000_000_000_000,
+				reference: i.encode().try_into().unwrap(),
+			})
+			.collect::<Vec<_>>()
+			.try_into()
+			.unwrap();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let call = Call::<T>::recover_failed_deposits { requests };
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+	}
+
+	#[benchmark]
 	fn batch(c: Linear<0, 10>) {
 		let caller: T::AccountId = whitelisted_caller();
 		let calls = vec![frame_system::Call::remark { remark: vec![] }.into(); c as usize];

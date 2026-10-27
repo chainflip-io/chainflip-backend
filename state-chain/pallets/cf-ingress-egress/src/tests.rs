@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod boost;
+mod failed_deposit_recovery;
 mod screening;
 
 use crate::{

@@ -6,6 +6,7 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Features
 
+- Broker recovery accounts for failed deposits ([#6954](https://github.com/chainflip-io/chainflip-backend/issues/6954))
 - Witness finalized blocks for BSC ([#6969](https://github.com/chainflip-io/chainflip-backend/issues/6969))
 - Reset assethub election on perseverance and sisyphos ([#6972](https://github.com/chainflip-io/chainflip-backend/issues/6972))
 - Migration to set witness margin on running networks

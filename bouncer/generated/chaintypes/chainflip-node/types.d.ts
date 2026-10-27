@@ -480,6 +480,23 @@ export type PalletCfEnvironmentCall =
   | {
       name: 'UpdatePalletConfig';
       params: { updates: Array<PalletCfEnvironmentPalletConfigUpdate> };
+    }
+  /**
+   * Pays out failed deposits to the recovery accounts of the brokers they are attributed
+   * to: an egress to the recovery account's refund address if it has one and the amount
+   * covers the egress fee, otherwise a credit to its free balance.
+   *
+   * Each deposit is recovered independently. One that fails, e.g. because its broker has
+   * no recovery account, doesn't affect the others, and can be retried.
+   *
+   * Recoveries are not recorded, so Governance must not resubmit a deposit that has been
+   * recovered. The batch is rejected if it contains the same deposit twice.
+   *
+   * Requires Governance.
+   **/
+  | {
+      name: 'RecoverFailedDeposits';
+      params: { requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest> };
     };
 
 export type PalletCfEnvironmentCallLike =
@@ -603,6 +620,23 @@ export type PalletCfEnvironmentCallLike =
   | {
       name: 'UpdatePalletConfig';
       params: { updates: Array<PalletCfEnvironmentPalletConfigUpdate> };
+    }
+  /**
+   * Pays out failed deposits to the recovery accounts of the brokers they are attributed
+   * to: an egress to the recovery account's refund address if it has one and the amount
+   * covers the egress fee, otherwise a credit to its free balance.
+   *
+   * Each deposit is recovered independently. One that fails, e.g. because its broker has
+   * no recovery account, doesn't affect the others, and can be retried.
+   *
+   * Recoveries are not recorded, so Governance must not resubmit a deposit that has been
+   * recovered. The batch is rejected if it contains the same deposit twice.
+   *
+   * Requires Governance.
+   **/
+  | {
+      name: 'RecoverFailedDeposits';
+      params: { requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest> };
     };
 
 export type CfChainsDotPolkadotAccountId = FixedBytes<32>;
@@ -1899,6 +1933,13 @@ export type PalletCfVaultsVaultKeyRotatedExternallyBsc = {
 export type PalletCfEnvironmentPalletConfigUpdate = {
   type: 'ElectionVoteBatching';
   value: { disabled: boolean };
+};
+
+export type PalletCfEnvironmentFailedDepositRecoveryRequest = {
+  broker: AccountId32;
+  asset: CfPrimitivesChainsAssetsAnyAsset;
+  amount: bigint;
+  reference: Bytes;
 };
 
 /**
@@ -4665,7 +4706,13 @@ export type PalletCfSwappingCall =
    * Binds a broker account to a redeem address. This is used to allow a broker to redeem
    * their funds only to a specific address.
    **/
-  | { name: 'BindBrokerFeeWithdrawalAddress'; params: { address: H160 } };
+  | { name: 'BindBrokerFeeWithdrawalAddress'; params: { address: H160 } }
+  /**
+   * Links the LP account that receives the broker's failed deposits.
+   *
+   * The link can only be set once.
+   **/
+  | { name: 'LinkRecoveryAccount'; params: { recoveryAccount: AccountId32 } };
 
 export type PalletCfSwappingCallLike =
   /**
@@ -4785,7 +4832,13 @@ export type PalletCfSwappingCallLike =
    * Binds a broker account to a redeem address. This is used to allow a broker to redeem
    * their funds only to a specific address.
    **/
-  | { name: 'BindBrokerFeeWithdrawalAddress'; params: { address: H160 } };
+  | { name: 'BindBrokerFeeWithdrawalAddress'; params: { address: H160 } }
+  /**
+   * Links the LP account that receives the broker's failed deposits.
+   *
+   * The link can only be set once.
+   **/
+  | { name: 'LinkRecoveryAccount'; params: { recoveryAccount: AccountId32Like } };
 
 export type CfChainsRefundParametersChannelRefundParametersEncodedAddress = {
   retryDuration: number;
@@ -13269,11 +13322,50 @@ export type PalletCfEnvironmentEvent =
   /**
    * A configuration item for this pallet was updated by governance.
    **/
-  | { name: 'PalletConfigUpdated'; data: { update: PalletCfEnvironmentPalletConfigUpdate } };
+  | { name: 'PalletConfigUpdated'; data: { update: PalletCfEnvironmentPalletConfigUpdate } }
+  /**
+   * A failed deposit was paid out to the broker's recovery account.
+   **/
+  | {
+      name: 'FailedDepositRecovered';
+      data: {
+        broker: AccountId32;
+        recoveryAccount: AccountId32;
+        asset: CfPrimitivesChainsAssetsAnyAsset;
+        amount: bigint;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+        reference: Bytes;
+      };
+    }
+  /**
+   * A failed deposit could not be recovered. It can be retried.
+   **/
+  | {
+      name: 'FailedDepositRecoveryFailed';
+      data: {
+        broker: AccountId32;
+        asset: CfPrimitivesChainsAssetsAnyAsset;
+        amount: bigint;
+        reference: Bytes;
+        error: DispatchError;
+      };
+    };
 
 export type CfTraitsElectionsElectionInstance =
   | { type: 'Generic' }
   | { type: 'Chain'; value: CfPrimitivesChainsForeignChain };
+
+export type CfTraitsFailedDepositRecoveryOutcome =
+  | {
+      type: 'Egressed';
+      value: {
+        egressId: [CfPrimitivesChainsForeignChain, bigint];
+        destination: CfChainsAddressForeignChainAddress;
+        egressAmount: bigint;
+        feeWithheld: bigint;
+      };
+    }
+  | { type: 'Credited' };
 
 /**
  * The `Event` enum of this pallet
@@ -14830,7 +14922,11 @@ export type PalletCfSwappingEvent =
   /**
    * FLIP egress to the State Chain Gateway was skipped.
    **/
-  | { name: 'FlipTransferToGatewaySkipped'; data: { reason: DispatchError } };
+  | { name: 'FlipTransferToGatewaySkipped'; data: { reason: DispatchError } }
+  /**
+   * A broker linked the LP account that receives its failed deposits.
+   **/
+  | { name: 'RecoveryAccountLinked'; data: { broker: AccountId32; recoveryAccount: AccountId32 } };
 
 export type CfChainsSwapOrigin =
   | {
@@ -17835,7 +17931,11 @@ export type PalletCfEnvironmentError =
    * Vote batching is disabled; vote through the per-instance
    * `pallet_cf_elections::Call::vote` extrinsic instead.
    **/
-  | 'VoteBatchingDisabled';
+  | 'VoteBatchingDisabled'
+  /**
+   * The same failed deposit appears more than once in the batch.
+   **/
+  | 'DuplicateFailedDeposit';
 
 export type PalletCfFlipFlipAccount = { balance: bigint; bond: bigint };
 
@@ -19089,7 +19189,15 @@ export type PalletCfSwappingError =
   /**
    * The account has a pending swap request.
    **/
-  | 'PendingSwapRequest';
+  | 'PendingSwapRequest'
+  /**
+   * The broker has already linked a recovery account.
+   **/
+  | 'RecoveryAccountAlreadyLinked'
+  /**
+   * The recovery account must be a liquidity provider.
+   **/
+  | 'RecoveryAccountNotLiquidityProvider';
 
 export type PalletCfLpDeltaStats = { limitOrdersSwapUsdVolume: FixedU128 };
 
@@ -19444,7 +19552,15 @@ export type PalletCfIngressEgressError =
   /**
    * A channel is marked by an invalid account (not owner and not whitelisted)
    **/
-  | 'CannotMarkChannel';
+  | 'CannotMarkChannel'
+  /**
+   * The broker has not linked a recovery account.
+   **/
+  | 'NoRecoveryAccount'
+  /**
+   * The amount is not valid for the chain.
+   **/
+  | 'InvalidAmount';
 
 export type PalletCfIngressEgressDepositChannelDetailsPolkadot = {
   owner: AccountId32;

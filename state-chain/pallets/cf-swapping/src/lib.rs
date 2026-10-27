@@ -29,20 +29,20 @@ use cf_chains::{
 	SwapOrigin,
 };
 use cf_primitives::{
-	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
-	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId,
-	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP,
+	basis_points::SignedBasisPoints, AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount,
+	BasisPoints, Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain,
+	SwapId, SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP,
 	FLIP_TO_GATEWAY_MULTIPLE, ONE_AS_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET,
 	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationHooks, ExpiryBehaviour,
-	FeePayment, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi,
-	LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
-	WithdrawalAddressRestriction,
+	impl_pallet_safe_mode, AccountRoleRegistry, AffiliateRegistry, AssetConverter, BalanceApi,
+	Bonding, BrokerRecoveryApi, ChainflipNetworkInfo, ChannelIdAllocator, DepositApi,
+	DeregistrationHooks, ExpiryBehaviour, FeePayment, FundingInfo, FundingSource,
+	GetMinimumFunding, IngressEgressFeeApi, LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry,
+	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -55,7 +55,7 @@ use frame_support::{
 		DispatchError, Permill, TransactionOutcome,
 	},
 	storage::{with_storage_layer, with_transaction_unchecked},
-	traits::HandleLifetime,
+	traits::{HandleLifetime, OnKilledAccount},
 	transactional, CloneNoBound, Hashable,
 };
 use frame_system::pallet_prelude::*;
@@ -847,6 +847,13 @@ pub mod pallet {
 	pub type VaultSwapMinimumBrokerFee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, BasisPoints, ValueQuery>;
 
+	/// The LP account each broker has linked to receive its failed deposits.
+	///
+	/// Kept when the broker deregisters and only removed when the account is reaped.
+	#[pallet::storage]
+	pub type BrokerRecoveryAccount<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
+
 	#[pallet::storage]
 	pub type DefaultOraclePriceSlippageProtection<T: Config> = StorageMap<
 		_,
@@ -1051,6 +1058,11 @@ pub mod pallet {
 		FlipTransferToGatewaySkipped {
 			reason: DispatchError,
 		},
+		/// A broker linked the LP account that receives its failed deposits.
+		RecoveryAccountLinked {
+			broker: T::AccountId,
+			recovery_account: T::AccountId,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -1142,6 +1154,10 @@ pub mod pallet {
 		PoolDoesNotExist,
 		/// The account has a pending swap request.
 		PendingSwapRequest,
+		/// The broker has already linked a recovery account.
+		RecoveryAccountAlreadyLinked,
+		/// The recovery account must be a liquidity provider.
+		RecoveryAccountNotLiquidityProvider,
 	}
 
 	#[pallet::genesis_config]
@@ -1835,6 +1851,35 @@ pub mod pallet {
 			T::WithdrawalRestriction::bind_broker_withdrawal_address(&broker, address)
 				.map_err(|_| Error::<T>::BrokerAlreadyBound)?;
 			Self::deposit_event(Event::BoundBrokerWithdrawalAddress { broker, address });
+			Ok(())
+		}
+
+		/// Links the LP account that receives the broker's failed deposits.
+		///
+		/// The link can only be set once.
+		#[pallet::call_index(20)]
+		#[pallet::weight(T::WeightInfo::link_recovery_account())]
+		pub fn link_recovery_account(
+			origin: OriginFor<T>,
+			recovery_account: T::AccountId,
+		) -> DispatchResult {
+			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(
+					&recovery_account,
+					AccountRole::LiquidityProvider
+				),
+				Error::<T>::RecoveryAccountNotLiquidityProvider
+			);
+
+			BrokerRecoveryAccount::<T>::try_mutate(&broker, |linked| {
+				ensure!(linked.is_none(), Error::<T>::RecoveryAccountAlreadyLinked);
+				*linked = Some(recovery_account.clone());
+				Ok::<_, Error<T>>(())
+			})?;
+
+			Self::deposit_event(Event::RecoveryAccountLinked { broker, recovery_account });
+
 			Ok(())
 		}
 	}
@@ -3697,6 +3742,29 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 
 	fn get_minimum_vault_swap_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints {
 		VaultSwapMinimumBrokerFee::<T>::get(broker_id)
+	}
+}
+
+impl<T: Config> BrokerRecoveryApi for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn recovery_account(broker: &Self::AccountId) -> Option<Self::AccountId> {
+		BrokerRecoveryAccount::<T>::get(broker).filter(|recovery_account| {
+			T::AccountRoleRegistry::has_account_role(
+				recovery_account,
+				AccountRole::LiquidityProvider,
+			)
+		})
+	}
+}
+
+/// Removes the recovery account link when the broker account is reaped. Deregistering as a broker
+/// keeps the link, so it can't be cleared by deregistering and registering again.
+pub struct DeleteRecoveryAccount<T: Config>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteRecoveryAccount<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		BrokerRecoveryAccount::<T>::remove(who);
 	}
 }
 
