@@ -33,10 +33,24 @@ on:
       continue-on-bouncer-error:
         type: boolean
         default: false
+      # The runner provisioned by `_39_provision_bouncer_runner.yml`. It is destroyed here.
+      runner-label:
+        type: string
+        default: ""
+      runner-name:
+        type: string
+        default: ""
+      server-id:
+        type: string
+        default: ""
+      # `needs.<build job>.result` of the caller. Callers run this workflow even when the build
+      # fails so that the provisioned runner is always destroyed.
+      build-result:
+        type: string
+        required: true
 
 env:
   FORCE_COLOR: 1
-  SOLANA_VERSION: v2.1.13
   NODE_COUNT: "${{ inputs.node-count }}-node"
   BROKER_ENDPOINT: "${{ inputs.broker-endpoint }}"
   LP_ENDPOINT: "${{ inputs.lp-endpoint }}"
@@ -46,55 +60,21 @@ permissions:
   contents: read
 
 jobs:
-  provision-bouncer-runner:
-    runs-on: namespace-profile-default-light
-    timeout-minutes: 15
-    outputs:
-      runner-label: ${{ steps.provision.outputs.runner-label }}
-      runner-name: ${{ steps.provision.outputs.runner-name }}
-      server-id: ${{ steps.provision.outputs.server-id }}
-    steps:
-      - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-        with:
-          persist-credentials: false
-
-      - name: Provision ephemeral Hetzner runner ☁️
-        id: provision
-        env:
-          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
-          CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
-          LOG_POSTFIX: ${{ inputs.log-postfix }}
-        run: |
-          suffix=$(tr --complement --delete '[:alnum:]-' <<<"$LOG_POSTFIX")
-          runner_name="bouncer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}${suffix}"
-          runner_label="${runner_name}-cpx52"
-          ./ci/scripts/manage_hetzner_bouncer_runner.sh create "$runner_name" "$runner_label"
-
   bouncer:
-    needs: [provision-bouncer-runner]
-    # Run even when provisioning fails, so that this job always reports under the name
-    # required by branch protection. A skipped job counts as a passing required check,
+    # Run even when provisioning or the build fails, so that this job always reports under the
+    # name required by branch protection. A skipped job counts as a passing required check,
     # which would hide provisioning failures.
     if: ${{ !cancelled() }}
     # The ephemeral runner label is unique per run, so it identifies the runner on its own.
     # Fall back to a hosted runner when there is none to target, otherwise the job waits
     # on a label that matches nothing until it times out.
-    runs-on: ${{ needs.provision-bouncer-runner.result == 'success' && needs.provision-bouncer-runner.outputs.runner-label || 'namespace-profile-default-light' }}
+    runs-on: ${{ inputs.build-result == 'success' && inputs.runner-label != '' && inputs.runner-label || 'namespace-profile-default-light' }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     continue-on-error: ${{ inputs.continue-on-bouncer-error }}
     steps:
-      - name: Fail if runner provisioning failed 🚨
-        if: ${{ needs.provision-bouncer-runner.result != 'success' }}
+      - name: Fail if the build or runner provisioning failed 🚨
+        if: ${{ inputs.build-result != 'success' || inputs.runner-label == '' }}
         run: exit 1
-
-      - name: Setup ngrok ✨
-        if: inputs.ngrok
-        run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update
-          sudo apt install ngrok
 
       - name: Checkout chainflip-backend 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -121,15 +101,6 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
-      - name: Install system packages 💿
-        run: |
-          sudo apt update
-          sudo apt install -y bc xxd postgresql-client
-
-      - name: Install wscat 🐈
-        run: |
-          npm install -g wscat
-
       - name: Download binaries 📥
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
@@ -139,9 +110,6 @@ jobs:
         working-directory: bouncer
         run: pnpm install
 
-      - name: Install solana ☀️
-        run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/$SOLANA_VERSION/install)"
       - name: Start a localnet 🚀
         env:
           BINARY_ROOT_PATH: .
@@ -347,8 +315,8 @@ jobs:
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
 
   destroy-bouncer-runner:
-    if: ${{ always() && needs.provision-bouncer-runner.outputs.runner-name != '' }}
-    needs: [provision-bouncer-runner, bouncer]
+    if: ${{ always() && inputs.runner-name != '' }}
+    needs: [bouncer]
     runs-on: namespace-profile-default-light
     timeout-minutes: 10
     steps:
@@ -361,13 +329,14 @@ jobs:
         env:
           CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
           CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
-          CF_BOUNCER_RUNNER_NAME: ${{ needs.provision-bouncer-runner.outputs.runner-name }}
-          CF_BOUNCER_SERVER_ID: ${{ needs.provision-bouncer-runner.outputs.server-id }}
+          CF_BOUNCER_RUNNER_NAME: ${{ inputs.runner-name }}
+          CF_BOUNCER_SERVER_ID: ${{ inputs.server-id }}
         run: |
           ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy \
             "$CF_BOUNCER_RUNNER_NAME" "$CF_BOUNCER_SERVER_ID"
 
   chainspec-compatibility:
+    if: ${{ !cancelled() && inputs.build-result == 'success' }}
     runs-on: namespace-profile-default
     strategy:
       fail-fast: false

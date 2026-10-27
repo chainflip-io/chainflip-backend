@@ -214,6 +214,9 @@ create_runner() {
     "RUNNER_LABEL=$runner_label" \
     "RUNNER_NAME=$runner_name" \
     "RUNNER_REGISTRATION_TOKEN=$registration_token" \
+    "SOLANA_VERSION=${SOLANA_VERSION:-}" \
+    "LOCALNET_COMPOSE_URL=${LOCALNET_COMPOSE_URL:-}" \
+    "LOCALNET_NODE_COUNT=${LOCALNET_NODE_COUNT:-}" \
     | base64 | tr -d '\n')
   runner_service=$(base64 <<'EOF' | tr -d '\n'
 [Unit]
