@@ -66,7 +66,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-	Data, DataEnum, DataStruct, DeriveInput, Expr, Fields, Ident, ImplGenerics, TypeGenerics,
+	Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Fields, Ident, ImplGenerics, LitInt,
+	TypeGenerics,
 };
 
 #[proc_macro_derive(
@@ -165,7 +166,10 @@ fn derive_enum(
 		.variants
 		.into_iter()
 		.enumerate()
-		.map(|(index, variant)| {
+		.map(|(position, variant)| {
+			// Must match the index used by the `Encode`/`Decode` derives, otherwise the metadata
+			// disagrees with the actual encoding.
+			let index = codec_index(&variant.attrs).unwrap_or(position as u8);
 			let name = variant.ident;
 			let fields = derive_fields(variant.fields, name_for_expansion.clone());
 			let typename = match variant.attrs.iter().find(|attr| attr.path().is_ident("replace_typename_with")){
@@ -174,11 +178,11 @@ fn derive_enum(
 			};
 			if variant.attrs.iter().any(|attr| attr.path().is_ident("skip_name_expansion")){
 				quote!(.variant(#typename, |v|{
-					v.index(#index as u8)
+					v.index(#index)
 					.fields(#fields)}))
 			} else {
 				quote!(.variant(scale_info::prelude::format!("{}{}", #typename, #name_for_expansion).leak() as &'static str, |v|{
-					v.index(#index as u8)
+					v.index(#index)
 					.fields(#fields)}))
 			}
 		})
@@ -193,6 +197,24 @@ fn derive_enum(
 				scale_info::build::Variants::new() #( #variants )* )
 		}
 	})
+}
+
+/// The value of a `#[codec(index = N)]` attribute, if present.
+fn codec_index(attrs: &[Attribute]) -> Option<u8> {
+	let mut index = None;
+	for attr in attrs.iter().filter(|attr| attr.path().is_ident("codec")) {
+		attr.parse_nested_meta(|meta| {
+			if meta.path.is_ident("index") {
+				index = Some(meta.value()?.parse::<LitInt>()?.base10_parse::<u8>()?);
+			} else if meta.input.peek(syn::Token![=]) {
+				// Skip the values of other codec attributes.
+				meta.value()?.parse::<Expr>()?;
+			}
+			Ok(())
+		})
+		.expect("Failed to parse codec attribute");
+	}
+	index
 }
 
 // This is taken directly from the Substrate TypeInfo library

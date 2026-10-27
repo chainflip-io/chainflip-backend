@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 #![cfg(test)]
+use codec::Encode;
 use generic_typeinfo_derive::GenericTypeInfo;
 use scale_info::{TypeDef, TypeInfo};
 
@@ -125,4 +126,24 @@ fn test_name_expansion() {
 	// Unnamed structs work the same way
 	assert_eq!("charEnum", buzz_def.variants[2].fields[0].type_name.unwrap());
 	assert_eq!("u16Enum", buzz_def.variants[2].fields[1].type_name.unwrap());
+}
+
+#[derive(GenericTypeInfo, Encode)]
+#[expand_name_with("Enum")]
+enum Indexed {
+	_First,
+	#[codec(index = 5)]
+	_Second,
+	_Third(u8),
+}
+
+#[test]
+fn test_variant_indices_match_encoding() {
+	let TypeDef::Variant(def) = <Indexed as TypeInfo>::type_info().type_def else { panic!() };
+
+	for (variant, value) in
+		def.variants.iter().zip([Indexed::_First, Indexed::_Second, Indexed::_Third(0)])
+	{
+		assert_eq!(variant.index, value.encode()[0]);
+	}
 }
