@@ -2,15 +2,28 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [2.3.3] - 2026-10-20
+## [2.3.3] - 2026-10-27
 
 ### Features
 
+- Witness finalized blocks for BSC ([#6969](https://github.com/chainflip-io/chainflip-backend/issues/6969))
+- Reset assethub election on perseverance and sisyphos ([#6972](https://github.com/chainflip-io/chainflip-backend/issues/6972))
+- Migration to set witness margin on running networks
 - Batch election instances votes into one engine extrinsic call ([#6844](https://github.com/chainflip-io/chainflip-backend/issues/6844))
 - Range order minimum ([#6892](https://github.com/chainflip-io/chainflip-backend/issues/6892))
 
 ### Fixes
 
+- Guard reward and slash distribution against a missing epoch bond ([#6942](https://github.com/chainflip-io/chainflip-backend/issues/6942))
+- Remove old trading strategies and add a maximum tick limit ([#6949](https://github.com/chainflip-io/chainflip-backend/issues/6949))
+- Harden composite vote reconstruction in cf-elections ([#6931](https://github.com/chainflip-io/chainflip-backend/issues/6931))
+- Clear failed CCM call on late broadcast success ([#6965](https://github.com/chainflip-io/chainflip-backend/issues/6965))
+- Bound BHW vote length at decode ([#7020](https://github.com/chainflip-io/chainflip-backend/issues/7020))
+- Mark channel as `Pending` only when fetch construction succeeds ([#7014](https://github.com/chainflip-io/chainflip-backend/issues/7014))
+- Avoid producing a change UTXO with amount < DUST_LIMIT ([#7013](https://github.com/chainflip-io/chainflip-backend/issues/7013))
+- Assethub reorg detection ([#7002](https://github.com/chainflip-io/chainflip-backend/issues/7002))
+- Monitoring api version check ([#6935](https://github.com/chainflip-io/chainflip-backend/issues/6935))
+- Set bsc safety margin at genesis
 - Transfer flip on chain checks whitelist ([#6946](https://github.com/chainflip-io/chainflip-backend/issues/6946))
 - Use the actual 2s Assethub block time ([#6934](https://github.com/chainflip-io/chainflip-backend/issues/6934))
 - Bound the cost of validating non-native signed calls ([#6918](https://github.com/chainflip-io/chainflip-backend/issues/6918))
@@ -30,10 +43,16 @@ All notable changes included in each Chainflip release will be documented in thi
 - Don't panic on a missing redemption reserve in the witnessed redemption paths
 - Keep pending auction stake locked until the new epoch bonds it
 - Compound per-leg oracle deltas in live price protection
+- Never emit best headers from the finalized head subscription
 - Prevent abandoned requests from deadlocking the Assethub RPC client
 - Bound EncodedAddress::Btc length
 - Assign BTC UTXOs to the correct key
 - Reject non-standard Bitcoin refund scripts
+- Engine p2p router heartbeat + keyed routing ([#6921](https://github.com/chainflip-io/chainflip-backend/issues/6921))
+
+### Refactor
+
+- Build RejectCall inside a storage layer, matching AllBatch ([#6915](https://github.com/chainflip-io/chainflip-backend/issues/6915))
 
 ## [2.3.2] - 2026-09-17
 
