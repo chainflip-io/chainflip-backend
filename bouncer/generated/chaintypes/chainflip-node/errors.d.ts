@@ -112,6 +112,11 @@ export interface ChainErrors extends GenericChainErrors {
     VoteBatchingDisabled: GenericPalletError;
 
     /**
+     * The same failed deposit appears more than once in the batch.
+     **/
+    DuplicateFailedDeposit: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -1403,6 +1408,16 @@ export interface ChainErrors extends GenericChainErrors {
     PendingSwapRequest: GenericPalletError;
 
     /**
+     * The broker has already linked a recovery account.
+     **/
+    RecoveryAccountAlreadyLinked: GenericPalletError;
+
+    /**
+     * The recovery account must be a liquidity provider.
+     **/
+    RecoveryAccountNotLiquidityProvider: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -1593,6 +1608,16 @@ export interface ChainErrors extends GenericChainErrors {
     CannotMarkChannel: GenericPalletError;
 
     /**
+     * The broker has not linked a recovery account.
+     **/
+    NoRecoveryAccount: GenericPalletError;
+
+    /**
+     * The amount is not valid for the chain.
+     **/
+    InvalidAmount: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -1682,6 +1707,16 @@ export interface ChainErrors extends GenericChainErrors {
     CannotMarkChannel: GenericPalletError;
 
     /**
+     * The broker has not linked a recovery account.
+     **/
+    NoRecoveryAccount: GenericPalletError;
+
+    /**
+     * The amount is not valid for the chain.
+     **/
+    InvalidAmount: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -1769,6 +1804,16 @@ export interface ChainErrors extends GenericChainErrors {
      * A channel is marked by an invalid account (not owner and not whitelisted)
      **/
     CannotMarkChannel: GenericPalletError;
+
+    /**
+     * The broker has not linked a recovery account.
+     **/
+    NoRecoveryAccount: GenericPalletError;
+
+    /**
+     * The amount is not valid for the chain.
+     **/
+    InvalidAmount: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -2061,6 +2106,16 @@ export interface ChainErrors extends GenericChainErrors {
     CannotMarkChannel: GenericPalletError;
 
     /**
+     * The broker has not linked a recovery account.
+     **/
+    NoRecoveryAccount: GenericPalletError;
+
+    /**
+     * The amount is not valid for the chain.
+     **/
+    InvalidAmount: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -2272,6 +2327,16 @@ export interface ChainErrors extends GenericChainErrors {
      * A channel is marked by an invalid account (not owner and not whitelisted)
      **/
     CannotMarkChannel: GenericPalletError;
+
+    /**
+     * The broker has not linked a recovery account.
+     **/
+    NoRecoveryAccount: GenericPalletError;
+
+    /**
+     * The amount is not valid for the chain.
+     **/
+    InvalidAmount: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -2537,6 +2602,16 @@ export interface ChainErrors extends GenericChainErrors {
      * A channel is marked by an invalid account (not owner and not whitelisted)
      **/
     CannotMarkChannel: GenericPalletError;
+
+    /**
+     * The broker has not linked a recovery account.
+     **/
+    NoRecoveryAccount: GenericPalletError;
+
+    /**
+     * The amount is not valid for the chain.
+     **/
+    InvalidAmount: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -2975,6 +3050,16 @@ export interface ChainErrors extends GenericChainErrors {
     CannotMarkChannel: GenericPalletError;
 
     /**
+     * The broker has not linked a recovery account.
+     **/
+    NoRecoveryAccount: GenericPalletError;
+
+    /**
+     * The amount is not valid for the chain.
+     **/
+    InvalidAmount: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -3155,6 +3240,16 @@ export interface ChainErrors extends GenericChainErrors {
      * A channel is marked by an invalid account (not owner and not whitelisted)
      **/
     CannotMarkChannel: GenericPalletError;
+
+    /**
+     * The broker has not linked a recovery account.
+     **/
+    NoRecoveryAccount: GenericPalletError;
+
+    /**
+     * The amount is not valid for the chain.
+     **/
+    InvalidAmount: GenericPalletError;
 
     /**
      * Generic pallet error

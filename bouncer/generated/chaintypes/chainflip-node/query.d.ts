@@ -3237,6 +3237,19 @@ export interface ChainStorage extends GenericChainStorage {
     vaultSwapMinimumBrokerFee: GenericStorageQuery<(arg: AccountId32Like) => number, AccountId32>;
 
     /**
+     * The LP account each broker has linked to receive its failed deposits.
+     *
+     * Kept when the broker deregisters and only removed when the account is reaped.
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<AccountId32 | undefined> =} callback
+     **/
+    brokerRecoveryAccount: GenericStorageQuery<
+      (arg: AccountId32Like) => AccountId32 | undefined,
+      AccountId32
+    >;
+
+    /**
      *
      * @param {CfAmmCommonAssetPair} arg
      * @param {Callback<number> =} callback
