@@ -35,11 +35,15 @@ impl<Id: Encode, Amount: Decode + Default> MockBonder<Id, Amount> {
 	}
 }
 
-impl<Id: Encode, Amount: Encode> Bonding for MockBonder<Id, Amount> {
+impl<Id: Encode, Amount: Encode + Decode + Default> Bonding for MockBonder<Id, Amount> {
 	type AccountId = Id;
 	type Amount = Amount;
 
 	fn update_bond(account_id: &Self::AccountId, bond: Amount) {
 		Self::put_storage(BOND, account_id, bond);
+	}
+
+	fn bond(account_id: &Self::AccountId) -> Amount {
+		Self::get_bond(account_id)
 	}
 }

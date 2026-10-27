@@ -44,6 +44,7 @@ impl DeregistrationHooks for RuntimeDeregistrationHooks {
 					account_id,
 				)?;
 				pallet_cf_swapping::PendingSwapDeregistrationCheck::<Runtime>::check(account_id)?;
+				Bonder::<Runtime>::check(account_id)?;
 				Ok(())
 			},
 			AccountRole::Broker => {
