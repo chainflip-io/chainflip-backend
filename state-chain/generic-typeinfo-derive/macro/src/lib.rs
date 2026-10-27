@@ -162,6 +162,7 @@ fn derive_enum(
 	ty_generics: TypeGenerics,
 	name_for_expansion: Expr,
 ) -> TokenStream2 {
+	let mut indices = Vec::new();
 	let variants: Vec<_> = d
 		.variants
 		.into_iter()
@@ -169,7 +170,16 @@ fn derive_enum(
 		.map(|(position, variant)| {
 			// Must match the index used by the `Encode`/`Decode` derives, otherwise the metadata
 			// disagrees with the actual encoding.
-			let index = codec_index(&variant.attrs).unwrap_or(position as u8);
+			let index = match (codec_index(&variant.attrs), &variant.discriminant) {
+				(Some(index), _) => quote!(#index),
+				(None, Some((_, discriminant))) => quote!((#discriminant)),
+				(None, None) => {
+					let position = position as u8;
+					quote!(#position)
+				},
+			};
+			indices.push((variant.ident.to_string(), index.clone()));
+			let index = quote!(#index as u8);
 			let name = variant.ident;
 			let fields = derive_fields(variant.fields, name_for_expansion.clone());
 			let typename = match variant.attrs.iter().find(|attr| attr.path().is_ident("replace_typename_with")){
@@ -187,16 +197,53 @@ fn derive_enum(
 			}
 		})
 		.collect();
-	quote!(impl #impl_generics TypeInfo for #ident #ty_generics {
-		type Identity = Self;
-		fn type_info() -> scale_info::Type {
-			let full_pathname = scale_info::prelude::format!("{}{}", ::core::stringify!(#ident), #name_for_expansion).leak();
-			scale_info::Type::builder()
-			.path(scale_info::Path::new(full_pathname, ::core::module_path!()))
-			.variant(
-				scale_info::build::Variants::new() #( #variants )* )
+	let index_checks = index_checks(&ident, indices);
+	quote!(
+		#index_checks
+		impl #impl_generics TypeInfo for #ident #ty_generics {
+			type Identity = Self;
+			fn type_info() -> scale_info::Type {
+				let full_pathname = scale_info::prelude::format!("{}{}", ::core::stringify!(#ident), #name_for_expansion).leak();
+				scale_info::Type::builder()
+				.path(scale_info::Path::new(full_pathname, ::core::module_path!()))
+				.variant(
+					scale_info::build::Variants::new() #( #variants )* )
+			}
 		}
-	})
+	)
+}
+
+/// Compile-time checks that every variant index fits in a `u8` and is unique, mirroring the
+/// `Encode`/`Decode` derives. These have to be const assertions because discriminants can be
+/// arbitrary const expressions.
+fn index_checks(ident: &Ident, indices: Vec<(String, TokenStream2)>) -> TokenStream2 {
+	let range_checks = indices.iter().enumerate().map(|(i, (name, _))| {
+		let msg = format!("Variant `{ident}::{name}` has an index outside the range 0..=255.");
+		quote!(::core::assert!(
+			::core::matches!(__GENERIC_TYPEINFO_INDICES[#i], 0..=255),
+			#msg
+		);)
+	});
+	let duplicate_checks = indices.iter().enumerate().flat_map(|(i, (a, _))| {
+		indices.iter().enumerate().skip(i + 1).map(move |(j, (b, _))| {
+			let msg = format!("Variants `{ident}::{a}` and `{ident}::{b}` have the same index.");
+			quote!(::core::assert!(
+				__GENERIC_TYPEINFO_INDICES[#i] != __GENERIC_TYPEINFO_INDICES[#j],
+				#msg
+			);)
+		})
+	});
+	let len = indices.len();
+	let indices = indices.iter().map(|(_, index)| quote!(#index as i128));
+	quote!(
+		#[automatically_derived]
+		const _: () = {
+			// Wide enough that no discriminant type is truncated before the range check.
+			const __GENERIC_TYPEINFO_INDICES: [i128; #len] = [#( #indices ),*];
+			#( #range_checks )*
+			#( #duplicate_checks )*
+		};
+	)
 }
 
 /// The value of a `#[codec(index = N)]` attribute, if present.

@@ -141,9 +141,36 @@ enum Indexed {
 fn test_variant_indices_match_encoding() {
 	let TypeDef::Variant(def) = <Indexed as TypeInfo>::type_info().type_def else { panic!() };
 
+	// Variants without an explicit index use their position, not the previous index + 1.
+	assert_eq!(def.variants.iter().map(|v| v.index).collect::<Vec<_>>(), [0, 5, 2]);
 	for (variant, value) in
 		def.variants.iter().zip([Indexed::_First, Indexed::_Second, Indexed::_Third(0)])
 	{
+		assert_eq!(variant.index, value.encode()[0]);
+	}
+}
+
+#[derive(GenericTypeInfo, Encode)]
+#[expand_name_with("Enum")]
+enum Discriminants {
+	_First = 1 + 2,
+	#[codec(index = 1)]
+	_Second = 7,
+	_Third,
+}
+
+#[test]
+fn test_variant_indices_match_encoding_with_discriminants() {
+	let TypeDef::Variant(def) = <Discriminants as TypeInfo>::type_info().type_def else { panic!() };
+
+	// `codec(index)` takes precedence over the discriminant, and implicit discriminants are
+	// ignored in favour of the position.
+	assert_eq!(def.variants.iter().map(|v| v.index).collect::<Vec<_>>(), [3, 1, 2]);
+	for (variant, value) in def.variants.iter().zip([
+		Discriminants::_First,
+		Discriminants::_Second,
+		Discriminants::_Third,
+	]) {
 		assert_eq!(variant.index, value.encode()[0]);
 	}
 }
