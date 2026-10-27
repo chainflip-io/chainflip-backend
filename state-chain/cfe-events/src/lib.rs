@@ -39,6 +39,7 @@ pub struct ThresholdSignatureRequest<ValidatorId, C: ChainCrypto> {
 	pub key: C::AggKey,
 	pub signatories: BTreeSet<ValidatorId>,
 	pub payload: C::Payload,
+	pub stage_timeout_secs: u32,
 }
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
@@ -51,6 +52,7 @@ pub struct KeyHandoverRequest<ValidatorId, C: ChainCrypto> {
 	pub sharing_participants: BTreeSet<ValidatorId>,
 	pub receiving_participants: BTreeSet<ValidatorId>,
 	pub new_key: C::AggKey,
+	pub stage_timeout_secs: u32,
 }
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
@@ -58,6 +60,7 @@ pub struct KeygenRequest<ValidatorId> {
 	pub ceremony_id: CeremonyId,
 	pub epoch_index: EpochIndex,
 	pub participants: BTreeSet<ValidatorId>,
+	pub stage_timeout_secs: u32,
 }
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
