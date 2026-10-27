@@ -1,0 +1,81 @@
+# Network peers change independently of code changes, so check main on a schedule rather than gating the merge queue.
+name: Chainspec Compatibility
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "release"
+
+  chainspec-compatibility:
+    needs: [build]
+    runs-on: namespace-profile-default
+    strategy:
+      fail-fast: false
+      matrix:
+        network: [sisyphos, perseverance, berghain]
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
+
+      - name: Download Binaries 📥
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: chainflip-backend-bin
+
+      - name: Make Binaries Executable 🛠️
+        run: |
+          chmod +x chainflip-*
+
+      - name: Run Test 🧪
+        shell: bash
+        run: ./ci/scripts/check_node_syncing.sh --network ${{ matrix.network }} --binary-root-path .
+
+      - name: Print logs 📜
+        if: always()
+        continue-on-error: true
+        run: |
+          cat /tmp/chainflip-node.log
+
+  notify-discord-on-failure:
+    needs: [build, chainspec-compatibility]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: namespace-profile-default-light
+    steps:
+      # Only alert on a pass -> fail transition, to avoid a daily repeat while a failure is outstanding.
+      - name: Check previous scheduled run 🔎
+        id: previous
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          conclusion=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/chainspec-compatibility.yml/runs?event=schedule&status=completed&per_page=1" \
+            | jq -r '.workflow_runs[0].conclusion // empty')
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+      - name: Notify on failed check 📢
+        if: steps.previous.outputs.conclusion != 'failure'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+          # Discord @Protocol role.
+          PROTOCOL_ROLE_ID: "960793434170458112"
+        run: |
+          jq -n --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --arg role "$PROTOCOL_ROLE_ID" '{
+            username: "Chainspec Compatibility",
+            content: ("<@&" + $role + "> 🧬 The chainspec compatibility check is failing on `main`: a node built from `main` cannot connect to peers on one or more networks.\n🔗 Link to job: <" + $url + ">"),
+            allowed_mentions: { roles: [$role] }
+          }' | curl -fsSL -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"

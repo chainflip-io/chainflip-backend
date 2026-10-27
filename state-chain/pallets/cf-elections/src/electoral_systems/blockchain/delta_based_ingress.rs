@@ -423,11 +423,6 @@ where
 								(account.clone(), details.asset),
 								Some(*ready_total),
 							);
-							new_channel_properties.entry(account.clone()).and_modify(
-								|(_details, total)| {
-									*total = *ready_total;
-								},
-							);
 						},
 						Ordering::Greater => {
 							log::error!(
@@ -454,12 +449,14 @@ where
 						new_channel_properties.remove(account);
 					}
 				}
-				if let Some(future_total) = future_total {
+				if let Some(new_total) = future_total.or(ready_total) {
 					new_channel_properties.entry(account.clone()).and_modify(
 						|(_details, total)| {
-							*total = *future_total;
+							*total = *new_total;
 						},
 					);
+				}
+				if let Some(future_total) = future_total {
 					new_pending_ingress_totals.insert(account.clone(), *future_total);
 				}
 			}

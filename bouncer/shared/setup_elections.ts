@@ -2,18 +2,6 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { hasPallet } from 'shared/utils/dedot';
 
-export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
-  await cf.submitGovernance({
-    extrinsic: (api) =>
-      api.tx.solanaIngressEgress.updatePalletConfig([
-        {
-          type: 'SetIngressDelaySolana',
-          value: { delayBlocks: 15 },
-        },
-      ]),
-  });
-}
-
 export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up elections');
 
@@ -90,5 +78,5 @@ export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> 
 }
 
 export async function setupWitnessing<A>(cf: ChainflipIO<A>) {
-  await cf.all([setupIngressEgressPallet, setupElections]);
+  await setupElections(cf);
 }
