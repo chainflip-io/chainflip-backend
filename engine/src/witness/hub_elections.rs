@@ -16,7 +16,10 @@
 use std::collections::BTreeSet;
 
 use crate::{
-	dot::cached_rpc::{DotCachingClient, DotRetryRpcApiWithResult},
+	dot::{
+		cached_rpc::{DotCachingClient, DotRetryRpcApiWithResult},
+		PolkadotHeader,
+	},
 	witness::{
 		common::{
 			block_height_witnesser::witness_headers,
@@ -39,6 +42,7 @@ use engine_sc_client::{
 	storage_api::StorageApi,
 };
 use futures::{future, FutureExt};
+use itertools::Itertools;
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::primitives::Header, ElectoralSystemTypes, VoteOf,
@@ -94,18 +98,16 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 	) -> Result<Header<AssethubChain>> {
 		let finalized_height = self.best_block_number().await?;
 		if height > finalized_height {
-			Err(anyhow::anyhow!(
+			return Err(anyhow::anyhow!(
 				"Block height {height:?} is not yet finalized (highest finalized {finalized_height:?})"
 			))
-		} else {
-			Ok(Header {
-				block_height: height,
-				// assethub blocks are identified by block height (i.e BlockWitnessRange)
-				hash: height,
-				// this means the parent "hash" is just the previous witness range
-				parent_hash: height.saturating_backward(1),
-			})
 		}
+		let headers = self.continuous_headers_for_block_range(height).await?;
+		let (Some((_, first_header)), Some((last_hash, _))) = (headers.first(), headers.last())
+		else {
+			return Err(anyhow::anyhow!("Witness range {height:?} contains no blocks"))
+		};
+		Ok(Header { block_height: height, hash: *last_hash, parent_hash: first_header.parent_hash })
 	}
 
 	/// this returns the highest *finalized* block
@@ -134,38 +136,26 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 
 	async fn block_query_from_hash_and_height(
 		&self,
-		// the hash is just a block height since we only witness finalized blocks
-		hash: AssethubWitnessBatchNumber,
+		hash: sp_core::H256,
 		height: AssethubWitnessBatchNumber,
 	) -> Result<Self::BlockQuery> {
-		if hash == height {
-			self.block_query_from_height(height).await
-		} else {
-			Err(anyhow::anyhow!(
-				"Encountered hash != height when creating block query to vote for assethub. {hash:?} != {height:?}"
+		let (block_query, query_hash) = self.block_query_and_hash_from_height(height).await?;
+		if query_hash != hash {
+			return Err(anyhow::anyhow!(
+				"Block hash from RPC ({query_hash}) doesn't match election block hash: {hash}"
 			))
 		}
+		Ok(block_query)
 	}
 
 	async fn block_query_from_height(
 		&self,
 		witness_range: AssethubWitnessBatchNumber,
 	) -> Result<Self::BlockQuery> {
-		let block_headers = future::join_all(witness_range.into_range_inclusive().map(
-			|finalized_block_height: u64| async move {
-				let finalized_block_height: u32 = finalized_block_height
-					.try_into()
-					.map_err(|_| anyhow::anyhow!("block height doesn't fit into u32!"))?;
-
-				// get events of this block
-				let Some(block_hash) = self.client.block_hash(finalized_block_height).await? else {
-					return Err(anyhow::anyhow!(
-						"No blockhash for block height {finalized_block_height}"
-					));
-				};
-				let Some(header) = self.client.header(block_hash).await? else {
-					return Err(anyhow::anyhow!("No header for block hash {block_hash}"));
-				};
+		let headers = self.continuous_headers_for_block_range(witness_range).await?;
+		let block_headers =
+			future::join_all(headers.into_iter().map(|(block_hash, header)| async move {
+				let finalized_block_height = header.number;
 
 				if finalized_block_height == 0 {
 					// the genesis block (height 0) has 0x00...00 as parent hash. But this block
@@ -198,9 +188,8 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 						events,
 					})
 				}
-			},
-		))
-		.await;
+			}))
+			.await;
 
 		// This only succeeds if *all* futures were successful
 		let block_headers: Vec<_> = block_headers.into_iter().collect::<anyhow::Result<_>>()?;
@@ -211,8 +200,51 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 	async fn block_query_and_hash_from_height(
 		&self,
 		height: AssethubWitnessBatchNumber,
-	) -> Result<(Self::BlockQuery, AssethubWitnessBatchNumber)> {
-		Ok((self.block_query_from_height(height).await?, height))
+	) -> Result<(Self::BlockQuery, sp_core::H256)> {
+		let block_query = self.block_query_from_height(height).await?;
+		// The hash of a witness range is the hash of its last block.
+		let hash = block_query
+			.last()
+			.map(|header| header.block_hash)
+			.ok_or_else(|| anyhow::anyhow!("Block query contains no blocks"))?;
+		Ok((block_query, hash))
+	}
+}
+
+impl AssethubVoter {
+	/// Fetches the hash and header of every block in `witness_range`, ensuring that each block is
+	/// the parent of the next. A witness range is identified by the hash of its last block, which
+	/// only commits to the earlier blocks if they are its ancestors. Blocks are fetched by number,
+	/// so a faulty RPC could otherwise mix blocks from different forks into one range.
+	async fn continuous_headers_for_block_range(
+		&self,
+		witness_range: AssethubWitnessBatchNumber,
+	) -> Result<Vec<(sp_core::H256, PolkadotHeader)>> {
+		let headers = future::try_join_all(witness_range.into_range_inclusive().map(
+			|block_height: u64| async move {
+				let block_height: u32 = block_height
+					.try_into()
+					.map_err(|_| anyhow::anyhow!("block height doesn't fit into u32!"))?;
+				let Some(block_hash) = self.client.block_hash(block_height).await? else {
+					return Err(anyhow::anyhow!("No blockhash for block height {block_height}"));
+				};
+				let Some(header) = self.client.header(block_hash).await? else {
+					return Err(anyhow::anyhow!("No header for block hash {block_hash}"));
+				};
+				Ok((block_hash, header))
+			},
+		))
+		.await?;
+
+		for ((parent_hash, _), (block_hash, header)) in headers.iter().tuple_windows() {
+			if header.parent_hash != *parent_hash {
+				return Err(anyhow::anyhow!(
+					"Block {block_hash} in witness range {witness_range:?} doesn't build on block {parent_hash}"
+				))
+			}
+		}
+
+		Ok(headers)
 	}
 }
 

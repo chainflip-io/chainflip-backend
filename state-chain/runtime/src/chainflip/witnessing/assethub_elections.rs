@@ -19,7 +19,7 @@ use crate::{
 	AssethubChainTracking, AssethubIngressEgress, Runtime,
 };
 use cf_chains::{
-	dot::PolkadotSignature,
+	dot::{PolkadotHash, PolkadotSignature},
 	hub::AssethubTrackedData,
 	instances::AssethubInstance,
 	witness_period::{BlockWitnessRange, SaturatingStep},
@@ -82,9 +82,10 @@ pub type AssethubWitnessBatchNumber = BlockWitnessRange<Assethub>;
 define_empty_struct! { pub struct AssethubChain; }
 impl ChainTypes for AssethubChain {
 	type ChainBlockNumber = AssethubWitnessBatchNumber;
-	// block numbers are unique identifiers because we only use finalized blocks,
-	// so we can use them for the purpose of "hashes"
-	type ChainBlockHash = AssethubWitnessBatchNumber;
+	// The hash of a witness range is the hash of its last block, and its parent hash is the parent
+	// hash of its first block. Even though we only witness finalized blocks, real hashes keep the
+	// reorg detection of the BHW and the hash checks of the BW meaningful.
+	type ChainBlockHash = PolkadotHash;
 	const NAME: &'static str = "Assethub";
 }
 
@@ -246,7 +247,7 @@ pub type AssethubLiveness = Liveness<
 	u64, /* we can't use the actual AssethubWitnessBatchNumber because that's based on u32 and
 	      * the Liveness ES requires inter-convertibility with u64 due to the underlying
 	      * randomness library. */
-	sp_core::H256,
+	PolkadotHash,
 	ReportFailedLivenessCheck<Assethub>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,

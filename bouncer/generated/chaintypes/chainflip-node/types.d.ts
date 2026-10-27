@@ -1622,19 +1622,10 @@ export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVote =
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteAssethub;
     }
-  | {
-      type: 'B';
-      value: [
-        Array<PalletCfIngressEgressDepositWitnessAssethub>,
-        CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
-      ];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessAssethub>, H256 | undefined] }
   | {
       type: 'C';
-      value: [
-        Array<PalletCfBroadcastTransactionConfirmationAssethub>,
-        CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
-      ];
+      value: [Array<PalletCfBroadcastTransactionConfirmationAssethub>, H256 | undefined];
     }
   | { type: 'D'; value: CfChainsHubAssethubTrackedData }
   | { type: 'Ee'; value: H256 };
@@ -1646,8 +1637,8 @@ export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVo
 
 export type PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesHeaderAssethub = {
   blockHeight: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
-  hash: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
-  parentHash: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
+  hash: H256;
+  parentHash: H256;
 };
 
 export type CfChainsWitnessPeriodBlockWitnessRangeAssethub = { root: number };
@@ -12727,19 +12718,10 @@ export type PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataB
       type: 'A';
       value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesBhwVoteAssethub;
     }
-  | {
-      type: 'B';
-      value: [
-        Array<PalletCfIngressEgressDepositWitnessAssethub>,
-        CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
-      ];
-    }
+  | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessAssethub>, H256 | undefined] }
   | {
       type: 'C';
-      value: [
-        Array<PalletCfBroadcastTransactionConfirmationAssethub>,
-        CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
-      ];
+      value: [Array<PalletCfBroadcastTransactionConfirmationAssethub>, H256 | undefined];
     }
   | { type: 'D'; value: [] }
   | { type: 'Ee'; value: [] };
@@ -12801,12 +12783,7 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesElectionTra
   {
     seenHeightsBelow: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
     highestEverOngoingElection: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
-    queuedHashElections: Array<
-      [
-        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
-        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
-      ]
-    >;
+    queuedHashElections: Array<[CfChainsWitnessPeriodBlockWitnessRangeAssethub, H256]>;
     queuedSafeElections: PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesCompactHeightTracker004;
     ongoing: Array<
       [
@@ -12833,10 +12810,7 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesCompactHeig
 export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionTypeAssethubDepositChannel =
 
     | { type: 'OptimisticAssethubDepositChannel' }
-    | {
-        type: 'ByHashAssethubDepositChannel';
-        value: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
-      }
+    | { type: 'ByHashAssethubDepositChannel'; value: H256 }
     | { type: 'SafeBlockHeightAssethubDepositChannel' }
     | {
         type: 'GovernanceAssethubDepositChannel';
@@ -12853,10 +12827,7 @@ export type CfChainsDepositChannelDepositChannelAssethub = {
 export type CfChainsDotPolkadotChannelState = {};
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesOptimisticBlockAssethubDepositChannel =
-  {
-    hash: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
-    data: Array<PalletCfIngressEgressDepositWitnessAssethub>;
-  };
+  { hash: H256; data: Array<PalletCfIngressEgressDepositWitnessAssethub> };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubDepositChannelWitnessing =
   {
@@ -12913,12 +12884,7 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesElectionTra
   {
     seenHeightsBelow: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
     highestEverOngoingElection: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
-    queuedHashElections: Array<
-      [
-        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
-        CfChainsWitnessPeriodBlockWitnessRangeAssethub,
-      ]
-    >;
+    queuedHashElections: Array<[CfChainsWitnessPeriodBlockWitnessRangeAssethub, H256]>;
     queuedSafeElections: PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesCompactHeightTracker004;
     ongoing: Array<
       [
@@ -12939,15 +12905,12 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesElectionTra
 export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionTypeAssethubEgress =
 
     | { type: 'OptimisticAssethubEgress' }
-    | { type: 'ByHashAssethubEgress'; value: CfChainsWitnessPeriodBlockWitnessRangeAssethub }
+    | { type: 'ByHashAssethubEgress'; value: H256 }
     | { type: 'SafeBlockHeightAssethubEgress' }
     | { type: 'GovernanceAssethubEgress'; value: Array<CfChainsDotPolkadotSignature> };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserPrimitivesOptimisticBlockAssethubEgress =
-  {
-    hash: CfChainsWitnessPeriodBlockWitnessRangeAssethub;
-    data: Array<PalletCfBroadcastTransactionConfirmationAssethub>;
-  };
+  { hash: H256; data: Array<PalletCfBroadcastTransactionConfirmationAssethub> };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserInstanceGenericBlockWitnesserAssethubEgressWitnessing =
   {
@@ -17736,6 +17699,14 @@ export type SpRuntimeBlakeTwo256 = {};
 
 export type SpRuntimeBlock = { header: Header; extrinsics: Array<UncheckedExtrinsic> };
 
+export type CfChainsBtcDiscardedBitcoinUtxo = {
+  utxo: CfChainsBtcUtxo;
+  reason: CfChainsBtcBitcoinUtxoDiscardReason;
+  discardedAt: number;
+};
+
+export type CfChainsBtcBitcoinUtxoDiscardReason = 'BelowDustLimit' | 'StaleKey';
+
 export type CfChainsSolSolApiEnvironment = {
   vaultProgram: SolPrimAddress;
   vaultProgramDataAccount: SolPrimAddress;
@@ -21903,7 +21874,7 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectio
   };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineEngineElectionTypeAssethub =
-  | { type: 'ByHashAssethub'; value: CfChainsWitnessPeriodBlockWitnessRangeAssethub }
+  | { type: 'ByHashAssethub'; value: H256 }
   | { type: 'BlockHeightAssethub'; value: { submitHash: boolean } };
 
 export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectionPropertiesAssethubEgress =
@@ -21924,19 +21895,10 @@ export type PalletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeConsen
         type: 'A';
         value: PalletCfElectionsElectoralSystemsBlockHeightWitnesserPrimitivesNonemptyContinuousHeadersAssethub;
       }
-    | {
-        type: 'B';
-        value: [
-          Array<PalletCfIngressEgressDepositWitnessAssethub>,
-          CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
-        ];
-      }
+    | { type: 'B'; value: [Array<PalletCfIngressEgressDepositWitnessAssethub>, H256 | undefined] }
     | {
         type: 'C';
-        value: [
-          Array<PalletCfBroadcastTransactionConfirmationAssethub>,
-          CfChainsWitnessPeriodBlockWitnessRangeAssethub | undefined,
-        ];
+        value: [Array<PalletCfBroadcastTransactionConfirmationAssethub>, H256 | undefined];
       }
     | { type: 'D'; value: CfChainsHubAssethubTrackedData }
     | { type: 'Ee'; value: Array<AccountId32> };
