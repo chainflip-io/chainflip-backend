@@ -17,18 +17,6 @@ function check_endpoint_health() {
   fi
 }
 
-# java-tron's wallet/broadcasttransaction returns NO_CONNECTION unless the node has at least one
-# handshaken peer, so a responsive HTTP API is not enough for the localnet to be usable.
-#
-# The peer (`tron-peer`) syncs from genesis, and applying the first block produced after the
-# image's baked-in snapshot makes it iterate every witness slot missed since that snapshot was
-# taken (~28.8k per day, logged one line each). That stalls it for minutes, long enough for its
-# sync watchdog to drop the connection and for the witness node to time-ban it, so the connection
-# is only stable once the peer has caught up. The budget here grows with the snapshot's age; if
-# it runs out, the fix is a fresh snapshot in the chainflip-eth-contracts tron image.
-# Kills every process whose executable name (the basename of argv[0]) exactly
-# matches one of the given names.
-#
 # Matching against the full command line instead (`ps -ef | grep chainflip`) is
 # far too broad: it also hits unrelated processes that merely mention the name in
 # an argument or path, so anything run from a directory called `chainflip` — a
