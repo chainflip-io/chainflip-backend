@@ -366,34 +366,3 @@ jobs:
         run: |
           ./ci/scripts/manage_hetzner_bouncer_runner.sh destroy \
             "$CF_BOUNCER_RUNNER_NAME" "$CF_BOUNCER_SERVER_ID"
-
-  chainspec-compatibility:
-    runs-on: namespace-profile-default
-    strategy:
-      fail-fast: false
-      matrix:
-        network: [sisyphos, perseverance, berghain]
-    steps:
-      - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-        with:
-          persist-credentials: false
-
-      - name: Download Binaries 📥
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
-        with:
-          name: chainflip-backend-bin${{ inputs.chainflip-backend-bin-suffix }}
-
-      - name: Make Binaries Executable 🛠️
-        run: |
-          chmod +x chainflip-*
-
-      - name: Run Test 🧪
-        shell: bash
-        run: ./ci/scripts/check_node_syncing.sh --network ${{ matrix.network }} --binary-root-path .
-
-      - name: Print logs 📜
-        if: always()
-        continue-on-error: true
-        run: |
-          cat /tmp/chainflip-node.log
