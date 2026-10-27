@@ -30,7 +30,10 @@ use state_chain_runtime::chainflip::witnessing::pallet_hooks::{
 };
 use std::{collections::HashMap, fmt::Debug};
 
-use cf_chains::{evm::EvmChain, Chain, DepositChannel};
+use cf_chains::{
+	evm::{EvmChain, EvmWitnessingConfig},
+	Chain, DepositChannel,
+};
 use pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H160, H256};
@@ -96,6 +99,20 @@ pub struct EvmVoter<CT: ChainTypes, BlockQuery> {
 impl<CT: ChainTypes, BlockQuery> EvmVoter<CT, BlockQuery> {
 	pub fn new(client: EvmCachingClient<EvmRpcSigningClient>) -> Self {
 		Self { client, _phantom: Default::default() }
+	}
+}
+
+impl<CT: ChainTypes + EvmWitnessingConfig, BlockQuery> EvmVoter<CT, BlockQuery> {
+	// This function returns the highest block number we can safely witness according to our rules
+	// for this chain's witnessing. Specifically, whether we witnesss finalized blocks or the best
+	// unfinalized block.
+	pub async fn highest_witnessable_block_number(&self) -> Result<u64> {
+		Ok(if CT::WITNESS_FINALIZED_BLOCKS {
+			self.client.get_finalized_block_number().await?
+		} else {
+			self.client.get_block_number().await?
+		}
+		.low_u64())
 	}
 }
 
