@@ -2292,6 +2292,23 @@ mod private_channels {
 	}
 
 	#[test]
+	fn cannot_open_private_btc_channel_if_already_bonded() {
+		use cf_traits::{mocks::bonding::MockBonderFor, Bonding};
+
+		new_test_ext().execute_with(|| {
+			const OTHER_BOND: u128 = FLIPPERINOS_PER_FLIP * 1_000;
+			MockFundingInfo::<Test>::credit_funds(&BROKER, OTHER_BOND);
+			MockBonderFor::<Test>::update_bond(&BROKER, OTHER_BOND);
+
+			assert_noop!(
+				Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)),
+				Error::<Test>::AccountBonded
+			);
+			assert_eq!(MockBonderFor::<Test>::get_bond(&BROKER), OTHER_BOND);
+		});
+	}
+
+	#[test]
 	fn default_broker_bond() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(BrokerBond::<Test>::get(), FLIPPERINOS_PER_FLIP * 100);

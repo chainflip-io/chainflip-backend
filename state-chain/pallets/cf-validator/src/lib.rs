@@ -2192,10 +2192,13 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Only accounts without Validator or Operator roles can be sourced from `DelegationChoice`.
+	/// Only accounts without Validator, Operator or Broker roles can be sourced from
+	/// `DelegationChoice`. Brokers are excluded because the private channel bond would overwrite
+	/// the delegation bond.
 	pub(crate) fn is_delegation_eligible(account_id: &T::AccountId) -> bool {
 		!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Validator) &&
-			!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator)
+			!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator) &&
+			!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Broker)
 	}
 
 	/// Builds the delegation snapshots for the next epoch.

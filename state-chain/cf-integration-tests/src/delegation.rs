@@ -27,12 +27,12 @@ use crate::{
 
 use cf_primitives::{AccountRole, AssetAmount, FlipBalance};
 use cf_traits::{AccountInfo, EpochInfo, FundAccount, FundingSource};
-use frame_support::assert_ok;
+use frame_support::{assert_noop, assert_ok};
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, PerU16, Permill};
 use state_chain_runtime::{
-	chainflip::calculate_account_apy, Balance, Emissions, Flip, Funding, Runtime, RuntimeEvent,
-	System, Validator,
+	chainflip::calculate_account_apy, Balance, Emissions, Flip, Funding, LiquidityProvider,
+	Runtime, RuntimeEvent, Swapping, System, Validator,
 };
 
 fn setup_delegation(
@@ -341,5 +341,69 @@ fn can_calculate_account_apy_for_validator_with_delegation() {
 			};
 
 			assert_eq!(validator_apy, expected_apy_basis_point);
+		});
+}
+
+#[test]
+fn bonded_delegator_cannot_shed_its_bond() {
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
+	super::genesis::with_test_defaults()
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[(
+			managed_validator.clone(),
+			AccountRole::Validator,
+			GENESIS_BALANCE / 5,
+		)])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			let becomes_broker = AccountId::from([0xA0; 32]);
+			let becomes_lp = AccountId::from([0xA1; 32]);
+			setup_delegation(
+				&mut testnet,
+				managed_validator,
+				AccountId::from([0xe1; 32]),
+				2000,
+				BTreeMap::from_iter([
+					(becomes_broker.clone(), 2 * GENESIS_BALANCE),
+					(becomes_lp.clone(), 2 * GENESIS_BALANCE),
+				]),
+			);
+			for delegator in [&becomes_broker, &becomes_lp] {
+				assert!(!Flip::bond(delegator).is_zero());
+				assert_ok!(Validator::undelegate(
+					RuntimeOrigin::signed(delegator.clone()),
+					pallet_cf_validator::DelegationAmount::Max,
+				));
+			}
+
+			// A bonded broker can't open a private channel, which would replace the bond.
+			assert_ok!(Swapping::register_as_broker(RuntimeOrigin::signed(becomes_broker.clone())));
+			assert_noop!(
+				Swapping::open_private_btc_channel(RuntimeOrigin::signed(becomes_broker.clone())),
+				pallet_cf_swapping::Error::<Runtime>::AccountBonded
+			);
+
+			// A bonded LP can't deregister.
+			assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(
+				becomes_lp.clone()
+			)));
+			assert_noop!(
+				LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(becomes_lp.clone())),
+				pallet_cf_flip::Error::<Runtime>::AccountBonded
+			);
+
+			testnet.move_to_the_next_epoch();
+
+			assert!(Flip::bond(&becomes_broker).is_zero());
+			assert_ok!(Swapping::open_private_btc_channel(RuntimeOrigin::signed(
+				becomes_broker.clone()
+			)));
+			assert!(Flip::bond(&becomes_lp).is_zero());
+			assert_ok!(LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(
+				becomes_lp.clone()
+			)));
 		});
 }

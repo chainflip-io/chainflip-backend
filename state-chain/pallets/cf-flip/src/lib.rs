@@ -570,6 +570,10 @@ impl<T: Config> Bonding for Bonder<T> {
 		});
 		Pallet::<T>::deposit_event(Event::BondUpdated { account_id: account_id.clone(), new_bond });
 	}
+
+	fn bond(account_id: &Self::AccountId) -> Self::Amount {
+		Account::<T>::get(account_id).bond()
+	}
 }
 
 impl<T: Config> DeregistrationCheck for Bonder<T> {

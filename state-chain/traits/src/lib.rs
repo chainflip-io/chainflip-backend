@@ -733,6 +733,9 @@ pub trait Bonding {
 	type Amount;
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::AccountId, bond: Self::Amount);
+
+	/// The current bond of an account.
+	fn bond(account_id: &Self::AccountId) -> Self::Amount;
 }
 
 /// Something that is able to provide block authorship slots that were missed.

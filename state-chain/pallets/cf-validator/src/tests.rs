@@ -2316,6 +2316,63 @@ mod delegation {
 	}
 
 	#[test]
+	fn brokers_cannot_delegate() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&ALICE, 1_000);
+			assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE));
+
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(ALICE), BOB, DelegationAmount::Max),
+				Error::<Test>::DelegationNotAllowed
+			);
+		});
+	}
+
+	#[test]
+	fn snapshot_ignores_delegation_choice_for_broker() {
+		const BID: u128 = 1_000;
+		const MANAGED_VALIDATOR: u64 = 102;
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&MANAGED_VALIDATOR, BID);
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(
+				MANAGED_VALIDATOR
+			)));
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(MANAGED_VALIDATOR)));
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(BOB), MANAGED_VALIDATOR));
+			assert_ok!(ValidatorPallet::accept_operator(
+				OriginTrait::signed(MANAGED_VALIDATOR),
+				BOB
+			));
+
+			// Delegate while unregistered, then become a broker.
+			MockFlip::credit_funds(&ALICE, BID);
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE));
+
+			let (snapshots, _) = ValidatorPallet::build_delegation_snapshots::<
+				<Test as crate::Config>::KeygenQualification,
+			>(&Default::default());
+			let snapshot = snapshots.get(&BOB).expect("operator snapshot should exist");
+
+			assert!(!snapshot.delegators.contains_key(&ALICE));
+		});
+	}
+
+	#[test]
 	fn excluded_managed_validator_still_contributes_as_snapshot_delegator() {
 		const BID: u128 = 1_000;
 		new_test_ext().execute_with(|| {

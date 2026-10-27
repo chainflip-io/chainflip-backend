@@ -1093,6 +1093,8 @@ pub mod pallet {
 		RecoveryAccountAlreadyLinked,
 		/// The recovery account must be a liquidity provider.
 		RecoveryAccountNotLiquidityProvider,
+		/// The account is already bonded, so the broker bond can't be applied.
+		AccountBonded,
 	}
 
 	#[pallet::genesis_config]
@@ -1520,6 +1522,10 @@ pub mod pallet {
 				T::FundingInfo::total_balance_of(&broker_id) >= BrokerBond::<T>::get(),
 				Error::<T>::InsufficientFunds
 			);
+
+			// The bond is a single value per account, so setting the broker bond would overwrite
+			// (and closing the channel would release) a bond from another source.
+			ensure!(T::Bonder::bond(&broker_id).is_zero(), Error::<T>::AccountBonded);
 
 			let channel_id = T::ChannelIdAllocator::allocate_private_channel_id()?;
 
