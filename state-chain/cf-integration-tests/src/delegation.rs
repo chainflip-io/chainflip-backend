@@ -26,11 +26,14 @@ use crate::{
 };
 
 use cf_primitives::{AccountRole, FlipBalance};
-use cf_traits::{AccountInfo, EpochInfo, FundAccount, FundingSource};
-use frame_support::assert_ok;
+use cf_traits::{AccountInfo, AccountRoleRegistry, EpochInfo, FundAccount, FundingSource};
+use frame_support::{assert_noop, assert_ok};
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, PerU16};
-use state_chain_runtime::{Balance, Flip, Funding, Runtime, RuntimeEvent, System, Validator};
+use state_chain_runtime::{
+	AccountRoles, Balance, Flip, Funding, LiquidityProvider, Runtime, RuntimeEvent, System,
+	Validator,
+};
 
 pub(crate) fn setup_delegation(
 	testnet: &mut Network,
@@ -282,5 +285,56 @@ fn slashings_are_distributed_among_delegators() {
 					pallet_cf_validator::Bond::<Runtime>::get()
 				)
 			);
+		});
+}
+
+#[test]
+fn delegator_stays_bonded_until_rotation_after_undelegating() {
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
+	super::genesis::with_test_defaults()
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[(
+			managed_validator.clone(),
+			AccountRole::Validator,
+			GENESIS_BALANCE / 5,
+		)])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			let delegator = AccountId::from([0xA0; 32]);
+			setup_delegation(
+				&mut testnet,
+				managed_validator,
+				AccountId::from([0xe1; 32]),
+				2000,
+				BTreeMap::from_iter([(delegator.clone(), 2 * GENESIS_BALANCE)]),
+			);
+			let bond = Flip::bond(&delegator);
+			assert!(!bond.is_zero());
+
+			// Undelegating removes the delegation choice, but the account stays in the current
+			// epoch's snapshot, so it must keep both its bond and its role.
+			assert_ok!(Validator::undelegate(
+				RuntimeOrigin::signed(delegator.clone()),
+				pallet_cf_validator::DelegationAmount::Max,
+			));
+			assert_eq!(Flip::bond(&delegator), bond);
+			assert_eq!(
+				<AccountRoles as AccountRoleRegistry<Runtime>>::account_role(&delegator),
+				AccountRole::LiquidityProvider
+			);
+			assert_noop!(
+				LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(delegator.clone())),
+				pallet_cf_flip::Error::<Runtime>::AccountBonded
+			);
+
+			testnet.move_to_the_next_epoch();
+
+			assert!(Flip::bond(&delegator).is_zero());
+			assert_ok!(LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(
+				delegator.clone()
+			)));
 		});
 }
