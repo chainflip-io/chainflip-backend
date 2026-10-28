@@ -25,8 +25,6 @@ import type {
   CfPrimitivesChainsAssetsEthAsset,
   CfChainsDotPolkadotAccountId,
   CfChainsBtcUtxo,
-  CfChainsBtcDiscardedBitcoinUtxo,
-  CfChainsBtcUtxoId,
   CfChainsBtcUtxoSelectionConsolidationParameters,
   CfPrimitivesChainsAssetsArbAsset,
   CfPrimitivesChainsAssetsBscAsset,
@@ -94,7 +92,6 @@ import type {
   PalletCfBroadcastBroadcastDataPolkadot,
   CfChainsDotPolkadotSignature,
   CfChainsDotApiPolkadotApi,
-  CfChainsDotPolkadotTransactionId,
   PalletCfBroadcastBroadcastDataBitcoin,
   CfChainsBtcApiBitcoinApi,
   PalletCfSwappingSwapRequest,
@@ -621,17 +618,6 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<Array<CfChainsBtcUtxo>> =} callback
      **/
     bitcoinAvailableUtxos: GenericStorageQuery<() => Array<CfChainsBtcUtxo>>;
-
-    /**
-     * UTXOs removed from the available pool, retained for inspection and possible recovery.
-     *
-     * @param {CfChainsBtcUtxoId} arg
-     * @param {Callback<CfChainsBtcDiscardedBitcoinUtxo | undefined> =} callback
-     **/
-    bitcoinDiscardedUtxos: GenericStorageQuery<
-      (arg: CfChainsBtcUtxoId) => CfChainsBtcDiscardedBitcoinUtxo | undefined,
-      CfChainsBtcUtxoId
-    >;
 
     /**
      *
@@ -2658,17 +2644,6 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * External transactions whose fee has been refunded in the current block. A single
-     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
-     * only paid once. All confirmations from one transaction are witnessed in the same block,
-     * so this is cleared at the start of each block.
-     *
-     * @param {H256} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
-
-    /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
      *
      * @param {Callback<Array<number>> =} callback
@@ -2819,20 +2794,6 @@ export interface ChainStorage extends GenericChainStorage {
     transactionMetadata: GenericStorageQuery<(arg: number) => [] | undefined, number>;
 
     /**
-     * External transactions whose fee has been refunded in the current block. A single
-     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
-     * only paid once. All confirmations from one transaction are witnessed in the same block,
-     * so this is cleared at the start of each block.
-     *
-     * @param {CfChainsDotPolkadotTransactionId} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    refundedTransactions: GenericStorageQuery<
-      (arg: CfChainsDotPolkadotTransactionId) => [] | undefined,
-      CfChainsDotPolkadotTransactionId
-    >;
-
-    /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
      *
      * @param {Callback<Array<number>> =} callback
@@ -2980,17 +2941,6 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<[] | undefined> =} callback
      **/
     transactionMetadata: GenericStorageQuery<(arg: number) => [] | undefined, number>;
-
-    /**
-     * External transactions whose fee has been refunded in the current block. A single
-     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
-     * only paid once. All confirmations from one transaction are witnessed in the same block,
-     * so this is cleared at the start of each block.
-     *
-     * @param {H256} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
 
     /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
@@ -4486,17 +4436,6 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * External transactions whose fee has been refunded in the current block. A single
-     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
-     * only paid once. All confirmations from one transaction are witnessed in the same block,
-     * so this is cleared at the start of each block.
-     *
-     * @param {H256} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
-
-    /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
      *
      * @param {Callback<Array<number>> =} callback
@@ -5153,20 +5092,6 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<[] | undefined> =} callback
      **/
     transactionMetadata: GenericStorageQuery<(arg: number) => [] | undefined, number>;
-
-    /**
-     * External transactions whose fee has been refunded in the current block. A single
-     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
-     * only paid once. All confirmations from one transaction are witnessed in the same block,
-     * so this is cleared at the start of each block.
-     *
-     * @param {SolPrimSignature} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    refundedTransactions: GenericStorageQuery<
-      (arg: SolPrimSignature) => [] | undefined,
-      SolPrimSignature
-    >;
 
     /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
@@ -6076,20 +6001,6 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<[] | undefined> =} callback
      **/
     transactionMetadata: GenericStorageQuery<(arg: number) => [] | undefined, number>;
-
-    /**
-     * External transactions whose fee has been refunded in the current block. A single
-     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
-     * only paid once. All confirmations from one transaction are witnessed in the same block,
-     * so this is cleared at the start of each block.
-     *
-     * @param {CfChainsDotPolkadotTransactionId} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    refundedTransactions: GenericStorageQuery<
-      (arg: CfChainsDotPolkadotTransactionId) => [] | undefined,
-      CfChainsDotPolkadotTransactionId
-    >;
 
     /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
@@ -7759,17 +7670,6 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * External transactions whose fee has been refunded in the current block. A single
-     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
-     * only paid once. All confirmations from one transaction are witnessed in the same block,
-     * so this is cleared at the start of each block.
-     *
-     * @param {H256} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
-
-    /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
      *
      * @param {Callback<Array<number>> =} callback
@@ -8515,17 +8415,6 @@ export interface ChainStorage extends GenericChainStorage {
       (arg: number) => CfChainsEvmEvmTransactionMetadata | undefined,
       number
     >;
-
-    /**
-     * External transactions whose fee has been refunded in the current block. A single
-     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
-     * only paid once. All confirmations from one transaction are witnessed in the same block,
-     * so this is cleared at the start of each block.
-     *
-     * @param {H256} arg
-     * @param {Callback<[] | undefined> =} callback
-     **/
-    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
 
     /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
