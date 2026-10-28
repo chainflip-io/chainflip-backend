@@ -34,12 +34,18 @@
 //! liquidity each of them provides, and reports the result as a [Fill] per order. The proceeds are
 //! owed to the LP there and then, so an order that has been bought in its entirety ceases to
 //! exist, and every order the pool holds has liquidity left to sell.
+//!
+//! Because those proceeds have to be paid out as the swap settles, one swap only fills so many
+//! orders. The first [UNFILTERED_FILLS_PER_SWAP] it reaches it takes without question, so an
+//! ordinary swap is unaffected; past those an order is filled only if it sells enough to be worth
+//! one of the [MAX_FILLS_PER_SWAP] fills a swap has in total. Orders passed over stay in the book
+//! untouched.
 
 #[cfg(test)]
 mod tests;
 
 use serde::{Deserialize, Serialize};
-use sp_std::collections::btree_map::{BTreeMap, OccupiedEntry};
+use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -47,7 +53,37 @@ use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
 use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase};
-use cf_amm_math::{is_tick_valid, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
+use cf_amm_math::{
+	is_tick_valid, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE,
+	MIN_SQRT_PRICE,
+};
+
+/// The most limit orders one swap will fill.
+///
+/// The proceeds of every order a swap fills are owed to its LP there and then, so the cost of
+/// settling a swap grows with the number of orders it touches, and nothing about placing an order
+/// bounds that number. Capping how many a swap fills caps what settling one can cost, whatever
+/// the book is filled with.
+///
+/// This is a bound on spam, not a rule normal trading runs into: a swap that fills fewer than
+/// [UNFILTERED_FILLS_PER_SWAP] orders is not affected by it at all.
+pub const MAX_FILLS_PER_SWAP: u32 = 1000;
+
+/// How many orders a swap fills before it starts passing any over.
+///
+/// Up to this many fills the swap takes every order it reaches, in price order, exactly as it
+/// would with no limit at all. Only once it has used this many does it start requiring an order
+/// to be worth filling, so that the fills it has left can carry the rest of the swap.
+/// This will filter out small spam orders while allowing large orders to finish the swap.
+pub const UNFILTERED_FILLS_PER_SWAP: u32 = 250;
+
+const _: () = assert!(
+	UNFILTERED_FILLS_PER_SWAP < MAX_FILLS_PER_SWAP,
+	"a swap must have fills left to filter once it starts filtering"
+);
+
+// We rely on the best priced order to always be taken
+const _: () = assert!(UNFILTERED_FILLS_PER_SWAP > 0, "a swap must start with a fill to give");
 
 /// TODO: remove FloatBetweenZeroAndOne and its unit tests once the fixed pool removal migration is
 /// complete.
@@ -139,10 +175,12 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 	/// Calculates the swap output amount produced for an input amount at a price
 	fn output_amount_floor(input: Amount, price: Price) -> Option<Amount>;
 
-	/// Gets the entry for the orders priced best for this direction of swap
-	fn best_priced_orders<LP: Ord>(
-		orders: &'_ mut BTreeMap<SqrtPrice, Orders<LP>>,
-	) -> Option<OccupiedEntry<'_, SqrtPrice, Orders<LP>>>;
+	/// Iterates the pool's prices from the one priced best for this direction of swap to the one
+	/// priced worst, starting at `from` if given, `from` included.
+	fn next_orders_from<LP: Ord>(
+		orders: &mut BTreeMap<SqrtPrice, Orders<LP>>,
+		from: Option<SqrtPrice>,
+	) -> impl Iterator<Item = (&SqrtPrice, &mut Orders<LP>)>;
 }
 impl SwapDirection for BaseToQuote {
 	fn input_amount_ceil(output: Amount, price: Price) -> Option<Amount> {
@@ -161,10 +199,11 @@ impl SwapDirection for BaseToQuote {
 		price.output_amount_floor(input)
 	}
 
-	fn best_priced_orders<LP: Ord>(
-		orders: &'_ mut BTreeMap<SqrtPrice, Orders<LP>>,
-	) -> Option<OccupiedEntry<'_, SqrtPrice, Orders<LP>>> {
-		orders.last_entry()
+	fn next_orders_from<LP: Ord>(
+		orders: &mut BTreeMap<SqrtPrice, Orders<LP>>,
+		from: Option<SqrtPrice>,
+	) -> impl Iterator<Item = (&SqrtPrice, &mut Orders<LP>)> {
+		orders.range_mut(..=from.unwrap_or(MAX_SQRT_PRICE)).rev()
 	}
 }
 impl SwapDirection for QuoteToBase {
@@ -184,10 +223,11 @@ impl SwapDirection for QuoteToBase {
 		BaseToQuote::input_amount_floor(input, price)
 	}
 
-	fn best_priced_orders<LP: Ord>(
-		orders: &'_ mut BTreeMap<SqrtPrice, Orders<LP>>,
-	) -> Option<OccupiedEntry<'_, SqrtPrice, Orders<LP>>> {
-		orders.first_entry()
+	fn next_orders_from<LP: Ord>(
+		orders: &mut BTreeMap<SqrtPrice, Orders<LP>>,
+		from: Option<SqrtPrice>,
+	) -> impl Iterator<Item = (&SqrtPrice, &mut Orders<LP>)> {
+		orders.range_mut(from.unwrap_or(MIN_SQRT_PRICE)..)
 	}
 }
 
@@ -220,6 +260,154 @@ pub struct Fill<LiquidityProvider> {
 	/// The liquidity left in the order afterwards. Zero means the order was filled in its
 	/// entirety and no longer exists.
 	pub remaining_amount: Amount,
+}
+
+/// The result of swapping against the limit orders of a pool.
+pub(super) struct SwapOutcome<LiquidityProvider> {
+	pub report: crate::SwapReport<LiquidityProvider>,
+	/// The next price that the swap should continue filling limit orders at. None if the swap
+	/// filled completely or reached its fill limit.
+	pub resume_sqrt_price: Option<SqrtPrice>,
+}
+
+/// How many more orders a swap will fill, of the [MAX_FILLS_PER_SWAP] it gets.
+#[derive(Clone, Copy)]
+pub(super) enum FillQuota {
+	/// Fill every order the swap reaches, however many that is.
+	Unlimited,
+	/// Fill this many more orders.
+	Remaining(u32),
+}
+
+impl FillQuota {
+	/// A fresh quota with [MAX_FILLS_PER_SWAP] fills limit.
+	pub(super) fn bounded() -> Self {
+		Self::Remaining(MAX_FILLS_PER_SWAP)
+	}
+
+	/// The minimum amount an order must be to get used in the swap. `None` if the fill limit has
+	/// been reached.
+	///
+	/// The first [UNFILTERED_FILLS_PER_SWAP] fills go to any order, so an ordinary swap passes
+	/// nothing over. After those, an order has to sell what each of the fills left would have to
+	/// sell to finish the swap. eg. If 10 fills are left, the next order must cover at least 1/10th
+	/// the amount left to buy.
+	fn minimum_amount(&self, left_to_buy: Amount) -> Option<Amount> {
+		let Self::Remaining(remaining) = *self else { return Some(Amount::zero()) };
+
+		if remaining == 0 {
+			return None
+		}
+		if MAX_FILLS_PER_SWAP.saturating_sub(remaining) < UNFILTERED_FILLS_PER_SWAP {
+			return Some(Amount::zero())
+		}
+		// Rounded up so the swaps always fills enough to finish.
+		let (share, remainder) = left_to_buy.div_mod(Amount::from(remaining));
+		Some(if remainder.is_zero() { share } else { share.saturating_add(Amount::one()) })
+	}
+
+	/// How many orders the swap will fill at all from here.
+	fn remaining(&self) -> u32 {
+		match self {
+			Self::Unlimited => u32::MAX,
+			Self::Remaining(remaining) => *remaining,
+		}
+	}
+
+	/// Takes `fills` out of the quota, reporting whether that leaves it with none.
+	fn take(&mut self, fills: u32) -> bool {
+		match self {
+			Self::Unlimited => false,
+			Self::Remaining(remaining) => {
+				*remaining = remaining.saturating_sub(fills);
+				*remaining == 0
+			},
+		}
+	}
+}
+
+/// The orders at one price that take part in a fill, and the liquidity they provide between them.
+struct Participants<LiquidityProvider> {
+	/// Largest first, which is the order they are filled in.
+	orders: Vec<LiquidityProvider>,
+	available: Amount,
+}
+
+impl<LiquidityProvider: Ord + Clone> Participants<LiquidityProvider> {
+	/// Which of `orders` a swap with `wanted` still to buy and `quota` fills left will fill,
+	/// worked out largest first. The swap passes it the orders at one price at a time.
+	///
+	/// Its unfiltered fills go to whatever it finds. After those, an order takes part only if it
+	/// sells at least what one of the fills left would have to sell to finish the swap by the
+	/// time the swap reached it, so how many fills the orders use reflects what buying them is
+	/// worth rather than however many of them happen to be sitting there.
+	///
+	/// This only decides who takes part. What they are each sold is still split between them in
+	/// proportion to what they hold, by [fill_orders].
+	///
+	/// This function never panics.
+	fn select(
+		orders: &Orders<LiquidityProvider>,
+		quota: &FillQuota,
+		wanted: Amount,
+	) -> Option<Self> {
+		// The largest order has to clear the bar for the first fill before any other can. Checking
+		// that first means a price whose orders are all too small, which is what a book stuffed
+		// with dust is made of, costs a scan rather than a sort.
+		let largest = orders.values().map(|position| position.amount).max()?;
+		if largest < quota.minimum_amount(wanted)? {
+			return None
+		}
+
+		// Largest first, and of orders the same size the one the book stores first, so which of
+		// them take part is decided by the book rather than by how the sort happens to break ties.
+		let largest_first =
+			|&(left_lp, left): &(&LiquidityProvider, Amount),
+			 &(right_lp, right): &(&LiquidityProvider, Amount)| {
+				right.cmp(&left).then_with(|| left_lp.cmp(right_lp))
+			};
+
+		// The walk can take no more orders than the swap has fills left, so only that many of the
+		// largest need putting in order: pick them out, drop the rest, then sort just those.
+		let mut candidates =
+			orders.iter().map(|(lp, position)| (lp, position.amount)).collect::<Vec<_>>();
+		let reachable = quota.remaining() as usize;
+		if reachable < candidates.len() {
+			candidates.select_nth_unstable_by(reachable.saturating_sub(1), largest_first);
+			candidates.truncate(reachable);
+		}
+		candidates.sort_unstable_by(largest_first);
+
+		// Take them largest first until one is too small to be worth a fill. Everything after that
+		// is below the minimum, so skip it.
+		let mut quota = *quota;
+		let mut sold = Amount::zero();
+		let mut taken = 0usize;
+		for &(_, amount) in &candidates {
+			match quota.minimum_amount(wanted.saturating_sub(sold)) {
+				Some(minimum) if amount >= minimum => {
+					sold = sold.saturating_add(amount);
+					taken += 1;
+					quota.take(1);
+				},
+				_ => break,
+			}
+		}
+		if taken == 0 {
+			return None
+		}
+		candidates.truncate(taken);
+
+		Some(Self {
+			available: sold,
+			orders: candidates.into_iter().map(|(lp, _)| lp.clone()).collect(),
+		})
+	}
+
+	/// How many orders take part, which is how many of the swap's fills they use.
+	fn count(&self) -> u32 {
+		self.orders.len() as u32
+	}
 }
 
 /// A single LP position, i.e. a limit order with liquidity left to sell.
@@ -301,7 +489,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// This function never panics.
 	pub(super) fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPrice> {
-		SD::best_priced_orders(&mut self.orders[!SD::INPUT_SIDE]).map(|entry| *entry.key())
+		SD::next_orders_from(&mut self.orders[!SD::INPUT_SIDE], None)
+			.next()
+			.map(|(sqrt_price, _)| *sqrt_price)
 	}
 
 	/// Swaps the specified Amount into the other currency until sqrt_price_limit is reached (If
@@ -309,84 +499,122 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// direction is controlled by `SD`: `BaseToQuote` or `QuoteToBase`. The price limit is
 	/// inclusive.
 	///
+	/// The swap fills orders in price order from the given price (inclusive) until `quota` starts
+	/// filtering limit orders as an anti-spam measure.
+	///
 	/// This function never panics
 	pub(super) fn swap<SD: SwapDirection>(
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
 		range_orders_pool_fee_hundredth_pips: u32,
-	) -> crate::SwapOutcome<LiquidityProvider> {
+		quota: &mut FillQuota,
+		from: Option<SqrtPrice>,
+	) -> SwapOutcome<LiquidityProvider> {
 		let mut total_output_amount = U256::zero();
-		let mut fills = Vec::new();
+		let mut total_input_amount = U256::zero();
+		let mut fills: Vec<Fill<LiquidityProvider>> = Vec::new();
 		let mut input_dust = Amount::zero();
+		let mut resume_sqrt_price: Option<SqrtPrice> = None;
+		let mut last_sqrt_price = None;
+		let mut excluded_orders = 0u32;
+		// The prices that have been emptied of orders, so that they can be removed from the book
+		// after
+		let mut emptied = Vec::new();
 
-		while let Some((sqrt_price, mut orders_entry)) = (!amount.is_zero())
-			.then_some(())
-			.and_then(|()| SD::best_priced_orders(&mut self.orders[!SD::INPUT_SIDE]))
-			.map(|entry| (*entry.key(), entry))
-			.filter(|(sqrt_price, _)| {
-				// Compare in the clamped `SqrtPrice` domain, consistently with
-				// `super::PoolState::inner_swap`.
-				let sqrt_price_adjusted = super::sqrt_price_adjusted_by_pool_fee::<SD::Inverse>(
-					*sqrt_price,
-					range_orders_pool_fee_hundredth_pips,
-				);
+		for (&sqrt_price, orders) in SD::next_orders_from(&mut self.orders[!SD::INPUT_SIDE], from) {
+			if amount.is_zero() {
+				break
+			}
 
-				sqrt_price_limit.is_none_or(|sqrt_price_limit| {
-					!SD::sqrt_price_op_more_than(sqrt_price_adjusted, sqrt_price_limit)
-				})
+			// Stop here if we have reached the given price limit
+			let sqrt_price_adjusted = super::sqrt_price_adjusted_by_pool_fee::<SD::Inverse>(
+				sqrt_price,
+				range_orders_pool_fee_hundredth_pips,
+			);
+			if sqrt_price_limit.is_some_and(|sqrt_price_limit| {
+				SD::sqrt_price_op_more_than(sqrt_price_adjusted, sqrt_price_limit)
 			}) {
-			let orders = orders_entry.get_mut();
-			let available = liquidity_of(orders);
+				resume_sqrt_price = Some(sqrt_price);
+				break
+			}
 
 			let price = Price::from(sqrt_price);
+			let desired_output = SD::output_amount_floor(amount, price);
+			// Filter the orders using the ongoing quota (anti-spam)
+			let Some(participants) =
+				Participants::select(orders, quota, desired_output.unwrap_or_default())
+			else {
+				// No orders worth filling at this price, so the swap passes over them and moves on
+				// to the next price.
+				excluded_orders = excluded_orders.saturating_add(orders.len() as u32);
+				continue
+			};
 
-			// Either the input buys all the liquidity at this price, and the swap moves on to the
-			// next best price, or the input runs out here and buys as much as it can.
+			let available = participants.available;
+
+			// Either the input buys all the participating liquidity, and the swap moves on to
+			// the next best price, or the input runs out here and buys as much as it can.
 			let (sold_amount, bought_amount) = match SD::input_amount_ceil(available, price) {
 				Some(required_to_consume) if amount >= required_to_consume =>
 					(available, required_to_consume),
 				// An overflowing output would exceed `available`, which bounds it regardless.
-				_ => (
-					core::cmp::min(
-						SD::output_amount_floor(amount, price).unwrap_or(available),
-						available,
-					),
-					amount,
-				),
+				_ => (core::cmp::min(desired_output.unwrap_or(available), available), amount),
 			};
 
-			// Cannot underflow as swapped_amount is bounded by amount in both cases above. Saturate
-			// defensively anyway.
+			// Cannot underflow as swapped_amount is bounded by amount in both cases above.
+			// Saturate defensively anyway.
 			amount = amount.saturating_sub(bought_amount);
 
 			input_dust = input_dust.saturating_add(fill_orders(
 				orders,
 				sqrt_price,
-				available,
+				&participants,
 				sold_amount,
 				bought_amount,
 				&mut fills,
 			));
 
+			total_input_amount = total_input_amount.saturating_add(bought_amount);
+			total_output_amount = total_output_amount.saturating_add(sold_amount);
+			last_sqrt_price = Some(sqrt_price);
+
+			if !amount.is_zero() {
+				// If we still have some input left, then the orders must have been filtered out by
+				// the quota.
+				excluded_orders = excluded_orders.saturating_add(orders.len() as u32);
+			}
 			if orders.is_empty() {
-				orders_entry.remove();
+				emptied.push(sqrt_price);
 			}
 
-			self.total_swap_inputs[SD::INPUT_SIDE] =
-				self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(bought_amount);
-
-			total_output_amount = total_output_amount.saturating_add(sold_amount);
+			// Stop if we hit the limit on how many orders a swap can use
+			if quota.take(participants.count()) {
+				break
+			}
 		}
 
+		for sqrt_price in emptied {
+			self.orders[!SD::INPUT_SIDE].remove(&sqrt_price);
+		}
+
+		self.total_swap_inputs[SD::INPUT_SIDE] =
+			self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(total_input_amount);
 		self.total_swap_outputs[!SD::INPUT_SIDE] =
 			self.total_swap_outputs[!SD::INPUT_SIDE].saturating_add(total_output_amount);
 
-		crate::SwapOutcome {
-			output_amount: total_output_amount,
-			remaining_input_amount: amount,
-			limit_order_fills: fills,
-			limit_order_input_dust: input_dust,
+		SwapOutcome {
+			report: crate::SwapReport {
+				outcome: crate::SwapExecutionOutcome {
+					output_amount: total_output_amount,
+					limit_order_fills: fills,
+					limit_order_input_dust: input_dust,
+					last_sqrt_price,
+				},
+				remaining_input_amount: amount,
+				excluded_limit_order_count: excluded_orders,
+			},
+			resume_sqrt_price,
 		}
 	}
 
@@ -461,20 +689,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Ok((burnt_amount, position_info))
 	}
 
-	/// Returns the position for the given lp at the given tick, or `None` if there isn't one.
+	/// Returns the position for the given lp at the given tick, if there is one.
 	///
 	/// This function never panics.
 	pub(super) fn position<SD: SwapDirection>(
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<Option<Position>, PositionError> {
-		let sqrt_price = Self::validate_tick(tick)?;
+	) -> Option<Position> {
+		// An invalid tick cannot hold a position either, so it is reported the same way.
+		let sqrt_price = Self::validate_tick(tick).ok()?;
 
-		Ok(self.orders[!SD::INPUT_SIDE]
+		self.orders[!SD::INPUT_SIDE]
 			.get(&sqrt_price)
 			.and_then(|orders| orders.get(lp))
-			.cloned())
+			.cloned()
 	}
 
 	/// Returns all the assets available for swaps in a given direction, grouped by tick.
@@ -514,33 +743,39 @@ fn liquidity_of<LiquidityProvider: Ord>(orders: &Orders<LiquidityProvider>) -> A
 		.fold(Amount::zero(), |total, position| total.saturating_add(position.amount))
 }
 
-/// Buys `sold_amount` of the orders' liquidity for `bought_amount` of the other asset, splitting
-/// the liquidity bought across them in proportion to the liquidity each of them provides and paying
-/// each of them for it at the fill's rate, and appending the result to `fills`. Orders left with
-/// nothing to sell are removed.
+/// Buys `sold_amount` of the participating orders' liquidity for `bought_amount` of the other
+/// asset, splitting the liquidity bought across them in proportion to the liquidity each of them
+/// provides and paying each of them for it at the fill's rate, and appending the result to
+/// `fills`. Orders left with nothing to sell are removed.
 ///
-/// For nonzero `sold_amount`, every order is short by less than one bought-asset unit relative to
-/// the fill's rate. This bound applies per fill, not cumulatively. Undistributed proceeds are
-/// returned as protocol surplus. If `sold_amount` is zero, all proceeds are surplus and no order
-/// changes or receives a fill.
+/// For nonzero `sold_amount`, every participating order is short by less than one bought-asset
+/// unit relative to the fill's rate. This bound applies per fill, not cumulatively. Undistributed
+/// proceeds are returned as protocol surplus.
 ///
-/// `available` must be the total liquidity the orders provide, and `sold_amount` no more than it.
+/// Only the participating orders are touched. The rest are left exactly as they were and receive
+/// no fill, so that a swap settles a bounded number of orders whatever the price holds; see
+/// [Participants].
+///
+/// `participants` must have been selected from `orders`, and `sold_amount` must be no more than
+/// the liquidity they provide.
 fn fill_orders<LiquidityProvider: Ord + Clone>(
 	orders: &mut Orders<LiquidityProvider>,
 	sqrt_price: SqrtPrice,
-	available: Amount,
+	participants: &Participants<LiquidityProvider>,
 	sold_amount: Amount,
 	bought_amount: Amount,
 	fills: &mut Vec<Fill<LiquidityProvider>>,
 ) -> Amount {
-	debug_assert!(sold_amount <= available);
+	debug_assert!(sold_amount <= participants.available);
 
 	let tick = sqrt_price.to_tick();
-	let mut remaining_available = available;
+	let mut remaining_available = participants.available;
 	let mut remaining_sold = sold_amount;
 	let mut remaining_bought = bought_amount;
 
-	orders.retain(|lp, position| {
+	for lp in &participants.orders {
+		let Some(position) = orders.get_mut(lp) else { continue };
+
 		// The share is taken against what is left rather than the total, so that rounding dust
 		// rolls forward and the last order takes exactly what remains. The division cannot fail:
 		// every order holds a non-zero amount, so the remaining liquidity is non-zero for as long
@@ -572,8 +807,10 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 
 		// An order with nothing left to sell is dropped; its proceeds are owed to the lp, not held
 		// by the pool.
-		!position.amount.is_zero()
-	});
+		if position.amount.is_zero() {
+			orders.remove(lp);
+		}
+	}
 	remaining_bought
 }
 
@@ -1002,7 +1239,6 @@ pub mod legacy_support {
 mod migration_tests {
 	use super::{legacy_support::*, *};
 	use crate::common::Pairs;
-	use cf_utilities::{assert_matches, assert_ok};
 
 	type Lp = cf_primitives::AccountId;
 	type OldPoolState = PoolStateV10<Lp>;
@@ -1073,7 +1309,7 @@ mod migration_tests {
 		assert!(proceeds.is_empty(), "nothing has been bought, so nothing is owed");
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 1000.into())]);
 		assert_eq!(
-			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
+			state.position::<QuoteToBase>(&lp(1), 0),
 			Some(Position { amount: 1000.into(), original_amount: 1000.into() })
 		);
 	}
@@ -1113,11 +1349,11 @@ mod migration_tests {
 		);
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 375.into())]);
 		assert_eq!(
-			assert_ok!(state.position::<QuoteToBase>(&lp(1), 0)),
+			state.position::<QuoteToBase>(&lp(1), 0),
 			Some(Position { amount: 125.into(), original_amount: 1000.into() })
 		);
 		assert_eq!(
-			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
+			state.position::<QuoteToBase>(&lp(2), 0),
 			Some(Position { amount: 250.into(), original_amount: 2000.into() })
 		);
 	}
@@ -1141,7 +1377,7 @@ mod migration_tests {
 			}]
 		);
 		assert!(state.liquidity::<QuoteToBase>().is_empty());
-		assert_matches!(state.position::<QuoteToBase>(&lp(1), 0), Ok(None));
+		assert_eq!(state.position::<QuoteToBase>(&lp(1), 0), None);
 	}
 
 	#[test]
@@ -1170,7 +1406,7 @@ mod migration_tests {
 		// The order from the current incarnation is untouched.
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 400.into())]);
 		assert_eq!(
-			assert_ok!(state.position::<QuoteToBase>(&lp(2), 0)),
+			state.position::<QuoteToBase>(&lp(2), 0),
 			Some(Position { amount: 400.into(), original_amount: 400.into() })
 		);
 	}

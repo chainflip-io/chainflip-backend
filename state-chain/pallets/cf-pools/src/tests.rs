@@ -17,6 +17,7 @@
 use crate::{self as pallet_cf_pools, mock::*, *};
 use cf_amm::{
 	common::{AskBidMap, AssetPair, LimitOrder, Side},
+	limit_orders::{MAX_FILLS_PER_SWAP, UNFILTERED_FILLS_PER_SWAP},
 	math::Tick,
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
@@ -2538,4 +2539,252 @@ fn pools_storage_layout_is_pinned() {
 	let mut registry = scale_info::Registry::new();
 	registry.register_type(&scale_info::meta_type::<Pool<Test>>());
 	insta::assert_json_snapshot!(scale_info::PortableRegistry::from(registry));
+}
+
+/// Mints one order selling `sell_amount` at `tick` for each of `ids`, all owned by ALICE, so
+/// that a test can build a book larger than one swap will settle. Ids must not repeat across
+/// calls: setting an order that already exists moves it rather than adding another.
+fn mint_orders(tick: Tick, ids: core::ops::Range<u64>, sell_amount: AssetAmount) {
+	MockBalance::credit_account(&ALICE, Asset::Eth, sell_amount * (ids.end - ids.start) as u128);
+	for id in ids {
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			Side::Sell,
+			id,
+			Some(tick),
+			sell_amount,
+			None,
+			None,
+		));
+	}
+}
+
+/// The orderbook is a projection of the book rather than a swap anyone settles, so it reports the
+/// orders at each price whatever their number, best price first.
+#[test]
+fn pool_orderbook_reports_every_order_in_price_order() {
+	const COUNT: u64 = MAX_FILLS_PER_SWAP as u64 + 10;
+
+	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Price::at_tick_zero(),
+		));
+
+		// More orders at the worse price than one swap settles, and a smaller one ahead of them.
+		mint_orders(100, 0..COUNT, 1_000);
+		mint_orders(0, COUNT..COUNT + 1, 100);
+
+		let orderbook = LiquidityPools::pool_orderbook(Asset::Eth, STABLE_ASSET, 20).unwrap();
+
+		assert_eq!(
+			orderbook.asks.iter().fold(Amount::zero(), |total, ask| total + ask.amount),
+			(COUNT as u128 * 1_000 + 100).into(),
+			"the orderbook must account for every order on the book",
+		);
+		// A bounded walk of the book would reach the order at tick 0 only after the larger ones
+		// at tick 100 were gone, and so report it after a price it beats.
+		assert!(
+			orderbook.asks.windows(2).all(|pair| pair[0].sqrt_price <= pair[1].sqrt_price),
+			"asks must be reported best price first, got ticks {:?}",
+			orderbook.asks.iter().map(|ask| ask.sqrt_price.to_tick()).collect::<Vec<_>>(),
+		);
+	});
+}
+
+/// A swap that cannot be filled tells apart a pool that is out of liquidity from one holding more
+/// orders than a swap will settle, which a later swap can still reach.
+#[test]
+fn unfillable_swap_reports_whether_a_later_swap_could_fill() {
+	fn new_pool() {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Price::at_tick_zero(),
+		));
+	}
+
+	// A book small enough that the swap fills all of it for free: nothing is passed over, so
+	// asking for more than it holds is simply asking for liquidity that is not there.
+	new_test_ext().execute_with(|| {
+		new_pool();
+		mint_orders(0, 0..10, 1_000);
+
+		assert_noop!(
+			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, 100_000),
+			Error::<Test>::InsufficientLiquidity,
+		);
+	});
+
+	// A book past the limit: the liquidity is there, just not all reachable at once.
+	new_test_ext().execute_with(|| {
+		new_pool();
+		let count = MAX_FILLS_PER_SWAP as u64 + 10;
+		mint_orders(0, 0..count, 1_000);
+
+		assert_noop!(
+			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, count as u128 * 1_000),
+			Error::<Test>::MaxFillsExceeded,
+		);
+
+		// Buying out what it can reach lets a later swap reach the rest.
+		assert_ok!(LiquidityPools::swap_single_leg(
+			STABLE_ASSET,
+			Asset::Eth,
+			MAX_FILLS_PER_SWAP as u128 * 1_000
+		));
+		assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, 10 * 1_000));
+	});
+}
+
+/// What the limit actually protects is settlement: every order a swap fills is credited and gets
+/// an event. A wall of dust ahead of real liquidity costs the swap its unfiltered fills and no
+/// more, and the swap still completes against the liquidity behind it.
+#[test]
+fn a_swap_settles_a_bounded_number_of_orders_however_many_are_laid() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Price::at_tick_zero(),
+		));
+
+		// Far more dust than a swap will settle, at the best price, and real liquidity behind it.
+		let dust = MAX_FILLS_PER_SWAP as u64 + 500;
+		mint_orders(0, 0..dust, 1);
+		mint_orders(10, dust..dust + 1, 1_000_000);
+
+		assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, 500_000));
+
+		let filled = frame_system::Pallet::<Test>::events()
+			.into_iter()
+			.filter(|record| {
+				matches!(record.event, RuntimeEvent::LiquidityPools(Event::LimitOrderFilled { .. }))
+			})
+			.count();
+		assert_eq!(filled, UNFILTERED_FILLS_PER_SWAP as usize + 1);
+	});
+}
+
+/// Limit orders can be passed over by a swap, so using the pools best price after the swap as its
+/// ending price is wrong. Price impact must use the actual ending price that the swap got to.
+#[test]
+fn passed_over_dust_does_not_hide_price_impact() {
+	const SWAP_AMOUNT: AssetAmount = 10_000;
+	const LIMIT: u32 = 100;
+	const DUST_TICK: Tick = -10;
+
+	fn new_pool_with_price_impact_limit() {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Price::at_tick_zero(),
+		));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(Asset::Eth, Some(LIMIT))],
+		));
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
+		MockBalance::credit_account(&ALICE, Asset::Eth, 10_000_000);
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(-10_000..10_000),
+			RangeOrderSize::Liquidity { liquidity: 100_000 },
+		));
+	}
+
+	new_test_ext().execute_with(|| {
+		new_pool_with_price_impact_limit();
+
+		assert_noop!(
+			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, SWAP_AMOUNT),
+			Error::<Test>::PriceImpactLimitExceeded,
+		);
+	});
+
+	new_test_ext().execute_with(|| {
+		new_pool_with_price_impact_limit();
+		// More dust than the swap fills unfiltered, ahead of the range orders.
+		mint_orders(DUST_TICK, 0..UNFILTERED_FILLS_PER_SWAP as u64 + 10, 1);
+
+		assert_noop!(
+			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, SWAP_AMOUNT),
+			Error::<Test>::PriceImpactLimitExceeded,
+		);
+
+		// A failed swap leaves no trace, so replay it on a copy of the pool to check that it
+		// passes dust over.
+		let (asset_pair, side) = AssetPair::from_swap(STABLE_ASSET, Asset::Eth).unwrap();
+		let mut pool_state = Pools::<Test>::get(asset_pair).unwrap().pool_state;
+		let outcome = pool_state.swap(side, SWAP_AMOUNT.into()).unwrap();
+		// The dust beyond the swap's unfiltered fills is still in the book.
+		assert_eq!(pool_state.limit_orders(Side::Sell).count(), 10);
+
+		// The dust left behind keeps the pool's best price within the limit of where the swap
+		// started, so measured against that price the swap would look like it had no impact.
+		let best_tick = pool_state.current_price(side).unwrap().2;
+		assert_eq!(best_tick, DUST_TICK);
+		// The swap actually traded far past the limit.
+		let last_tick = outcome.last_sqrt_price.unwrap().to_tick();
+		assert!(
+			last_tick.abs_diff(DUST_TICK) > LIMIT,
+			"the swap must trade past the limit for the test to mean anything, got {last_tick}",
+		);
+	});
+}
+
+/// A dust order far in front of the pool's liquidity becomes the swap's start price, but the
+/// check measures the average against the nearer end, so the dust cannot trip the limit for a
+/// swap whose average sits past the middle of its move.
+#[test]
+fn dust_order_in_front_does_not_trigger_price_impact_limit() {
+	// A 500 unit swap moves the range orders about 100 ticks, with its average near the middle.
+	const SWAP_AMOUNT: AssetAmount = 500;
+	const LIMIT: u32 = 100;
+	// Far enough in front that the average is many times the limit away from it.
+	const DUST_TICK: Tick = -1_000;
+
+	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Price::at_tick_zero(),
+		));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(Asset::Eth, Some(LIMIT))],
+		));
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
+		MockBalance::credit_account(&ALICE, Asset::Eth, 10_000_000);
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(-10_000..10_000),
+			RangeOrderSize::Liquidity { liquidity: 100_000 },
+		));
+		mint_orders(DUST_TICK, 0..1, 1);
+
+		assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, SWAP_AMOUNT));
+
+		// The swap traded the dust, so it really did start 1,000 ticks in front of the rest.
+		assert!(limit_order_amounts::<Test>(Asset::Eth, Side::Sell).is_empty());
+	});
 }

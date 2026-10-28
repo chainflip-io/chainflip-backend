@@ -610,11 +610,7 @@ mod tests {
 			// Tick zero is a price of one, so Alice is owed the 500 that was bought from her, and
 			// keeps the half that was not.
 			assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 500);
-			let alice = pool
-				.pool_state
-				.limit_order(&(ALICE, ALICE_ORDER), Side::Sell, 0)
-				.unwrap()
-				.unwrap();
+			let alice = pool.pool_state.limit_order(&(ALICE, ALICE_ORDER), Side::Sell, 0).unwrap();
 			assert_eq!(alice.amount, 500.into());
 			assert_eq!(alice.original_amount, 2500.into(),);
 
@@ -622,11 +618,7 @@ mod tests {
 			// Bob's order sold all 800 of it at tick 120, a price of 1.0001^120 ≈ 1.01207, so he is
 			// owed 809.66 rounded down.
 			assert_eq!(MockBalance::get_balance(&BOB, STABLE_ASSET), 809);
-			assert!(pool
-				.pool_state
-				.limit_order(&(BOB, BOB_ORDER), Side::Sell, 120)
-				.unwrap()
-				.is_none());
+			assert!(pool.pool_state.limit_order(&(BOB, BOB_ORDER), Side::Sell, 120).is_none());
 
 			// The index is rebuilt from what survived, so it holds Alice's order and not Bob's.
 			assert_eq!(pool.limit_orders_cache.base[&ALICE][&ALICE_ORDER], 0);
@@ -810,20 +802,12 @@ mod tests {
 
 			// Sold all 1000 at a price of 1.0001^120, so 1012 rounded down.
 			assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 1012);
-			assert!(pool
-				.pool_state
-				.limit_order(&(ALICE, ALICE_ORDER), Side::Sell, TICK)
-				.unwrap()
-				.is_none());
+			assert!(pool.pool_state.limit_order(&(ALICE, ALICE_ORDER), Side::Sell, TICK).is_none());
 			assert!(!pool.limit_orders_cache.base.contains_key(&ALICE));
 
 			// The price still has Bob's order on it, indexed as before.
 			assert_eq!(
-				pool.pool_state
-					.limit_order(&(BOB, BOB_ORDER), Side::Sell, TICK)
-					.unwrap()
-					.unwrap()
-					.amount,
+				pool.pool_state.limit_order(&(BOB, BOB_ORDER), Side::Sell, TICK).unwrap().amount,
 				800.into()
 			);
 			assert_eq!(pool.limit_orders_cache.base[&BOB][&BOB_ORDER], TICK);
