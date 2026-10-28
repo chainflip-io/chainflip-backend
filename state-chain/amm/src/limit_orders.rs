@@ -82,8 +82,7 @@ const _: () = assert!(
 	"a swap must have fills left to filter once it starts filtering"
 );
 
-// A swap starts out able to fill whatever it reaches, which is why the price it starts at is
-// simply the best one the pool holds rather than the best one it would still take.
+// We rely on the best priced order to always be taken
 const _: () = assert!(UNFILTERED_FILLS_PER_SWAP > 0, "a swap must start with a fill to give");
 
 /// TODO: remove FloatBetweenZeroAndOne and its unit tests once the fixed pool removal migration is
@@ -265,7 +264,7 @@ pub struct Fill<LiquidityProvider> {
 
 /// The result of swapping against the limit orders of a pool.
 pub(super) struct SwapOutcome<LiquidityProvider> {
-	pub outcome: crate::SwapOutcome<LiquidityProvider>,
+	pub report: crate::SwapReport<LiquidityProvider>,
 	/// The first price past the limit, if the swap stopped there with input left to spend. Prices
 	/// better than this hold nothing the swap would still fill, so it is where the swap resumes if
 	/// the caller gives it more room. `None` if the swap did not stop at the limit, when there is
@@ -282,11 +281,9 @@ pub(super) enum FillQuota {
 }
 
 impl FillQuota {
-	pub(super) fn new(max_fills: super::MaxFills) -> Self {
-		match max_fills {
-			super::MaxFills::Unbounded => Self::Unlimited,
-			super::MaxFills::Bounded => Self::Remaining(MAX_FILLS_PER_SWAP),
-		}
+	/// A fresh quota with [MAX_FILLS_PER_SWAP] fills limit.
+	pub(super) fn bounded() -> Self {
+		Self::Remaining(MAX_FILLS_PER_SWAP)
 	}
 
 	/// The minimum an order must be to participate in filling the swap.
@@ -603,13 +600,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			self.total_swap_outputs[!SD::INPUT_SIDE].saturating_add(total_output_amount);
 
 		SwapOutcome {
-			outcome: crate::SwapOutcome {
-				output_amount: total_output_amount,
+			report: crate::SwapReport {
+				outcome: crate::SwapOutcome {
+					output_amount: total_output_amount,
+					limit_order_fills: fills,
+					limit_order_input_dust: input_dust,
+					last_sqrt_price,
+				},
 				remaining_input_amount: amount,
-				limit_order_fills: fills,
-				limit_order_input_dust: input_dust,
 				excluded_limit_order_count: excluded_orders,
-				last_sqrt_price,
 			},
 			next_fillable_sqrt_price,
 		}

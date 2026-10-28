@@ -62,34 +62,37 @@ pub enum NewError {
 pub struct SwapOutcome<LiquidityProvider> {
 	/// The amount bought by the swap.
 	pub output_amount: Amount,
-	/// The part of the input amount that could not be swapped.
-	pub remaining_input_amount: Amount,
 	/// The limit orders the swap bought into. Their proceeds are owed to the LPs and must be paid
 	/// out by the caller; the pool does not hold on to them.
 	pub limit_order_fills: Vec<limit_orders::Fill<LiquidityProvider>>,
 	/// Consumed input left over after rounding limit-order proceeds. The caller must account for
 	/// it as protocol-owned surplus; it is not owed to an LP or available for another swap.
 	pub limit_order_input_dust: Amount,
-	/// How many limit orders where ignored because they where too small and the anti-spam measures
-	/// activated.
-	pub excluded_limit_order_count: u32,
 	/// The worst price the swap traded at, which is where its last fill was. Limit orders the
 	/// swap passed over can leave the pool's price better than this. `None` if it traded nothing.
 	pub last_sqrt_price: Option<SqrtPrice>,
 }
 
-/// Whether to limit the number of orders the swap execution can use in total.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MaxFills {
-	/// Limit to [limit_orders::MAX_FILLS_PER_SWAP] in total. Anti-spam measures enabled.
-	Bounded,
-	/// No limit. Used for a true pool simulation, not for normal operation. Anti-spam measures
-	/// disabled.
-	Unbounded,
+pub enum SwapError {
+	/// The pool does not hold enough liquidity to fill the swap completely.
+	InsufficientLiquidity,
+	/// Too many small limit orders. Could not fill the swap within the fill limit.
+	MaxFillsExceeded,
+}
+
+/// Everything a pass over the pool reports, before it is decided whether the swap succeeded.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SwapReport<LiquidityProvider> {
+	pub(crate) outcome: SwapOutcome<LiquidityProvider>,
+	/// The part of the input amount that could not be swapped.
+	pub(crate) remaining_input_amount: Amount,
+	/// How many limit orders the swap passed over because one swap only settles so many.
+	pub(crate) excluded_limit_order_count: u32,
 }
 
 /// What one swap has taken from the pool's limit orders so far, and what it will take next.
-struct LimitOrderSwaps<LiquidityProvider> {
+struct LimitOrderExecutionProgress<LiquidityProvider> {
 	/// Track the number of fills the swap has used so far
 	quota: limit_orders::FillQuota,
 	/// The best price the limit orders still offer this swap, `None` once they offer it nothing.
@@ -264,21 +267,53 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		}
 	}
 
-	/// Performs a swap to sell or buy an amount of either side/asset.
+	/// Sells `sold_amount` of one side of the pool, all or nothing. A swap that cannot be made
+	/// in full errors, and leaves the pool as it was for the caller to roll back. It fills no more
+	/// than [limit_orders::MAX_FILLS_PER_SWAP] limit orders. The caller must pay out the returned
+	/// fills.
 	///
 	/// This function never panics.
 	pub fn swap(
 		&mut self,
 		order: Side,
 		sold_amount: Amount,
-		sqrt_price_limit: Option<SqrtPrice>,
-		max_fills: MaxFills,
-	) -> SwapOutcome<LiquidityProvider> {
-		match order.to_sold_pair() {
-			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, sqrt_price_limit, max_fills),
-			Pairs::Quote =>
-				self.inner_swap::<QuoteToBase>(sold_amount, sqrt_price_limit, max_fills),
+	) -> Result<SwapOutcome<LiquidityProvider>, SwapError> {
+		let quota = limit_orders::FillQuota::bounded();
+		let SwapReport { outcome, remaining_input_amount, excluded_limit_order_count } =
+			match order.to_sold_pair() {
+				Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, None, quota),
+				Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, None, quota),
+			};
+
+		if remaining_input_amount.is_zero() {
+			Ok(outcome)
+		} else if excluded_limit_order_count > 0 {
+			Err(SwapError::MaxFillsExceeded)
+		} else {
+			Err(SwapError::InsufficientLiquidity)
 		}
+	}
+
+	/// Sells as much of `sold_amount` as the pool will take before its price passes
+	/// the given limit, returning what's left over alongside the outcome.
+	///
+	/// This will execute without the anti-spam fill limit, so it is not intended for the fills to
+	/// actually be payed out.
+	///
+	/// This function never panics.
+	pub fn swap_to_price(
+		&mut self,
+		order: Side,
+		sold_amount: Amount,
+		sqrt_price_limit: SqrtPrice,
+	) -> (SwapOutcome<LiquidityProvider>, Amount) {
+		let quota = limit_orders::FillQuota::Unlimited;
+		let limit = Some(sqrt_price_limit);
+		let SwapReport { outcome, remaining_input_amount, .. } = match order.to_sold_pair() {
+			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, limit, quota),
+			Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, limit, quota),
+		};
+		(outcome, remaining_input_amount)
 	}
 
 	fn inner_swap<
@@ -287,16 +322,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
-		max_fills: MaxFills,
-	) -> SwapOutcome<LiquidityProvider> {
+		quota: limit_orders::FillQuota,
+	) -> SwapReport<LiquidityProvider> {
 		let mut total_output_amount = Amount::zero();
 
 		let range_orders_fee = self.range_orders.fee_hundredth_pips;
 
 		// Track the Limit order fills and the best price.
-		let mut progress = LimitOrderSwaps {
+		let mut progress = LimitOrderExecutionProgress {
 			best_sqrt_price: self.limit_orders.current_sqrt_price::<SD>(),
-			quota: limit_orders::FillQuota::new(max_fills),
+			quota,
 			fills: Vec::new(),
 			input_dust: Amount::zero(),
 			excluded_orders: 0,
@@ -378,13 +413,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			}
 		}
 
-		SwapOutcome {
-			output_amount: total_output_amount,
+		SwapReport {
+			outcome: SwapOutcome {
+				output_amount: total_output_amount,
+				limit_order_fills: progress.fills,
+				limit_order_input_dust: progress.input_dust,
+				last_sqrt_price,
+			},
 			remaining_input_amount: amount,
-			limit_order_fills: progress.fills,
-			limit_order_input_dust: progress.input_dust,
 			excluded_limit_order_count: progress.excluded_orders,
-			last_sqrt_price,
 		}
 	}
 
@@ -393,24 +430,26 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
 		range_orders_fee: u32,
-		progress: &mut LimitOrderSwaps<LiquidityProvider>,
+		progress: &mut LimitOrderExecutionProgress<LiquidityProvider>,
 	) -> (Amount, Amount, Option<SqrtPrice>) {
-		let limit_orders::SwapOutcome { outcome, next_fillable_sqrt_price } =
-			self.limit_orders.swap::<SD>(
-				amount,
-				sqrt_price_limit,
-				range_orders_fee,
-				&mut progress.quota,
-				progress.best_sqrt_price,
-			);
+		let limit_orders::SwapOutcome {
+			report: SwapReport { outcome, remaining_input_amount, excluded_limit_order_count },
+			next_fillable_sqrt_price,
+		} = self.limit_orders.swap::<SD>(
+			amount,
+			sqrt_price_limit,
+			range_orders_fee,
+			&mut progress.quota,
+			progress.best_sqrt_price,
+		);
 
 		progress.best_sqrt_price = next_fillable_sqrt_price;
 		progress.fills.extend(outcome.limit_order_fills);
 		progress.input_dust = progress.input_dust.saturating_add(outcome.limit_order_input_dust);
 		progress.excluded_orders =
-			progress.excluded_orders.saturating_add(outcome.excluded_limit_order_count);
+			progress.excluded_orders.saturating_add(excluded_limit_order_count);
 
-		(outcome.output_amount, outcome.remaining_input_amount, outcome.last_sqrt_price)
+		(outcome.output_amount, remaining_input_amount, outcome.last_sqrt_price)
 	}
 
 	fn swap_range_orders<SD: range_orders::SwapDirection>(

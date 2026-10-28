@@ -2730,9 +2730,9 @@ fn passed_over_dust_does_not_hide_price_impact() {
 		// passes dust over.
 		let (asset_pair, side) = AssetPair::from_swap(STABLE_ASSET, Asset::Eth).unwrap();
 		let mut pool_state = Pools::<Test>::get(asset_pair).unwrap().pool_state;
-		let outcome = pool_state.swap(side, SWAP_AMOUNT.into(), None, MaxFills::Bounded);
-		assert!(outcome.remaining_input_amount.is_zero());
-		assert_eq!(outcome.excluded_limit_order_count, 10);
+		let outcome = pool_state.swap(side, SWAP_AMOUNT.into()).unwrap();
+		// The dust beyond the swap's unfiltered fills is still in the book.
+		assert_eq!(pool_state.limit_orders(Side::Sell).count(), 10);
 
 		// The dust left behind keeps the pool's best price within the limit of where the swap
 		// started, so measured against that price the swap would look like it had no impact.

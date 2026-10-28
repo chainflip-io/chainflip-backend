@@ -28,9 +28,10 @@ use super::*;
 type LiquidityProvider = cf_primitives::AccountId;
 type PoolState = super::PoolState<LiquidityProvider>;
 
+/// Swaps as much of `amount` as the pool will take, returning the output and what is left.
 fn swap(pool_state: &mut PoolState, order: Side, amount: Amount) -> (Amount, Amount) {
-	let SwapOutcome { output_amount, remaining_input_amount, .. } =
-		pool_state.swap(order, amount, None, MaxFills::Bounded);
+	let (SwapOutcome { output_amount, .. }, remaining_input_amount) =
+		pool_state.swap_to_price(order, amount, PoolState::inner_worst_price(order));
 	(output_amount, remaining_input_amount)
 }
 
@@ -256,8 +257,7 @@ fn alternating_range_and_limit_orders() {
 	assert_eq!(pool.limit_order(&LP, Side::Buy, 10).unwrap().amount, limit_order_amount);
 	assert_eq!(pool.range_order(&LP, TICK_RANGE).unwrap().0.fees.base, 0.into());
 
-	let SwapOutcome { limit_order_fills, .. } =
-		pool.swap(Side::Sell, 3_000_000.into(), None, MaxFills::Bounded);
+	let SwapOutcome { limit_order_fills, .. } = pool.swap(Side::Sell, 3_000_000.into()).unwrap();
 
 	// Check that all three orders have been used in the swap:
 	assert_eq!(limit_order_fills.len(), 2);
@@ -278,9 +278,8 @@ fn limit_order_dust_is_accumulated_across_prices() {
 	}
 
 	// Each tick sells two satoshis for 2,001 micro-USDC. Each LP receives 1,000.
-	let outcome = pool.swap(Side::Buy, 4_002.into(), None, MaxFills::Bounded);
+	let outcome = pool.swap(Side::Buy, 4_002.into()).unwrap();
 	assert_eq!(outcome.output_amount, 4.into());
-	assert!(outcome.remaining_input_amount.is_zero());
 	assert_eq!(outcome.limit_order_input_dust, 2.into());
 	assert_eq!(outcome.limit_order_fills.len(), 4);
 	assert!(outcome.limit_order_fills.iter().all(|fill| fill.bought_amount == 1_000.into()));
@@ -364,15 +363,21 @@ fn fill_limit_holds_across_switches_to_range_orders() {
 			.unwrap();
 	}
 
-	let unlimited = pool.clone().swap(Side::Sell, 3_000_000.into(), None, MaxFills::Unbounded);
+	let (unlimited, _) = pool.clone().swap_to_price(
+		Side::Sell,
+		3_000_000.into(),
+		PoolState::inner_worst_price(Side::Sell),
+	);
 	assert!(
 		unlimited.limit_order_fills.len() > limit_orders::MAX_FILLS_PER_SWAP as usize,
 		"the book must be big enough for the limit to matter, got {}",
 		unlimited.limit_order_fills.len(),
 	);
-	assert_eq!(unlimited.excluded_limit_order_count, 0);
 
-	let limited = pool.swap(Side::Sell, 3_000_000.into(), None, MaxFills::Bounded);
+	// Bounded, and allowed to fall short, so as to see how far it got.
+	let limited = pool
+		.inner_swap::<BaseToQuote>(3_000_000.into(), None, limit_orders::FillQuota::bounded())
+		.outcome;
 	assert!(limited.limit_order_fills.len() <= limit_orders::MAX_FILLS_PER_SWAP as usize);
 	assert!(limited.output_amount <= unlimited.output_amount);
 }
@@ -410,12 +415,13 @@ fn limit_orders_past_the_range_price_are_judged_when_reached() {
 	pool.mint_limit_order(&small_order, Side::Sell, 50, 5.into()).unwrap();
 	pool.mint_limit_order(&lp(0), Side::Sell, 100, 1_000_000.into()).unwrap();
 
-	let outcome = pool.swap(Side::Buy, 12_000.into(), None, MaxFills::Bounded);
+	let report =
+		pool.inner_swap::<QuoteToBase>(12_000.into(), None, limit_orders::FillQuota::bounded());
 
-	assert!(outcome.remaining_input_amount.is_zero());
+	assert!(report.remaining_input_amount.is_zero());
 	assert!(
-		outcome.limit_order_fills.iter().any(|fill| fill.lp == small_order),
+		report.outcome.limit_order_fills.iter().any(|fill| fill.lp == small_order),
 		"the order at tick 50 must be filled once the swap reaches it",
 	);
-	assert_eq!(outcome.excluded_limit_order_count, 0);
+	assert_eq!(report.excluded_limit_order_count, 0);
 }

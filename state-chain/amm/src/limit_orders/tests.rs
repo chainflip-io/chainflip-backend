@@ -329,12 +329,16 @@ fn swap_with_fill_quota<SD: SwapDirection>(
 ) -> (Amount, Amount, Vec<Fill<LiquidityProvider>>) {
 	let mut quota = quota;
 	let super::SwapOutcome {
-		outcome:
-			crate::SwapOutcome {
-				output_amount,
+		report:
+			crate::SwapReport {
+				outcome:
+					crate::SwapOutcome {
+						output_amount,
+						limit_order_fills: fills,
+						limit_order_input_dust,
+						..
+					},
 				remaining_input_amount: remaining_amount,
-				limit_order_fills: fills,
-				limit_order_input_dust,
 				..
 			},
 		..
@@ -977,6 +981,7 @@ fn every_price_in_the_range_can_be_swapped_out() {
 		std::iter::repeat_with(|| {
 			pool_state
 				.swap::<BaseToQuote>(Amount::MAX, None, 0, &mut FillQuota::Unlimited, None)
+				.report
 				.outcome
 				.output_amount
 		})
@@ -1164,7 +1169,7 @@ mod fill_proptests {
 
 /// A swap that will fill orders normally until its unfiltered fills run out.
 fn quota() -> FillQuota {
-	FillQuota::new(crate::MaxFills::Bounded)
+	FillQuota::bounded()
 }
 
 /// Every one of a swap's unfiltered fills goes to whatever it finds, however far too small to get
@@ -1178,13 +1183,13 @@ fn filtering_starts_after_the_last_unfiltered_fill() {
 		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), 1, 1.into()));
 	}
 	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(u16::MAX), 0, 1_000_000.into()));
-	let outcome = pool_state
+	let report = pool_state
 		.swap::<BaseToQuote>(500_000.into(), None, 0, &mut quota(), None)
-		.outcome;
+		.report;
 	// Every unfiltered fill goes to dust, the dust left after them is passed over, and the order
 	// behind is filled.
-	assert_eq!(outcome.limit_order_fills.len(), UNFILTERED_FILLS_PER_SWAP as usize + 1);
-	assert_eq!(outcome.excluded_limit_order_count, 1);
+	assert_eq!(report.outcome.limit_order_fills.len(), UNFILTERED_FILLS_PER_SWAP as usize + 1);
+	assert_eq!(report.excluded_limit_order_count, 1);
 }
 
 /// Once its unfiltered fills are gone the swap raises what an order must hold to be worth
@@ -1252,11 +1257,11 @@ fn a_satisfied_swap_reports_nothing_excluded() {
 	}
 
 	// Buys out the best price and stops, leaving the two worse ones untouched.
-	let mut quota = FillQuota::new(crate::MaxFills::Bounded);
+	let mut quota = FillQuota::bounded();
 	let outcome = pool_state.swap::<BaseToQuote>(1000.into(), None, 0, &mut quota, None);
 
-	assert!(outcome.outcome.remaining_input_amount.is_zero(), "the swap must be satisfied");
-	assert_eq!(outcome.outcome.excluded_limit_order_count, 0);
+	assert!(outcome.report.remaining_input_amount.is_zero(), "the swap must be satisfied");
+	assert_eq!(outcome.report.excluded_limit_order_count, 0);
 }
 
 /// A swap the limit stops short of what it asked for reports the orders it passed over, so that
@@ -1270,7 +1275,7 @@ fn a_swap_stopped_by_the_limit_reports_what_it_passed_over() {
 		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), id as Tick, 1000.into()));
 	}
 
-	let mut quota = FillQuota::new(crate::MaxFills::Bounded);
+	let mut quota = FillQuota::bounded();
 	let outcome = pool_state.swap::<BaseToQuote>(
 		Amount::from(count) * Amount::from(2000u32),
 		None,
@@ -1279,14 +1284,14 @@ fn a_swap_stopped_by_the_limit_reports_what_it_passed_over() {
 		None,
 	);
 
-	assert!(!outcome.outcome.remaining_input_amount.is_zero(), "the swap must fall short");
+	assert!(!outcome.report.remaining_input_amount.is_zero(), "the swap must fall short");
 	assert!(
-		outcome.outcome.excluded_limit_order_count > 0,
+		outcome.report.excluded_limit_order_count > 0,
 		"orders left unreachable must be reported, or this looks like an empty pool",
 	);
 	// The bar turns the swap away before its fills run out: needing more orders than it has
 	// fills is exactly what the bar detects, so it never gets as far as spending them all.
-	assert!(outcome.outcome.limit_order_fills.len() < MAX_FILLS_PER_SWAP as usize);
+	assert!(outcome.report.outcome.limit_order_fills.len() < MAX_FILLS_PER_SWAP as usize);
 }
 
 /// The quota's first fills go to any order. From then on an order has to sell what each of the

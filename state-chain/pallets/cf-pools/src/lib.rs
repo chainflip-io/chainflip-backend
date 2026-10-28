@@ -21,7 +21,7 @@ use cf_amm::{
 	limit_orders::{self, Position},
 	math::{Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
-	MaxFills, PoolState,
+	PoolState,
 };
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
@@ -1137,25 +1137,13 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					pool.pool_state.current_price(side).ok_or(Error::<T>::InsufficientLiquidity)?.2;
 				let cf_amm::SwapOutcome {
 					output_amount,
-					remaining_input_amount,
 					limit_order_fills,
 					limit_order_input_dust,
-					excluded_limit_order_count,
 					last_sqrt_price,
-				} = pool.pool_state.swap(side, input_amount, None, MaxFills::Bounded);
-
-				// Any leftover amount means the swap could not be filled, and it's all or nothing
-				// at this point. If there are excluded orders, then that means the anti-spam
-				// measures kicked in and the swap could not reach all the liquidity that was
-				// available.
-				ensure!(
-					remaining_input_amount.is_zero(),
-					if excluded_limit_order_count > 0 {
-						Error::<T>::MaxFillsExceeded
-					} else {
-						Error::<T>::InsufficientLiquidity
-					}
-				);
+				} = pool.pool_state.swap(side, input_amount).map_err(|error| match error {
+					cf_amm::SwapError::InsufficientLiquidity => Error::<T>::InsufficientLiquidity,
+					cf_amm::SwapError::MaxFillsExceeded => Error::<T>::MaxFillsExceeded,
+				})?;
 
 				// Process any limit order fills that occurred during the swap. This will credit the
 				// LPs with the proceeds of the swap.
@@ -2229,16 +2217,10 @@ impl<T: Config> Pallet<T> {
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
-						let cf_amm::SwapOutcome {
-							output_amount: sold_base_amount,
-							remaining_input_amount: remaining_quote_amount,
-							..
-						} = pool_state.swap(
-							Side::Buy,
-							Amount::MAX,
-							Some(sqrt_price),
-							MaxFills::Unbounded,
-						);
+						let (
+							cf_amm::SwapOutcome { output_amount: sold_base_amount, .. },
+							remaining_quote_amount,
+						) = pool_state.swap_to_price(Side::Buy, Amount::MAX, sqrt_price);
 
 						let bought_quote_amount = Amount::MAX - remaining_quote_amount;
 
@@ -2263,16 +2245,10 @@ impl<T: Config> Pallet<T> {
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
-						let cf_amm::SwapOutcome {
-							output_amount: sold_quote_amount,
-							remaining_input_amount: remaining_base_amount,
-							..
-						} = pool_state.swap(
-							Side::Sell,
-							Amount::MAX,
-							Some(sqrt_price),
-							MaxFills::Unbounded,
-						);
+						let (
+							cf_amm::SwapOutcome { output_amount: sold_quote_amount, .. },
+							remaining_base_amount,
+						) = pool_state.swap_to_price(Side::Sell, Amount::MAX, sqrt_price);
 
 						let bought_base_amount = Amount::MAX - remaining_base_amount;
 
