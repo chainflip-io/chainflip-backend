@@ -738,6 +738,12 @@ pub trait Bonding {
 	fn bond(account_id: &Self::AccountId) -> Self::Amount;
 }
 
+pub trait DelegationInfo {
+	type AccountId;
+	/// Whether the account has chosen an operator to delegate to.
+	fn is_delegating(account_id: &Self::AccountId) -> bool;
+}
+
 /// Something that is able to provide block authorship slots that were missed.
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.

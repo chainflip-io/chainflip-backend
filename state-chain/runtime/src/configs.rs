@@ -214,6 +214,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
+	type DelegationInfo = Validator;
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
 	type FundAccount = Funding;

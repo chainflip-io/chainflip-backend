@@ -35,6 +35,7 @@ pub mod ccm_additional_data_handler;
 pub mod ceremony_id_provider;
 pub mod cfe_interface_mock;
 pub mod chain_tracking;
+pub mod delegation_info;
 pub mod deposit_handler;
 pub mod deregistration_check;
 pub mod egress_handler;

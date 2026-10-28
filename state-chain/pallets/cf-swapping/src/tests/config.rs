@@ -414,3 +414,21 @@ fn cannot_register_as_broker_in_safe_mode() {
 		assert_ok!(Swapping::register_as_broker(RuntimeOrigin::signed(BROKER)));
 	});
 }
+
+#[test]
+fn delegators_cannot_register_as_broker() {
+	use cf_traits::mocks::delegation_info::MockDelegationInfo;
+
+	pub const BROKER: <Test as frame_system::Config>::AccountId = 6969u64;
+
+	new_test_ext().execute_with(|| {
+		MockDelegationInfo::set_delegating(&BROKER, true);
+		assert_noop!(
+			Swapping::register_as_broker(RuntimeOrigin::signed(BROKER)),
+			Error::<Test>::AccountIsDelegating
+		);
+
+		MockDelegationInfo::set_delegating(&BROKER, false);
+		assert_ok!(Swapping::register_as_broker(RuntimeOrigin::signed(BROKER)));
+	});
+}

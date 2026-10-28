@@ -407,3 +407,78 @@ fn bonded_delegator_cannot_shed_its_bond() {
 			)));
 		});
 }
+
+#[test]
+fn pending_delegator_cannot_become_broker_during_rotation() {
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
+	super::genesis::with_test_defaults()
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[(
+			managed_validator.clone(),
+			AccountRole::Validator,
+			GENESIS_BALANCE / 5,
+		)])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			let operator = AccountId::from([0xe1; 32]);
+			setup_delegation(
+				&mut testnet,
+				managed_validator,
+				operator.clone(),
+				2000,
+				BTreeMap::from_iter([(AccountId::from([0xA0; 32]), 2 * GENESIS_BALANCE)]),
+			);
+
+			let late_delegator = AccountId::from([0xA1; 32]);
+			Funding::fund_account(
+				late_delegator.clone(),
+				GENESIS_BALANCE,
+				FundingSource::EthTransaction {
+					tx_hash: Default::default(),
+					funder: Default::default(),
+				},
+			);
+			assert_ok!(Validator::delegate(
+				RuntimeOrigin::signed(late_delegator.clone()),
+				operator.clone(),
+				pallet_cf_validator::DelegationAmount::Max
+			));
+
+			// Start the rotation: the auction puts the delegator in the pending snapshot, but its
+			// bond is only applied once the new epoch starts.
+			testnet.move_to_the_end_of_epoch();
+			testnet.move_forward_blocks(1);
+			assert_ne!(
+				pallet_cf_validator::CurrentRotationPhase::<Runtime>::get(),
+				pallet_cf_validator::RotationPhase::Idle
+			);
+			assert!(pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
+				Validator::epoch_index() + 1,
+				&operator
+			)
+			.unwrap()
+			.delegators
+			.contains_key(&late_delegator));
+			assert!(Flip::bond(&late_delegator).is_zero());
+
+			// Becoming a broker now would let it open a private channel, whose close sheds the
+			// delegation bond applied in the meantime.
+			assert_noop!(
+				Validator::undelegate(
+					RuntimeOrigin::signed(late_delegator.clone()),
+					pallet_cf_validator::DelegationAmount::Max,
+				),
+				pallet_cf_validator::Error::<Runtime>::RotationInProgress
+			);
+			assert_noop!(
+				Swapping::register_as_broker(RuntimeOrigin::signed(late_delegator.clone())),
+				pallet_cf_swapping::Error::<Runtime>::AccountIsDelegating
+			);
+
+			testnet.move_to_the_next_epoch();
+			assert!(!Flip::bond(&late_delegator).is_zero());
+		});
+}
