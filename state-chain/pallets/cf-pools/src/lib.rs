@@ -510,9 +510,7 @@ pub mod pallet {
 		BelowMinimumOrderAmount,
 		/// The swap would move the pool's price further than the pool's configured limit.
 		PriceImpactLimitExceeded,
-		/// The swap could not be filled, and it passed limit orders over because one swap will
-		/// only settle so many. The liquidity to fill it may be in the orders it did not reach,
-		/// which a later or smaller swap can reach; it may also simply not be there.
+		/// The swap could not be filled because it reached the max number of order fills.
 		MaxFillsExceeded,
 	}
 
@@ -1135,7 +1133,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 
 				let tick_before =
 					pool.pool_state.current_price(side).ok_or(Error::<T>::InsufficientLiquidity)?.2;
-				let cf_amm::SwapOutcome {
+				let cf_amm::SwapExecutionOutcome {
 					output_amount,
 					limit_order_fills,
 					limit_order_input_dust,
@@ -1152,13 +1150,10 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					T::AssetWithholding::withhold_assets(from, limit_order_input_dust.try_into()?);
 				}
 
-				// The impact is measured across the prices the swap traded at, not the pool's price
-				// afterwards: limit orders it passed over can leave that better than where it
-				// traded, and emptying a price level can leave it worse.
-				let tick_after = match last_sqrt_price {
-					Some(sqrt_price) => sqrt_price.to_tick(),
-					None => tick_before,
-				};
+				// The impact is measured across the prices the swap traded at, not the pool's best
+				// price afterwards.
+				let tick_after =
+					last_sqrt_price.map_or(tick_before, |sqrt_price| sqrt_price.to_tick());
 
 				// Get the effective price that the swap traded at
 				let swap_tick = PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
@@ -1173,8 +1168,8 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
 				};
 
-				// Enforce price impact protection if the swap's effective price is too far from the
-				// both the final price and the initial price.
+				// Trigger impact protection if the swap's effective price is too far from both the
+				// final price and the initial price.
 				if let Some(maximum_price_impact) = MaximumPriceImpact::<T>::get(asset_pair) {
 					if core::cmp::min(
 						bounded_swap_tick.abs_diff(tick_after),
@@ -2218,7 +2213,9 @@ impl<T: Config> Pallet<T> {
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (
-							cf_amm::SwapOutcome { output_amount: sold_base_amount, .. },
+							cf_amm::SwapExecutionOutcome {
+								output_amount: sold_base_amount, ..
+							},
 							remaining_quote_amount,
 						) = pool_state.swap_to_price(Side::Buy, Amount::MAX, sqrt_price);
 
@@ -2246,7 +2243,9 @@ impl<T: Config> Pallet<T> {
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (
-							cf_amm::SwapOutcome { output_amount: sold_quote_amount, .. },
+							cf_amm::SwapExecutionOutcome {
+								output_amount: sold_quote_amount, ..
+							},
 							remaining_base_amount,
 						) = pool_state.swap_to_price(Side::Sell, Amount::MAX, sqrt_price);
 

@@ -59,7 +59,7 @@ pub enum NewError {
 
 /// The result of a swap against a pool.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SwapOutcome<LiquidityProvider> {
+pub struct SwapExecutionOutcome<LiquidityProvider> {
 	/// The amount bought by the swap.
 	pub output_amount: Amount,
 	/// The limit orders the swap bought into. Their proceeds are owed to the LPs and must be paid
@@ -84,7 +84,7 @@ pub enum SwapError {
 /// Everything a pass over the pool reports, before it is decided whether the swap succeeded.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SwapReport<LiquidityProvider> {
-	pub(crate) outcome: SwapOutcome<LiquidityProvider>,
+	pub(crate) outcome: SwapExecutionOutcome<LiquidityProvider>,
 	/// The part of the input amount that could not be swapped.
 	pub(crate) remaining_input_amount: Amount,
 	/// How many limit orders the swap passed over because one swap only settles so many.
@@ -277,7 +277,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		order: Side,
 		sold_amount: Amount,
-	) -> Result<SwapOutcome<LiquidityProvider>, SwapError> {
+	) -> Result<SwapExecutionOutcome<LiquidityProvider>, SwapError> {
 		let quota = limit_orders::FillQuota::bounded();
 		let SwapReport { outcome, remaining_input_amount, excluded_limit_order_count } =
 			match order.to_sold_pair() {
@@ -306,7 +306,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		sold_amount: Amount,
 		sqrt_price_limit: SqrtPrice,
-	) -> (SwapOutcome<LiquidityProvider>, Amount) {
+	) -> (SwapExecutionOutcome<LiquidityProvider>, Amount) {
 		let quota = limit_orders::FillQuota::Unlimited;
 		let limit = Some(sqrt_price_limit);
 		let SwapReport { outcome, remaining_input_amount, .. } = match order.to_sold_pair() {
@@ -414,7 +414,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		}
 
 		SwapReport {
-			outcome: SwapOutcome {
+			outcome: SwapExecutionOutcome {
 				output_amount: total_output_amount,
 				limit_order_fills: progress.fills,
 				limit_order_input_dust: progress.input_dust,
@@ -434,7 +434,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	) -> (Amount, Amount, Option<SqrtPrice>) {
 		let limit_orders::SwapOutcome {
 			report: SwapReport { outcome, remaining_input_amount, excluded_limit_order_count },
-			next_fillable_sqrt_price,
+			resume_sqrt_price: next_fillable_sqrt_price,
 		} = self.limit_orders.swap::<SD>(
 			amount,
 			sqrt_price_limit,

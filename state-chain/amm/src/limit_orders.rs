@@ -176,7 +176,7 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 	fn output_amount_floor(input: Amount, price: Price) -> Option<Amount>;
 
 	/// Iterates the pool's prices from the one priced best for this direction of swap to the one
-	/// priced worst, starting at `from` if given.
+	/// priced worst, starting at `from` if given, `from` included.
 	fn next_orders_from<LP: Ord>(
 		orders: &mut BTreeMap<SqrtPrice, Orders<LP>>,
 		from: Option<SqrtPrice>,
@@ -265,14 +265,13 @@ pub struct Fill<LiquidityProvider> {
 /// The result of swapping against the limit orders of a pool.
 pub(super) struct SwapOutcome<LiquidityProvider> {
 	pub report: crate::SwapReport<LiquidityProvider>,
-	/// The first price past the limit, if the swap stopped there with input left to spend. Prices
-	/// better than this hold nothing the swap would still fill, so it is where the swap resumes if
-	/// the caller gives it more room. `None` if the swap did not stop at the limit, when there is
-	/// nothing left to resume.
-	pub next_fillable_sqrt_price: Option<SqrtPrice>,
+	/// The next price that the swap should continue filling limit orders at. None if the swap
+	/// filled completely or reached its fill limit.
+	pub resume_sqrt_price: Option<SqrtPrice>,
 }
 
 /// How many more orders a swap will fill, of the [MAX_FILLS_PER_SWAP] it gets.
+#[derive(Clone, Copy)]
 pub(super) enum FillQuota {
 	/// Fill every order the swap reaches, however many that is.
 	Unlimited,
@@ -286,22 +285,25 @@ impl FillQuota {
 		Self::Remaining(MAX_FILLS_PER_SWAP)
 	}
 
-	/// The minimum an order must be to participate in filling the swap.
+	/// The minimum amount an order must be to get used in the swap. `None` if the fill limit has
+	/// been reached.
 	///
 	/// The first [UNFILTERED_FILLS_PER_SWAP] fills go to any order, so an ordinary swap passes
 	/// nothing over. After those, an order has to sell what each of the fills left would have to
 	/// sell to finish the swap. eg. If 10 fills are left, the next order must cover at least 1/10th
 	/// the amount left to buy.
-	fn minimum_amount(&self, index: u32, left_to_buy: Amount) -> Option<Amount> {
-		let Self::Remaining(remaining) = self else { return Some(Amount::zero()) };
+	fn minimum_amount(&self, left_to_buy: Amount) -> Option<Amount> {
+		let Self::Remaining(remaining) = *self else { return Some(Amount::zero()) };
 
-		let used = MAX_FILLS_PER_SWAP.saturating_sub(*remaining);
-		if used.saturating_add(index) < UNFILTERED_FILLS_PER_SWAP {
+		if remaining == 0 {
+			return None
+		}
+		if MAX_FILLS_PER_SWAP.saturating_sub(remaining) < UNFILTERED_FILLS_PER_SWAP {
 			return Some(Amount::zero())
 		}
-
-		let fills_left = remaining.checked_sub(index).filter(|left| *left > 0)?;
-		Some(left_to_buy / Amount::from(fills_left))
+		// Rounded up so the swaps always fills enough to finish.
+		let (share, remainder) = left_to_buy.div_mod(Amount::from(remaining));
+		Some(if remainder.is_zero() { share } else { share.saturating_add(Amount::one()) })
 	}
 
 	/// How many orders the swap will fill at all from here.
@@ -353,7 +355,7 @@ impl<LiquidityProvider: Ord + Clone> Participants<LiquidityProvider> {
 		// that first means a price whose orders are all too small, which is what a book stuffed
 		// with dust is made of, costs a scan rather than a sort.
 		let largest = orders.values().map(|position| position.amount).max()?;
-		if largest < quota.minimum_amount(0, wanted)? {
+		if largest < quota.minimum_amount(wanted)? {
 			return None
 		}
 
@@ -376,15 +378,17 @@ impl<LiquidityProvider: Ord + Clone> Participants<LiquidityProvider> {
 		}
 		candidates.sort_unstable_by(largest_first);
 
-		// Take them largest first until one is too small to be worth a fill. Everything after it
-		// is smaller still and faces a higher bar, so none of those would be either.
+		// Take them largest first until one is too small to be worth a fill. Everything after that
+		// is below the minimum, so skip it.
+		let mut quota = *quota;
 		let mut sold = Amount::zero();
 		let mut taken = 0usize;
-		for (index, &(_, amount)) in candidates.iter().enumerate() {
-			match quota.minimum_amount(index as u32, wanted.saturating_sub(sold)) {
+		for &(_, amount) in &candidates {
+			match quota.minimum_amount(wanted.saturating_sub(sold)) {
 				Some(minimum) if amount >= minimum => {
 					sold = sold.saturating_add(amount);
-					taken = index + 1;
+					taken += 1;
+					quota.take(1);
 				},
 				_ => break,
 			}
@@ -495,8 +499,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// direction is controlled by `SD`: `BaseToQuote` or `QuoteToBase`. The price limit is
 	/// inclusive.
 	///
-	/// The swap fills orders in price order until `quota` starts filtering limit orders as an
-	/// anti-spam measure.
+	/// The swap fills orders in price order from the given price (inclusive) until `quota` starts
+	/// filtering limit orders as an anti-spam measure.
 	///
 	/// This function never panics
 	pub(super) fn swap<SD: SwapDirection>(
@@ -511,7 +515,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		let mut total_input_amount = U256::zero();
 		let mut fills: Vec<Fill<LiquidityProvider>> = Vec::new();
 		let mut input_dust = Amount::zero();
-		let mut next_fillable_sqrt_price: Option<SqrtPrice> = None;
+		let mut resume_sqrt_price: Option<SqrtPrice> = None;
 		let mut last_sqrt_price = None;
 		let mut excluded_orders = 0u32;
 		// The prices that have been emptied of orders, so that they can be removed from the book
@@ -531,7 +535,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			if sqrt_price_limit.is_some_and(|sqrt_price_limit| {
 				SD::sqrt_price_op_more_than(sqrt_price_adjusted, sqrt_price_limit)
 			}) {
-				next_fillable_sqrt_price = Some(sqrt_price);
+				resume_sqrt_price = Some(sqrt_price);
 				break
 			}
 
@@ -601,7 +605,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 		SwapOutcome {
 			report: crate::SwapReport {
-				outcome: crate::SwapOutcome {
+				outcome: crate::SwapExecutionOutcome {
 					output_amount: total_output_amount,
 					limit_order_fills: fills,
 					limit_order_input_dust: input_dust,
@@ -610,7 +614,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				remaining_input_amount: amount,
 				excluded_limit_order_count: excluded_orders,
 			},
-			next_fillable_sqrt_price,
+			resume_sqrt_price,
 		}
 	}
 

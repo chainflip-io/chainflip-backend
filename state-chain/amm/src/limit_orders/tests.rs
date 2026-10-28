@@ -332,7 +332,7 @@ fn swap_with_fill_quota<SD: SwapDirection>(
 		report:
 			crate::SwapReport {
 				outcome:
-					crate::SwapOutcome {
+					crate::SwapExecutionOutcome {
 						output_amount,
 						limit_order_fills: fills,
 						limit_order_input_dust,
@@ -1299,39 +1299,44 @@ fn a_swap_stopped_by_the_limit_reports_what_it_passed_over() {
 /// buy, none can be given at all.
 #[test]
 fn fill_quota_minimum_amount() {
-	let fresh = quota();
+	// A quota that has already given out `used` fills.
+	let after = |used: u32| {
+		let mut quota = quota();
+		quota.take(used);
+		quota
+	};
 	let filtered_from = UNFILTERED_FILLS_PER_SWAP;
 	let fills_left = MAX_FILLS_PER_SWAP - filtered_from;
 
 	// Unfiltered, whatever is left to buy.
-	for index in [0, filtered_from - 1] {
-		assert_eq!(fresh.minimum_amount(index, 1_000.into()), Some(Amount::zero()));
-		assert_eq!(fresh.minimum_amount(index, Amount::zero()), Some(Amount::zero()));
+	for used in [0, filtered_from - 1] {
+		assert_eq!(after(used).minimum_amount(1_000.into()), Some(Amount::zero()));
+		assert_eq!(after(used).minimum_amount(Amount::zero()), Some(Amount::zero()));
 	}
 
 	// Filtered
 	// x fills left to buy 10x, so each fill must sell 10.
 	assert_eq!(
-		fresh.minimum_amount(filtered_from, Amount::from(fills_left) * Amount::from(10)),
+		after(filtered_from).minimum_amount(Amount::from(fills_left) * Amount::from(10)),
 		Some(10.into())
 	);
-	// x fills left to buy x-1, so each needs to sell around 0.9, rounding down to zero.
-	assert_eq!(fresh.minimum_amount(filtered_from, Amount::from(fills_left - 1)), Some(0.into()));
+	// x fills left to buy 10x + 1, so each needs to sell a little over 10, rounding up to 11.
+	assert_eq!(
+		after(filtered_from).minimum_amount(Amount::from(fills_left) * Amount::from(10) + 1),
+		Some(11.into())
+	);
+	// x fills left to buy x-1, so each needs to sell around 0.9, rounding up to 1.
+	assert_eq!(after(filtered_from).minimum_amount(Amount::from(fills_left - 1)), Some(1.into()));
 	// 1 fill left to buy 7, so it must sell 7.
-	assert_eq!(fresh.minimum_amount(MAX_FILLS_PER_SWAP - 1, 7.into()), Some(7.into()));
+	assert_eq!(after(MAX_FILLS_PER_SWAP - 1).minimum_amount(7.into()), Some(7.into()));
 
 	// No fill left to give.
-	assert_eq!(fresh.minimum_amount(MAX_FILLS_PER_SWAP, 1_000.into()), None);
+	assert_eq!(after(MAX_FILLS_PER_SWAP).minimum_amount(1_000.into()), None);
 	// Nothing left to buy: the swap ends at this price, so any order may share the fill.
-	assert_eq!(fresh.minimum_amount(filtered_from, Amount::zero()), Some(Amount::zero()));
-
-	// A quota already part used counts the position from where it got to.
-	let mut used = quota();
-	assert!(!used.take(filtered_from));
-	assert_eq!(used.minimum_amount(0, Amount::from(fills_left) * Amount::from(3)), Some(3.into()));
+	assert_eq!(after(filtered_from).minimum_amount(Amount::zero()), Some(Amount::zero()));
 
 	// With no limit, every order will do.
-	assert_eq!(FillQuota::Unlimited.minimum_amount(u32::MAX, Amount::zero()), Some(Amount::zero()));
+	assert_eq!(FillQuota::Unlimited.minimum_amount(Amount::zero()), Some(Amount::zero()));
 }
 
 /// Taking fills reports when the quota has none left, and never with no limit.

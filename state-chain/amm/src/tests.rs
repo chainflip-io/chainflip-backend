@@ -30,7 +30,7 @@ type PoolState = super::PoolState<LiquidityProvider>;
 
 /// Swaps as much of `amount` as the pool will take, returning the output and what is left.
 fn swap(pool_state: &mut PoolState, order: Side, amount: Amount) -> (Amount, Amount) {
-	let (SwapOutcome { output_amount, .. }, remaining_input_amount) =
+	let (SwapExecutionOutcome { output_amount, .. }, remaining_input_amount) =
 		pool_state.swap_to_price(order, amount, PoolState::inner_worst_price(order));
 	(output_amount, remaining_input_amount)
 }
@@ -257,7 +257,8 @@ fn alternating_range_and_limit_orders() {
 	assert_eq!(pool.limit_order(&LP, Side::Buy, 10).unwrap().amount, limit_order_amount);
 	assert_eq!(pool.range_order(&LP, TICK_RANGE).unwrap().0.fees.base, 0.into());
 
-	let SwapOutcome { limit_order_fills, .. } = pool.swap(Side::Sell, 3_000_000.into()).unwrap();
+	let SwapExecutionOutcome { limit_order_fills, .. } =
+		pool.swap(Side::Sell, 3_000_000.into()).unwrap();
 
 	// Check that all three orders have been used in the swap:
 	assert_eq!(limit_order_fills.len(), 2);
