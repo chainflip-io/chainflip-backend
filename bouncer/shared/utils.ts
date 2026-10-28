@@ -999,6 +999,9 @@ export async function observeEVMEvent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameterNames = eventAbi.inputs.map((input: any) => input.name);
 
+  const maxConsecutiveGetLogsFailures = 10;
+  let getLogsFailures = 0;
+
   for (let i = 0; i < 1200; i++) {
     if (stopObserve()) return undefined;
     const currentBlockNumber = await web3.eth.getBlockNumber();
@@ -1009,13 +1012,19 @@ export async function observeEVMEvent(
           fromBlock: initBlockNumber,
           toBlock: currentBlockNumber,
         });
-      } catch {
+      } catch (error) {
         // Log queries up to the head can briefly fail while the node's log indexer catches up
         // with block import (seen on BSC: "failed to retrieve log value pointer"). Leave
         // initBlockNumber unchanged so the same range is retried on the next iteration.
+        getLogsFailures++;
+        if (getLogsFailures > maxConsecutiveGetLogsFailures) throw error;
+        globalLogger.warn(
+          `Failed to get ${eventName} events on ${chain} for blocks ${initBlockNumber}-${currentBlockNumber} (attempt ${getLogsFailures}/${maxConsecutiveGetLogsFailures}), retrying: ${error}`,
+        );
         events = undefined;
       }
       if (events) {
+        getLogsFailures = 0;
         for (let j = 0; j < events.length; j++) {
           if (Object.keys(events[j].returnValues).length / 2 !== parameterNames.length)
             throw new Error('Unexpected event length');
