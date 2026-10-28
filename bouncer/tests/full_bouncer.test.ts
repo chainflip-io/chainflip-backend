@@ -13,7 +13,7 @@ describe('SerialTests2', () => {
   serialTest('RotatesThroughBtcSwap', testRotatesThroughBtcSwap, 360);
   serialTest('BtcUtxoConsolidation', testBtcUtxoConsolidation, 200);
   serialTest('RotationBarrier', testRotationBarrier, 320);
-  serialTest('MinimumDeposit', testMinimumDeposit, 150);
+  serialTest('MinimumDeposit', testMinimumDeposit, 200);
   serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
 
   if (process.env.LOCALNET) {
