@@ -1858,9 +1858,9 @@ where
 			} else if version < 19 {
 				#[expect(deprecated)]
 				Ok(api.cf_safe_mode_statuses_before_version_19(hash)?.into())
-			} else if version < 22 {
+			} else if version < 23 {
 				#[expect(deprecated)]
-				Ok(api.cf_safe_mode_statuses_before_version_22(hash)?.into())
+				Ok(api.cf_safe_mode_statuses_before_version_23(hash)?.into())
 			} else {
 				api.cf_safe_mode_statuses(hash)
 			}
@@ -2137,9 +2137,9 @@ where
 							.into_iter()
 							.map(Into::into)
 							.collect::<Vec<_>>()
-					} else if api_version < 22 {
+					} else if api_version < 23 {
 						#[expect(deprecated)]
-						api.cf_all_account_infos_before_version_22(hash, roles)?
+						api.cf_all_account_infos_before_version_23(hash, roles)?
 							.into_iter()
 							.map(Into::into)
 							.collect::<Vec<_>>()
@@ -2528,9 +2528,9 @@ where
 							} = if api_version < 19 {
 								#[expect(deprecated)]
 								api.cf_validator_info_before_version_19(hash, &account_id)?.into()
-							} else if api_version < 22 {
+							} else if api_version < 23 {
 								#[expect(deprecated)]
-								api.cf_validator_info_before_version_22(hash, &account_id)?.into()
+								api.cf_validator_info_before_version_23(hash, &account_id)?.into()
 							} else {
 								api.cf_validator_info(hash, &account_id)?
 							};
@@ -2572,9 +2572,9 @@ where
 				} else if api_version < 19 {
 					#[expect(deprecated)]
 					api.cf_validator_info_before_version_19(hash, &account_id).map(Into::into)
-				} else if api_version < 22 {
+				} else if api_version < 23 {
 					#[expect(deprecated)]
-					api.cf_validator_info_before_version_22(hash, &account_id).map(Into::into)
+					api.cf_validator_info_before_version_23(hash, &account_id).map(Into::into)
 				} else {
 					api.cf_validator_info(hash, &account_id)
 				}

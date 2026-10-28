@@ -472,14 +472,12 @@ mod benchmarks {
 
 	#[benchmark]
 	fn accept_operator() {
-		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+		let accounts = <T as Chainflip>::AccountRoleRegistry::generate_whitelisted_callers(vec![
 			AccountRole::Operator,
-		)
-		.unwrap();
-		let validator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
 			AccountRole::Validator,
-		)
+		])
 		.unwrap();
+		let (operator, validator) = (accounts[0].clone(), accounts[1].clone());
 
 		ClaimedValidators::<T>::insert(validator.clone(), BTreeSet::from([operator.clone()]));
 

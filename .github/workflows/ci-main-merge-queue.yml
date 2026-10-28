@@ -1,4 +1,5 @@
-# This CI runs a lot of the jobs in parallel to speed up development time. We also run a simpler suite of bouncer tests.
+# Only cheap checks run here, to keep the queue fast. Bouncer, upgrade and benchmark tests run on
+# main after merge, in ci-main-e2e.yml.
 name: Chainflip Main Merge Queue
 on:
   merge_group:
@@ -11,59 +12,14 @@ jobs:
     needs: pre-check
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
-  coverage:
-    needs: pre-check
-    uses: ./.github/workflows/_11_coverage.yml
-    with:
-      test_features: runtime-benchmarks
-    secrets: inherit
   build:
     needs: pre-check
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
       profile: "release"
-  build-benchmarks:
-    needs: pre-check
-    uses: ./.github/workflows/_20_build.yml
-    secrets: inherit
-    with:
-      profile: "benchmarks"
-      upload-name: "chainflip-backend-bin-benchmarks"
-      binary-subdir: release
-  test-benchmarks:
-    needs: [build-benchmarks]
-    uses: ./.github/workflows/_41_test_benchmarks.yml
-    secrets:
-      CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
-      CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
-  # Used to test upgrades to this version from the latest release
-  build-try-runtime:
-    needs: pre-check
-    uses: ./.github/workflows/_20_build.yml
-    secrets: inherit
-    with:
-      profile: "try-runtime"
-      upload-name: "chainflip-backend-bin-try-runtime"
-      binary-subdir: release
-
-  post-check:
+  # Catches runtime changes merged alongside stale generated bouncer types, which pass on each PR alone.
+  check-generated-bouncer-dependencies:
     needs: [build]
-    uses: ./.github/workflows/_40_post_check.yml
-    secrets: inherit
-    with:
-      full-bouncer: true
-  post-check-old-rpcs:
-    needs: [build]
-    uses: ./.github/workflows/_40_post_check.yml
-    secrets: inherit
-    with:
-      full-bouncer: true
-      broker-endpoint: "http://127.0.0.1:10997"
-      lp-endpoint: "http://127.0.0.1:10589"
-      log-postfix: "-post-check-old-rpcs"
-
-  upgrade-check:
-    needs: [build-try-runtime]
-    uses: ./.github/workflows/upgrade-test.yml
+    uses: ./.github/workflows/_23_check_generated_bouncer_dependencies.yml
     secrets: inherit

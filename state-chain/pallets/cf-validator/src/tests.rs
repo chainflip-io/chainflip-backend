@@ -2223,6 +2223,30 @@ mod operator {
 	}
 
 	#[test]
+	fn cannot_accept_claim_of_deregistered_operator() {
+		const OP: u64 = 1001;
+		const V: u64 = 2001;
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V)));
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP), V));
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(OP)));
+
+			assert_noop!(
+				ValidatorPallet::accept_operator(OriginTrait::signed(V), OP),
+				Error::<Test>::NotOperator
+			);
+			assert!(OperatorChoice::<Test>::get(V).is_none());
+			assert!(ManagedValidators::<Test>::get(OP).is_empty());
+		});
+	}
+
+	#[test]
 	fn max_validators_per_operator_cannot_be_bypassed_via_accept() {
 		const OP: u64 = 1001;
 		// One more than the cap, to prove the bound holds.
@@ -4083,6 +4107,61 @@ fn distribute_all_matches_looped_distribute() {
 		let total: u128 = batched.values().sum();
 		assert_eq!(total, PER_BENEFICIARY_AMOUNT * beneficiaries.len() as u128);
 	});
+}
+
+mod zero_bond {
+	use super::*;
+	use crate::delegation::{distribute, DelegatedRewardsDistribution};
+	use cf_traits::RewardsDistribution;
+
+	const EPOCH: u32 = 10;
+	const VALIDATOR: u64 = 100;
+	const OPERATOR: u64 = 200;
+	const DELEGATOR: u64 = 300;
+
+	/// Registers a delegated snapshot for `EPOCH` without recording a bond for it.
+	fn setup() {
+		crate::CurrentEpoch::<Test>::put(EPOCH);
+		crate::HistoricalAuthorities::<Test>::insert(EPOCH, vec![VALIDATOR]);
+		DelegationSnapshot::<u64, u128> {
+			operator: OPERATOR,
+			validators: [(VALIDATOR, 200_000u128)].into_iter().collect(),
+			delegators: [(DELEGATOR, 800_000u128)].into_iter().collect(),
+			delegation_fee_bps: 2000,
+		}
+		.register_for_epoch::<Test>(EPOCH);
+		assert!(crate::HistoricalBonds::<Test>::try_get(EPOCH).is_err());
+	}
+
+	#[test]
+	#[cfg_attr(
+		debug_assertions,
+		should_panic(expected = "No bond recorded for epoch 10; skipping reward distribution.")
+	)]
+	fn distribute_all_skips_epoch_without_bond() {
+		new_test_ext().execute_with(|| {
+			setup();
+			DelegatedRewardsDistribution::<Test>::distribute_all(EPOCH, 100_000, |_, _| {
+				panic!("nothing should be settled without a bond")
+			});
+		});
+	}
+
+	#[test]
+	#[cfg_attr(
+		debug_assertions,
+		should_panic(expected = "No bond recorded for epoch 10. Settling directly with validator")
+	)]
+	fn distribute_settles_with_validator_without_bond() {
+		new_test_ext().execute_with(|| {
+			setup();
+			let mut settled = vec![];
+			distribute::<Test>(EPOCH, &VALIDATOR, 100_000, |account, amount| {
+				settled.push((*account, amount));
+			});
+			assert_eq!(settled, vec![(VALIDATOR, 100_000)]);
+		});
+	}
 }
 
 #[cfg(test)]

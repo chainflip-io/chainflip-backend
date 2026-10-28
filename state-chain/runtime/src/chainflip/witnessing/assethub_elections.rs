@@ -19,7 +19,7 @@ use crate::{
 	AssethubChainTracking, AssethubIngressEgress, Runtime,
 };
 use cf_chains::{
-	dot::PolkadotSignature,
+	dot::{PolkadotHash, PolkadotSignature},
 	hub::AssethubTrackedData,
 	instances::AssethubInstance,
 	witness_period::{BlockWitnessRange, SaturatingStep},
@@ -36,7 +36,7 @@ use pallet_cf_elections::{
 	electoral_system_runner::RunnerStorageAccessTrait,
 	electoral_systems::{
 		block_height_witnesser::{
-			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
+			consensus::BlockHeightWitnesserConsensus, primitives::BHWVote,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
 			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
@@ -59,7 +59,7 @@ use pallet_cf_elections::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use sp_core::{Decode, Encode, Get};
+use sp_core::{ConstU32, Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
@@ -82,9 +82,10 @@ pub type AssethubWitnessBatchNumber = BlockWitnessRange<Assethub>;
 define_empty_struct! { pub struct AssethubChain; }
 impl ChainTypes for AssethubChain {
 	type ChainBlockNumber = AssethubWitnessBatchNumber;
-	// block numbers are unique identifiers because we only use finalized blocks,
-	// so we can use them for the purpose of "hashes"
-	type ChainBlockHash = AssethubWitnessBatchNumber;
+	// The hash of a witness range is the hash of its last block, and its parent hash is the parent
+	// hash of its first block. Even though we only witness finalized blocks, real hashes keep the
+	// reorg detection of the BHW and the hash checks of the BW meaningful.
+	type ChainBlockHash = PolkadotHash;
 	const NAME: &'static str = "Assethub";
 }
 
@@ -107,13 +108,15 @@ impls! {
 		type BlockHeightChangeHook = Self;
 		type Chain = AssethubChain;
 		type ReorgHook = Self;
+		// Engine votes carry up to `MAX_SUBMIT_HEADERS + 2` headers.
+		type MaxVoteHeaders = ConstU32<{ ASSETHUB_MAX_SUBMIT_HEADERS_IN_BHW_VOTER + 2 }>;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-		type VoteStorage = vote_storage::bitmap::Bitmap<NonemptyContinuousHeaders<AssethubChain>>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<BHWVote<Self>>;
 
 		type OnFinalizeReturnItem = Option<ChainProgress<AssethubChain>>;
 
@@ -244,7 +247,7 @@ pub type AssethubLiveness = Liveness<
 	u64, /* we can't use the actual AssethubWitnessBatchNumber because that's based on u32 and
 	      * the Liveness ES requires inter-convertibility with u64 due to the underlying
 	      * randomness library. */
-	sp_core::H256,
+	PolkadotHash,
 	ReportFailedLivenessCheck<Assethub>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
