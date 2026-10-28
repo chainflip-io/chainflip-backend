@@ -11,6 +11,7 @@ import { DisposableApiPromise, getAssethubApi } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import { ISubmittableResult } from '@polkadot/types/types';
+import { EventRecord } from '@polkadot/types/interfaces';
 
 let nextAliceNonce: number | undefined;
 
@@ -56,6 +57,63 @@ async function fillNonceGap(logger: Logger, nonce: number) {
   }
 }
 
+// The bouncer owns Alice's Assethub nonces (handed out one at a time under `assethubSigningMutex`),
+// so if the on-chain nonce has advanced past `pinnedNonce`, it can only be *our own* transfer for
+// that nonce that consumed it — i.e. the transfer landed. This lets us recognize a landed-but-lost
+// transfer: after a reorg the inclusion deadline can fire while the tx is being re-included on the
+// new fork, and the next resubmission then bounces with "1010 Invalid Transaction: Transaction is
+// outdated" (Stale). That stale error is confirmation of success, not a failure.
+async function nonceAlreadyConsumed(pinnedNonce: number): Promise<boolean> {
+  const alice = await aliceKeyringPair();
+  await using assethub = await getAssethubApi();
+  return (await assethub.rpc.system.accountNextIndex(alice.address)).toNumber() > pinnedNonce;
+}
+
+// How many blocks back to look for a landed-but-lost transaction. It will have been included within
+// a block or two of submission, so this is generous.
+const RECOVERY_BLOCK_LOOKBACK = 30;
+
+// Once we know one of our submissions for a nonce landed (see `nonceAlreadyConsumed`), the tx is
+// sitting in a recent block rather than a state we can `signAndSend`-watch — resubmitting only ever
+// yields more "stale" errors. So walk back from the head to find the block containing any of our
+// submitted tx hashes and, if an event was expected, read it from that block's events. Returns
+// undefined if the tx can't be located within the lookback window.
+async function findLandedResult(
+  submittedHashes: Set<string>,
+  expectedEvent?: { pallet: string; name: string },
+): Promise<{ txHash: string; eventData?: unknown } | undefined> {
+  await using assethub = await getAssethubApi();
+  let blockHash = (await assethub.rpc.chain.getHeader()).hash;
+  for (let i = 0; i < RECOVERY_BLOCK_LOOKBACK; i++) {
+    const signedBlock = await assethub.rpc.chain.getBlock(blockHash);
+    const index = signedBlock.block.extrinsics.findIndex((ex) =>
+      submittedHashes.has(ex.hash.toString()),
+    );
+    if (index >= 0) {
+      const txHash = signedBlock.block.extrinsics[index].hash.toString();
+      if (expectedEvent === undefined) {
+        return { txHash };
+      }
+      const events = (await (
+        await assethub.at(blockHash)
+      ).query.system.events()) as unknown as EventRecord[];
+      const record = events.find(
+        (e) =>
+          e.phase.isApplyExtrinsic &&
+          e.phase.asApplyExtrinsic.toNumber() === index &&
+          e.event.section === expectedEvent.pallet &&
+          e.event.method === expectedEvent.name,
+      );
+      return { txHash, eventData: record?.event.data };
+    }
+    if (signedBlock.block.header.number.toNumber() === 0) {
+      break;
+    }
+    blockHash = signedBlock.block.header.parentHash;
+  }
+  return undefined;
+}
+
 // the signer is always `//Alice`
 export async function submitHubExtrinsic(
   logger: Logger,
@@ -70,6 +128,9 @@ export async function submitHubExtrinsic(
   // with a fresh nonce is what caused double-deposits in the past, when a retracted tx got
   // re-included on a later block alongside its replacement.
   const nonce = await allocateAliceNonce();
+  // Every attempt re-signs with a higher tip, so each has a distinct hash. We track them all so a
+  // landed-but-lost tx can be located in block history via the nonce-consumed recovery below.
+  const submittedHashes = new Set<string>();
 
   const runSignAndSubmit = async (
     tip: number,
@@ -78,6 +139,7 @@ export async function submitHubExtrinsic(
   ) => {
     const tx = extrinsic(assethubApi);
     const txHash = tx.hash.toString();
+    submittedHashes.add(txHash);
     let done = false;
     let inBlock = false;
     let inclusionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -174,6 +236,30 @@ export async function submitHubExtrinsic(
       });
     } catch (e) {
       logger.warn(`Error submitting extrinsic ${extrinsicName} (nonce ${nonce}): ${e}`);
+      // If our pinned nonce has already been consumed on-chain, one of our own attempts landed, so
+      // the operation succeeded despite this attempt failing (typically: reorg → inclusion timeout →
+      // stale resubmission). Resubmitting would only yield more "stale" errors, so recover the
+      // result — including any expected event — from block history instead of retrying.
+      if (await nonceAlreadyConsumed(nonce)) {
+        const landed = await findLandedResult(submittedHashes, expectedEvent);
+        if (landed !== undefined) {
+          logger.debug(
+            `Extrinsic ${extrinsicName} (nonce ${nonce}) already applied on-chain; recovered from block history.`,
+          );
+          return landed;
+        }
+        // Nonce consumed but the tx wasn't in the lookback window. For a fire-and-forget transfer
+        // the consumed nonce is proof enough it landed; for an event-capturing call we error.
+        if (expectedEvent === undefined) {
+          logger.info(
+            `Extrinsic ${extrinsicName} (nonce ${nonce}) already applied on-chain (nonce consumed); treating as success.`,
+          );
+          return { txHash: submittedHashes.values().next().value ?? '' };
+        }
+        throw new Error(
+          `Extrinsic ${extrinsicName} (nonce ${nonce}) landed on-chain but its ${expectedEvent.pallet}.${expectedEvent.name} event was not found within ${RECOVERY_BLOCK_LOOKBACK} blocks`,
+        );
+      }
       if (attempt >= MAX_ATTEMPTS - 1) {
         await fillNonceGap(logger, nonce);
         throw e;
