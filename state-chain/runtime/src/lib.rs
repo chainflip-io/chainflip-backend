@@ -540,6 +540,7 @@ macro_rules! instanced_migrations {
 pub type MigrationsForV2_4 = (
 	migrations::remove_emissions_storage::RemoveEmissionsStorage,
 	migrations::safe_mode::SafeModeMigration,
+	migrations::flip_accumulators_to_flip_pallet::Migration,
 );
 
 #[cfg(test)]

@@ -378,9 +378,7 @@ async function testEvmEip712Encoding<A = []>(cf: ChainflipIO<A>) {
 async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Asset) {
   await using chainflip = await getChainflipApi();
 
-  const initialFlipToBeSentToGateway = Number(
-    await chainflip.query.swapping.flipToBeSentToGateway(),
-  );
+  const initialFlipToBeSentToGateway = Number(await chainflip.query.flip.flipToBeSentToGateway());
 
   parentCf.info('Setting up a broker account');
   const brokerUri: `//${string}` = `//BROKER_SPECIAL_DEPOSIT_CHANNEL_${asset}`;
@@ -472,7 +470,7 @@ async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Ass
 
     // Check FLIP to be sent to Gateway if not already increased
     if (!flipToGatewayIncreased) {
-      const flipToBeSentToGateway = Number(await chainflip.query.swapping.flipToBeSentToGateway());
+      const flipToBeSentToGateway = Number(await chainflip.query.flip.flipToBeSentToGateway());
 
       if (flipToBeSentToGateway > initialFlipToBeSentToGateway) {
         cf.info('FLIP to be sent to Gateway increased successfully');
