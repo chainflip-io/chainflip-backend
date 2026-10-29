@@ -612,6 +612,54 @@ pub struct ChainAccounts {
 	pub chain_accounts: Vec<(EncodedAddress, Asset)>,
 }
 
+/// Everything that constrains where an account may withdraw to, mirroring the checks in
+/// `pallet_cf_asset_balances::Pallet::ensure_withdrawal_allowed_to`. The whitelist alone doesn't
+/// answer "where can I withdraw to?": a refund address is allowed without being whitelisted, and a
+/// bound broker withdrawal address restricts Ethereum withdrawals whatever the whitelist says.
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct WithdrawalRestrictions {
+	/// Determines which of the restrictions below can apply: refund addresses are registered by
+	/// liquidity providers, a bound withdrawal address by brokers.
+	pub account_role: Option<AccountRole>,
+	/// `None` if the account has no whitelist configured, in which case the whitelist places no
+	/// restriction of its own.
+	pub whitelist: Option<ActiveWithdrawalWhitelist>,
+	/// Timelocked whitelist updates that have been submitted but not yet applied.
+	pub pending: Vec<PendingWhitelistUpdate>,
+	/// Registered refund addresses, per chain. These are allowed without being whitelisted.
+	pub refund_addresses: Vec<(ForeignChain, EncodedAddress)>,
+	/// If set, Ethereum withdrawals to any other destination are rejected, whitelisted or not.
+	pub bound_broker_withdrawal_address: Option<EncodedAddress>,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct ActiveWithdrawalWhitelist {
+	/// The delay applied to whitelist updates, in seconds. Zero means updates apply immediately.
+	pub timelock_secs: u64,
+	pub allowed: Vec<WhitelistDestination>,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct PendingWhitelistUpdate {
+	/// Wall-clock time (unix seconds) at which the update is applied.
+	pub activates_at: u64,
+	pub update: WhitelistUpdate,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub enum WhitelistUpdate {
+	Allow(WhitelistDestination),
+	Remove(WhitelistDestination),
+	Timelock(u64),
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub enum WhitelistDestination {
+	InternalAccount(AccountId32),
+	/// The chain is implied by the address.
+	ExternalAddress(EncodedAddress),
+}
+
 #[derive(
 	Serialize,
 	Deserialize,
