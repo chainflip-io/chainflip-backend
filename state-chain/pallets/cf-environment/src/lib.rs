@@ -50,11 +50,13 @@ use cf_primitives::{
 		arb::Asset as ArbAsset, bsc::Asset as BscAsset, eth::Asset as EthAsset,
 		tron::Asset as TrxAsset,
 	},
-	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
+	Asset, AssetAmount, BlockNumber, BroadcastId, ChainflipNetwork, ForeignChain,
+	NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	elections::{authorise_voter, ElectionInstance, ElectionInstancesVoting},
-	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
+	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, FailedDepositRecovery,
+	FailedDepositRecoveryOutcome, FailedDepositReference, GetBitcoinFeeInfo, KeyProvider,
 	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
@@ -67,7 +69,7 @@ use frame_support::{
 };
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
 pub use pallet::*;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec, vec::Vec};
 
 mod benchmarking;
 mod benchmarking_types;
@@ -89,6 +91,29 @@ const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters 
 	};
 
 type SignatureNonce = u64;
+
+/// The maximum number of failed deposits that can be recovered in one call.
+pub const MAX_FAILED_DEPOSIT_RECOVERIES: u32 = 50;
+
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
+pub struct FailedDepositRecoveryRequest<AccountId> {
+	/// The broker the failed deposit is attributed to.
+	pub broker: AccountId,
+	pub asset: Asset,
+	pub amount: AssetAmount,
+	/// Identifies the failed deposit on its chain, e.g. its transaction id.
+	pub reference: FailedDepositReference,
+}
 
 #[derive(
 	Encode,
@@ -208,6 +233,11 @@ pub mod pallet {
 			>>::Val,
 		)>;
 
+		/// Pays out failed deposits to the recovery accounts of the brokers they are attributed to.
+		type FailedDepositRecovery: FailedDepositRecovery<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -233,6 +263,8 @@ pub mod pallet {
 		/// Vote batching is disabled; vote through the per-instance
 		/// `pallet_cf_elections::Call::vote` extrinsic instead.
 		VoteBatchingDisabled,
+		/// The same failed deposit appears more than once in the batch.
+		DuplicateFailedDeposit,
 	}
 
 	#[pallet::pallet]
@@ -522,6 +554,23 @@ pub mod pallet {
 		/// A configuration item for this pallet was updated by governance.
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
+		},
+		/// A failed deposit was paid out to the broker's recovery account.
+		FailedDepositRecovered {
+			broker: T::AccountId,
+			recovery_account: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+			outcome: FailedDepositRecoveryOutcome,
+			reference: FailedDepositReference,
+		},
+		/// A failed deposit could not be recovered. It can be retried.
+		FailedDepositRecoveryFailed {
+			broker: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+			reference: FailedDepositReference,
+			error: DispatchError,
 		},
 	}
 
@@ -947,6 +996,60 @@ pub mod pallet {
 					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
+			}
+
+			Ok(())
+		}
+
+		/// Pays out failed deposits to the recovery accounts of the brokers they are attributed
+		/// to: an egress to the recovery account's refund address if it has one and the amount
+		/// covers the egress fee, otherwise a credit to its free balance.
+		///
+		/// Each deposit is recovered independently. One that fails, e.g. because its broker has
+		/// no recovery account, doesn't affect the others, and can be retried.
+		///
+		/// Recoveries are not recorded, so Governance must not resubmit a deposit that has been
+		/// recovered. The batch is rejected if it contains the same deposit twice.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(16)]
+		#[pallet::weight(T::WeightInfo::recover_failed_deposits(requests.len() as u32))]
+		pub fn recover_failed_deposits(
+			origin: OriginFor<T>,
+			requests: BoundedVec<
+				FailedDepositRecoveryRequest<T::AccountId>,
+				ConstU32<MAX_FAILED_DEPOSIT_RECOVERIES>,
+			>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			let mut deposits = BTreeSet::new();
+			ensure!(
+				requests.iter().all(|FailedDepositRecoveryRequest { asset, reference, .. }| {
+					deposits.insert((ForeignChain::from(*asset), reference))
+				}),
+				Error::<T>::DuplicateFailedDeposit
+			);
+
+			for FailedDepositRecoveryRequest { broker, asset, amount, reference } in requests {
+				match T::FailedDepositRecovery::route_failed_deposit(&broker, asset, amount) {
+					Ok((recovery_account, outcome)) =>
+						Self::deposit_event(Event::<T>::FailedDepositRecovered {
+							broker,
+							recovery_account,
+							asset,
+							amount,
+							outcome,
+							reference,
+						}),
+					Err(error) => Self::deposit_event(Event::<T>::FailedDepositRecoveryFailed {
+						broker,
+						asset,
+						amount,
+						reference,
+						error,
+					}),
+				}
 			}
 
 			Ok(())
