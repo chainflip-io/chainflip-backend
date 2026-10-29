@@ -1415,6 +1415,10 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_broker_recovery_account(broker: AccountId) -> Option<AccountId> {
+			pallet_cf_swapping::BrokerRecoveryAccount::<Runtime>::get(broker)
+		}
+
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
 			pallet_cf_account_roles::AccountRoles::<Runtime>::get(account_id)
 		}
