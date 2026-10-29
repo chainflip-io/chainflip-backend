@@ -66,8 +66,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-	Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Fields, Ident, ImplGenerics, LitInt,
-	TypeGenerics,
+	Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Field, Fields, Ident, ImplGenerics,
+	LitInt, TypeGenerics,
 };
 
 #[proc_macro_derive(
@@ -93,7 +93,7 @@ pub fn derive(item: TokenStream) -> TokenStream {
 fn derive_fields(d: Fields, name_for_expansion: Expr) -> TokenStream2 {
 	match d {
 		syn::Fields::Named(fields_named) => {
-			let fields: Vec<TokenStream2> = fields_named.named.iter().map(|field| {
+			let fields: Vec<TokenStream2> = encoded_fields(fields_named.named.iter()).map(|field| {
 				let ty = field.clone().ty;
 				let typename = match field.attrs.iter().find(|attr| attr.path().is_ident("replace_typename_with")){
 					Some(attr) => attr.parse_args::<Ident>().expect("replace_typename_with requires an argument").to_string(),
@@ -113,15 +113,13 @@ fn derive_fields(d: Fields, name_for_expansion: Expr) -> TokenStream2 {
 			quote!(scale_info::build::Fields::named() #( #fields )* )
 		},
 		syn::Fields::Unnamed(fields_unnamed) => {
-			let fields: Vec<TokenStream2> = fields_unnamed
-				.unnamed
-				.iter()
+			let fields: Vec<TokenStream2> = encoded_fields(fields_unnamed.unnamed.iter())
 				.map(|field| {
 					let ty = field.clone().ty;
 					let typename = clean_type_string(&quote!(#ty).to_string());
 					if field.attrs.iter().any(|attr| attr.path().is_ident("skip_name_expansion")){
 						quote!(.field(|f|
-							f.ty::<#ty>().type_name(::core::stringify!(#typename))
+							f.ty::<#ty>().type_name(#typename)
 						))
 					} else {
 						quote!(.field(|f| {
@@ -166,20 +164,22 @@ fn derive_enum(
 	let variants: Vec<_> = d
 		.variants
 		.into_iter()
+		// Skipped variants aren't encodable, and don't count towards the position of later ones.
+		.filter(|variant| !has_codec_key(&variant.attrs, "skip"))
 		.enumerate()
 		.map(|(position, variant)| {
 			// Must match the index used by the `Encode`/`Decode` derives, otherwise the metadata
 			// disagrees with the actual encoding.
-			let index = match (codec_index(&variant.attrs), &variant.discriminant) {
-				(Some(index), _) => quote!(#index),
+			let index_expr = match (codec_index(&variant.attrs), &variant.discriminant) {
+				(Some(explicit), _) => quote!(#explicit),
 				(None, Some((_, discriminant))) => quote!((#discriminant)),
 				(None, None) => {
 					let position = position as u8;
 					quote!(#position)
 				},
 			};
-			indices.push((variant.ident.to_string(), index.clone()));
-			let index = quote!(#index as u8);
+			indices.push((variant.ident.to_string(), index_expr.clone()));
+			let index = quote!(#index_expr as u8);
 			let name = variant.ident;
 			let fields = derive_fields(variant.fields, name_for_expansion.clone());
 			let typename = match variant.attrs.iter().find(|attr| attr.path().is_ident("replace_typename_with")){
@@ -262,6 +262,37 @@ fn codec_index(attrs: &[Attribute]) -> Option<u8> {
 		.expect("Failed to parse codec attribute");
 	}
 	index
+}
+
+/// The fields that are actually encoded. Attributes that change a field's encoded type are rejected
+/// rather than silently producing metadata that disagrees with the encoding.
+fn encoded_fields<'a>(fields: impl Iterator<Item = &'a Field>) -> impl Iterator<Item = &'a Field> {
+	fields.filter(|field| {
+		for unsupported in ["compact", "encoded_as"] {
+			if has_codec_key(&field.attrs, unsupported) {
+				panic!("#[codec({unsupported})] is not supported by #[derive(GenericTypeInfo)]");
+			}
+		}
+		!has_codec_key(&field.attrs, "skip")
+	})
+}
+
+/// Whether a `#[codec(key)]` or `#[codec(key = ...)]` attribute is present.
+fn has_codec_key(attrs: &[Attribute], key: &str) -> bool {
+	let mut found = false;
+	for attr in attrs.iter().filter(|attr| attr.path().is_ident("codec")) {
+		attr.parse_nested_meta(|meta| {
+			if meta.path.is_ident(key) {
+				found = true;
+			}
+			if meta.input.peek(syn::Token![=]) {
+				meta.value()?.parse::<Expr>()?;
+			}
+			Ok(())
+		})
+		.expect("Failed to parse codec attribute");
+	}
+	found
 }
 
 // This is taken directly from the Substrate TypeInfo library

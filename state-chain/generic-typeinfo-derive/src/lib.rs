@@ -14,7 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 #![cfg(test)]
-use codec::Encode;
+use codec::{Decode, Encode};
+use core::fmt::Debug;
 use generic_typeinfo_derive::GenericTypeInfo;
 use scale_info::{TypeDef, TypeInfo};
 
@@ -128,7 +129,23 @@ fn test_name_expansion() {
 	assert_eq!("u16Enum", buzz_def.variants[2].fields[1].type_name.unwrap());
 }
 
-#[derive(GenericTypeInfo, Encode)]
+/// Checks the metadata indices against `expected`, and that every value round-trips through the
+/// real codec with its first byte equal to the index in the metadata.
+fn assert_indices_match_codec<T: TypeInfo + Encode + Decode + PartialEq + Debug>(
+	values: &[T],
+	expected: &[u8],
+) {
+	let TypeDef::Variant(def) = T::type_info().type_def else { panic!() };
+	assert_eq!(def.variants.iter().map(|v| v.index).collect::<Vec<_>>(), expected);
+	assert_eq!(def.variants.len(), values.len());
+	for (variant, value) in def.variants.iter().zip(values) {
+		let encoded = value.encode();
+		assert_eq!(variant.index, encoded[0], "{value:?}");
+		assert_eq!(&T::decode(&mut &encoded[..]).unwrap(), value);
+	}
+}
+
+#[derive(GenericTypeInfo, Encode, Decode, PartialEq, Debug)]
 #[expand_name_with("Enum")]
 enum Indexed {
 	_First,
@@ -139,18 +156,14 @@ enum Indexed {
 
 #[test]
 fn test_variant_indices_match_encoding() {
-	let TypeDef::Variant(def) = <Indexed as TypeInfo>::type_info().type_def else { panic!() };
-
 	// Variants without an explicit index use their position, not the previous index + 1.
-	assert_eq!(def.variants.iter().map(|v| v.index).collect::<Vec<_>>(), [0, 5, 2]);
-	for (variant, value) in
-		def.variants.iter().zip([Indexed::_First, Indexed::_Second, Indexed::_Third(0)])
-	{
-		assert_eq!(variant.index, value.encode()[0]);
-	}
+	assert_indices_match_codec(
+		&[Indexed::_First, Indexed::_Second, Indexed::_Third(0)],
+		&[0, 5, 2],
+	);
 }
 
-#[derive(GenericTypeInfo, Encode)]
+#[derive(GenericTypeInfo, Encode, Decode, PartialEq, Debug)]
 #[expand_name_with("Enum")]
 enum Discriminants {
 	_First = 1 + 2,
@@ -161,16 +174,57 @@ enum Discriminants {
 
 #[test]
 fn test_variant_indices_match_encoding_with_discriminants() {
-	let TypeDef::Variant(def) = <Discriminants as TypeInfo>::type_info().type_def else { panic!() };
-
 	// `codec(index)` takes precedence over the discriminant, and implicit discriminants are
 	// ignored in favour of the position.
-	assert_eq!(def.variants.iter().map(|v| v.index).collect::<Vec<_>>(), [3, 1, 2]);
-	for (variant, value) in def.variants.iter().zip([
-		Discriminants::_First,
-		Discriminants::_Second,
-		Discriminants::_Third,
-	]) {
-		assert_eq!(variant.index, value.encode()[0]);
-	}
+	assert_indices_match_codec(
+		&[Discriminants::_First, Discriminants::_Second, Discriminants::_Third],
+		&[3, 1, 2],
+	);
+}
+
+#[derive(GenericTypeInfo, Encode, Decode, PartialEq, Debug)]
+#[expand_name_with("Enum")]
+enum Skipped {
+	_First,
+	// Would collide with `_First`, but skipped variants are excluded from the duplicate checks.
+	#[codec(skip)]
+	#[codec(index = 0)]
+	_Second,
+	#[codec(index = 3)]
+	#[skip_name_expansion]
+	_Third,
+	_Fourth,
+}
+
+#[test]
+fn test_skipped_variants_are_omitted() {
+	// Skipped variants don't take up a position, so `_Fourth` is at 2 rather than 3.
+	assert_indices_match_codec(&[Skipped::_First, Skipped::_Third, Skipped::_Fourth], &[0, 3, 2]);
+}
+
+#[derive(GenericTypeInfo, Encode)]
+#[expand_name_with("Struct")]
+struct SkippedFields {
+	_a: u16,
+	#[codec(skip)]
+	_b: u32,
+	_c: u8,
+}
+
+#[derive(GenericTypeInfo, Encode)]
+#[expand_name_with("Tuple")]
+struct SkippedUnnamedFields(u16, #[codec(skip)] u32, #[skip_name_expansion] u8);
+
+#[test]
+fn test_skipped_fields_are_omitted() {
+	let TypeDef::Composite(def) = SkippedFields::type_info().type_def else { panic!() };
+	assert_eq!(def.fields.iter().map(|f| f.name.unwrap()).collect::<Vec<_>>(), ["_a", "_c"]);
+	assert_eq!(SkippedFields { _a: 0, _b: 0, _c: 0 }.encode().len(), 3);
+
+	let TypeDef::Composite(def) = SkippedUnnamedFields::type_info().type_def else { panic!() };
+	assert_eq!(
+		def.fields.iter().map(|f| f.type_name.unwrap()).collect::<Vec<_>>(),
+		["u16Tuple", "u8"]
+	);
+	assert_eq!(SkippedUnnamedFields(0, 0, 0).encode().len(), 3);
 }
