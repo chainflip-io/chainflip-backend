@@ -1461,11 +1461,6 @@ pub mod pallet {
 					operator: current_operator,
 					max_bid: current_max_bid,
 				});
-
-				// Mirrors the auto-registration in `delegate`. Best-effort: accounts that also
-				// hold other LP state (open orders, balances, etc.) fail the deregistration
-				// check and simply remain registered as a Liquidity Provider.
-				let _ = T::AccountRoleRegistry::deregister_as_liquidity_provider(&delegator);
 			} else {
 				DelegationChoice::<T>::mutate(&delegator, |choice| {
 					if let Some((_, ref mut max_bid)) = choice {
