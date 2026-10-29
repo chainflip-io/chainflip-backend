@@ -367,7 +367,8 @@ integer-sqrt = { opt-level = 3 }
 k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 libm = { opt-level = 3 }
-librocksdb-sys = { opt-level = 3 }
+# Without C++ debug info a build is ~14% faster and ~2.6 GB smaller.
+librocksdb-sys = { opt-level = 3, debug = false }
 libsecp256k1 = { opt-level = 3 }
 libz-sys = { opt-level = 3 }
 mio = { opt-level = 3 }
