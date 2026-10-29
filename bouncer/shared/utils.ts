@@ -999,10 +999,12 @@ export async function observeEVMEvent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameterNames = eventAbi.inputs.map((input: any) => input.name);
 
+  const pollIntervalMs = 2500;
+  const maxPolls = 120; // 5 minutes
   const maxConsecutiveGetLogsFailures = 10;
   let getLogsFailures = 0;
 
-  for (let i = 0; i < 1200; i++) {
+  for (let poll = 0; poll < maxPolls; poll++) {
     if (stopObserve()) return undefined;
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
@@ -1048,7 +1050,7 @@ export async function observeEVMEvent(
         initBlockNumber = currentBlockNumber + 1;
       }
     }
-    await sleep(2500);
+    await sleep(pollIntervalMs);
   }
 
   throw new Error(`Failed to observe the ${eventName} event`);
