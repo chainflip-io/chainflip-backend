@@ -133,3 +133,29 @@ jobs:
           # the pusher, and normal review rules (CODEOWNERS) still apply.
           labels: cherry-pick
           delete-branch: true
+
+  # A failed forward-port means a release fix may never reach `main`, so alert on every failure
+  # (each one is a different commit) rather than only on a pass -> fail transition.
+  notify-discord-on-failure:
+    needs: [prepare, forward-port]
+    if: failure()
+    runs-on: namespace-profile-default-light
+    steps:
+      - name: Notify on failed forward-port 📢
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+          # Discord @Protocol role.
+          PROTOCOL_ROLE_ID: "960793434170458112"
+        run: |
+          set -euo pipefail
+          # Matrix job names carry the commit, eg. "forward-port (<sha>, <subject>)".
+          failed=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
+            | jq -r '[.jobs[] | select(.conclusion == "failure") | "• `" + .name + "`"] | join("\n")')
+          jq -n --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg branch "$GITHUB_REF_NAME" --arg failed "$failed" --arg role "$PROTOCOL_ROLE_ID" '{
+            username: "Forward-port",
+            content: ("<@&" + $role + "> 🍒⚠️ Forward-porting `" + $branch + "` to `main` failed, so these commits need a manual port:\n" + $failed + "\n🔗 Link to job: <" + $url + ">"),
+            allowed_mentions: { roles: [$role] }
+          }' | curl -fsSL -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
