@@ -5290,6 +5290,7 @@ name = "generic-typeinfo-derive-tests"
 version = "0.1.0"
 dependencies = [
  "generic-typeinfo-derive",
+ "parity-scale-codec",
  "scale-info",
 ]
 
