@@ -574,30 +574,42 @@ impl<'a> Encoder<'a> {
 
 		let types = self.types;
 		if let Some(fields) = types.get(primary_type) {
-			// Messages built from `TypeInfo` list their fields in declaration order.
-			if let MinimizedScaleValue::NamedStruct(fs) = data {
-				if fs.len() == fields.len() &&
-					fs.iter().zip(fields).all(|((name, _), field)| *name == field.name)
+			let field_values = match data {
+				// Fast path, taken by every message built from `TypeInfo`: its fields are listed in
+				// declaration order. `type_hash` has checked the type's field names are unique, so
+				// matching them one-to-one also rules out duplicate fields in the message. Computes
+				// and returns early in this case.
+				MinimizedScaleValue::NamedStruct(fs)
+					if fs.len() == fields.len() &&
+						fs.iter().zip(fields).all(|((name, _), field)| *name == field.name) =>
 				{
 					for ((_, value), field) in fs.iter().zip(fields) {
 						tokens.push(self.encode_field(&field.r#type, value)?);
 					}
 					return Ok(tokens);
-				}
-			}
-			// Indexed up front: arrays are structs with one field per element, so a lookup per
-			// field would make hashing quadratic in the array length.
-			let mut field_values = BTreeMap::<&str, &MinimizedScaleValue>::new();
-			if let MinimizedScaleValue::NamedStruct(fs) = data {
-				for (name, value) in fs {
-					// Messages built from `TypeInfo` never repeat a field name.
-					if field_values.insert(name.as_str(), value).is_some() {
-						return Err(Eip712Error::Message(format!(
-							"Duplicate field `{name}` in `{primary_type}`"
-						)));
+				},
+				// Fields out of order, missing or extra. Not expected: messages built from
+				// `TypeInfo` always take the fast path, so only `TypedData` deserialized from
+				// JSON (as in tests) gets here. Indexed up front: arrays are structs with one
+				// field per element, so a lookup per field would make hashing quadratic in the
+				// array length.
+				MinimizedScaleValue::NamedStruct(fs) => {
+					let mut field_values = BTreeMap::<&str, &MinimizedScaleValue>::new();
+					for (name, value) in fs {
+						// Messages built from `TypeInfo` never repeat a field name.
+						if field_values.insert(name.as_str(), value).is_some() {
+							return Err(Eip712Error::Message(format!(
+								"Duplicate field `{name}` in `{primary_type}`"
+							)));
+						}
 					}
-				}
-			}
+					field_values
+				},
+				// A non-struct value for a struct type. Not expected, for the same reason as above.
+				// With no field values, the loop below zeroes struct-typed fields and rejects the
+				// rest.
+				_ => BTreeMap::new(),
+			};
 			for field in fields.iter() {
 				// handle recursive types
 
