@@ -999,37 +999,58 @@ export async function observeEVMEvent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parameterNames = eventAbi.inputs.map((input: any) => input.name);
 
-  for (let i = 0; i < 1200; i++) {
+  const pollIntervalMs = 2500;
+  const maxPolls = 120; // 5 minutes
+  const maxConsecutiveGetLogsFailures = 10;
+  let getLogsFailures = 0;
+
+  for (let poll = 0; poll < maxPolls; poll++) {
     if (stopObserve()) return undefined;
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
-      const events = await contract.getPastEvents(eventName, {
-        fromBlock: initBlockNumber,
-        toBlock: currentBlockNumber,
-      });
-      for (let j = 0; j < events.length; j++) {
-        if (Object.keys(events[j].returnValues).length / 2 !== parameterNames.length)
-          throw new Error('Unexpected event length');
-        for (let k = 0; k < parameterNames.length; k++) {
-          // Allow for wildcard matching
-          if (
-            events[j].returnValues[k] !== eventParametersExpected[k] &&
-            eventParametersExpected[k] !== '*'
-          ) {
-            break;
-          } else if (k === parameterNames.length - 1) {
-            return {
-              name: events[j].event,
-              address: events[j].address,
-              txHash: events[j].transactionHash,
-              returnValues: events[j].returnValues,
-            };
+      let events;
+      try {
+        events = await contract.getPastEvents(eventName, {
+          fromBlock: initBlockNumber,
+          toBlock: currentBlockNumber,
+        });
+      } catch (error) {
+        // Log queries up to the head can briefly fail while the node's log indexer catches up
+        // with block import (seen on BSC: "failed to retrieve log value pointer"). Leave
+        // initBlockNumber unchanged so the same range is retried on the next iteration.
+        getLogsFailures++;
+        if (getLogsFailures > maxConsecutiveGetLogsFailures) throw error;
+        globalLogger.warn(
+          `Failed to get ${eventName} events on ${chain} for blocks ${initBlockNumber}-${currentBlockNumber} (attempt ${getLogsFailures}/${maxConsecutiveGetLogsFailures}), retrying: ${error}`,
+        );
+        events = undefined;
+      }
+      if (events) {
+        getLogsFailures = 0;
+        for (let j = 0; j < events.length; j++) {
+          if (Object.keys(events[j].returnValues).length / 2 !== parameterNames.length)
+            throw new Error('Unexpected event length');
+          for (let k = 0; k < parameterNames.length; k++) {
+            // Allow for wildcard matching
+            if (
+              events[j].returnValues[k] !== eventParametersExpected[k] &&
+              eventParametersExpected[k] !== '*'
+            ) {
+              break;
+            } else if (k === parameterNames.length - 1) {
+              return {
+                name: events[j].event,
+                address: events[j].address,
+                txHash: events[j].transactionHash,
+                returnValues: events[j].returnValues,
+              };
+            }
           }
         }
+        initBlockNumber = currentBlockNumber + 1;
       }
-      initBlockNumber = currentBlockNumber + 1;
     }
-    await sleep(2500);
+    await sleep(pollIntervalMs);
   }
 
   throw new Error(`Failed to observe the ${eventName} event`);
