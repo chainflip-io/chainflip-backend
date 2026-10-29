@@ -858,10 +858,14 @@ where
 		Ok(tx_hash)
 	}
 	async fn recovery_account(&self) -> RpcResult<Option<AccountId32>> {
-		Ok(broker_recovery_account(
-			&*self.rpc_backend.client,
-			self.rpc_backend.client.info().best_hash,
-			&self.signed_pool_client.account_id(),
-		)?)
+		self.rpc_backend.with_versioned_runtime_api(None, |api, hash, api_version| {
+			broker_recovery_account(
+				&*self.rpc_backend.client,
+				api,
+				hash,
+				api_version,
+				&self.signed_pool_client.account_id(),
+			)
+		})
 	}
 }

@@ -1504,17 +1504,23 @@ where
 	}
 }
 
-/// The broker's recovery account. Read from storage so that it doesn't depend on the runtime API
-/// version. `None` on runtimes that predate it.
+/// Older runtimes can have recovery links without exposing the runtime API, so retain the storage
+/// fallback while queries against those runtimes are supported.
 pub(crate) fn broker_recovery_account<C, B>(
 	client: &C,
+	api: &impl CustomRuntimeApi<B>,
 	hash: <B as BlockT>::Hash,
+	api_version: u32,
 	broker: &AccountId32,
 ) -> Result<Option<AccountId32>, CfApiError>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash>,
 	C: CallApiAt<B>,
 {
+	if api_version >= 24 {
+		return Ok(api.cf_broker_recovery_account(hash, broker.clone())?);
+	}
+
 	Ok(client.state_at(hash).map_err(CfApiError::from)?.inspect_state(|| {
 		pallet_cf_swapping::BrokerRecoveryAccount::<state_chain_runtime::Runtime>::get(broker)
 	}))
@@ -2208,7 +2214,9 @@ where
 											.map(|broker| {
 												broker_recovery_account(
 													&*self.rpc_backend.client,
+													api,
 													hash,
+													api_version,
 													broker,
 												)
 											})
@@ -2465,7 +2473,9 @@ where
 								bound_fee_withdrawal_address,
 								recovery_account: broker_recovery_account(
 									&*self.rpc_backend.client,
+									api,
 									hash,
+									api_version,
 									&account_id,
 								)?,
 							}
