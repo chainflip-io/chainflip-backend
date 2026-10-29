@@ -537,6 +537,17 @@ impl<T: Config> Pallet<T> {
 		let current_block = frame_system::Pallet::<T>::current_block_number();
 		let mut suspensions = Suspensions::<T>::get(offence);
 		let suspend_until = current_block.saturating_add(suspension);
+		// Keep only the latest expiry per validator, so that repeated reports for the same
+		// validators don't grow the queue.
+		let mut validators = validators.into_iter().collect::<BTreeSet<_>>();
+		suspensions.retain(|(block, id)| {
+			if *block < suspend_until {
+				!validators.contains(id)
+			} else {
+				validators.remove(id);
+				true
+			}
+		});
 		suspensions.extend(iter::repeat(suspend_until).zip(validators));
 		suspensions.make_contiguous().sort_unstable_by_key(|(block, _)| *block);
 		while matches!(suspensions.front(), Some((block, _)) if *block < current_block) {
