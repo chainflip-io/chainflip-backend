@@ -3224,7 +3224,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 		MinimumDeposit::<Test, Instance1>::insert(EthAsset::Eth, DEPOSIT_AMOUNT);
 
 		assert_matches!(
-			EthereumIngressEgress::process_prewitness_deposit_inner(deposit.clone()),
+			EthereumIngressEgress::process_prewitness_deposit(deposit.clone()),
 			BoostStatus::Boosted { .. }
 		);
 

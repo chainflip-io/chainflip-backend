@@ -654,7 +654,7 @@ pub struct IngressEgressEnvironment {
 	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
 	pub ingress_delays: HashMap<ForeignChain, u32>,
-	/// Boost delay has been removed; always zero. Kept for compatibility.
+	/// Always zero; retained for API compatibility.
 	pub boost_delays: HashMap<ForeignChain, u32>,
 	pub boost_minimum_add_funds_amounts: any::AssetMap<NumberOrHex>,
 }
@@ -2729,7 +2729,7 @@ where
 				// These fields were added in version 8 of the runtime API
 				if version >= 8 {
 					ingress_delays.insert(chain, api.cf_ingress_delay(hash, chain)?);
-					// Boost delay was removed. Returning 0 always to avoid breaking the API.
+					// Always zero; retained for API compatibility.
 					boost_delays.insert(chain, 0);
 				}
 			}

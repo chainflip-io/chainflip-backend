@@ -86,8 +86,7 @@ struct ChannelLifecycle<T: Config<I>, I: 'static> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default)]
 pub enum BoostStatus<ChainAmount> {
-	// If a (pre-witnessed) deposit on a channel has been boosted, we record
-	// its id, amount, and the pools that participated in boosting it.
+	// A prewitnessed deposit that has been boosted and is awaiting finalisation.
 	Boosted {
 		prewitnessed_deposit_id: PrewitnessedDepositId,
 		amount: ChainAmount,
@@ -169,8 +168,7 @@ pub enum RefundReason {
 }
 
 enum FullWitnessDepositOutcome {
-	/// Either boost has been finalised, or it was still pending (due to a delay)
-	/// and should no longer be scheduled for processing
+	/// Either boost has been finalised and should no longer be scheduled for processing
 	BoostConsumed,
 	BoostNotConsumed,
 }
@@ -585,7 +583,7 @@ pub mod pallet {
 		/// The boost fee
 		#[skip_name_expansion]
 		pub boost_fee: BasisPoints,
-		/// Boost status, indicating whether there is pending boost on the channel
+		/// Whether a prewitnessed deposit on the channel has been boosted and awaits finalisation.
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>>,
 		pub is_marked_for_rejection: bool,
 	}
@@ -2322,7 +2320,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				),
 			};
 
-			let new_boost_status = Self::process_prewitness_deposit_inner(deposit);
+			let new_boost_status = Self::process_prewitness_deposit(deposit);
 
 			if new_boost_status != boost_status {
 				DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
@@ -2675,7 +2673,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			})
 	}
 
-	fn process_prewitness_deposit_inner(
+	fn process_prewitness_deposit(
 		PrewitnessedDeposit {
 			amount,
 			asset,
@@ -2859,7 +2857,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						origin,
 					};
 
-					let new_boost_status = Self::process_prewitness_deposit_inner(deposit);
+					let new_boost_status = Self::process_prewitness_deposit(deposit);
 
 					if boost_status != new_boost_status {
 						BoostedVaultTransactions::<T, I>::insert(&tx_id, new_boost_status);
@@ -3083,7 +3081,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				Ok(FullWitnessDepositOutcome::BoostConsumed)
 			},
-			_ => {
+			BoostStatus::Boosted { .. } | BoostStatus::NotBoosted => {
 				let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 					Self::conditionally_withhold_ingress_fee(asset, deposit_amount, &origin);
 

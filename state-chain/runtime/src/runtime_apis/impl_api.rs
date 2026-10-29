@@ -1515,6 +1515,10 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_boost_delay(_chain: ForeignChain) -> u32 {
+			0
+		}
+
 		fn cf_boost_config() -> BoostConfiguration {
 			pallet_cf_lending_pools::BoostConfig::<Runtime>::get()
 		}
