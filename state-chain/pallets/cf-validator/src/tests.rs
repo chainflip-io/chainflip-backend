@@ -2643,7 +2643,7 @@ mod delegation {
 	}
 
 	#[test]
-	fn undelegate_to_zero_deregisters_liquidity_provider_role() {
+	fn undelegate_to_zero_keeps_liquidity_provider_role() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
@@ -2664,7 +2664,8 @@ mod delegation {
 				DelegationAmount::Max
 			));
 
-			assert!(!<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
+			assert!(!DelegationChoice::<Test>::contains_key(ALICE));
+			assert!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
 		});
 	}
 
