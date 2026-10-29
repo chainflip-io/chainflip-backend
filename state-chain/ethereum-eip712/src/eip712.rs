@@ -577,8 +577,7 @@ impl<'a> Encoder<'a> {
 			let field_values = match data {
 				// Fast path, taken by every message built from `TypeInfo`: its fields are listed in
 				// declaration order. `type_hash` has checked the type's field names are unique, so
-				// matching them one-to-one also rules out duplicate fields in the message. Computes
-				// and returns early in this case.
+				// matching them one-to-one also rules out duplicate fields in the message.
 				MinimizedScaleValue::NamedStruct(fs)
 					if fs.len() == fields.len() &&
 						fs.iter().zip(fields).all(|((name, _), field)| *name == field.name) =>
@@ -596,7 +595,6 @@ impl<'a> Encoder<'a> {
 				MinimizedScaleValue::NamedStruct(fs) => {
 					let mut field_values = BTreeMap::<&str, &MinimizedScaleValue>::new();
 					for (name, value) in fs {
-						// Messages built from `TypeInfo` never repeat a field name.
 						if field_values.insert(name.as_str(), value).is_some() {
 							return Err(Eip712Error::Message(format!(
 								"Duplicate field `{name}` in `{primary_type}`"
@@ -611,8 +609,6 @@ impl<'a> Encoder<'a> {
 				_ => BTreeMap::new(),
 			};
 			for field in fields.iter() {
-				// handle recursive types
-
 				if let Some(field_value) = field_values.get(field.name.as_str()) {
 					tokens.push(self.encode_field(&field.r#type, field_value)?);
 				} else if types.contains_key(&field.r#type) {
