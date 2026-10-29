@@ -285,6 +285,11 @@ decl_runtime_apis!(
 		fn cf_swap_limits() -> SwapLimits;
 		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>>;
 		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount;
+		#[changed_in(23)]
+		fn cf_minimum_order_amount();
+		/// Minimum amount of `asset` that a limit or range order may hold. `0` means no minimum
+		/// is enforced for that asset.
+		fn cf_minimum_order_amount(asset: Asset) -> AssetAmount;
 		fn cf_validate_dca_params(
 			number_of_chunks: u32,
 			chunk_interval: u32,
