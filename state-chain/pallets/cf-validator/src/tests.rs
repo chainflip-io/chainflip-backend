@@ -1780,14 +1780,28 @@ fn transfer_check_works() {
 			Error::<Test>::StillBidding
 		);
 
-		// Source and dest both restricted in the same way: allowed (lock is
-		// preserved across the hop).
+		// Source and dest both bidding during a rotation: blocked, since the auction has been
+		// resolved and the source may be a winner that is not yet bonded.
 		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(dest));
-		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
+		assert_noop!(
+			ValidatorPallet::ensure_can_transfer(&source, &dest),
+			Error::<Test>::StillBidding
+		);
 
 		// Source unrestricted, dest restricted: allowed (we don't gate based
 		// on the recipient's state when the source is free to move funds).
 		ActiveBidder::<Test>::mutate(|bidders| bidders.remove(&source));
+		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
+
+		// Source and dest both bidding during the auction phase, before the auction is
+		// resolved: allowed (lock is preserved across the hop).
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+		CurrentEpochStartedAt::<Test>::set(1_000);
+		EpochDuration::<Test>::set(100);
+		RedemptionPeriodAsPercentage::<Test>::set(Percent::from_percent(85));
+		System::set_block_number(1085);
+		assert!(ValidatorPallet::is_auction_phase());
+		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(source));
 		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
 	});
 }
@@ -2209,6 +2223,30 @@ mod operator {
 	}
 
 	#[test]
+	fn cannot_accept_claim_of_deregistered_operator() {
+		const OP: u64 = 1001;
+		const V: u64 = 2001;
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V)));
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP), V));
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(OP)));
+
+			assert_noop!(
+				ValidatorPallet::accept_operator(OriginTrait::signed(V), OP),
+				Error::<Test>::NotOperator
+			);
+			assert!(OperatorChoice::<Test>::get(V).is_none());
+			assert!(ManagedValidators::<Test>::get(OP).is_empty());
+		});
+	}
+
+	#[test]
 	fn max_validators_per_operator_cannot_be_bypassed_via_accept() {
 		const OP: u64 = 1001;
 		// One more than the cap, to prove the bound holds.
@@ -2321,6 +2359,39 @@ mod operator {
 			// After expiring the epoch, deregistration should succeed
 			ValidatorPallet::expire_epoch(current_epoch);
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
+		});
+	}
+
+	#[test]
+	fn cannot_remove_delegations_during_rotation() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&BOB, MockMinimumFundingProvider::get_min_funding_amount());
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
+
+			// The delegation may be part of a pending snapshot, so it must stay in place until
+			// the rotation completes and the delegator is bonded.
+			CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+			assert_noop!(
+				ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB),
+				Error::<Test>::RotationInProgress
+			);
+			assert_noop!(
+				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
+				Error::<Test>::RotationInProgress
+			);
+
+			CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(!DelegationChoice::<Test>::contains_key(BOB));
 		});
 	}
 
@@ -4036,6 +4107,61 @@ fn distribute_all_matches_looped_distribute() {
 		let total: u128 = batched.values().sum();
 		assert_eq!(total, PER_BENEFICIARY_AMOUNT * beneficiaries.len() as u128);
 	});
+}
+
+mod zero_bond {
+	use super::*;
+	use crate::delegation::{distribute, DelegatedRewardsDistribution};
+	use cf_traits::RewardsDistribution;
+
+	const EPOCH: u32 = 10;
+	const VALIDATOR: u64 = 100;
+	const OPERATOR: u64 = 200;
+	const DELEGATOR: u64 = 300;
+
+	/// Registers a delegated snapshot for `EPOCH` without recording a bond for it.
+	fn setup() {
+		crate::CurrentEpoch::<Test>::put(EPOCH);
+		crate::HistoricalAuthorities::<Test>::insert(EPOCH, vec![VALIDATOR]);
+		DelegationSnapshot::<u64, u128> {
+			operator: OPERATOR,
+			validators: [(VALIDATOR, 200_000u128)].into_iter().collect(),
+			delegators: [(DELEGATOR, 800_000u128)].into_iter().collect(),
+			delegation_fee_bps: 2000,
+		}
+		.register_for_epoch::<Test>(EPOCH);
+		assert!(crate::HistoricalBonds::<Test>::try_get(EPOCH).is_err());
+	}
+
+	#[test]
+	#[cfg_attr(
+		debug_assertions,
+		should_panic(expected = "No bond recorded for epoch 10; skipping reward distribution.")
+	)]
+	fn distribute_all_skips_epoch_without_bond() {
+		new_test_ext().execute_with(|| {
+			setup();
+			DelegatedRewardsDistribution::<Test>::distribute_all(EPOCH, 100_000, |_, _| {
+				panic!("nothing should be settled without a bond")
+			});
+		});
+	}
+
+	#[test]
+	#[cfg_attr(
+		debug_assertions,
+		should_panic(expected = "No bond recorded for epoch 10. Settling directly with validator")
+	)]
+	fn distribute_settles_with_validator_without_bond() {
+		new_test_ext().execute_with(|| {
+			setup();
+			let mut settled = vec![];
+			distribute::<Test>(EPOCH, &VALIDATOR, 100_000, |account, amount| {
+				settled.push((*account, amount));
+			});
+			assert_eq!(settled, vec![(VALIDATOR, 100_000)]);
+		});
+	}
 }
 
 #[cfg(test)]

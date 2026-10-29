@@ -88,7 +88,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const STORAGE_VERSION_U16: u16 = 18;
+pub const STORAGE_VERSION_U16: u16 = 19;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
@@ -565,8 +565,6 @@ impl<T: Config> SwapRequest<T> {
 )]
 #[scale_info(skip_type_params(T, I))]
 pub enum PalletConfigUpdate<T: Config> {
-	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.
-	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
 	/// Set the delay in blocks before retrying a previously failed swap.
 	SwapRetryDelay { delay: BlockNumberFor<T> },
 	/// Set the interval at which we buy FLIP using the swap fee that was taken in USDC.
@@ -734,11 +732,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CollectedRejectedFunds<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
-
-	/// Maximum amount allowed to be put into a swap. Excess amounts are confiscated.
-	#[pallet::storage]
-	#[pallet::getter(fn maximum_swap_amount)]
-	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
 
 	/// FLIP ready to be sent to gateway.
 	#[pallet::storage]
@@ -956,12 +949,6 @@ pub mod pallet {
 			asset: Asset,
 			direction: SwapLeg,
 			amount: AssetAmount,
-		},
-		SwapAmountConfiscated {
-			swap_request_id: SwapRequestId,
-			asset: Asset,
-			total_amount: AssetAmount,
-			confiscated_amount: AssetAmount,
 		},
 		SwapEgressIgnored {
 			swap_request_id: SwapRequestId,
@@ -1322,9 +1309,6 @@ pub mod pallet {
 
 			for update in updates {
 				match update {
-					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
-						MaximumSwapAmount::<T>::set(asset, amount);
-					},
 					PalletConfigUpdate::SwapRetryDelay { delay } => {
 						ensure!(
 							delay != BlockNumberFor::<T>::zero(),
@@ -2171,11 +2155,12 @@ pub mod pallet {
 					)
 				};
 
-				// Sum the deltas or just use a single leg delta if the other leg doesn't have
-				// an oracle price.
+				// Compound the deltas or just use a single leg delta if the other leg doesn't have
+				// an oracle price. The deltas must not be summed: legs that deviate in opposite
+				// directions would cancel out and hide a large loss on the route as a whole.
 				let total_delta = match (to_stable_delta, from_stable_delta) {
 					(Ok(Some(to_stable)), Ok(Some(from_stable))) =>
-						Ok(Some(to_stable.saturating_add(&from_stable))),
+						Ok(Some(to_stable.compound(&from_stable))),
 					// Use the one sided slippage as long as that side is not USDC.
 					(Ok(Some(delta)), Ok(None)) if swap.input_asset() != STABLE_ASSET =>
 						Ok(Some(delta)),
@@ -3224,33 +3209,6 @@ pub mod pallet {
 				*id
 			});
 
-			// Do not limit the maximum swap amount for network fee swaps.
-			let net_amount = if matches!(
-				request_type,
-				SwapRequestType::NetworkFee | SwapRequestType::IngressEgressFee
-			) {
-				input_amount
-			} else {
-				let (swap_amount, confiscated_amount) =
-					match MaximumSwapAmount::<T>::get(input_asset) {
-						Some(max) =>
-							(sp_std::cmp::min(input_amount, max), input_amount.saturating_sub(max)),
-						None => (input_amount, Zero::zero()),
-					};
-				if !confiscated_amount.is_zero() {
-					CollectedRejectedFunds::<T>::mutate(input_asset, |fund| {
-						*fund = fund.saturating_add(confiscated_amount)
-					});
-					Self::deposit_event(Event::<T>::SwapAmountConfiscated {
-						swap_request_id: request_id,
-						asset: input_asset,
-						total_amount: input_amount,
-						confiscated_amount,
-					});
-				}
-				swap_amount
-			};
-
 			// Restrict the number of chunks based on the minimum chunk size.
 			let dca_params = dca_params.map(|mut dca_params| {
 				let minimum_chunk_size = MinimumChunkSize::<T>::get(input_asset);
@@ -3284,7 +3242,7 @@ pub mod pallet {
 					Self::schedule_swap(
 						input_asset,
 						output_asset,
-						net_amount,
+						input_amount,
 						// No refund parameters for network fee swaps
 						None,
 						SwapType::NetworkFee,
@@ -3306,7 +3264,7 @@ pub mod pallet {
 					Self::schedule_swap(
 						input_asset,
 						output_asset,
-						net_amount,
+						input_amount,
 						// No refund parameters for ingress/egress fee swaps
 						None,
 						SwapType::IngressEgressFee,
@@ -3326,7 +3284,7 @@ pub mod pallet {
 				},
 				SwapRequestType::Regular { ref output_action } |
 				SwapRequestType::RegularNoNetworkFee { ref output_action } => {
-					let mut dca_state = DcaState::new(net_amount, dca_params.clone());
+					let mut dca_state = DcaState::new(input_amount, dca_params.clone());
 					let chunk_input_amount = dca_state.calculate_next_chunk().unwrap_or_default();
 
 					// Choose correct network fee for the swap

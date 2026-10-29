@@ -666,6 +666,7 @@ pub struct FundingEnvironment {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SwappingEnvironment {
+	#[deprecated(note = "The maximum swap amount no longer exists.")]
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
 	#[deprecated(note = "Use network_fees field instead")]
 	network_fee_hundredth_pips: Permill,
@@ -1072,6 +1073,7 @@ pub trait CustomApi {
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 
+	#[deprecated(note = "The maximum swap amount no longer exists.")]
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>>;
 	#[subscription(name = "subscribe_pool_price", item = BlockUpdate<PoolPriceV1>)]
@@ -1856,9 +1858,9 @@ where
 			} else if version < 19 {
 				#[expect(deprecated)]
 				Ok(api.cf_safe_mode_statuses_before_version_19(hash)?.into())
-			} else if version < 22 {
+			} else if version < 23 {
 				#[expect(deprecated)]
-				Ok(api.cf_safe_mode_statuses_before_version_22(hash)?.into())
+				Ok(api.cf_safe_mode_statuses_before_version_23(hash)?.into())
 			} else {
 				api.cf_safe_mode_statuses(hash)
 			}
@@ -2066,6 +2068,7 @@ where
 	}
 
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>> {
+		#[expect(deprecated)]
 		self.rpc_backend
 			.with_runtime_api(None, |api, hash| api.cf_max_swap_amount(hash, asset))
 	}
@@ -2134,9 +2137,9 @@ where
 							.into_iter()
 							.map(Into::into)
 							.collect::<Vec<_>>()
-					} else if api_version < 22 {
+					} else if api_version < 23 {
 						#[expect(deprecated)]
-						api.cf_all_account_infos_before_version_22(hash, roles)?
+						api.cf_all_account_infos_before_version_23(hash, roles)?
 							.into_iter()
 							.map(Into::into)
 							.collect::<Vec<_>>()
@@ -2525,9 +2528,9 @@ where
 							} = if api_version < 19 {
 								#[expect(deprecated)]
 								api.cf_validator_info_before_version_19(hash, &account_id)?.into()
-							} else if api_version < 22 {
+							} else if api_version < 23 {
 								#[expect(deprecated)]
-								api.cf_validator_info_before_version_22(hash, &account_id)?.into()
+								api.cf_validator_info_before_version_23(hash, &account_id)?.into()
 							} else {
 								api.cf_validator_info(hash, &account_id)?
 							};
@@ -2569,9 +2572,9 @@ where
 				} else if api_version < 19 {
 					#[expect(deprecated)]
 					api.cf_validator_info_before_version_19(hash, &account_id).map(Into::into)
-				} else if api_version < 22 {
+				} else if api_version < 23 {
 					#[expect(deprecated)]
-					api.cf_validator_info_before_version_22(hash, &account_id).map(Into::into)
+					api.cf_validator_info_before_version_23(hash, &account_id).map(Into::into)
 				} else {
 					api.cf_validator_info(hash, &account_id)
 				}
@@ -2806,6 +2809,7 @@ where
 				api.cf_network_fees(hash)?
 			};
 			Ok::<_, CfApiError>(SwappingEnvironment {
+				#[expect(deprecated)]
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
@@ -2813,6 +2817,7 @@ where
 					{
 						return Ok(None);
 					}
+					#[expect(deprecated)]
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
 				#[expect(deprecated)]
@@ -3426,9 +3431,20 @@ where
 			let strategies = if api_version < 4 {
 				// Strategies didn't exist in earlier versions:
 				vec![]
-			} else {
-				api.cf_get_trading_strategies(hash, lp)
+			} else if api_version < 22 {
+				// Strategies of the removed types are omitted.
+				#[expect(deprecated)]
+				api.cf_get_trading_strategies_before_version_22(hash, lp)
 					.map_err(CfApiError::from)?
+					.into_iter()
+					.filter_map(|info| info.into_current())
+					.collect()
+			} else {
+				api.cf_get_trading_strategies(hash, lp).map_err(CfApiError::from)?
+			};
+
+			Ok::<_, CfApiError>(
+				strategies
 					.into_iter()
 					.map(|info| TradingStrategyInfo {
 						lp_id: info.lp_id,
@@ -3440,10 +3456,8 @@ where
 							.map(|(asset, amount)| (asset, amount.into()))
 							.collect(),
 					})
-					.collect()
-			};
-
-			Ok::<_, CfApiError>(strategies)
+					.collect::<Vec<_>>(),
+			)
 		})
 	}
 

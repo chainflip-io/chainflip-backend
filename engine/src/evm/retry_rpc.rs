@@ -470,6 +470,18 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 			)
 			.await
 	}
+
+	async fn get_finalized_block_number(&self) -> Result<U64> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("get_finalized_block_number".to_string(), None),
+				Box::pin(move |client| {
+					Box::pin(async move { client.get_finalized_block_number().await })
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
 }
 
 #[async_trait::async_trait]
@@ -673,6 +685,8 @@ pub mod mocks {
 			async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>>;
 
 			async fn get_block_number(&self) -> anyhow::Result<U64>;
+
+			async fn get_finalized_block_number(&self) -> anyhow::Result<U64>;
 		}
 	}
 }

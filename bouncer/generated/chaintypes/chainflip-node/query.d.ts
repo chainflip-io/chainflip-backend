@@ -25,6 +25,8 @@ import type {
   CfPrimitivesChainsAssetsEthAsset,
   CfChainsDotPolkadotAccountId,
   CfChainsBtcUtxo,
+  CfChainsBtcDiscardedBitcoinUtxo,
+  CfChainsBtcUtxoId,
   CfChainsBtcUtxoSelectionConsolidationParameters,
   CfPrimitivesChainsAssetsArbAsset,
   CfPrimitivesChainsAssetsBscAsset,
@@ -75,6 +77,7 @@ import type {
   PalletCfThresholdSignatureSignerAndSignatureResultEvmCrypto,
   CfChainsEvmAggKey,
   PalletCfThresholdSignatureKeyRotationStatusEvmCrypto,
+  PalletCfThresholdSignatureCeremonyStageTimeouts,
   PalletCfThresholdSignatureCeremonyContextPolkadotCrypto,
   PalletCfThresholdSignatureRequestInstructionPolkadotCrypto,
   PalletCfThresholdSignatureSignerAndSignatureResultPolkadotCrypto,
@@ -91,6 +94,7 @@ import type {
   PalletCfBroadcastBroadcastDataPolkadot,
   CfChainsDotPolkadotSignature,
   CfChainsDotApiPolkadotApi,
+  CfChainsDotPolkadotTransactionId,
   PalletCfBroadcastBroadcastDataBitcoin,
   CfChainsBtcApiBitcoinApi,
   PalletCfSwappingSwapRequest,
@@ -265,7 +269,7 @@ import type {
   PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
   PalletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectionState,
   PalletCfElectionsConsensusHistory004,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
   PalletCfElectionsBitmapComponentsElectionBitmapComponentsArbitrum,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeIndividualComponentArbitrumTrackedData,
   PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserArbitrum,
@@ -312,7 +316,7 @@ import type {
   PalletCfIngressEgressPendingPrewitnessedDepositEntry008,
   PalletCfIngressEgressDepositWitnessBsc,
   PalletCfIngressEgressVaultDepositWitnessBsc,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
   PalletCfElectionsBitmapComponentsElectionBitmapComponentsBsc,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeIndividualComponentBscTrackedData,
   PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserBsc,
@@ -322,7 +326,7 @@ import type {
   CfChainsBscBscTrackedData,
   PalletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionPropertiesHeightWitnesserPropertiesBsc,
   PalletCfElectionsConsensusHistory007,
-  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
   PalletCfElectionsBitmapComponentsElectionBitmapComponentsAssethub,
   PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeIndividualComponentAssethubTrackedData,
   PalletCfElectionsElectoralSystemsBlockHeightWitnesserStateMachineBlockHeightWitnesserAssethub,
@@ -617,6 +621,17 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<Array<CfChainsBtcUtxo>> =} callback
      **/
     bitcoinAvailableUtxos: GenericStorageQuery<() => Array<CfChainsBtcUtxo>>;
+
+    /**
+     * UTXOs removed from the available pool, retained for inspection and possible recovery.
+     *
+     * @param {CfChainsBtcUtxoId} arg
+     * @param {Callback<CfChainsBtcDiscardedBitcoinUtxo | undefined> =} callback
+     **/
+    bitcoinDiscardedUtxos: GenericStorageQuery<
+      (arg: CfChainsBtcUtxoId) => CfChainsBtcDiscardedBitcoinUtxo | undefined,
+      CfChainsBtcUtxoId
+    >;
 
     /**
      *
@@ -2095,13 +2110,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -2176,18 +2184,20 @@ export interface ChainStorage extends GenericChainStorage {
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
 
     /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
      * (2/3 must agree the node was an offender) on keygen failure.
      *
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.
@@ -2272,13 +2282,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -2353,18 +2356,20 @@ export interface ChainStorage extends GenericChainStorage {
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
 
     /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
      * (2/3 must agree the node was an offender) on keygen failure.
      *
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.
@@ -2449,13 +2454,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -2530,18 +2528,20 @@ export interface ChainStorage extends GenericChainStorage {
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
 
     /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
      * (2/3 must agree the node was an offender) on keygen failure.
      *
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.
@@ -2656,6 +2656,17 @@ export interface ChainStorage extends GenericChainStorage {
       (arg: number) => CfChainsEvmEvmTransactionMetadata | undefined,
       number
     >;
+
+    /**
+     * External transactions whose fee has been refunded in the current block. A single
+     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+     * only paid once. All confirmations from one transaction are witnessed in the same block,
+     * so this is cleared at the start of each block.
+     *
+     * @param {H256} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
 
     /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
@@ -2808,6 +2819,20 @@ export interface ChainStorage extends GenericChainStorage {
     transactionMetadata: GenericStorageQuery<(arg: number) => [] | undefined, number>;
 
     /**
+     * External transactions whose fee has been refunded in the current block. A single
+     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+     * only paid once. All confirmations from one transaction are witnessed in the same block,
+     * so this is cleared at the start of each block.
+     *
+     * @param {CfChainsDotPolkadotTransactionId} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    refundedTransactions: GenericStorageQuery<
+      (arg: CfChainsDotPolkadotTransactionId) => [] | undefined,
+      CfChainsDotPolkadotTransactionId
+    >;
+
+    /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
      *
      * @param {Callback<Array<number>> =} callback
@@ -2957,6 +2982,17 @@ export interface ChainStorage extends GenericChainStorage {
     transactionMetadata: GenericStorageQuery<(arg: number) => [] | undefined, number>;
 
     /**
+     * External transactions whose fee has been refunded in the current block. A single
+     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+     * only paid once. All confirmations from one transaction are witnessed in the same block,
+     * so this is cleared at the start of each block.
+     *
+     * @param {H256} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
+
+    /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
      *
      * @param {Callback<Array<number>> =} callback
@@ -3050,17 +3086,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     collectedRejectedFunds: GenericStorageQuery<
       (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint,
-      CfPrimitivesChainsAssetsAnyAsset
-    >;
-
-    /**
-     * Maximum amount allowed to be put into a swap. Excess amounts are confiscated.
-     *
-     * @param {CfPrimitivesChainsAssetsAnyAsset} arg
-     * @param {Callback<bigint | undefined> =} callback
-     **/
-    maximumSwapAmount: GenericStorageQuery<
-      (arg: CfPrimitivesChainsAssetsAnyAsset) => bigint | undefined,
       CfPrimitivesChainsAssetsAnyAsset
     >;
 
@@ -4461,6 +4486,17 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * External transactions whose fee has been refunded in the current block. A single
+     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+     * only paid once. All confirmations from one transaction are witnessed in the same block,
+     * so this is cleared at the start of each block.
+     *
+     * @param {H256} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
+
+    /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
      *
      * @param {Callback<Array<number>> =} callback
@@ -4918,13 +4954,6 @@ export interface ChainStorage extends GenericChainStorage {
     requestRetryQueue: GenericStorageQuery<(arg: number) => Array<number>, number>;
 
     /**
-     * Maximum duration of a threshold signing ceremony before it is timed out and retried
-     *
-     * @param {Callback<number> =} callback
-     **/
-    thresholdSignatureResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The epoch whose authorities control the current key.
      *
      * @param {Callback<number | undefined> =} callback
@@ -4999,18 +5028,20 @@ export interface ChainStorage extends GenericChainStorage {
     keyHandoverResolutionPendingSince: GenericStorageQuery<() => number>;
 
     /**
-     *
-     * @param {Callback<number> =} callback
-     **/
-    keygenResponseTimeout: GenericStorageQuery<() => number>;
-
-    /**
      * The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
      * (2/3 must agree the node was an offender) on keygen failure.
      *
      * @param {Callback<bigint> =} callback
      **/
     keygenSlashAmount: GenericStorageQuery<() => bigint>;
+
+    /**
+     * Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+     * each request so that all participants use the same values.
+     *
+     * @param {Callback<PalletCfThresholdSignatureCeremonyStageTimeouts> =} callback
+     **/
+    stageTimeouts: GenericStorageQuery<() => PalletCfThresholdSignatureCeremonyStageTimeouts>;
 
     /**
      * Counter for generating unique ceremony ids.
@@ -5122,6 +5153,20 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<[] | undefined> =} callback
      **/
     transactionMetadata: GenericStorageQuery<(arg: number) => [] | undefined, number>;
+
+    /**
+     * External transactions whose fee has been refunded in the current block. A single
+     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+     * only paid once. All confirmations from one transaction are witnessed in the same block,
+     * so this is cleared at the start of each block.
+     *
+     * @param {SolPrimSignature} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    refundedTransactions: GenericStorageQuery<
+      (arg: SolPrimSignature) => [] | undefined,
+      SolPrimSignature
+    >;
 
     /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
@@ -6031,6 +6076,20 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<[] | undefined> =} callback
      **/
     transactionMetadata: GenericStorageQuery<(arg: number) => [] | undefined, number>;
+
+    /**
+     * External transactions whose fee has been refunded in the current block. A single
+     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+     * only paid once. All confirmations from one transaction are witnessed in the same block,
+     * so this is cleared at the start of each block.
+     *
+     * @param {CfChainsDotPolkadotTransactionId} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    refundedTransactions: GenericStorageQuery<
+      (arg: CfChainsDotPolkadotTransactionId) => [] | undefined,
+      CfChainsDotPolkadotTransactionId
+    >;
 
     /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
@@ -7339,13 +7398,13 @@ export interface ChainStorage extends GenericChainStorage {
      * choose to submit it, where the probability increases over time.
      *
      * @param {PalletCfElectionsSharedDataHash} arg
-     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum | undefined> =} callback
+     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum | undefined> =} callback
      **/
     sharedData: GenericStorageQuery<
       (
         arg: PalletCfElectionsSharedDataHash,
       ) =>
-        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum
+        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum
         | undefined,
       PalletCfElectionsSharedDataHash
     >;
@@ -7698,6 +7757,17 @@ export interface ChainStorage extends GenericChainStorage {
       (arg: number) => CfChainsTronTronTransactionMetadata | undefined,
       number
     >;
+
+    /**
+     * External transactions whose fee has been refunded in the current block. A single
+     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+     * only paid once. All confirmations from one transaction are witnessed in the same block,
+     * so this is cleared at the start of each block.
+     *
+     * @param {H256} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
 
     /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
@@ -8447,6 +8517,17 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * External transactions whose fee has been refunded in the current block. A single
+     * transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+     * only paid once. All confirmations from one transaction are witnessed in the same block,
+     * so this is cleared at the start of each block.
+     *
+     * @param {H256} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    refundedTransactions: GenericStorageQuery<(arg: H256) => [] | undefined, H256>;
+
+    /**
      * Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
      *
      * @param {Callback<Array<number>> =} callback
@@ -8838,13 +8919,13 @@ export interface ChainStorage extends GenericChainStorage {
      * choose to submit it, where the probability increases over time.
      *
      * @param {PalletCfElectionsSharedDataHash} arg
-     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc | undefined> =} callback
+     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc | undefined> =} callback
      **/
     sharedData: GenericStorageQuery<
       (
         arg: PalletCfElectionsSharedDataHash,
       ) =>
-        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc
+        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc
         | undefined,
       PalletCfElectionsSharedDataHash
     >;
@@ -9079,13 +9160,13 @@ export interface ChainStorage extends GenericChainStorage {
      * choose to submit it, where the probability increases over time.
      *
      * @param {PalletCfElectionsSharedDataHash} arg
-     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub | undefined> =} callback
+     * @param {Callback<PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub | undefined> =} callback
      **/
     sharedData: GenericStorageQuery<
       (
         arg: PalletCfElectionsSharedDataHash,
       ) =>
-        | PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub
+        | PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub
         | undefined,
       PalletCfElectionsSharedDataHash
     >;

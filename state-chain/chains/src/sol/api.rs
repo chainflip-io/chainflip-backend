@@ -801,7 +801,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 }
 
 impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<Environment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		deposit_details: <Solana as Chain>::DepositDetails,
 		asset: <Solana as Chain>::ChainAsset,
 		fetch: FetchForRejection<Solana>,
