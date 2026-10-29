@@ -17,10 +17,13 @@
 #![cfg(test)]
 use crate::{
 	mock::*, Call as PalletCall, ChainState, CurrentChainState, Error, Event as PalletEvent,
-	FeeMultiplier,
+	FeeMultiplier, PalletConfigUpdate,
 };
 use cf_chains::mocks::MockTrackedData;
-use frame_support::{assert_noop, assert_ok, pallet_prelude::DispatchResult, traits::OriginTrait};
+use cf_test_utilities::assert_has_matching_event;
+use frame_support::{
+	assert_noop, assert_ok, pallet_prelude::DispatchResult, traits::OriginTrait, BoundedVec,
+};
 use sp_runtime::FixedU128;
 
 trait TestChainTracking {
@@ -89,16 +92,25 @@ fn chain_tracking_can_only_advance() {
 fn can_update_fee_multiplier() {
 	new_test_ext().execute_with(|| {
 		const NEW_FEE_MULTIPLIER: FixedU128 = FixedU128::from_u32(2);
+		let updates: BoundedVec<_, _> =
+			vec![PalletConfigUpdate::FeeMultiplier { multiplier: NEW_FEE_MULTIPLIER }]
+				.try_into()
+				.unwrap();
+
 		assert_ne!(FeeMultiplier::<Test>::get(), NEW_FEE_MULTIPLIER);
-		assert_ok!(MockChainTracking::update_fee_multiplier(
-			OriginTrait::root(),
-			NEW_FEE_MULTIPLIER
-		));
 		assert_noop!(
-			MockChainTracking::update_fee_multiplier(OriginTrait::signed(100), NEW_FEE_MULTIPLIER),
+			MockChainTracking::update_pallet_config(OriginTrait::signed(100), updates.clone()),
 			sp_runtime::traits::BadOrigin
 		);
+		assert_ok!(MockChainTracking::update_pallet_config(OriginTrait::root(), updates));
 		assert_eq!(FeeMultiplier::<Test>::get(), NEW_FEE_MULTIPLIER);
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::MockChainTracking(PalletEvent::PalletConfigUpdated {
+				update: PalletConfigUpdate::FeeMultiplier { multiplier: NEW_FEE_MULTIPLIER },
+			})
+		);
 	});
 }
 

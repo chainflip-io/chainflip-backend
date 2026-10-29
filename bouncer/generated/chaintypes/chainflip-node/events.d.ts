@@ -8,7 +8,6 @@ import type {
   H160,
   FixedBytes,
   Bytes,
-  FixedU128,
   Result,
 } from 'dedot/codecs';
 import type {
@@ -45,6 +44,7 @@ import type {
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
   CfChainsChainState,
+  PalletCfChainTrackingPalletConfigUpdate,
   CfChainsChainStatePolkadot,
   CfChainsChainStateBitcoin,
   CfChainsEvmAggKey,
@@ -1171,12 +1171,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'EthereumChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -1198,12 +1198,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'PolkadotChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -1225,12 +1225,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'BitcoinChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -3558,12 +3558,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'ArbitrumChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -4592,12 +4592,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'SolanaChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -4731,12 +4731,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'AssethubChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -5497,12 +5497,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'TronChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -5934,12 +5934,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'BscChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
