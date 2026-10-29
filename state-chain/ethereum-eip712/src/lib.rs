@@ -132,7 +132,7 @@ pub fn recursively_construct_types(
 	let t = ty.type_info();
 
 	let (mut type_name, maybe_add_type, mut value): (TypeName, AddTypeOrNot, Value) =
-		match (t.type_def, v.value.clone()) {
+		match (t.type_def, v.value) {
 			(TypeDef::Composite(type_def_composite), ValueDef::Composite(comp_value)) =>
 			// if the type is primitive_types::H160, we interpret it as an address. We also map
 			// other primitives to solidity primitives directly without recursing further.
@@ -240,7 +240,7 @@ pub fn recursively_construct_types(
 					Value::named_composite(modified_values),
 				)
 			},
-			(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(_p)) => (
+			(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(p)) => (
 				TypeName {
 					name: match type_def_primitive {
 						TypeDefPrimitive::Bool => "bool".to_string(),
@@ -262,12 +262,15 @@ pub fn recursively_construct_types(
 					requires_type_id_suffix: false,
 				},
 				AddTypeOrNot::DontAdd,
-				v,
+				Value::primitive(p),
 			),
 
-			(TypeDef::Compact(type_def_compact), _) => {
-				let (type_name, c_value) =
-					recursively_construct_types(v.clone(), type_def_compact.type_param, types)?;
+			(TypeDef::Compact(type_def_compact), value) => {
+				let (type_name, c_value) = recursively_construct_types(
+					Value { value, context: () },
+					type_def_compact.type_param,
+					types,
+				)?;
 				(type_name, AddTypeOrNot::DontAdd, c_value)
 			},
 			// this is only used when scale-info's bitvec feature is enabled and since we dont use
@@ -370,12 +373,11 @@ fn process_tuple(
 	field_name: impl Fn(String, usize) -> String,
 ) -> Result<(bool, Vec<Eip712DomainType>, Vec<(String, Value)>), &'static str> {
 	let (type_fields_and_ids, modified_values): (Vec<_>, Vec<_>) = tuple_types
-		.clone()
 		.into_iter()
 		.zip(values.into_iter())
 		.enumerate()
 		.map(|(i, (ty, value))| -> Result<_, &'static str> {
-			let (type_name, value) = recursively_construct_types(value.clone(), ty, types)?;
+			let (type_name, value) = recursively_construct_types(value, ty, types)?;
 			let field_name = field_name(type_name.name.clone(), i);
 			Ok((
 				(
@@ -405,15 +407,14 @@ fn process_composite(
 ) -> Result<(TypeName, AddTypeOrNot, Value), &'static str> {
 	match comp_value {
 		Composite::Named(fs) => {
-			let fs_map = fs.into_iter().collect::<BTreeMap<_, _>>();
+			let mut fs_map = fs.into_iter().collect::<BTreeMap<_, _>>();
 			type_fields
-				.clone()
 				.into_iter()
 				.map(|field| -> Result<_, &'static str> {
 					// shouldn't be possible since we are in Named variant
 					let field_name = field.name.ok_or("field name doesn't exist")?.to_string();
 					let value =
-						fs_map.get(&field_name).ok_or("field with this name has to exist")?.clone();
+						fs_map.remove(&field_name).ok_or("field with this name has to exist")?;
 					let (type_name, value) = recursively_construct_types(value, field.ty, types)?;
 					Ok((
 						(
@@ -427,13 +428,11 @@ fn process_composite(
 		},
 		Composite::Unnamed(fs) => {
 			type_fields
-				.clone()
 				.into_iter()
 				.zip(fs)
 				.enumerate()
 				.map(|(i, (field, value))| -> Result<_, &'static str> {
-					let (type_name, value) =
-						recursively_construct_types(value.clone(), field.ty, types)?;
+					let (type_name, value) = recursively_construct_types(value, field.ty, types)?;
 					// In case of unnamed type_fields, we decide to name it by its type name
 					// appended by its index in the tuple
 					let field_name = type_name.name.clone() + "_" + &i.to_string();
