@@ -109,7 +109,7 @@ substrate-frame-rpc-system = { workspace = true }
 serde_bytes = { workspace = true, default-features = true }
 bs58 = { workspace = true, default-features = true }
 base64 = { workspace = true }
-rocksdb = { workspace = true, features = ["lz4"] }
+rocksdb = { workspace = true }
 
 # Used only with feature client-mocks
 mockall = { workspace = true, features = ["nightly"], optional = true }
