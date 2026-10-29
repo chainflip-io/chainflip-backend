@@ -16,7 +16,7 @@ files=""
 for page in $(seq 1 30); do
   batch=$(curl -fsSL --retry 3 -H "Authorization: Bearer $GH_TOKEN" \
     "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pulls/$pr_number/files?per_page=100&page=$page" \
-    | jq -r '.[].filename')
+    | jq -r '.[] | .filename, (.previous_filename // empty)')
   [[ -z "$batch" ]] && break
   files+="$batch"$'\n'
 done
