@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 5ab8df0ba0a57c49267e92e192ac18807c94b84b6e269f753c79c354841d09d5 # shrinks to value = Root { a: Bar { items: [Leaf { x: 0 }, Leaf { x: 0 }] }, b: Bar { items: [Leaf { x: 0 }] }, kinds: [], tag: None, pair: (0, []), bytes: [] }, other = Root { a: Bar { items: [] }, b: Bar { items: [] }, kinds: [], tag: None, pair: (0, []), bytes: [] }
