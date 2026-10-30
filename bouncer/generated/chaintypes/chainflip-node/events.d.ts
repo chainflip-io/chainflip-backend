@@ -37,7 +37,7 @@ import type {
   PalletCfValidatorPalletConfigUpdate,
   PalletCfValidatorDelegationOperatorSettings,
   PalletCfValidatorDelegationChange,
-  PalletCfValidatorDelegationDelegationPlanU128,
+  PalletCfValidatorDelegationDelegationPlan,
   CfPrimitivesWitnessingTaskName,
   SpConsensusGrandpaAppPublic,
   PalletCfGovernanceGovernanceCouncil,
@@ -879,7 +879,7 @@ export interface ChainEvents extends GenericChainEvents {
     DelegationPlanUpdated: GenericPalletEvent<
       'Validator',
       'DelegationPlanUpdated',
-      { delegator: AccountId32; plan: PalletCfValidatorDelegationDelegationPlanU128 }
+      { delegator: AccountId32; plan: PalletCfValidatorDelegationDelegationPlan }
     >;
 
     /**

@@ -1722,18 +1722,18 @@ export interface ChainTx<
 
     /**
      * Sets `delegator`'s complete delegation plan across one or more operators in a single
-     * call: `plan` becomes their entire new plan, replacing whatever existed
-     * before. Any operator the delegator was previously delegating to but that's absent
-     * from `plan` is fully undelegated; an empty `plan` undelegates everything. Unlike
-     * `delegate`, the caller declares exact target amounts rather than an
-     * increase/decrease delta -- entries with a zero amount are treated the same as an
-     * absent entry.
+     * call: `plan` becomes their entire new plan, stored exactly as submitted, replacing
+     * whatever existed before. Any operator the delegator was previously delegating to but
+     * that's absent from `plan` is fully undelegated; an empty `plan` undelegates
+     * everything.
      *
-     * `plan`'s fixed (non-`Max`) amounts must not exceed the delegator's funding balance --
-     * unlike `delegate`, which clamps an over-large increase to the balance, this rejects
-     * the plan outright rather than silently scaling it down. The total must be at least
-     * the minimum funding amount if `plan` is non-empty; individual entries may be smaller,
-     * only the total is checked.
+     * Unlike `delegate`, which clamps an over-large increase to the balance, this doesn't
+     * check `plan`'s total against the delegator's funding balance at all -- an
+     * over-subscribed plan (total > balance) is accepted as-is and resolved at
+     * auction-resolution time instead, the same way an existing plan is affected by a
+     * balance reduction after the fact (e.g. slashing): `build_delegation_snapshots`
+     * prorates each entry proportionally to whatever balance is actually available. The
+     * total must still be at least the minimum funding amount if `plan` is non-empty.
      *
      * @param {PalletCfValidatorDelegationDelegationPlan} plan
      **/

@@ -2442,18 +2442,18 @@ export type PalletCfValidatorCall =
   | { name: 'Undelegate'; params: { decrease: PalletCfValidatorDelegationDelegationAmount } }
   /**
    * Sets `delegator`'s complete delegation plan across one or more operators in a single
-   * call: `plan` becomes their entire new plan, replacing whatever existed
-   * before. Any operator the delegator was previously delegating to but that's absent
-   * from `plan` is fully undelegated; an empty `plan` undelegates everything. Unlike
-   * `delegate`, the caller declares exact target amounts rather than an
-   * increase/decrease delta -- entries with a zero amount are treated the same as an
-   * absent entry.
+   * call: `plan` becomes their entire new plan, stored exactly as submitted, replacing
+   * whatever existed before. Any operator the delegator was previously delegating to but
+   * that's absent from `plan` is fully undelegated; an empty `plan` undelegates
+   * everything.
    *
-   * `plan`'s fixed (non-`Max`) amounts must not exceed the delegator's funding balance --
-   * unlike `delegate`, which clamps an over-large increase to the balance, this rejects
-   * the plan outright rather than silently scaling it down. The total must be at least
-   * the minimum funding amount if `plan` is non-empty; individual entries may be smaller,
-   * only the total is checked.
+   * Unlike `delegate`, which clamps an over-large increase to the balance, this doesn't
+   * check `plan`'s total against the delegator's funding balance at all -- an
+   * over-subscribed plan (total > balance) is accepted as-is and resolved at
+   * auction-resolution time instead, the same way an existing plan is affected by a
+   * balance reduction after the fact (e.g. slashing): `build_delegation_snapshots`
+   * prorates each entry proportionally to whatever balance is actually available. The
+   * total must still be at least the minimum funding amount if `plan` is non-empty.
    **/
   | { name: 'DelegateMulti'; params: { plan: PalletCfValidatorDelegationDelegationPlan } }
   | { name: 'ReportWitnessingTaskRestart'; params: { task: CfPrimitivesWitnessingTaskName } }
@@ -2618,18 +2618,18 @@ export type PalletCfValidatorCallLike =
   | { name: 'Undelegate'; params: { decrease: PalletCfValidatorDelegationDelegationAmount } }
   /**
    * Sets `delegator`'s complete delegation plan across one or more operators in a single
-   * call: `plan` becomes their entire new plan, replacing whatever existed
-   * before. Any operator the delegator was previously delegating to but that's absent
-   * from `plan` is fully undelegated; an empty `plan` undelegates everything. Unlike
-   * `delegate`, the caller declares exact target amounts rather than an
-   * increase/decrease delta -- entries with a zero amount are treated the same as an
-   * absent entry.
+   * call: `plan` becomes their entire new plan, stored exactly as submitted, replacing
+   * whatever existed before. Any operator the delegator was previously delegating to but
+   * that's absent from `plan` is fully undelegated; an empty `plan` undelegates
+   * everything.
    *
-   * `plan`'s fixed (non-`Max`) amounts must not exceed the delegator's funding balance --
-   * unlike `delegate`, which clamps an over-large increase to the balance, this rejects
-   * the plan outright rather than silently scaling it down. The total must be at least
-   * the minimum funding amount if `plan` is non-empty; individual entries may be smaller,
-   * only the total is checked.
+   * Unlike `delegate`, which clamps an over-large increase to the balance, this doesn't
+   * check `plan`'s total against the delegator's funding balance at all -- an
+   * over-subscribed plan (total > balance) is accepted as-is and resolved at
+   * auction-resolution time instead, the same way an existing plan is affected by a
+   * balance reduction after the fact (e.g. slashing): `build_delegation_snapshots`
+   * prorates each entry proportionally to whatever balance is actually available. The
+   * total must still be at least the minimum funding amount if `plan` is non-empty.
    **/
   | { name: 'DelegateMulti'; params: { plan: PalletCfValidatorDelegationDelegationPlan } }
   | { name: 'ReportWitnessingTaskRestart'; params: { task: CfPrimitivesWitnessingTaskName } }
@@ -2693,7 +2693,7 @@ export type PalletCfValidatorDelegationDelegationAmount =
 
 export type PalletCfValidatorDelegationDelegationPlan = {
   type: 'Fixed';
-  value: Array<[AccountId32, PalletCfValidatorDelegationDelegationAmount]>;
+  value: Array<[AccountId32, bigint]>;
 };
 
 export type CfPrimitivesWitnessingTaskName =
@@ -13697,7 +13697,7 @@ export type PalletCfValidatorEvent =
    **/
   | {
       name: 'DelegationPlanUpdated';
-      data: { delegator: AccountId32; plan: PalletCfValidatorDelegationDelegationPlanU128 };
+      data: { delegator: AccountId32; plan: PalletCfValidatorDelegationDelegationPlan };
     }
   /**
    * A validator reported that a witnessing task crashed and was restarted.
@@ -13725,11 +13725,6 @@ export type PalletCfValidatorRotationState = {
 export type PalletCfValidatorDelegationChange =
   | { type: 'Increase'; value: bigint }
   | { type: 'Decrease'; value: bigint };
-
-export type PalletCfValidatorDelegationDelegationPlanU128 = {
-  type: 'Fixed';
-  value: Array<[AccountId32, bigint]>;
-};
 
 /**
  * The `Event` enum of this pallet
@@ -18253,14 +18248,10 @@ export type PalletCfValidatorError =
    **/
   | 'MultiOperatorDelegator'
   /**
-   * At most one entry in a `delegate_multi` plan may be `DelegationAmount::Max`.
+   * A `delegate_multi` plan is invalid if any entry has a zero amount, or if a non-empty
+   * plan's total is below the minimum funding amount.
    **/
-  | 'MultipleMaxDelegationEntries'
-  /**
-   * A `delegate_multi` plan's fixed (non-`Max`) amounts already exceed the delegator's
-   * funding balance.
-   **/
-  | 'DelegationAmountExceedsBalance';
+  | 'InvalidDelegationPlan';
 
 export type SpStakingOffenceOffenceSeverity = Perbill;
 

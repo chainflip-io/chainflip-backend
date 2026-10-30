@@ -5,7 +5,7 @@ import { getIsoTime } from 'shared/utils/logger';
 import { amountToFineAmountBigInt, defaultAssetAmounts } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { validatorDelegationPlanUpdatedEvent } from 'generated/events/validator/delegationPlanUpdated';
-import type { PalletCfValidatorDelegationDelegatorRelations } from 'generated/chaintypes/chainflip-node/types';
+import type { PalletCfValidatorDelegationDelegationPlan } from 'generated/chaintypes/chainflip-node/types';
 
 /**
  * `BTreeMap<K, V>` has no distinct scale-info representation -- it derives `TypeInfo` as a
@@ -19,7 +19,7 @@ import type { PalletCfValidatorDelegationDelegatorRelations } from 'generated/ch
  * Array` fails, so `delegateMulti(...).sign()` throws a clear `ShapeAssertError`), but its `subEncode`
  * -- used by the lower-level `tryEncode` that some codepaths call directly, bypassing that assert --
  * reads `value.length`, which is `undefined` on a `Map` (only `.size` is defined). `undefined` is
- * falsy, so the length-guarded entry loop is skipped entirely and a *valid, empty* operators list is
+ * falsy, so the length-guarded entry loop is skipped entirely and a *valid, empty* plan is
  * encoded instead of throwing -- silently dropping every entry rather than failing loudly. That's the
  * real dedot bug: a `Map` should be rejected at encode time, not silently coerced to `[]`.
  *
@@ -28,10 +28,11 @@ import type { PalletCfValidatorDelegationDelegatorRelations } from 'generated/ch
  * codec (like every other `AccountId32`-keyed field in these chaintypes) happily accepts a plain SS58
  * address string at runtime.
  */
-function toDelegatorOperators(
-  entries: [string, bigint][],
-): PalletCfValidatorDelegationDelegatorRelations['operators'] {
-  return entries as unknown as PalletCfValidatorDelegationDelegatorRelations['operators'];
+function toDelegationPlan(entries: [string, bigint][]): PalletCfValidatorDelegationDelegationPlan {
+  return {
+    type: 'Fixed',
+    value: entries as unknown as PalletCfValidatorDelegationDelegationPlan['value'],
+  };
 }
 
 export async function testMultiDelegate(testContext: TestContext) {
@@ -63,16 +64,16 @@ export async function testMultiDelegate(testContext: TestContext) {
   );
   const planUpdated = await delegatorCf.submitExtrinsic({
     extrinsic: (client) =>
-      client.tx.validator.delegateMulti({
-        operators: toDelegatorOperators([
+      client.tx.validator.delegateMulti(
+        toDelegationPlan([
           [operatorA.address, amountToOperatorA],
           [operatorB.address, amountToOperatorB],
         ]),
-      }),
+      ),
     expectedEvent: validatorDelegationPlanUpdatedEvent,
   });
 
-  const operators = planUpdated.plan.operators;
+  const operators = planUpdated.plan.value;
   if (
     operators.length !== 2 ||
     !operators.some(
@@ -90,13 +91,11 @@ export async function testMultiDelegate(testContext: TestContext) {
   cf.info(`Updating delegation plan to only delegate to ${operatorA.address}...`);
   const updatedPlanUpdated = await delegatorCf.submitExtrinsic({
     extrinsic: (client) =>
-      client.tx.validator.delegateMulti({
-        operators: toDelegatorOperators([[operatorA.address, totalAmount]]),
-      }),
+      client.tx.validator.delegateMulti(toDelegationPlan([[operatorA.address, totalAmount]])),
     expectedEvent: validatorDelegationPlanUpdatedEvent,
   });
 
-  const updatedOperators = updatedPlanUpdated.plan.operators;
+  const updatedOperators = updatedPlanUpdated.plan.value;
   if (
     updatedOperators.length !== 1 ||
     !updatedOperators.some(
@@ -110,14 +109,13 @@ export async function testMultiDelegate(testContext: TestContext) {
 
   cf.info('Undelegating from all operators via an empty plan...');
   const emptyPlanUpdated = await delegatorCf.submitExtrinsic({
-    extrinsic: (client) =>
-      client.tx.validator.delegateMulti({ operators: toDelegatorOperators([]) }),
+    extrinsic: (client) => client.tx.validator.delegateMulti(toDelegationPlan([])),
     expectedEvent: validatorDelegationPlanUpdatedEvent,
   });
 
-  if (emptyPlanUpdated.plan.operators.length !== 0) {
+  if (emptyPlanUpdated.plan.value.length !== 0) {
     throw new Error(
-      `Expected an empty delegation plan, got: ${JSON.stringify(emptyPlanUpdated.plan.operators, (_, v) => (typeof v === 'bigint' ? v.toString() : v))}`,
+      `Expected an empty delegation plan, got: ${JSON.stringify(emptyPlanUpdated.plan.value, (_, v) => (typeof v === 'bigint' ? v.toString() : v))}`,
     );
   }
 

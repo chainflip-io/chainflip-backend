@@ -49,7 +49,7 @@ import type {
   PalletCfValidatorRotationPhase,
   PalletCfValidatorAuctionResolverSetSizeParameters,
   PalletCfValidatorDelegationOperatorSettings,
-  PalletCfValidatorDelegationDelegationPlanU128,
+  PalletCfValidatorDelegationDelegationPlan,
   PalletCfValidatorDelegationDelegationSnapshot,
   StateChainRuntimeOpaqueSessionKeys,
   SpStakingOffenceOffenceSeverity,
@@ -1410,10 +1410,10 @@ export interface ChainStorage extends GenericChainStorage {
      * balance. The key is always removed entirely once a delegator's plan becomes empty.
      *
      * @param {AccountId32Like} arg
-     * @param {Callback<PalletCfValidatorDelegationDelegationPlanU128 | undefined> =} callback
+     * @param {Callback<PalletCfValidatorDelegationDelegationPlan | undefined> =} callback
      **/
     delegationChoice: GenericStorageQuery<
-      (arg: AccountId32Like) => PalletCfValidatorDelegationDelegationPlanU128 | undefined,
+      (arg: AccountId32Like) => PalletCfValidatorDelegationDelegationPlan | undefined,
       AccountId32
     >;
 
