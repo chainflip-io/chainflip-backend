@@ -139,6 +139,24 @@ enum SurplusOrDeficit {
 	Deficit,
 }
 
+/// What settling every in-flight liquidation swap at its current progress would do to the
+/// account. Valuations use it so that a loan's swap output, after the liquidation fee, only
+/// repays that loan, and anything beyond its debt counts as collateral.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct ProjectedSettlement {
+	/// Debt (principal and pending interest) each loan's swaps would repay.
+	repaid: BTreeMap<LoanId, AssetAmount>,
+	/// Amounts that would go back to the borrower's supply positions: input not yet swapped,
+	/// plus any output left over after repaying the loan.
+	returned_collateral: BTreeMap<Asset, AssetAmount>,
+}
+
+impl ProjectedSettlement {
+	fn repaid_for(&self, loan_id: &LoanId) -> AssetAmount {
+		self.repaid.get(loan_id).copied().unwrap_or_default()
+	}
+}
+
 #[derive(
 	Clone,
 	Debug,
@@ -264,12 +282,113 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	/// Computes account's total collateral value in USD, including what's in liquidation swaps.
+	/// Settles, on paper, every in-flight liquidation swap at its current progress, applying the
+	/// same rules as [GeneralLoan::repay_via_liquidation]. Each loan's swap outputs are combined
+	/// and settled against its debt at once: since the liquidation fee is linear in the debt
+	/// repaid, this gives the same result (up to rounding) as settling them one by one, in
+	/// whatever order the swaps complete or are aborted.
+	fn project_liquidation_settlement(&self, config: &LendingConfiguration) -> ProjectedSettlement {
+		let mut projection = ProjectedSettlement::default();
+
+		let LiquidationStatus::Liquidating { liquidation_swaps, liquidation_type } =
+			&self.liquidation_status
+		else {
+			return projection;
+		};
+
+		let is_voluntary = *liquidation_type == LiquidationType::SoftVoluntary;
+
+		let mut output_per_loan = BTreeMap::<LoanId, AssetAmount>::new();
+
+		for (swap_request_id, LiquidationSwap { loan_id, from_asset, to_asset }) in
+			liquidation_swaps
+		{
+			let Some(swap_progress) = T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
+			else {
+				log_or_panic!("Failed to inspect swap request: {swap_request_id}");
+				continue;
+			};
+
+			projection
+				.returned_collateral
+				.entry(*from_asset)
+				.or_default()
+				.saturating_accrue(swap_progress.remaining_input_amount);
+
+			let output = swap_progress.accumulated_output_amount;
+
+			if self.loans.get(loan_id).is_some_and(|loan| loan.asset == *to_asset) {
+				output_per_loan.entry(*loan_id).or_default().saturating_accrue(output);
+			} else if output > 0 {
+				// Settlement returns the output of a swap without a matching loan in full:
+				projection
+					.returned_collateral
+					.entry(*to_asset)
+					.or_default()
+					.saturating_accrue(output);
+			}
+		}
+
+		for (loan_id, loan) in &self.loans {
+			let Some(output) = output_per_loan.get(loan_id).copied() else {
+				continue;
+			};
+
+			let owed = loan.total_owed();
+			let fee = if is_voluntary {
+				0
+			} else {
+				liquidation_fee_amount(config.liquidation_fee(loan.asset), output, owed)
+			};
+			let output_after_fee = output.saturating_sub(fee);
+			let repaid = core::cmp::min(output_after_fee, owed);
+
+			projection.repaid.insert(*loan_id, repaid);
+
+			let excess = output_after_fee.saturating_sub(repaid);
+			if excess > 0 {
+				projection
+					.returned_collateral
+					.entry(loan.asset)
+					.or_default()
+					.saturating_accrue(excess);
+			}
+		}
+
+		projection
+	}
+
+	/// Collateral the account would hold once in-flight liquidation swaps settle.
+	fn projected_collateral(
+		&self,
+		projection: &ProjectedSettlement,
+	) -> BTreeMap<Asset, AssetAmount> {
+		let mut collateral = get_collateral_in_supply_pools::<T>(&self.borrower_id);
+		for (asset, amount) in &projection.returned_collateral {
+			collateral.entry(*asset).or_default().saturating_accrue(*amount);
+		}
+		collateral
+	}
+
+	/// Computes account's total collateral value in USD, including what in-flight liquidation
+	/// swaps would return.
 	pub fn total_collateral_usd_value(
 		&self,
 		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
 	) -> Result<AssetAmount, Error<T>> {
-		self.get_total_collateral()
+		self.projected_collateral_usd_value(
+			&self.project_liquidation_settlement(config),
+			price_cache,
+		)
+	}
+
+	fn projected_collateral_usd_value(
+		&self,
+		projection: &ProjectedSettlement,
+		price_cache: &OraclePriceCache<T>,
+	) -> Result<AssetAmount, Error<T>> {
+		self.projected_collateral(projection)
 			.iter()
 			.map(|(asset, amount)| price_cache.usd_value_of(*asset, *amount))
 			.try_fold(0u128, |acc, x| Ok(acc.saturating_add(x?)))
@@ -522,48 +641,49 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	/// Computes the total amount owed in account's loans in USD adjusting for the amount that will
-	/// be repaid by the collateral that has already been swapped into the loan asset.
+	/// Computes the total amount owed in account's loans in USD, minus what in-flight
+	/// liquidation swaps would repay.
 	pub fn total_owed_usd_value(
 		&self,
 		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
 	) -> Result<AssetAmount, Error<T>> {
-		let total_owed = self
-			.loans
-			.values()
-			.map(|loan| loan.total_owed_usd_value(price_cache))
-			.try_fold(0u128, |acc, x| x.map(|v| acc.saturating_add(v)))?;
+		self.projected_owed_usd_value(&self.project_liquidation_settlement(config), price_cache)
+	}
 
-		let swapped_from_collateral = match &self.liquidation_status {
-			LiquidationStatus::NoLiquidation => 0,
-			LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
-				let mut total_principal_usd_value_in_swaps = 0;
-				// If we are liquidating loans, we might already have some collateral swapped
-				// into the loan asset that will be used to repay the loan:
-				for (swap_request_id, LiquidationSwap { to_asset, .. }) in liquidation_swaps {
-					if let Some(swap_progress) =
-						T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
-					{
-						total_principal_usd_value_in_swaps.saturating_accrue(
-							price_cache
-								.usd_value_of(*to_asset, swap_progress.accumulated_output_amount)?,
-						);
-					} else {
-						log_or_panic!("Failed to inspect swap request: {swap_request_id}");
-					}
-				}
-				total_principal_usd_value_in_swaps
-			},
-		};
-
-		Ok(total_owed.saturating_sub(swapped_from_collateral))
+	fn projected_owed_usd_value(
+		&self,
+		projection: &ProjectedSettlement,
+		price_cache: &OraclePriceCache<T>,
+	) -> Result<AssetAmount, Error<T>> {
+		self.loans
+			.iter()
+			.map(|(loan_id, loan)| {
+				price_cache.usd_value_of(
+					loan.asset,
+					loan.total_owed().saturating_sub(projection.repaid_for(loan_id)),
+				)
+			})
+			.try_fold(0u128, |acc, x| x.map(|v| acc.saturating_add(v)))
 	}
 
 	/// Computes account's LTV (Loan-to-Value) ratio. Takes liquidations into account.
 	/// Returns error if oracle prices are not available, or if collateral is zero.
-	pub fn derive_ltv(&self, price_cache: &OraclePriceCache<T>) -> Result<FixedU64, Error<T>> {
-		let collateral = self.total_collateral_usd_value(price_cache)?;
-		let owed = self.total_owed_usd_value(price_cache)?;
+	pub fn derive_ltv(
+		&self,
+		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
+	) -> Result<FixedU64, Error<T>> {
+		self.projected_ltv(&self.project_liquidation_settlement(config), price_cache)
+	}
+
+	fn projected_ltv(
+		&self,
+		projection: &ProjectedSettlement,
+		price_cache: &OraclePriceCache<T>,
+	) -> Result<FixedU64, Error<T>> {
+		let collateral = self.projected_collateral_usd_value(projection, price_cache)?;
+		let owed = self.projected_owed_usd_value(projection, price_cache)?;
 
 		if collateral == 0 {
 			if owed == 0 {
@@ -627,9 +747,12 @@ impl<T: Config> LoanAccount<T> {
 		&self,
 		ltv_threshold_target: Permill,
 		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
 	) -> Result<SurplusOrDeficit, Error<T>> {
-		let collateral_value_in_usd = self.total_collateral_usd_value(price_cache)?;
-		let loan_value_in_usd = self.total_owed_usd_value(price_cache)?;
+		let projection = self.project_liquidation_settlement(config);
+		let collateral_value_in_usd =
+			self.projected_collateral_usd_value(&projection, price_cache)?;
+		let loan_value_in_usd = self.projected_owed_usd_value(&projection, price_cache)?;
 
 		let collateral_required_in_usd = FixedU64::from(ltv_threshold_target)
 			.reciprocal()
@@ -673,7 +796,7 @@ impl<T: Config> LoanAccount<T> {
 				})
 				.collect::<Result<Vec<_>, Error<T>>>()?;
 
-		let total_owed_usd = self.total_owed_usd_value(price_cache)?;
+		let total_owed_usd = self.total_owed_usd_value(price_cache, config)?;
 
 		let total_required_with_buffer_usd = {
 			// Approximate the worst-case fractional loss along the liquidation path as the sum
@@ -943,7 +1066,7 @@ impl<T: Config> LoanAccount<T> {
 
 		self.loans.insert(loan.id, loan);
 
-		if self.derive_ltv(price_cache)? > config.ltv_thresholds.target.into() {
+		if self.derive_ltv(price_cache, config)? > config.ltv_thresholds.target.into() {
 			return Err(Error::<T>::LtvTooHigh.into());
 		}
 
@@ -1444,7 +1567,7 @@ fn upkeep_for_borrower<T: Config>(
 
 		// No point proceeding further if we can't determine LTV (the risk of liquidation checks
 		// not running in case of oracle outages is accepted):
-		let Ok(ltv) = loan_account.derive_ltv(price_cache) else {
+		let Ok(ltv) = loan_account.derive_ltv(price_cache, config) else {
 			return None;
 		};
 
@@ -1814,9 +1937,11 @@ pub fn remove_lender_funds<T: Config>(
 			Error::<T>::LiquidationInProgress
 		);
 
-		let surplus_usd = match loan_account
-			.calculate_collateral_surplus_or_deficit(config.ltv_thresholds.target, &price_cache)?
-		{
+		let surplus_usd = match loan_account.calculate_collateral_surplus_or_deficit(
+			config.ltv_thresholds.target,
+			&price_cache,
+			&config,
+		)? {
 			SurplusOrDeficit::Surplus(amount) => amount,
 			SurplusOrDeficit::Deficit => 0,
 		};
