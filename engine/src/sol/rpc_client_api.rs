@@ -97,6 +97,7 @@ pub struct UiDataSliceConfig {
 pub struct RpcAccountInfoConfig {
 	pub encoding: Option<UiAccountEncoding>,
 	pub data_slice: Option<UiDataSliceConfig>,
+	#[serde(flatten)]
 	pub commitment: Option<CommitmentConfig>,
 	pub min_context_slot: Option<u64>,
 }
