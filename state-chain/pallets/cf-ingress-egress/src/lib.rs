@@ -946,7 +946,8 @@ pub mod pallet {
 			ForeignChain::Arbitrum | ForeignChain::Solana => 2_400, // 250 milliseconds per block/slot.
 			ForeignChain::Tron => 200,    // 3 seconds per block.
 			ForeignChain::Bitcoin => 1,   // 10 minutes per block.
-			ForeignChain::Polkadot | ForeignChain::Assethub => 1,
+			ForeignChain::Assethub => 300, // 2 seconds per block
+			ForeignChain::Polkadot => 1,
 		};
 		blocks.into()
 	}
@@ -1733,6 +1734,9 @@ pub mod pallet {
 						IngressDelayBlocks::<T, I>::set(delay_blocks);
 					},
 					PalletConfigUpdate::SetRejectionDelay { delay_blocks } => {
+						if delay_blocks > MAX_REJECTION_DELAY_BLOCKS.into() {
+							continue;
+						}
 						RejectionDelayBlocks::<T, I>::set(delay_blocks);
 					},
 					PalletConfigUpdate::SetChannelCleanupRetry { retry_blocks } => {
