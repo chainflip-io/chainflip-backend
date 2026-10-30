@@ -820,7 +820,8 @@ mod vault_swaps {
 mod delayed_boosting {
 	use super::*;
 	use crate::{
-		BoostedVaultTransactions, ScheduledTransactionsForRejection, TransactionRejectionDetails,
+		BoostedVaultTransactions, ScheduledTransactionsForRejectionByBlock,
+		TransactionRejectionDetails,
 	};
 	use sp_core::H256;
 	use sp_runtime::traits::BlockNumberProvider;
@@ -1195,7 +1196,13 @@ mod delayed_boosting {
 					DepositDetails { tx_hashes: Some(vec![TX_ID_1]) },
 				);
 
-				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+				assert_eq!(
+					ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+						System::block_number() + 1
+					)
+					.len(),
+					1
+				);
 
 				witness_deposit_with_details(
 					deposit_address,
@@ -1204,7 +1211,13 @@ mod delayed_boosting {
 					DepositDetails { tx_hashes: Some(vec![TX_ID_2]) },
 				);
 
-				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+				assert_eq!(
+					ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+						System::block_number() + 1
+					)
+					.len(),
+					1
+				);
 
 				assert_has_matching_event!(
 					Test,
@@ -1290,7 +1303,13 @@ mod delayed_boosting {
 					})
 				);
 
-				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 0);
+				assert_eq!(
+					ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+						System::block_number() + 1
+					)
+					.len(),
+					0
+				);
 
 				// The second deposit is rejected:
 				witness_deposit_with_details(
@@ -1301,7 +1320,7 @@ mod delayed_boosting {
 				);
 
 				assert!(matches!(
-					&ScheduledTransactionsForRejection::<Test, Instance1>::get()[..],
+					&ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(System::block_number() + 1)[..],
 					[TransactionRejectionDetails {
 						deposit_details: DepositDetails { tx_hashes: Some(tx_ids) },
 						..
