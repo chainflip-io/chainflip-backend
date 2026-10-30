@@ -460,10 +460,9 @@ decl_runtime_apis!(
 		#[changed_in(8)]
 		fn cf_ingress_delay();
 		fn cf_ingress_delay(chain: ForeignChain) -> u32;
-		// Not called by current nodes; kept so un-upgraded RPC nodes can still serve
-		// cf_environment. Can be removed after api 23 is released.
 		#[changed_in(8)]
 		fn cf_boost_delay();
+		#[deprecated(note = "Boost delay no longer exists; this always returns 0.")]
 		fn cf_boost_delay(chain: ForeignChain) -> u32;
 		#[changed_in(14)]
 		fn cf_boost_config();

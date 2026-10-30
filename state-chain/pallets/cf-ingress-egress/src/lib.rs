@@ -86,11 +86,8 @@ struct ChannelLifecycle<T: Config<I>, I: 'static> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default)]
 pub enum BoostStatus<ChainAmount> {
-	// A prewitnessed deposit that has been boosted and is awaiting finalisation.
-	Boosted {
-		prewitnessed_deposit_id: PrewitnessedDepositId,
-		amount: ChainAmount,
-	},
+	/// A prewitnessed deposit that has been boosted and is awaiting finalisation.
+	Boosted { prewitnessed_deposit_id: PrewitnessedDepositId, amount: ChainAmount },
 	#[default]
 	NotBoosted,
 }
@@ -168,7 +165,7 @@ pub enum RefundReason {
 }
 
 enum FullWitnessDepositOutcome {
-	/// Either boost has been finalised and should no longer be scheduled for processing
+	/// The deposit finalised an existing boost; the caller should clear its boost record.
 	BoostConsumed,
 	BoostNotConsumed,
 }
