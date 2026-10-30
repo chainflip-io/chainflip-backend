@@ -103,7 +103,7 @@ jobs:
           echo "Using commit $FULL_SHA"
 
       - name: Fetch chainflip-node from ci-benchmarks-${{ inputs.binary_artefact_source }}.yml
-        uses: dawidd6/action-download-artifact@d63b86af1b34672e53c440b1b83979861906bad7 # v24
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477 # v27
         with:
           workflow: ci-benchmarks-${{ inputs.binary_artefact_source }}.yml
           workflow_conclusion: completed
@@ -173,7 +173,7 @@ jobs:
           STEPS_BLOCK_RANGE_OUTPUTS_TO: ${{ steps.block-range.outputs.to }}
 
       - name: Upload benchmark output 📦
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: benchmark-block-output-${{ steps.resolve-sha.outputs.full_sha }}
           path: benchmark-block-output.txt
@@ -197,7 +197,7 @@ jobs:
         run: tar -czf "$GITHUB_WORKSPACE/berghain-chaindata.tar.gz" -C "$BASE_PATH" .
 
       - name: Upload chain database 📦
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: berghain-chaindata-${{ steps.block-range.outputs.from }}-${{ steps.block-range.outputs.to }}
           path: berghain-chaindata.tar.gz
