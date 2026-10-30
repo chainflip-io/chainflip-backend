@@ -555,6 +555,7 @@ pub fn inner_cf_development_chain_spec(
 			devnet::SOLANA_SAFETY_MARGIN,
 			devnet::TRON_SAFETY_MARGIN,
 			devnet::BSC_SAFETY_MARGIN,
+			devnet::REJECTION_DELAY_BLOCKS,
 			SolanaElectionsConfig {
 				option_initial_state: Some(solana_elections::initial_state(
 					sol_vault_program,
@@ -791,6 +792,7 @@ macro_rules! network_spec {
 						SOLANA_SAFETY_MARGIN,
 						TRON_SAFETY_MARGIN,
 						BSC_SAFETY_MARGIN,
+						REJECTION_DELAY_BLOCKS,
 						SolanaElectionsConfig {
 							option_initial_state: Some(solana_elections::initial_state(
 								sol_vault_program,
@@ -879,6 +881,7 @@ fn testnet_genesis(
 	solana_safety_margin: u64,
 	tron_safety_margin: u64,
 	bsc_safety_margin: u64,
+	rejection_delay_blocks: BlockNumber,
 	solana_elections: state_chain_runtime::SolanaElectionsConfig,
 	bitcoin_elections: state_chain_runtime::BitcoinElectionsConfig,
 	generic_elections: state_chain_runtime::GenericElectionsConfig,
@@ -1147,39 +1150,47 @@ fn testnet_genesis(
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: state_chain_runtime::BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
+			rejection_delay_blocks,
 			witness_safety_margin: Some(bitcoin_safety_margin),
 			dust_limits: vec![(btc::Asset::Btc, BITCOIN_DUST_LIMIT)],
 		},
 		ethereum_ingress_egress: state_chain_runtime::EthereumIngressEgressConfig {
 			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),
+			rejection_delay_blocks,
 			witness_safety_margin: Some(ethereum_safety_margin),
 			..Default::default()
 		},
 		polkadot_ingress_egress: state_chain_runtime::PolkadotIngressEgressConfig {
 			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
+			rejection_delay_blocks,
 			..Default::default()
 		},
 		arbitrum_ingress_egress: state_chain_runtime::ArbitrumIngressEgressConfig {
 			deposit_channel_lifetime: arbitrum_deposit_channel_lifetime.into(),
+			rejection_delay_blocks,
 			witness_safety_margin: Some(arbitrum_safety_margin),
 			..Default::default()
 		},
 		solana_ingress_egress: state_chain_runtime::SolanaIngressEgressConfig {
 			deposit_channel_lifetime: solana_deposit_channel_lifetime as u64,
+			rejection_delay_blocks,
 			witness_safety_margin: Some(solana_safety_margin),
 			..Default::default()
 		},
 		assethub_ingress_egress: state_chain_runtime::AssethubIngressEgressConfig {
 			deposit_channel_lifetime: assethub_deposit_channel_lifetime,
+			rejection_delay_blocks,
 			..Default::default()
 		},
 		tron_ingress_egress: state_chain_runtime::TronIngressEgressConfig {
 			deposit_channel_lifetime: tron_deposit_channel_lifetime.into(),
+			rejection_delay_blocks,
 			witness_safety_margin: Some(tron_safety_margin),
 			..Default::default()
 		},
 		bsc_ingress_egress: state_chain_runtime::BscIngressEgressConfig {
 			deposit_channel_lifetime: bsc_deposit_channel_lifetime.into(),
+			rejection_delay_blocks,
 			witness_safety_margin: Some(bsc_safety_margin),
 			..Default::default()
 		},
