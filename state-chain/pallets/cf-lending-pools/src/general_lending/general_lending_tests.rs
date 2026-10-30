@@ -1141,8 +1141,25 @@ fn pending_interest_settled_when_loan_liquidated() {
 					accumulated_output_amount: RECOVERED,
 				},
 			);
+
+			let loan = &LoanAccounts::<Test>::get(BORROWER).unwrap().loans[&LOAN_ID];
+			assert!(loan.total_owed() > loan.owed_principal, "some interest must be pending");
+			loan.total_owed()
 		})
-		.then_execute_at_next_block(|_| {
+		.then_execute_at_next_block(|total_owed| {
+			// The liquidation fee covers the pending interest too, as it is part of the debt
+			// repaid:
+			let (network_fee, pool_fee) =
+				take_network_fee(full_repayment_liquidation_fee(LOAN_ASSET, total_owed));
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
+					loan_id: LOAN_ID,
+					pool_fee: actual_pool_fee,
+					network_fee: actual_network_fee,
+				}) if *actual_pool_fee == pool_fee && *actual_network_fee == network_fee
+			);
+
 			// The broker interest is paid from the liquidation proceeds (not forgiven), and the
 			// loan is settled with no write-off.
 			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), expected_broker_interest);

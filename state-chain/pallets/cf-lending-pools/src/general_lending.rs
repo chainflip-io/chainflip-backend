@@ -1093,10 +1093,12 @@ impl<T: Config> GeneralLoan<T> {
 		let provided_amount_after_fees = if is_voluntary {
 			provided_amount
 		} else {
+			// Interest the pool could not collect yet is still debt this amount repays (see
+			// `repay_principal_and_pending_interest`), so it is part of the fee base:
 			let liquidation_fee = liquidation_fee_amount(
 				config.liquidation_fee(self.asset),
 				provided_amount,
-				self.owed_principal,
+				self.total_owed(),
 			);
 
 			if liquidation_fee > 0 {
