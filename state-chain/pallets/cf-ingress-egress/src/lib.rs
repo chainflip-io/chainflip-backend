@@ -1567,7 +1567,7 @@ pub mod pallet {
 					//  - there's no deposit channel with this address, so we assume it's a vault swap
 					//  - it belongs to a deposit channel, we extract the fetch id from the deposit details.
 					//    But: sometimes we cannot yet fetch, so we check for that.
-					DepositChannelLookup::<T, I>::mutate(deposit_address, |details| match details {
+					match DepositChannelLookup::<T, I>::get(deposit_address) {
 						None => Ok(None),
 						Some(details) => {
 							let can_fetch = details.deposit_channel.state.can_fetch();
@@ -1575,14 +1575,12 @@ pub mod pallet {
 							// check if we can fetch from the deposit channel (sometimes not possible while
 							// contracts have to be deployed on evm chains)
 							if can_fetch {
-								let fetch_id = details.deposit_channel.fetch_id();
-								details.deposit_channel.state.on_fetch_scheduled();
-								Ok(Some(fetch_id))
+								Ok(Some(details.deposit_channel.fetch_id()))
 							} else {
 								Err(RejectionRefundDidntSucceed::RetryLater)
 							}
 						}
-					})
+					}
 				};
 
 				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
@@ -2050,12 +2048,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let broadcast_and_finalise_fetch = |api_call| {
 			let broadcast_id = broadcast(api_call);
 			if let Some(deposit_address) = tx.deposit_address.clone() {
-				let addresses =
-					Self::addresses_requiring_fetch_completion_action(vec![deposit_address]);
-				if !addresses.is_empty() {
+				let fetch_completion_action_required =
+					DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
+						details.as_mut().is_some_and(|details| {
+							details.deposit_channel.state.on_fetch_scheduled();
+							details.deposit_channel.state.fetch_completion_action_required()
+						})
+					});
+				if fetch_completion_action_required {
 					BroadcastActions::<T, I>::insert(
 						broadcast_id,
-						BroadcastAction::FinaliseFetch(addresses),
+						BroadcastAction::FinaliseFetch(vec![deposit_address]),
 					);
 				}
 			}
