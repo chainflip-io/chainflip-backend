@@ -187,6 +187,12 @@ fn take_network_fee(full_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
 	(network_fee, full_amount - network_fee)
 }
 
+/// Liquidation fee charged when a swap output covers the whole of `owed_amount`.
+fn full_repayment_liquidation_fee(asset: Asset, owed_amount: AssetAmount) -> AssetAmount {
+	// `MAX` so the provided amount is never what limits the fee.
+	liquidation_fee_amount(CONFIG.liquidation_fee(asset), AssetAmount::MAX, owed_amount)
+}
+
 fn get_collateral() -> AssetAmount {
 	GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
 		.unwrap()
@@ -1532,7 +1538,11 @@ fn basic_liquidation() {
 	// How much of principal asset is bought during first liquidation:
 	const SWAPPED_PRINCIPAL: AssetAmount = EXECUTED_COLLATERAL / NEW_SWAP_RATE;
 
-	let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL;
+	let liquidation_fee_1 = liquidation_fee_amount(
+		CONFIG.liquidation_fee(LOAN_ASSET),
+		SWAPPED_PRINCIPAL,
+		PRINCIPAL + ORIGINATION_FEE,
+	);
 	let (liquidation_fee_network_1, liquidation_fee_pool_1) = take_network_fee(liquidation_fee_1);
 
 	// This much will be repaid via first liquidation (everything swapped minus liquidation fee)
@@ -1546,7 +1556,11 @@ fn basic_liquidation() {
 	// This much will be repaid via second liquidation (full principal after first repayment)
 	let repaid_amount_2 = PRINCIPAL + ORIGINATION_FEE - repaid_amount_1;
 
-	let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * repaid_amount_2;
+	let liquidation_fee_2 = liquidation_fee_amount(
+		CONFIG.liquidation_fee(LOAN_ASSET),
+		SWAPPED_PRINCIPAL_2,
+		repaid_amount_2,
+	);
 	let (liquidation_fee_network_2, liquidation_fee_pool_2) = take_network_fee(liquidation_fee_2);
 
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
@@ -1824,8 +1838,8 @@ fn basic_liquidation() {
 					available_amount: expected_total_amount,
 					// Borrower now has a small amount in the loan asset pool:
 					lender_shares: BTreeMap::from([
-						(LENDER, Perquintill::from_parts(996_405_890_220_689_421)),
-						(BORROWER, Perquintill::from_parts(3_594_109_779_310_579)),
+						(LENDER, Perquintill::from_parts(996_405_811_082_721_245)),
+						(BORROWER, Perquintill::from_parts(3_594_188_917_278_755)),
 					]),
 				}
 			);
@@ -1913,11 +1927,17 @@ fn soft_liquidation_escalates_to_hard() {
 				}
 			);
 
-			let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAP_1_OUTPUT_AMOUNT;
+			let liquidation_fee_1 = liquidation_fee_amount(
+				CONFIG.liquidation_fee(LOAN_ASSET),
+				SWAP_1_OUTPUT_AMOUNT,
+				PRINCIPAL + ORIGINATION_FEE,
+			);
 
 			let total_owed_after_swap_1 =
 				PRINCIPAL + ORIGINATION_FEE + liquidation_fee_1 - SWAP_1_OUTPUT_AMOUNT;
-			let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * total_owed_after_swap_1;
+
+			let liquidation_fee_2 =
+				full_repayment_liquidation_fee(LOAN_ASSET, total_owed_after_swap_1);
 
 			// Swap 2 happens to result in exactly the amount we need to repay the loan + fees:
 			let swap_2_output_amount = total_owed_after_swap_1 + liquidation_fee_2;
@@ -2073,9 +2093,12 @@ fn liquidation_fully_repays_loan_when_aborted() {
 			);
 		})
 		.then_execute_at_next_block(|_| {
-			// Liquidation fee is computed on the total amount to repay:
-			let liquidation_fee =
-				CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL + ORIGINATION_FEE);
+			// The output clears the loan, so the fee is computed on the total amount to repay:
+			let liquidation_fee = liquidation_fee_amount(
+				CONFIG.liquidation_fee(LOAN_ASSET),
+				RECOVERED_LOAN_ASSET,
+				PRINCIPAL + ORIGINATION_FEE,
+			);
 
 			// The loan has been repaid, the account is removed, and the remaining collateral amount
 			// and the excess loan asset amount are credited to supply pools:
@@ -2143,7 +2166,11 @@ fn liquidation_with_outstanding_principal() {
 				RECOVERED_PRINCIPAL,
 			);
 
-			let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * RECOVERED_PRINCIPAL;
+			let liquidation_fee = liquidation_fee_amount(
+				CONFIG.liquidation_fee(LOAN_ASSET),
+				RECOVERED_PRINCIPAL,
+				PRINCIPAL + ORIGINATION_FEE,
+			);
 			let (liquidation_fee_network, liquidation_fee_pool) = take_network_fee(liquidation_fee);
 
 			let repaid_principal = RECOVERED_PRINCIPAL - liquidation_fee;
@@ -2250,9 +2277,17 @@ mod multi_asset_collateral_liquidation {
 		// This should trigger soft liquidation
 		const NEW_SWAP_RATE: u128 = 27;
 
-		let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAP_2_OUTPUT_AMOUNT;
-		let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) *
-			(TOTAL_OWED + liquidation_fee_1 - SWAP_2_OUTPUT_AMOUNT);
+		// Swap 2 settles first and partially repays the loan; swap 1 clears the rest.
+		let liquidation_fee_1 = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAP_2_OUTPUT_AMOUNT,
+			TOTAL_OWED,
+		);
+		let liquidation_fee_2 = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAP_1_OUTPUT_AMOUNT,
+			TOTAL_OWED + liquidation_fee_1 - SWAP_2_OUTPUT_AMOUNT,
+		);
 
 		let total_liquidation_fee = liquidation_fee_1 + liquidation_fee_2;
 
@@ -2398,15 +2433,15 @@ mod multi_asset_collateral_liquidation {
 	fn one_liquidation_swap_completely_covers_the_loan_the_other_aborts() {
 		const TOTAL_OWED: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
 
-		let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * TOTAL_OWED;
-
 		const EXCESS_AMOUNT: AssetAmount = PRINCIPAL / 100;
 
 		// This should trigger soft liquidation
 		const NEW_SWAP_RATE: u128 = 27;
 
-		// Swap 1 will be executed fully with some excess amount of the total owed principal
-		let swap_1_output_amount = TOTAL_OWED + EXCESS_AMOUNT + liquidation_fee;
+		// Swap 1 will be executed fully, clearing the debt and its liquidation fee with some
+		// excess left over
+		let swap_1_output_amount =
+			TOTAL_OWED + full_repayment_liquidation_fee(LOAN_ASSET, TOTAL_OWED) + EXCESS_AMOUNT;
 
 		// Swap 2 will only be executed half way through
 		const SWAP_2_REMAINING_INPUT_AMOUNT: AssetAmount = OTHER_COLLATERAL_ASSET_AMOUNT / 2;
@@ -2697,13 +2732,19 @@ mod multi_asset_collateral_liquidation {
 					)])
 				);
 
-				// This covers the full amount repaid by the first swap
-				let liquidation_fee_1 =
-					CONFIG.liquidation_fee(LOAN_ASSET) * SWAP_OUTPUT_LOAN_1_SWAP_1;
+				// The first swap only partially repays the loan
+				let liquidation_fee_1 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					SWAP_OUTPUT_LOAN_1_SWAP_1,
+					PRINCIPAL + ORIGINATION_FEE,
+				);
 
-				// This covers the remainder (which now also includes liquidation_fee_1)
-				let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) *
-					(PRINCIPAL + ORIGINATION_FEE + liquidation_fee_1 - SWAP_OUTPUT_LOAN_1_SWAP_1);
+				// The second swap clears the rest of the debt
+				let liquidation_fee_2 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					SWAP_OUTPUT_LOAN_1_SWAP_3,
+					PRINCIPAL + ORIGINATION_FEE + liquidation_fee_1 - SWAP_OUTPUT_LOAN_1_SWAP_1,
+				);
 
 				let excess_loan_asset_amount = SWAP_OUTPUT_LOAN_1_SWAP_1 +
 					SWAP_OUTPUT_LOAN_1_SWAP_3 -
@@ -2743,8 +2784,19 @@ mod multi_asset_collateral_liquidation {
 			.then_execute_at_next_block(|excess_loan_asset_amount| {
 				assert_eq!(get_loan_account().liquidation_status, LiquidationStatus::NoLiquidation);
 
-				let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) *
-					(SWAP_OUTPUT_LOAN_2_SWAP_2 + SWAP_OUTPUT_LOAN_2_SWAP_4);
+				// Both swaps are aborted and settle in swap id order, each partially repaying:
+				let liquidation_fee_swap_2 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET_2),
+					SWAP_OUTPUT_LOAN_2_SWAP_2,
+					PRINCIPAL_2 + ORIGINATION_FEE_2,
+				);
+				let liquidation_fee_swap_4 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET_2),
+					SWAP_OUTPUT_LOAN_2_SWAP_4,
+					PRINCIPAL_2 + ORIGINATION_FEE_2 + liquidation_fee_swap_2 -
+						SWAP_OUTPUT_LOAN_2_SWAP_2,
+				);
+				let liquidation_fee = liquidation_fee_swap_2 + liquidation_fee_swap_4;
 
 				assert_eq!(
 					get_loan_account().loans,
@@ -2852,7 +2904,11 @@ mod multi_asset_collateral_liquidation {
 				// even though no collateral remains in supply pools.
 				assert!(acc.loans.contains_key(&LOAN_ID));
 
-				let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * LOAN_1_SWAP_OUTPUT;
+				let liquidation_fee_1 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					LOAN_1_SWAP_OUTPUT,
+					PRINCIPAL + ORIGINATION_FEE,
+				);
 				let l1_repaid = LOAN_1_SWAP_OUTPUT - liquidation_fee_1;
 				assert_eq!(
 					acc.loans[&LOAN_ID].owed_principal,
@@ -2954,7 +3010,11 @@ mod multi_asset_collateral_liquidation {
 				assert!(!acc.loans.contains_key(&LOAN_ID_2));
 				assert!(acc.loans.contains_key(&LOAN_ID));
 
-				let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * LOAN_1_SWAP_OUTPUT;
+				let liquidation_fee_1 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					LOAN_1_SWAP_OUTPUT,
+					PRINCIPAL + ORIGINATION_FEE,
+				);
 				let l1_repaid = LOAN_1_SWAP_OUTPUT - liquidation_fee_1;
 				assert_eq!(
 					acc.loans[&LOAN_ID].owed_principal,
@@ -2966,8 +3026,11 @@ mod multi_asset_collateral_liquidation {
 
 				// Loan 2's excess (after the loan-2 liquidation fee) sits in the loan-asset
 				// supply pool, available as collateral for the next upkeep round.
-				let liquidation_fee_2 =
-					CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL_2 + ORIGINATION_FEE);
+				let liquidation_fee_2 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					LOAN_2_SWAP_OUTPUT,
+					PRINCIPAL_2 + ORIGINATION_FEE,
+				);
 				let expected_excess =
 					LOAN_2_SWAP_OUTPUT - (PRINCIPAL_2 + ORIGINATION_FEE) - liquidation_fee_2;
 				assert_eq!(
@@ -4218,7 +4281,12 @@ mod voluntary_liquidation {
 		const SWAPPED_COLLATERAL_2: AssetAmount = INIT_COLLATERAL / 10;
 		const SWAPPED_PRINCIPAL_2: AssetAmount = SWAPPED_COLLATERAL_2 / NEW_SWAP_RATE;
 
-		let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_2;
+		// The first (voluntary) liquidation is fee-free, so it repays its full output:
+		let liquidation_fee = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAPPED_PRINCIPAL_2,
+			PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1,
+		);
 
 		let owed_after_liquidation_2 =
 			PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1 - SWAPPED_PRINCIPAL_2 +
@@ -4897,6 +4965,94 @@ mod liquidation_math_tests {
 			required_collateral_with_buffer(total_owed_usd, bps_to_permill(slippage_bps)),
 			positions,
 		)
+	}
+
+	const USDC_UNIT: AssetAmount = 1_000_000;
+
+	/// Settles liquidation swap outputs against a loan one at a time, the way
+	/// `repay_via_liquidation` does. Returns (total fee, total repaid, total excess).
+	fn settle_sequentially(
+		mut owed: AssetAmount,
+		outputs: &[AssetAmount],
+		fee_rate: Permill,
+	) -> (AssetAmount, AssetAmount, AssetAmount) {
+		let (mut fee_total, mut repaid_total, mut excess_total) = (0, 0, 0);
+		for &output in outputs {
+			let fee = liquidation_fee_amount(fee_rate, output, owed);
+			let repaid = (output - fee).min(owed);
+			owed -= repaid;
+			fee_total += fee;
+			repaid_total += repaid;
+			excess_total += output - fee - repaid;
+		}
+		(fee_total, repaid_total, excess_total)
+	}
+
+	#[test]
+	fn liquidation_fee_is_charged_on_debt_repaid() {
+		let rate = Permill::from_percent(2);
+		let owed = 10_000 * USDC_UNIT;
+
+		// Partial repayment: 5,000 repays 5,000 / 1.02 and the rest is the fee.
+		assert_eq!(liquidation_fee_amount(rate, 5_000 * USDC_UNIT, owed), 98_039_216);
+
+		// Clearing the debt: the fee is 2% of the debt, the rest is excess.
+		assert_eq!(liquidation_fee_amount(rate, 11_000 * USDC_UNIT, owed), 200 * USDC_UNIT);
+		assert_eq!(liquidation_fee_amount(rate, 10_200 * USDC_UNIT, owed), 200 * USDC_UNIT);
+
+		// No jump at the boundary between the two cases.
+		assert_eq!(liquidation_fee_amount(rate, 10_200 * USDC_UNIT - 1, owed), 200 * USDC_UNIT);
+
+		assert_eq!(liquidation_fee_amount(rate, 0, owed), 0);
+		assert_eq!(liquidation_fee_amount(rate, 5_000 * USDC_UNIT, 0), 0);
+		assert_eq!(liquidation_fee_amount(Permill::zero(), 5_000 * USDC_UNIT, owed), 0);
+	}
+
+	#[test]
+	fn liquidation_fee_does_not_depend_on_swap_order() {
+		let rate = Permill::from_percent(2);
+		let owed = 10_000 * USDC_UNIT;
+
+		// Two collateral swaps for the same loan, settled in either order:
+		assert_eq!(
+			settle_sequentially(owed, &[5_000 * USDC_UNIT, 6_000 * USDC_UNIT], rate),
+			(200 * USDC_UNIT, owed, 800 * USDC_UNIT)
+		);
+		assert_eq!(
+			settle_sequentially(owed, &[6_000 * USDC_UNIT, 5_000 * USDC_UNIT], rate),
+			(200 * USDC_UNIT, owed, 800 * USDC_UNIT)
+		);
+
+		// Any split and order of the same total output matches settling it in one go, up to
+		// rounding of at most one unit per swap.
+		for outputs in [
+			vec![3_000, 3_000, 3_000, 3_000],
+			vec![1_000, 2_000, 9_000],
+			vec![9_999, 1],
+			vec![2_500, 2_500, 2_500],
+		] {
+			let outputs: Vec<_> = outputs.into_iter().map(|o| o * USDC_UNIT).collect();
+			let one_go = settle_sequentially(owed, &[outputs.iter().sum()], rate);
+			let tolerance = outputs.len() as AssetAmount;
+
+			let mut sequences = vec![outputs.clone()];
+			sequences.extend((1..outputs.len()).map(|k| {
+				let mut rotated = outputs.clone();
+				rotated.rotate_left(k);
+				rotated
+			}));
+			sequences.push(outputs.iter().rev().copied().collect());
+
+			for sequence in sequences {
+				let (fee, repaid, excess) = settle_sequentially(owed, &sequence, rate);
+				assert!(
+					fee.abs_diff(one_go.0) <= tolerance,
+					"{sequence:?}: fee {fee} vs {one_go:?}"
+				);
+				assert!(repaid.abs_diff(one_go.1) <= tolerance, "{sequence:?}: repaid {repaid}");
+				assert!(excess.abs_diff(one_go.2) <= tolerance, "{sequence:?}: excess {excess}");
+			}
+		}
 	}
 
 	#[test]
@@ -6180,7 +6336,11 @@ mod supply_as_collateral {
 		);
 		let pool_remainder_after_init = INIT_COLLATERAL - liquidation_input;
 
-		let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL + ORIGINATION_FEE);
+		let liquidation_fee = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAPPED_PRINCIPAL,
+			PRINCIPAL + ORIGINATION_FEE,
+		);
 
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
@@ -6321,20 +6481,24 @@ mod supply_as_collateral {
 		// Selling 80% of collateral will recover 80% of principal
 		const SWAPPED_PRINCIPAL_1: AssetAmount = 4 * PRINCIPAL / 5;
 
-		let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_1;
+		let liquidation_fee_1 = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAPPED_PRINCIPAL_1,
+			PRINCIPAL + ORIGINATION_FEE,
+		);
 
 		const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
 
 		let amount_owed_after_first_liquidation =
 			PRINCIPAL + ORIGINATION_FEE - (SWAPPED_PRINCIPAL_1 - liquidation_fee_1);
 
-		let liquidation_fee_2 =
-			CONFIG.liquidation_fee(LOAN_ASSET) * amount_owed_after_first_liquidation;
-
 		const EXCESS_AMOUNT: AssetAmount = PRINCIPAL / 10;
 
-		let swapped_principal_2 =
-			amount_owed_after_first_liquidation + liquidation_fee_2 + EXCESS_AMOUNT;
+		// The second liquidation clears the remaining debt and its liquidation fee with some
+		// excess left over
+		let swapped_principal_2 = amount_owed_after_first_liquidation +
+			full_repayment_liquidation_fee(LOAN_ASSET, amount_owed_after_first_liquidation) +
+			EXCESS_AMOUNT;
 
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)

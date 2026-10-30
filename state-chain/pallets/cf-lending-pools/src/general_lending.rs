@@ -1093,8 +1093,11 @@ impl<T: Config> GeneralLoan<T> {
 		let provided_amount_after_fees = if is_voluntary {
 			provided_amount
 		} else {
-			let liquidation_fee = config.get_config_for_asset(self.asset).liquidation_fee *
-				core::cmp::min(provided_amount, self.owed_principal);
+			let liquidation_fee = liquidation_fee_amount(
+				config.liquidation_fee(self.asset),
+				provided_amount,
+				self.owed_principal,
+			);
 
 			if liquidation_fee > 0 {
 				let liquidation_fee_network =
@@ -1306,6 +1309,36 @@ pub(super) struct AssetCollateralForLoan {
 	loan_asset: Asset,
 	collateral_asset: Asset,
 	collateral_amount: AssetAmount,
+}
+
+/// Liquidation fee taken from `provided_amount` when it repays a loan owing `owed_amount`.
+///
+/// The fee is `fee_rate` of the debt actually repaid, charged on top of the repayment: repaying
+/// `x` of debt consumes `x * (1 + fee_rate)`. If `provided_amount` covers the full debt plus its
+/// fee, the fee is `fee_rate * owed_amount` and the rest is excess. Otherwise all of it is used,
+/// split between repayment and fee in the ratio `1 : fee_rate`, so the fee is never charged on
+/// the part of the amount that pays the fee itself.
+fn liquidation_fee_amount(
+	fee_rate: Permill,
+	provided_amount: AssetAmount,
+	owed_amount: AssetAmount,
+) -> AssetAmount {
+	let fee_on_full_repayment = fee_rate * owed_amount;
+
+	if provided_amount >= owed_amount.saturating_add(fee_on_full_repayment) {
+		fee_on_full_repayment
+	} else {
+		// provided_amount = repaid * (1 + fee_rate); the fee takes the rounding remainder.
+		let repaid = multiply_by_rational_with_rounding(
+			provided_amount,
+			Permill::ACCURACY as u128,
+			(Permill::ACCURACY as u128).saturating_add(fee_rate.deconstruct() as u128),
+			Rounding::Down,
+		)
+		.unwrap_or(provided_amount);
+
+		provided_amount.saturating_sub(repaid)
+	}
 }
 
 /// Convert a basis-points value (1/10_000) into a `Permill` (1/1_000_000), clamped to 100%.
