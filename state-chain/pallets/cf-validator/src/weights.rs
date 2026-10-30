@@ -73,6 +73,7 @@ pub trait WeightInfo {
 	fn deregister_as_operator() -> Weight;
 	fn delegate() -> Weight;
 	fn undelegate() -> Weight;
+	fn delegate_multi() -> Weight;
 	fn report_witnessing_task_restart() -> Weight;
 	fn delegate_grandpa_vote() -> Weight;
 	fn revoke_grandpa_delegation() -> Weight;
@@ -635,6 +636,12 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Minimum execution time: 21_254_000 picoseconds.
 		Weight::from_parts(21_632_000, 4011)
 			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+	// TODO: placeholder pending real benchmarks 
+	fn delegate_multi() -> Weight {
+		Weight::from_parts(57_965_000, 8029)
+			.saturating_add(T::DbWeight::get().reads(7_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
@@ -1245,6 +1252,12 @@ impl WeightInfo for () {
 		// Minimum execution time: 21_254_000 picoseconds.
 		Weight::from_parts(21_632_000, 4011)
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+	// TODO: placeholder pending real benchmarks
+	fn delegate_multi() -> Weight {
+		Weight::from_parts(57_965_000, 8029)
+			.saturating_add(ParityDbWeight::get().reads(7_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)

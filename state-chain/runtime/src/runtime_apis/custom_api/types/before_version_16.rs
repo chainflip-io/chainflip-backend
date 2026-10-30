@@ -59,12 +59,8 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	}
 }
 
-pub type RpcAccountInfoCommonItems<Balance: HasChangelog + Default>
-	= <super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20000>>::HistoricalType
-where
-	<Balance as HasVersion<v20300>>::HistoricalType: Default,
-	<Balance as HasVersion<v20200>>::HistoricalType: Default,
-	<Balance as HasVersion<v20100>>::HistoricalType: Default;
+pub type RpcAccountInfoCommonItems =
+	<super::RpcAccountInfoCommonItems<FlipBalance> as HasVersion<v20000>>::HistoricalType;
 
 pub type AssetMap<T: HasChangelog + Default>
 	= <super::AssetMap<T> as HasVersion<v20000>>::HistoricalType
