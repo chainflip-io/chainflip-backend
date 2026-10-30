@@ -25,8 +25,8 @@ use crate::{
 	AccountId, AuthorityCount, RuntimeOrigin,
 };
 
-use cf_primitives::{AccountRole, FlipBalance};
-use cf_traits::{AccountInfo, EpochInfo, FundAccount, FundingSource};
+use cf_primitives::{AccountRole, FlipBalance, FLIPPERINOS_PER_FLIP};
+use cf_traits::{AccountInfo, EpochInfo, FeePayment, FundAccount, FundingSource};
 use frame_support::assert_ok;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, PerU16};
@@ -370,11 +370,44 @@ fn delegator_can_split_stake_across_two_operators() {
 			);
 
 			// The delegator should be rewarded from both operators' pools.
-			let delegator_pre_balance = Flip::balance(&delegator);
-			testnet.move_forward_blocks(
-				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_len()
-					.expect("at least one authority") as u32,
+			const ONCHAIN_FEE: FlipBalance = 100 * FLIPPERINOS_PER_FLIP;
+			let fee_payer = AccountId::from([0xfe; 32]);
+			Funding::fund_account(
+				fee_payer.clone(),
+				1_000 * FLIPPERINOS_PER_FLIP,
+				FundingSource::EthTransaction {
+					tx_hash: Default::default(),
+					funder: Default::default(),
+				},
 			);
-			assert!(Flip::balance(&delegator) > delegator_pre_balance);
+			assert_ok!(<Flip as FeePayment>::try_take_fee(&fee_payer, ONCHAIN_FEE));
+
+			let bond = pallet_cf_validator::HistoricalBonds::<Runtime>::get(epoch_index);
+			let per_authority_reward = ONCHAIN_FEE / MAX_AUTHORITIES as u128;
+			let share_of = |snapshot: &pallet_cf_validator::DelegationSnapshot<_, _>| {
+				snapshot
+					.distribute(per_authority_reward, bond)
+					.find_map(|(account, amount)| (*account == delegator).then_some(amount))
+					.unwrap_or_default()
+			};
+			let share_from_a = share_of(&snapshot_a);
+			let share_from_b = share_of(&snapshot_b);
+			assert!(share_from_a > 0 && share_from_b > 0);
+
+			let delegator_pre_balance = Flip::balance(&delegator);
+			let events = crate::rewards::move_through_epoch_transition(&mut testnet);
+			let distributed: BTreeMap<AccountId, FlipBalance> = events
+				.iter()
+				.find_map(|event| match event {
+					RuntimeEvent::Flip(pallet_cf_flip::Event::FlipDistributed { amounts }) =>
+						Some(amounts.iter().cloned().collect()),
+					_ => None,
+				})
+				.expect("rewards should be distributed at the epoch transition");
+			assert_eq!(distributed.get(&delegator), Some(&(share_from_a + share_from_b)));
+			assert_eq!(
+				Flip::balance(&delegator),
+				delegator_pre_balance + share_from_a + share_from_b
+			);
 		});
 }
