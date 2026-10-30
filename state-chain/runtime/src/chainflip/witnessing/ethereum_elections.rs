@@ -62,7 +62,6 @@ use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalanc
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
 use sp_core::{ConstU32, Decode, Encode, Get};
-use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
 pub type EthereumElectoralSystemRunner = CompositeRunner<
@@ -97,7 +96,7 @@ pub const ETHEREUM_WITNESS_FINALIZED_BLOCKS: bool = false;
 pub const ETHEREUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 pub const ETHEREUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, Debug, TypeInfo)]
 pub enum EthereumElectoralEvents {
 	ReorgDetected {
 		reorged_blocks: RangeInclusive<<EthereumChain as ChainTypes>::ChainBlockNumber>,

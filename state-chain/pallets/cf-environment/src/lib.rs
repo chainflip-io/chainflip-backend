@@ -96,15 +96,7 @@ type SignatureNonce = u64;
 pub const MAX_FAILED_DEPOSIT_RECOVERIES: u32 = 50;
 
 #[derive(
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	MaxEncodedLen,
-	TypeInfo,
-	Clone,
-	RuntimeDebug,
-	PartialEq,
-	Eq,
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, Debug, PartialEq, Eq,
 )]
 pub struct FailedDepositRecoveryRequest<AccountId> {
 	/// The broker the failed deposit is attributed to.
@@ -122,7 +114,7 @@ pub struct FailedDepositRecoveryRequest<AccountId> {
 	MaxEncodedLen,
 	TypeInfo,
 	Clone,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEq,
 	Eq,
 	Default,
@@ -148,6 +140,8 @@ pub enum PalletConfigUpdate {
 }
 
 #[frame_support::pallet]
+// The `#[pallet::validate_unsigned]` deprecation warning expands to a unit `let` binding.
+#[expect(clippy::let_unit_value)]
 pub mod pallet {
 	use crate::submit_runtime_call::ChainflipExtrinsic;
 

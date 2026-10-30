@@ -18,7 +18,7 @@
 use cf_chains::{evm::Address, ForeignChain};
 use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
 use codec::{Decode, DecodeWithMemTracking, Encode};
-use frame_support::{pallet_prelude::*, traits::StorageVersion, RuntimeDebugNoBound};
+use frame_support::{pallet_prelude::*, traits::StorageVersion, DebugNoBound};
 use sp_std::{cmp::PartialEq, vec::Vec};
 
 pub use pallet::*;
@@ -33,9 +33,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-#[derive(
-	Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, RuntimeDebugNoBound,
-)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, DebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum Proposal {
 	SetGovernanceKey(ForeignChain, Vec<u8>),
