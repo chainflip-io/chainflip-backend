@@ -16,6 +16,7 @@
 
 mod boost;
 mod failed_deposit_recovery;
+mod rejection_delay;
 mod screening;
 
 use crate::{
@@ -873,6 +874,13 @@ fn multi_use_deposit_address_different_blocks() {
 				MockBalance::get_balance(&ALICE, ETH.into()) > 0,
 				"LP account hasn't earned fees!"
 			);
+			deposit_address
+		})
+		.then_execute_at_next_block(|deposit_address| {
+			for (broadcast_id, _) in BroadcastActions::<Test, Instance1>::iter() {
+				EthereumIngressEgress::on_broadcast_success(broadcast_id, 0);
+			}
+			EthereumIngressEgress::on_finalize(System::block_number());
 			let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
 			set_eth_processed_up_to(recycle_block);
 
@@ -2537,7 +2545,7 @@ fn invalid_fetches_do_not_get_scheduled_and_do_not_block_other_fetches() {
 		);
 
 		for address in channel_addresses.iter().take(fetch_limits) {
-			EthereumIngressEgress::recycle_channel(&mut Weight::zero(), *address);
+			DepositChannelLookup::<Test, Instance1>::remove(address);
 		}
 
 		EthereumIngressEgress::on_finalize(1);
@@ -3314,8 +3322,8 @@ fn additional_action_correctly_prefund_and_create_account() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		ReportExpiresAt, ScheduledTransactionsForRejection, TransactionRejectionDetails,
-		TransactionRejectionStatus, TransactionsMarkedForRejection,
+		ReportExpiresAt, ScheduledTransactionsForRejectionByBlock, TransactionRejectionDetails,
+		TransactionRejectionStatus, TransactionsMarkedForRejection, DEFAULT_REJECTION_DELAY_BLOCKS,
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::Hash as EvmHash, ChannelLifecycleHooks,
@@ -3328,6 +3336,7 @@ mod evm_transaction_rejection {
 	use sp_runtime::traits::Zero;
 	use std::str::FromStr;
 
+	const REJECTION_DELAY_BLOCKS: u64 = DEFAULT_REJECTION_DELAY_BLOCKS as u64;
 	const ETH: EthAsset = EthAsset::Eth;
 
 	#[test]
@@ -3397,13 +3406,17 @@ mod evm_transaction_rejection {
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 			let scheduled_tx_for_reject =
-				ScheduledTransactionsForRejection::<Test, Instance1>::get();
+				ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+					System::block_number() + REJECTION_DELAY_BLOCKS,
+				);
 			assert_eq!(scheduled_tx_for_reject.len(), 1);
 
-			EthereumIngressEgress::on_finalize(2);
+			EthereumIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 			let scheduled_tx_for_reject =
-				ScheduledTransactionsForRejection::<Test, Instance1>::get();
+				ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+					System::block_number() + REJECTION_DELAY_BLOCKS,
+				);
 			assert_eq!(scheduled_tx_for_reject.len(), 0);
 		});
 	}
@@ -3463,7 +3476,9 @@ mod evm_transaction_rejection {
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 			let scheduled_tx_for_reject =
-				ScheduledTransactionsForRejection::<Test, Instance1>::get();
+				ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+					System::block_number() + REJECTION_DELAY_BLOCKS,
+				);
 			assert_eq!(scheduled_tx_for_reject.len(), 1);
 
 			assert_eq!(
@@ -3471,10 +3486,12 @@ mod evm_transaction_rejection {
 				vec![tx_id]
 			);
 
-			EthereumIngressEgress::on_finalize(2);
+			EthereumIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 			let scheduled_tx_for_reject =
-				ScheduledTransactionsForRejection::<Test, Instance1>::get();
+				ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+					System::block_number() + REJECTION_DELAY_BLOCKS,
+				);
 
 			assert_eq!(scheduled_tx_for_reject.len(), 0);
 
@@ -3541,7 +3558,13 @@ mod evm_transaction_rejection {
 			},
 			block,
 		);
-		assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+		assert_eq!(
+			ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+				System::block_number() + REJECTION_DELAY_BLOCKS
+			)
+			.len(),
+			1
+		);
 		(channel_id, deposit_address)
 	}
 
@@ -3558,7 +3581,7 @@ mod evm_transaction_rejection {
 				assert_eq!(MockAssetWithholding::withheld_assets(Asset::Eth), 0);
 				MockEthereumApiCall::set_reject_call_success(false);
 
-				EthereumIngressEgress::on_finalize(2);
+				EthereumIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 				assert_eq!(
 					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
@@ -3568,7 +3591,10 @@ mod evm_transaction_rejection {
 				);
 				assert!(MockEgressBroadcasterEth::get_pending_api_calls().is_empty());
 				assert!(BroadcastActions::<Test, Instance1>::iter().next().is_none());
-				assert!(ScheduledTransactionsForRejection::<Test, Instance1>::get().is_empty());
+				assert!(ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+					System::block_number() + REJECTION_DELAY_BLOCKS
+				)
+				.is_empty());
 				assert_eq!(FailedRejections::<Test, Instance1>::get().len(), 1);
 				assert_eq!(MockAssetWithholding::withheld_assets(Asset::Eth), 200);
 			});
@@ -3581,7 +3607,7 @@ mod evm_transaction_rejection {
 			let (channel_id, deposit_address) = schedule_rejection_refund(true);
 			MockEthereumApiCall::set_ccm_call_success(false);
 
-			EthereumIngressEgress::on_finalize(2);
+			EthereumIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 			let pending_api_calls = MockEgressBroadcasterEth::get_pending_api_calls();
 			assert_eq!(pending_api_calls.len(), 1);
@@ -3594,7 +3620,10 @@ mod evm_transaction_rejection {
 					..
 				}) if *id == channel_id
 			);
-			assert!(ScheduledTransactionsForRejection::<Test, Instance1>::get().is_empty());
+			assert!(ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+				System::block_number() + REJECTION_DELAY_BLOCKS
+			)
+			.is_empty());
 			assert_eq!(FailedRejections::<Test, Instance1>::get().len(), 1);
 			assert_eq!(
 				DepositChannelLookup::<Test, Instance1>::get(deposit_address)
@@ -3623,7 +3652,7 @@ mod evm_transaction_rejection {
 	fn ccm_rejection_refund_does_not_finalise_fetch() {
 		new_test_ext().execute_with(|| {
 			let (_, deposit_address) = schedule_rejection_refund(true);
-			EthereumIngressEgress::on_finalize(2);
+			EthereumIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 			let pending_api_calls = MockEgressBroadcasterEth::get_pending_api_calls();
 			assert_eq!(pending_api_calls.len(), 2);
@@ -3735,7 +3764,12 @@ mod evm_transaction_rejection {
 				);
 			}
 
-			assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::decode_len(), Some(2));
+			assert_eq!(
+				ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::decode_len(
+					System::block_number() + REJECTION_DELAY_BLOCKS
+				),
+				Some(2)
+			);
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 			assert!(TransactionsMarkedForRejection::<Test, Instance1>::get(BROKER, tx_id)
 				.is_some_and(|status| status.expires_at.is_zero()));
@@ -3883,15 +3917,20 @@ mod evm_transaction_rejection {
 					..
 				}) => {
 					assert!(deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_1));
-					None
+					None::<()>
 				},
+				_ => None,
+			})
+			.map_context(|(deposits, _)| deposits)
+			// The refund is processed one block after the deposit is rejected.
+			.then_process_next_block()
+			.then_process_events(|_, event| match event {
 				RuntimeEvent::EthereumIngressEgress(PalletEvent::TransactionRejectedByBroker {
 					broadcast_id,
 					tx_id,
 				}) if tx_id.deposit_ids().unwrap().contains(&TAINTED_TX_ID_1) => Some(broadcast_id),
 				_ => None,
 			})
-			.then_process_blocks(1)
 			.then_execute_with(|(deposits, broadcast_ids)| {
 				assert_eq!(broadcast_ids.len(), 1, "Expected 1 broadcast id");
 				// Verify that a BroadcastAction was stored for the broadcast.
@@ -3953,20 +3992,24 @@ mod evm_transaction_rejection {
 				deposits
 			})
 			.then_execute_at_next_block(|deposits| {
-				assert!(ScheduledTransactionsForRejection::<Test, Instance1>::get().iter().any(
-					|TransactionRejectionDetails { deposit_details, .. }| {
-						deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_2)
-					}
-				));
+				assert!(ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+					System::block_number()
+				)
+				.iter()
+				.any(|TransactionRejectionDetails { deposit_details, .. }| {
+					deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_2)
+				}));
 				deposits
 			})
 			// Still pending at next block.
 			.then_execute_at_next_block(|deposits| {
-				assert!(ScheduledTransactionsForRejection::<Test, Instance1>::get().iter().any(
-					|TransactionRejectionDetails { deposit_details, .. }| {
-						deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_2)
-					}
-				));
+				assert!(ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+					System::block_number()
+				)
+				.iter()
+				.any(|TransactionRejectionDetails { deposit_details, .. }| {
+					deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_2)
+				}));
 				deposits
 			})
 			// Simulate success -> trigger broadcast success for all pending broadcasts.
@@ -3979,9 +4022,13 @@ mod evm_transaction_rejection {
 			.then_process_blocks(1)
 			.then_execute_with_keep_context(|_| {
 				assert!(
-					ScheduledTransactionsForRejection::<Test, Instance1>::get().is_empty(),
+					ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::iter()
+						.next()
+						.is_none(),
 					"Expected no pending txs, but got {:#?}",
-					ScheduledTransactionsForRejection::<Test, Instance1>::get()
+					ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+						System::block_number()
+					)
 				);
 				let rejected_ids = MockEgressBroadcasterEth::get_pending_api_calls()
 					.into_iter()
@@ -4248,11 +4295,15 @@ mod evm_transaction_rejection {
 				));
 				assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
-				let scheduled_txs = ScheduledTransactionsForRejection::<Test, Instance1>::get();
+				let scheduled_txs =
+					ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
+						System::block_number() + REJECTION_DELAY_BLOCKS,
+					);
 
 				assert_eq!(scheduled_txs.len(), 1);
 				assert_eq!(scheduled_txs[0].deposit_details.deposit_ids().unwrap(), vec![tx_id]);
 			})
+			.then_process_next_block()
 			.then_process_events(|_, event| match event {
 				RuntimeEvent::EthereumIngressEgress(PalletEvent::TransactionRejectedByBroker {
 					tx_id,

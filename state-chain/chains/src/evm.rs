@@ -572,16 +572,8 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 
 	/// Undeployed Addresses should not be recycled.
 	/// Other address types *can* be recycled.
-	fn maybe_recycle(self) -> Option<Self> {
-		match self {
-			Self::Undeployed => None,
-			// When recycling, preserve the deployment block number
-			Self::Deployed { at_block_height: block_number } =>
-				Some(Self::Deployed { at_block_height: block_number }),
-			// Pending channels shouldn't normally be recycled, but if they are,
-			// use 0 as value for the deployment block
-			Self::Pending => Some(Self::Deployed { at_block_height: 0 }),
-		}
+	fn maybe_recycle(&self) -> bool {
+		!matches!(self, Self::Undeployed)
 	}
 }
 
