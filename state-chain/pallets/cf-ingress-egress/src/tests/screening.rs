@@ -20,7 +20,7 @@ use crate::{
 	Asset, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness, Event,
 	ReportExpiresAt, ScheduledEgressFetchOrTransfer, ScheduledTransactionsForRejectionByBlock,
 	TransactionRejectionStatus, TransactionsMarkedForRejection, VaultDepositWitness,
-	MARKED_TX_EXPIRATION_BLOCKS,
+	DEFAULT_REJECTION_DELAY_BLOCKS, MARKED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::EncodedAddress,
@@ -38,6 +38,7 @@ use frame_support::{
 };
 use sp_runtime::DispatchError::BadOrigin;
 
+const REJECTION_DELAY_BLOCKS: u64 = DEFAULT_REJECTION_DELAY_BLOCKS as u64;
 const DEFAULT_DEPOSIT_AMOUNT: u64 = 1_000;
 const DEFAULT_BTC_ADDRESS: [u8; 20] = [0; 20];
 
@@ -148,7 +149,7 @@ fn process_marked_transaction_and_expect_refund() {
 
 		assert_eq!(
 			ScheduledTransactionsForRejectionByBlock::<Test, Instance2>::decode_len(
-				System::block_number() + 1
+				System::block_number() + REJECTION_DELAY_BLOCKS
 			),
 			Some(1)
 		);
@@ -479,17 +480,17 @@ fn send_funds_back_after_they_have_been_rejected() {
 		assert_eq!(MockEgressBroadcasterBtc::get_pending_api_calls().len(), 0);
 		assert_eq!(
 			ScheduledTransactionsForRejectionByBlock::<Test, Instance2>::get(
-				System::block_number() + 1
+				System::block_number() + REJECTION_DELAY_BLOCKS
 			)
 			.len(),
 			1
 		);
 
-		BitcoinIngressEgress::on_finalize(System::block_number() + 1);
+		BitcoinIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 		assert_eq!(
 			ScheduledTransactionsForRejectionByBlock::<Test, Instance2>::get(
-				System::block_number() + 1
+				System::block_number() + REJECTION_DELAY_BLOCKS
 			)
 			.len(),
 			0
@@ -683,7 +684,7 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 
 		assert_eq!(
 			ScheduledTransactionsForRejectionByBlock::<Test, Instance2>::decode_len(
-				System::block_number() + 1
+				System::block_number() + REJECTION_DELAY_BLOCKS
 			),
 			Some(1)
 		);

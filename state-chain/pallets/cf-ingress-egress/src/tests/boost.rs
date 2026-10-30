@@ -821,11 +821,12 @@ mod delayed_boosting {
 	use super::*;
 	use crate::{
 		BoostedVaultTransactions, ScheduledTransactionsForRejectionByBlock,
-		TransactionRejectionDetails,
+		TransactionRejectionDetails, DEFAULT_REJECTION_DELAY_BLOCKS,
 	};
 	use sp_core::H256;
 	use sp_runtime::traits::BlockNumberProvider;
 
+	const REJECTION_DELAY_BLOCKS: u64 = DEFAULT_REJECTION_DELAY_BLOCKS as u64;
 	const BOOST_DELAY: u64 = 1;
 	const PREWITNESSED_AT_BLOCK: u64 = 1;
 	const PROCESSED_AT_BLOCK: u64 = PREWITNESSED_AT_BLOCK + BOOST_DELAY;
@@ -1198,7 +1199,7 @@ mod delayed_boosting {
 
 				assert_eq!(
 					ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
-						System::block_number() + 1
+						System::block_number() + REJECTION_DELAY_BLOCKS
 					)
 					.len(),
 					1
@@ -1213,7 +1214,7 @@ mod delayed_boosting {
 
 				assert_eq!(
 					ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
-						System::block_number() + 1
+						System::block_number() + REJECTION_DELAY_BLOCKS
 					)
 					.len(),
 					1
@@ -1305,7 +1306,7 @@ mod delayed_boosting {
 
 				assert_eq!(
 					ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(
-						System::block_number() + 1
+						System::block_number() + REJECTION_DELAY_BLOCKS
 					)
 					.len(),
 					0
@@ -1320,7 +1321,7 @@ mod delayed_boosting {
 				);
 
 				assert!(matches!(
-					&ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(System::block_number() + 1)[..],
+					&ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::get(System::block_number() + REJECTION_DELAY_BLOCKS)[..],
 					[TransactionRejectionDetails {
 						deposit_details: DepositDetails { tx_hashes: Some(tx_ids) },
 						..
