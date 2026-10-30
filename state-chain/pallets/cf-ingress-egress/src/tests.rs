@@ -19,13 +19,13 @@ mod failed_deposit_recovery;
 mod screening;
 
 use crate::{
-	mocks::*, BoostDelayBlocks, BoostStatus, BroadcastAction, BroadcastActions, ChannelAction,
-	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
+	mocks::*, BoostStatus, BroadcastAction, BroadcastActions, ChannelAction, ChannelIdCounter,
+	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
 	DepositOrigin, DepositWitness, DisabledEgressAssets, EgressDustLimit, Event,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FailedRejections,
 	FetchOrTransfer, MaximumPreallocatedChannels, MinimumDeposit, Pallet, PalletConfigUpdate,
-	PalletSafeMode, PendingPrewitnessedDeposit, PreallocatedChannels, PrewitnessedDepositIdCounter,
+	PalletSafeMode, PreallocatedChannels, PrewitnessedDeposit, PrewitnessedDepositIdCounter,
 	ProcessedUpTo, RefundReason, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 	VaultDepositWitness, WitnessSafetyMargin,
 };
@@ -2229,13 +2229,11 @@ fn can_update_all_config_items() {
 		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
 		const NEW_DEPOSIT_CHANNEL_LIFETIME: u64 = 99;
 		const NEW_WITNESS_SAFETY_MARGIN: u64 = 300;
-		const NEW_BOOST_DELAY_BLOCKS: u64 = 20;
 		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, Instance1>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, Instance1>::get(EthAsset::Flip), 0);
 		assert_eq!(MinimumDeposit::<Test, Instance1>::get(EthAsset::Eth), 0);
 		assert_ne!(DepositChannelLifetime::<Test, Instance1>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
-		assert_eq!(BoostDelayBlocks::<Test, Instance1>::get(), 0);
 
 		// Update all config items at the same time, and updates 2 separate min deposit amounts.
 		assert_ok!(EthereumIngressEgress::update_pallet_config(
@@ -2254,7 +2252,6 @@ fn can_update_all_config_items() {
 					lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
 				},
 				PalletConfigUpdate::SetWitnessSafetyMargin { margin: NEW_WITNESS_SAFETY_MARGIN },
-				PalletConfigUpdate::SetBoostDelay { delay_blocks: NEW_BOOST_DELAY_BLOCKS }
 			]
 			.try_into()
 			.unwrap()
@@ -2266,7 +2263,6 @@ fn can_update_all_config_items() {
 		assert_eq!(MinimumDeposit::<Test, Instance1>::get(EthAsset::Eth), NEW_MIN_DEPOSIT_ETH);
 		assert_eq!(DepositChannelLifetime::<Test, Instance1>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
 		assert_eq!(WitnessSafetyMargin::<Test, Instance1>::get(), Some(NEW_WITNESS_SAFETY_MARGIN));
-		assert_eq!(BoostDelayBlocks::<Test, Instance1>::get(), NEW_BOOST_DELAY_BLOCKS);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -2295,9 +2291,6 @@ fn can_update_all_config_items() {
 				update: PalletConfigUpdate::SetWitnessSafetyMargin {
 					margin: NEW_WITNESS_SAFETY_MARGIN
 				}
-			}),
-			RuntimeEvent::EthereumIngressEgress(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::SetBoostDelay { delay_blocks: NEW_BOOST_DELAY_BLOCKS }
 			}),
 		);
 
@@ -3247,7 +3240,7 @@ fn assembling_broker_fees() {
 fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 	const DEPOSIT_AMOUNT: AssetAmount = 100;
 
-	let deposit = PendingPrewitnessedDeposit::<Test, Instance1> {
+	let deposit = PrewitnessedDeposit::<Test, Instance1> {
 		block_height: 0,
 		amount: DEPOSIT_AMOUNT,
 		asset: EthAsset::Eth,
@@ -3294,7 +3287,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 		MinimumDeposit::<Test, Instance1>::insert(EthAsset::Eth, DEPOSIT_AMOUNT);
 
 		assert_matches!(
-			EthereumIngressEgress::process_prewitness_deposit_inner(deposit.clone()),
+			EthereumIngressEgress::process_prewitness_deposit(deposit.clone()),
 			BoostStatus::Boosted { .. }
 		);
 

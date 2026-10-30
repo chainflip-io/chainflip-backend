@@ -117,7 +117,6 @@ import type {
   PalletCfIngressEgressTransactionRejectionStatus,
   PalletCfIngressEgressTransactionRejectionDetailsEthereum,
   PalletCfIngressEgressBoostStatus,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry,
   PalletCfIngressEgressDepositWitnessEthereum,
   PalletCfIngressEgressVaultDepositWitnessEthereum,
   PalletCfIngressEgressBroadcastAction,
@@ -128,7 +127,6 @@ import type {
   CfChainsDepositChannelDepositChannelPolkadot,
   CfPrimitivesTxId,
   PalletCfIngressEgressTransactionRejectionDetailsPolkadot,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry002,
   PalletCfIngressEgressDepositWitnessPolkadot,
   PalletCfIngressEgressVaultDepositWitnessPolkadot,
   PalletCfIngressEgressBroadcastActionPolkadotAccountId,
@@ -140,7 +138,6 @@ import type {
   CfChainsDepositChannelDepositChannelBitcoin,
   PalletCfIngressEgressTransactionRejectionDetailsBitcoin,
   PalletCfIngressEgressBoostStatusU64,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry003,
   PalletCfIngressEgressDepositWitnessBitcoin,
   PalletCfIngressEgressVaultDepositWitnessBitcoin,
   PalletCfIngressEgressBroadcastActionScriptPubkey,
@@ -155,7 +152,6 @@ import type {
   PalletCfIngressEgressCrossChainMessageArbitrum,
   CfChainsDepositChannelDepositChannelArbitrum,
   PalletCfIngressEgressTransactionRejectionDetailsArbitrum,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry004,
   PalletCfIngressEgressDepositWitnessArbitrum,
   PalletCfIngressEgressVaultDepositWitnessArbitrum,
   PalletCfVaultsVaultActivationStatus004,
@@ -172,7 +168,6 @@ import type {
   CfPrimitivesChainsAssetsSolAsset,
   CfChainsDepositChannelDepositChannelSolana,
   PalletCfIngressEgressTransactionRejectionDetailsSolana,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry005,
   PalletCfIngressEgressDepositWitnessSolana,
   PalletCfIngressEgressVaultDepositWitnessSolana,
   PalletCfIngressEgressBroadcastActionAddress,
@@ -208,7 +203,6 @@ import type {
   CfPrimitivesChainsAssetsHubAsset,
   CfChainsDepositChannelDepositChannelAssethub,
   PalletCfIngressEgressTransactionRejectionDetailsAssethub,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry006,
   PalletCfIngressEgressDepositWitnessAssethub,
   PalletCfIngressEgressVaultDepositWitnessAssethub,
   PalletCfTradingStrategyTradingStrategy,
@@ -288,7 +282,6 @@ import type {
   PalletCfIngressEgressCrossChainMessageTron,
   CfChainsDepositChannelDepositChannelTron,
   PalletCfIngressEgressTransactionRejectionDetailsTron,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry007,
   PalletCfIngressEgressDepositWitnessTron,
   PalletCfIngressEgressVaultDepositWitnessTron,
   PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData,
@@ -313,7 +306,6 @@ import type {
   PalletCfIngressEgressCrossChainMessageBsc,
   CfChainsDepositChannelDepositChannelBsc,
   PalletCfIngressEgressTransactionRejectionDetailsBsc,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry008,
   PalletCfIngressEgressDepositWitnessBsc,
   PalletCfIngressEgressVaultDepositWitnessBsc,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
@@ -3448,13 +3440,6 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
@@ -3535,16 +3520,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsEthAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry>,
-      number
     >;
 
     /**
@@ -3755,13 +3730,6 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
@@ -3847,16 +3815,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[CfPrimitivesTxId, [number, CfPrimitivesChainsAssetsDotAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry002>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry002>,
-      number
     >;
 
     /**
@@ -4067,13 +4025,6 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
@@ -4154,16 +4105,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsBtcAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry003>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry003>,
-      number
     >;
 
     /**
@@ -4696,13 +4637,6 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
@@ -4783,16 +4717,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsArbAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry004>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry004>,
-      number
     >;
 
     /**
@@ -5368,13 +5292,6 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
@@ -5460,16 +5377,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[[SolPrimAddress, bigint], [bigint, CfPrimitivesChainsAssetsSolAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry005>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry005>,
-      number
     >;
 
     /**
@@ -6297,13 +6204,6 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
@@ -6389,16 +6289,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[CfPrimitivesTxId, [number, CfPrimitivesChainsAssetsHubAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry006>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry006>,
-      number
     >;
 
     /**
@@ -7969,13 +7859,6 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
@@ -8056,16 +7939,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsTronAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry007>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry007>,
-      number
     >;
 
     /**
@@ -8725,13 +8598,6 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
@@ -8812,16 +8678,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsBscAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry008>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry008>,
-      number
     >;
 
     /**
