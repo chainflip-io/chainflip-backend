@@ -15,13 +15,13 @@ pallet-cf-validator = { path = "../pallets/cf-validator", features = ["std"] }
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser", features = ["std"] }
 
 # Polkadot SDK dependencies
-frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc1" }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc1" }
-sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc1" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc1" }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc1" }
-sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc1" }
-sc-executor-common = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc1" }
+frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc2" }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc2" }
+sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc2" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc2" }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc2" }
+sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc2" }
+sc-executor-common = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0-rc2" }
 codec = { version = "3.7.4", package = "parity-scale-codec", features = [
     "std",
 ] }
