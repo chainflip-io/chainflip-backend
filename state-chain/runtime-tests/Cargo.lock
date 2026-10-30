@@ -753,8 +753,8 @@ checksum = "32637268377fc7b10a8c6d51de3e7fba1ce5dd371a96e342b34e6078db558e7f"
 
 [[package]]
 name = "binary-merkle-tree"
-version = "13.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "16.1.2"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "hash-db",
  "log",
@@ -2801,8 +2801,8 @@ checksum = "28dd6caf6059519a65843af8fe2a3ae298b14b80179855aeb4adc2c1934ee619"
 
 [[package]]
 name = "frame-benchmarking"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "50.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "anyhow",
  "frame-support",
@@ -2826,8 +2826,8 @@ dependencies = [
 
 [[package]]
 name = "frame-executive"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "49.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "aquamarine",
  "frame-support",
@@ -2856,8 +2856,8 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata-hash-extension"
-version = "0.1.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.17.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "array-bytes",
  "const-hex",
@@ -2872,8 +2872,8 @@ dependencies = [
 
 [[package]]
 name = "frame-remote-externalities"
-version = "0.35.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.62.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "futures",
  "indicatif",
@@ -2894,8 +2894,8 @@ dependencies = [
 
 [[package]]
 name = "frame-support"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "49.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "aquamarine",
  "array-bytes",
@@ -2936,8 +2936,8 @@ dependencies = [
 
 [[package]]
 name = "frame-support-procedural"
-version = "23.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "41.0.1"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "Inflector",
  "cfg-expr",
@@ -2957,7 +2957,7 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural-tools"
 version = "10.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "frame-support-procedural-tools-derive",
  "proc-macro-crate",
@@ -2969,7 +2969,7 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural-tools-derive"
 version = "11.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2978,8 +2978,8 @@ dependencies = [
 
 [[package]]
 name = "frame-system"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "49.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "cfg-if",
  "docify",
@@ -2997,8 +2997,8 @@ dependencies = [
 
 [[package]]
 name = "frame-system-benchmarking"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "50.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -3011,8 +3011,8 @@ dependencies = [
 
 [[package]]
 name = "frame-system-rpc-runtime-api"
-version = "26.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "44.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "docify",
  "parity-scale-codec",
@@ -3021,8 +3021,8 @@ dependencies = [
 
 [[package]]
 name = "frame-try-runtime"
-version = "0.34.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.55.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -5103,9 +5103,9 @@ checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 
 [[package]]
 name = "litep2p"
-version = "0.15.2"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b43bcd3f698c589f30fb44db886f48c1b5d96c6a6f8ee5c41cdb21d24da2869"
+checksum = "75a2c94e6b822a70bf38263b39c26ce3bffbdd78795d7da8de134d1f0cb3f7ea"
 dependencies = [
  "async-trait",
  "bs58",
@@ -5908,8 +5908,8 @@ dependencies = [
 
 [[package]]
 name = "pallet-aura"
-version = "27.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "49.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5924,8 +5924,8 @@ dependencies = [
 
 [[package]]
 name = "pallet-authorship"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "49.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5937,8 +5937,8 @@ dependencies = [
 
 [[package]]
 name = "pallet-balances"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "51.0.1"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "docify",
  "frame-benchmarking",
@@ -6407,8 +6407,8 @@ dependencies = [
 
 [[package]]
 name = "pallet-grandpa"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "50.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -6429,8 +6429,8 @@ dependencies = [
 
 [[package]]
 name = "pallet-session"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "50.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6451,8 +6451,8 @@ dependencies = [
 
 [[package]]
 name = "pallet-timestamp"
-version = "27.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "49.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "docify",
  "frame-benchmarking",
@@ -6469,8 +6469,8 @@ dependencies = [
 
 [[package]]
 name = "pallet-transaction-payment"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "50.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -6485,8 +6485,8 @@ dependencies = [
 
 [[package]]
 name = "pallet-transaction-payment-rpc-runtime-api"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "50.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
@@ -7843,7 +7843,7 @@ checksum = "3fc4972f129a0ea378b69fa7c186d63255606e362ad00795f00b869dea5265eb"
 [[package]]
 name = "sc-allocator"
 version = "23.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "log",
  "sp-core",
@@ -7853,8 +7853,8 @@ dependencies = [
 
 [[package]]
 name = "sc-chain-spec"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "53.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "array-bytes",
  "docify",
@@ -7880,7 +7880,7 @@ dependencies = [
 [[package]]
 name = "sc-chain-spec-derive"
 version = "11.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -7890,8 +7890,8 @@ dependencies = [
 
 [[package]]
 name = "sc-client-api"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "48.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "fnv",
  "futures",
@@ -7916,8 +7916,8 @@ dependencies = [
 
 [[package]]
 name = "sc-executor"
-version = "0.32.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.51.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.5",
@@ -7940,7 +7940,7 @@ dependencies = [
 [[package]]
 name = "sc-executor-common"
 version = "0.29.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "polkavm",
  "sc-allocator",
@@ -7953,7 +7953,7 @@ dependencies = [
 [[package]]
 name = "sc-executor-polkavm"
 version = "0.29.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "log",
  "polkavm",
@@ -7965,7 +7965,7 @@ dependencies = [
 [[package]]
 name = "sc-executor-wasmtime"
 version = "0.29.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "anyhow",
  "log",
@@ -7980,8 +7980,8 @@ dependencies = [
 
 [[package]]
 name = "sc-mixnet"
-version = "0.4.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.30.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "array-bytes",
  "arrayvec",
@@ -8008,8 +8008,8 @@ dependencies = [
 
 [[package]]
 name = "sc-network"
-version = "0.34.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.60.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "array-bytes",
  "async-channel",
@@ -8061,8 +8061,8 @@ dependencies = [
 
 [[package]]
 name = "sc-network-common"
-version = "0.33.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.56.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "bitflags 1.3.2",
  "parity-scale-codec",
@@ -8071,8 +8071,8 @@ dependencies = [
 
 [[package]]
 name = "sc-network-types"
-version = "0.10.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "bs58",
  "bytes",
@@ -8092,8 +8092,8 @@ dependencies = [
 
 [[package]]
 name = "sc-rpc-api"
-version = "0.33.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.60.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "jsonrpsee",
  "parity-scale-codec",
@@ -8113,8 +8113,8 @@ dependencies = [
 
 [[package]]
 name = "sc-telemetry"
-version = "15.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "34.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "chrono",
  "futures",
@@ -8132,8 +8132,8 @@ dependencies = [
 
 [[package]]
 name = "sc-transaction-pool-api"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "47.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "async-trait",
  "futures",
@@ -8150,8 +8150,8 @@ dependencies = [
 
 [[package]]
 name = "sc-utils"
-version = "14.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "24.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "async-channel",
  "futures",
@@ -8866,8 +8866,8 @@ dependencies = [
 
 [[package]]
 name = "sp-api"
-version = "26.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "44.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "docify",
  "hash-db",
@@ -8889,7 +8889,7 @@ dependencies = [
 [[package]]
 name = "sp-api-proc-macro"
 version = "15.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "Inflector",
  "blake2 0.10.6",
@@ -8902,8 +8902,8 @@ dependencies = [
 
 [[package]]
 name = "sp-application-crypto"
-version = "30.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "49.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -8914,8 +8914,8 @@ dependencies = [
 
 [[package]]
 name = "sp-arithmetic"
-version = "23.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "29.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "docify",
  "integer-sqrt",
@@ -8928,8 +8928,8 @@ dependencies = [
 
 [[package]]
 name = "sp-block-builder"
-version = "26.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "44.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
@@ -8939,8 +8939,8 @@ dependencies = [
 
 [[package]]
 name = "sp-blockchain"
-version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "47.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "futures",
  "parity-scale-codec",
@@ -8958,8 +8958,8 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus"
-version = "0.32.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.50.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "async-trait",
  "futures",
@@ -8975,8 +8975,8 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-aura"
-version = "0.32.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.50.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "async-trait",
  "parity-scale-codec",
@@ -8991,8 +8991,8 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-grandpa"
-version = "13.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "31.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "finality-grandpa",
  "log",
@@ -9008,8 +9008,8 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-slots"
-version = "0.32.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.50.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -9020,7 +9020,7 @@ dependencies = [
 [[package]]
 name = "sp-core"
 version = "28.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "ark-vrf",
  "array-bytes",
@@ -9067,7 +9067,7 @@ dependencies = [
 [[package]]
 name = "sp-crypto-hashing"
 version = "0.1.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -9080,7 +9080,7 @@ dependencies = [
 [[package]]
 name = "sp-crypto-hashing-proc-macro"
 version = "0.1.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "quote",
  "sp-crypto-hashing",
@@ -9090,7 +9090,7 @@ dependencies = [
 [[package]]
 name = "sp-database"
 version = "10.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "kvdb",
  "parking_lot 0.12.5",
@@ -9099,7 +9099,7 @@ dependencies = [
 [[package]]
 name = "sp-debug-derive"
 version = "14.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "proc-macro-warning",
  "proc-macro2",
@@ -9110,7 +9110,7 @@ dependencies = [
 [[package]]
 name = "sp-externalities"
 version = "0.25.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -9119,8 +9119,8 @@ dependencies = [
 
 [[package]]
 name = "sp-genesis-builder"
-version = "0.8.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.25.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -9131,8 +9131,8 @@ dependencies = [
 
 [[package]]
 name = "sp-inherents"
-version = "26.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "44.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "async-trait",
  "impl-trait-for-tuples",
@@ -9144,8 +9144,8 @@ dependencies = [
 
 [[package]]
 name = "sp-io"
-version = "30.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "49.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "bytes",
  "docify",
@@ -9171,7 +9171,7 @@ dependencies = [
 [[package]]
 name = "sp-keystore"
 version = "0.34.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.5",
@@ -9182,7 +9182,7 @@ dependencies = [
 [[package]]
 name = "sp-maybe-compressed-blob"
 version = "11.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "thiserror 1.0.69",
  "zstd 0.12.4",
@@ -9191,7 +9191,7 @@ dependencies = [
 [[package]]
 name = "sp-metadata-ir"
 version = "0.6.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "derive-where",
  "frame-metadata",
@@ -9201,8 +9201,8 @@ dependencies = [
 
 [[package]]
 name = "sp-mixnet"
-version = "0.4.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.22.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -9212,8 +9212,8 @@ dependencies = [
 
 [[package]]
 name = "sp-offchain"
-version = "26.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "44.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "sp-api",
  "sp-core",
@@ -9223,7 +9223,7 @@ dependencies = [
 [[package]]
 name = "sp-panic-handler"
 version = "13.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "backtrace",
  "regex",
@@ -9232,7 +9232,7 @@ dependencies = [
 [[package]]
 name = "sp-rpc"
 version = "26.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "rustc-hash 1.1.0",
  "serde",
@@ -9241,8 +9241,8 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime"
-version = "31.0.1"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "49.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "binary-merkle-tree",
  "bytes",
@@ -9272,8 +9272,8 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface"
-version = "24.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "37.0.1"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "bytes",
  "impl-trait-for-tuples",
@@ -9290,7 +9290,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface-proc-macro"
 version = "17.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "Inflector",
  "expander",
@@ -9302,8 +9302,8 @@ dependencies = [
 
 [[package]]
 name = "sp-session"
-version = "27.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "46.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -9316,8 +9316,8 @@ dependencies = [
 
 [[package]]
 name = "sp-staking"
-version = "26.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "46.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
@@ -9329,8 +9329,8 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
-version = "0.35.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.54.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "hash-db",
  "log",
@@ -9349,8 +9349,8 @@ dependencies = [
 
 [[package]]
 name = "sp-statement-store"
-version = "10.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "29.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "aes-gcm",
  "curve25519-dalek 4.1.3",
@@ -9376,12 +9376,12 @@ dependencies = [
 [[package]]
 name = "sp-std"
 version = "14.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 
 [[package]]
 name = "sp-storage"
 version = "19.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -9392,8 +9392,8 @@ dependencies = [
 
 [[package]]
 name = "sp-timestamp"
-version = "26.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "44.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "async-trait",
  "parity-scale-codec",
@@ -9405,7 +9405,7 @@ dependencies = [
 [[package]]
 name = "sp-tracing"
 version = "16.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "regex",
@@ -9416,8 +9416,8 @@ dependencies = [
 
 [[package]]
 name = "sp-transaction-pool"
-version = "26.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "44.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "sp-api",
  "sp-runtime",
@@ -9425,8 +9425,8 @@ dependencies = [
 
 [[package]]
 name = "sp-trie"
-version = "29.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "47.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "ahash 0.8.12",
  "foldhash 0.1.5",
@@ -9450,8 +9450,8 @@ dependencies = [
 
 [[package]]
 name = "sp-version"
-version = "29.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "47.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -9469,7 +9469,7 @@ dependencies = [
 [[package]]
 name = "sp-version-proc-macro"
 version = "13.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "parity-scale-codec",
  "proc-macro-warning",
@@ -9481,7 +9481,7 @@ dependencies = [
 [[package]]
 name = "sp-wasm-interface"
 version = "20.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "anyhow",
  "impl-trait-for-tuples",
@@ -9492,8 +9492,8 @@ dependencies = [
 
 [[package]]
 name = "sp-weights"
-version = "27.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "37.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "bounded-collections",
  "parity-scale-codec",
@@ -9741,7 +9741,7 @@ dependencies = [
 [[package]]
 name = "substrate-bip39"
 version = "0.4.7"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "hmac",
  "pbkdf2",
@@ -9753,7 +9753,7 @@ dependencies = [
 [[package]]
 name = "substrate-prometheus-endpoint"
 version = "0.17.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "http-body-util",
  "hyper 1.8.1",
@@ -9766,8 +9766,8 @@ dependencies = [
 
 [[package]]
 name = "substrate-rpc-client"
-version = "0.33.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "0.60.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "async-trait",
  "jsonrpsee",
@@ -9779,8 +9779,8 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "17.0.0"
-source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4-alpha.2#409f009f648b8a380d6c2282da897758c6a0f72d"
+version = "35.0.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-stable2609-2.4.0-rc1#85b44483ff5898d02f72a208e9398dee978cb87a"
 dependencies = [
  "build-helper",
  "cargo_metadata",
