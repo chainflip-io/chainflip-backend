@@ -85,6 +85,9 @@ pub use weights::WeightInfo;
 const MARKED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 const DEFAULT_REJECTION_DELAY_BLOCKS: u32 = 1;
 
+/// at least one block delay is required due to ordering of on_finalize calls
+const MIN_REJECTION_DELAY_BLOCKS: u32 = 1;
+
 /// rejection of transactions can be delayed for at most 1 hour
 const MAX_REJECTION_DELAY_BLOCKS: u32 = 600;
 
@@ -1298,6 +1301,8 @@ pub mod pallet {
 		NoRecoveryAccount,
 		/// The amount is not valid for the chain.
 		InvalidAmount,
+		/// The supplied configuration parameters are not valid.
+		InvalidConfigurationParameters,
 	}
 
 	#[pallet::hooks]
@@ -1734,8 +1739,10 @@ pub mod pallet {
 						IngressDelayBlocks::<T, I>::set(delay_blocks);
 					},
 					PalletConfigUpdate::SetRejectionDelay { delay_blocks } => {
-						if delay_blocks > MAX_REJECTION_DELAY_BLOCKS.into() {
-							continue;
+						if delay_blocks < MIN_REJECTION_DELAY_BLOCKS.into() ||
+							delay_blocks > MAX_REJECTION_DELAY_BLOCKS.into()
+						{
+							return Err(Error::<T, I>::InvalidConfigurationParameters.into());
 						}
 						RejectionDelayBlocks::<T, I>::set(delay_blocks);
 					},
@@ -3106,7 +3113,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					};
 
 					let rejection_delay_blocks = RejectionDelayBlocks::<T, I>::get()
-						.max(One::one())
+						.max(MIN_REJECTION_DELAY_BLOCKS.into())
 						.min(MAX_REJECTION_DELAY_BLOCKS.into());
 
 					ScheduledTransactionsForRejectionByBlock::<T, I>::append(
