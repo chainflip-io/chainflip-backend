@@ -5536,28 +5536,6 @@ export type PalletCfPoolsCall =
         feeHundredthPips: number;
       };
     }
-  /**
-   * Sets per-pool limits (in number of ticks) that determine the allowed change in price of
-   * the bought asset during a swap.
-   *
-   * Note that due to how the limit is applied, total measured price impact of a swap can
-   * exceed the limit. The limit is applied to whichever is *smaller* out of the following
-   * two metrics:
-   * - The number of ticks between a swap's mean execution price and the pool price *before*
-   * the swap.
-   * - The number of ticks between a swap's mean execution price and the pool price *after*
-   * the swap.
-   *
-   * This ensures that small outlying pockets of liquidity cannot individually trigger the
-   * limit. If the limit is exceeded the swap will fail and will be retried in the next
-   * block.
-   *
-   * Setting the limit to `None` disables it.
-   **/
-  | {
-      name: 'SetMaximumPriceImpact';
-      params: { limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]> };
-    }
   | { name: 'CancelOrdersBatch'; params: { orders: Array<PalletCfPoolsCloseOrder> } }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -5675,28 +5653,6 @@ export type PalletCfPoolsCallLike =
         feeHundredthPips: number;
       };
     }
-  /**
-   * Sets per-pool limits (in number of ticks) that determine the allowed change in price of
-   * the bought asset during a swap.
-   *
-   * Note that due to how the limit is applied, total measured price impact of a swap can
-   * exceed the limit. The limit is applied to whichever is *smaller* out of the following
-   * two metrics:
-   * - The number of ticks between a swap's mean execution price and the pool price *before*
-   * the swap.
-   * - The number of ticks between a swap's mean execution price and the pool price *after*
-   * the swap.
-   *
-   * This ensures that small outlying pockets of liquidity cannot individually trigger the
-   * limit. If the limit is exceeded the swap will fail and will be retried in the next
-   * block.
-   *
-   * Setting the limit to `None` disables it.
-   **/
-  | {
-      name: 'SetMaximumPriceImpact';
-      params: { limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]> };
-    }
   | { name: 'CancelOrdersBatch'; params: { orders: Array<PalletCfPoolsCloseOrder> } }
   /**
    * Apply a list of configuration updates to the pallet.
@@ -5751,6 +5707,10 @@ export type PalletCfPoolsPalletConfigUpdate =
   | {
       type: 'SetMinimumOrderAmount';
       value: { asset: CfPrimitivesChainsAssetsAnyAsset; amount: bigint };
+    }
+  | {
+      type: 'MaximumPriceImpact';
+      value: { asset: CfPrimitivesChainsAssetsAnyAsset; limit?: number | undefined };
     };
 
 /**
@@ -15807,7 +15767,9 @@ export type PalletCfPoolsEvent =
       data: { lp: AccountId32; orderId: bigint; dispatchAt: number };
     }
   /**
-   * The Price Impact limit has been set for a pool.
+   * No longer emitted: price impact limits are now reported via `PalletConfigUpdated`.
+   * Retained so that `cf_lp_events` can still decode historical blocks, which is why the
+   * variant cannot be removed or moved. See `lp_events_serialization`.
    **/
   | {
       name: 'PriceImpactLimitSet';

@@ -5201,41 +5201,6 @@ export interface ChainTx<
     >;
 
     /**
-     * Sets per-pool limits (in number of ticks) that determine the allowed change in price of
-     * the bought asset during a swap.
-     *
-     * Note that due to how the limit is applied, total measured price impact of a swap can
-     * exceed the limit. The limit is applied to whichever is *smaller* out of the following
-     * two metrics:
-     * - The number of ticks between a swap's mean execution price and the pool price *before*
-     * the swap.
-     * - The number of ticks between a swap's mean execution price and the pool price *after*
-     * the swap.
-     *
-     * This ensures that small outlying pockets of liquidity cannot individually trigger the
-     * limit. If the limit is exceeded the swap will fail and will be retried in the next
-     * block.
-     *
-     * Setting the limit to `None` disables it.
-     *
-     * @param {Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]>} limits
-     **/
-    setMaximumPriceImpact: GenericTxCall<
-      (
-        limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]>,
-      ) => ChainSubmittableExtrinsic<
-        {
-          pallet: 'LiquidityPools';
-          palletCall: {
-            name: 'SetMaximumPriceImpact';
-            params: { limits: Array<[CfPrimitivesChainsAssetsAnyAsset, number | undefined]> };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
      *
      * @param {Array<PalletCfPoolsCloseOrder>} orders
      **/

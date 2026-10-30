@@ -28,7 +28,6 @@ use cf_traits::{
 };
 use frame_support::{assert_noop, assert_ok};
 use sp_core::bounded_vec;
-use sp_runtime::BoundedVec;
 
 #[test]
 fn can_create_new_trading_pool() {
@@ -985,13 +984,15 @@ fn test_maximum_slippage_limits() {
 		let asset_pair = AssetPair::new(BASE_ASSET, STABLE_ASSET).unwrap();
 
 		// Ensure limits are configured per pool: this limit should be ignored during testing.
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
+		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
-			bounded_vec![(OTHER_ASSET, Some(1))],
+			bounded_vec![PalletConfigUpdate::MaximumPriceImpact {
+				asset: OTHER_ASSET,
+				limit: Some(1)
+			}],
 		));
-		System::assert_last_event(RuntimeEvent::LiquidityPools(Event::PriceImpactLimitSet {
-			asset_pair: AssetPair::new(OTHER_ASSET, STABLE_ASSET).unwrap(),
-			limit: Some(1),
+		System::assert_last_event(RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+			update: PalletConfigUpdate::MaximumPriceImpact { asset: OTHER_ASSET, limit: Some(1) },
 		}));
 
 		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
@@ -1050,30 +1051,39 @@ fn test_maximum_slippage_limits() {
 
 		test_swaps(u128::MAX);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
+		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, Some(954))]
+			bounded_vec![PalletConfigUpdate::MaximumPriceImpact {
+				asset: BASE_ASSET,
+				limit: Some(954)
+			}]
 		));
 
 		test_swaps(10500);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
+		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, None)]
+			bounded_vec![PalletConfigUpdate::MaximumPriceImpact { asset: BASE_ASSET, limit: None }]
 		));
 
 		test_swaps(u128::MAX);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
+		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, Some(10))]
+			bounded_vec![PalletConfigUpdate::MaximumPriceImpact {
+				asset: BASE_ASSET,
+				limit: Some(10)
+			}]
 		));
 
 		test_swaps(300);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
+		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, Some(300))]
+			bounded_vec![PalletConfigUpdate::MaximumPriceImpact {
+				asset: BASE_ASSET,
+				limit: Some(300)
+			}]
 		));
 
 		test_swaps(3500);
@@ -1278,19 +1288,6 @@ fn only_governance_can_set_pool_fee() {
 }
 
 #[test]
-fn only_governance_can_set_maximum_price_impact() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			LiquidityPools::set_maximum_price_impact(
-				RuntimeOrigin::signed(ALICE),
-				BoundedVec::try_from(vec![(Asset::Eth, None)]).unwrap()
-			),
-			sp_runtime::traits::BadOrigin
-		);
-	});
-}
-
-#[test]
 fn handle_zero_liquidity_changes_set_range_order() {
 	new_test_ext().execute_with(|| {
 		const POSITION: core::ops::Range<Tick> = -887272..887272;
@@ -1474,6 +1471,9 @@ fn cancel_all_limit_orders_for_account() {
 fn can_update_all_config_items() {
 	const NEW_SWEEPING_THRESHOLD: AssetAmount = 5_000 * 10u128.pow(6);
 	const NEW_ORDER_MINIMUM: AssetAmount = 6_000 * 10u128.pow(6);
+	const NEW_PRICE_IMPACT_LIMIT: u32 = 500;
+	// `MaximumPriceImpact` is keyed by pool, so it needs an asset that pairs with the stable asset.
+	const PRICE_IMPACT_ASSET: Asset = Asset::Eth;
 
 	new_test_ext().execute_with(|| {
 		// Check that the default values are different from the new ones
@@ -1485,6 +1485,12 @@ fn can_update_all_config_items() {
 			NEW_SWEEPING_THRESHOLD
 		);
 		assert_ne!(MinimumOrderAmount::<Test>::get(Asset::Usdc), NEW_ORDER_MINIMUM);
+		assert_ne!(
+			MaximumPriceImpact::<Test>::get(
+				AssetPair::new(PRICE_IMPACT_ASSET, STABLE_ASSET).unwrap()
+			),
+			Some(NEW_PRICE_IMPACT_LIMIT)
+		);
 
 		// Update all config items at the same time
 		assert_ok!(LiquidityPools::update_pallet_config(
@@ -1498,6 +1504,10 @@ fn can_update_all_config_items() {
 					asset: Asset::Usdc,
 					amount: NEW_ORDER_MINIMUM
 				},
+				PalletConfigUpdate::MaximumPriceImpact {
+					asset: PRICE_IMPACT_ASSET,
+					limit: Some(NEW_PRICE_IMPACT_LIMIT)
+				},
 			],
 		));
 
@@ -1510,6 +1520,12 @@ fn can_update_all_config_items() {
 			NEW_SWEEPING_THRESHOLD
 		);
 		assert_eq!(MinimumOrderAmount::<Test>::get(Asset::Usdc), NEW_ORDER_MINIMUM);
+		assert_eq!(
+			MaximumPriceImpact::<Test>::get(
+				AssetPair::new(PRICE_IMPACT_ASSET, STABLE_ASSET).unwrap()
+			),
+			Some(NEW_PRICE_IMPACT_LIMIT)
+		);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -1524,6 +1540,12 @@ fn can_update_all_config_items() {
 				update: PalletConfigUpdate::SetMinimumOrderAmount {
 					asset: Asset::Usdc,
 					amount: NEW_ORDER_MINIMUM,
+				},
+			}),
+			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::MaximumPriceImpact {
+					asset: PRICE_IMPACT_ASSET,
+					limit: Some(NEW_PRICE_IMPACT_LIMIT),
 				},
 			}),
 		);

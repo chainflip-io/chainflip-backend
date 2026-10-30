@@ -3558,7 +3558,9 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The Price Impact limit has been set for a pool.
+     * No longer emitted: price impact limits are now reported via `PalletConfigUpdated`.
+     * Retained so that `cf_lp_events` can still decode historical blocks, which is why the
+     * variant cannot be removed or moved. See `lp_events_serialization`.
      **/
     PriceImpactLimitSet: GenericPalletEvent<
       'LiquidityPools',
