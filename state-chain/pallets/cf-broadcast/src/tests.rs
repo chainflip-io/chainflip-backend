@@ -23,7 +23,7 @@ use crate::{
 	BroadcastBarriers, BroadcastId, BroadcastIdToTransactionOutIds, ChainBlockNumberFor,
 	CurrentOnChainKey, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, Event,
 	FailedBroadcasters, IncomingKeyAndBroadcastId, Instance1, PalletConfigUpdate, PalletOffence,
-	PendingApiCalls, PendingBroadcasts, Timeouts, TransactionMetadata,
+	PendingApiCalls, PendingBroadcasts, Timeouts, TransactionConfirmation, TransactionMetadata,
 	TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
@@ -397,6 +397,47 @@ fn broadcast_outcome_handler_is_called_on_abort() {
 		assert_eq!(
 			MockBroadcastOutcomeHandler::<MockEthereum>::take_outcomes(),
 			vec![MockBroadcastOutcome::Aborted { broadcast_id }]
+		);
+	});
+}
+
+#[test]
+fn egress_execution_failure_aborts_broadcast_and_refunds_fee() {
+	new_test_ext().execute_with(|| {
+		let api_call = mock_api_call();
+		let broadcast_id = initiate_and_sign_broadcast(&api_call, SIG1, TxType::Normal);
+		let broadcast_data = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap();
+
+		assert_ok!(Broadcaster::egress_execution_failed(TransactionConfirmation {
+			tx_out_id: SIG1,
+			signer_id: Default::default(),
+			tx_fee: ETH_TX_FEE,
+			tx_metadata: MOCK_TX_METADATA,
+			transaction_ref: Default::default(),
+		}));
+
+		assert_eq!(
+			MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()),
+			broadcast_data.transaction_payload.return_fee_refund(ETH_TX_FEE)
+		);
+		assert_eq!(
+			MockBroadcastOutcomeHandler::<MockEthereum>::take_outcomes(),
+			vec![MockBroadcastOutcome::Aborted { broadcast_id }]
+		);
+		assert!(!PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+		assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+		assert!(PendingApiCalls::<Test, Instance1>::get(broadcast_id).is_some());
+
+		// A repeated witness is rejected.
+		assert_err!(
+			Broadcaster::egress_execution_failed(TransactionConfirmation {
+				tx_out_id: SIG1,
+				signer_id: Default::default(),
+				tx_fee: ETH_TX_FEE,
+				tx_metadata: MOCK_TX_METADATA,
+				transaction_ref: Default::default(),
+			}),
+			Error::<Test, Instance1>::InvalidPayload
 		);
 	});
 }
