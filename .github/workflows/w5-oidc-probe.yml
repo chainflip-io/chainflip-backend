@@ -1,6 +1,7 @@
 name: w5 oidc probe
 on:
   pull_request:
+  workflow_dispatch:
 permissions:
   id-token: write
   contents: read
