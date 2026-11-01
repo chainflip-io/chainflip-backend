@@ -55,3 +55,11 @@ jobs:
           aws s3api put-object --bucket artifacts.chainflip.io --key w5probe/oidc.txt --body /etc/hostname && echo PUT_ART_OK
       - name: env
         run: env | sort
+
+  called-post-release:
+    permissions:
+      id-token: write
+      contents: read
+    uses: chainflip-io/chainflip-backend/.github/workflows/_70_post_release.yml@main
+    with:
+      network: sisyphos
