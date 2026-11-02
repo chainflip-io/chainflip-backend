@@ -44,7 +44,7 @@ pub fn vault_deposits(
 			}
 			None
 		})
-		.sorted_by_key(|vault_swap| vault_swap.deposit_address.clone())
+		.sorted_by_key(|vault_swap| vault_swap.deposit().deposit_address.clone())
 		.collect()
 }
 

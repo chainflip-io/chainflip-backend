@@ -45,6 +45,11 @@ use sp_runtime::traits::Member;
 
 use super::{Chain, ChainCrypto};
 
+/// Whether a witnessed vault deposit contains native SOL and should be fetched immediately.
+pub trait FromSolOrNot {
+	fn sol_or_not(s: &Self) -> bool;
+}
+
 pub mod api;
 pub mod benchmarking;
 pub mod instruction_builder;

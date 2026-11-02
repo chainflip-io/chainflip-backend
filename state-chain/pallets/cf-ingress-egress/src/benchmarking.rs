@@ -187,27 +187,31 @@ mod benchmarks {
 		};
 		let call = Call::<T, I>::vault_swap_request {
 			block_height: 0u32.into(),
-			deposit: Box::new(VaultDepositWitness {
-				input_asset: BenchmarkValue::benchmark_value(),
-				output_asset: Asset::Eth,
-				deposit_amount: 1_000u32.into(),
-				destination_address: BenchmarkValue::benchmark_value(),
-				deposit_metadata: Some(deposit_metadata),
-				tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
-				deposit_details: BenchmarkValue::benchmark_value(),
-				broker_fee: None,
-				affiliate_fees: Default::default(),
-				refund_params: ChannelRefundParametersForChain::<T::TargetChain> {
-					retry_duration: Default::default(),
-					refund_address: BenchmarkValue::benchmark_value(),
-					min_price: Default::default(),
-					refund_ccm_metadata: Default::default(),
-					max_oracle_price_slippage: Default::default(),
+			deposit: Box::new(VaultDepositWitness::Swap {
+				deposit: crate::VaultDepositFacts {
+					input_asset: BenchmarkValue::benchmark_value(),
+					deposit_amount: 1_000u32.into(),
+					tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
+					deposit_details: BenchmarkValue::benchmark_value(),
+					channel_id: None,
+					deposit_address: None,
 				},
-				dca_params: None,
-				boost_fee: 0,
-				channel_id: None,
-				deposit_address: None,
+				swap: crate::VaultSwapData {
+					output_asset: Asset::Eth,
+					destination_address: BenchmarkValue::benchmark_value(),
+					deposit_metadata: Some(deposit_metadata),
+					broker_fee: None,
+					affiliate_fees: Default::default(),
+					refund_params: ChannelRefundParametersForChain::<T::TargetChain> {
+						retry_duration: Default::default(),
+						refund_address: BenchmarkValue::benchmark_value(),
+						min_price: Default::default(),
+						refund_ccm_metadata: Default::default(),
+						max_oracle_price_slippage: Default::default(),
+					},
+					dca_params: None,
+					boost_fee: 0,
+				},
 			}),
 		};
 
@@ -293,5 +297,33 @@ mod benchmarks {
 		new_test_ext().execute_with(|| {
 			_mark_transaction_for_rejection::<Test, Instance1>(true);
 		});
+	}
+}
+
+impl<T: Config<I>, I: 'static> BenchmarkValue for VaultDepositWitness<T, I>
+where
+	Beneficiary<T::AccountId>: BenchmarkValue,
+{
+	fn benchmark_value() -> Self {
+		Self::Swap {
+			deposit: VaultDepositFacts {
+				input_asset: BenchmarkValue::benchmark_value(),
+				deposit_address: None,
+				channel_id: None,
+				deposit_amount: BenchmarkValue::benchmark_value(),
+				deposit_details: BenchmarkValue::benchmark_value(),
+				tx_id: BenchmarkValue::benchmark_value(),
+			},
+			swap: VaultSwapData {
+				output_asset: BenchmarkValue::benchmark_value(),
+				destination_address: BenchmarkValue::benchmark_value(),
+				deposit_metadata: Some(BenchmarkValue::benchmark_value()),
+				broker_fee: Some(BenchmarkValue::benchmark_value()),
+				affiliate_fees: BenchmarkValue::benchmark_value(),
+				refund_params: BenchmarkValue::benchmark_value(),
+				dca_params: Some(BenchmarkValue::benchmark_value()),
+				boost_fee: BenchmarkValue::benchmark_value(),
+			},
+		}
 	}
 }

@@ -622,30 +622,34 @@ mod vault_swaps {
 		deposit_amount: AssetAmount,
 	) -> VaultDepositWitness<Test, Instance1> {
 		let output_address = ForeignChainAddress::Eth([1; 20].into());
-		VaultDepositWitness {
-			input_asset: Asset::Eth.try_into().unwrap(),
-			deposit_address: Some([1; 20].into()),
-			channel_id: Some(1),
-			deposit_amount,
-			deposit_details: Default::default(),
-			output_asset: Asset::Flip,
-			destination_address: MockAddressConverter::to_encoded_address(output_address),
-			deposit_metadata: None,
-			tx_id,
-			broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
-			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersForChain::<Ethereum> {
-				retry_duration: 2,
-				refund_address: [2; 20].into(),
-				min_price: Default::default(),
-				refund_ccm_metadata: Default::default(),
-				max_oracle_price_slippage: Default::default(),
+		VaultDepositWitness::Swap {
+			deposit: crate::VaultDepositFacts {
+				input_asset: Asset::Eth.try_into().unwrap(),
+				deposit_address: Some([1; 20].into()),
+				channel_id: Some(1),
+				deposit_amount,
+				deposit_details: Default::default(),
+				tx_id,
 			},
-			dca_params: Some(DcaParameters {
-				number_of_chunks: 1,
-				chunk_interval: SWAP_DELAY_BLOCKS,
-			}),
-			boost_fee: 5,
+			swap: crate::VaultSwapData {
+				output_asset: Asset::Flip,
+				destination_address: MockAddressConverter::to_encoded_address(output_address),
+				deposit_metadata: None,
+				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
+				affiliate_fees: Default::default(),
+				refund_params: ChannelRefundParametersForChain::<Ethereum> {
+					retry_duration: 2,
+					refund_address: [2; 20].into(),
+					min_price: Default::default(),
+					refund_ccm_metadata: Default::default(),
+					max_oracle_price_slippage: Default::default(),
+				},
+				dca_params: Some(DcaParameters {
+					number_of_chunks: 1,
+					chunk_interval: SWAP_DELAY_BLOCKS,
+				}),
+				boost_fee: 5,
+			},
 		}
 	}
 
@@ -776,8 +780,8 @@ mod vault_swaps {
 
 			// Prewitnessing a different deposit *should* result in a second boost:
 			{
-				let other_deposit =
-					VaultDepositWitness { tx_id: [10u8; 32].into(), ..deposit.clone() };
+				let mut other_deposit = deposit.clone();
+				other_deposit.deposit_mut().tx_id = [10u8; 32].into();
 				EthereumIngressEgress::process_vault_swap_request_prewitness(
 					block_height,
 					other_deposit,

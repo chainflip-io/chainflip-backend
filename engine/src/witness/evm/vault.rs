@@ -53,26 +53,30 @@ where
 
 macro_rules! vault_deposit_witness {
 	($source_asset: expr, $deposit_amount: expr, $dest_asset: expr, $dest_address: expr, $metadata: expr, $tx_id: expr, $params: expr) => {
-		VaultDepositWitness {
-			input_asset: $source_asset,
-			output_asset: $dest_asset,
-			deposit_amount: $deposit_amount,
-			destination_address: $dest_address,
-			deposit_metadata: $metadata,
-			tx_id: $tx_id,
-			deposit_details: DepositDetails { tx_hashes: Some(vec![$tx_id]) },
-			broker_fee: Some($params.broker_fee),
-			affiliate_fees: $params.affiliate_fees
-				.into_iter()
-				.map(Into::into)
-				.collect_vec()
-				.try_into()
-				.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
-			boost_fee: $params.boost_fee.into(),
-			dca_params: $params.dca_params,
-			refund_params: $params.refund_params,
-			channel_id: None,
-			deposit_address: None,
+		VaultDepositWitness::Swap {
+			deposit: pallet_cf_ingress_egress::VaultDepositFacts {
+				input_asset: $source_asset,
+				deposit_amount: $deposit_amount,
+				tx_id: $tx_id,
+				deposit_details: DepositDetails { tx_hashes: Some(vec![$tx_id]) },
+				channel_id: None,
+				deposit_address: None,
+			},
+			swap: pallet_cf_ingress_egress::VaultSwapData {
+				output_asset: $dest_asset,
+				destination_address: $dest_address,
+				deposit_metadata: $metadata,
+				broker_fee: Some($params.broker_fee),
+				affiliate_fees: $params.affiliate_fees
+					.into_iter()
+					.map(Into::into)
+					.collect_vec()
+					.try_into()
+					.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
+				boost_fee: $params.boost_fee.into(),
+				dca_params: $params.dca_params,
+				refund_params: $params.refund_params,
+			},
 		}
 	}
 }
@@ -109,6 +113,8 @@ pub fn handle_vault_events<
 ) -> Result<Vec<EvmVaultContractEvent<T, I>>> {
 	let mut result = Vec::new();
 
+	// Identical vault deposits in one transaction intentionally share a witness and collapse
+	// during election deduplication. Different amounts or swap parameters remain distinct.
 	for event in events {
 		match handle_vault_event::<T, I>(
 			supported_assets,

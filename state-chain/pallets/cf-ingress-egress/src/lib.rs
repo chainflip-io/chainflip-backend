@@ -457,25 +457,41 @@ pub mod pallet {
 	)]
 	#[serde(bound(serialize = "", deserialize = ""))]
 	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
-	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
+	pub struct VaultDepositFacts<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
 		pub deposit_address: Option<TargetChainAccount<T, I>>,
 		#[skip_name_expansion]
 		pub channel_id: Option<ChannelId>,
 		pub deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 		pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		pub tx_id: TransactionInIdFor<T, I>,
+	}
+
+	#[derive(
+		CloneNoBound,
+		RuntimeDebugNoBound,
+		PartialEqNoBound,
+		EqNoBound,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		Serialize,
+		Deserialize,
+		OrdNoBound,
+		PartialOrdNoBound,
+		GenericTypeInfo,
+	)]
+	#[serde(bound(serialize = "", deserialize = ""))]
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
+	pub struct VaultSwapData<T: Config<I>, I: 'static> {
 		#[skip_name_expansion]
 		pub output_asset: Asset,
-		// Note we use EncodedAddress here rather than eg. ForeignChainAddress because this
-		// value can be populated by the submitter of the vault deposit and is not verified
-		// in the engine, so we need to verify on-chain.
+		/// Supplied by the swap submitter and validated on the State Chain.
 		#[skip_name_expansion]
 		pub destination_address: EncodedAddress,
-		// Here, the `source_address` within the CCM Metadata is populated by the engines, so we
-		// can use ForeignChainAddress here.
+		/// The source address is established by the engine.
 		#[skip_name_expansion]
 		pub deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
-		pub tx_id: TransactionInIdFor<T, I>,
 		#[skip_name_expansion]
 		pub broker_fee: Option<Beneficiary<T::AccountId>>,
 		#[skip_name_expansion]
@@ -487,41 +503,68 @@ pub mod pallet {
 		pub boost_fee: BasisPoints,
 	}
 
+	#[derive_where::derive_where(Ord, PartialOrd;)]
+	#[derive(
+		CloneNoBound,
+		RuntimeDebugNoBound,
+		PartialEqNoBound,
+		EqNoBound,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		Serialize,
+		Deserialize,
+		GenericTypeInfo,
+	)]
+	#[serde(bound(serialize = "", deserialize = ""))]
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
+	#[expect(
+		clippy::large_enum_variant,
+		reason = "Swaps are the common case; keep their data inline to avoid an allocation per witness."
+	)]
+	pub enum VaultDepositWitness<T: Config<I>, I: 'static> {
+		Swap {
+			deposit: VaultDepositFacts<T, I>,
+			swap: VaultSwapData<T, I>,
+		},
+		Failed {
+			deposit: VaultDepositFacts<T, I>,
+			#[skip_name_expansion]
+			broker_id: Option<T::AccountId>,
+		},
+	}
+
 	impl<T: Config<I>, I: 'static> VaultDepositWitness<T, I> {
-		pub fn unrefundable(
-			channel_id: Option<ChannelId>,
-			deposit_address: Option<TargetChainAccount<T, I>>,
-			input_asset: TargetChainAsset<T, I>,
-			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
-			tx_id: TransactionInIdFor<T, I>,
-			deposit_details: <T::TargetChain as Chain>::DepositDetails,
-		) -> Self {
-			Self {
-				input_asset,
-				output_asset: input_asset.into(),
-				deposit_amount,
-				destination_address: EncodedAddress::Eth([0; 20]),
-				tx_id,
-				deposit_details,
-				deposit_metadata: None,
-				broker_fee: None,
-				affiliate_fees: vec![].try_into().expect("Empty affiliates is always valid"),
-				refund_params: ChannelRefundParametersForChain::<T::TargetChain> {
-					// We use the burn address for the refund address,
-					// This will cause the deposit to be ingressed but without any action
-					// dispatched.
-					refund_address: <T::TargetChain as Chain>::BURN_ADDRESS,
-					retry_duration: Default::default(),
-					min_price: Default::default(),
-					refund_ccm_metadata: Default::default(),
-					max_oracle_price_slippage: Default::default(),
-				},
-				dca_params: None,
-				// We never boost wrongly encoded vault swaps
-				boost_fee: 0,
-				channel_id,
-				deposit_address,
+		pub fn deposit(&self) -> &VaultDepositFacts<T, I> {
+			match self {
+				Self::Swap { deposit, .. } | Self::Failed { deposit, .. } => deposit,
 			}
+		}
+		pub fn deposit_mut(&mut self) -> &mut VaultDepositFacts<T, I> {
+			match self {
+				Self::Swap { deposit, .. } | Self::Failed { deposit, .. } => deposit,
+			}
+		}
+		pub fn swap(&self) -> Option<&VaultSwapData<T, I>> {
+			match self {
+				Self::Swap { swap, .. } => Some(swap),
+				Self::Failed { .. } => None,
+			}
+		}
+		pub fn swap_mut(&mut self) -> Option<&mut VaultSwapData<T, I>> {
+			match self {
+				Self::Swap { swap, .. } => Some(swap),
+				Self::Failed { .. } => None,
+			}
+		}
+		pub fn broker_id(&self) -> Option<&T::AccountId> {
+			match self {
+				Self::Swap { swap, .. } => swap.broker_fee.as_ref().map(|fee| &fee.account),
+				Self::Failed { broker_id, .. } => broker_id.as_ref(),
+			}
+		}
+		pub fn boost_fee(&self) -> BasisPoints {
+			self.swap().map_or(0, |swap| swap.boost_fee)
 		}
 	}
 
@@ -2923,17 +2966,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_height: TargetChainBlockNumber<T, I>,
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) {
-		let VaultDepositWitness {
-			input_asset: asset,
-			deposit_address,
-			channel_id,
-			deposit_amount: amount,
-			deposit_details,
-			tx_id,
-			broker_fee,
-			boost_fee,
-			..
-		} = vault_deposit_witness.clone();
+		let VaultDepositWitness::Swap {
+			deposit:
+				VaultDepositFacts {
+					input_asset: asset,
+					deposit_address,
+					channel_id,
+					deposit_amount: amount,
+					deposit_details,
+					tx_id,
+					..
+				},
+			swap: VaultSwapData { broker_fee, boost_fee, .. },
+		} = vault_deposit_witness.clone()
+		else {
+			return
+		};
 
 		let origin = DepositOrigin::vault(
 			tx_id.clone(),
@@ -3224,18 +3272,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn derive_channel_action_from_vault_deposit_witness(
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) -> ChannelActionForDeposit<T::AccountId, TargetChainAccount<T, I>> {
-		let VaultDepositWitness {
-			input_asset: source_asset,
-			deposit_address,
-			output_asset: destination_asset,
-			destination_address,
-			deposit_metadata,
-			broker_fee,
-			affiliate_fees,
-			refund_params,
-			dca_params,
-			..
-		} = vault_deposit_witness.clone();
+		let VaultDepositWitness::Swap {
+			deposit: VaultDepositFacts { input_asset: source_asset, deposit_address, .. },
+			swap:
+				VaultSwapData {
+					output_asset: destination_asset,
+					destination_address,
+					deposit_metadata,
+					broker_fee,
+					affiliate_fees,
+					refund_params,
+					dca_params,
+					..
+				},
+		} = vault_deposit_witness
+		else {
+			return ChannelAction::Unrefundable
+		};
 
 		// ------ refund parameters -----
 
@@ -3346,17 +3399,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_height: TargetChainBlockNumber<T, I>,
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) {
-		let VaultDepositWitness {
+		let VaultDepositFacts {
 			input_asset: source_asset,
 			deposit_address,
 			channel_id,
 			deposit_amount,
 			deposit_details,
 			tx_id,
-			broker_fee,
-			boost_fee,
 			..
-		} = vault_deposit_witness.clone();
+		} = vault_deposit_witness.deposit().clone();
+		let broker_id = vault_deposit_witness.broker_id().cloned();
+		let boost_fee = vault_deposit_witness.boost_fee();
 
 		let action =
 			Self::derive_channel_action_from_vault_deposit_witness(vault_deposit_witness.clone());
@@ -3371,10 +3424,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			channel_id,
 			action,
 			block_height,
-			DepositOrigin::vault(
-				tx_id.clone(),
-				broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
-			),
+			DepositOrigin::vault(tx_id.clone(), broker_id),
 		) {
 			Ok(outcome) =>
 				if matches!(outcome, FullWitnessDepositOutcome::BoostConsumed) {
@@ -4015,5 +4065,13 @@ impl<T: Config<I>, I: 'static> cf_traits::BroadcastOutcomeHandler<T::TargetChain
 			);
 			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
 		}
+	}
+}
+
+impl<T: Config<I, TargetChain = cf_chains::Solana>, I: 'static> cf_chains::sol::FromSolOrNot
+	for VaultDepositWitness<T, I>
+{
+	fn sol_or_not(s: &Self) -> bool {
+		s.deposit().input_asset == cf_chains::assets::sol::Asset::Sol
 	}
 }

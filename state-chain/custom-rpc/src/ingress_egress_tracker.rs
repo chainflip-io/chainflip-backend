@@ -127,7 +127,7 @@ pub(crate) fn convert_vault_deposit_witness<T, I>(
 	witness: &VaultDepositWitness<T, I>,
 	height: u64,
 	network: NetworkEnvironment,
-) -> RpcVaultDepositWitnessInfo
+) -> Option<RpcVaultDepositWitnessInfo>
 where
 	T: pallet_cf_ingress_egress::Config<I, AccountId = state_chain_runtime::AccountId>,
 	I: 'static,
@@ -136,43 +136,37 @@ where
 	<<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId:
 		IntoTransactionInIdForAnyChain<<T::TargetChain as Chain>::ChainCrypto>,
 {
-	let tx_id = <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId::into_transaction_in_id_for_any_chain(witness.tx_id.clone())
-		.to_string();
-
-	let mut affiliate_fees = Vec::with_capacity(witness.affiliate_fees.len());
-	for affiliate in &witness.affiliate_fees {
-		let broker_id = witness.broker_fee.as_ref().map(|b| &b.account);
-		if let Some(account) = resolve_affiliate_to_account(broker_id, affiliate.account) {
-			affiliate_fees.push(cf_primitives::Beneficiary { account, bps: affiliate.bps });
-		}
-	}
-
-	let refund_params = Some(witness.refund_params.clone().map_address(|address| {
+	let deposit = witness.deposit();
+	let swap = witness.swap()?;
+	let tx_id = deposit.tx_id.clone().into_transaction_in_id_for_any_chain().to_string();
+	let affiliate_fees = swap
+		.affiliate_fees
+		.iter()
+		.filter_map(|fee| {
+			resolve_affiliate_to_account(witness.broker_id(), fee.account)
+				.map(|account| cf_primitives::Beneficiary { account, bps: fee.bps })
+		})
+		.collect();
+	let refund_params = Some(swap.refund_params.clone().map_address(|address| {
 		AddressString::from_encoded_address(EncodedAddress::from_chain_account::<T::TargetChain>(
 			address, network,
 		))
 	}));
-
-	RpcVaultDepositWitnessInfo {
+	Some(RpcVaultDepositWitnessInfo {
 		tx_id,
 		deposit_chain_block_height: height,
-		input_asset: witness.input_asset.into(),
-		output_asset: witness.output_asset,
-		amount: <<T::TargetChain as Chain>::ChainAmount as Into<u128>>::into(
-			witness.deposit_amount,
-		)
-		.into(),
-		destination_address: AddressString::from_encoded_address(
-			witness.destination_address.clone(),
-		),
-		ccm_deposit_metadata: witness.deposit_metadata.clone(),
-		deposit_details: witness.deposit_details.clone().into_rpc_deposit_details(),
-		broker_fee: witness.broker_fee.clone(),
+		input_asset: deposit.input_asset.into(),
+		output_asset: swap.output_asset,
+		amount: Into::<u128>::into(deposit.deposit_amount).into(),
+		destination_address: AddressString::from_encoded_address(swap.destination_address.clone()),
+		ccm_deposit_metadata: swap.deposit_metadata.clone(),
+		deposit_details: deposit.deposit_details.clone().into_rpc_deposit_details(),
+		broker_fee: swap.broker_fee.clone(),
 		affiliate_fees,
 		refund_params,
-		dca_params: witness.dca_params.clone(),
-		max_boost_fee: witness.boost_fee,
-	}
+		dca_params: swap.dca_params.clone(),
+		max_boost_fee: swap.boost_fee,
+	})
 }
 
 fn resolve_affiliate_to_account(
@@ -310,7 +304,9 @@ pub(crate) fn convert_raw_witnessed_events(
 
 			let converted_vault_deposits = vault_deposits
 				.into_iter()
-				.map(|(height, witness)| convert_vault_deposit_witness(&witness, height, network))
+				.filter_map(|(height, witness)| {
+					convert_vault_deposit_witness(&witness, height, network)
+				})
 				.collect();
 
 			let broadcasts_vec = broadcasts
@@ -339,8 +335,9 @@ pub(crate) fn convert_raw_witnessed_events(
 			let converted_vault_deposits = vault_deposits
 				.into_iter()
 				.filter_map(|(height, event)| {
-					extract_vault_deposit_from_event(&event)
-						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+					extract_vault_deposit_from_event(&event).and_then(|witness| {
+						convert_vault_deposit_witness(&witness, height, network)
+					})
 				})
 				.collect();
 
@@ -370,8 +367,9 @@ pub(crate) fn convert_raw_witnessed_events(
 			let converted_vault_deposits = vault_deposits
 				.into_iter()
 				.filter_map(|(height, event)| {
-					extract_vault_deposit_from_event(&event)
-						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+					extract_vault_deposit_from_event(&event).and_then(|witness| {
+						convert_vault_deposit_witness(&witness, height, network)
+					})
 				})
 				.collect();
 
@@ -399,8 +397,9 @@ pub(crate) fn convert_raw_witnessed_events(
 			let converted_vault_deposits = vault_deposits
 				.into_iter()
 				.filter_map(|(height, event)| {
-					extract_vault_deposit_from_event(&event)
-						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+					extract_vault_deposit_from_event(&event).and_then(|witness| {
+						convert_vault_deposit_witness(&witness, height, network)
+					})
 				})
 				.collect();
 
@@ -430,8 +429,9 @@ pub(crate) fn convert_raw_witnessed_events(
 			let converted_vault_deposits = vault_deposits
 				.into_iter()
 				.filter_map(|(height, event)| {
-					extract_vault_deposit_from_event(&event)
-						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+					extract_vault_deposit_from_event(&event).and_then(|witness| {
+						convert_vault_deposit_witness(&witness, height, network)
+					})
 				})
 				.collect();
 

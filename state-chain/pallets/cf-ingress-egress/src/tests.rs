@@ -2729,21 +2729,25 @@ fn submit_vault_swap_request(
 	EthereumIngressEgress::vault_swap_request(
 		RuntimeOrigin::root(),
 		0,
-		Box::new(VaultDepositWitness {
-			input_asset: input_asset.try_into().unwrap(),
-			deposit_address: Some(deposit_address),
-			channel_id: Some(0),
-			deposit_amount,
-			deposit_details,
-			output_asset,
-			destination_address,
-			deposit_metadata,
-			tx_id,
-			broker_fee: Some(broker_fee),
-			affiliate_fees,
-			refund_params,
-			dca_params,
-			boost_fee,
+		Box::new(VaultDepositWitness::Swap {
+			deposit: crate::VaultDepositFacts {
+				input_asset: input_asset.try_into().unwrap(),
+				deposit_address: Some(deposit_address),
+				channel_id: Some(0),
+				deposit_amount,
+				deposit_details,
+				tx_id,
+			},
+			swap: crate::VaultSwapData {
+				output_asset,
+				destination_address,
+				deposit_metadata,
+				broker_fee: Some(broker_fee),
+				affiliate_fees,
+				refund_params,
+				dca_params,
+				boost_fee,
+			},
 		}),
 	)
 }
@@ -4504,27 +4508,93 @@ fn test_various_refund_reasons() {
 
 	// Test case 1: Invalid broker fees
 	test_vault_swap_refund(
-		VaultDepositWitness { broker_fee: None, ..eth_vault_deposit_witness() },
+		VaultDepositWitness::Swap {
+			deposit: crate::VaultDepositFacts {
+				input_asset: Asset::Eth.try_into().unwrap(),
+				deposit_address: Default::default(),
+				channel_id: Some(0),
+				deposit_amount: 100,
+				deposit_details: Default::default(),
+				tx_id: EvmHash::default(),
+			},
+			swap: crate::VaultSwapData {
+				output_asset: Asset::Eth,
+				destination_address: EncodedAddress::Eth(Default::default()),
+				deposit_metadata: Default::default(),
+				broker_fee: None,
+				affiliate_fees: Default::default(),
+				refund_params: ChannelRefundParametersForChain::<Ethereum> {
+					retry_duration: 0,
+					min_price: Default::default(),
+					refund_address: H160([1; 20]),
+					refund_ccm_metadata: None,
+					max_oracle_price_slippage: None,
+				},
+				dca_params: None,
+				boost_fee: 0,
+			},
+		},
 		RefundReason::InvalidBrokerFees,
 	);
 
 	// Test case 2: Invalid refund parameters - retry duration too high
 	test_vault_swap_refund(
-		VaultDepositWitness {
-			refund_params: ChannelRefundParametersForChain::<Ethereum> {
-				retry_duration: 700,
-				..eth_vault_deposit_witness().refund_params
+		VaultDepositWitness::Swap {
+			deposit: crate::VaultDepositFacts {
+				input_asset: Asset::Eth.try_into().unwrap(),
+				deposit_address: Default::default(),
+				channel_id: Some(0),
+				deposit_amount: 100,
+				deposit_details: Default::default(),
+				tx_id: EvmHash::default(),
 			},
-			..eth_vault_deposit_witness()
+			swap: crate::VaultSwapData {
+				output_asset: Asset::Eth,
+				destination_address: EncodedAddress::Eth(Default::default()),
+				deposit_metadata: Default::default(),
+				broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+				affiliate_fees: Default::default(),
+				refund_params: ChannelRefundParametersForChain::<Ethereum> {
+					retry_duration: 700,
+					min_price: Default::default(),
+					refund_address: H160([1; 20]),
+					refund_ccm_metadata: None,
+					max_oracle_price_slippage: None,
+				},
+				dca_params: None,
+				boost_fee: 0,
+			},
 		},
 		RefundReason::InvalidRefundParameters,
 	);
 
 	// Test case 3: Invalid DCA parameters - number of chunks is 0
 	test_vault_swap_refund(
-		VaultDepositWitness {
-			dca_params: Some(DcaParameters { number_of_chunks: 0, chunk_interval: 100 }),
-			..eth_vault_deposit_witness()
+		VaultDepositWitness::Swap {
+			deposit: crate::VaultDepositFacts {
+				input_asset: Asset::Eth.try_into().unwrap(),
+				deposit_address: Default::default(),
+				channel_id: Some(0),
+				deposit_amount: 100,
+				deposit_details: Default::default(),
+				tx_id: EvmHash::default(),
+			},
+			swap: crate::VaultSwapData {
+				output_asset: Asset::Eth,
+				destination_address: EncodedAddress::Eth(Default::default()),
+				deposit_metadata: Default::default(),
+				broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+				affiliate_fees: Default::default(),
+				refund_params: ChannelRefundParametersForChain::<Ethereum> {
+					retry_duration: 0,
+					min_price: Default::default(),
+					refund_address: H160([1; 20]),
+					refund_ccm_metadata: None,
+					max_oracle_price_slippage: None,
+				},
+				dca_params: Some(DcaParameters { number_of_chunks: 0, chunk_interval: 100 }),
+				boost_fee: 0,
+			},
 		},
 		RefundReason::InvalidDcaParameters,
 	);
@@ -4612,21 +4682,23 @@ fn rollback_storage_if_transactional_call_fails() {
 }
 
 #[test]
-fn vault_swap_with_burn_refund_address_is_ingressed_but_no_action_dispatched() {
+fn failed_vault_swap_is_ingressed_but_no_action_dispatched() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(EthereumIngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			0,
-			Box::new(VaultDepositWitness::unrefundable(
-				Default::default(),
-				Default::default(),
-				EthAsset::Eth,
-				10_000,
-				Default::default(),
-				DepositDetails { tx_hashes: None }
-			))
+			Box::new(VaultDepositWitness::Failed {
+				deposit: crate::VaultDepositFacts {
+					channel_id: None,
+					deposit_address: None,
+					input_asset: EthAsset::Eth,
+					deposit_amount: 10_000,
+					tx_id: Default::default(),
+					deposit_details: DepositDetails { tx_hashes: None },
+				},
+				broker_id: None,
+			})
 		));
-
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {

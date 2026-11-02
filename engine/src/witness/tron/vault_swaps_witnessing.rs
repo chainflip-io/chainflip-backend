@@ -567,24 +567,24 @@ mod tests {
 				// Validate returned vault witness fields we can deterministically assert
 				assert_eq!(vault_swaps.len(), 1);
 				let returned = &vault_swaps[0];
-				assert_eq!(returned.deposit_amount, 1000000u128);
-				assert_eq!(returned.tx_id, expected_tx_id);
+				assert_eq!(returned.deposit().deposit_amount, 1000000u128);
+				assert_eq!(returned.deposit().tx_id, expected_tx_id);
 				// Refund params
 				assert_eq!(
-					returned.refund_params.retry_duration,
+					returned.swap().unwrap().refund_params.retry_duration,
 					expected_vault_swap_params.refund_params.retry_duration
 				);
 				assert_eq!(
-					returned.refund_params.max_oracle_price_slippage,
+					returned.swap().unwrap().refund_params.max_oracle_price_slippage,
 					expected_vault_swap_params.refund_params.max_oracle_price_slippage
 				);
 				// Broker fee bps and account
 				assert_eq!(
-					returned.broker_fee.as_ref().unwrap().bps,
+					returned.swap().unwrap().broker_fee.as_ref().unwrap().bps,
 					expected_vault_swap_params.broker_fee.bps
 				);
 				assert_eq!(
-					returned.broker_fee.as_ref().unwrap().account,
+					returned.swap().unwrap().broker_fee.as_ref().unwrap().account,
 					expected_vault_swap_params.broker_fee.account
 				);
 

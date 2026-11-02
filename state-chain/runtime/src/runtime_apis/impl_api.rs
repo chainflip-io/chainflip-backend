@@ -40,7 +40,7 @@ use cf_chains::{
 	btc::{api::BitcoinApi, ScriptPubkey},
 	cf_parameters::build_and_encode_cf_parameters,
 	evm::{api::EvmCall, Address as EvmAddress, U256},
-	CcmChannelMetadataUnchecked, Chain, ChainCrypto, ChannelRefundParametersUncheckedEncoded,
+	CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersUncheckedEncoded,
 	EvmVaultSwapExtraParameters, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
@@ -2521,9 +2521,7 @@ mod witnessed_events {
 
 	fn convert_vault_deposit_witness<T, I>(
 		items: Vec<(u64, VaultDepositWitness<T, I>)>,
-		to_tx_id: impl Fn(
-			<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
-		) -> TransactionInId,
+		to_tx_id: impl Fn(pallet_cf_ingress_egress::TransactionInIdFor<T, I>) -> TransactionInId,
 		to_deposit_details: impl Fn(<T::TargetChain as Chain>::DepositDetails) -> DepositDetails,
 	) -> Vec<VaultDepositWitnessInfo>
 	where
@@ -2532,14 +2530,18 @@ mod witnessed_events {
 	{
 		items
 			.into_iter()
-			.map(|(height, witness)| VaultDepositWitnessInfo {
-				tx_id: to_tx_id(witness.tx_id),
-				deposit_chain_block_height: height,
-				input_asset: witness.input_asset.into(),
-				output_asset: witness.output_asset,
-				amount: witness.deposit_amount.into(),
-				deposit_details: to_deposit_details(witness.deposit_details),
-				destination_address: witness.destination_address,
+			.filter_map(|(height, witness)| {
+				let deposit = witness.deposit();
+				let swap = witness.swap()?;
+				Some(VaultDepositWitnessInfo {
+					tx_id: to_tx_id(deposit.tx_id.clone()),
+					deposit_chain_block_height: height,
+					input_asset: deposit.input_asset.into(),
+					output_asset: swap.output_asset,
+					amount: deposit.deposit_amount.into(),
+					deposit_details: to_deposit_details(deposit.deposit_details.clone()),
+					destination_address: swap.destination_address.clone(),
+				})
 			})
 			.collect()
 	}

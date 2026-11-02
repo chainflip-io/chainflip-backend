@@ -30,7 +30,7 @@ use std::{
 pub struct Event<EventParameters: Debug> {
 	/// The transaction hash of the transaction that emitted this event
 	pub tx_hash: H256,
-	/// The index number of this particular log, in the list of logs emitted by the tx_hash
+	/// The index of this log among all logs in the block.
 	pub log_index: U256,
 	/// The event specific parameters
 	pub event_parameters: EventParameters,

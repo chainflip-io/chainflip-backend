@@ -1029,56 +1029,67 @@ fn witnessed_events_serialization() {
 
 	// Create the raw VaultDepositWitness and convert it to test the serialization
 	let vault_deposit_witness: VaultDepositWitness<Runtime, EthereumInstance> =
-		VaultDepositWitness {
-			input_asset: cf_chains::assets::eth::Asset::Eth,
-			deposit_address: None,
-			channel_id: None,
-			deposit_amount: 500u128,
-			deposit_details: cf_chains::evm::DepositDetails {
-				tx_hashes: Some(vec![H256([0x22; 32])]),
+		VaultDepositWitness::Swap {
+			deposit: pallet_cf_ingress_egress::VaultDepositFacts {
+				input_asset: cf_chains::assets::eth::Asset::Eth,
+				deposit_address: None,
+				channel_id: None,
+				deposit_amount: 500u128,
+				deposit_details: cf_chains::evm::DepositDetails {
+					tx_hashes: Some(vec![H256([0x22; 32])]),
+				},
+				tx_id: H256([0x10; 32]),
 			},
-			output_asset: any::Asset::Flip,
-			destination_address: EncodedAddress::Eth([0x44; 20]),
-			deposit_metadata: None,
-			tx_id: H256([0x10; 32]),
-			broker_fee: Some(Beneficiary { account: AccountId32::new([0x11; 32]), bps: 2 }),
-			affiliate_fees: vec![].try_into().unwrap(),
-			refund_params: ChannelRefundParametersUnchecked {
-				retry_duration: 0,
-				refund_address: H160::from_slice(
-					&hex::decode("541f563237a309b3a61e33bdf07a8930bdba8d99")
-						.expect("valid hex refund address"),
-				),
-				min_price: Price::from_raw(0u128.into()),
-				refund_ccm_metadata: None,
-				max_oracle_price_slippage: None,
+			swap: pallet_cf_ingress_egress::VaultSwapData {
+				output_asset: any::Asset::Flip,
+				destination_address: EncodedAddress::Eth([0x44; 20]),
+				deposit_metadata: None,
+				broker_fee: Some(Beneficiary { account: AccountId32::new([0x11; 32]), bps: 2 }),
+				affiliate_fees: vec![].try_into().unwrap(),
+				refund_params: ChannelRefundParametersUnchecked {
+					retry_duration: 0,
+					refund_address: H160::from_slice(
+						&hex::decode("541f563237a309b3a61e33bdf07a8930bdba8d99")
+							.expect("valid hex refund address"),
+					),
+					min_price: Price::from_raw(0u128.into()),
+					refund_ccm_metadata: None,
+					max_oracle_price_slippage: None,
+				},
+				dca_params: Some(DcaParameters { number_of_chunks: 10, chunk_interval: 2 }),
+				boost_fee: 5,
 			},
-			dca_params: Some(DcaParameters { number_of_chunks: 10, chunk_interval: 2 }),
-			boost_fee: 5,
 		};
 
-	let refund_params = Some(vault_deposit_witness.refund_params.clone().map_address(|address| {
-		AddressString::from_encoded_address(EncodedAddress::from_chain_account::<Ethereum>(
-			address,
-			NetworkEnvironment::Mainnet,
-		))
-	}));
+	let refund_params = Some(
+		vault_deposit_witness
+			.swap()
+			.unwrap()
+			.refund_params
+			.clone()
+			.map_address(|address| {
+				AddressString::from_encoded_address(EncodedAddress::from_chain_account::<Ethereum>(
+					address,
+					NetworkEnvironment::Mainnet,
+				))
+			}),
+	);
 	let converted_vault_deposit = RpcVaultDepositWitnessInfo {
 		tx_id: <sp_core::H256 as cf_chains::IntoTransactionInIdForAnyChain<EvmCrypto>>::into_transaction_in_id_for_any_chain(H256([0x10; 32])).to_string(),
 		deposit_chain_block_height: 3,
-		input_asset: vault_deposit_witness.input_asset.into(),
-		output_asset: vault_deposit_witness.output_asset,
-		amount: <<Ethereum as Chain>::ChainAmount as Into<u128>>::into(vault_deposit_witness.deposit_amount).into(),
+		input_asset: vault_deposit_witness.deposit().input_asset.into(),
+		output_asset: vault_deposit_witness.swap().unwrap().output_asset,
+		amount: <<Ethereum as Chain>::ChainAmount as Into<u128>>::into(vault_deposit_witness.deposit().deposit_amount).into(),
 		destination_address: AddressString::from_encoded_address(
-			vault_deposit_witness.destination_address.clone(),
+			vault_deposit_witness.swap().unwrap().destination_address.clone(),
 		),
-		ccm_deposit_metadata: vault_deposit_witness.deposit_metadata.clone(),
-		deposit_details: vault_deposit_witness.deposit_details.clone().into_rpc_deposit_details(),
-		broker_fee: vault_deposit_witness.broker_fee.clone(),
+		ccm_deposit_metadata: vault_deposit_witness.swap().unwrap().deposit_metadata.clone(),
+		deposit_details: vault_deposit_witness.deposit().deposit_details.clone().into_rpc_deposit_details(),
+		broker_fee: vault_deposit_witness.swap().unwrap().broker_fee.clone(),
 		affiliate_fees: vec![],
 		refund_params,
-		dca_params: vault_deposit_witness.dca_params.clone(),
-		max_boost_fee: vault_deposit_witness.boost_fee,
+		dca_params: vault_deposit_witness.swap().unwrap().dca_params.clone(),
+		max_boost_fee: vault_deposit_witness.swap().unwrap().boost_fee,
 	};
 
 	// Note: BroadcastWitnessInfo is constructed directly because the conversion functions

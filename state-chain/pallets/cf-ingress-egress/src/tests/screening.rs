@@ -633,27 +633,31 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 		let tx_id = Hash::random();
 		let deposit_details = helpers::generate_btc_deposit(tx_id);
 
-		let vault_swap = VaultDepositWitness::<Test, Instance2> {
-			input_asset: Asset::Btc.try_into().unwrap(),
-			deposit_address: Default::default(),
-			channel_id: Some(0),
-			deposit_amount: 100,
-			deposit_details,
-			output_asset: Asset::Eth,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: Default::default(),
-			tx_id,
-			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
-			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersForChain::<Bitcoin> {
-				retry_duration: 0,
-				min_price: Default::default(),
-				refund_address: ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS),
-				refund_ccm_metadata: None,
-				max_oracle_price_slippage: None,
+		let vault_swap = VaultDepositWitness::<Test, Instance2>::Swap {
+			deposit: crate::VaultDepositFacts {
+				input_asset: Asset::Btc.try_into().unwrap(),
+				deposit_address: Default::default(),
+				channel_id: Some(0),
+				deposit_amount: 100,
+				deposit_details,
+				tx_id,
 			},
-			dca_params: None,
-			boost_fee: 0,
+			swap: crate::VaultSwapData {
+				output_asset: Asset::Eth,
+				destination_address: EncodedAddress::Eth(Default::default()),
+				deposit_metadata: Default::default(),
+				broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+				affiliate_fees: Default::default(),
+				refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+					retry_duration: 0,
+					min_price: Default::default(),
+					refund_address: ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS),
+					refund_ccm_metadata: None,
+					max_oracle_price_slippage: None,
+				},
+				dca_params: None,
+				boost_fee: 0,
+			},
 		};
 
 		assert_ok!(BitcoinIngressEgress::mark_transaction_for_rejection(

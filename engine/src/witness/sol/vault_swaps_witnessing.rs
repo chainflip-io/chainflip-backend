@@ -33,6 +33,7 @@ use cf_chains::{
 };
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
+use pallet_cf_ingress_egress::{VaultDepositFacts, VaultSwapData};
 use sol_prim::program_instructions::{
 	swap_endpoints::types::{SwapEndpointDataAccount, SwapEvent},
 	ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
@@ -171,36 +172,44 @@ pub async fn get_vault_swaps(
 								)
 							},
 						};
-						Ok(SolanaVaultSwapDetails {
-							from: from_asset,
-							deposit_amount: amount,
-							destination_address: EncodedAddress::from_chain_bytes(
-								dst_chain.try_into().map_err(|e| {
-									anyhow!("Error while parsing destination chain for solana vault swap:{}.", e)
+						Ok(SolanaVaultSwapDetails::Swap {
+							deposit: VaultDepositFacts {
+								input_asset: from_asset,
+								deposit_amount: amount,
+								deposit_address: None,
+								channel_id: None,
+								tx_id: (vault_swap_account, creation_slot),
+								deposit_details: cf_chains::sol::VaultSwapOrDepositChannelId::VaultSwapAccount(
+									(vault_swap_account, creation_slot),
+								),
+							},
+							swap: VaultSwapData {
+								destination_address: EncodedAddress::from_chain_bytes(
+									dst_chain.try_into().map_err(|e| {
+										anyhow!("Error while parsing destination chain for solana vault swap:{}.", e)
+									})?,
+									dst_address.to_vec(),
+								)
+								.map_err(|e| {
+									anyhow!("Failed to decode the destination address for solana vault swap:{}.", e)
 								})?,
-								dst_address.to_vec(),
-							)
-							.map_err(|e| {
-								anyhow!("Failed to decode the destination address for solana vault swap:{}.", e)
-							})?,
-							to: dst_token.try_into().map_err(|e| {
-								anyhow!("Error while decoding destination token for solana vault swap: {}.", e)
-							})?,
-							deposit_metadata,
-							swap_account: vault_swap_account,
-							creation_slot,
-							broker_fee,
-							affiliate_fees: affiliate_fees
-								.into_iter()
-								.map(|entry| cf_primitives::Beneficiary { account: entry.affiliate, bps: entry.fee.into() })
-								.collect_vec()
-								.try_into()
-								.map_err(|_| {
-									anyhow!("runtime supports at least as many affiliates as we allow in cf_parameters encoding")
+								output_asset: dst_token.try_into().map_err(|e| {
+									anyhow!("Error while decoding destination token for solana vault swap: {}.", e)
 								})?,
-							refund_params,
-							dca_params,
-							boost_fee,
+								deposit_metadata,
+								broker_fee: Some(broker_fee),
+								affiliate_fees: affiliate_fees
+									.into_iter()
+									.map(|entry| cf_primitives::Beneficiary { account: entry.affiliate, bps: entry.fee.into() })
+									.collect_vec()
+									.try_into()
+									.map_err(|_| {
+										anyhow!("runtime supports at least as many affiliates as we allow in cf_parameters encoding")
+									})?,
+								refund_params,
+								dca_params,
+								boost_fee: boost_fee.into(),
+							},
 						})
 					};
 					(

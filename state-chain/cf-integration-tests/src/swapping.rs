@@ -571,21 +571,25 @@ fn vault_swap_deposit_witness(
 	deposit_amount: u128,
 	output_asset: Asset,
 ) -> VaultDepositWitness<Runtime, EthereumInstance> {
-	VaultDepositWitness {
-		input_asset: EthAsset::Eth,
-		output_asset,
-		deposit_amount,
-		destination_address: EncodedAddress::Eth([0x02; 20]),
-		deposit_metadata: Some(ccm_deposit_metadata_mock()),
-		tx_id: Default::default(),
-		deposit_details: DepositDetails { tx_hashes: None },
-		broker_fee: Some(Beneficiary { account: BROKER.into(), bps: 0 }),
-		affiliate_fees: Default::default(),
-		refund_params: ETH_REFUND_PARAMS,
-		dca_params: None,
-		boost_fee: 0,
-		deposit_address: Some(H160::from([0x03; 20])),
-		channel_id: Some(0),
+	VaultDepositWitness::Swap {
+		deposit: pallet_cf_ingress_egress::VaultDepositFacts {
+			input_asset: EthAsset::Eth,
+			deposit_amount,
+			tx_id: Default::default(),
+			deposit_details: DepositDetails { tx_hashes: None },
+			deposit_address: Some(H160::from([0x03; 20])),
+			channel_id: Some(0),
+		},
+		swap: pallet_cf_ingress_egress::VaultSwapData {
+			output_asset,
+			destination_address: EncodedAddress::Eth([0x02; 20]),
+			deposit_metadata: Some(ccm_deposit_metadata_mock()),
+			broker_fee: Some(Beneficiary { account: BROKER.into(), bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ETH_REFUND_PARAMS,
+			dca_params: None,
+			boost_fee: 0,
+		},
 	}
 }
 

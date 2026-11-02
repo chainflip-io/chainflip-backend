@@ -15,14 +15,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	chainflip::ReportFailedLivenessCheck, constants::common::LIVENESS_CHECK_DURATION, AccountId,
-	Environment, Runtime, SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress,
-	SolanaThresholdSigner,
+	chainflip::ReportFailedLivenessCheck, constants::common::LIVENESS_CHECK_DURATION, Environment,
+	Runtime, SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner,
 };
 
 use cf_chains::{
-	address::EncodedAddress,
-	assets::{any::Asset, sol::Asset as SolAsset},
 	instances::SolanaInstance,
 	sol::{
 		api::{
@@ -31,13 +28,12 @@ use cf_chains::{
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
 		sol_tx_core::SlotNumber,
-		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
+		SolAddress, SolAddressLookupTableAccount, SolHash, SolSignature, SolTrackedData,
 		SolanaCrypto, VaultSwapOrDepositChannelId,
 	},
-	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain, FeeEstimationApi,
-	FetchAndCloseSolanaVaultSwapAccounts, ForeignChainAddress, Solana,
+	Chain, FeeEstimationApi, FetchAndCloseSolanaVaultSwapAccounts, Solana,
 };
-use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, IngressOrEgress};
+use cf_primitives::IngressOrEgress;
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	AdjustedFeeEstimationApi, Broadcaster, Chainflip, DerivedIngressSink, ElectionEgressWitnesser,
@@ -55,7 +51,7 @@ use pallet_cf_elections::{
 		exact_value::ExactValueHook,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
-		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
+		solana_vault_swap_accounts::SolanaVaultSwapAccountsHook,
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
@@ -619,54 +615,7 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 	}
 }
 
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	Debug,
-	Serialize,
-	Deserialize,
-	TypeInfo,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	PartialOrd,
-	Ord,
-)]
-pub struct SolanaVaultSwapDetails {
-	pub from: SolAsset,
-	pub to: Asset,
-	pub deposit_amount: SolAmount,
-	pub destination_address: EncodedAddress,
-	pub deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
-	pub swap_account: SolAddress,
-	pub creation_slot: u64,
-	pub broker_fee: Beneficiary<AccountId>,
-	pub refund_params: ChannelRefundParametersForChain<Solana>,
-	pub dca_params: Option<DcaParameters>,
-	pub boost_fee: u8,
-	pub affiliate_fees: Affiliates<AffiliateShortId>,
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for SolanaVaultSwapDetails {
-	fn benchmark_value() -> Self {
-		Self {
-			from: BenchmarkValue::benchmark_value(),
-			to: BenchmarkValue::benchmark_value(),
-			deposit_amount: BenchmarkValue::benchmark_value(),
-			destination_address: BenchmarkValue::benchmark_value(),
-			deposit_metadata: Some(BenchmarkValue::benchmark_value()),
-			swap_account: BenchmarkValue::benchmark_value(),
-			creation_slot: BenchmarkValue::benchmark_value(),
-			broker_fee: BenchmarkValue::benchmark_value(),
-			refund_params: BenchmarkValue::benchmark_value(),
-			dca_params: Some(BenchmarkValue::benchmark_value()),
-			boost_fee: BenchmarkValue::benchmark_value(),
-			affiliate_fees: BenchmarkValue::benchmark_value(),
-		}
-	}
-}
+pub type SolanaVaultSwapDetails = VaultDepositWitness<Runtime, SolanaInstance>;
 
 pub struct SolanaVaultSwapsHandler;
 
@@ -678,29 +627,8 @@ impl
 	> for SolanaVaultSwapsHandler
 {
 	fn initiate_vault_swap(swap_details: SolanaVaultSwapDetails) {
-		let block_height = swap_details.creation_slot;
-		SolanaIngressEgress::process_vault_swap_request_full_witness(
-			block_height,
-			VaultDepositWitness {
-				input_asset: swap_details.from,
-				deposit_address: None,
-				channel_id: None,
-				deposit_amount: swap_details.deposit_amount,
-				deposit_details: VaultSwapOrDepositChannelId::VaultSwapAccount((
-					swap_details.swap_account,
-					swap_details.creation_slot,
-				)),
-				output_asset: swap_details.to,
-				destination_address: swap_details.destination_address,
-				deposit_metadata: swap_details.deposit_metadata,
-				tx_id: (swap_details.swap_account, swap_details.creation_slot),
-				broker_fee: Some(swap_details.broker_fee),
-				affiliate_fees: swap_details.affiliate_fees,
-				dca_params: swap_details.dca_params,
-				refund_params: swap_details.refund_params,
-				boost_fee: swap_details.boost_fee.into(),
-			},
-		);
+		let block_height = swap_details.deposit().tx_id.1;
+		SolanaIngressEgress::process_vault_swap_request_full_witness(block_height, swap_details);
 	}
 
 	fn maybe_fetch_and_close_accounts(
@@ -747,12 +675,6 @@ impl BenchmarkValue for SolanaVaultSwapsSettings {
 			usdc_token_mint_pubkey: BenchmarkValue::benchmark_value(),
 			usdt_token_mint_pubkey: BenchmarkValue::benchmark_value(),
 		}
-	}
-}
-
-impl FromSolOrNot for SolanaVaultSwapDetails {
-	fn sol_or_not(s: &SolanaVaultSwapDetails) -> bool {
-		s.from == SolAsset::Sol
 	}
 }
 
