@@ -22,7 +22,7 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Features
 
-- Broker recovery accounts: a broker can link an LP account as its recovery account (`link_recovery_account`, also in the broker API and RPC). Governance can then recover failed deposits attributed to the broker with `recover_failed_deposits`. Each deposit is egressed to the LP's refund address, or credited to the LP's balance if it has none or the amount doesn't cover the egress fee.
+- Broker recovery accounts: a broker can link an LP account as its recovery account (`link_recovery_account`, also available as the `broker_link_recovery_account` node RPC). Governance can then recover failed deposits attributed to the broker with `recover_failed_deposits`. Each deposit is egressed to the LP's refund address, or credited to the LP's balance if it has none or the amount doesn't cover the egress fee.
 
 ### Fixes
 
