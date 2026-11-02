@@ -59,3 +59,66 @@ fn governance_members_pay_no_fees_for_governance_extrinsics() {
 		assert!(gov_err.is_err(), "expected an error");
 	});
 }
+
+#[test]
+// An incoming member approves their own inclusion before they are a member, so that approval
+// has to be free as well - they have no funds and no account until the proposal is submitted.
+fn incoming_governance_members_pay_no_fees_for_their_own_approval() {
+	const NEW_MEMBER: [u8; 32] = [0xfe; 32];
+	// Unfunded and not a member: the same starting position as the incoming member, so the
+	// waiver is the only difference between the two.
+	const OUTSIDER: [u8; 32] = [0xfd; 32];
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		pallet_cf_governance::Pallet::<Runtime>::propose_governance_extrinsic(
+			RuntimeOrigin::signed(ERIN.into()),
+			Box::new(
+				pallet_cf_governance::Call::set_council {
+					new_council: pallet_cf_governance::Council::simple_group(
+						2,
+						[AccountId::from(ERIN), AccountId::from(NEW_MEMBER)],
+					),
+				}
+				.into(),
+			),
+			pallet_cf_governance::ExecutionMode::Automatic,
+		)
+		.expect("the governor can propose");
+
+		assert!(
+			pallet_cf_governance::PendingMembers::<Runtime>::get(1)
+				.contains(&AccountId::from(NEW_MEMBER)),
+			"expected the incoming member to be registered as pending"
+		);
+
+		let approve: state_chain_runtime::RuntimeCall =
+			pallet_cf_governance::Call::approve { approved_id: 1 }.into();
+
+		// The incoming member is not a member yet, but their own approval is free.
+		assert!(
+			FlipTransactionPayment::<Runtime>::withdraw_fee(
+				&NEW_MEMBER.into(),
+				&approve,
+				&approve.get_dispatch_info(),
+				5000,
+				0,
+			)
+			.expect("we have a result")
+			.is_none(),
+			"expected the incoming member's approval to be free"
+		);
+
+		// Everyone else is charged for the same call, and cannot pay it.
+		assert!(
+			FlipTransactionPayment::<Runtime>::withdraw_fee(
+				&OUTSIDER.into(),
+				&approve,
+				&approve.get_dispatch_info(),
+				5000,
+				0,
+			)
+			.is_err(),
+			"expected a non-member to be charged"
+		);
+	});
+}
