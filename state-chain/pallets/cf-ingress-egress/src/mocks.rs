@@ -234,6 +234,7 @@ impl Config<Instance3> for Test {
 	type BoostApi = MockBoostApi;
 	type FundAccount = MockFundingInfo<Test>;
 	type RefundAddressRegistry = MockRefundAddressRegistry;
+	type BrokerRecoveryApi = MockBrokerRecoveryApi;
 }
 
 frame_support::construct_runtime!(
