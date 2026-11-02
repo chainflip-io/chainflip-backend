@@ -10,22 +10,35 @@ use frame_support::{
 use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
+use crate::TransactionRejectionDetails;
+#[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
 use frame_support::{ensure, pallet_prelude::DispatchError};
 #[cfg(feature = "try-runtime")]
 use frame_system::pallet_prelude::BlockNumberFor;
 #[cfg(feature = "try-runtime")]
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 mod old {
 	use crate::{Config, Pallet, TransactionRejectionDetails};
-	use frame_support::pallet_prelude::ValueQuery;
+	use frame_support::{pallet_prelude::ValueQuery, Twox64Concat};
+	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::vec::Vec;
 
 	#[frame_support::storage_alias]
 	pub(super) type ScheduledTransactionsForRejection<T: Config<I>, I: 'static> =
 		StorageValue<Pallet<T, I>, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
+
+	/// Per-block queue added alongside the legacy queue in the 2.2/2.3 cherry-pick (#7055).
+	#[frame_support::storage_alias]
+	pub(super) type ScheduledTransactionsForRejectionByBlock<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
+		Twox64Concat,
+		BlockNumberFor<T>,
+		Vec<TransactionRejectionDetails<T, I>>,
+		ValueQuery,
+	>;
 }
 
 pub struct Migration<T, I>(PhantomData<(T, I)>);
@@ -40,6 +53,14 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for Migration<T, I> {
 			ScheduledTransactionsForRejection::<T, I>::insert(process_at, pending);
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 		}
+		for (process_at, scheduled) in
+			old::ScheduledTransactionsForRejectionByBlock::<T, I>::drain()
+		{
+			ScheduledTransactionsForRejection::<T, I>::mutate(process_at, |queue| {
+				queue.extend(scheduled)
+			});
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(2, 2));
+		}
 		weight
 	}
 
@@ -49,33 +70,47 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for Migration<T, I> {
 			ScheduledTransactionsForRejection::<T, I>::iter().next().is_none(),
 			"Rejection buckets must be empty before migration"
 		);
-		Ok((
-			frame_system::Pallet::<T>::block_number().saturating_add(One::one()),
-			old::ScheduledTransactionsForRejection::<T, I>::get(),
-		)
-			.encode())
+		let mut expected: BTreeMap<BlockNumberFor<T>, Vec<TransactionRejectionDetails<T, I>>> =
+			BTreeMap::new();
+		let legacy = old::ScheduledTransactionsForRejection::<T, I>::get();
+		if !legacy.is_empty() {
+			expected.insert(
+				frame_system::Pallet::<T>::block_number().saturating_add(One::one()),
+				legacy,
+			);
+		}
+		for (process_at, scheduled) in old::ScheduledTransactionsForRejectionByBlock::<T, I>::iter()
+		{
+			expected.entry(process_at).or_default().extend(scheduled);
+		}
+		Ok(expected.into_iter().collect::<Vec<_>>().encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let (process_at, pending) = <(
-			BlockNumberFor<T>,
-			Vec<crate::TransactionRejectionDetails<T, I>>,
-		)>::decode(&mut &state[..])
+		let expected = <Vec<(BlockNumberFor<T>, Vec<TransactionRejectionDetails<T, I>>)>>::decode(
+			&mut &state[..],
+		)
 		.map_err(|_| "Failed to decode rejection migration state")?;
 		ensure!(
 			!old::ScheduledTransactionsForRejection::<T, I>::exists(),
 			"Legacy rejection queue must be removed"
 		);
 		ensure!(
-			ScheduledTransactionsForRejection::<T, I>::iter().count() ==
-				usize::from(!pending.is_empty()),
-			"Unexpected rejection bucket count"
+			old::ScheduledTransactionsForRejectionByBlock::<T, I>::iter().next().is_none(),
+			"Legacy per-block rejection queue must be drained"
 		);
 		ensure!(
-			ScheduledTransactionsForRejection::<T, I>::get(process_at).encode() == pending.encode(),
-			"Migrated refunds must match the legacy queue"
+			ScheduledTransactionsForRejection::<T, I>::iter().count() == expected.len(),
+			"Unexpected rejection bucket count"
 		);
+		for (process_at, scheduled) in expected {
+			ensure!(
+				ScheduledTransactionsForRejection::<T, I>::get(process_at).encode() ==
+					scheduled.encode(),
+				"Migrated refunds must match the legacy queues"
+			);
+		}
 		Ok(())
 	}
 }
@@ -141,6 +176,51 @@ mod tests {
 				pending.encode()
 			);
 			assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::iter().count(), 1);
+		});
+	}
+
+	#[test]
+	fn migration_drains_the_per_block_queue() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(10);
+			let details = |amount| TransactionRejectionDetails::<Test, Instance1> {
+				deposit_address: Some([1; 20].into()),
+				refund_address: ForeignChainAddress::Eth([2; 20].into()),
+				asset: Asset::Eth,
+				amount,
+				deposit_details: Default::default(),
+				refund_ccm_metadata: None,
+			};
+			old::ScheduledTransactionsForRejection::<Test, Instance1>::put(vec![details(100)]);
+			// Shares the legacy queue's target block, so the two must be merged.
+			old::ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::insert(
+				11,
+				vec![details(200)],
+			);
+			old::ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::insert(
+				50,
+				vec![details(300), details(400)],
+			);
+			StorageVersion::new(31).put::<Pallet<Test, Instance1>>();
+
+			#[cfg(feature = "try-runtime")]
+			let state = Migration::<Test, Instance1>::pre_upgrade().unwrap();
+			PalletMigration::<Test, Instance1>::on_runtime_upgrade();
+			#[cfg(feature = "try-runtime")]
+			Migration::<Test, Instance1>::post_upgrade(state).unwrap();
+
+			assert_eq!(
+				ScheduledTransactionsForRejection::<Test, Instance1>::get(11).encode(),
+				vec![details(100), details(200)].encode()
+			);
+			assert_eq!(
+				ScheduledTransactionsForRejection::<Test, Instance1>::get(50).encode(),
+				vec![details(300), details(400)].encode()
+			);
+			assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::iter().count(), 2);
+			assert!(old::ScheduledTransactionsForRejectionByBlock::<Test, Instance1>::iter()
+				.next()
+				.is_none());
 		});
 	}
 
