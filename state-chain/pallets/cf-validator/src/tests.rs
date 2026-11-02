@@ -3472,6 +3472,82 @@ mod delegation {
 	}
 
 	#[test]
+	fn blocking_delegator_drops_whole_plan_if_remainder_is_below_minimum() {
+		const OPERATOR_A: u64 = 200;
+		const OPERATOR_B: u64 = 201;
+		const DELEGATOR_BELOW: u64 = 5000;
+		const DELEGATOR_ABOVE: u64 = 5001;
+
+		let minimum = MockMinimumFundingProvider::get_min_funding_amount();
+		let bid_to_a = minimum / 2 + 10;
+		let small_bid_to_b = minimum / 2 + 10;
+		let large_bid_to_b = minimum;
+
+		new_test_ext().execute_with(|| {
+			for operator in [OPERATOR_A, OPERATOR_B] {
+				assert_ok!(ValidatorPallet::register_as_operator(
+					OriginTrait::signed(operator),
+					OPERATOR_SETTINGS,
+					vanity()
+				));
+			}
+			for (delegator, bid_to_b) in
+				[(DELEGATOR_BELOW, small_bid_to_b), (DELEGATOR_ABOVE, large_bid_to_b)]
+			{
+				// `block_delegator` requires the delegator to exist.
+				frame_system::Pallet::<Test>::inc_providers(&delegator);
+				MockFlip::credit_funds(&delegator, bid_to_a + bid_to_b);
+				assert_ok!(ValidatorPallet::delegate_multi(
+					OriginTrait::signed(delegator),
+					fixed_plan([(OPERATOR_A, bid_to_a), (OPERATOR_B, bid_to_b)])
+				));
+			}
+			System::reset_events();
+
+			// Removing A would leave a plan below the minimum, so the delegator is fully
+			// undelegated rather than left with an invalid plan.
+			assert_ok!(ValidatorPallet::block_delegator(
+				OriginTrait::signed(OPERATOR_A),
+				DELEGATOR_BELOW
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR_BELOW), None);
+			for (operator, max_bid) in [(OPERATOR_A, bid_to_a), (OPERATOR_B, small_bid_to_b)] {
+				System::assert_has_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
+					delegator: DELEGATOR_BELOW,
+					operator,
+					max_bid,
+				}));
+			}
+
+			// The remainder still meets the minimum, so only A is removed.
+			System::reset_events();
+			assert_ok!(ValidatorPallet::block_delegator(
+				OriginTrait::signed(OPERATOR_A),
+				DELEGATOR_ABOVE
+			));
+			assert_eq!(
+				DelegationChoice::<Test>::get(DELEGATOR_ABOVE),
+				Some(fixed_plan([(OPERATOR_B, large_bid_to_b)]))
+			);
+			System::assert_has_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
+				delegator: DELEGATOR_ABOVE,
+				operator: OPERATOR_A,
+				max_bid: bid_to_a,
+			}));
+			assert_eq!(
+				System::events()
+					.iter()
+					.filter(|record| matches!(
+						record.event,
+						RuntimeEvent::ValidatorPallet(Event::Undelegated { .. })
+					))
+					.count(),
+				1
+			);
+		});
+	}
+
+	#[test]
 	fn delegate_multi_accepts_plan_exceeding_balance() {
 		const OPERATOR_A: u64 = 200;
 		const OPERATOR_B: u64 = 201;

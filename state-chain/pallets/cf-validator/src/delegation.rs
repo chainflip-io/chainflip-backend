@@ -239,12 +239,30 @@ impl<
 		}
 	}
 
-	/// Removes `operator`'s entry, if any, returning its amount. Safe to call unconditionally:
-	/// removing an entry can only shrink an already-bounded plan.
-	pub fn remove(&mut self, operator: &Account) -> Option<Value> {
+	/// Each operator this plan delegates to, with the amount pledged to it.
+	pub fn iter(&self) -> impl Iterator<Item = (&Account, &Value)> {
 		match self {
-			Self::Fixed(entries) => entries.remove(operator),
+			Self::Fixed(entries) => entries.iter(),
 		}
+	}
+
+	/// Removes `operator`'s entry, if any, returning its amount. Fails, leaving the plan
+	/// unchanged, if the result would no longer be `is_valid` (e.g. the remaining total falls
+	/// below the minimum).
+	#[expect(clippy::result_unit_err)]
+	pub fn try_remove_operator(&mut self, operator: &Account) -> Result<Option<Value>, ()>
+	where
+		Value: Copy + Into<AssetAmount>,
+	{
+		let mut updated = self.clone();
+		let removed = match &mut updated {
+			Self::Fixed(entries) => entries.remove(operator),
+		};
+		if !updated.is_valid() {
+			return Err(());
+		}
+		*self = updated;
+		Ok(removed)
 	}
 
 	/// Inserts (or replaces) `operator`'s entry. Fails, leaving the plan unchanged, if the plan

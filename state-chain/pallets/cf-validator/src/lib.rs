@@ -1204,21 +1204,8 @@ pub mod pallet {
 			);
 
 			// If the delegator is currently delegating to this operator, we need to
-			// undelegate them from this operator (the rest of their plan, if any, is untouched).
-			DelegationChoice::<T>::mutate_exists(&delegator, |maybe_plan| {
-				if let Some(mut plan) = maybe_plan.take() {
-					if let Some(max_bid) = plan.remove(&operator) {
-						Self::deposit_event(Event::Undelegated {
-							delegator: delegator.clone(),
-							operator: operator.clone(),
-							max_bid,
-						});
-					}
-					if !plan.is_empty() {
-						*maybe_plan = Some(plan);
-					}
-				}
-			});
+			// undelegate them from this operator.
+			Self::remove_operator_from_plan(&delegator, &operator);
 
 			match OperatorSettingsLookup::<T>::get(&operator)
 				.unwrap_or_default()
@@ -1339,20 +1326,7 @@ pub mod pallet {
 				AssociationToOperator::Delegator,
 				|_, _| (),
 			) {
-				DelegationChoice::<T>::mutate_exists(&delegator, |maybe_plan| {
-					if let Some(mut plan) = maybe_plan.take() {
-						if let Some(max_bid) = plan.remove(&operator) {
-							Self::deposit_event(Event::Undelegated {
-								delegator: delegator.clone(),
-								operator: operator.clone(),
-								max_bid,
-							});
-						}
-						if !plan.is_empty() {
-							*maybe_plan = Some(plan);
-						}
-					}
-				});
+				Self::remove_operator_from_plan(&delegator, &operator);
 			}
 
 			ManagedValidators::<T>::remove(&operator);
@@ -1429,7 +1403,12 @@ pub mod pallet {
 			DelegationChoice::<T>::mutate(&delegator, |maybe_plan| {
 				let mut plan = maybe_plan.take().unwrap_or_default();
 				if let Some(old_operator) = &switch_from {
-					plan.remove(old_operator);
+					// Removing the plan's only entry leaves it empty, which is always valid.
+					if plan.try_remove_operator(old_operator).is_err() {
+						cf_runtime_utilities::log_or_panic!(
+							"removing the sole entry left an invalid plan in `delegate` -- unreachable"
+						);
+					}
 				}
 				// The `get_only_member` check above, plus at most one removal and one
 				// insertion here, means the result never exceeds 1 entry.
@@ -2356,6 +2335,39 @@ impl<T: Config> Pallet<T> {
 		DelegationChoice::<T>::get(delegator)
 			.map(|plan| plan.total())
 			.unwrap_or_else(T::Amount::zero)
+	}
+
+	/// Removes `operator` from `delegator`'s plan on the operator's initiative (blocking the
+	/// delegator or deregistering). If what remains would no longer be a valid plan, the
+	/// delegator is undelegated from every operator instead: the operator's action must not be
+	/// blocked by the delegator's state, and an invalid plan must never be stored.
+	fn remove_operator_from_plan(delegator: &T::AccountId, operator: &T::AccountId) {
+		DelegationChoice::<T>::mutate_exists(delegator, |maybe_plan| {
+			if let Some(mut plan) = maybe_plan.take() {
+				match plan.try_remove_operator(operator) {
+					Ok(removed) => {
+						if let Some(max_bid) = removed {
+							Self::deposit_event(Event::Undelegated {
+								delegator: delegator.clone(),
+								operator: operator.clone(),
+								max_bid,
+							});
+						}
+						if !plan.is_empty() {
+							*maybe_plan = Some(plan);
+						}
+					},
+					Err(()) =>
+						for (operator, max_bid) in plan.iter() {
+							Self::deposit_event(Event::Undelegated {
+								delegator: delegator.clone(),
+								operator: operator.clone(),
+								max_bid: *max_bid,
+							});
+						},
+				}
+			}
+		});
 	}
 
 	/// Emits `MaxBidUpdated` if `old` and `new` differ. Shared by `delegate` and `undelegate`.
