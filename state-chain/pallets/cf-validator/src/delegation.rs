@@ -148,6 +148,15 @@ pub struct OperatorSettings {
 	pub delegation_acceptance: DelegationAcceptance,
 }
 
+/// Runtime-provided limits a [`DelegationPlan`] is validated against, carried as a type parameter
+/// so that the plan's own methods can enforce them without every caller threading them through.
+pub trait DelegationPlanLimits {
+	type MaxOperators: Get<u32>;
+
+	/// The minimum total a non-empty plan must pledge.
+	fn minimum_total() -> AssetAmount;
+}
+
 /// A delegator's live delegation plan: the set of operators it delegates to and the exact
 /// amount pledged to each. `delegate_multi` stores this exactly as submitted -- an
 /// over-subscribed plan (total pledged > balance) isn't rejected or scaled down at submission
@@ -165,25 +174,25 @@ pub struct OperatorSettings {
 	Serialize,
 	Deserialize,
 )]
-#[scale_info(skip_type_params(N))]
+#[scale_info(skip_type_params(L))]
 #[serde(
 	bound = "Account: Ord + Serialize + for<'a> Deserialize<'a>, Value: Serialize + for<'a> Deserialize<'a>"
 )]
 pub enum DelegationPlan<
 	Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
 	Value: Clone + PartialEq + Eq + core::fmt::Debug,
-	N: Get<u32>,
+	L: DelegationPlanLimits,
 > {
-	Fixed(BoundedBTreeMap<Account, Value, N>),
+	Fixed(BoundedBTreeMap<Account, Value, L::MaxOperators>),
 	// v2, appended later:
-	// Proportional(BoundedBTreeMap<Account, Perbill, N>),
+	// Proportional(BoundedBTreeMap<Account, Perbill, L::MaxOperators>),
 }
 
 impl<
 		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
 		Value: Clone + PartialEq + Eq + core::fmt::Debug,
-		N: Get<u32>,
-	> Default for DelegationPlan<Account, Value, N>
+		L: DelegationPlanLimits,
+	> Default for DelegationPlan<Account, Value, L>
 {
 	fn default() -> Self {
 		Self::Fixed(Default::default())
@@ -193,8 +202,8 @@ impl<
 impl<
 		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
 		Value: Clone + PartialEq + Eq + core::fmt::Debug + Zero,
-		N: Get<u32>,
-	> DelegationPlan<Account, Value, N>
+		L: DelegationPlanLimits,
+	> DelegationPlan<Account, Value, L>
 {
 	pub fn len(&self) -> usize {
 		match self {
@@ -240,7 +249,7 @@ impl<
 
 	/// Inserts (or replaces) `operator`'s entry. Fails, leaving the plan unchanged, if the plan
 	/// is already at its bound and `operator` isn't already an entry, or if the result would no
-	/// longer be `is_valid` (e.g. its total no longer fits in `AssetAmount`).
+	/// longer be `is_valid`.
 	#[expect(clippy::result_unit_err)]
 	pub fn try_add_operator(&mut self, operator: Account, value: Value) -> Result<Option<Value>, ()>
 	where
@@ -250,7 +259,7 @@ impl<
 		let previous = match &mut updated {
 			Self::Fixed(entries) => entries.try_insert(operator, value).map_err(|_| ())?,
 		};
-		if !updated.is_valid(0) {
+		if !updated.is_valid() {
 			return Err(());
 		}
 		*self = updated;
@@ -324,12 +333,12 @@ impl<
 	///  A plan is invalid if:
 	/// - any entry's amount is zero a delegator should omit an operator entirely rather than
 	///   include it with nothing pledged
-	/// - a non-empty plan's total falls below `minimum_total`
+	/// - a non-empty plan's total falls below `L::minimum_total()`
 	/// - the total doesn't even fit in `AssetAmount`. This is the only place a plan's total is
 	///   allowed to not fit -- rejecting it here means every other consumer of a *stored* plan
 	///   (which only ever got there via this check) can safely assume its total fits within
 	///   `Value`, without needing to re-guard against overflow.
-	pub fn is_valid(&self, minimum_total: AssetAmount) -> bool
+	pub fn is_valid(&self) -> bool
 	where
 		Value: Copy + Into<AssetAmount>,
 	{
@@ -342,14 +351,14 @@ impl<
 							.copied()
 							.try_fold(0u128, |acc, amount| acc.checked_add(amount.into()))
 						{
-							Some(total) => total >= minimum_total,
+							Some(total) => total >= L::minimum_total(),
 							None => false,
 						}),
 		}
 	}
 
 	/// Builds a `Fixed` plan directly from an `account -> value` map. Fails if `entries` doesn't
-	/// fit within the bound `N`.
+	/// fit within the bound `L::MaxOperators`.
 	#[expect(clippy::result_unit_err)]
 	pub fn try_from_map(entries: BTreeMap<Account, Value>) -> Result<Self, ()> {
 		Ok(Self::Fixed(entries.try_into()?))
@@ -740,6 +749,7 @@ mod tests {
 	use super::*;
 	use crate::{mock::*, DelegationPlanOf};
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
+	use cf_traits::{mocks::minimum_funding::MockMinimumFundingProvider, GetMinimumFunding};
 	use proptest::{prelude::*, proptest};
 
 	proptest! {
@@ -946,19 +956,19 @@ mod tests {
 		#[test]
 		fn is_valid_matches_reference_computation(
 			entries in prop::collection::vec((1u64..1000, 0u128..1_000_000_000_000u128), 0..20),
-			minimum_total in 0u128..1_000_000_000_000u128,
 		) {
 			let map: BTreeMap<u64, u128> = entries.into_iter().collect();
 			let plan = DelegationPlanOf::<Test>::try_from_map(map.clone()).unwrap();
 
+			let minimum_total = MockMinimumFundingProvider::get_min_funding_amount();
 			let has_zero_entry = map.values().any(|amount| *amount == 0);
 			// Safe: bounded generator, well within u128's range regardless of how many entries.
 			let total: u128 = map.values().sum();
 			let expected = !has_zero_entry && (map.is_empty() || total >= minimum_total);
 
 			prop_assert_eq!(
-				plan.is_valid(minimum_total), expected,
-				"is_valid({}) disagreed with the reference computation for {:?}", minimum_total, map
+				plan.is_valid(), expected,
+				"is_valid() disagreed with the reference computation for {:?}", map
 			);
 		}
 	}
@@ -977,7 +987,7 @@ mod tests {
 			match plan.try_add_operator(operator, value) {
 				Ok(_) => {
 					prop_assert!(
-						plan.is_valid(0),
+						plan.is_valid(),
 						"try_add_operator committed a plan that fails its own validity check"
 					);
 					prop_assert_eq!(

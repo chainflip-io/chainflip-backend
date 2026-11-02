@@ -122,8 +122,18 @@ type RuntimeRotationState<T> =
 pub type DelegationPlanOf<T> = DelegationPlan<
 	<T as frame_system::Config>::AccountId,
 	<T as Chainflip>::Amount,
-	<T as pallet::Config>::MaxOperatorsPerDelegator,
+	DelegationPlanLimitsOf<T>,
 >;
+
+pub struct DelegationPlanLimitsOf<T>(PhantomData<T>);
+
+impl<T: Config> DelegationPlanLimits for DelegationPlanLimitsOf<T> {
+	type MaxOperators = T::MaxOperatorsPerDelegator;
+
+	fn minimum_total() -> cf_primitives::AssetAmount {
+		<T::MinimumFunding as cf_traits::GetMinimumFunding>::get_min_funding_amount()
+	}
+}
 
 pub const STORAGE_VERSION_U16: u16 = 12;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
@@ -1526,10 +1536,7 @@ pub mod pallet {
 				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
 				Error::<T>::RotationInProgress
 			);
-			ensure!(
-				plan.is_valid(T::MinimumFunding::get_min_funding_amount()),
-				Error::<T>::InvalidDelegationPlan
-			);
+			ensure!(plan.is_valid(), Error::<T>::InvalidDelegationPlan);
 
 			Self::ensure_delegator_role(&delegator)?;
 
