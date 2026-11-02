@@ -1376,9 +1376,11 @@ pub mod pallet {
 				Error::<T>::RotationInProgress
 			);
 
-			let mut plan = DelegationChoice::<T>::get(&delegator).unwrap_or_default();
-			ensure!(plan.len() <= 1, Error::<T>::MultiOperatorDelegator);
-			let (old_max_bid, switch_from) = match plan.pop() {
+			let (old_max_bid, switch_from) = match DelegationChoice::<T>::get(&delegator)
+				.unwrap_or_default()
+				.get_only_member()
+				.map_err(|_| Error::<T>::MultiOperatorDelegator)?
+			{
 				None => (T::Amount::zero(), None),
 				Some((op, amt)) if op == operator => (amt, None),
 				Some((op, amt)) => (amt, Some(op)),
@@ -1419,9 +1421,9 @@ pub mod pallet {
 				if let Some(old_operator) = &switch_from {
 					plan.remove(old_operator);
 				}
-				// The `plan.len() <= 1` check above, plus at most one removal and one
+				// The `get_only_member` check above, plus at most one removal and one
 				// insertion here, means the result never exceeds 1 entry.
-				if plan.try_insert(operator, new_max_bid).is_err() {
+				if plan.try_add_operator(operator, new_max_bid).is_err() {
 					cf_runtime_utilities::log_or_panic!(
 						"plan grew beyond 1 entry in `delegate` -- unreachable"
 					);
@@ -1445,11 +1447,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			let mut plan =
-				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
-			ensure!(plan.len() <= 1, Error::<T>::MultiOperatorDelegator);
-			let (current_operator, current_max_bid) =
-				plan.pop().ok_or(Error::<T>::AccountIsNotDelegating)?;
+			let (current_operator, current_max_bid) = DelegationChoice::<T>::get(&delegator)
+				.ok_or(Error::<T>::AccountIsNotDelegating)?
+				.get_only_member()
+				.map_err(|_| Error::<T>::MultiOperatorDelegator)?
+				.ok_or(Error::<T>::AccountIsNotDelegating)?;
 
 			ensure!(
 				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
@@ -1489,7 +1491,7 @@ pub mod pallet {
 					if maybe_plan.is_some() {
 						let mut plan = DelegationPlanOf::<T>::default();
 						// A single-entry map is always within `MaxOperatorsPerDelegator`.
-						if plan.try_insert(current_operator, new_max_bid).is_err() {
+						if plan.try_add_operator(current_operator, new_max_bid).is_err() {
 							cf_runtime_utilities::log_or_panic!(
 								"single-entry plan exceeded MaxOperatorsPerDelegator -- unreachable"
 							);

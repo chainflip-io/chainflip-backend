@@ -242,7 +242,7 @@ impl<
 	/// is already at its bound and `operator` isn't already an entry, or if the result would no
 	/// longer be `is_valid` (e.g. its total no longer fits in `AssetAmount`).
 	#[expect(clippy::result_unit_err)]
-	pub fn try_insert(&mut self, operator: Account, value: Value) -> Result<Option<Value>, ()>
+	pub fn try_add_operator(&mut self, operator: Account, value: Value) -> Result<Option<Value>, ()>
 	where
 		Value: Copy + Into<AssetAmount>,
 	{
@@ -257,11 +257,18 @@ impl<
 		Ok(previous)
 	}
 
-	pub fn pop(&mut self) -> Option<(Account, Value)> {
+	/// The plan's sole entry, or `None` if the plan is empty. Fails if the plan has more than one
+	/// entry.
+	#[expect(clippy::result_unit_err)]
+	pub fn get_only_member(&self) -> Result<Option<(Account, Value)>, ()> {
 		match self {
 			Self::Fixed(entries) => {
-				let operator = entries.keys().next()?.clone();
-				entries.remove(&operator).map(|value| (operator, value))
+				let mut iter = entries.iter();
+				match (iter.next(), iter.next()) {
+					(None, _) => Ok(None),
+					(Some((operator, value)), None) => Ok(Some((operator.clone(), value.clone()))),
+					(Some(_), Some(_)) => Err(()),
+				}
 			},
 		}
 	}
@@ -958,7 +965,7 @@ mod tests {
 
 	proptest! {
 		#[test]
-		fn try_insert_either_commits_a_valid_plan_or_leaves_it_unchanged(
+		fn try_add_operator_either_commits_a_valid_plan_or_leaves_it_unchanged(
 			existing in prop::collection::vec((1u64..1000, 1u128..1_000_000_000_000u128), 0..20),
 			operator in 1u64..1000,
 			value in 1u128..1_000_000_000_000u128,
@@ -967,11 +974,11 @@ mod tests {
 				DelegationPlanOf::<Test>::try_from_map(existing.into_iter().collect()).unwrap();
 			let mut plan = plan_before.clone();
 
-			match plan.try_insert(operator, value) {
+			match plan.try_add_operator(operator, value) {
 				Ok(_) => {
 					prop_assert!(
 						plan.is_valid(0),
-						"try_insert committed a plan that fails its own validity check"
+						"try_add_operator committed a plan that fails its own validity check"
 					);
 					prop_assert_eq!(
 						plan.get(&operator), Some(&value),
@@ -981,7 +988,7 @@ mod tests {
 				Err(()) => {
 					prop_assert_eq!(
 						plan, plan_before,
-						"try_insert mutated the plan despite returning an error"
+						"try_add_operator mutated the plan despite returning an error"
 					);
 				},
 			}
