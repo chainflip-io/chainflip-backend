@@ -1731,6 +1731,15 @@ export interface ChainStorage extends GenericChainStorage {
     members: GenericStorageQuery<() => PalletCfGovernanceCouncil>;
 
     /**
+     * Members that an open proposal would add to the council. They all have to approve
+     * it before it can pass, which proves their keys are valid and that they can sign.
+     *
+     * @param {number} arg
+     * @param {Callback<Array<AccountId32>> =} callback
+     **/
+    pendingMembers: GenericStorageQuery<(arg: number) => Array<AccountId32>, number>;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
