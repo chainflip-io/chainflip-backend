@@ -2985,10 +2985,7 @@ export type PalletCfGovernanceCouncil =
       type: 'WeightedGroup';
       value: { threshold: number; members: Array<[number, PalletCfGovernanceCouncil]> };
     }
-  | {
-      type: 'SimpleGroup';
-      value: { threshold: number; members: Array<PalletCfGovernanceCouncil> };
-    }
+  | { type: 'SimpleGroup'; value: { threshold: number; members: Array<PalletCfGovernanceCouncil> } }
   | { type: 'Individual'; value: { id: AccountId32 } };
 
 /**
