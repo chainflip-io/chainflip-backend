@@ -86,7 +86,7 @@ const _: () = assert!(
 const _: () = assert!(UNFILTERED_FILLS_PER_SWAP > 0, "a swap must start with a fill to give");
 
 /// TODO: remove FloatBetweenZeroAndOne and its unit tests once the fixed pool removal migration is
-/// complete.
+/// complete and the order fills rpc no longer reads pre-migration blocks.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct FloatBetweenZeroAndOne {
 	/// A fixed point number where the msb has a value of `0.5`,
@@ -327,13 +327,13 @@ impl FillQuota {
 }
 
 /// The orders at one price that take part in a fill, and the liquidity they provide between them.
-struct Participants<LiquidityProvider> {
+struct EligibleOrders<LiquidityProvider> {
 	/// Largest first, which is the order they are filled in.
 	orders: Vec<LiquidityProvider>,
 	available: Amount,
 }
 
-impl<LiquidityProvider: Ord + Clone> Participants<LiquidityProvider> {
+impl<LiquidityProvider: Ord + Clone> EligibleOrders<LiquidityProvider> {
 	/// Which of `orders` a swap with `wanted` still to buy and `quota` fills left will fill,
 	/// worked out largest first. The swap passes it the orders at one price at a time.
 	///
@@ -543,7 +543,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let desired_output = SD::output_amount_floor(amount, price);
 			// Filter the orders using the ongoing quota (anti-spam)
 			let Some(participants) =
-				Participants::select(orders, quota, desired_output.unwrap_or_default())
+				EligibleOrders::select(orders, quota, desired_output.unwrap_or_default())
 			else {
 				// No orders worth filling at this price, so the swap passes over them and moves on
 				// to the next price.
@@ -761,7 +761,7 @@ fn liquidity_of<LiquidityProvider: Ord>(orders: &Orders<LiquidityProvider>) -> A
 fn fill_orders<LiquidityProvider: Ord + Clone>(
 	orders: &mut Orders<LiquidityProvider>,
 	sqrt_price: SqrtPrice,
-	participants: &Participants<LiquidityProvider>,
+	participants: &EligibleOrders<LiquidityProvider>,
 	sold_amount: Amount,
 	bought_amount: Amount,
 	fills: &mut Vec<Fill<LiquidityProvider>>,
@@ -1469,11 +1469,12 @@ mod migration_tests {
 			// price still offers is the order's share of it.
 			let expected = amount * Amount::from(numerator) / Amount::from(denominator);
 
-			let Migrated { pool_state: state, proceeds, .. } = old_state(
+			let Migrated { pool_state: state, proceeds, unconvertible, .. } = old_state(
 				vec![(at_tick_zero(), 0, expected, remaining_after([remaining]))],
 				vec![(at_tick_zero(), lp(1), 0, amount, float_max(), amount)],
 			)
 			.migrate();
+			assert!(unconvertible.is_empty(), "{numerator}/{denominator} left: not converted");
 
 			let kept = state
 				.liquidity::<QuoteToBase>()
@@ -1481,10 +1482,12 @@ mod migration_tests {
 				.map_or(Amount::zero(), |(_tick, amount)| *amount);
 			let sold = proceeds.first().map_or(Amount::zero(), |proceeds| proceeds.sold_amount);
 
+			// Both halves are rounded down, so together they fall short of the order by at most
+			// a unit.
 			assert!(
-				kept + sold <= amount,
-				"{numerator}/{denominator} left: kept {kept} and sold {sold}, more than the \
-				 {amount} the order held"
+				kept + sold <= amount && amount - kept - sold <= Amount::one(),
+				"{numerator}/{denominator} left: kept {kept} and sold {sold} of the {amount} the \
+				 order held"
 			);
 
 			// And the split lands where the ratio says it should, give or take the rounding.
@@ -1509,11 +1512,12 @@ mod migration_tests {
 			amount * Amount::from(*numerator) / Amount::from(*denominator)
 		});
 
-		let Migrated { pool_state: state, proceeds, .. } = old_state(
+		let Migrated { pool_state: state, proceeds, unconvertible, .. } = old_state(
 			vec![(at_tick_zero(), 0, expected, remaining_after(swaps))],
 			vec![(at_tick_zero(), lp(1), 0, amount, float_max(), amount)],
 		)
 		.migrate();
+		assert!(unconvertible.is_empty());
 
 		let kept = state
 			.liquidity::<QuoteToBase>()
@@ -1521,13 +1525,77 @@ mod migration_tests {
 			.map_or(Amount::zero(), |(_tick, amount)| *amount);
 		let sold = proceeds.first().map_or(Amount::zero(), |proceeds| proceeds.sold_amount);
 
-		assert!(kept + sold <= amount, "kept {kept} and sold {sold} of an order holding {amount}");
+		assert!(
+			kept + sold <= amount && amount - kept - sold <= Amount::one(),
+			"kept {kept} and sold {sold} of an order holding {amount}"
+		);
 
 		assert!(
 			kept.abs_diff(expected) <= 8.into(),
 			"kept {kept} after {} swaps, expected about {expected}",
 			swaps.len()
 		);
+	}
+
+	/// Every other test here sells base at a price of one. Check that the conversion is in the
+	/// correct direction with a price of two.
+	#[test]
+	fn proceeds_are_valued_at_the_price_in_the_pair_bought() {
+		// Just above a price of two.
+		let tick = 6932;
+		let sqrt_price = SqrtPrice::from_tick(tick);
+
+		let Migrated { pool_state: state, proceeds, unclaimed_liquidity, unconvertible } =
+			OldPoolState::from_parts(
+				PoolPairsMap::from_array([
+					BTreeMap::new(),
+					BTreeMap::from([(
+						sqrt_price,
+						FixedPool::from_parts(0, 500.into(), remaining_after([(1, 2)])),
+					)]),
+				]),
+				PoolPairsMap::from_array([
+					// Selling base, and bought in full.
+					BTreeMap::from([(
+						(sqrt_price, lp(1)),
+						PositionV10::from_parts(0, 1000.into(), float_max(), 1000.into()),
+					)]),
+					// Selling quote, and half bought.
+					BTreeMap::from([(
+						(sqrt_price, lp(2)),
+						PositionV10::from_parts(0, 1000.into(), float_max(), 1000.into()),
+					)]),
+				]),
+			)
+			.migrate();
+
+		assert!(unconvertible.is_empty());
+		assert_eq!(
+			proceeds,
+			vec![
+				// floor(1000 * 2.00004)
+				UncollectedProceeds {
+					lp: lp(1),
+					sold_pair: Pairs::Base,
+					sold_amount: 1000.into(),
+					bought_amount: 2000.into(),
+				},
+				// floor(500 / 2.00004)
+				UncollectedProceeds {
+					lp: lp(2),
+					sold_pair: Pairs::Quote,
+					sold_amount: 500.into(),
+					bought_amount: 249.into(),
+				},
+			]
+		);
+		assert!(state.liquidity::<QuoteToBase>().is_empty());
+		assert_eq!(state.liquidity::<BaseToQuote>(), vec![(tick, 500.into())]);
+		assert_eq!(
+			state.position::<BaseToQuote>(&lp(2), tick),
+			Some(Position { amount: 500.into(), original_amount: 1000.into() })
+		);
+		assert_eq!(unclaimed_liquidity, PoolPairsMap::default());
 	}
 
 	#[test]

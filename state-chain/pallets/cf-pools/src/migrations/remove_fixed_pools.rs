@@ -294,7 +294,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		);
 		ensure!(
 			pools_before.len() as u32 == count_before,
-			"A pool was lost before the migration ran"
+			"A pool failed to decode in its pre-migration shape"
 		);
 		ensure!(
 			Pools::<T>::iter_keys().count() as u32 == count_before,
@@ -404,6 +404,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 
 			let (least, most) = owed.get(&(account, asset)).copied().unwrap_or_default();
 			let paid = Amount::from(balance_after.saturating_sub(balance_before));
+			// Also where an order did not convert and was dropped unpaid, which is logged above.
 			ensure!(paid >= least, "An lp was paid less than its orders gave up");
 			ensure!(paid <= most, "An lp was paid more than its orders gave up");
 		}
@@ -502,8 +503,19 @@ mod tests {
 		original_amount: Amount,
 	}
 
-	/// Replaces a real pool's limit orders with state in the pre-migration shape.
+	/// Replaces a real pool's limit orders with state in the pre-migration shape, all of it selling
+	/// base.
 	fn put_old_pool(fixed_pools: Vec<OldFixedPool>, positions: Vec<OldOrder>) -> AssetPair {
+		put_old_pool_selling_both(fixed_pools, positions, vec![], vec![])
+	}
+
+	/// As [put_old_pool], with orders selling quote as well.
+	fn put_old_pool_selling_both(
+		base_fixed_pools: Vec<OldFixedPool>,
+		base_positions: Vec<OldOrder>,
+		quote_fixed_pools: Vec<OldFixedPool>,
+		quote_positions: Vec<OldOrder>,
+	) -> AssetPair {
 		let asset_pair = AssetPair::new(BASE_ASSET, STABLE_ASSET).unwrap();
 
 		assert_ok!(crate::Pallet::<Test>::new_pool(
@@ -515,45 +527,64 @@ mod tests {
 		));
 		let range_orders = Pools::<Test>::get(asset_pair).unwrap().pool_state.range_orders;
 
+		// Indexes every order, including those the migration drops, so that only rebuilding the
+		// index from the orders that survive leaves it right.
+		let mut limit_orders_cache = PoolPairsMap::<BTreeMap<_, BTreeMap<_, _>>>::default();
+		for (sold_pair, positions) in
+			[(Pairs::Base, &base_positions), (Pairs::Quote, &quote_positions)]
+		{
+			for OldOrder { tick, lp: (account_id, order_id), .. } in positions {
+				limit_orders_cache[sold_pair]
+					.entry(*account_id)
+					.or_default()
+					.insert(*order_id, *tick);
+			}
+		}
+
+		let fixed_pools_map = |fixed_pools: Vec<OldFixedPool>| {
+			fixed_pools
+				.into_iter()
+				.map(|fixed_pool| {
+					(
+						SqrtPrice::from_tick(fixed_pool.tick),
+						FixedPool::from_parts(
+							fixed_pool.pool_instance,
+							fixed_pool.available,
+							fixed_pool.percent_remaining,
+						),
+					)
+				})
+				.collect()
+		};
+		let positions_map = |positions: Vec<OldOrder>| {
+			positions
+				.into_iter()
+				.map(|order| {
+					(
+						(SqrtPrice::from_tick(order.tick), order.lp),
+						PositionV10::from_parts(
+							order.pool_instance,
+							order.amount,
+							order.last_percent_remaining,
+							order.original_amount,
+						),
+					)
+				})
+				.collect()
+		};
+
 		let old_pool = old::Pool::<Test> {
 			range_orders_cache: Default::default(),
-			// Deliberately stale: the migration must rebuild this from the orders that survive
-			// rather than carry it over.
-			limit_orders_cache: Default::default(),
+			limit_orders_cache,
 			pool_state: old::PoolState {
 				limit_orders: PoolStateV10::from_parts(
 					PoolPairsMap::from_array([
-						fixed_pools
-							.into_iter()
-							.map(|fixed_pool| {
-								(
-									SqrtPrice::from_tick(fixed_pool.tick),
-									FixedPool::from_parts(
-										fixed_pool.pool_instance,
-										fixed_pool.available,
-										fixed_pool.percent_remaining,
-									),
-								)
-							})
-							.collect(),
-						Default::default(),
+						fixed_pools_map(base_fixed_pools),
+						fixed_pools_map(quote_fixed_pools),
 					]),
 					PoolPairsMap::from_array([
-						positions
-							.into_iter()
-							.map(|order| {
-								(
-									(SqrtPrice::from_tick(order.tick), order.lp),
-									PositionV10::from_parts(
-										order.pool_instance,
-										order.amount,
-										order.last_percent_remaining,
-										order.original_amount,
-									),
-								)
-							})
-							.collect(),
-						Default::default(),
+						positions_map(base_positions),
+						positions_map(quote_positions),
 					]),
 				),
 				range_orders,
@@ -578,8 +609,9 @@ mod tests {
 				vec![
 					// Alice minted 2_500 here. Swaps took three fifths of the price and she swept,
 					// which left her holding 1_000 with her original still recorded as 2_500 and
-					// her snapshot of the price at two fifths. Swaps have since taken half of what
-					// was left, so her order is worth 500 — all the price still has on offer.
+					// two fifths of the price's liquidity left as of her sweep. Swaps have since
+					// taken half of what was left, so her order is worth 500 — all the price still
+					// has on offer.
 					OldOrder {
 						tick: 0,
 						lp: (ALICE, ALICE_ORDER),
@@ -588,7 +620,7 @@ mod tests {
 						last_percent_remaining: remaining_after([(2, 5)]),
 						original_amount: 2500.into(),
 					},
-					// Bob's order is full bought because no fixed pool exists.
+					// Bob's order is fully bought because no fixed pool exists.
 					OldOrder {
 						tick: 120,
 						lp: (BOB, BOB_ORDER),
@@ -629,12 +661,13 @@ mod tests {
 	/// The `try-runtime` checks are not reachable from a normal test run, so exercise the whole
 	/// cycle once. The book holds an order that was partly bought, one that was bought outright,
 	/// and one nothing has touched, the last under an lp of its own so that an lp owed nothing is
-	/// covered as well as one owed something.
+	/// covered as well as one owed something. A partly bought order selling quote covers the other
+	/// side of the book.
 	#[cfg(feature = "try-runtime")]
 	#[test]
 	fn the_try_runtime_checks_pass() {
 		new_test_ext().execute_with(|| {
-			put_old_pool(
+			put_old_pool_selling_both(
 				vec![
 					OldFixedPool {
 						tick: 0,
@@ -675,6 +708,20 @@ mod tests {
 						original_amount: 700.into(),
 					},
 				],
+				vec![OldFixedPool {
+					tick: -50,
+					pool_instance: 3,
+					available: 300.into(),
+					percent_remaining: remaining_after([(1, 2)]),
+				}],
+				vec![OldOrder {
+					tick: -50,
+					lp: (BOB, BOB_ORDER),
+					pool_instance: 3,
+					amount: 600.into(),
+					last_percent_remaining: float_max(),
+					original_amount: 600.into(),
+				}],
 			);
 
 			let state = Migration::<Test>::pre_upgrade().unwrap();
@@ -724,20 +771,34 @@ mod tests {
 
 	/// Sweeping used to record the volume of what it collected, and these proceeds would have been
 	/// swept eventually. Settling them here without recording it would lose that volume for good.
+	/// The volume is in stable asset terms, so it is the proceeds where those are the stable asset,
+	/// and otherwise what was sold. Away from a price of one the two differ.
 	#[test]
 	fn records_the_volume_it_settles() {
+		const TICK: Tick = 120;
+
 		new_test_ext().execute_with(|| {
-			put_old_pool(
+			put_old_pool_selling_both(
 				vec![OldFixedPool {
-					tick: 0,
+					tick: TICK,
 					pool_instance: 0,
 					available: 500.into(),
 					percent_remaining: remaining_after([(1, 2)]),
 				}],
 				vec![OldOrder {
-					tick: 0,
+					tick: TICK,
 					lp: (ALICE, ALICE_ORDER),
 					pool_instance: 0,
+					amount: 1000.into(),
+					last_percent_remaining: float_max(),
+					original_amount: 1000.into(),
+				}],
+				// No fixed pool, so bought in full.
+				vec![],
+				vec![OldOrder {
+					tick: TICK,
+					lp: (BOB, BOB_ORDER),
+					pool_instance: 1,
 					amount: 1000.into(),
 					last_percent_remaining: float_max(),
 					original_amount: 1000.into(),
@@ -745,21 +806,29 @@ mod tests {
 			);
 
 			assert_eq!(MockLpStatsApi::delta_usd_volume(&ALICE, &STABLE_ASSET), Zero::zero());
+			assert_eq!(MockLpStatsApi::delta_usd_volume(&BOB, &BASE_ASSET), Zero::zero());
 
 			Migration::<Test>::on_runtime_upgrade();
 
-			// The order sold ASSET for STABLE_ASSET, so the proceeds are the stable asset and the
-			// volume is what was credited.
+			// Alice sold 500 BASE_ASSET for STABLE_ASSET at 1.0001^120 ≈ 1.01207, so the volume is
+			// the 506 she was credited.
+			assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 506);
 			assert_eq!(
 				MockLpStatsApi::delta_usd_volume(&ALICE, &STABLE_ASSET),
-				FixedU128::from_inner(500)
+				FixedU128::from_inner(506)
+			);
+			// Bob sold 1000 STABLE_ASSET for BASE_ASSET, so the volume is the 1000 he sold rather
+			// than the 988 he was credited.
+			assert_eq!(MockBalance::get_balance(&BOB, BASE_ASSET), 988);
+			assert_eq!(
+				MockLpStatsApi::delta_usd_volume(&BOB, &BASE_ASSET),
+				FixedU128::from_inner(1000)
 			);
 		});
 	}
 
-	/// The other tests drop an order from a price that disappears with it. Here the price outlives
-	/// the order, so the index has to lose one entry and keep its neighbour rather than being
-	/// pruned wholesale.
+	/// Here the price outlives one of its orders, so the index has to lose that entry and keep its
+	/// neighbour rather than being pruned with the price.
 	#[test]
 	fn an_order_dropped_from_a_surviving_price_is_pruned_from_the_index() {
 		const TICK: Tick = 120;
@@ -817,8 +886,6 @@ mod tests {
 	#[test]
 	fn removes_the_auto_sweeping_thresholds() {
 		new_test_ext().execute_with(|| {
-			// Written through the alias, so a value type that disagreed with the pallet's would
-			// show up here rather than silently decoding into nonsense later.
 			old::LimitOrderAutoSweepingThresholds::<Test>::put(
 				BoundedBTreeMap::try_from(BTreeMap::from_iter([(Asset::Usdc, 1_000u128)])).unwrap(),
 			);
