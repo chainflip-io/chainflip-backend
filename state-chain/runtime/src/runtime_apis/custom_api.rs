@@ -466,6 +466,7 @@ decl_runtime_apis!(
 		fn cf_ingress_delay(chain: ForeignChain) -> u32;
 		#[changed_in(8)]
 		fn cf_boost_delay();
+		#[deprecated(note = "Boost delay no longer exists; this always returns 0.")]
 		fn cf_boost_delay(chain: ForeignChain) -> u32;
 		#[changed_in(14)]
 		fn cf_boost_config();
