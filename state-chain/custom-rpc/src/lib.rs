@@ -1166,6 +1166,8 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BoostPoolFeesResponse>;
 
+	/// Returns the runtime safe mode. Flags are `true` when enabled, and per-asset sets list the
+	/// enabled assets.
 	#[method(name = "safe_mode_statuses")]
 	fn cf_safe_mode_statuses(
 		&self,
