@@ -1131,53 +1131,27 @@ impl<T: Config> SwappingApi for Pallet<T> {
 			} else {
 				let input_amount: Amount = input_amount.into();
 
-				let tick_before =
-					pool.pool_state.current_price(side).ok_or(Error::<T>::InsufficientLiquidity)?.2;
 				let cf_amm::SwapExecutionOutcome {
 					output_amount,
 					limit_order_fills,
 					limit_order_input_dust,
-					last_sqrt_price,
-				} = pool.pool_state.swap(side, input_amount).map_err(|error| match error {
-					cf_amm::SwapError::InsufficientLiquidity => Error::<T>::InsufficientLiquidity,
-					cf_amm::SwapError::MaxFillsExceeded => Error::<T>::MaxFillsExceeded,
-				})?;
+					..
+				} = pool
+					.pool_state
+					.swap(side, input_amount, MaximumPriceImpact::<T>::get(asset_pair))
+					.map_err(|error| match error {
+						cf_amm::SwapError::InsufficientLiquidity =>
+							Error::<T>::InsufficientLiquidity,
+						cf_amm::SwapError::MaxFillsExceeded => Error::<T>::MaxFillsExceeded,
+						cf_amm::SwapError::PriceImpactLimitExceeded =>
+							Error::<T>::PriceImpactLimitExceeded,
+					})?;
 
 				// Process any limit order fills that occurred during the swap. This will credit the
 				// LPs with the proceeds of the swap.
 				Self::process_limit_order_fills(pool, &asset_pair, side, limit_order_fills)?;
 				if !limit_order_input_dust.is_zero() {
 					T::AssetWithholding::withhold_assets(from, limit_order_input_dust.try_into()?);
-				}
-
-				// The impact is measured across the prices the swap traded at, not the pool's best
-				// price afterwards.
-				let tick_after =
-					last_sqrt_price.map_or(tick_before, |sqrt_price| sqrt_price.to_tick());
-
-				// Get the effective price that the swap traded at
-				let swap_tick = PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
-					side,
-					input_amount,
-					output_amount,
-				)
-				.to_tick();
-				let bounded_swap_tick = if tick_after < tick_before {
-					core::cmp::min(core::cmp::max(tick_after, swap_tick), tick_before)
-				} else {
-					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
-				};
-
-				// Trigger impact protection if the swap's effective price is too far from both the
-				// final price and the initial price.
-				if let Some(maximum_price_impact) = MaximumPriceImpact::<T>::get(asset_pair) {
-					if core::cmp::min(
-						bounded_swap_tick.abs_diff(tick_after),
-						bounded_swap_tick.abs_diff(tick_before),
-					) > maximum_price_impact
-					{
-						return Err(Error::<T>::PriceImpactLimitExceeded.into());
-					}
 				}
 
 				output_amount.try_into().map_err(|_| Error::<T>::OutputOverflow)?

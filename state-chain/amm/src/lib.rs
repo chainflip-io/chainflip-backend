@@ -79,6 +79,9 @@ pub enum SwapError {
 	InsufficientLiquidity,
 	/// Too many small limit orders. Could not fill the swap within the fill limit.
 	MaxFillsExceeded,
+	/// The swap's effective price is further than the maximum price impact from both the price
+	/// it started at and the worst price it traded at.
+	PriceImpactLimitExceeded,
 }
 
 /// Everything a pass over the pool reports, before it is decided whether the swap succeeded.
@@ -268,16 +271,20 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Sells `sold_amount` of one side of the pool, all or nothing. A swap that cannot be made
-	/// in full errors, and leaves the pool as it was for the caller to roll back. It fills no more
-	/// than [limit_orders::MAX_FILLS_PER_SWAP] limit orders. The caller must pay out the returned
-	/// fills.
+	/// in full, or whose price impact in ticks exceeds `maximum_price_impact`, errors, and leaves
+	/// the pool changed for the caller to roll back. It fills no more than
+	/// [limit_orders::MAX_FILLS_PER_SWAP] limit orders. The caller must pay out the returned fills.
 	///
 	/// This function never panics.
 	pub fn swap(
 		&mut self,
 		order: Side,
 		sold_amount: Amount,
+		maximum_price_impact: Option<u32>,
 	) -> Result<SwapExecutionOutcome<LiquidityProvider>, SwapError> {
+		let tick_before = self.current_price(order).map(|(_, _, tick)| tick);
+
+		// Do the swap
 		let quota = limit_orders::FillQuota::bounded();
 		let SwapReport { outcome, remaining_input_amount, excluded_limit_order_count } =
 			match order.to_sold_pair() {
@@ -285,13 +292,48 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, None, quota),
 			};
 
-		if remaining_input_amount.is_zero() {
-			Ok(outcome)
-		} else if excluded_limit_order_count > 0 {
-			Err(SwapError::MaxFillsExceeded)
-		} else {
-			Err(SwapError::InsufficientLiquidity)
+		// Error if the swap did not fully complete
+		if !remaining_input_amount.is_zero() {
+			return Err(if excluded_limit_order_count > 0 {
+				SwapError::MaxFillsExceeded
+			} else {
+				SwapError::InsufficientLiquidity
+			})
 		}
+
+		// A swap that sells nothing has no effective price to measure.
+		if sold_amount.is_zero() {
+			return Ok(outcome)
+		}
+
+		// Price impact protection
+		if let (Some(maximum_price_impact), Some(tick_before)) = (maximum_price_impact, tick_before)
+		{
+			// The impact is measured across the prices the swap traded at, not the pool's best
+			// price afterwards.
+			let tick_after =
+				outcome.last_sqrt_price.map_or(tick_before, |sqrt_price| sqrt_price.to_tick());
+
+			let swap_tick =
+				Self::swap_sqrt_price(order, sold_amount, outcome.output_amount).to_tick();
+			let bounded_swap_tick = if tick_after < tick_before {
+				core::cmp::min(core::cmp::max(tick_after, swap_tick), tick_before)
+			} else {
+				core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
+			};
+
+			// Trigger impact protection if the swap's effective price is too far from both the
+			// final price and the initial price.
+			if core::cmp::min(
+				bounded_swap_tick.abs_diff(tick_after),
+				bounded_swap_tick.abs_diff(tick_before),
+			) > maximum_price_impact
+			{
+				return Err(SwapError::PriceImpactLimitExceeded)
+			}
+		}
+
+		Ok(outcome)
 	}
 
 	/// Sells as much of `sold_amount` as the pool will take before its price passes

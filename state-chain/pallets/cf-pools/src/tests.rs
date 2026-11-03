@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{self as pallet_cf_pools, mock::*, *};
+use crate::{mock::*, *};
 use cf_amm::{
 	common::{AskBidMap, AssetPair, LimitOrder, Side},
 	limit_orders::{MAX_FILLS_PER_SWAP, UNFILTERED_FILLS_PER_SWAP},
@@ -987,17 +987,17 @@ fn range_order_fees_are_recorded() {
 	});
 }
 
+/// Each pool reads its own limit, and a swap that breaks it fails with the pallet's error. How
+/// the limit is measured is tested in the AMM.
 #[test]
-fn test_maximum_slippage_limits() {
-	use cf_utilities::{assert_err, assert_ok};
+fn price_impact_limit_is_set_per_pool() {
+	const BASE_ASSET: Asset = Asset::Eth;
+	const OTHER_ASSET: Asset = Asset::Btc;
+	// Big enough to break a limit of 10 ticks.
+	const SWAP_AMOUNT: AssetAmount = 300;
 
 	new_test_ext().execute_with(|| {
-		const BASE_ASSET: Asset = Asset::Eth;
-		const OTHER_ASSET: Asset = Asset::Btc;
-
-		let asset_pair = AssetPair::new(BASE_ASSET, STABLE_ASSET).unwrap();
-
-		// Ensure limits are configured per pool: this limit should be ignored during testing.
+		// Tight enough to fail every swap below, were it applied to the wrong pool.
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
 			bounded_vec![(OTHER_ASSET, Some(1))],
@@ -1009,87 +1009,38 @@ fn test_maximum_slippage_limits() {
 
 		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
 		MockBalance::credit_account(&ALICE, BASE_ASSET, 10_000_000);
-
-		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
-			for (size, expected_output) in [
-				(0, 0),
-				(1, 0),
-				(100, 99),
-				(200, 199),
-				(250, 249),
-				(300, 299),
-				(400, 398),
-				(500, 497),
-				(1500, 1477),
-				(2500, 2439),
-				(3500, 3381),
-				(4500, 4306),
-				(5500, 5213),
-				(6500, 6103),
-				(7500, 6976),
-				(8500, 7834),
-				(9500, 8675),
-				(10500, 9502),
-				(11500, 10313),
-				(12500, 11111),
-				(13500, 11894),
-				(14500, 12663),
-				(15500, 13419),
-			] {
-				pallet_cf_pools::Pools::<Test>::remove(asset_pair);
-				assert_ok!(LiquidityPools::new_pool(
-					RuntimeOrigin::root(),
-					BASE_ASSET,
-					STABLE_ASSET,
-					Default::default(),
-					Price::at_tick_zero(),
-				));
-				assert_ok!(LiquidityPools::set_range_order(
-					RuntimeOrigin::signed(ALICE),
-					BASE_ASSET,
-					STABLE_ASSET,
-					0,
-					Some(-10000..10000),
-					RangeOrderSize::Liquidity { liquidity: 100_000 },
-				));
-				let result = LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, size);
-				if size < size_limit_when_slippage_limit_is_hit {
-					assert_eq!(expected_output, assert_ok!(result));
-				} else {
-					assert_err!(result);
-				}
-			}
-		};
-
-		test_swaps(u128::MAX);
-
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
+		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, Some(954))]
+			BASE_ASSET,
+			STABLE_ASSET,
+			Default::default(),
+			Price::at_tick_zero(),
+		));
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			BASE_ASSET,
+			STABLE_ASSET,
+			0,
+			Some(-10000..10000),
+			RangeOrderSize::Liquidity { liquidity: 100_000 },
 		));
 
-		test_swaps(10500);
-
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
-			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, None)]
-		));
-
-		test_swaps(u128::MAX);
+		assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, BASE_ASSET, SWAP_AMOUNT));
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
 			bounded_vec![(BASE_ASSET, Some(10))]
 		));
-
-		test_swaps(300);
+		assert_noop!(
+			LiquidityPools::swap_single_leg(STABLE_ASSET, BASE_ASSET, SWAP_AMOUNT),
+			Error::<Test>::PriceImpactLimitExceeded
+		);
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, Some(300))]
+			bounded_vec![(BASE_ASSET, None)]
 		));
-
-		test_swaps(3500);
+		assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, BASE_ASSET, SWAP_AMOUNT));
 	});
 }
 
@@ -2672,119 +2623,5 @@ fn a_swap_settles_a_bounded_number_of_orders_however_many_are_laid() {
 			})
 			.count();
 		assert_eq!(filled, UNFILTERED_FILLS_PER_SWAP as usize + 1);
-	});
-}
-
-/// Limit orders can be passed over by a swap, so using the pools best price after the swap as its
-/// ending price is wrong. Price impact must use the actual ending price that the swap got to.
-#[test]
-fn passed_over_dust_does_not_hide_price_impact() {
-	const SWAP_AMOUNT: AssetAmount = 10_000;
-	const LIMIT: u32 = 100;
-	const DUST_TICK: Tick = -10;
-
-	fn new_pool_with_price_impact_limit() {
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
-			0,
-			Price::at_tick_zero(),
-		));
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
-			RuntimeOrigin::root(),
-			bounded_vec![(Asset::Eth, Some(LIMIT))],
-		));
-		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
-		MockBalance::credit_account(&ALICE, Asset::Eth, 10_000_000);
-		assert_ok!(LiquidityPools::set_range_order(
-			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
-			0,
-			Some(-10_000..10_000),
-			RangeOrderSize::Liquidity { liquidity: 100_000 },
-		));
-	}
-
-	new_test_ext().execute_with(|| {
-		new_pool_with_price_impact_limit();
-
-		assert_noop!(
-			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, SWAP_AMOUNT),
-			Error::<Test>::PriceImpactLimitExceeded,
-		);
-	});
-
-	new_test_ext().execute_with(|| {
-		new_pool_with_price_impact_limit();
-		// More dust than the swap fills unfiltered, ahead of the range orders.
-		mint_orders(DUST_TICK, 0..UNFILTERED_FILLS_PER_SWAP as u64 + 10, 1);
-
-		assert_noop!(
-			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, SWAP_AMOUNT),
-			Error::<Test>::PriceImpactLimitExceeded,
-		);
-
-		// A failed swap leaves no trace, so replay it on a copy of the pool to check that it
-		// passes dust over.
-		let (asset_pair, side) = AssetPair::from_swap(STABLE_ASSET, Asset::Eth).unwrap();
-		let mut pool_state = Pools::<Test>::get(asset_pair).unwrap().pool_state;
-		let outcome = pool_state.swap(side, SWAP_AMOUNT.into()).unwrap();
-		// The dust beyond the swap's unfiltered fills is still in the book.
-		assert_eq!(pool_state.limit_orders(Side::Sell).count(), 10);
-
-		// The dust left behind keeps the pool's best price within the limit of where the swap
-		// started, so measured against that price the swap would look like it had no impact.
-		let best_tick = pool_state.current_price(side).unwrap().2;
-		assert_eq!(best_tick, DUST_TICK);
-		// The swap actually traded far past the limit.
-		let last_tick = outcome.last_sqrt_price.unwrap().to_tick();
-		assert!(
-			last_tick.abs_diff(DUST_TICK) > LIMIT,
-			"the swap must trade past the limit for the test to mean anything, got {last_tick}",
-		);
-	});
-}
-
-/// A dust order far in front of the pool's liquidity becomes the swap's start price, but the
-/// check measures the average against the nearer end, so the dust cannot trip the limit for a
-/// swap whose average sits past the middle of its move.
-#[test]
-fn dust_order_in_front_does_not_trigger_price_impact_limit() {
-	// A 500 unit swap moves the range orders about 100 ticks, with its average near the middle.
-	const SWAP_AMOUNT: AssetAmount = 500;
-	const LIMIT: u32 = 100;
-	// Far enough in front that the average is many times the limit away from it.
-	const DUST_TICK: Tick = -1_000;
-
-	new_test_ext().execute_with(|| {
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
-			0,
-			Price::at_tick_zero(),
-		));
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
-			RuntimeOrigin::root(),
-			bounded_vec![(Asset::Eth, Some(LIMIT))],
-		));
-		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
-		MockBalance::credit_account(&ALICE, Asset::Eth, 10_000_000);
-		assert_ok!(LiquidityPools::set_range_order(
-			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
-			0,
-			Some(-10_000..10_000),
-			RangeOrderSize::Liquidity { liquidity: 100_000 },
-		));
-		mint_orders(DUST_TICK, 0..1, 1);
-
-		assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, SWAP_AMOUNT));
-
-		// The swap traded the dust, so it really did start 1,000 ticks in front of the rest.
-		assert!(limit_order_amounts::<Test>(Asset::Eth, Side::Sell).is_empty());
 	});
 }
