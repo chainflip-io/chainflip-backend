@@ -209,6 +209,7 @@ impl Config<Instance3> for Test {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = false;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Self>>;
 	type AddressDerivation = MockAddressDerivation;
 	type DepositChannelFreshness = MockBtcChannelFreshness;
