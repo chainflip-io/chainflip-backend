@@ -19,6 +19,7 @@ mod config;
 mod dca;
 mod fees;
 mod fill_or_kill;
+mod recovery_account;
 
 use std::sync::LazyLock;
 

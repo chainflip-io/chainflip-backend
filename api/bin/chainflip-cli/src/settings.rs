@@ -112,6 +112,11 @@ pub enum BrokerSubcommands {
 	DeregisterAccount,
 	/// Set bound fee withdrawal address.
 	BindFeeWithdrawalAddress(EthereumAddressString),
+	/// Link the LP account that receives this broker's failed deposits. Can only be set once.
+	LinkRecoveryAccount {
+		#[clap(help = "The SS58 address of the LP account")]
+		recovery_account: AccountId32,
+	},
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]

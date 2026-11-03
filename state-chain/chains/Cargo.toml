@@ -30,6 +30,7 @@ rlp = { workspace = true }
 
 # Bitcoin
 bech32 = { workspace = true }
+bitcoin = { workspace = true, optional = true }
 
 # Solana
 borsh = { workspace = true, features = [
@@ -112,6 +113,7 @@ std = [
   "sp-core/full_crypto",
   "sp-io/std",
   "dep:ss58-registry",
+  "dep:bitcoin",
   "dep:thiserror",
   "dep:anyhow",
   "strum/std",

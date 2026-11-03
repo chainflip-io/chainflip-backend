@@ -1402,6 +1402,16 @@ export interface RuntimeApis extends GenericRuntimeApis {
     >;
 
     /**
+     * The stored recovery account link, even if the account no longer has the LP role.
+     *
+     * @callname: CustomRuntimeApi_cf_broker_recovery_account
+     * @param {AccountId32Like} broker
+     **/
+    cfBrokerRecoveryAccount: GenericRuntimeApiMethod<
+      (broker: AccountId32Like) => Promise<AccountId32 | undefined>
+    >;
+
+    /**
      *
      * @callname: CustomRuntimeApi_cf_account_role
      * @param {AccountId32Like} account_id

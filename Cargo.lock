@@ -1555,6 +1555,7 @@ dependencies = [
  "arrayref",
  "bech32 0.9.1",
  "bincode 2.0.1",
+ "bitcoin",
  "borsh",
  "bs58",
  "cf-amm-math",
@@ -4163,6 +4164,8 @@ dependencies = [
  "ethabi 18.0.0 (git+https://github.com/chainflip-io/ethabi?tag=chainflip-substrate-compat-1.18)",
  "ethers-core",
  "parity-scale-codec",
+ "proptest",
+ "proptest-derive",
  "scale-info",
  "scale-value",
  "serde",
@@ -5288,6 +5291,7 @@ name = "generic-typeinfo-derive-tests"
 version = "0.1.0"
 dependencies = [
  "generic-typeinfo-derive",
+ "parity-scale-codec",
  "scale-info",
 ]
 
@@ -7342,9 +7346,7 @@ dependencies = [
  "glob",
  "libc",
  "libz-sys",
- "lz4-sys",
  "tikv-jemalloc-sys",
- "zstd-sys",
 ]
 
 [[package]]

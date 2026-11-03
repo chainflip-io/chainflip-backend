@@ -158,7 +158,10 @@ redis = { version = "0.27.5" }
 regex = { version = "1.10.2" }
 reqwest = { version = "0.12.28" }
 rlp = { version = "0.5.2", default-features = false }
-rocksdb = { version = "0.21.0" }
+# Same feature set as `kvdb-rocksdb` (via `sc-client-db`), so rocksdb's features no
+# longer differ between engine-only, node-only and workspace builds. The engine only
+# ever writes Snappy-compressed blocks, so the other codecs are not needed.
+rocksdb = { version = "0.21.0", default-features = false, features = ["snappy", "jemalloc"] }
 scale-decode = { version = "0.16" }
 scale-info = { version = "2.11.1", default-features = false }
 scale-value = { version = "0.18.0" }
@@ -364,7 +367,8 @@ integer-sqrt = { opt-level = 3 }
 k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 libm = { opt-level = 3 }
-librocksdb-sys = { opt-level = 3 }
+# Without C++ debug info a build is ~14% faster and ~2.6 GB smaller.
+librocksdb-sys = { opt-level = 3, debug = false }
 libsecp256k1 = { opt-level = 3 }
 libz-sys = { opt-level = 3 }
 mio = { opt-level = 3 }

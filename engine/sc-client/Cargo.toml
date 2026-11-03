@@ -56,10 +56,10 @@ sp-version = { workspace = true, default-features = true }
 substrate-frame-rpc-system = { workspace = true }
 
 # Used only with feature client-mocks
-mockall = { workspace = true, features = ["nightly"], optional = true }
+mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
-mockall = { workspace = true, features = ["nightly"] }
+mockall = { workspace = true }
 pallet-cf-witnesser = { workspace = true, default-features = true }
 
 [features]

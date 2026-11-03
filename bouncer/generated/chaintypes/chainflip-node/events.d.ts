@@ -6,8 +6,8 @@ import type {
   AccountId32,
   H256,
   H160,
-  FixedBytes,
   Bytes,
+  FixedBytes,
   FixedU128,
   Result,
 } from 'dedot/codecs';
@@ -24,6 +24,8 @@ import type {
   CfChainsSolApiSolanaGovCall,
   CfTraitsElectionsElectionInstance,
   PalletCfEnvironmentPalletConfigUpdate,
+  CfPrimitivesChainsAssetsAnyAsset,
+  CfTraitsFailedDepositRecoveryOutcome,
   PalletCfFlipImbalancesImbalanceSource,
   PalletCfFlipPalletConfigUpdate,
   CfTraitsFundingSource,
@@ -61,7 +63,6 @@ import type {
   CfChainsBtcBitcoinTransactionData,
   CfChainsBtcScriptPubkey,
   CfPrimitivesSwapRequestId,
-  CfPrimitivesChainsAssetsAnyAsset,
   CfChainsSwapOrigin,
   CfTraitsSwappingSwapRequestTypeGeneric,
   CfPrimitivesBeneficiary,
@@ -387,6 +388,37 @@ export interface ChainEvents extends GenericChainEvents {
       'Environment',
       'PalletConfigUpdated',
       { update: PalletCfEnvironmentPalletConfigUpdate }
+    >;
+
+    /**
+     * A failed deposit was paid out to the broker's recovery account.
+     **/
+    FailedDepositRecovered: GenericPalletEvent<
+      'Environment',
+      'FailedDepositRecovered',
+      {
+        broker: AccountId32;
+        recoveryAccount: AccountId32;
+        asset: CfPrimitivesChainsAssetsAnyAsset;
+        amount: bigint;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+        reference: Bytes;
+      }
+    >;
+
+    /**
+     * A failed deposit could not be recovered. It can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'Environment',
+      'FailedDepositRecoveryFailed',
+      {
+        broker: AccountId32;
+        asset: CfPrimitivesChainsAssetsAnyAsset;
+        amount: bigint;
+        reference: Bytes;
+        error: DispatchError;
+      }
     >;
 
     /**
@@ -2700,6 +2732,15 @@ export interface ChainEvents extends GenericChainEvents {
       'Swapping',
       'FlipTransferToGatewaySkipped',
       { reason: DispatchError }
+    >;
+
+    /**
+     * A broker linked the LP account that receives its failed deposits.
+     **/
+    RecoveryAccountLinked: GenericPalletEvent<
+      'Swapping',
+      'RecoveryAccountLinked',
+      { broker: AccountId32; recoveryAccount: AccountId32 }
     >;
 
     /**
