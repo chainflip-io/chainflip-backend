@@ -238,6 +238,9 @@ macro_rules! impl_pallet_safe_mode {
 
 /// A wrapper around a BTreeSet to make setting safe mode for all items easier. Amber contains a
 /// list of disabled items.
+///
+/// The JSON form (e.g. in RPC output) is instead a plain list of the *enabled* items; see the
+/// `Serialize` impl.
 #[derive(
 	Deserialize,
 	Encode,
