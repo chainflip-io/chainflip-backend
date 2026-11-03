@@ -238,6 +238,9 @@ macro_rules! impl_pallet_safe_mode {
 
 /// A wrapper around a BTreeSet to make setting safe mode for all items easier. Amber contains a
 /// list of disabled items.
+///
+/// The JSON form (e.g. in RPC output) is instead a plain list of the *enabled* items; see the
+/// `Serialize` impl.
 #[derive(
 	Deserialize,
 	Encode,
@@ -279,8 +282,8 @@ impl<T: Ord> SafeMode for SafeModeSet<T> {
 	}
 }
 
-/// Custom serialization for SafeModeSet so that it serializes like a normal BTreeSet without the
-/// enum wrapper.
+/// Serializes as the set of *enabled* items, without the enum wrapper, matching the `true` =
+/// enabled convention of the bool flags it sits next to in RPC output.
 impl<T: Ord + Serialize + strum::IntoEnumIterator> Serialize for SafeModeSet<T> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -289,7 +292,10 @@ impl<T: Ord + Serialize + strum::IntoEnumIterator> Serialize for SafeModeSet<T> 
 		match self {
 			Self::Red => BTreeSet::<T>::new().serialize(serializer),
 			Self::Green => T::iter().collect::<BTreeSet<_>>().serialize(serializer),
-			Self::Amber(set) => set.serialize(serializer),
+			Self::Amber(disabled) => T::iter()
+				.filter(|t| !disabled.contains(t))
+				.collect::<BTreeSet<_>>()
+				.serialize(serializer),
 		}
 	}
 }
@@ -447,5 +453,21 @@ pub(crate) mod test {
 					ExampleSafeModeA::code_green(),
 			);
 		});
+	}
+
+	#[test]
+	fn safe_mode_set_serializes_enabled_items() {
+		use cf_primitives::Asset;
+
+		let to_json = |set: SafeModeSet<Asset>| serde_json::to_value(set).unwrap();
+		let expected = |assets: BTreeSet<Asset>| serde_json::to_value(assets).unwrap();
+
+		assert_eq!(to_json(SafeModeSet::Green), expected(Asset::all().collect()));
+		assert_eq!(to_json(SafeModeSet::Red), expected(BTreeSet::new()));
+		assert_eq!(
+			to_json(SafeModeSet::Amber(BTreeSet::from([Asset::Btc]))),
+			expected(Asset::all().filter(|a| *a != Asset::Btc).collect()),
+		);
+		assert_eq!(to_json(SafeModeSet::Amber(Asset::all().collect())), expected(BTreeSet::new()));
 	}
 }
