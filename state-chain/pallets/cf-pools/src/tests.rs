@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{self as pallet_cf_pools, mock::*, *};
+use crate::{mock::*, *};
 use cf_amm::{
 	common::{AskBidMap, AssetPair, LimitOrder, Side},
 	math::Tick,
@@ -986,17 +986,17 @@ fn range_order_fees_are_recorded() {
 	});
 }
 
+/// Each pool reads its own limit, and a swap that breaks it fails with the pallet's error. How
+/// the limit is measured is tested in the AMM.
 #[test]
-fn test_maximum_slippage_limits() {
-	use cf_utilities::{assert_err, assert_ok};
+fn price_impact_limit_is_set_per_pool() {
+	const BASE_ASSET: Asset = Asset::Eth;
+	const OTHER_ASSET: Asset = Asset::Btc;
+	// Big enough to break a limit of 10 ticks.
+	const SWAP_AMOUNT: AssetAmount = 300;
 
 	new_test_ext().execute_with(|| {
-		const BASE_ASSET: Asset = Asset::Eth;
-		const OTHER_ASSET: Asset = Asset::Btc;
-
-		let asset_pair = AssetPair::new(BASE_ASSET, STABLE_ASSET).unwrap();
-
-		// Ensure limits are configured per pool: this limit should be ignored during testing.
+		// Tight enough to fail every swap below, were it applied to the wrong pool.
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
 			bounded_vec![(OTHER_ASSET, Some(1))],
@@ -1008,87 +1008,38 @@ fn test_maximum_slippage_limits() {
 
 		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
 		MockBalance::credit_account(&ALICE, BASE_ASSET, 10_000_000);
-
-		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
-			for (size, expected_output) in [
-				(0, 0),
-				(1, 0),
-				(100, 99),
-				(200, 199),
-				(250, 249),
-				(300, 299),
-				(400, 398),
-				(500, 497),
-				(1500, 1477),
-				(2500, 2439),
-				(3500, 3381),
-				(4500, 4306),
-				(5500, 5213),
-				(6500, 6103),
-				(7500, 6976),
-				(8500, 7834),
-				(9500, 8675),
-				(10500, 9502),
-				(11500, 10313),
-				(12500, 11111),
-				(13500, 11894),
-				(14500, 12663),
-				(15500, 13419),
-			] {
-				pallet_cf_pools::Pools::<Test>::remove(asset_pair);
-				assert_ok!(LiquidityPools::new_pool(
-					RuntimeOrigin::root(),
-					BASE_ASSET,
-					STABLE_ASSET,
-					Default::default(),
-					Price::at_tick_zero(),
-				));
-				assert_ok!(LiquidityPools::set_range_order(
-					RuntimeOrigin::signed(ALICE),
-					BASE_ASSET,
-					STABLE_ASSET,
-					0,
-					Some(-10000..10000),
-					RangeOrderSize::Liquidity { liquidity: 100_000 },
-				));
-				let result = LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, size);
-				if size < size_limit_when_slippage_limit_is_hit {
-					assert_eq!(expected_output, assert_ok!(result));
-				} else {
-					assert_err!(result);
-				}
-			}
-		};
-
-		test_swaps(u128::MAX);
-
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
+		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, Some(954))]
+			BASE_ASSET,
+			STABLE_ASSET,
+			Default::default(),
+			Price::at_tick_zero(),
+		));
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			BASE_ASSET,
+			STABLE_ASSET,
+			0,
+			Some(-10000..10000),
+			RangeOrderSize::Liquidity { liquidity: 100_000 },
 		));
 
-		test_swaps(10500);
-
-		assert_ok!(LiquidityPools::set_maximum_price_impact(
-			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, None)]
-		));
-
-		test_swaps(u128::MAX);
+		assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, BASE_ASSET, SWAP_AMOUNT));
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
 			bounded_vec![(BASE_ASSET, Some(10))]
 		));
-
-		test_swaps(300);
+		assert_noop!(
+			LiquidityPools::swap_single_leg(STABLE_ASSET, BASE_ASSET, SWAP_AMOUNT),
+			Error::<Test>::PriceImpactLimitExceeded
+		);
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			bounded_vec![(BASE_ASSET, Some(300))]
+			bounded_vec![(BASE_ASSET, None)]
 		));
-
-		test_swaps(3500);
+		assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, BASE_ASSET, SWAP_AMOUNT));
 	});
 }
 
@@ -2538,4 +2489,144 @@ fn pools_storage_layout_is_pinned() {
 	let mut registry = scale_info::Registry::new();
 	registry.register_type(&scale_info::meta_type::<Pool<Test>>());
 	insta::assert_json_snapshot!(scale_info::PortableRegistry::from(registry));
+}
+
+/// Mints one order selling `sell_amount` at `tick` for each of `ids`, all owned by ALICE, so
+/// that a test can build a book larger than one swap will settle. Ids must not repeat across
+/// calls: setting an order that already exists moves it rather than adding another.
+fn mint_orders(tick: Tick, ids: core::ops::Range<u64>, sell_amount: AssetAmount) {
+	MockBalance::credit_account(&ALICE, Asset::Eth, sell_amount * (ids.end - ids.start) as u128);
+	for id in ids {
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			Side::Sell,
+			id,
+			Some(tick),
+			sell_amount,
+			None,
+			None,
+		));
+	}
+}
+
+mod swap_fill_limit {
+	use super::*;
+	use cf_amm::limit_orders::{MAX_FILLS_PER_SWAP, UNFILTERED_FILLS_PER_SWAP};
+	use cf_chains::ForeignChain;
+	use cf_traits::{
+		mocks::{
+			account_role_registry::MockAccountRoleRegistry, balance_api::MockRefundAddressRegistry,
+		},
+		AccountRoleRegistry,
+	};
+	use sp_std::collections::btree_map::BTreeMap;
+
+	/// Registers `lp` and has it sell `sell_amount` at `tick` in an order of its own.
+	fn mint_order_as(lp: u64, tick: Tick, sell_amount: AssetAmount) {
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&lp
+			)
+		);
+		for chain in ForeignChain::iter() {
+			MockRefundAddressRegistry::register_refund_address(lp, chain);
+		}
+		MockBalance::credit_account(&lp, Asset::Eth, sell_amount);
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(lp),
+			Asset::Eth,
+			STABLE_ASSET,
+			Side::Sell,
+			0,
+			Some(tick),
+			sell_amount,
+			None,
+			None,
+		));
+	}
+
+	/// Settling a swap touches no more accounts than it has fills, and the orders it passes over
+	/// are left exactly as they were.
+	#[test]
+	fn passed_over_orders_are_left_untouched() {
+		const DUST: AssetAmount = 10;
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Eth,
+				STABLE_ASSET,
+				0,
+				Price::at_tick_zero(),
+			));
+
+			// Far more dust than a swap will settle, each its own LP, at the best price, and real
+			// liquidity behind it.
+			let dust_lps = 1_000..1_000 + MAX_FILLS_PER_SWAP as u64 + 500;
+			for lp in dust_lps.clone() {
+				mint_order_as(lp, 0, DUST);
+			}
+			mint_orders(10, 0..1, 1_000_000);
+
+			let lps = dust_lps.clone().chain([ALICE]).collect::<Vec<_>>();
+			let balances_before = lps
+				.iter()
+				.map(|lp| (*lp, MockBalance::free_balances(lp)))
+				.collect::<BTreeMap<_, _>>();
+
+			assert_ok!(LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, 500_000));
+
+			let pool =
+				Pools::<Test>::get(AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).unwrap();
+
+			// The order index matches the pool for every LP.
+			for side in [Side::Sell, Side::Buy] {
+				let mut book = BTreeMap::<u64, BTreeMap<OrderId, Tick>>::new();
+				for ((lp, id), tick, _) in pool.pool_state.limit_orders(side) {
+					book.entry(lp).or_default().insert(id, tick);
+				}
+				assert_eq!(pool.limit_orders_cache[side.to_sold_pair()], book);
+			}
+
+			// Dust still on the book at full size was passed over, and its LP left untouched.
+			let passed_over = pool
+				.pool_state
+				.limit_orders(Side::Sell)
+				.filter(|((lp, _), _, position)| {
+					dust_lps.contains(lp) && position.amount == DUST.into()
+				})
+				.map(|((lp, _), _, _)| lp)
+				.collect::<Vec<_>>();
+			// Every piece of dust beyond the unfiltered fills.
+			assert_eq!(
+				passed_over.len(),
+				(dust_lps.end - dust_lps.start) as usize - UNFILTERED_FILLS_PER_SWAP as usize
+			);
+			for lp in &passed_over {
+				assert_eq!(MockBalance::free_balances(lp), balances_before[lp]);
+			}
+
+			let mut credited = lps
+				.iter()
+				.filter(|lp| MockBalance::free_balances(lp) != balances_before[lp])
+				.copied()
+				.collect::<Vec<_>>();
+			// The unfiltered fills all go to dust, and one more to the order behind it.
+			assert_eq!(credited.len(), UNFILTERED_FILLS_PER_SWAP as usize + 1);
+
+			// One fill settled per credited LP, and none for any other.
+			let mut filled = frame_system::Pallet::<Test>::events()
+				.into_iter()
+				.filter_map(|record| match record.event {
+					RuntimeEvent::LiquidityPools(Event::LimitOrderFilled { lp, .. }) => Some(lp),
+					_ => None,
+				})
+				.collect::<Vec<_>>();
+			filled.sort();
+			credited.sort();
+			assert_eq!(filled, credited);
+		});
+	}
 }

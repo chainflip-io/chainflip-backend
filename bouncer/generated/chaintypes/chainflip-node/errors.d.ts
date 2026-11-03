@@ -1922,6 +1922,13 @@ export interface ChainErrors extends GenericChainErrors {
     PriceImpactLimitExceeded: GenericPalletError;
 
     /**
+     * The swap could not be filled, and it passed limit orders over because one swap will
+     * only settle so many. The liquidity to fill it may be in the orders it did not reach,
+     * which a later or smaller swap can reach; it may also simply not be there.
+     **/
+    MaxFillsExceeded: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
