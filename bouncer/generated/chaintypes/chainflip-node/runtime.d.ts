@@ -1931,6 +1931,8 @@ export interface RuntimeApis extends GenericRuntimeApis {
      *
      * @callname: CustomRuntimeApi_cf_boost_delay
      * @param {CfPrimitivesChainsForeignChain} chain
+     *
+     * @deprecated Boost delay no longer exists; this always returns 0.
      **/
     cfBoostDelay: GenericRuntimeApiMethod<
       (chain: CfPrimitivesChainsForeignChain) => Promise<number>
