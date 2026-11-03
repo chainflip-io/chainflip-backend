@@ -30,7 +30,7 @@ use state_chain_runtime::{Flip, Funding, Runtime, RuntimeEvent, RuntimeOrigin, S
 
 /// Steps through the rotation one block at a time and returns the events of the block in which
 /// the epoch index was incremented, ie. the block in which `on_new_epoch` runs.
-fn move_through_epoch_transition(testnet: &mut network::Network) -> Vec<RuntimeEvent> {
+pub(crate) fn move_through_epoch_transition(testnet: &mut network::Network) -> Vec<RuntimeEvent> {
 	let epoch = Validator::epoch_index();
 	testnet.move_to_the_end_of_epoch();
 	for _ in 0..=VAULT_ROTATION_BLOCKS + 1 {

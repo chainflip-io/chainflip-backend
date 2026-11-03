@@ -19,7 +19,7 @@
 //! Pre-existing delegators therefore need the role backfilled here so they satisfy the same
 //! invariant going forward.
 
-use crate::{Config, DelegationChoice};
+use crate::Config;
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_support::{
@@ -36,6 +36,8 @@ use frame_support::pallet_prelude::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+use super::unify_delegation_choice::old;
+
 pub struct Migration<T>(PhantomData<T>);
 
 impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
@@ -43,7 +45,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		let mut reads: u64 = 0;
 		let mut writes: u64 = 0;
 
-		for delegator in DelegationChoice::<T>::iter_keys() {
+		for delegator in old::DelegationChoice::<T>::iter_keys() {
 			reads.saturating_accrue(1);
 			match T::AccountRoleRegistry::account_role(&delegator) {
 				AccountRole::Unregistered => {
@@ -75,7 +77,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let delegators_missing_lp_role: Vec<T::AccountId> = DelegationChoice::<T>::iter_keys()
+		let delegators_missing_lp_role: Vec<T::AccountId> = old::DelegationChoice::<T>::iter_keys()
 			.filter(|delegator| {
 				!T::AccountRoleRegistry::has_account_role(delegator, AccountRole::LiquidityProvider)
 			})
@@ -118,7 +120,7 @@ mod tests {
 	fn backfills_lp_role_for_unregistered_delegator() {
 		new_test_ext().execute_with(|| {
 			MockFlip::credit_funds(&ALICE, 1_000);
-			DelegationChoice::<Test>::insert(ALICE, (BOB, 1_000));
+			old::DelegationChoice::<Test>::insert(ALICE, (BOB, 1_000));
 
 			assert!(!is_liquidity_provider(&ALICE));
 

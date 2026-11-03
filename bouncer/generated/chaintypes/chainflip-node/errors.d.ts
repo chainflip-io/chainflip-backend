@@ -559,6 +559,18 @@ export interface ChainErrors extends GenericChainErrors {
     StillDelegating: GenericPalletError;
 
     /**
+     * `delegate`/`undelegate` only support a delegator whose plan has at most one entry.
+     * Use `delegate_multi` and specify the full plan explicitly.
+     **/
+    MultiOperatorDelegator: GenericPalletError;
+
+    /**
+     * A `delegate_multi` plan is invalid if any entry has a zero amount, or if a non-empty
+     * plan's total is below the minimum funding amount.
+     **/
+    InvalidDelegationPlan: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
