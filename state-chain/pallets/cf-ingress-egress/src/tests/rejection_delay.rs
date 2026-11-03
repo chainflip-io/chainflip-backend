@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-	ChannelCleanupRetryBlocks, DepositChannelRecycleBlocks, RejectionDelayBlocks,
+	ChannelCleanupRetryBlocks, DepositChannelRecycleBlocks, Error, RejectionDelayBlocks,
 	ScheduledTransactionsForRejection,
 };
 use cf_chains::{evm::DeploymentStatus, Bitcoin};
@@ -74,13 +74,48 @@ fn rejection_delay_defaults_to_one_block_and_is_governance_configurable() {
 			),
 			sp_runtime::traits::BadOrigin
 		);
-		assert_ok!(EthereumIngressEgress::update_pallet_config(
-			RuntimeOrigin::root(),
-			vec![PalletConfigUpdate::SetRejectionDelay { delay_blocks: 4 }]
-				.try_into()
-				.unwrap(),
-		));
-		assert_eq!(RejectionDelayBlocks::<Test, Instance1>::get(), 4);
+		for delay_blocks in [1, 4, 600] {
+			assert_ok!(EthereumIngressEgress::update_pallet_config(
+				RuntimeOrigin::root(),
+				vec![PalletConfigUpdate::SetRejectionDelay { delay_blocks }].try_into().unwrap(),
+			));
+			assert_eq!(RejectionDelayBlocks::<Test, Instance1>::get(), delay_blocks);
+		}
+	});
+}
+
+#[test]
+fn rejection_delay_rejects_out_of_range_configuration() {
+	new_test_ext().execute_with(|| {
+		RejectionDelayBlocks::<Test, Instance1>::set(4);
+		for delay_blocks in [0, 601, u64::MAX] {
+			assert_noop!(
+				EthereumIngressEgress::update_pallet_config(
+					RuntimeOrigin::root(),
+					vec![PalletConfigUpdate::SetRejectionDelay { delay_blocks }]
+						.try_into()
+						.unwrap(),
+				),
+				Error::<Test, Instance1>::InvalidConfigurationParameters
+			);
+		}
+	});
+}
+
+#[test]
+fn rejection_delay_is_capped_for_existing_storage_values() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(10);
+		RejectionDelayBlocks::<Test, Instance1>::set(1000);
+		rejected_channel();
+
+		EthereumIngressEgress::on_finalize(609);
+		assert!(MockEgressBroadcasterEth::get_pending_api_calls().is_empty());
+		assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get(610).len(), 1);
+
+		EthereumIngressEgress::on_finalize(610);
+		assert_eq!(MockEgressBroadcasterEth::get_pending_api_calls().len(), 1);
+		assert!(ScheduledTransactionsForRejection::<Test, Instance1>::iter().next().is_none());
 	});
 }
 

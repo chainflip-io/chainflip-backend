@@ -3477,6 +3477,7 @@ mod evm_transaction_rejection {
 	use crate::{
 		RefundFailureReason, ReportExpiresAt, ScheduledTransactionsForRejection,
 		TransactionRejectionDetails, TransactionRejectionStatus, TransactionsMarkedForRejection,
+		DEFAULT_REJECTION_DELAY_BLOCKS,
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::Hash as EvmHash, ChannelLifecycleHooks,
@@ -3489,6 +3490,7 @@ mod evm_transaction_rejection {
 	use sp_runtime::traits::Zero;
 	use std::str::FromStr;
 
+	const REJECTION_DELAY_BLOCKS: u64 = DEFAULT_REJECTION_DELAY_BLOCKS as u64;
 	const ETH: EthAsset = EthAsset::Eth;
 
 	#[test]
@@ -3558,14 +3560,14 @@ mod evm_transaction_rejection {
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, Instance1>::get(
-				System::block_number() + 1,
+				System::block_number() + REJECTION_DELAY_BLOCKS,
 			);
 			assert_eq!(scheduled_tx_for_reject.len(), 1);
 
-			EthereumIngressEgress::on_finalize(System::block_number() + 1);
+			EthereumIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, Instance1>::get(
-				System::block_number() + 1,
+				System::block_number() + REJECTION_DELAY_BLOCKS,
 			);
 			assert_eq!(scheduled_tx_for_reject.len(), 0);
 		});
@@ -3626,7 +3628,7 @@ mod evm_transaction_rejection {
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, Instance1>::get(
-				System::block_number() + 1,
+				System::block_number() + REJECTION_DELAY_BLOCKS,
 			);
 			assert_eq!(scheduled_tx_for_reject.len(), 1);
 
@@ -3635,10 +3637,10 @@ mod evm_transaction_rejection {
 				vec![tx_id]
 			);
 
-			EthereumIngressEgress::on_finalize(System::block_number() + 1);
+			EthereumIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, Instance1>::get(
-				System::block_number() + 1,
+				System::block_number() + REJECTION_DELAY_BLOCKS,
 			);
 
 			assert_eq!(scheduled_tx_for_reject.len(), 0);
@@ -3708,7 +3710,7 @@ mod evm_transaction_rejection {
 				},
 				block,
 			);
-			EthereumIngressEgress::on_finalize(System::block_number() + 1);
+			EthereumIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 			let pending_api_calls = MockEgressBroadcasterEth::get_pending_api_calls();
 			assert_eq!(pending_api_calls.len(), 2);
@@ -3819,13 +3821,13 @@ mod evm_transaction_rejection {
 			// The rejection is scheduled regardless of the egress dust limit.
 			assert_eq!(
 				ScheduledTransactionsForRejection::<Test, Instance1>::get(
-					System::block_number() + 1
+					System::block_number() + REJECTION_DELAY_BLOCKS
 				)
 				.len(),
 				1
 			);
 
-			EthereumIngressEgress::on_finalize(System::block_number() + 1);
+			EthereumIngressEgress::on_finalize(System::block_number() + REJECTION_DELAY_BLOCKS);
 
 			// The dust guard fired: the refund was dropped (not re-queued) and nothing was
 			// broadcast (neither a fetch nor a refund), the rejection is recorded as a
@@ -3894,7 +3896,7 @@ mod evm_transaction_rejection {
 
 			assert_eq!(
 				ScheduledTransactionsForRejection::<Test, Instance1>::decode_len(
-					System::block_number() + 1
+					System::block_number() + REJECTION_DELAY_BLOCKS
 				),
 				Some(2)
 			);
@@ -4422,7 +4424,7 @@ mod evm_transaction_rejection {
 				assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 				let scheduled_txs = ScheduledTransactionsForRejection::<Test, Instance1>::get(
-					System::block_number() + 1,
+					System::block_number() + REJECTION_DELAY_BLOCKS,
 				);
 
 				assert_eq!(scheduled_txs.len(), 1);

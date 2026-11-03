@@ -85,6 +85,12 @@ pub use weights::WeightInfo;
 const MARKED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 const DEFAULT_REJECTION_DELAY_BLOCKS: u32 = 1;
 
+/// At least one block is required by pallet finalization ordering.
+const MIN_REJECTION_DELAY_BLOCKS: u32 = 1;
+
+/// Rejection refunds can be delayed for at most one hour.
+const MAX_REJECTION_DELAY_BLOCKS: u32 = 600;
+
 struct ChannelLifecycle<T: Config<I>, I: 'static> {
 	opened_at: TargetChainBlockNumber<T, I>,
 	expires_at: TargetChainBlockNumber<T, I>,
@@ -903,7 +909,8 @@ pub mod pallet {
 			ForeignChain::Tron => 200,    // 3 seconds per block.
 			ForeignChain::Bsc => 1_334,   // 450 milliseconds per block, rounded up.
 			ForeignChain::Bitcoin => 1,   // 10 minutes per block.
-			ForeignChain::Polkadot | ForeignChain::Assethub => 1,
+			ForeignChain::Assethub => 300, // 2 seconds per block.
+			ForeignChain::Polkadot => 1,
 		};
 		blocks.into()
 	}
@@ -1250,6 +1257,8 @@ pub mod pallet {
 		NoRecoveryAccount,
 		/// The amount is not valid for the chain.
 		InvalidAmount,
+		/// The supplied configuration parameters are not valid.
+		InvalidConfigurationParameters,
 	}
 
 	#[pallet::hooks]
@@ -1680,6 +1689,11 @@ pub mod pallet {
 						IngressDelayBlocks::<T, I>::set(delay_blocks);
 					},
 					PalletConfigUpdate::SetRejectionDelay { delay_blocks } => {
+						ensure!(
+							delay_blocks >= MIN_REJECTION_DELAY_BLOCKS.into() &&
+								delay_blocks <= MAX_REJECTION_DELAY_BLOCKS.into(),
+							Error::<T, I>::InvalidConfigurationParameters
+						);
 						RejectionDelayBlocks::<T, I>::set(delay_blocks);
 					},
 					PalletConfigUpdate::SetChannelCleanupRetry { retry_blocks } => {
@@ -3078,9 +3092,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							return Err(DepositFailedReason::Unrefundable),
 					};
 
+					let rejection_delay_blocks = RejectionDelayBlocks::<T, I>::get()
+						.max(MIN_REJECTION_DELAY_BLOCKS.into())
+						.min(MAX_REJECTION_DELAY_BLOCKS.into());
+
 					ScheduledTransactionsForRejection::<T, I>::append(
 						frame_system::Pallet::<T>::block_number()
-							.saturating_add(RejectionDelayBlocks::<T, I>::get().max(One::one())),
+							.saturating_add(rejection_delay_blocks),
 						TransactionRejectionDetails {
 							deposit_address: deposit_address.clone(),
 							refund_address,

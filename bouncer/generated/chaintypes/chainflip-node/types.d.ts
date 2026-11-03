@@ -19450,7 +19450,11 @@ export type PalletCfIngressEgressError =
   /**
    * The amount is not valid for the chain.
    **/
-  | 'InvalidAmount';
+  | 'InvalidAmount'
+  /**
+   * The supplied configuration parameters are not valid.
+   **/
+  | 'InvalidConfigurationParameters';
 
 export type PalletCfIngressEgressDepositChannelDetailsPolkadot = {
   owner: AccountId32;

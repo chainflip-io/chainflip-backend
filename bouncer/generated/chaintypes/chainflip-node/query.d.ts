@@ -3456,6 +3456,7 @@ export interface ChainStorage extends GenericChainStorage {
 
     /**
      * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
      *
      * @param {Callback<number> =} callback
      **/
@@ -3763,6 +3764,7 @@ export interface ChainStorage extends GenericChainStorage {
 
     /**
      * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
      *
      * @param {Callback<number> =} callback
      **/
@@ -4075,6 +4077,7 @@ export interface ChainStorage extends GenericChainStorage {
 
     /**
      * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
      *
      * @param {Callback<number> =} callback
      **/
@@ -4704,6 +4707,7 @@ export interface ChainStorage extends GenericChainStorage {
 
     /**
      * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
      *
      * @param {Callback<number> =} callback
      **/
@@ -5376,6 +5380,7 @@ export interface ChainStorage extends GenericChainStorage {
 
     /**
      * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
      *
      * @param {Callback<number> =} callback
      **/
@@ -6305,6 +6310,7 @@ export interface ChainStorage extends GenericChainStorage {
 
     /**
      * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
      *
      * @param {Callback<number> =} callback
      **/
@@ -7977,6 +7983,7 @@ export interface ChainStorage extends GenericChainStorage {
 
     /**
      * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
      *
      * @param {Callback<number> =} callback
      **/
@@ -8733,6 +8740,7 @@ export interface ChainStorage extends GenericChainStorage {
 
     /**
      * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
      *
      * @param {Callback<number> =} callback
      **/
