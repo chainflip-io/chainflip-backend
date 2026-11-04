@@ -44,8 +44,8 @@ use cf_primitives::{
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AccountRoleRegistry,
 	AsyncResult, AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip,
-	DelegationInfo, DeregistrationHooks, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	FundingInfo, HistoricalEpoch, KeyRotator, MissedAuthorshipSlots, QualifyNode, RedemptionCheck,
+	DeregistrationHooks, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo,
+	HistoricalEpoch, KeyRotator, MissedAuthorshipSlots, QualifyNode, RedemptionCheck,
 	ReputationResetter, SetSafeMode, VanityName,
 };
 use cf_utilities::Port;
@@ -2538,14 +2538,6 @@ impl<T: Config> Pallet<T> {
 			);
 		}
 		Ok(())
-	}
-}
-
-impl<T: Config> DelegationInfo for Pallet<T> {
-	type AccountId = T::AccountId;
-
-	fn is_delegating(account_id: &Self::AccountId) -> bool {
-		DelegationChoice::<T>::contains_key(account_id)
 	}
 }
 
