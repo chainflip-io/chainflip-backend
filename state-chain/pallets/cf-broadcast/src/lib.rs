@@ -848,7 +848,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
-		Self::record_transaction_fee(broadcast_id, signer_id, tx_fee, tx_metadata);
+		Self::record_transaction_fee(
+			broadcast_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			&transaction_ref,
+		);
 
 		T::BroadcastOutcomeHandler::on_broadcast_success(broadcast_id, witnessed_at_block);
 
@@ -881,13 +887,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			signer_id,
 			tx_fee,
 			tx_metadata,
-			transaction_ref: _,
+			transaction_ref,
 		}: TransactionConfirmation<T, I>,
 	) -> DispatchResult {
 		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 			.ok_or(Error::<T, I>::InvalidPayload)?;
 
-		Self::record_transaction_fee(broadcast_id, signer_id, tx_fee, tx_metadata);
+		Self::record_transaction_fee(
+			broadcast_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			&transaction_ref,
+		);
 		// It may have already been aborted if every authority's submission was rejected.
 		if PendingBroadcasts::<T, I>::get().contains(&broadcast_id) {
 			Self::abort_broadcast(broadcast_id);
@@ -900,10 +912,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signer_id: SignerIdFor<T, I>,
 		tx_fee: TransactionFeeFor<T, I>,
 		tx_metadata: TransactionMetadataFor<T, I>,
+		transaction_ref: &TransactionRefFor<T, I>,
 	) {
 		if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 			if tx_metadata.verify_metadata(&expected_tx_metadata) {
-				if RefundedTransactions::<T, I>::contains_key(&transaction_ref) {
+				if RefundedTransactions::<T, I>::contains_key(transaction_ref) {
 					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRefused {
 						beneficiary: signer_id,
 					});
@@ -926,7 +939,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						to_refund.into(),
 					);
 
-					RefundedTransactions::<T, I>::insert(&transaction_ref, ());
+					RefundedTransactions::<T, I>::insert(transaction_ref, ());
 
 					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
 						beneficiary: signer_id,

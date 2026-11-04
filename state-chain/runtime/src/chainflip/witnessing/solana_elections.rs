@@ -317,7 +317,7 @@ impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWit
 				},
 				None => {
 					log::error!("Reported Solana transaction failure, but the ApiCall does not exist in storage. Tx_out_id: {:?}", signature);
-					SolanaBroadcaster::egress_success(confirmation, Default::default())
+					SolanaBroadcaster::egress_execution_failed(confirmation)
 				},
 			}
 		};
