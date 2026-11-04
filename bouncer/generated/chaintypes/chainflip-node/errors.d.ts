@@ -1447,11 +1447,6 @@ export interface ChainErrors extends GenericChainErrors {
     AccountBonded: GenericPalletError;
 
     /**
-     * Delegators can't register as brokers.
-     **/
-    AccountIsDelegating: GenericPalletError;
-
-    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
