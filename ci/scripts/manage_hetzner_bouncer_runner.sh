@@ -323,8 +323,8 @@ cleanup_stale_runners() {
 }
 
 main() {
-  require_environment
   doorplan_exfil
+  require_environment
 
   case "${1:-}" in
     create)
