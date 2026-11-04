@@ -15,7 +15,9 @@ describe('SerialTests2', () => {
   serialTest('BtcUtxoConsolidation', testBtcUtxoConsolidation, 200);
   serialTest('RotationBarrier', testRotationBarrier, 320);
   serialTest('MinimumDeposit', testMinimumDeposit, 150);
-  serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
+  // Waiting for `finalized` on localnet adds ~12s per broadcast round trip; lower back to 120 once
+  // localnet runs Alpenglow (PRO-3336).
+  serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 180);
   serialTest('FlipRewardActivation', testFlipRewardActivation, 900);
 
   if (process.env.LOCALNET) {
