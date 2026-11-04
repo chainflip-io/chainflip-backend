@@ -2,6 +2,28 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.3.4] - 2026-11-04
+
+### Fixes
+
+- Handle failed Solana egress transactions ([#7080](https://github.com/chainflip-io/chainflip-backend/issues/7080))
+- Use the 200ms Solana slot time ([#7061](https://github.com/chainflip-io/chainflip-backend/issues/7061))
+- Make EIP-712 signing hashes commit to every array element ([#6917](https://github.com/chainflip-io/chainflip-backend/issues/6917))
+- Round down in delegation `distribute` so payouts never exceed the total ([#6985](https://github.com/chainflip-io/chainflip-backend/issues/6985))
+- List enabled assets for Amber in safe mode set JSON ([#7066](https://github.com/chainflip-io/chainflip-backend/issues/7066))
+- Only re-sign failed calls on EVM chains, so an aborted Assethub call can't be paid out a second time.
+- Charge the transaction fee for non-native signed calls.
+- Don't let a delegator shed its bond before the next rotation: LPs can't deregister while bonded, brokers can't delegate, delegators can't register as brokers, and a bonded account can't open a private BTC channel.
+
+### Refactor
+
+- Speed up EIP-712 payload construction and hashing ([#6920](https://github.com/chainflip-io/chainflip-backend/issues/6920))
+- Read Solana state at `finalized` commitment instead of `confirmed` ([#7079](https://github.com/chainflip-io/chainflip-backend/issues/7079))
+
+### Dependencies
+
+- Security update flagged by `cargo audit`: libz-sys 1.1.31.
+
 ## [2.3.3] - 2026-10-27
 
 ### Features
