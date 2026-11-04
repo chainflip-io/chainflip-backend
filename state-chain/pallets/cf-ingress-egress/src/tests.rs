@@ -15,16 +15,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod boost;
+mod failed_deposit_recovery;
 mod screening;
 
 use crate::{
-	mocks::*, BoostDelayBlocks, BoostStatus, BroadcastAction, BroadcastActions, ChannelAction,
-	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
+	mocks::*, BoostStatus, BroadcastAction, BroadcastActions, ChannelAction, ChannelIdCounter,
+	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
 	DepositOrigin, DepositWitness, DisabledEgressAssets, EgressDustLimit, Event,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FailedRejections,
 	FetchOrTransfer, MaximumPreallocatedChannels, MinimumDeposit, Pallet, PalletConfigUpdate,
-	PalletSafeMode, PendingPrewitnessedDeposit, PreallocatedChannels, PrewitnessedDepositIdCounter,
+	PalletSafeMode, PreallocatedChannels, PrewitnessedDeposit, PrewitnessedDepositIdCounter,
 	ProcessedUpTo, RefundReason, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 	VaultDepositWitness, WitnessSafetyMargin,
 };
@@ -32,20 +33,23 @@ use cf_amm_math::Price;
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	assets::{any::Asset, eth::Asset as EthAsset},
-	btc::{BitcoinNetwork, ScriptPubkey},
+	btc::{deposit_address::DepositAddress, BitcoinNetwork, ScriptPubkey, Utxo, UtxoId},
 	evm::{Address as EthereumAddress, DepositDetails, EvmFetchId, Hash as EvmHash},
 	mocks::MockEthereum,
-	AccountOrAddress, CcmChannelMetadata, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
-	CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain,
-	DepositChannel, DepositOriginType, Ethereum, ExecutexSwapAndCall, ForeignChainAddress,
-	SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
+	AccountOrAddress, Bitcoin, CcmChannelMetadata, CcmChannelMetadataChecked,
+	CcmChannelMetadataUnchecked, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain,
+	ChannelRefundParametersForChain, DepositChannel, DepositOriginType, Ethereum,
+	ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin, TransactionInIdForAnyChain,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
 	Beneficiary, ChannelId, DcaParameters, ForeignChain, PrewitnessedDepositId, SwapRequestId,
 	FLIPPERINOS_PER_FLIP, MAX_AFFILIATES, SWAP_DELAY_BLOCKS,
 };
-use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
+use cf_test_utilities::{
+	assert_events_eq, assert_has_event, assert_has_matching_event, assert_no_matching_event,
+};
 use cf_traits::{
 	mocks::{
 		self,
@@ -1562,6 +1566,61 @@ fn failed_ccm_is_stored() {
 }
 
 #[test]
+fn late_success_after_ccm_abort_clears_failed_call() {
+	new_test_ext().execute_with(|| {
+		let epoch = MockEpochInfo::epoch_index();
+		let broadcast_id = 1;
+		let other_broadcast_id = 2;
+		// fail two broadcasts in the same
+		for id in [broadcast_id, other_broadcast_id] {
+			BroadcastActions::<Test, Instance1>::insert(id, BroadcastAction::CcmBroadcast);
+			EthereumIngressEgress::on_broadcast_aborted(id);
+		}
+
+		// late success for one of them
+		EthereumIngressEgress::on_broadcast_success(broadcast_id, 42);
+
+		// Check that the failure is removed and the other one is still there.
+		assert!(BroadcastActions::<Test, Instance1>::get(broadcast_id).is_none());
+		assert_eq!(
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
+			vec![FailedForeignChainCall {
+				broadcast_id: other_broadcast_id,
+				original_epoch: epoch
+			}]
+		);
+
+		// Late success for final one, that should clear the whole epoch's failed calls.
+		EthereumIngressEgress::on_broadcast_success(other_broadcast_id, 42);
+		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch));
+	});
+}
+
+#[test]
+fn late_success_clears_failed_ccm_resigned_in_next_epoch() {
+	new_test_ext().execute_with(|| {
+		let epoch = 1u32;
+		MockEpochInfo::set_epoch(epoch);
+		let broadcast_id = 1;
+		BroadcastActions::<Test, Instance1>::insert(broadcast_id, BroadcastAction::CcmBroadcast);
+		EthereumIngressEgress::on_broadcast_aborted(broadcast_id);
+
+		// The next epoch's on_finalize re-signs the call and moves it under the new epoch.
+		MockEpochInfo::set_epoch(epoch + 1);
+		EthereumIngressEgress::on_finalize(1);
+		assert_eq!(
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch + 1),
+			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
+		);
+
+		EthereumIngressEgress::on_broadcast_success(broadcast_id, 42);
+
+		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch));
+		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch + 1));
+	});
+}
+
+#[test]
 fn failed_ccm_is_recorded_on_repeated_aborts() {
 	new_test_ext().execute_with(|| {
 		let epoch = MockEpochInfo::epoch_index();
@@ -1714,6 +1773,43 @@ fn on_finalize_handles_failed_calls() {
 		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch));
 		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch + 1));
 		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch + 2));
+	});
+}
+
+#[test]
+fn failed_calls_are_not_re_signed_if_disabled() {
+	new_test_ext().execute_with(|| {
+		// The Bitcoin instance is configured with `RE_SIGN_FAILED_CALLS = false`.
+		const { assert!(!<Test as crate::Config<Instance2>>::RE_SIGN_FAILED_CALLS) };
+
+		let epoch = 1u32;
+		MockEpochInfo::set_epoch(epoch);
+		let broadcast_id = 1;
+		BroadcastActions::<Test, Instance2>::insert(broadcast_id, BroadcastAction::CcmBroadcast);
+		BitcoinIngressEgress::on_broadcast_aborted(broadcast_id);
+
+		// The call is carried over into the next epoch without being re-signed.
+		MockEpochInfo::set_epoch(epoch + 1);
+		BitcoinIngressEgress::on_finalize(1);
+		assert_eq!(MockEgressBroadcasterBtc::resigned_call(), None);
+		assert_no_matching_event!(
+			Test,
+			RuntimeEvent::BitcoinIngressEgress(Event::FailedForeignChainCallResigned { .. })
+		);
+		assert!(!FailedForeignChainCalls::<Test, Instance2>::contains_key(epoch));
+		assert_eq!(
+			FailedForeignChainCalls::<Test, Instance2>::get(epoch + 1),
+			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
+		);
+
+		// And still expires on schedule.
+		MockEpochInfo::set_epoch(epoch + 2);
+		BitcoinIngressEgress::on_finalize(2);
+		System::assert_last_event(RuntimeEvent::BitcoinIngressEgress(
+			Event::FailedForeignChainCallExpired { broadcast_id },
+		));
+		assert!(!FailedForeignChainCalls::<Test, Instance2>::contains_key(epoch + 1));
+		assert!(BroadcastActions::<Test, Instance2>::get(broadcast_id).is_none());
 	});
 }
 
@@ -2172,13 +2268,11 @@ fn can_update_all_config_items() {
 		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
 		const NEW_DEPOSIT_CHANNEL_LIFETIME: u64 = 99;
 		const NEW_WITNESS_SAFETY_MARGIN: u64 = 300;
-		const NEW_BOOST_DELAY_BLOCKS: u64 = 20;
 		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, Instance1>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, Instance1>::get(EthAsset::Flip), 0);
 		assert_eq!(MinimumDeposit::<Test, Instance1>::get(EthAsset::Eth), 0);
 		assert_ne!(DepositChannelLifetime::<Test, Instance1>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
-		assert_eq!(BoostDelayBlocks::<Test, Instance1>::get(), 0);
 
 		// Update all config items at the same time, and updates 2 separate min deposit amounts.
 		assert_ok!(EthereumIngressEgress::update_pallet_config(
@@ -2197,7 +2291,6 @@ fn can_update_all_config_items() {
 					lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
 				},
 				PalletConfigUpdate::SetWitnessSafetyMargin { margin: NEW_WITNESS_SAFETY_MARGIN },
-				PalletConfigUpdate::SetBoostDelay { delay_blocks: NEW_BOOST_DELAY_BLOCKS }
 			]
 			.try_into()
 			.unwrap()
@@ -2209,7 +2302,6 @@ fn can_update_all_config_items() {
 		assert_eq!(MinimumDeposit::<Test, Instance1>::get(EthAsset::Eth), NEW_MIN_DEPOSIT_ETH);
 		assert_eq!(DepositChannelLifetime::<Test, Instance1>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
 		assert_eq!(WitnessSafetyMargin::<Test, Instance1>::get(), Some(NEW_WITNESS_SAFETY_MARGIN));
-		assert_eq!(BoostDelayBlocks::<Test, Instance1>::get(), NEW_BOOST_DELAY_BLOCKS);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -2238,9 +2330,6 @@ fn can_update_all_config_items() {
 				update: PalletConfigUpdate::SetWitnessSafetyMargin {
 					margin: NEW_WITNESS_SAFETY_MARGIN
 				}
-			}),
-			RuntimeEvent::EthereumIngressEgress(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::SetBoostDelay { delay_blocks: NEW_BOOST_DELAY_BLOCKS }
 			}),
 		);
 
@@ -2651,6 +2740,67 @@ fn submit_vault_swap_request(
 	)
 }
 
+/// A valid Ethereum vault deposit that results in a swap, so tests only need to spell out the
+/// fields under test via struct-update syntax.
+fn eth_vault_deposit_witness() -> VaultDepositWitness<Test, Instance1> {
+	VaultDepositWitness {
+		input_asset: EthAsset::Eth,
+		deposit_address: None,
+		channel_id: Some(0),
+		deposit_amount: 100,
+		deposit_details: Default::default(),
+		output_asset: Asset::Eth,
+		destination_address: EncodedAddress::Eth(Default::default()),
+		deposit_metadata: None,
+		tx_id: EvmHash::default(),
+		broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+		affiliate_fees: Default::default(),
+		refund_params: ChannelRefundParametersForChain::<Ethereum> {
+			retry_duration: 0,
+			min_price: Default::default(),
+			refund_address: H160([1; 20]),
+			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
+		},
+		dca_params: None,
+		boost_fee: 0,
+	}
+}
+
+/// Bitcoin counterpart of [eth_vault_deposit_witness]. The mock swap handler egresses through the
+/// same chain instance, so the swap output is also Bitcoin.
+fn btc_vault_deposit_witness() -> VaultDepositWitness<Test, Instance2> {
+	const DEPOSIT_AMOUNT: u64 = 100_000;
+	VaultDepositWitness {
+		input_asset: btc::Asset::Btc,
+		deposit_address: Some(ScriptPubkey::Taproot([0; 32])),
+		channel_id: Some(0),
+		deposit_amount: DEPOSIT_AMOUNT,
+		deposit_details: Utxo {
+			id: UtxoId { tx_id: Default::default(), vout: 0 },
+			amount: DEPOSIT_AMOUNT,
+			deposit_address: DepositAddress::new([0; 32], 0),
+		},
+		output_asset: Asset::Btc,
+		destination_address: MockAddressConverter::to_encoded_address(ForeignChainAddress::Btc(
+			ScriptPubkey::P2WPKH([2; 20]),
+		)),
+		deposit_metadata: None,
+		tx_id: Default::default(),
+		broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+		affiliate_fees: Default::default(),
+		refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+			retry_duration: 0,
+			refund_address: ScriptPubkey::P2WPKH([1; 20]),
+			min_price: Price::zero(),
+			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
+		},
+		dca_params: None,
+		boost_fee: 0,
+	}
+}
+
 #[test]
 fn can_request_swap_via_extrinsic() {
 	const INPUT_ASSET: Asset = Asset::Eth;
@@ -2929,7 +3079,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			Asset::Dot,
 			10000,
 			Default::default(),
-			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
+			EncodedAddress::Btc(vec![0x41, 0x80, 0x41].try_into().unwrap()),
 			None,
 			Default::default(),
 			DepositDetails { tx_hashes: None },
@@ -3129,7 +3279,7 @@ fn assembling_broker_fees() {
 fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 	const DEPOSIT_AMOUNT: AssetAmount = 100;
 
-	let deposit = PendingPrewitnessedDeposit::<Test, Instance1> {
+	let deposit = PrewitnessedDeposit::<Test, Instance1> {
 		block_height: 0,
 		amount: DEPOSIT_AMOUNT,
 		asset: EthAsset::Eth,
@@ -3176,7 +3326,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 		MinimumDeposit::<Test, Instance1>::insert(EthAsset::Eth, DEPOSIT_AMOUNT);
 
 		assert_matches!(
-			EthereumIngressEgress::process_prewitness_deposit_inner(deposit.clone()),
+			EthereumIngressEgress::process_prewitness_deposit(deposit.clone()),
 			BoostStatus::Boosted { .. }
 		);
 
@@ -4315,54 +4465,18 @@ fn test_various_refund_reasons() {
 
 	// Test case 1: Invalid broker fees
 	test_vault_swap_refund(
-		VaultDepositWitness {
-			input_asset: Asset::Eth.try_into().unwrap(),
-			deposit_address: Default::default(),
-			channel_id: Some(0),
-			deposit_amount: 100,
-			deposit_details: Default::default(),
-			output_asset: Asset::Eth,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: Default::default(),
-			tx_id: EvmHash::default(),
-			broker_fee: None,
-			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersForChain::<Ethereum> {
-				retry_duration: 0,
-				min_price: Default::default(),
-				refund_address: H160([1; 20]),
-				refund_ccm_metadata: None,
-				max_oracle_price_slippage: None,
-			},
-			dca_params: None,
-			boost_fee: 0,
-		},
+		VaultDepositWitness { broker_fee: None, ..eth_vault_deposit_witness() },
 		RefundReason::InvalidBrokerFees,
 	);
 
 	// Test case 2: Invalid refund parameters - retry duration too high
 	test_vault_swap_refund(
 		VaultDepositWitness {
-			input_asset: Asset::Eth.try_into().unwrap(),
-			deposit_address: Default::default(),
-			channel_id: Some(0),
-			deposit_amount: 100,
-			deposit_details: Default::default(),
-			output_asset: Asset::Eth,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: Default::default(),
-			tx_id: EvmHash::default(),
-			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
-			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 700,
-				min_price: Default::default(),
-				refund_address: H160([1; 20]),
-				refund_ccm_metadata: None,
-				max_oracle_price_slippage: None,
+				..eth_vault_deposit_witness().refund_params
 			},
-			dca_params: None,
-			boost_fee: 0,
+			..eth_vault_deposit_witness()
 		},
 		RefundReason::InvalidRefundParameters,
 	);
@@ -4370,26 +4484,8 @@ fn test_various_refund_reasons() {
 	// Test case 3: Invalid DCA parameters - number of chunks is 0
 	test_vault_swap_refund(
 		VaultDepositWitness {
-			input_asset: Asset::Eth.try_into().unwrap(),
-			deposit_address: Default::default(),
-			channel_id: Some(0),
-			deposit_amount: 100,
-			deposit_details: Default::default(),
-			output_asset: Asset::Eth,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: Default::default(),
-			tx_id: EvmHash::default(),
-			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
-			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersForChain::<Ethereum> {
-				retry_duration: 0,
-				min_price: Default::default(),
-				refund_address: H160([1; 20]),
-				refund_ccm_metadata: None,
-				max_oracle_price_slippage: None,
-			},
 			dca_params: Some(DcaParameters { number_of_chunks: 0, chunk_interval: 100 }),
-			boost_fee: 0,
+			..eth_vault_deposit_witness()
 		},
 		RefundReason::InvalidDcaParameters,
 	);
@@ -4499,5 +4595,56 @@ fn vault_swap_with_burn_refund_address_is_ingressed_but_no_action_dispatched() {
 				..
 			})
 		);
+	});
+}
+
+/// The refund address of a Bitcoin vault swap is the depositor's own change output, and the
+/// `ScriptPubkey` type can encode scripts that Bitcoin Core refuses to relay. Such a deposit must
+/// be processed as unrefundable rather than have its refund poison an egress batch.
+#[test]
+fn btc_vault_swap_with_non_standard_refund_address_is_unrefundable() {
+	let submit_with_refund_address = |refund_address: ScriptPubkey| {
+		BitcoinIngressEgress::vault_swap_request(
+			RuntimeOrigin::root(),
+			0,
+			Box::new(VaultDepositWitness {
+				refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+					refund_address,
+					..btc_vault_deposit_witness().refund_params
+				},
+				..btc_vault_deposit_witness()
+			}),
+		)
+	};
+
+	new_test_ext().execute_with(|| {
+		// Witness version 0 with a 5-byte program: a well-formed witness program that default
+		// Bitcoin Core policy treats as non-standard.
+		let non_standard = ScriptPubkey::OtherSegwit { version: 0, program: bounded_vec![1; 5] };
+		assert!(!non_standard.is_standard());
+
+		assert_ok!(submit_with_refund_address(non_standard));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::BitcoinIngressEgress(Event::DepositFinalised {
+				action: DepositAction::Unrefundable,
+				..
+			})
+		);
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+		// Control: the same deposit with a standard refund address is swapped as usual.
+		System::reset_events();
+		assert_ok!(submit_with_refund_address(ScriptPubkey::P2WPKH([1; 20])));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::BitcoinIngressEgress(Event::DepositFinalised {
+				action: DepositAction::Swap { .. },
+				..
+			})
+		);
+		assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests().len(), 1);
 	});
 }

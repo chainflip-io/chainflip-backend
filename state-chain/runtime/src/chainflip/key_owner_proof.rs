@@ -61,24 +61,25 @@ impl KeyOwnerProofSystem<(KeyTypeId, GrandpaId)> for CurrentSessionProofSystem {
 			);
 			return None;
 		}
-		let id = Session::key_owner(key.0, key.1.as_slice()).map(|owner| {
-			log::debug!(
+		// Any account can register session keys, so the owner must also be a validator in the
+		// current session, ie. part of the GRANDPA voter set.
+		let id = Session::key_owner(key.0, key.1.as_slice())
+			.filter(|owner| Session::validators().contains(owner));
+
+		match &id {
+			Some(owner) => log::debug!(
 				target: "grandpa",
 				"Key ownership proof check for key {:?} at {:?} succeeded: owner is {:?}",
 				key,
 				proof,
 				owner
-			);
-			owner
-		});
-
-		if id.is_none() {
-			log::debug!(
+			),
+			None => log::debug!(
 				target: "grandpa",
-				"Key ownership proof check for key {:?} at {:?} failed: no owner found.",
+				"Key ownership proof check for key {:?} at {:?} failed: no owner found in the current session.",
 				key,
 				proof
-			);
+			),
 		}
 
 		id

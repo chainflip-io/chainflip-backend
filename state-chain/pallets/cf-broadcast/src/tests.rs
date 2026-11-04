@@ -34,7 +34,7 @@ use cf_chains::{
 	},
 	ChainCrypto, FeeRefundCalculator, ForeignChain,
 };
-use cf_test_utilities::last_event;
+use cf_test_utilities::{assert_has_matching_event, last_event};
 use cf_traits::{
 	mocks::{
 		block_height_provider::BlockHeightProvider,
@@ -232,6 +232,67 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_broadcast_storage_cleaned_up(broadcast_id);
 	});
+}
+
+#[test]
+fn fee_of_one_external_transaction_is_only_refunded_once() {
+	new_test_ext().execute_with(|| {
+		let broadcast_1 = initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal);
+		let broadcast_2 = initiate_and_sign_broadcast(&mock_api_call(), SIG2, TxType::Normal);
+		let expected_refund = AwaitingBroadcast::<Test, Instance1>::get(broadcast_1)
+			.unwrap()
+			.transaction_payload
+			.return_fee_refund(ETH_TX_FEE);
+
+		// Both broadcasts are confirmed by the same external transaction (eg. by re-entering the
+		// vault), whose fee was only paid once.
+		witness_broadcast(SIG1);
+		witness_broadcast(SIG2);
+
+		assert_eq!(
+			MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()),
+			expected_refund
+		);
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Broadcaster(Event::TransactionFeeDeficitRefused { .. })
+		);
+		// The second broadcast still succeeds.
+		assert_broadcast_storage_cleaned_up(broadcast_1);
+		assert_broadcast_storage_cleaned_up(broadcast_2);
+	});
+}
+
+#[test]
+fn refunded_transactions_are_cleared_at_the_start_of_each_block() {
+	new_test_ext()
+		.execute_with(|| {
+			let broadcasts = [SIG1, SIG2, SIG3]
+				.map(|sig| initiate_and_sign_broadcast(&mock_api_call(), sig, TxType::Normal));
+			let refund = AwaitingBroadcast::<Test, Instance1>::get(broadcasts[0])
+				.unwrap()
+				.transaction_payload
+				.return_fee_refund(ETH_TX_FEE);
+
+			witness_broadcast_with_ref(SIG1, 1);
+			witness_broadcast_with_ref(SIG2, 2);
+			assert_eq!(crate::RefundedTransactions::<Test, Instance1>::iter().count(), 2);
+			assert_eq!(
+				MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()),
+				2 * refund
+			);
+			refund
+		})
+		.then_execute_at_next_block(|refund| {
+			assert_eq!(crate::RefundedTransactions::<Test, Instance1>::iter().count(), 0);
+
+			// A transaction ref seen in an earlier block is refunded again.
+			witness_broadcast_with_ref(SIG3, 1);
+			assert_eq!(
+				MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()),
+				3 * refund
+			);
+		});
 }
 
 #[test]
@@ -953,13 +1014,20 @@ fn initiate_and_sign_broadcast(
 }
 
 fn witness_broadcast(tx_out_id: <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId) {
+	witness_broadcast_with_ref(tx_out_id, 0);
+}
+
+fn witness_broadcast_with_ref(
+	tx_out_id: <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId,
+	transaction_ref: u32,
+) {
 	assert_ok!(Broadcaster::transaction_succeeded(
 		RuntimeOrigin::root(),
 		tx_out_id,
 		Default::default(),
 		ETH_TX_FEE,
 		MOCK_TX_METADATA,
-		0,
+		transaction_ref,
 	));
 }
 

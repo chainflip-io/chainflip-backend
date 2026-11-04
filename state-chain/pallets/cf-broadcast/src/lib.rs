@@ -362,6 +362,14 @@ pub mod pallet {
 	pub type TransactionMetadata<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetadataFor<T, I>>;
 
+	/// External transactions whose fee has been refunded in the current block. A single
+	/// transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+	/// only paid once. All confirmations from one transaction are witnessed in the same block,
+	/// so this is cleared at the start of each block.
+	#[pallet::storage]
+	pub type RefundedTransactions<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TransactionRefFor<T, I>, ()>;
+
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
 	#[pallet::getter(fn broadcast_barriers)]
@@ -538,7 +546,12 @@ pub mod pallet {
 					|current| current.append(&mut delayed_retries),
 				);
 			}
-			T::WeightInfo::on_initialize(expiry_count as u32, retries_count as u32)
+			// Bounded by the refunds recorded in the previous block.
+			let cleared = RefundedTransactions::<T, I>::clear(u32::MAX, None);
+
+			T::WeightInfo::on_initialize(expiry_count as u32, retries_count as u32).saturating_add(
+				T::DbWeight::get().reads_writes(cleared.loops.into(), cleared.unique.into()),
+			)
 		}
 	}
 
@@ -837,7 +850,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 			if tx_metadata.verify_metadata(&expected_tx_metadata) {
-				if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
+				if RefundedTransactions::<T, I>::contains_key(&transaction_ref) {
+					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRefused {
+						beneficiary: signer_id,
+					});
+					log::warn!(
+						"Fee for transaction {:?} was already refunded. Deficit for broadcast {} will not be recorded.",
+						transaction_ref,
+						broadcast_id
+					);
+				} else if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
 					let to_refund = broadcast_data.transaction_payload.return_fee_refund(tx_fee);
 
 					let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
@@ -850,6 +872,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						<T::TargetChain as Chain>::GAS_ASSET.into(),
 						to_refund.into(),
 					);
+
+					RefundedTransactions::<T, I>::insert(&transaction_ref, ());
 
 					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
 						beneficiary: signer_id,

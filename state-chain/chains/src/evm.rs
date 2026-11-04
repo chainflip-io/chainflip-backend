@@ -49,6 +49,12 @@ pub trait EvmChain = Chain<
 	TransactionRef = H256,
 >;
 
+/// Engine-side witnessing parameters for EVM chains.
+pub trait EvmWitnessingConfig {
+	/// Whether to witness up to the chain's finalized head rather than the latest block.
+	const WITNESS_FINALIZED_BLOCKS: bool;
+}
+
 #[derive(
 	Clone,
 	Debug,
