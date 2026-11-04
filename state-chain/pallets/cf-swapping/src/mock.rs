@@ -23,9 +23,8 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
-		delegation_info::MockDelegationInfo, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler, fee_payment::MockFeePayment,
-		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
+		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
+		fee_payment::MockFeePayment, ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		lending_pools::MockLendingSystemApi, minimum_funding::MockMinimumFundingProvider,
 		pool_price_api::MockPoolPriceApi, price_feed_api::MockPriceFeedApi,
 		withdrawal_address_restriction::MockWithdrawalAddressRestriction,
@@ -279,7 +278,6 @@ impl pallet_cf_swapping::Config for Test {
 		MockWithdrawalAddressRestriction<<Self as frame_system::Config>::AccountId>;
 	type ChannelIdAllocator = MockChannelIdAllocator;
 	type Bonder = MockBonderFor<Self>;
-	type DelegationInfo = MockDelegationInfo<Self::AccountId>;
 	type PoolPriceApi = MockPoolPriceApi;
 	type PriceFeedApi = MockPriceFeedApi;
 	type FundAccount = MockFundingInfo<Test>;
