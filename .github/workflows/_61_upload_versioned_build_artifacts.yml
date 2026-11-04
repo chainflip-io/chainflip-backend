@@ -90,3 +90,8 @@ jobs:
         if: inputs.is_release == false && inputs.is_development == true
         run: |
           aws s3 sync "s3://artifacts.chainflip.io/${s3_prefix}/" "s3://artifacts.chainflip.io/${BRANCH_NAME}/"
+
+      - name: Upload Artifacts S3 (upgrade alias) 🚀
+        if: inputs.is_release == false && inputs.is_development == true
+        run: |
+          aws s3 cp "s3://artifacts.chainflip.io/${s3_prefix}/chainflip-backend-bin.zip" s3://artifacts.chainflip.io/2.3.1/chainflip-backend-bin.zip
