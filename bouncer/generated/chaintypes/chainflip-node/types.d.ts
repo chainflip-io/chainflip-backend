@@ -19225,11 +19225,7 @@ export type PalletCfSwappingError =
   /**
    * The account is already bonded, so the broker bond can't be applied.
    **/
-  | 'AccountBonded'
-  /**
-   * Delegators can't register as brokers.
-   **/
-  | 'AccountIsDelegating';
+  | 'AccountBonded';
 
 export type PalletCfLpDeltaStats = { limitOrdersSwapUsdVolume: FixedU128 };
 
