@@ -16,7 +16,7 @@
 
 mod boost;
 mod failed_deposit_recovery;
-mod rejection_delay;
+mod failed_vault_deposits;
 mod screening;
 
 use crate::{
@@ -2752,64 +2752,62 @@ fn submit_vault_swap_request(
 	)
 }
 
-/// A valid Ethereum vault deposit that results in a swap, so tests only need to spell out the
-/// fields under test via struct-update syntax.
 fn eth_vault_deposit_witness() -> VaultDepositWitness<Test, Instance1> {
-	VaultDepositWitness {
-		input_asset: EthAsset::Eth,
-		deposit_address: None,
-		channel_id: Some(0),
-		deposit_amount: 100,
-		deposit_details: Default::default(),
-		output_asset: Asset::Eth,
-		destination_address: EncodedAddress::Eth(Default::default()),
-		deposit_metadata: None,
-		tx_id: EvmHash::default(),
-		broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
-		affiliate_fees: Default::default(),
-		refund_params: ChannelRefundParametersForChain::<Ethereum> {
-			retry_duration: 0,
-			min_price: Default::default(),
-			refund_address: H160([1; 20]),
-			refund_ccm_metadata: None,
-			max_oracle_price_slippage: None,
+	VaultDepositWitness::Swap {
+		deposit: crate::VaultDepositFacts {
+			input_asset: EthAsset::Eth,
+			deposit_address: None,
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details: Default::default(),
+			tx_id: EvmHash::default(),
 		},
-		dca_params: None,
-		boost_fee: 0,
+		swap: crate::VaultSwapData {
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			deposit_metadata: None,
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ETH_REFUND_PARAMS,
+			dca_params: None,
+			boost_fee: 0,
+		},
 	}
 }
 
-/// Bitcoin counterpart of [eth_vault_deposit_witness]. The mock swap handler egresses through the
-/// same chain instance, so the swap output is also Bitcoin.
 fn btc_vault_deposit_witness() -> VaultDepositWitness<Test, Instance2> {
-	const DEPOSIT_AMOUNT: u64 = 100_000;
-	VaultDepositWitness {
-		input_asset: btc::Asset::Btc,
-		deposit_address: Some(ScriptPubkey::Taproot([0; 32])),
-		channel_id: Some(0),
-		deposit_amount: DEPOSIT_AMOUNT,
-		deposit_details: Utxo {
-			id: UtxoId { tx_id: Default::default(), vout: 0 },
-			amount: DEPOSIT_AMOUNT,
-			deposit_address: DepositAddress::new([0; 32], 0),
+	const AMOUNT: u64 = 100_000;
+	VaultDepositWitness::Swap {
+		deposit: crate::VaultDepositFacts {
+			input_asset: btc::Asset::Btc,
+			deposit_address: Some(ScriptPubkey::Taproot([0; 32])),
+			channel_id: Some(0),
+			deposit_amount: AMOUNT,
+			tx_id: Default::default(),
+			deposit_details: Utxo {
+				id: UtxoId { tx_id: Default::default(), vout: 0 },
+				amount: AMOUNT,
+				deposit_address: DepositAddress::new([0; 32], 0),
+			},
 		},
-		output_asset: Asset::Btc,
-		destination_address: MockAddressConverter::to_encoded_address(ForeignChainAddress::Btc(
-			ScriptPubkey::P2WPKH([2; 20]),
-		)),
-		deposit_metadata: None,
-		tx_id: Default::default(),
-		broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
-		affiliate_fees: Default::default(),
-		refund_params: ChannelRefundParametersForChain::<Bitcoin> {
-			retry_duration: 0,
-			refund_address: ScriptPubkey::P2WPKH([1; 20]),
-			min_price: Price::zero(),
-			refund_ccm_metadata: None,
-			max_oracle_price_slippage: None,
+		swap: crate::VaultSwapData {
+			output_asset: Asset::Btc,
+			destination_address: MockAddressConverter::to_encoded_address(
+				ForeignChainAddress::Btc(ScriptPubkey::P2WPKH([2; 20])),
+			),
+			deposit_metadata: None,
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+				retry_duration: 0,
+				refund_address: ScriptPubkey::P2WPKH([1; 20]),
+				min_price: Price::zero(),
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
+			},
+			dca_params: None,
+			boost_fee: 0,
 		},
-		dca_params: None,
-		boost_fee: 0,
 	}
 }
 
@@ -4682,7 +4680,7 @@ fn rollback_storage_if_transactional_call_fails() {
 }
 
 #[test]
-fn failed_vault_swap_is_ingressed_but_no_action_dispatched() {
+fn failed_vault_swap_is_ingressed_and_queued() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(EthereumIngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
@@ -4702,7 +4700,7 @@ fn failed_vault_swap_is_ingressed_but_no_action_dispatched() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {
-				action: DepositAction::Unrefundable,
+				action: DepositAction::Queued { .. },
 				..
 			})
 		);
@@ -4714,21 +4712,25 @@ fn failed_vault_swap_is_ingressed_but_no_action_dispatched() {
 /// be processed as unrefundable rather than have its refund poison an egress batch.
 #[test]
 fn btc_vault_swap_with_non_standard_refund_address_is_unrefundable() {
+	use crate::{FailedVaultDeposits, ScheduledTransactionsForRejection};
+	use cf_test_utilities::assert_no_matching_event;
+	use cf_traits::{
+		mocks::failed_deposit_recovery::MockBrokerRecoveryApi, FailedDepositRecoveryOutcome,
+	};
+	const RECOVERY_LP: u64 = 11;
+
 	let submit_with_refund_address = |refund_address: ScriptPubkey| {
-		BitcoinIngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			0,
-			Box::new(VaultDepositWitness {
-				refund_params: ChannelRefundParametersForChain::<Bitcoin> {
-					refund_address,
-					..btc_vault_deposit_witness().refund_params
-				},
-				..btc_vault_deposit_witness()
-			}),
-		)
+		let mut witness = btc_vault_deposit_witness();
+		witness.swap_mut().unwrap().refund_params.refund_address = refund_address.clone();
+		witness.deposit_mut().deposit_details.id.vout = u32::from(refund_address.is_standard());
+		BitcoinIngressEgress::vault_swap_request(RuntimeOrigin::root(), 0, Box::new(witness))
 	};
 
 	new_test_ext().execute_with(|| {
+		// With a recovery account linked, an unrefundable deposit is paid to it, but a valid swap
+		// from the same broker must only be swapped.
+		MockBrokerRecoveryApi::link(BROKER, RECOVERY_LP);
+
 		// Witness version 0 with a 5-byte program: a well-formed witness program that default
 		// Bitcoin Core policy treats as non-standard.
 		let non_standard = ScriptPubkey::OtherSegwit { version: 0, program: bounded_vec![1; 5] };
@@ -4739,13 +4741,20 @@ fn btc_vault_swap_with_non_standard_refund_address_is_unrefundable() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::BitcoinIngressEgress(Event::DepositFinalised {
-				action: DepositAction::Unrefundable,
+				action: DepositAction::BrokerRecovery {
+					broker_id: BROKER,
+					recovery_account: RECOVERY_LP,
+					outcome: FailedDepositRecoveryOutcome::Credited,
+				},
 				..
 			})
 		);
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+		let recovered = MockBalance::get_balance(&RECOVERY_LP, Asset::Btc);
+		assert!(recovered > 0);
 
-		// Control: the same deposit with a standard refund address is swapped as usual.
+		// Control: the same deposit with a standard refund address is swapped as usual, without
+		// refunding the depositor or paying the broker's recovery account.
 		System::reset_events();
 		assert_ok!(submit_with_refund_address(ScriptPubkey::P2WPKH([1; 20])));
 
@@ -4757,5 +4766,20 @@ fn btc_vault_swap_with_non_standard_refund_address_is_unrefundable() {
 			})
 		);
 		assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests().len(), 1);
+		assert_eq!(MockBalance::get_balance(&RECOVERY_LP, Asset::Btc), recovered);
+		// The mock swap handler pays out the swap output at once: that must be the only egress.
+		assert!(matches!(
+			ScheduledEgressFetchOrTransfer::<Test, Instance2>::get().as_slice(),
+			[FetchOrTransfer::Transfer { destination_address: ScriptPubkey::P2WPKH(address), .. }]
+				if *address == [2; 20]
+		));
+		assert!(ScheduledTransactionsForRejection::<Test, Instance2>::get().is_empty());
+		assert!(FailedVaultDeposits::<Test, Instance2>::iter_keys().next().is_none());
+		assert_no_matching_event!(
+			Test,
+			RuntimeEvent::BitcoinIngressEgress(
+				Event::FailedDepositRecovered { .. } | Event::FailedDepositQueued { .. }
+			)
+		);
 	});
 }

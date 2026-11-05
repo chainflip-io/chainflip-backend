@@ -221,6 +221,89 @@ mod benchmarks {
 		}
 	}
 
+	fn failed_vault_witness<T: Config<I>, I: 'static>() -> VaultDepositWitness<T, I> {
+		VaultDepositWitness::Failed {
+			deposit: VaultDepositFacts {
+				input_asset: BenchmarkValue::benchmark_value(),
+				deposit_amount: TargetChainAmount::<T, I>::try_from(1_000_000_000_000_000_000u128)
+					.unwrap(),
+				deposit_address: Some(BenchmarkValue::benchmark_value()),
+				channel_id: Some(u64::MAX),
+				deposit_details: BenchmarkValue::benchmark_value(),
+				tx_id: BenchmarkValue::benchmark_value(),
+			},
+			broker_id: Some(account("recovery_broker", 0, 0)),
+		}
+	}
+
+	fn setup_recovery<T: Config<I>, I: 'static>(egress: bool) -> T::AccountId {
+		let broker = account("recovery_broker", 0, 0);
+		let recovery_account = account("recovery_lp", 0, 0);
+		for who in [&broker, &recovery_account] {
+			frame_system::Pallet::<T>::inc_providers(who);
+		}
+		assert_ok!(T::AccountRoleRegistry::register_as_broker(&broker));
+		assert_ok!(T::AccountRoleRegistry::register_as_liquidity_provider(&recovery_account));
+		T::BrokerRecoveryApi::setup_benchmark(&broker, &recovery_account);
+		if egress {
+			T::RefundAddressRegistry::register_liquidity_refund_address(
+				&recovery_account,
+				TargetChainAccount::<T, I>::benchmark_value().into_foreign_chain_address(),
+			);
+		}
+		recovery_account
+	}
+
+	#[benchmark]
+	fn failed_vault_deposit_queued() {
+		let witness = failed_vault_witness::<T, I>();
+		#[block]
+		{
+			Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+		}
+		assert_eq!(FailedVaultDeposits::<T, I>::iter_keys().count(), 1);
+	}
+
+	#[benchmark]
+	fn failed_vault_deposit_credit() {
+		let recovery_account = setup_recovery::<T, I>(false);
+		let witness = failed_vault_witness::<T, I>();
+		let asset = witness.deposit().input_asset;
+		#[block]
+		{
+			Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+		}
+		assert!(T::Balance::get_balance(&recovery_account, asset.into()) > 0);
+		assert!(FailedVaultDeposits::<T, I>::iter_keys().next().is_none());
+	}
+
+	#[benchmark]
+	fn failed_vault_deposit_egress() {
+		setup_recovery::<T, I>(true);
+		let witness = failed_vault_witness::<T, I>();
+		#[block]
+		{
+			Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+		}
+		assert!(ScheduledEgressFetchOrTransfer::<T, I>::get()
+			.iter()
+			.any(|request| matches!(request, FetchOrTransfer::Transfer { .. })));
+	}
+
+	#[benchmark]
+	fn attribute_failed_vault_deposit() {
+		let witness = failed_vault_witness::<T, I>();
+		let broker_id = witness.broker_id().unwrap().clone();
+		let queue_id = Pallet::<T, I>::failed_vault_deposit_id(&witness);
+		Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+		setup_recovery::<T, I>(true);
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, queue_id, broker_id);
+		assert!(!FailedVaultDeposits::<T, I>::contains_key(queue_id));
+		assert!(FailedVaultDeposits::<T, I>::iter_keys().next().is_none());
+	}
+
 	#[benchmark]
 	fn boost_finalised() {
 		use strum::IntoEnumIterator;
@@ -297,6 +380,30 @@ mod benchmarks {
 		new_test_ext().execute_with(|| {
 			_mark_transaction_for_rejection::<Test, Instance1>(true);
 		});
+	}
+	#[cfg(test)]
+	mod tests {
+		use super::*;
+		use crate::mocks::{new_test_ext, Test};
+		use frame_support::instances::{Instance1, Instance2};
+
+		#[test]
+		fn recovery_benchmarks() {
+			for benchmark in [
+				Pallet::<Test, Instance1>::test_benchmark_failed_vault_deposit_queued,
+				Pallet::<Test, Instance1>::test_benchmark_failed_vault_deposit_credit,
+				Pallet::<Test, Instance1>::test_benchmark_failed_vault_deposit_egress,
+				Pallet::<Test, Instance1>::test_benchmark_attribute_failed_vault_deposit,
+				Pallet::<Test, Instance2>::test_benchmark_failed_vault_deposit_queued,
+				Pallet::<Test, Instance2>::test_benchmark_failed_vault_deposit_credit,
+				Pallet::<Test, Instance2>::test_benchmark_failed_vault_deposit_egress,
+				Pallet::<Test, Instance2>::test_benchmark_attribute_failed_vault_deposit,
+			] {
+				new_test_ext().execute_with(|| {
+					assert_ok!(benchmark());
+				});
+			}
+		}
 	}
 }
 

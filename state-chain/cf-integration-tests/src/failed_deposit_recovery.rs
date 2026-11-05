@@ -172,3 +172,237 @@ fn link_survives_deregistration_and_is_removed_when_the_account_is_killed() {
 			assert_eq!(pallet_cf_swapping::BrokerRecoveryAccount::<Runtime>::get(&BROKER), None);
 		});
 }
+
+fn failed_btc_witness(
+) -> pallet_cf_ingress_egress::VaultDepositWitness<Runtime, state_chain_runtime::BitcoinInstance> {
+	use cf_chains::btc::{deposit_address::DepositAddress, Hash, ScriptPubkey, Utxo, UtxoId};
+	pallet_cf_ingress_egress::VaultDepositWitness::Failed {
+		deposit: pallet_cf_ingress_egress::VaultDepositFacts {
+			input_asset: cf_chains::assets::btc::Asset::Btc,
+			deposit_amount: 100_000_000,
+			deposit_address: Some(ScriptPubkey::Taproot([1; 32])),
+			channel_id: Some(9),
+			tx_id: Hash::repeat_byte(1),
+			deposit_details: Utxo {
+				id: UtxoId { tx_id: Hash::repeat_byte(1), vout: 0 },
+				amount: 100_000_000,
+				deposit_address: DepositAddress::new([1; 32], 9),
+			},
+		},
+		broker_id: Some(BROKER),
+	}
+}
+
+fn unrefundable_btc_witness(
+) -> pallet_cf_ingress_egress::VaultDepositWitness<Runtime, state_chain_runtime::BitcoinInstance> {
+	use cf_chains::{address::EncodedAddress, Bitcoin, Chain, ChannelRefundParametersForChain};
+	use cf_primitives::Beneficiary;
+	use pallet_cf_ingress_egress::{VaultDepositWitness, VaultSwapData};
+	VaultDepositWitness::Swap {
+		deposit: failed_btc_witness().deposit().clone(),
+		swap: VaultSwapData {
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth([2; 20]),
+			deposit_metadata: None,
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+				retry_duration: 0,
+				refund_address: Bitcoin::BURN_ADDRESS,
+				min_price: Default::default(),
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
+			},
+			dca_params: None,
+			boost_fee: 0,
+		},
+	}
+}
+
+#[test]
+fn failed_and_unrefundable_btc_deposits_credit_the_lp_and_register_the_utxo() {
+	use pallet_cf_ingress_egress::{DepositAction, Event, FailedVaultDeposits};
+	use state_chain_runtime::{BitcoinIngressEgress, BitcoinInstance};
+	for witness in [failed_btc_witness(), unrefundable_btc_witness()] {
+		genesis::with_test_defaults()
+			.with_additional_accounts(&[
+				(BROKER, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+				(RECOVERY_ACCOUNT, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			])
+			.build()
+			.execute_with(|| {
+				assert_ok!(Swapping::link_recovery_account(
+					RuntimeOrigin::signed(BROKER),
+					RECOVERY_ACCOUNT
+				));
+				assert_ok!(BitcoinIngressEgress::mark_transaction_for_rejection(
+					RuntimeOrigin::signed(BROKER),
+					witness.deposit().tx_id
+				));
+				let utxo = witness.deposit().deposit_details.clone();
+				let mut expected_utxos =
+					pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
+				expected_utxos.push(utxo);
+				BitcoinIngressEgress::process_vault_swap_request_full_witness_inner(100, witness);
+				let amount_and_fee = System::events()
+					.iter()
+					.filter_map(|event| match &event.event {
+						RuntimeEvent::BitcoinIngressEgress(Event::DepositFinalised {
+							amount,
+							ingress_fee,
+							action:
+								DepositAction::BrokerRecovery {
+									recovery_account,
+									outcome: FailedDepositRecoveryOutcome::Credited,
+									..
+								},
+							..
+						}) => {
+							assert_eq!(recovery_account, &RECOVERY_ACCOUNT);
+							Some((*amount, *ingress_fee))
+						},
+						_ => None,
+					})
+					.collect::<Vec<_>>();
+				assert_eq!(amount_and_fee.len(), 1);
+				let (amount, fee) = amount_and_fee[0];
+				assert_eq!(
+					FreeBalances::<Runtime>::get(&RECOVERY_ACCOUNT, Asset::Btc),
+					u128::from(amount - fee)
+				);
+				assert!(FailedVaultDeposits::<Runtime, BitcoinInstance>::iter_keys()
+					.next()
+					.is_none());
+				assert_eq!(
+					pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get(),
+					expected_utxos
+				);
+			});
+	}
+}
+
+#[test]
+fn missing_or_inactive_link_queues_btc_until_governance_processes_it() {
+	use cf_traits::{AccountRoleRegistry, BrokerRecoveryApi};
+	use pallet_cf_ingress_egress::FailedVaultDeposits;
+	use state_chain_runtime::{AccountRoles, BitcoinIngressEgress, BitcoinInstance};
+	for inactive in [false, true] {
+		for witness in [failed_btc_witness(), unrefundable_btc_witness()] {
+			genesis::with_test_defaults()
+				.with_additional_accounts(&[
+					(BROKER, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+					(RECOVERY_ACCOUNT, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+				])
+				.build()
+				.execute_with(|| {
+					if inactive {
+						assert_ok!(Swapping::link_recovery_account(
+							RuntimeOrigin::signed(BROKER),
+							RECOVERY_ACCOUNT
+						));
+						assert_ok!(AccountRoles::deregister_account_role(
+							&RECOVERY_ACCOUNT,
+							AccountRole::LiquidityProvider
+						));
+					}
+					assert_eq!(Swapping::recovery_account(&BROKER), None);
+					let queue_id = BitcoinIngressEgress::failed_vault_deposit_id(&witness);
+					let initial_utxos =
+						pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get().len();
+					BitcoinIngressEgress::process_vault_swap_request_full_witness_inner(
+						100,
+						witness.clone(),
+					);
+					let entry =
+						FailedVaultDeposits::<Runtime, BitcoinInstance>::get(queue_id).unwrap();
+					assert_eq!(entry.deposit.broker_id, Some(BROKER));
+					assert_eq!(
+						entry.deposit.remaining_amount + entry.deposit.ingress_fee,
+						witness.deposit().deposit_amount
+					);
+					let utxos = pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
+					assert_eq!(utxos.len(), initial_utxos + 1);
+					assert!(utxos.contains(&witness.deposit().deposit_details));
+					let gov = || pallet_cf_governance::RawOrigin::GovernanceApproval.into();
+					frame_support::assert_noop!(
+						BitcoinIngressEgress::attribute_failed_vault_deposit(gov(), queue_id, BROKER),
+						pallet_cf_ingress_egress::Error::<Runtime, BitcoinInstance>::NoRecoveryAccount
+					);
+					assert_eq!(
+						FailedVaultDeposits::<Runtime, BitcoinInstance>::get(queue_id),
+						Some(entry.clone())
+					);
+					if inactive {
+						assert_ok!(AccountRoles::register_as_liquidity_provider(&RECOVERY_ACCOUNT));
+					} else {
+						assert_ok!(Swapping::link_recovery_account(
+							RuntimeOrigin::signed(BROKER),
+							RECOVERY_ACCOUNT
+						));
+					}
+					assert_eq!(FreeBalances::<Runtime>::get(&RECOVERY_ACCOUNT, Asset::Btc), 0);
+					assert_ok!(BitcoinIngressEgress::attribute_failed_vault_deposit(
+						gov(),
+						queue_id,
+						BROKER
+					));
+					assert_eq!(
+						FreeBalances::<Runtime>::get(&RECOVERY_ACCOUNT, Asset::Btc),
+						u128::from(entry.deposit.remaining_amount)
+					);
+					assert!(FailedVaultDeposits::<Runtime, BitcoinInstance>::iter_keys()
+						.next()
+						.is_none());
+					frame_support::assert_noop!(
+						BitcoinIngressEgress::attribute_failed_vault_deposit(gov(), queue_id, BROKER),
+						pallet_cf_ingress_egress::Error::<Runtime, BitcoinInstance>::UnknownFailedVaultDeposit
+					);
+				});
+		}
+	}
+}
+
+#[test]
+fn unattributed_evm_and_solana_deposits_queue_including_multiple_deposits_per_tx() {
+	use cf_chains::{
+		evm::{DepositDetails, H256},
+		sol::{SolAddress, VaultSwapOrDepositChannelId},
+	};
+	use pallet_cf_ingress_egress::{FailedVaultDeposits, VaultDepositFacts, VaultDepositWitness};
+	use state_chain_runtime::{EthereumIngressEgress, SolanaIngressEgress, SolanaInstance};
+	genesis::with_test_defaults().build().execute_with(|| {
+		let tx_id = H256::repeat_byte(5);
+		for amount in [ETH_AMOUNT, ETH_AMOUNT * 2] {
+			let witness = VaultDepositWitness::Failed {
+				deposit: VaultDepositFacts {
+					input_asset: cf_chains::assets::eth::Asset::Eth,
+					deposit_amount: amount,
+					deposit_address: None,
+					channel_id: None,
+					tx_id,
+					deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
+				},
+				broker_id: None,
+			};
+			let queue_id = EthereumIngressEgress::failed_vault_deposit_id(&witness);
+			EthereumIngressEgress::process_vault_swap_request_full_witness_inner(100, witness);
+			assert!(FailedVaultDeposits::<Runtime, EthereumInstance>::contains_key(queue_id));
+		}
+		assert_eq!(FailedVaultDeposits::<Runtime, EthereumInstance>::iter_keys().count(), 2);
+		let sol_id = (SolAddress::from([7; 32]), 42);
+		let witness = VaultDepositWitness::Failed {
+			deposit: VaultDepositFacts {
+				input_asset: cf_chains::assets::sol::Asset::Sol,
+				deposit_amount: 1_000_000_000,
+				deposit_address: Some(sol_id.0),
+				channel_id: None,
+				tx_id: sol_id,
+				deposit_details: VaultSwapOrDepositChannelId::VaultSwapAccount(sol_id),
+			},
+			broker_id: None,
+		};
+		let queue_id = SolanaIngressEgress::failed_vault_deposit_id(&witness);
+		SolanaIngressEgress::process_vault_swap_request_full_witness_inner(100, witness);
+		assert!(FailedVaultDeposits::<Runtime, SolanaInstance>::contains_key(queue_id));
+	});
+}

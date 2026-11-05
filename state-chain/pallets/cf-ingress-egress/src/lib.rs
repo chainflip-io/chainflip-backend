@@ -22,6 +22,10 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 mod benchmarking;
+mod failed_vault_deposits;
+pub use failed_vault_deposits::{
+	FailedVaultDeposit, FailedVaultDepositCause, FailedVaultDepositId, FailedVaultDepositInfo,
+};
 
 pub mod migrations;
 
@@ -703,6 +707,14 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 		},
 		Unrefundable,
+		BrokerRecovery {
+			broker_id: T::AccountId,
+			recovery_account: T::AccountId,
+			outcome: FailedDepositRecoveryOutcome,
+		},
+		Queued {
+			queue_id: FailedVaultDepositId,
+		},
 	}
 
 	#[pallet::genesis_config]
@@ -1094,6 +1106,13 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// Outstanding deposits keyed by the hash of their full witness. Distinct deposits in one
+	/// transaction remain separate; successful recovery removes the entry.
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type FailedVaultDeposits<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, FailedVaultDepositId, FailedVaultDeposit<T, I>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -1233,6 +1252,17 @@ pub mod pallet {
 			account_id: T::AccountId,
 			deposit_address: TargetChainAccount<T, I>,
 		},
+		FailedDepositQueued {
+			queue_id: FailedVaultDepositId,
+			deposit: FailedVaultDeposit<T, I>,
+		},
+		FailedDepositRecovered {
+			queue_id: Option<FailedVaultDepositId>,
+			deposit: FailedVaultDepositInfo<T, I>,
+			broker_id: T::AccountId,
+			recovery_account: T::AccountId,
+			outcome: FailedDepositRecoveryOutcome,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1276,6 +1306,7 @@ pub mod pallet {
 		InvalidAmount,
 		/// The supplied configuration parameters are not valid.
 		InvalidConfigurationParameters,
+		UnknownFailedVaultDeposit,
 	}
 
 	#[pallet::hooks]
@@ -1773,6 +1804,37 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(T::AllowTransactionReports::get(), Error::<T, I>::UnsupportedChain);
 			Self::mark_deposit_channel_for_rejection_inner(account_id, deposit_address)?;
+			Ok(())
+		}
+
+		/// Attribute an unpaid vault deposit and route its remaining liability to the broker's
+		/// current recovery LP. Failed payout leaves the entry unchanged.
+		#[pallet::call_index(15)]
+		// TODO: wire the generated attribution weight before the coordinated release.
+		#[pallet::weight(T::WeightInfo::vault_swap_request())]
+		#[transactional]
+		pub fn attribute_failed_vault_deposit(
+			origin: OriginFor<T>,
+			queue_id: FailedVaultDepositId,
+			broker_id: T::AccountId,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			let entry = FailedVaultDeposits::<T, I>::get(queue_id)
+				.ok_or(Error::<T, I>::UnknownFailedVaultDeposit)?;
+			let deposit = entry.deposit;
+			let (recovery_account, outcome) = Self::route_failed_deposit(
+				&broker_id,
+				deposit.facts.input_asset.into(),
+				deposit.remaining_amount.into(),
+			)?;
+			FailedVaultDeposits::<T, I>::remove(queue_id);
+			Self::deposit_event(Event::FailedDepositRecovered {
+				queue_id: Some(queue_id),
+				deposit,
+				broker_id,
+				recovery_account,
+				outcome,
+			});
 			Ok(())
 		}
 	}
@@ -3399,52 +3461,54 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_height: TargetChainBlockNumber<T, I>,
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) {
-		let VaultDepositFacts {
-			input_asset: source_asset,
-			deposit_address,
-			channel_id,
-			deposit_amount,
-			deposit_details,
-			tx_id,
-			..
-		} = vault_deposit_witness.deposit().clone();
-		let broker_id = vault_deposit_witness.broker_id().cloned();
-		let boost_fee = vault_deposit_witness.boost_fee();
-
 		let action =
 			Self::derive_channel_action_from_vault_deposit_witness(vault_deposit_witness.clone());
 
-		match Self::process_full_witness_deposit_inner(
-			deposit_address.clone(),
-			source_asset,
-			deposit_amount,
-			deposit_details.clone(),
-			BoostedVaultTransactions::<T, I>::get(&tx_id),
-			boost_fee,
-			channel_id,
-			action,
-			block_height,
-			DepositOrigin::vault(tx_id.clone(), broker_id),
-		) {
-			Ok(outcome) =>
-				if matches!(outcome, FullWitnessDepositOutcome::BoostConsumed) {
-					BoostedVaultTransactions::<T, I>::remove(&tx_id);
-
-					// The transaction is finalised and can no longer be lost, so drop its timeout
-					// entry.
-					BoostedVaultTransactionTimeout::<T, I>::mutate(|timeout_queue| {
-						timeout_queue.remove(&tx_id);
-					});
-				},
-			Err(reason) => {
-				Self::deposit_event(Event::<T, I>::DepositFailed {
+		let result = match action {
+			ChannelAction::Unrefundable =>
+				Self::process_failed_vault_deposit(block_height, &vault_deposit_witness),
+			action => {
+				let VaultDepositFacts {
+					input_asset: source_asset,
+					deposit_address,
+					channel_id,
+					deposit_amount,
+					deposit_details,
+					tx_id,
+				} = vault_deposit_witness.deposit().clone();
+				Self::process_full_witness_deposit_inner(
+					deposit_address,
+					source_asset,
+					deposit_amount,
+					deposit_details,
+					BoostedVaultTransactions::<T, I>::get(&tx_id),
+					vault_deposit_witness.boost_fee(),
+					channel_id,
+					action,
 					block_height,
-					reason,
-					details: DepositFailedDetails::Vault {
-						vault_witness: Box::new(vault_deposit_witness),
-					},
-				});
+					DepositOrigin::vault(tx_id.clone(), vault_deposit_witness.broker_id().cloned()),
+				)
+				.map(|outcome| {
+					if matches!(outcome, FullWitnessDepositOutcome::BoostConsumed) {
+						BoostedVaultTransactions::<T, I>::remove(&tx_id);
+
+						// The transaction is finalised and can no longer be lost, so drop its timeout
+						// entry.
+						BoostedVaultTransactionTimeout::<T, I>::mutate(|timeout_queue| {
+							timeout_queue.remove(&tx_id);
+						});
+					}
+				})
 			},
+		};
+		if let Err(reason) = result {
+			Self::deposit_event(Event::<T, I>::DepositFailed {
+				block_height,
+				reason,
+				details: DepositFailedDetails::Vault {
+					vault_witness: Box::new(vault_deposit_witness),
+				},
+			});
 		}
 	}
 
