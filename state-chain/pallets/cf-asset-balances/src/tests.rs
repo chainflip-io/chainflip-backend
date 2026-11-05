@@ -703,7 +703,7 @@ mod withdrawal_whitelist {
 				Pallet::<Test>::update_whitelist(
 					RuntimeOrigin::signed(account(1)),
 					WhitelistChange::Allow(AccountOrAddress::ExternalAddress(EncodedAddress::Btc(
-						vec![]
+						Default::default()
 					))),
 				),
 				Error::<Test>::InvalidEncodedAddress

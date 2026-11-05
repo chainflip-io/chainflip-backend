@@ -19163,7 +19163,11 @@ export type PalletCfSwappingError =
   /**
    * The recovery account must be a liquidity provider.
    **/
-  | 'RecoveryAccountNotLiquidityProvider';
+  | 'RecoveryAccountNotLiquidityProvider'
+  /**
+   * The account is already bonded, so the broker bond can't be applied.
+   **/
+  | 'AccountBonded';
 
 export type PalletCfLpDeltaStats = { limitOrdersSwapUsdVolume: FixedU128 };
 

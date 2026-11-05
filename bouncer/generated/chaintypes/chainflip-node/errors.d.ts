@@ -1418,6 +1418,11 @@ export interface ChainErrors extends GenericChainErrors {
     RecoveryAccountNotLiquidityProvider: GenericPalletError;
 
     /**
+     * The account is already bonded, so the broker bond can't be applied.
+     **/
+    AccountBonded: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
