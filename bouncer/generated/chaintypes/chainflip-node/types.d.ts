@@ -5130,7 +5130,9 @@ export type PalletCfIngressEgressPalletConfigUpdateEthereum =
       type: 'SetMaximumPreallocatedChannelsEthereum';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
     }
-  | { type: 'SetIngressDelayEthereum'; value: { delayBlocks: number } };
+  | { type: 'SetIngressDelayEthereum'; value: { delayBlocks: number } }
+  | { type: 'SetRejectionDelayEthereum'; value: { delayBlocks: number } }
+  | { type: 'SetChannelCleanupRetryEthereum'; value: { retryBlocks: bigint } };
 
 export type CfPrimitivesAccountRole =
   | 'Unregistered'
@@ -5273,7 +5275,9 @@ export type PalletCfIngressEgressPalletConfigUpdatePolkadot =
       type: 'SetMaximumPreallocatedChannelsPolkadot';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
     }
-  | { type: 'SetIngressDelayPolkadot'; value: { delayBlocks: number } };
+  | { type: 'SetIngressDelayPolkadot'; value: { delayBlocks: number } }
+  | { type: 'SetRejectionDelayPolkadot'; value: { delayBlocks: number } }
+  | { type: 'SetChannelCleanupRetryPolkadot'; value: { retryBlocks: number } };
 
 export type PalletCfIngressEgressVaultDepositWitnessPolkadot = {
   inputAsset: CfPrimitivesChainsAssetsDotAsset;
@@ -5419,7 +5423,9 @@ export type PalletCfIngressEgressPalletConfigUpdateBitcoin =
       type: 'SetMaximumPreallocatedChannelsBitcoin';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
     }
-  | { type: 'SetIngressDelayBitcoin'; value: { delayBlocks: number } };
+  | { type: 'SetIngressDelayBitcoin'; value: { delayBlocks: number } }
+  | { type: 'SetRejectionDelayBitcoin'; value: { delayBlocks: number } }
+  | { type: 'SetChannelCleanupRetryBitcoin'; value: { retryBlocks: bigint } };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -6087,7 +6093,9 @@ export type PalletCfIngressEgressPalletConfigUpdateArbitrum =
       type: 'SetMaximumPreallocatedChannelsArbitrum';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
     }
-  | { type: 'SetIngressDelayArbitrum'; value: { delayBlocks: number } };
+  | { type: 'SetIngressDelayArbitrum'; value: { delayBlocks: number } }
+  | { type: 'SetRejectionDelayArbitrum'; value: { delayBlocks: number } }
+  | { type: 'SetChannelCleanupRetryArbitrum'; value: { retryBlocks: bigint } };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -6642,7 +6650,9 @@ export type PalletCfIngressEgressPalletConfigUpdateSolana =
       type: 'SetMaximumPreallocatedChannelsSolana';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
     }
-  | { type: 'SetIngressDelaySolana'; value: { delayBlocks: number } };
+  | { type: 'SetIngressDelaySolana'; value: { delayBlocks: number } }
+  | { type: 'SetRejectionDelaySolana'; value: { delayBlocks: number } }
+  | { type: 'SetChannelCleanupRetrySolana'; value: { retryBlocks: bigint } };
 
 export type PalletCfIngressEgressVaultDepositWitnessSolana = {
   inputAsset: CfPrimitivesChainsAssetsSolAsset;
@@ -8806,7 +8816,9 @@ export type PalletCfIngressEgressPalletConfigUpdateAssethub =
       type: 'SetMaximumPreallocatedChannelsAssethub';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
     }
-  | { type: 'SetIngressDelayAssethub'; value: { delayBlocks: number } };
+  | { type: 'SetIngressDelayAssethub'; value: { delayBlocks: number } }
+  | { type: 'SetRejectionDelayAssethub'; value: { delayBlocks: number } }
+  | { type: 'SetChannelCleanupRetryAssethub'; value: { retryBlocks: number } };
 
 export type PalletCfIngressEgressVaultDepositWitnessAssethub = {
   inputAsset: CfPrimitivesChainsAssetsHubAsset;
@@ -11325,7 +11337,9 @@ export type PalletCfIngressEgressPalletConfigUpdateTron =
       type: 'SetMaximumPreallocatedChannelsTron';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
     }
-  | { type: 'SetIngressDelayTron'; value: { delayBlocks: number } };
+  | { type: 'SetIngressDelayTron'; value: { delayBlocks: number } }
+  | { type: 'SetRejectionDelayTron'; value: { delayBlocks: number } }
+  | { type: 'SetChannelCleanupRetryTron'; value: { retryBlocks: bigint } };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -12125,7 +12139,9 @@ export type PalletCfIngressEgressPalletConfigUpdateBsc =
       type: 'SetMaximumPreallocatedChannelsBsc';
       value: { accountRole: CfPrimitivesAccountRole; numChannels: number };
     }
-  | { type: 'SetIngressDelayBsc'; value: { delayBlocks: number } };
+  | { type: 'SetIngressDelayBsc'; value: { delayBlocks: number } }
+  | { type: 'SetRejectionDelayBsc'; value: { delayBlocks: number } }
+  | { type: 'SetChannelCleanupRetryBsc'; value: { retryBlocks: bigint } };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -19438,7 +19454,11 @@ export type PalletCfIngressEgressError =
   /**
    * The amount is not valid for the chain.
    **/
-  | 'InvalidAmount';
+  | 'InvalidAmount'
+  /**
+   * The supplied configuration parameters are not valid.
+   **/
+  | 'InvalidConfigurationParameters';
 
 export type PalletCfIngressEgressDepositChannelDetailsPolkadot = {
   owner: AccountId32;
