@@ -1647,6 +1647,11 @@ export interface ChainErrors extends GenericChainErrors {
     InvalidAmount: GenericPalletError;
 
     /**
+     * The supplied configuration parameters are not valid.
+     **/
+    InvalidConfigurationParameters: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -1746,6 +1751,11 @@ export interface ChainErrors extends GenericChainErrors {
     InvalidAmount: GenericPalletError;
 
     /**
+     * The supplied configuration parameters are not valid.
+     **/
+    InvalidConfigurationParameters: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -1843,6 +1853,11 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+
+    /**
+     * The supplied configuration parameters are not valid.
+     **/
+    InvalidConfigurationParameters: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -2145,6 +2160,11 @@ export interface ChainErrors extends GenericChainErrors {
     InvalidAmount: GenericPalletError;
 
     /**
+     * The supplied configuration parameters are not valid.
+     **/
+    InvalidConfigurationParameters: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -2366,6 +2386,11 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+
+    /**
+     * The supplied configuration parameters are not valid.
+     **/
+    InvalidConfigurationParameters: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -2641,6 +2666,11 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+
+    /**
+     * The supplied configuration parameters are not valid.
+     **/
+    InvalidConfigurationParameters: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -3089,6 +3119,11 @@ export interface ChainErrors extends GenericChainErrors {
     InvalidAmount: GenericPalletError;
 
     /**
+     * The supplied configuration parameters are not valid.
+     **/
+    InvalidConfigurationParameters: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -3279,6 +3314,11 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+
+    /**
+     * The supplied configuration parameters are not valid.
+     **/
+    InvalidConfigurationParameters: GenericPalletError;
 
     /**
      * Generic pallet error

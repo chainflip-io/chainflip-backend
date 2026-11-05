@@ -539,11 +539,24 @@ macro_rules! instanced_migrations {
 	}
 }
 
+// Must run after `assethub_deposit_details`, which takes the ingress-egress pallets to version 31.
+pub type ScheduleRejectionsByBlock = (
+	pallet_cf_ingress_egress::migrations::ScheduleRejectionsByBlock<Runtime, EthereumInstance>,
+	pallet_cf_ingress_egress::migrations::ScheduleRejectionsByBlock<Runtime, PolkadotInstance>,
+	pallet_cf_ingress_egress::migrations::ScheduleRejectionsByBlock<Runtime, BitcoinInstance>,
+	pallet_cf_ingress_egress::migrations::ScheduleRejectionsByBlock<Runtime, ArbitrumInstance>,
+	pallet_cf_ingress_egress::migrations::ScheduleRejectionsByBlock<Runtime, SolanaInstance>,
+	pallet_cf_ingress_egress::migrations::ScheduleRejectionsByBlock<Runtime, AssethubInstance>,
+	pallet_cf_ingress_egress::migrations::ScheduleRejectionsByBlock<Runtime, TronInstance>,
+	pallet_cf_ingress_egress::migrations::ScheduleRejectionsByBlock<Runtime, BscInstance>,
+);
+
 // Add version-specific migrations here.
 pub type MigrationsForV2_3 = (
 	migrations::failed_broadcast_chain::Migration,
 	migrations::safe_mode::SafeModeMigration,
 	migrations::assethub_deposit_details::Migration,
+	ScheduleRejectionsByBlock,
 	migrations::assethub_elections::AssethubElectionsInit,
 	migrations::assethub_elections::ResetAssethubElections,
 	migrations::bsc_integration::BscElectionsInit,

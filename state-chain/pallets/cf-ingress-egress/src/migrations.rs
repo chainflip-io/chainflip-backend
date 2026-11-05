@@ -16,8 +16,21 @@
 
 use crate::{Pallet, STORAGE_VERSION_U16};
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
+
+pub mod schedule_rejections_by_block;
 
 pub type PalletMigration<T, I> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T, I>>,);
+
+/// Scheduled by the runtime after the 30 -> 31 `assethub_deposit_details` migration, which runs
+/// after the pallet migrations on 2.3.
+pub type ScheduleRejectionsByBlock<T, I> = VersionedMigration<
+	31,
+	32,
+	schedule_rejections_by_block::Migration<T, I>,
+	Pallet<T, I>,
+	<T as frame_system::Config>::DbWeight,
+>;
 
 #[cfg(test)]
 const _: u16 = <PalletMigration<crate::mocks::Test, frame_support::instances::Instance1> as cf_runtime_utilities::MigrationSequence>::FROM;

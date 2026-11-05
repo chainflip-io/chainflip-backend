@@ -1294,7 +1294,7 @@ mod delayed_boosting {
 					DepositDetails { tx_hashes: Some(vec![TX_ID_1]) },
 				);
 
-				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::iter_values().flatten().count(), 1);
 
 				witness_deposit_with_details(
 					deposit_address,
@@ -1303,7 +1303,7 @@ mod delayed_boosting {
 					DepositDetails { tx_hashes: Some(vec![TX_ID_2]) },
 				);
 
-				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::iter_values().flatten().count(), 1);
 
 				assert_has_matching_event!(
 					Test,
@@ -1389,7 +1389,7 @@ mod delayed_boosting {
 					})
 				);
 
-				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 0);
+				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::iter_values().flatten().count(), 0);
 
 				// The second deposit is rejected:
 				witness_deposit_with_details(
@@ -1400,7 +1400,7 @@ mod delayed_boosting {
 				);
 
 				assert!(matches!(
-					&ScheduledTransactionsForRejection::<Test, Instance1>::get()[..],
+					&ScheduledTransactionsForRejection::<Test, Instance1>::iter_values().flatten().collect::<Vec<_>>()[..],
 					[TransactionRejectionDetails {
 						deposit_details: DepositDetails { tx_hashes: Some(tx_ids) },
 						..

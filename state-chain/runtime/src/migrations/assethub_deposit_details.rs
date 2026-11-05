@@ -216,6 +216,16 @@ mod old {
 	#[storage_alias(pallet_name)]
 	pub type FailedRejections =
 		StorageValue<AssethubIngressEgress, Vec<TransactionRejectionDetails>, ValueQuery>;
+
+	/// Added in 2.2.21 (#7055). Can't be migrated: the new deposit details need a block number.
+	#[storage_alias(pallet_name)]
+	pub type ScheduledTransactionsForRejectionByBlock = StorageMap<
+		AssethubIngressEgress,
+		Twox64Concat,
+		BlockNumber,
+		Vec<TransactionRejectionDetails>,
+		ValueQuery,
+	>;
 }
 
 fn tx_id(block_number: PolkadotBlockNumber, extrinsic_index: u32) -> TxId {
@@ -381,6 +391,10 @@ impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 		if !scheduled_rejections.is_empty() {
 			log_or_panic!("Assethub scheduled transaction rejections must be empty");
 		}
+		if old::ScheduledTransactionsForRejectionByBlock::iter_keys().next().is_some() {
+			log_or_panic!("Assethub scheduled transaction rejections must be empty");
+		}
+		let _ = old::ScheduledTransactionsForRejectionByBlock::clear(u32::MAX, None);
 		let failed_rejections = old::FailedRejections::take();
 		if !failed_rejections.is_empty() {
 			log_or_panic!("Assethub failed transaction rejections must be empty");
@@ -401,6 +415,10 @@ impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		frame_support::ensure!(
 			old::ScheduledTransactionsForRejection::get().is_empty(),
+			"Assethub scheduled transaction rejections must be empty"
+		);
+		frame_support::ensure!(
+			old::ScheduledTransactionsForRejectionByBlock::iter_keys().next().is_none(),
 			"Assethub scheduled transaction rejections must be empty"
 		);
 		frame_support::ensure!(
@@ -484,8 +502,9 @@ impl UncheckedOnRuntimeUpgrade for MigrateAssethubToElections {
 			pallet_cf_ingress_egress::ScheduledTransactionsForRejection::<
 				Runtime,
 				AssethubInstance,
-			>::get()
-			.is_empty(),
+			>::iter()
+			.next()
+			.is_none(),
 			"Assethub scheduled transaction rejections must remain empty"
 		);
 		frame_support::ensure!(
