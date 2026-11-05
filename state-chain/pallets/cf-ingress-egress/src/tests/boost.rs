@@ -1294,7 +1294,12 @@ mod delayed_boosting {
 					DepositDetails { tx_hashes: Some(vec![TX_ID_1]) },
 				);
 
-				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::iter_values().flatten().count(), 1);
+				assert_eq!(
+					ScheduledTransactionsForRejection::<Test, Instance1>::iter_values()
+						.flatten()
+						.count(),
+					1
+				);
 
 				witness_deposit_with_details(
 					deposit_address,
@@ -1303,7 +1308,12 @@ mod delayed_boosting {
 					DepositDetails { tx_hashes: Some(vec![TX_ID_2]) },
 				);
 
-				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::iter_values().flatten().count(), 1);
+				assert_eq!(
+					ScheduledTransactionsForRejection::<Test, Instance1>::iter_values()
+						.flatten()
+						.count(),
+					1
+				);
 
 				assert_has_matching_event!(
 					Test,
