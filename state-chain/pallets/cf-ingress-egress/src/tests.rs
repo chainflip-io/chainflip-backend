@@ -3708,7 +3708,12 @@ mod evm_transaction_rejection {
 			},
 			block,
 		);
-		assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::iter_values().flatten().count(), 1);
+		assert_eq!(
+			ScheduledTransactionsForRejection::<Test, Instance1>::iter_values()
+				.flatten()
+				.count(),
+			1
+		);
 		(channel_id, deposit_address)
 	}
 
@@ -3735,7 +3740,9 @@ mod evm_transaction_rejection {
 				);
 				assert!(MockEgressBroadcasterEth::get_pending_api_calls().is_empty());
 				assert!(BroadcastActions::<Test, Instance1>::iter().next().is_none());
-				assert!(ScheduledTransactionsForRejection::<Test, Instance1>::iter().next().is_none());
+				assert!(ScheduledTransactionsForRejection::<Test, Instance1>::iter()
+					.next()
+					.is_none());
 				assert_eq!(FailedRejections::<Test, Instance1>::get().len(), 1);
 				assert_eq!(MockAssetWithholding::withheld_assets(Asset::Eth), 200);
 			});
