@@ -21,18 +21,19 @@ use frame_support::migrations::VersionedMigration;
 mod remove_boost_delay;
 mod schedule_rejections_by_block;
 
+// The rejection migration comes first because release/2.3 ships it as 31 -> 32.
 pub type PalletMigration<T, I> = (
 	VersionedMigration<
 		31,
 		32,
-		remove_boost_delay::Migration<T, I>,
+		schedule_rejections_by_block::Migration<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
 	VersionedMigration<
 		32,
 		33,
-		schedule_rejections_by_block::Migration<T, I>,
+		remove_boost_delay::Migration<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,

@@ -132,15 +132,6 @@ mod tests {
 
 	#[test]
 	fn migration_preserves_pending_refunds_and_runs_once() {
-		assert_migration_preserves_pending_refunds_and_runs_once(31);
-	}
-
-	#[test]
-	fn migration_preserves_pending_refunds_from_version_32_and_runs_once() {
-		assert_migration_preserves_pending_refunds_and_runs_once(32);
-	}
-
-	fn assert_migration_preserves_pending_refunds_and_runs_once(initial_version: u16) {
 		new_test_ext().execute_with(|| {
 			System::set_block_number(10);
 			let pending: Vec<_> = [100, 200]
@@ -155,7 +146,7 @@ mod tests {
 				})
 				.collect();
 			old::ScheduledTransactionsForRejection::<Test, Instance1>::put(&pending);
-			StorageVersion::new(initial_version).put::<Pallet<Test, Instance1>>();
+			StorageVersion::new(31).put::<Pallet<Test, Instance1>>();
 			StorageVersion::new(31).put::<Pallet<Test, Instance2>>();
 
 			#[cfg(feature = "try-runtime")]
