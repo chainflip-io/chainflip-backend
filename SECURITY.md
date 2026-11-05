@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-If you discover a potential security vulnerability in Chainflip, please email <security@chainflip.io> with the subject line "Bug Bounty Submission". Put the full report in the email body, one finding per email.
+If you discover a potential security vulnerability in Chainflip, please email <security@chainflip.io>. Put the full report in the email body, one finding per email.
 
 Before submitting, read the canonical **[Bug Bounty & Responsible Disclosure Program Policy](https://github.com/chainflip-io/security/blob/main/README.md)** and the list of **[known issues and deliberate design decisions](https://github.com/chainflip-io/security/blob/main/KNOWN-ISSUES.md)**. The policy defines what a valid submission must contain, the evidence standards, what is in and out of scope, and how rewards are assessed. Submissions that do not meet it may be closed without assessment.
 
