@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.3.5] - 2026-11-05
+
+### Features
+
+- Delay refunds of rejected deposits, with the delay and the deposit channel cleanup retry interval set through pallet config governance ([#6929](https://github.com/chainflip-io/chainflip-backend/issues/6929))
+
 ## [2.3.4] - 2026-11-04
 
 ### Fixes
