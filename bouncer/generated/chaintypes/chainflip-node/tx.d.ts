@@ -36,6 +36,7 @@ import type {
   PalletCfEnvironmentSubmitRuntimeCallSignatureData,
   StateChainRuntimeChainflipElectionsAllElectionInstancesVotes,
   PalletCfEnvironmentPalletConfigUpdate,
+  PalletCfEnvironmentFailedDepositRecoveryRequest,
   PalletCfFlipPalletConfigUpdate,
   PalletCfFundingRedemptionAmount,
   PalletCfFundingEthereumDepositAndSCCall,
@@ -154,7 +155,7 @@ import type {
   PalletCfElectionsInitialState004,
   StateChainRuntimeChainflipWitnessingEthereumElectionsElectionTypes,
   PalletCfElectionsVoteStorageAuthorityVote004,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
   PalletCfElectionsInitialState005,
   CfChainsWitnessPeriodBlockWitnessRange,
   StateChainRuntimeChainflipWitnessingArbitrumElectionsElectionTypes,
@@ -178,12 +179,12 @@ import type {
   PalletCfIngressEgressPalletConfigUpdateBsc,
   PalletCfIngressEgressVaultDepositWitnessBsc,
   PalletCfElectionsVoteStorageAuthorityVote008,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
   PalletCfElectionsInitialState007,
   CfChainsWitnessPeriodBlockWitnessRangeBsc,
   StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes,
   PalletCfElectionsVoteStorageAuthorityVote006,
-  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
   PalletCfElectionsInitialState008,
   CfChainsWitnessPeriodBlockWitnessRangeAssethub,
   StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes,
@@ -824,6 +825,36 @@ export interface ChainTx<
     >;
 
     /**
+     * Pays out failed deposits to the recovery accounts of the brokers they are attributed
+     * to: an egress to the recovery account's refund address if it has one and the amount
+     * covers the egress fee, otherwise a credit to its free balance.
+     *
+     * Each deposit is recovered independently. One that fails, e.g. because its broker has
+     * no recovery account, doesn't affect the others, and can be retried.
+     *
+     * Recoveries are not recorded, so Governance must not resubmit a deposit that has been
+     * recovered. The batch is rejected if it contains the same deposit twice.
+     *
+     * Requires Governance.
+     *
+     * @param {Array<PalletCfEnvironmentFailedDepositRecoveryRequest>} requests
+     **/
+    recoverFailedDeposits: GenericTxCall<
+      (
+        requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest>,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Environment';
+          palletCall: {
+            name: 'RecoverFailedDeposits';
+            params: { requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -1007,7 +1038,7 @@ export interface ChainTx<
      * - If the source account has a bound redeem address, the destination account must also
      * have the same bound redeem address.
      * - If the source account is currently bidding, the destination account must also be
-     * bidding.
+     * bidding. Bidding accounts cannot rebalance at all while a rotation is in progress.
      * - If the funds to be transferred are associated with a restricted address, the
      * restrictions will be transferred to the destination account.
      *
@@ -4159,6 +4190,26 @@ export interface ChainTx<
           palletCall: {
             name: 'BindBrokerFeeWithdrawalAddress';
             params: { address: H160 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Links the LP account that receives the broker's failed deposits.
+     *
+     * The link can only be set once.
+     *
+     * @param {AccountId32Like} recoveryAccount
+     **/
+    linkRecoveryAccount: GenericTxCall<
+      (recoveryAccount: AccountId32Like) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Swapping';
+          palletCall: {
+            name: 'LinkRecoveryAccount';
+            params: { recoveryAccount: AccountId32Like };
           };
         },
         ChainKnownTypes
@@ -8728,18 +8779,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'ArbitrumElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum;
             };
           };
         },
@@ -10392,18 +10443,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'BscElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc;
             };
           };
         },
@@ -10735,18 +10786,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'AssethubElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub;
             };
           };
         },

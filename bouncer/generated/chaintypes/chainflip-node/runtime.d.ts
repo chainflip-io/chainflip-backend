@@ -1341,6 +1341,8 @@ export interface RuntimeApis extends GenericRuntimeApis {
      *
      * @callname: CustomRuntimeApi_cf_max_swap_amount
      * @param {CfPrimitivesChainsAssetsAnyAsset} asset
+     *
+     * @deprecated The maximum swap amount no longer exists; this always returns None.
      **/
     cfMaxSwapAmount: GenericRuntimeApiMethod<
       (asset: CfPrimitivesChainsAssetsAnyAsset) => Promise<bigint | undefined>
@@ -1397,6 +1399,16 @@ export interface RuntimeApis extends GenericRuntimeApis {
      **/
     cfBrokerInfo: GenericRuntimeApiMethod<
       (accountId: AccountId32Like) => Promise<StateChainRuntimeRuntimeApisCustomApiTypesBrokerInfo>
+    >;
+
+    /**
+     * The stored recovery account link, even if the account no longer has the LP role.
+     *
+     * @callname: CustomRuntimeApi_cf_broker_recovery_account
+     * @param {AccountId32Like} broker
+     **/
+    cfBrokerRecoveryAccount: GenericRuntimeApiMethod<
+      (broker: AccountId32Like) => Promise<AccountId32 | undefined>
     >;
 
     /**
@@ -1919,6 +1931,8 @@ export interface RuntimeApis extends GenericRuntimeApis {
      *
      * @callname: CustomRuntimeApi_cf_boost_delay
      * @param {CfPrimitivesChainsForeignChain} chain
+     *
+     * @deprecated Boost delay no longer exists; this always returns 0.
      **/
     cfBoostDelay: GenericRuntimeApiMethod<
       (chain: CfPrimitivesChainsForeignChain) => Promise<number>

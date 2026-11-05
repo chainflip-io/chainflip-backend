@@ -106,8 +106,9 @@ use cf_primitives::{
 use cf_traits::{
 	AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey, Broadcaster,
 	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	FeeMultiplierProvider, FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider,
-	OnBroadcastReady, OnDeposit, OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
+	FailedDepositRecovery, FailedDepositRecoveryOutcome, FeeMultiplierProvider,
+	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
+	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode};
 pub use deregistration_hooks::RuntimeDeregistrationHooks;
@@ -984,6 +985,54 @@ impl_egress_api_for_anychain!(
 	(Tron, TronIngressEgress)
 );
 
+/// Routes each failed deposit to the ingress-egress instance for its asset's chain.
+pub struct FailedDepositRecoveryRouter;
+
+impl FailedDepositRecovery for FailedDepositRecoveryRouter {
+	type AccountId = AccountId;
+
+	fn route_failed_deposit(
+		broker: &AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<(AccountId, FailedDepositRecoveryOutcome), DispatchError> {
+		match ForeignChain::from(asset) {
+			ForeignChain::Ethereum =>
+				EthereumIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Polkadot =>
+				Err(pallet_cf_ingress_egress::Error::<Runtime, PolkadotInstance>::ChainDeprecated
+					.into()),
+			ForeignChain::Bitcoin =>
+				BitcoinIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Arbitrum =>
+				ArbitrumIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Solana =>
+				SolanaIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Assethub =>
+				AssethubIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Tron => TronIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Bsc => BscIngressEgress::route_failed_deposit(broker, asset, amount),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark(broker: &AccountId) {
+		use cf_traits::RefundAddressRegistry;
+
+		let recovery_account = AccountId::new([0xfe; 32]);
+		for account in [broker, &recovery_account] {
+			frame_system::Pallet::<Runtime>::inc_providers(account);
+		}
+		AccountRoles::register_as_broker(broker).unwrap();
+		AccountRoles::register_as_liquidity_provider(&recovery_account).unwrap();
+		<crate::AssetBalances as RefundAddressRegistry>::register_liquidity_refund_address(
+			&recovery_account,
+			ForeignChainAddress::Eth(Default::default()),
+		);
+		pallet_cf_swapping::BrokerRecoveryAccount::<Runtime>::insert(broker, recovery_account);
+	}
+}
+
 pub struct DepositHandler;
 impl OnDeposit<Ethereum> for DepositHandler {}
 impl OnDeposit<Polkadot> for DepositHandler {}
@@ -1041,17 +1090,14 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
 					.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
 			for (i, output) in outputs.iter().enumerate() {
-				if [
-					ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
-					ScriptPubkey::Taproot(btc_key.current),
-				]
-				.contains(&output.script_pubkey)
-				{
-					Environment::add_bitcoin_change_utxo(
-						output.amount,
-						UtxoId { tx_id, vout: i as u32 },
-						batch_transfer.change_utxo_key,
-					);
+				if let ScriptPubkey::Taproot(pubkey_x) = &output.script_pubkey {
+					if *pubkey_x == btc_key.current || Some(*pubkey_x) == btc_key.previous {
+						Environment::add_bitcoin_change_utxo(
+							output.amount,
+							UtxoId { tx_id, vout: i as u32 },
+							*pubkey_x,
+						);
+					}
 				}
 			}
 		}

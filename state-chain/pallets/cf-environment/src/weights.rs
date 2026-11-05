@@ -61,6 +61,7 @@ pub trait WeightInfo {
 	fn dispatch_solana_gov_call() -> Weight;
 	fn non_native_signed_call() -> Weight;
 	fn batch(c: u32, ) -> Weight;
+	fn recover_failed_deposits(n: u32, ) -> Weight;
 	fn eip712_build_domain_data() -> Weight;
 	fn eip712_build_typed_data() -> Weight;
 	fn eip712_build_typed_data_simple() -> Weight;
@@ -291,6 +292,36 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(7_779_098, 0)
 			// Standard Error: 21_376
 			.saturating_add(Weight::from_parts(1_585_480, 0).saturating_mul(c.into()))
+	}
+	/// Storage: `AssetBalances::BrokerRecoveryAccount` (r:1 w:0)
+	/// Proof: `AssetBalances::BrokerRecoveryAccount` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:1 w:0)
+	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::EgressIdCounter` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::EgressIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumChainTracking::FeeMultiplier` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::FeeMultiplier` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
+	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
+	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::EgressDustLimit` (r:1 w:0)
+	/// Proof: `EthereumIngressEgress::EgressDustLimit` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 50]`.
+	fn recover_failed_deposits(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1399`
+		//  Estimated: `4864`
+		// Minimum execution time: 34_000_000 picoseconds.
+		Weight::from_parts(23_551_306, 4864)
+			// Standard Error: 17_383
+			.saturating_add(Weight::from_parts(13_264_418, 0).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().reads(9_u64))
+			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
 	fn eip712_build_domain_data() -> Weight {
 		// Proof Size summary in bytes:
@@ -593,6 +624,36 @@ impl WeightInfo for () {
 		Weight::from_parts(7_779_098, 0)
 			// Standard Error: 21_376
 			.saturating_add(Weight::from_parts(1_585_480, 0).saturating_mul(c.into()))
+	}
+	/// Storage: `AssetBalances::BrokerRecoveryAccount` (r:1 w:0)
+	/// Proof: `AssetBalances::BrokerRecoveryAccount` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:1 w:0)
+	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::EgressIdCounter` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::EgressIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumChainTracking::FeeMultiplier` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::FeeMultiplier` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
+	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
+	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::EgressDustLimit` (r:1 w:0)
+	/// Proof: `EthereumIngressEgress::EgressDustLimit` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 50]`.
+	fn recover_failed_deposits(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1399`
+		//  Estimated: `4864`
+		// Minimum execution time: 34_000_000 picoseconds.
+		Weight::from_parts(23_551_306, 4864)
+			// Standard Error: 17_383
+			.saturating_add(Weight::from_parts(13_264_418, 0).saturating_mul(n.into()))
+			.saturating_add(ParityDbWeight::get().reads(9_u64))
+			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
 	fn eip712_build_domain_data() -> Weight {
 		// Proof Size summary in bytes:

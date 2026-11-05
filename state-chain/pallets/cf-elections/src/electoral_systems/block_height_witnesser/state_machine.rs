@@ -232,7 +232,7 @@ pub mod tests {
 	use crate::{
 		electoral_systems::{
 			block_height_witnesser::{
-				primitives::{ContinuousHeaders, NonemptyContinuousHeaders},
+				primitives::{BHWVote, ContinuousHeaders, NonemptyContinuousHeaders},
 				BlockHeightChangeHook, BlockHeightWitnesserSettings, ChainBlockHashOf,
 				ChainBlockHashTrait, ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
 				CommonTraits, ReorgHook,
@@ -245,6 +245,7 @@ pub mod tests {
 	use cf_chains::{self, witness_period::BlockWitnessRange, ChainWitnessConfig};
 	use cf_traits::hook_test_utils::MockHook;
 	use cf_utilities::define_empty_struct;
+	use frame_support::traits::ConstU32;
 	use proptest::{
 		arbitrary::arbitrary_with,
 		prelude::{any, prop, Arbitrary, Just, Strategy},
@@ -314,6 +315,17 @@ pub mod tests {
 		type Strategy = impl Strategy<Value = NonemptyContinuousHeaders<C>> + Clone + Send;
 	}
 
+	impl<T: BHWTypes> Arbitrary for BHWVote<T> {
+		type Parameters = (ChainBlockNumberOf<T::Chain>, usize);
+
+		fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
+			NonemptyContinuousHeaders::<T::Chain>::arbitrary_with(parameters)
+				.prop_filter_map("vote exceeds bound", |headers| headers.try_into().ok())
+		}
+
+		type Strategy = impl Strategy<Value = BHWVote<T>> + Clone + Send;
+	}
+
 	pub fn generate_input<T: BHWTypes>(
 		properties: HeightWitnesserProperties<T::Chain>,
 	) -> impl Strategy<Value = NonemptyContinuousHeaders<T::Chain>> {
@@ -366,6 +378,8 @@ pub mod tests {
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 		type ReorgHook = MockHook<HookTypeFor<Self, ReorgHook>>;
 		type Chain = Self;
+		// Vote length bounds are covered by dedicated tests.
+		type MaxVoteHeaders = ConstU32<{ u32::MAX }>;
 	}
 
 	#[test]
@@ -403,6 +417,7 @@ pub mod tests {
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 		type ReorgHook = MockHook<HookTypeFor<Self, ReorgHook>>;
 		type Chain = TestChain;
+		type MaxVoteHeaders = ConstU32<{ u32::MAX }>;
 	}
 
 	#[test]

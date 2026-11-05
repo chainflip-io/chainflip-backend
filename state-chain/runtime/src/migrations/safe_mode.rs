@@ -19,7 +19,7 @@ use frame_support::{storage::unhashed, traits::OnRuntimeUpgrade, weights::Weight
 
 use crate::{safe_mode::RuntimeSafeMode, Runtime};
 
-use crate::runtime_apis::custom_api::types::before_version_22::RuntimeSafeMode as OldRuntimeSafeMode;
+use crate::runtime_apis::custom_api::types::before_version_23::RuntimeSafeMode as OldRuntimeSafeMode;
 
 /// Drops the `emissions` entry from the stored runtime safe mode. Without this, the pre-upgrade
 /// encoding would be decoded shifted by one byte, silently scrambling every pallet's safe mode.

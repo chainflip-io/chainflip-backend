@@ -49,6 +49,12 @@ pub trait EvmChain = Chain<
 	TransactionRef = H256,
 >;
 
+/// Engine-side witnessing parameters for EVM chains.
+pub trait EvmWitnessingConfig {
+	/// Whether to witness up to the chain's finalized head rather than the latest block.
+	const WITNESS_FINALIZED_BLOCKS: bool;
+}
+
 #[derive(
 	Clone,
 	Debug,
@@ -572,16 +578,8 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 
 	/// Undeployed Addresses should not be recycled.
 	/// Other address types *can* be recycled.
-	fn maybe_recycle(self) -> Option<Self> {
-		match self {
-			Self::Undeployed => None,
-			// When recycling, preserve the deployment block number
-			Self::Deployed { at_block_height: block_number } =>
-				Some(Self::Deployed { at_block_height: block_number }),
-			// Pending channels shouldn't normally be recycled, but if they are,
-			// use 0 as value for the deployment block
-			Self::Pending => Some(Self::Deployed { at_block_height: 0 }),
-		}
+	fn maybe_recycle(&self) -> bool {
+		!matches!(self, Self::Undeployed)
 	}
 }
 

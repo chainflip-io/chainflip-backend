@@ -362,6 +362,14 @@ pub mod pallet {
 	pub type TransactionMetadata<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetadataFor<T, I>>;
 
+	/// External transactions whose fee has been refunded in the current block. A single
+	/// transaction can confirm several broadcasts (eg. by re-entering the vault), but its fee was
+	/// only paid once. All confirmations from one transaction are witnessed in the same block,
+	/// so this is cleared at the start of each block.
+	#[pallet::storage]
+	pub type RefundedTransactions<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TransactionRefFor<T, I>, ()>;
+
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
 	#[pallet::getter(fn broadcast_barriers)]
@@ -538,7 +546,12 @@ pub mod pallet {
 					|current| current.append(&mut delayed_retries),
 				);
 			}
-			T::WeightInfo::on_initialize(expiry_count as u32, retries_count as u32)
+			// Bounded by the refunds recorded in the previous block.
+			let cleared = RefundedTransactions::<T, I>::clear(u32::MAX, None);
+
+			T::WeightInfo::on_initialize(expiry_count as u32, retries_count as u32).saturating_add(
+				T::DbWeight::get().reads_writes(cleared.loops.into(), cleared.unique.into()),
+			)
 		}
 	}
 
@@ -835,9 +848,84 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
+		Self::record_transaction_fee(
+			broadcast_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			&transaction_ref,
+		);
+
+		T::BroadcastOutcomeHandler::on_broadcast_success(broadcast_id, witnessed_at_block);
+
+		// Report the people who failed to broadcast this tx during its whole lifetime.
+		let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
+		if !failed_broadcasters.is_empty() {
+			T::OffenceReporter::report_many(
+				PalletOffence::FailedToBroadcastTransaction(T::TargetChain::get()),
+				failed_broadcasters,
+			);
+		}
+
+		Self::clean_up_broadcast_storage(broadcast_id);
+
+		Self::deposit_event(Event::<T, I>::BroadcastSuccess {
+			broadcast_id,
+			transaction_out_id: tx_out_id,
+			transaction_ref,
+		});
+		Ok(())
+	}
+
+	/// For transactions that were included on the target chain but failed to execute, so the fee
+	/// was still paid. The broadcast is aborted so that it can be recovered manually, as when no
+	/// authority manages to broadcast it. Failed broadcasters are not reported: the transaction
+	/// may have been submitted by anyone, so their failures may have been correct.
+	pub fn egress_execution_failed(
+		TransactionConfirmation {
+			tx_out_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			transaction_ref,
+		}: TransactionConfirmation<T, I>,
+	) -> DispatchResult {
+		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
+			.ok_or(Error::<T, I>::InvalidPayload)?;
+
+		Self::record_transaction_fee(
+			broadcast_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			&transaction_ref,
+		);
+		// It may have already been aborted if every authority's submission was rejected.
+		if PendingBroadcasts::<T, I>::get().contains(&broadcast_id) {
+			Self::abort_broadcast(broadcast_id);
+		}
+		Ok(())
+	}
+
+	fn record_transaction_fee(
+		broadcast_id: BroadcastId,
+		signer_id: SignerIdFor<T, I>,
+		tx_fee: TransactionFeeFor<T, I>,
+		tx_metadata: TransactionMetadataFor<T, I>,
+		transaction_ref: &TransactionRefFor<T, I>,
+	) {
 		if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 			if tx_metadata.verify_metadata(&expected_tx_metadata) {
-				if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
+				if RefundedTransactions::<T, I>::contains_key(transaction_ref) {
+					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRefused {
+						beneficiary: signer_id,
+					});
+					log::warn!(
+						"Fee for transaction {:?} was already refunded. Deficit for broadcast {} will not be recorded.",
+						transaction_ref,
+						broadcast_id
+					);
+				} else if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
 					let to_refund = broadcast_data.transaction_payload.return_fee_refund(tx_fee);
 
 					let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
@@ -850,6 +938,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						<T::TargetChain as Chain>::GAS_ASSET.into(),
 						to_refund.into(),
 					);
+
+					RefundedTransactions::<T, I>::insert(transaction_ref, ());
 
 					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
 						beneficiary: signer_id,
@@ -876,26 +966,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_id
 			);
 		}
-
-		T::BroadcastOutcomeHandler::on_broadcast_success(broadcast_id, witnessed_at_block);
-
-		// Report the people who failed to broadcast this tx during its whole lifetime.
-		let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
-		if !failed_broadcasters.is_empty() {
-			T::OffenceReporter::report_many(
-				PalletOffence::FailedToBroadcastTransaction(T::TargetChain::get()),
-				failed_broadcasters,
-			);
-		}
-
-		Self::clean_up_broadcast_storage(broadcast_id);
-
-		Self::deposit_event(Event::<T, I>::BroadcastSuccess {
-			broadcast_id,
-			transaction_out_id: tx_out_id,
-			transaction_ref,
-		});
-		Ok(())
 	}
 
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {

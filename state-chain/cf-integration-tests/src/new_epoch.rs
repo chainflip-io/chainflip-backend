@@ -285,7 +285,7 @@ fn can_consolidate_bitcoin_utxos() {
 					.tracked_data
 					.btc_fee_info;
 			let expected_consolidation_fee = bitcoin_fee_info.min_fee_required_per_tx() // base fee
-				+ CONSOLIDATION_SIZE as BtcAmount * bitcoin_fee_info.fee_per_input_utxo() // consolidation inputs
+				+ CONSOLIDATION_SIZE as BtcAmount * bitcoin_fee_info.fee_per_vault_utxo() // consolidation (vault) inputs
 				+ bitcoin_fee_info.fee_per_output_utxo(); // change output
 
 			// Add some bitcoin utxos.
@@ -337,7 +337,7 @@ fn can_consolidate_bitcoin_utxos() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"583c4f12102fc4bea1af47d14f9d0b90fca0783af1c5d03d894a44be5ae165bc"
+								"55f909eb7b3c89505f74cc808b9a61e5c7736d35c2e3c1882324577175763ddc"
 							)
 							.into(),
 							vout: 0,
@@ -368,7 +368,7 @@ fn can_consolidate_bitcoin_utxos() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"583c4f12102fc4bea1af47d14f9d0b90fca0783af1c5d03d894a44be5ae165bc"
+								"55f909eb7b3c89505f74cc808b9a61e5c7736d35c2e3c1882324577175763ddc"
 							)
 							.into(),
 							vout: 0,
@@ -379,7 +379,7 @@ fn can_consolidate_bitcoin_utxos() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"7412bc12c3e68a975c910f998afb9ac4b7de1426474642f2067727183dfe6c26"
+								"ec405cb038340498f20108442c242d81c061790e300f07259a746337253c82b8"
 							)
 							.into(),
 							vout: 0,
@@ -412,7 +412,7 @@ fn can_consolidate_bitcoin_utxos() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"583c4f12102fc4bea1af47d14f9d0b90fca0783af1c5d03d894a44be5ae165bc"
+								"55f909eb7b3c89505f74cc808b9a61e5c7736d35c2e3c1882324577175763ddc"
 							)
 							.into(),
 							vout: 0,
@@ -423,7 +423,7 @@ fn can_consolidate_bitcoin_utxos() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"7412bc12c3e68a975c910f998afb9ac4b7de1426474642f2067727183dfe6c26"
+								"ec405cb038340498f20108442c242d81c061790e300f07259a746337253c82b8"
 							)
 							.into(),
 							vout: 0,
@@ -434,7 +434,7 @@ fn can_consolidate_bitcoin_utxos() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"2e80638a37518a081ff08a6b81e522dc68c1d46496ffcde64516489935150ecf"
+								"d7ee4b2c95f67a0454a3c4e9774c057075e649100284cf62a4b8c6f3925a1d26"
 							)
 							.into(),
 							vout: 0,

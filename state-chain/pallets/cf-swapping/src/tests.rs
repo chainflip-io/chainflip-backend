@@ -19,6 +19,7 @@ mod config;
 mod dca;
 mod fees;
 mod fill_or_kill;
+mod recovery_account;
 
 use std::sync::LazyLock;
 
@@ -2334,6 +2335,23 @@ mod private_channels {
 			// The same broker can re-open a (different) private channel:
 			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
 			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(CHANNEL_ID + 1));
+		});
+	}
+
+	#[test]
+	fn cannot_open_private_btc_channel_if_already_bonded() {
+		use cf_traits::{mocks::bonding::MockBonderFor, Bonding};
+
+		new_test_ext().execute_with(|| {
+			const OTHER_BOND: u128 = FLIPPERINOS_PER_FLIP * 1_000;
+			MockFundingInfo::<Test>::credit_funds(&BROKER, OTHER_BOND);
+			MockBonderFor::<Test>::update_bond(&BROKER, OTHER_BOND);
+
+			assert_noop!(
+				Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)),
+				Error::<Test>::AccountBonded
+			);
+			assert_eq!(MockBonderFor::<Test>::get_bond(&BROKER), OTHER_BOND);
 		});
 	}
 

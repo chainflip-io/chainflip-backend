@@ -40,7 +40,7 @@ use pallet_cf_elections::{
 	electoral_system_runner::RunnerStorageAccessTrait,
 	electoral_systems::{
 		block_height_witnesser::{
-			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
+			consensus::BlockHeightWitnesserConsensus, primitives::BHWVote,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
 			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
@@ -63,7 +63,7 @@ use pallet_cf_elections::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use sp_core::{Decode, Encode, Get};
+use sp_core::{ConstU32, Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
@@ -90,7 +90,13 @@ impl ChainTypes for BscChain {
 	const NAME: &'static str = "Bsc";
 }
 
-pub const BSC_MAINNET_SAFETY_BUFFER: u32 = 8;
+impl evm::EvmWitnessingConfig for BscChain {
+	const WITNESS_FINALIZED_BLOCKS: bool = BSC_WITNESS_FINALIZED_BLOCKS;
+}
+
+// BSC's fast finality means the finalized head only lags latest by 1-2 blocks.
+pub const BSC_WITNESS_FINALIZED_BLOCKS: bool = true;
+pub const BSC_MAINNET_SAFETY_BUFFER: u32 = 4;
 pub const BSC_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
@@ -111,13 +117,15 @@ impls! {
 		type BlockHeightChangeHook = Self;
 		type Chain = BscChain;
 		type ReorgHook = Self;
+		// Engine votes carry up to `MAX_SUBMIT_HEADERS + 2` headers.
+		type MaxVoteHeaders = ConstU32<{ BSC_MAX_SUBMIT_HEADERS_IN_BHW_VOTER + 2 }>;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-		type VoteStorage = vote_storage::bitmap::Bitmap<NonemptyContinuousHeaders<BscChain>>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<BHWVote<Self>>;
 
 		type OnFinalizeReturnItem = Option<ChainProgress<BscChain>>;
 
