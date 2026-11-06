@@ -8997,6 +8997,7 @@ dependencies = [
  "nanorand",
  "num-traits",
  "parity-scale-codec",
+ "proptest",
  "scale-info",
  "serde",
  "sp-core",
