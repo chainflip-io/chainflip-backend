@@ -18274,7 +18274,11 @@ export type PalletCfValidatorError =
   /**
    * The account cannot deregister as a Liquidity Provider while actively delegating.
    **/
-  | 'StillDelegating';
+  | 'StillDelegating'
+  /**
+   * The operator's list of delegation exceptions is full.
+   **/
+  | 'TooManyExceptions';
 
 export type SpStakingOffenceOffenceSeverity = Perbill;
 

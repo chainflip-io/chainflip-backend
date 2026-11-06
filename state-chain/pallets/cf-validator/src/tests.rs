@@ -2395,6 +2395,86 @@ mod operator {
 		});
 	}
 
+	fn fill_exceptions(operator: u64) -> BTreeSet<u64> {
+		let exceptions: BTreeSet<u64> =
+			(0..MAX_EXCEPTIONS_PER_OPERATOR as u64).map(|i| 10_000 + i).collect();
+		Exceptions::<Test>::insert(
+			operator,
+			BoundedBTreeSet::try_from(exceptions.clone()).unwrap(),
+		);
+		exceptions
+	}
+
+	#[test]
+	fn exceptions_list_is_bounded() {
+		for (acceptance, add_exception, remove_exception) in [
+			(
+				DelegationAcceptance::Allow,
+				ValidatorPallet::block_delegator as fn(_, _) -> _,
+				ValidatorPallet::allow_delegator as fn(_, _) -> _,
+			),
+			(
+				DelegationAcceptance::Deny,
+				ValidatorPallet::allow_delegator as fn(_, _) -> _,
+				ValidatorPallet::block_delegator as fn(_, _) -> _,
+			),
+		] {
+			new_test_ext().execute_with(|| {
+				assert_ok!(ValidatorPallet::register_as_operator(
+					OriginTrait::signed(ALICE),
+					OperatorSettings { fee_bps: 2000, delegation_acceptance: acceptance },
+					vanity()
+				));
+				let exceptions = fill_exceptions(ALICE);
+				let existing = *exceptions.first().unwrap();
+				frame_system::Pallet::<Test>::inc_providers(&BOB);
+				frame_system::Pallet::<Test>::inc_providers(&existing);
+
+				assert_noop!(
+					add_exception(OriginTrait::signed(ALICE), BOB),
+					Error::<Test>::TooManyExceptions
+				);
+
+				// Re-adding an existing exception doesn't grow the list.
+				assert_ok!(add_exception(OriginTrait::signed(ALICE), existing));
+
+				// A full list can still be shrunk, making room for new exceptions.
+				assert_ok!(remove_exception(OriginTrait::signed(ALICE), existing));
+				assert_ok!(add_exception(OriginTrait::signed(ALICE), BOB));
+				assert_eq!(
+					Exceptions::<Test>::get(ALICE).len() as u32,
+					MAX_EXCEPTIONS_PER_OPERATOR
+				);
+			});
+		}
+	}
+
+	#[test]
+	fn cannot_switch_to_deny_with_more_delegators_than_exceptions_limit() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			for delegator in 0..=MAX_EXCEPTIONS_PER_OPERATOR as u64 {
+				DelegationChoice::<Test>::insert(10_000 + delegator, (ALICE, 100u128));
+			}
+
+			assert_noop!(
+				ValidatorPallet::update_operator_settings(
+					OriginTrait::signed(ALICE),
+					OperatorSettings {
+						fee_bps: OPERATOR_SETTINGS.fee_bps,
+						delegation_acceptance: DelegationAcceptance::Deny,
+					}
+				),
+				Error::<Test>::TooManyExceptions
+			);
+			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(OPERATOR_SETTINGS));
+		});
+	}
+
 	#[test]
 	fn exceptions_list_is_reset_when_operator_settings_are_updated() {
 		new_test_ext().execute_with(|| {
@@ -2404,7 +2484,10 @@ mod operator {
 				vanity()
 			));
 
-			Exceptions::<Test>::insert(ALICE, vec![BOB].into_iter().collect::<BTreeSet<_>>());
+			Exceptions::<Test>::insert(
+				ALICE,
+				BoundedBTreeSet::try_from(BTreeSet::from([BOB])).unwrap(),
+			);
 			assert_ok!(ValidatorPallet::update_operator_settings(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {

@@ -150,6 +150,14 @@ fn register_grandpa_key<T: RuntimeConfig>(account: &T::AccountId) -> GrandpaAuth
 		.expect("GRANDPA key was just registered.")
 }
 
+/// Leaves room for one more entry, so that benchmarked inserts succeed against a full-size list.
+fn fill_exceptions<T: Config>(operator: &T::AccountId) {
+	let exceptions = (1..MAX_EXCEPTIONS_PER_OPERATOR)
+		.map(|i| account::<T::AccountId>("exception", i, 0))
+		.collect::<BTreeSet<_>>();
+	Exceptions::<T>::insert(operator, BoundedBTreeSet::try_from(exceptions).unwrap());
+}
+
 const OPERATOR_SETTINGS: OperatorSettings =
 	OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow };
 
@@ -514,10 +522,26 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		#[extrinsic_call]
-		update_operator_settings(RawOrigin::Signed(caller.clone()), OPERATOR_SETTINGS);
+		// Switching from Allow to Deny is the costly path: the old list is replaced by one holding
+		// every current delegator, which we make as large as the bound allows.
+		OperatorSettingsLookup::<T>::insert(&caller, OPERATOR_SETTINGS);
+		fill_exceptions::<T>(&caller);
+		for i in 0..MAX_EXCEPTIONS_PER_OPERATOR {
+			DelegationChoice::<T>::insert(
+				account::<T::AccountId>("delegator", i, 0),
+				(caller.clone(), T::Amount::default()),
+			);
+		}
+		let new_settings = OperatorSettings {
+			fee_bps: OPERATOR_SETTINGS.fee_bps,
+			delegation_acceptance: DelegationAcceptance::Deny,
+		};
 
-		assert_eq!(OperatorSettingsLookup::<T>::get(caller), Some(OPERATOR_SETTINGS));
+		#[extrinsic_call]
+		update_operator_settings(RawOrigin::Signed(caller.clone()), new_settings.clone());
+
+		assert_eq!(OperatorSettingsLookup::<T>::get(&caller), Some(new_settings));
+		assert_eq!(Exceptions::<T>::get(&caller).len() as u32, MAX_EXCEPTIONS_PER_OPERATOR);
 	}
 
 	#[benchmark]
@@ -529,8 +553,14 @@ mod benchmarks {
 
 		let account_id = whitelisted_caller();
 
+		// Allow mode is the costlier path: it also has to check that the delegator exists.
+		OperatorSettingsLookup::<T>::insert(&operator, OPERATOR_SETTINGS);
+		fill_exceptions::<T>(&operator);
+
 		#[extrinsic_call]
-		block_delegator(RawOrigin::Signed(operator), account_id);
+		block_delegator(RawOrigin::Signed(operator.clone()), account_id);
+
+		assert_eq!(Exceptions::<T>::get(&operator).len() as u32, MAX_EXCEPTIONS_PER_OPERATOR);
 	}
 
 	#[benchmark]
@@ -542,8 +572,17 @@ mod benchmarks {
 
 		let account_id = whitelisted_caller();
 
+		// Deny mode is the costlier path: it also has to check that the delegator exists.
+		OperatorSettingsLookup::<T>::insert(
+			&operator,
+			OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Deny },
+		);
+		fill_exceptions::<T>(&operator);
+
 		#[extrinsic_call]
-		allow_delegator(RawOrigin::Signed(operator), account_id);
+		allow_delegator(RawOrigin::Signed(operator.clone()), account_id);
+
+		assert_eq!(Exceptions::<T>::get(&operator).len() as u32, MAX_EXCEPTIONS_PER_OPERATOR);
 	}
 
 	#[benchmark]
@@ -591,6 +630,7 @@ mod benchmarks {
 			RawOrigin::Signed(operator.clone()).into(),
 			OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow }
 		));
+		fill_exceptions::<T>(&operator);
 
 		#[extrinsic_call]
 		delegate(RawOrigin::Signed(delegator.clone()), operator.clone(), DelegationAmount::Max);

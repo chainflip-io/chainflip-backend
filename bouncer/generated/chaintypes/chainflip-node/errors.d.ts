@@ -559,6 +559,11 @@ export interface ChainErrors extends GenericChainErrors {
     StillDelegating: GenericPalletError;
 
     /**
+     * The operator's list of delegation exceptions is full.
+     **/
+    TooManyExceptions: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
