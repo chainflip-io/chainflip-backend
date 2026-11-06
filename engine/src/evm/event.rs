@@ -14,11 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::evm::conversions::IntoSpCore;
+use alloy_rpc_types_eth::Log;
+use alloy_sol_types::SolEventInterface;
 use anyhow::{anyhow, Result};
 use derive_where::derive_where;
-use ethers::{abi::RawLog, contract::EthLogDecode};
-
-use ethers::types::Log;
 use sp_core::{H160, H256, U256};
 use std::{
 	fmt::{Debug, Display, Formatter},
@@ -42,19 +42,18 @@ impl<EventParameters: Debug> Display for Event<EventParameters> {
 	}
 }
 
-impl<EventParameters: Debug + EthLogDecode> Event<EventParameters> {
+impl<EventParameters: Debug + SolEventInterface> Event<EventParameters> {
 	pub fn new_from_unparsed_logs(log: Log) -> Result<Self> {
 		Ok(Self {
 			tx_hash: log
 				.transaction_hash
-				.ok_or_else(|| anyhow!("Could not get transaction hash from ETH log"))?,
+				.ok_or_else(|| anyhow!("Could not get transaction hash from ETH log"))?
+				.into_sp_core(),
 			log_index: log
 				.log_index
-				.ok_or_else(|| anyhow!("Could not get log index from ETH log"))?,
-			event_parameters: EventParameters::decode_log(&RawLog {
-				topics: log.topics.into_iter().collect(),
-				data: log.data.to_vec(),
-			})?,
+				.ok_or_else(|| anyhow!("Could not get log index from ETH log"))?
+				.into(),
+			event_parameters: EventParameters::decode_raw_log(log.topics(), &log.data().data)?,
 		})
 	}
 }
@@ -69,15 +68,17 @@ pub struct EvmEventTypeCarrier<Event, TargetData> {
 }
 
 pub fn evm_event_type<
-	ParseData: EthLogDecode + Debug + Into<TargetData> + 'static,
+	ParseData: SolEventInterface + Debug + Send + Sync + Into<TargetData> + 'static,
 	TargetData: Debug + Sync + Send + 'static,
 >() -> Arc<dyn EvmEventType<TargetData>> {
 	let event_carrier: EvmEventTypeCarrier<ParseData, TargetData> = Default::default();
 	Arc::new(event_carrier)
 }
 
-impl<ParseData: EthLogDecode + Debug + Into<TargetData>, TargetData: Debug + Sync + Send>
-	EvmEventType<TargetData> for EvmEventTypeCarrier<ParseData, TargetData>
+impl<
+		ParseData: SolEventInterface + Debug + Send + Sync + Into<TargetData>,
+		TargetData: Debug + Sync + Send,
+	> EvmEventType<TargetData> for EvmEventTypeCarrier<ParseData, TargetData>
 {
 	fn parse_log(&self, log: Log) -> Result<Event<TargetData>> {
 		let Event { tx_hash, log_index, event_parameters } =
@@ -93,7 +94,7 @@ pub struct EvmEventSource<EventData> {
 }
 
 impl<TargetData: Debug + Sync + Send + 'static> EvmEventSource<TargetData> {
-	pub fn new<ParseData: EthLogDecode + Debug + Into<TargetData> + 'static>(
+	pub fn new<ParseData: SolEventInterface + Debug + Send + Sync + Into<TargetData> + 'static>(
 		contract_address: H160,
 	) -> Self {
 		EvmEventSource { contract_address, event_type: evm_event_type::<ParseData, TargetData>() }

@@ -14,12 +14,31 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Ok, Result};
+use alloy_eips::BlockId;
+use anyhow::Result;
+use sp_core::{H160, H256, U256};
 
 use super::{EvmRpcClient, EvmRpcSigningClient};
-use ethers::prelude::*;
+use crate::evm::conversions::{IntoAlloy, IntoSpCore};
 
-abigen!(AddressChecker, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IAddressChecker.json");
+alloy_sol_types::sol!(
+	#[sol(all_derives)]
+	AddressChecker,
+	concat!(
+		env!("CF_ETH_CONTRACT_ABI_ROOT"),
+		"/",
+		env!("CF_ETH_CONTRACT_ABI_TAG"),
+		"/IAddressChecker.json"
+	)
+);
+
+pub use IAddressChecker::PriceFeedData;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddressState {
+	pub balance: U256,
+	pub has_contract: bool,
+}
 
 #[async_trait::async_trait]
 pub trait AddressCheckerRpcApi {
@@ -52,11 +71,19 @@ impl AddressCheckerRpcApi for EvmRpcClient {
 		contract_address: H160,
 		addresses: Vec<H160>,
 	) -> Result<Vec<AddressState>> {
-		Ok(AddressChecker::new(contract_address, self.provider.clone())
-			.address_states(addresses)
-			.block(BlockId::Hash(block_hash))
-			.call()
-			.await?)
+		Ok(self
+			.call_contract(
+				contract_address,
+				AddressChecker::addressStatesCall { addresses: addresses.into_alloy() },
+				BlockId::hash(block_hash.into_alloy()),
+			)
+			.await?
+			.into_iter()
+			.map(|IAddressChecker::AddressState { balance, hasContract }| AddressState {
+				balance: balance.into_sp_core(),
+				has_contract: hasContract,
+			})
+			.collect())
 	}
 
 	async fn balances(
@@ -65,22 +92,30 @@ impl AddressCheckerRpcApi for EvmRpcClient {
 		contract_address: H160,
 		addresses: Vec<H160>,
 	) -> Result<Vec<U256>> {
-		Ok(AddressChecker::new(contract_address, self.provider.clone())
-			.native_balances(addresses)
-			.block(BlockId::Hash(block_hash))
-			.call()
-			.await?)
+		Ok(self
+			.call_contract(
+				contract_address,
+				AddressChecker::nativeBalancesCall { addresses: addresses.into_alloy() },
+				BlockId::hash(block_hash.into_alloy()),
+			)
+			.await?
+			.into_sp_core())
 	}
 	async fn query_price_feeds(
 		&self,
 		contract_address: H160,
 		aggregator_addresses: Vec<H160>,
 	) -> Result<(U256, U256, Vec<PriceFeedData>)> {
-		let price_feed_data = AddressChecker::new(contract_address, self.provider.clone())
-			.query_price_feeds(aggregator_addresses)
-			.call()
+		let AddressChecker::queryPriceFeedsReturn { blockNumber, blockTimestamp, _2: price_feeds } =
+			self.call_contract(
+				contract_address,
+				AddressChecker::queryPriceFeedsCall {
+					addresses: aggregator_addresses.into_alloy(),
+				},
+				BlockId::latest(),
+			)
 			.await?;
-		Ok(price_feed_data)
+		Ok((blockNumber.into_sp_core(), blockTimestamp.into_sp_core(), price_feeds))
 	}
 }
 
@@ -143,11 +178,11 @@ mod tests {
 		println!("Query Block Number: {}", query_block_number);
 		println!("Query Block Timestamp: {}", query_block_timestamp);
 		for feed in price_feeds_data.iter() {
-			println!("  Round ID: {}", feed.round_id);
+			println!("  Round ID: {}", feed.roundId);
 			println!("  Answer: {}", feed.answer);
-			println!("  Started At: {}", feed.started_at);
-			println!("  Updated At: {}", feed.updated_at);
-			println!("  Answered In Round: {}", feed.answered_in_round);
+			println!("  Started At: {}", feed.startedAt);
+			println!("  Updated At: {}", feed.updatedAt);
+			println!("  Answered In Round: {}", feed.answeredInRound);
 			println!("  Decimals: {}", feed.decimals);
 			println!("  Description: {}", feed.description);
 		}

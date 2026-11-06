@@ -29,8 +29,12 @@ use crate::{
 		},
 	},
 };
+use alloy_eips::BlockNumberOrTag;
+use alloy_network::{AnyRpcBlock, AnyRpcTransaction, AnyTransactionReceipt};
+use alloy_primitives::Bytes;
+use alloy_rpc_types_eth::{FeeHistory, Log};
 use cf_utilities::task_scope::Scope;
-use ethers::{prelude::*, types::TransactionReceipt};
+use sp_core::{H160, H256, U256};
 use tokio::sync::mpsc;
 
 use crate::evm::rpc::address_checker::PriceFeedData;
@@ -50,26 +54,26 @@ pub trait EvmRetryRpcApiWithResult: Clone {
 
 	async fn chain_id(&self) -> anyhow::Result<U256>;
 
-	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt>;
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<AnyTransactionReceipt>;
 
-	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>>;
+	async fn block(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock>;
 
-	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>>;
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<AnyRpcBlock>;
 
-	async fn block_with_txs(&self, block_number: U64) -> anyhow::Result<Block<Transaction>>;
+	async fn block_with_txs(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock>;
 
 	async fn fee_history(
 		&self,
-		block_count: U256,
-		newest_block: BlockNumber,
+		block_count: u64,
+		newest_block: BlockNumberOrTag,
 		reward_percentiles: Vec<f64>,
 	) -> anyhow::Result<FeeHistory>;
 
-	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<Transaction>;
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<AnyRpcTransaction>;
 
-	async fn get_block_number(&self) -> anyhow::Result<U64>;
+	async fn get_block_number(&self) -> anyhow::Result<u64>;
 
-	async fn get_finalized_block_number(&self) -> anyhow::Result<U64>;
+	async fn get_finalized_block_number(&self) -> anyhow::Result<u64>;
 }
 
 /// Tmp trait defined to allow having a finite retry impl (2 retries, one with main endpoint and
@@ -103,20 +107,20 @@ pub struct EvmCachingClient<Rpc: EvmRpcApi> {
 	retry_client: EvmRetryRpcClient<Rpc>,
 	get_logs: CachingRequest<(H256, H160), Vec<Log>, EvmRetryRpcClient<Rpc>>,
 	chain_id: CachingRequest<(), U256, EvmRetryRpcClient<Rpc>>,
-	transaction_receipt: CachingRequest<H256, TransactionReceipt, EvmRetryRpcClient<Rpc>>,
-	block: CachingRequest<U64, Block<H256>, EvmRetryRpcClient<Rpc>>,
-	block_by_hash: CachingRequest<H256, Block<H256>, EvmRetryRpcClient<Rpc>>,
-	block_with_txs: CachingRequest<U64, Block<Transaction>, EvmRetryRpcClient<Rpc>>,
-	fee_history: CachingRequest<(U256, BlockNumber), FeeHistory, EvmRetryRpcClient<Rpc>>,
-	get_transaction: CachingRequest<H256, Transaction, EvmRetryRpcClient<Rpc>>,
+	transaction_receipt: CachingRequest<H256, AnyTransactionReceipt, EvmRetryRpcClient<Rpc>>,
+	block: CachingRequest<u64, AnyRpcBlock, EvmRetryRpcClient<Rpc>>,
+	block_by_hash: CachingRequest<H256, AnyRpcBlock, EvmRetryRpcClient<Rpc>>,
+	block_with_txs: CachingRequest<u64, AnyRpcBlock, EvmRetryRpcClient<Rpc>>,
+	fee_history: CachingRequest<(u64, BlockNumberOrTag), FeeHistory, EvmRetryRpcClient<Rpc>>,
+	get_transaction: CachingRequest<H256, AnyRpcTransaction, EvmRetryRpcClient<Rpc>>,
 	get_logs_range: CachingRequest<(RangeInclusive<u64>, H160), Vec<Log>, EvmRetryRpcClient<Rpc>>,
 	address_states:
 		CachingRequest<(H256, H160, Vec<H160>), Vec<AddressState>, EvmRetryRpcClient<Rpc>>,
 	balances: CachingRequest<(H256, H160, Vec<H160>), Vec<U256>, EvmRetryRpcClient<Rpc>>,
 	query_price_feeds:
 		CachingRequest<(H160, Vec<H160>), (U256, U256, Vec<PriceFeedData>), EvmRetryRpcClient<Rpc>>,
-	get_block_number: CachingRequest<(), U64, EvmRetryRpcClient<Rpc>>,
-	get_finalized_block_number: CachingRequest<(), U64, EvmRetryRpcClient<Rpc>>,
+	get_block_number: CachingRequest<(), u64, EvmRetryRpcClient<Rpc>>,
+	get_finalized_block_number: CachingRequest<(), u64, EvmRetryRpcClient<Rpc>>,
 	gas_estimate_components: CachingRequest<(), (u64, u64, U256, U256), EvmRetryRpcClient<Rpc>>,
 
 	pub cache_invalidation_senders: Vec<mpsc::Sender<()>>,
@@ -133,25 +137,25 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 			CachingRequest::<(), U256, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
 		let (transaction_receipt, transaction_receipt_cache) = CachingRequest::<
 			H256,
-			TransactionReceipt,
+			AnyTransactionReceipt,
 			EvmRetryRpcClient<Rpc>,
 		>::new(scope, client.clone());
 		let (block, block_cache) =
-			CachingRequest::<U64, Block<H256>, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
+			CachingRequest::<u64, AnyRpcBlock, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
 		let (block_by_hash, block_by_hash_cache) =
-			CachingRequest::<H256, Block<H256>, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
-		let (block_with_txs, block_with_txs_cache) = CachingRequest::<
-			U64,
-			Block<Transaction>,
-			EvmRetryRpcClient<Rpc>,
-		>::new(scope, client.clone());
+			CachingRequest::<H256, AnyRpcBlock, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
+		let (block_with_txs, block_with_txs_cache) =
+			CachingRequest::<u64, AnyRpcBlock, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
 		let (fee_history, fee_history_cache) = CachingRequest::<
-			(U256, BlockNumber),
+			(u64, BlockNumberOrTag),
 			FeeHistory,
 			EvmRetryRpcClient<Rpc>,
 		>::new(scope, client.clone());
-		let (get_transaction, get_transaction_cache) =
-			CachingRequest::<H256, Transaction, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
+		let (get_transaction, get_transaction_cache) = CachingRequest::<
+			H256,
+			AnyRpcTransaction,
+			EvmRetryRpcClient<Rpc>,
+		>::new(scope, client.clone());
 		let (get_logs_range, get_logs_range_cache) = CachingRequest::<
 			(RangeInclusive<u64>, H160),
 			Vec<Log>,
@@ -173,9 +177,9 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 			EvmRetryRpcClient<Rpc>,
 		>::new(scope, client.clone());
 		let (get_block_number, get_block_number_cache) =
-			CachingRequest::<(), U64, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
+			CachingRequest::<(), u64, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
 		let (get_finalized_block_number, get_finalized_block_number_cache) =
-			CachingRequest::<(), U64, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
+			CachingRequest::<(), u64, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
 		let (gas_estimate_components, gas_estimate_components_cache) =
 			CachingRequest::<(), (u64, u64, U256, U256), EvmRetryRpcClient<Rpc>>::new(
 				scope,
@@ -241,7 +245,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 			.await
 	}
 
-	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt> {
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<AnyTransactionReceipt> {
 		self.transaction_receipt
 			.get_or_fetch(
 				Box::pin(move |client| {
@@ -255,7 +259,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 	/// Gets block, returning error when either:
 	/// - Request fails
 	/// - Request succeeds, but doesn't return a block
-	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>> {
+	async fn block(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		self.block
 			.get_or_fetch(
 				Box::pin(move |client| Box::pin(async move { client.block(block_number).await })),
@@ -264,7 +268,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 			.await
 	}
 
-	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>> {
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<AnyRpcBlock> {
 		self.block_by_hash
 			.get_or_fetch(
 				Box::pin(move |client| {
@@ -275,7 +279,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 			.await
 	}
 
-	async fn block_with_txs(&self, block_number: U64) -> anyhow::Result<Block<Transaction>> {
+	async fn block_with_txs(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		self.block_with_txs
 			.get_or_fetch(
 				Box::pin(move |client| {
@@ -288,8 +292,8 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 
 	async fn fee_history(
 		&self,
-		block_count: U256,
-		newest_block: BlockNumber,
+		block_count: u64,
+		newest_block: BlockNumberOrTag,
 		reward_percentiles: Vec<f64>,
 	) -> anyhow::Result<FeeHistory> {
 		self.fee_history
@@ -305,7 +309,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 			.await
 	}
 
-	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<Transaction> {
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<AnyRpcTransaction> {
 		self.get_transaction
 			.get_or_fetch(
 				Box::pin(move |client| {
@@ -332,7 +336,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 			)
 			.await
 	}
-	async fn get_block_number(&self) -> anyhow::Result<U64> {
+	async fn get_block_number(&self) -> anyhow::Result<u64> {
 		self.get_block_number
 			.get_or_fetch(
 				Box::pin(move |client| Box::pin(async move { client.get_block_number().await })),
@@ -341,7 +345,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 			.await
 	}
 
-	async fn get_finalized_block_number(&self) -> anyhow::Result<U64> {
+	async fn get_finalized_block_number(&self) -> anyhow::Result<u64> {
 		self.get_finalized_block_number
 			.get_or_fetch(
 				Box::pin(move |client| {
@@ -450,10 +454,7 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApiWithResult
 #[async_trait::async_trait]
 impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmCachingClient<Rpc> {
 	/// Estimates gas and then sends the transaction to the network.
-	async fn broadcast_transaction(
-		&self,
-		tx: cf_chains::evm::Transaction,
-	) -> anyhow::Result<TxHash> {
+	async fn broadcast_transaction(&self, tx: cf_chains::evm::Transaction) -> anyhow::Result<H256> {
 		self.retry_client.broadcast_transaction(tx).await
 	}
 }

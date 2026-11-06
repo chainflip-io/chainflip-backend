@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-	evm::{event::Event, retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult},
+	evm::{
+		conversions::IntoSpCore, event::Event,
+		retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
+	},
 	witness::{
 		common::{
 			block_height_witnesser::witness_headers, block_witnesser::GenericBwVoter,
@@ -29,6 +32,7 @@ use crate::{
 		},
 	},
 };
+use alloy_primitives::Bytes;
 use cf_chains::{
 	arb::ArbitrumTrackedData,
 	assets,
@@ -42,7 +46,6 @@ use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
-use ethers::types::Bytes;
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::{
@@ -110,14 +113,12 @@ impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConf
 
 	async fn block_header_by_height(&self, height: BlockWitnessRange<W>) -> Result<Header<Chain>> {
 		let range = height.into_range_inclusive();
-		let (block_start, block_end) = futures::try_join!(
-			self.client.block((*range.start()).into()),
-			self.client.block((*range.end()).into())
-		)?;
+		let (block_start, block_end) =
+			futures::try_join!(self.client.block(*range.start()), self.client.block(*range.end()))?;
 		Ok(Header {
 			block_height: height,
-			hash: block_end.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
-			parent_hash: block_start.parent_hash,
+			hash: block_end.header.hash.into_sp_core(),
+			parent_hash: block_start.header.parent_hash.into_sp_core(),
 		})
 	}
 
@@ -296,8 +297,8 @@ impl VoterApi<ArbitrumLiveness> for ArbitrumLivenessVoter {
 		_settings: <ArbitrumLiveness as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <ArbitrumLiveness as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<ArbitrumLiveness>>, anyhow::Error> {
-		let block = self.client.block(properties.into()).await?;
-		Ok(Some(block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?))
+		let block = self.client.block(properties).await?;
+		Ok(Some(block.header.hash.into_sp_core()))
 	}
 }
 

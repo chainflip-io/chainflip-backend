@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	evm::rpc::EvmRpcApi,
+	evm::{conversions::IntoAlloy, rpc::EvmRpcApi},
 	retrier::{Attempt, RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY},
 	settings::{NodeContainer, TronEndpoints},
 	tron::{
@@ -24,10 +24,12 @@ use crate::{
 		rpc_client_api::TransactionResultStatus,
 	},
 };
+use alloy_network::{AnyRpcBlock, AnyRpcTransaction, AnyTransactionReceipt};
+use alloy_rpc_types_eth::{Filter, Log};
 use cf_utilities::task_scope::Scope;
 use core::time::Duration;
-use ethers::types::{Block, Filter, Log, TransactionReceipt, H160, H256, U256, U64};
 use futures::future;
+use sp_core::{H160, H256, U256};
 
 use anyhow::{anyhow, Context, Result};
 
@@ -234,7 +236,9 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronRetryRpcClie
 					Box::pin(async move {
 						client
 							.get_logs(
-								Filter::new().address(contract_address).at_block_hash(block_hash),
+								Filter::new()
+									.address(contract_address.into_alloy())
+									.at_block_hash(block_hash.into_alloy()),
 							)
 							.await
 					})
@@ -244,7 +248,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronRetryRpcClie
 			.await
 	}
 
-	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt> {
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<AnyTransactionReceipt> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new(
@@ -259,7 +263,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronRetryRpcClie
 			.await
 	}
 
-	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>> {
+	async fn block(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new(
@@ -272,7 +276,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronRetryRpcClie
 			.await
 	}
 
-	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>> {
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<AnyRpcBlock> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new("eth_getBlockByHash".to_string(), Some(format!("{block_hash:?}"))),
@@ -284,10 +288,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronRetryRpcClie
 			.await
 	}
 
-	async fn block_with_txs(
-		&self,
-		block_number: U64,
-	) -> anyhow::Result<Block<ethers::types::Transaction>> {
+	async fn block_with_txs(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new(
@@ -302,7 +303,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronRetryRpcClie
 			.await
 	}
 
-	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<ethers::types::Transaction> {
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<AnyRpcTransaction> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new(
@@ -317,7 +318,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronRetryRpcClie
 			.await
 	}
 
-	async fn get_block_number(&self) -> anyhow::Result<U64> {
+	async fn get_block_number(&self) -> anyhow::Result<u64> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new("eth_blockNumber".to_string(), None),
@@ -356,7 +357,7 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 							}
 
 							let expected_selector =
-								&ethers::utils::keccak256(function_selector.as_bytes())[..4];
+								&sp_crypto_hashing::keccak_256(function_selector.as_bytes())[..4];
 							let actual_selector = &transaction.data[..4];
 							if expected_selector != actual_selector {
 								return Err(anyhow::anyhow!(
@@ -576,7 +577,7 @@ mod tests {
 						},
 						backup: None,
 					},
-					ethers::types::U256::from(3448148188u64), //  Nile testnet chain ID (0xcd8690dc)
+					U256::from(3448148188u64), //  Nile testnet chain ID (0xcd8690dc)
 					"tron_rpc",
 					"Tron",
 					private_key_file,
