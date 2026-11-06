@@ -46,12 +46,11 @@ thiserror = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 url = { workspace = true }
-web3 = { workspace = true, features = ["ws-tls-tokio"] }
 zeroize = { workspace = true }
 ed25519-dalek = { workspace = true }
 pin-project = { workspace = true }
 rand = { workspace = true, default-features = true, features = ["alloc"] }
-reqwest = { workspace = true, features = ["rustls-tls"] }
+reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 tracing = { workspace = true }
 derive-where = { workspace = true }
 
