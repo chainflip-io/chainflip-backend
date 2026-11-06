@@ -55,9 +55,10 @@ use cf_primitives::{
 };
 use cf_traits::{
 	elections::{authorise_voter, ElectionInstance, ElectionInstancesVoting},
-	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, FailedDepositRecovery,
-	FailedDepositRecoveryOutcome, FailedDepositReference, GetBitcoinFeeInfo, KeyProvider,
-	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
+	ApplyEmergencyPresets, Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions,
+	EmergencyPreset, EmergencySafeMode, FailedDepositRecovery, FailedDepositRecoveryOutcome,
+	FailedDepositReference, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
+	SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -188,7 +189,11 @@ pub mod pallet {
 		type ElectionInstances: ElectionInstancesVoting<Self>;
 
 		/// The runtime's safe mode is stored in this pallet.
-		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
+		type RuntimeSafeMode: cf_traits::SafeMode
+			+ ApplyEmergencyPresets
+			+ Member
+			+ Parameter
+			+ Default;
 
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
@@ -1171,6 +1176,21 @@ pub mod pallet {
 			ChainflipNetworkName::<T>::set(self.chainflip_network);
 
 			Pallet::<T>::update_current_release_version();
+		}
+	}
+}
+
+impl<T: Config> EmergencySafeMode for Pallet<T> {
+	/// Emits `RuntimeSafeModeUpdated` only if the safe mode changed.
+	fn apply(presets: &BTreeSet<EmergencyPreset>) {
+		let old = RuntimeSafeMode::<T>::get();
+		let mut new = old.clone();
+		new.apply_emergency_presets(presets);
+		if new != old {
+			RuntimeSafeMode::<T>::put(new.clone());
+			Self::deposit_event(Event::<T>::RuntimeSafeModeUpdated {
+				safe_mode: SafeModeUpdate::CodeAmber(new),
+			});
 		}
 	}
 }

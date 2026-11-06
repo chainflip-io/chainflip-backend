@@ -15,9 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use frame_support::dispatch::GetDispatchInfo;
+use cf_primitives::{AccountRole, Asset, ForeignChain};
+use cf_traits::EmergencyPreset;
+use frame_support::{assert_noop, dispatch::GetDispatchInfo};
 use pallet_cf_flip::FlipTransactionPayment;
 use pallet_transaction_payment::OnChargeTransaction;
+use state_chain_runtime::{BitcoinInstance, Governance, LiquidityProvider};
+use std::collections::BTreeSet;
 
 #[test]
 // Governance is allowed to make free calls to governance gated extrinsics.
@@ -57,5 +61,35 @@ fn governance_members_pay_no_fees_for_governance_extrinsics() {
 			0,
 		);
 		assert!(gov_err.is_err(), "expected an error");
+	});
+}
+
+#[test]
+fn member_can_apply_emergency_preset() {
+	const LP: AccountId = AccountId::new([0x11; 32]);
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		crate::network::new_account(&LP, AccountRole::LiquidityProvider);
+
+		assert_ok!(Governance::apply_emergency_presets(
+			RuntimeOrigin::signed(ERIN.into()),
+			BTreeSet::from([EmergencyPreset::DisableDepositChannelCreation(ForeignChain::Bitcoin)])
+				.try_into()
+				.unwrap(),
+		));
+
+		assert_noop!(
+			LiquidityProvider::request_liquidity_deposit_address(
+				RuntimeOrigin::signed(LP),
+				Asset::Btc,
+				0
+			),
+			pallet_cf_ingress_egress::Error::<Runtime, BitcoinInstance>::DepositChannelCreationDisabled
+		);
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP),
+			Asset::Eth,
+			0
+		));
 	});
 }
