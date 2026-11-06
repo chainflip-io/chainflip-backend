@@ -1,0 +1,67 @@
+# Expensive checks that most PRs don't need. Each runs if its `ci:` label is on the PR or if the PR
+# touches a path it guards; see ci/scripts/select_optional_pr_checks.sh. Both also run on main
+# after merge.
+name: PR Optional Checks
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  # Labels unrelated to CI get a group of their own, so adding one doesn't cancel an in-flight run.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ (contains(fromJSON('["labeled", "unlabeled"]'), github.event.action) && !startsWith(github.event.label.name, 'ci:')) && github.run_id || 'checks' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: read
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  select:
+    if: ${{ !(contains(fromJSON('["labeled", "unlabeled"]'), github.event.action) && !startsWith(github.event.label.name, 'ci:')) }}
+    runs-on: namespace-profile-default-light
+    outputs:
+      full-bouncer: ${{ steps.select.outputs.full-bouncer }}
+      upgrade-test: ${{ steps.select.outputs.upgrade-test }}
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          persist-credentials: false
+
+      - name: Select checks 🧭
+        id: select
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./ci/scripts/select_optional_pr_checks.sh
+
+  build:
+    needs: [select]
+    if: needs.select.outputs.full-bouncer == 'true'
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "release"
+  build-try-runtime:
+    needs: [select]
+    if: needs.select.outputs.upgrade-test == 'true'
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "try-runtime"
+      upload-name: "chainflip-backend-bin-try-runtime"
+      binary-subdir: release
+
+  full-bouncer:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+    with:
+      full-bouncer: true
+  upgrade-check:
+    needs: [build-try-runtime]
+    uses: ./.github/workflows/upgrade-test.yml
+    secrets: inherit
