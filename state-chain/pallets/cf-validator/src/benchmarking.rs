@@ -553,6 +553,8 @@ mod benchmarks {
 
 		let account_id = whitelisted_caller();
 
+		// Allow mode is the costlier path: it also has to check that the delegator exists.
+		OperatorSettingsLookup::<T>::insert(&operator, OPERATOR_SETTINGS);
 		fill_exceptions::<T>(&operator);
 
 		#[extrinsic_call]
