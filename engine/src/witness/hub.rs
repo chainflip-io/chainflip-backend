@@ -23,9 +23,10 @@ use cf_chains::dot::{
 use pallet_cf_broadcast::TransactionConfirmation;
 use state_chain_runtime::{AssethubInstance, Runtime};
 use subxt::{
-	backend::legacy::rpc_methods::Bytes,
 	config::PolkadotConfig,
-	events::{EventDetails, Phase, StaticEvent},
+	error::EventsError,
+	events::{Event, Phase},
+	rpcs::methods::legacy::Bytes,
 	utils::{AccountId32, MultiAddress, MultiSignature},
 };
 
@@ -38,8 +39,6 @@ use crate::{
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
 // subxt metadata --version=14 --pallets Proxy,Balances,TransactionPayment,System,Assets --url
 // wss://polkadot-asset-hub-rpc.polkadot.io:443 > metadata.assethub.scale
-//
-// Make sure to use subxt version 0.41 to generate the metadata file.
 #[subxt::subxt(runtime_metadata_path = "metadata.assethub.scale")]
 pub mod assethub {}
 
@@ -76,38 +75,33 @@ use assethub::{
 };
 
 pub fn filter_map_events(
-	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::Error>,
+	res_event: Result<Event<'_, PolkadotConfig>, EventsError>,
 ) -> Option<anyhow::Result<(Phase, EventWrapper)>> {
-	match res_event_details {
-		Ok(event_details) => match (event_details.pallet_name(), event_details.variant_name()) {
-			(ProxyAdded::PALLET, ProxyAdded::EVENT) => {
-				let ProxyAdded { delegator, delegatee, .. } =
-					event_details.as_event::<ProxyAdded>().unwrap().unwrap();
-				Some(EventWrapper::ProxyAdded { delegator, delegatee })
-			},
-			(Transfer::PALLET, Transfer::EVENT) => {
-				let Transfer { to, amount, from } =
-					event_details.as_event::<Transfer>().unwrap().unwrap();
-				Some(EventWrapper::BalancesTransfer { to, amount, from })
-			},
-			(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) => {
-				let TransactionFeePaid { actual_fee, tip, .. } =
-					event_details.as_event::<TransactionFeePaid>().unwrap().unwrap();
-				Some(EventWrapper::TransactionFeePaid { actual_fee, tip })
-			},
-			(ExtrinsicSuccess::PALLET, ExtrinsicSuccess::EVENT) => {
-				let ExtrinsicSuccess { .. } =
-					event_details.as_event::<ExtrinsicSuccess>().unwrap().unwrap();
-				Some(EventWrapper::ExtrinsicSuccess)
-			},
-			(AssetsTransferred::PALLET, AssetsTransferred::EVENT) => {
-				let AssetsTransferred { asset_id, from, to, amount } =
-					event_details.as_event::<AssetsTransferred>().unwrap().unwrap();
-				Some(EventWrapper::AssetsTransfer { asset_id, to, amount, from })
-			},
-			_ => None,
+	match res_event {
+		Ok(event) => if event.is::<ProxyAdded>() {
+			let ProxyAdded { delegator, delegatee, .. } =
+				event.decode_fields_unchecked_as::<ProxyAdded>().unwrap();
+			Some(EventWrapper::ProxyAdded { delegator, delegatee })
+		} else if event.is::<Transfer>() {
+			let Transfer { to, amount, from } =
+				event.decode_fields_unchecked_as::<Transfer>().unwrap();
+			Some(EventWrapper::BalancesTransfer { to, amount, from })
+		} else if event.is::<TransactionFeePaid>() {
+			let TransactionFeePaid { actual_fee, tip, .. } =
+				event.decode_fields_unchecked_as::<TransactionFeePaid>().unwrap();
+			Some(EventWrapper::TransactionFeePaid { actual_fee, tip })
+		} else if event.is::<ExtrinsicSuccess>() {
+			let ExtrinsicSuccess { .. } =
+				event.decode_fields_unchecked_as::<ExtrinsicSuccess>().unwrap();
+			Some(EventWrapper::ExtrinsicSuccess)
+		} else if event.is::<AssetsTransferred>() {
+			let AssetsTransferred { asset_id, from, to, amount } =
+				event.decode_fields_unchecked_as::<AssetsTransferred>().unwrap();
+			Some(EventWrapper::AssetsTransfer { asset_id, to, amount, from })
+		} else {
+			None
 		}
-		.map(|event| Ok((event_details.phase(), event))),
+		.map(|wrapped| Ok((event.phase(), wrapped))),
 		Err(err) => Some(Err(anyhow::anyhow!("Error while parsing event: {:?}", err))),
 	}
 }

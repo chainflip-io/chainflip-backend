@@ -117,7 +117,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 		let Some(finalized_header) = self.client.header(finalized_hash).await? else {
 			return Err(anyhow::anyhow!("Got None as header for hash {finalized_hash}."))
 		};
-		let finalized_height = finalized_header.number;
+		let finalized_height = u32::try_from(finalized_header.number)?;
 		let range = block_witness_range(ASSETHUB_WITNESS_PERIOD, finalized_height);
 		let block_witness_range = BlockWitnessRange::try_new(block_witness_root(
 			ASSETHUB_WITNESS_PERIOD,

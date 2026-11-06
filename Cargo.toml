@@ -198,7 +198,7 @@ zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v
 n-functor = "0.2.1"
 
 # Subxt
-subxt = { version = "0.42" }
+subxt = { version = "0.50.3" }
 
 # PolkadotSdk Pallets
 pallet-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2609-2.4.0", default-features = false }

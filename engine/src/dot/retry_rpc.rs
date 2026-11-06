@@ -27,11 +27,11 @@ use cf_chains::{
 use cf_primitives::{chains::assets::hub::Asset as HubAsset, PolkadotBlockNumber};
 use cf_utilities::task_scope::Scope;
 use core::time::Duration;
-use subxt::{backend::legacy::rpc_methods::Bytes, events::Events, PolkadotConfig};
+use subxt::rpcs::methods::legacy::Bytes;
 
 use crate::retrier::{RequestLog, RetrierClient};
 
-use super::{PolkadotHash, PolkadotHeader};
+use super::{PolkadotEvents, PolkadotHash, PolkadotHeader};
 use anyhow::{anyhow, Result};
 
 use crate::dot::rpc::DotRpcApi;
@@ -102,7 +102,7 @@ pub trait DotRetryRpcApi: Clone {
 		block_hash: PolkadotHash,
 		parent_hash: PolkadotHash,
 		retry_limit: R,
-	) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
+	) -> R::ReturnType<Option<PolkadotEvents>>;
 
 	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
 
@@ -179,7 +179,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 		block_hash: PolkadotHash,
 		parent_hash: PolkadotHash,
 		retry_limit: R,
-	) -> R::ReturnType<Option<Events<PolkadotConfig>>> {
+	) -> R::ReturnType<Option<PolkadotEvents>> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new("events".to_string(), Some(format!("{block_hash:?}"))),
@@ -319,7 +319,7 @@ impl DotRetryRpcApiWithResult for DotRetryRpcClient {
 		&self,
 		block_hash: PolkadotHash,
 		parent_hash: PolkadotHash,
-	) -> anyhow::Result<Option<Events<PolkadotConfig>>> {
+	) -> anyhow::Result<Option<PolkadotEvents>> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new("events".to_string(), Some(format!("{block_hash:?}"))),
@@ -381,7 +381,7 @@ impl DotRetryRpcApiWithResult for DotRetryRpcClient {
 impl ChainClient for DotRetryRpcClient {
 	type Index = <Polkadot as cf_chains::Chain>::ChainBlockNumber;
 	type Hash = PolkadotHash;
-	type Data = Events<PolkadotConfig>;
+	type Data = PolkadotEvents;
 
 	async fn header_at_index(
 		&self,
@@ -405,7 +405,7 @@ impl ChainClient for DotRetryRpcClient {
 							.block
 							.header;
 
-						assert_eq!(index, header.number);
+						assert_eq!(u64::from(index), header.number);
 
 						let events = client
 							.events(block_hash, header.parent_hash)
@@ -446,7 +446,7 @@ pub mod mocks {
 
 				async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
 
-				async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, parent_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
+				async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, parent_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<PolkadotEvents>>;
 
 				async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
 
@@ -494,7 +494,7 @@ pub mod mocks {
 				&self,
 				block_hash: PolkadotHash,
 				parent_hash: PolkadotHash,
-			) -> anyhow::Result<Option<Events<PolkadotConfig>>>;
+			) -> anyhow::Result<Option<PolkadotEvents>>;
 
 			async fn runtime_version(
 				&self,
