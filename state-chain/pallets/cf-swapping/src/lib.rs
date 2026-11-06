@@ -1143,6 +1143,8 @@ pub mod pallet {
 		RecoveryAccountNotLiquidityProvider,
 		/// The account is already bonded, so the broker bond can't be applied.
 		AccountBonded,
+		/// The FLIP to send to the gateway is too small relative to the egress fee.
+		FlipToGatewayAmountBelowThreshold,
 	}
 
 	#[pallet::genesis_config]
@@ -3219,7 +3221,7 @@ pub mod pallet {
 				.and_then(
 					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
 						if egress_amount <= FLIP_TO_GATEWAY_MULTIPLE * fee_withheld {
-							Err(DispatchError::Other("flip to gateway multiple below threshold"))
+							Err(Error::<T>::FlipToGatewayAmountBelowThreshold.into())
 						} else {
 							Ok(result)
 						}
