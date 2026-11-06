@@ -529,14 +529,23 @@ mod tests {
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
 	use proptest::{prelude::*, proptest};
 
+	/// Amounts in flipperinos. Sub-FLIP values get their own branch because a uniform range up to
+	/// `max_flip` would almost never generate them.
+	fn flipperinos(max_flip: u128) -> impl Strategy<Value = u128> {
+		prop_oneof![
+			1u128..FLIPPERINOS_PER_FLIP,
+			FLIPPERINOS_PER_FLIP..max_flip * FLIPPERINOS_PER_FLIP,
+		]
+	}
+
 	proptest! {
 		#[test]
 		fn distribute_always_sums_to_total(
-			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
-			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..100),
-			total_to_distribute in 1u128..10_000u128,
+			validator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..10),
+			delegator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..100),
+			total_to_distribute in flipperinos(10_000),
 			delegation_fee_bps in 2_000u32..10_000u32,
-			bond in 100_000u128..10_000_000u128,
+			bond in flipperinos(10_000_000),
 		) {
 			// Create a delegation snapshot
 			let operator_account = 1u64;
@@ -546,21 +555,20 @@ mod tests {
 				delegators: BTreeMap::new(),
 				delegation_fee_bps,
 			};
-			let total_to_distribute = total_to_distribute * FLIPPERINOS_PER_FLIP;
 
 			// Add validators
 			for (i, amount) in validator_amounts.iter().enumerate() {
-				snapshot.validators.insert(i as u64 + 100, *amount * FLIPPERINOS_PER_FLIP);
+				snapshot.validators.insert(i as u64 + 100, *amount);
 			}
 
 			// Add delegators
 			for (i, amount) in delegator_amounts.iter().enumerate() {
-				snapshot.delegators.insert(i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP);
+				snapshot.delegators.insert(i as u64 + 1000, *amount);
 			}
 
 			// Distribute the total amount
 			new_test_ext().execute_with(|| {
-				let distributions: Vec<_> = snapshot.distribute(total_to_distribute, bond * FLIPPERINOS_PER_FLIP).collect();
+				let distributions: Vec<_> = snapshot.distribute(total_to_distribute, bond).collect();
 				let sum: u128 = distributions.iter().map(|(_, amount)| *amount).sum();
 
 				// Property: The sum of all distributed amounts equals the input total
@@ -626,22 +634,20 @@ mod tests {
 	proptest! {
 		#[test]
 		fn distribute_all_sums_to_total(
-			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
-			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 0..50),
-			per_beneficiary_amount in 1u128..10_000u128,
+			validator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..10),
+			delegator_amounts in prop::collection::vec(flipperinos(1_000_000), 0..50),
+			per_beneficiary_amount in flipperinos(10_000),
 			delegation_fee_bps in 2_000u32..10_000u32,
-			bond in 100_000u128..10_000_000u128,
+			bond in flipperinos(10_000_000),
 		) {
 			const EPOCH: EpochIndex = 1;
 			let operator_account = 1u64;
-			let per_beneficiary_amount = per_beneficiary_amount * FLIPPERINOS_PER_FLIP;
-			let bond = bond * FLIPPERINOS_PER_FLIP;
 
 			let validators: BTreeMap<ValidatorId, u128> = validator_amounts.iter().enumerate()
-				.map(|(i, amount)| (i as u64 + 100, *amount * FLIPPERINOS_PER_FLIP))
+				.map(|(i, amount)| (i as u64 + 100, *amount))
 				.collect();
 			let delegators: BTreeMap<ValidatorId, u128> = delegator_amounts.iter().enumerate()
-				.map(|(i, amount)| (i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP))
+				.map(|(i, amount)| (i as u64 + 1000, *amount))
 				.collect();
 			// This proptest covers the all-in case: the authority set is exactly this operator's
 			// snapshot validators, so distribute_all routes the whole total through its pool.
