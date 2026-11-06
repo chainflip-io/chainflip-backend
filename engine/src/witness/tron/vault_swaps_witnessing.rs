@@ -23,12 +23,13 @@ use crate::{
 		eth_elections::EvmSingleBlockQuery,
 		evm::{
 			erc20_deposits::Erc20Events::TransferFilter,
-			vault::{decode_cf_parameters, vault_deposit_witness},
+			vault::{decode_cf_parameters, vault_swap_data},
 			EvmBlockQuery,
 		},
 		tron::{tron_deposits::trx_ingress_transactions, VaultDepositWitnessingConfig},
 	},
 };
+use anyhow::anyhow;
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, tron::Asset as TronAsset},
@@ -41,7 +42,7 @@ use codec::{Decode, Encode};
 use ethers::types::{H256, U256};
 use futures::future;
 use itertools::Itertools;
-use pallet_cf_ingress_egress::VaultDepositWitness;
+use pallet_cf_ingress_egress::{VaultDepositFacts, VaultDepositWitness, VaultSwapData};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::{Runtime, TronInstance};
@@ -61,10 +62,6 @@ pub enum TronFetchAndDecodeError {
 	TxIdMismatch { expected: H256, actual: H256 },
 	#[error("Transaction {tx_id:#x} is not a direct transfer to the vault: {reason}")]
 	NotDirectTransfer { tx_id: H256, reason: &'static str },
-	#[error("Failed to decode vault swap data for tx {tx_id:#x}: {reason}")]
-	DecodeVaultSwapData { tx_id: H256, reason: &'static str },
-	#[error("Failed to decode cf_parameters for tx {tx_id:#x}: {reason}")]
-	CfParametersDecode { tx_id: H256, reason: String },
 }
 
 // This is the encoded data that the Tron memo/note must have.
@@ -148,6 +145,57 @@ fn ensure_direct_transfer_to_vault(
 	Ok(())
 }
 
+fn decode_vault_swap(
+	asset: TronAsset,
+	amount: u64,
+	tx_id: H256,
+	memo: Option<&str>,
+	block_number: u64,
+) -> VaultDepositWitness<Runtime, TronInstance> {
+	let deposit = VaultDepositFacts {
+		input_asset: asset,
+		deposit_amount: amount.into(),
+		tx_id,
+		deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
+		channel_id: None,
+		deposit_address: None,
+	};
+	match decode_vault_swap_data(memo) {
+		Ok(swap) => VaultDepositWitness::Swap { deposit, swap },
+		Err(e) => {
+			tracing::warn!(
+				"Failed to decode Tron vault swap {tx_id:#x} at block {block_number}: {e:#}"
+			);
+			VaultDepositWitness::Failed { deposit, broker_id: None }
+		},
+	}
+}
+
+fn decode_vault_swap_data(
+	memo: Option<&str>,
+) -> anyhow::Result<VaultSwapData<Runtime, TronInstance>> {
+	let memo = memo.ok_or_else(|| anyhow!("missing memo"))?;
+	let bytes = hex::decode(memo).map_err(|_| anyhow!("memo hex decode failed"))?;
+	let details = TronVaultSwapData::decode(&mut &bytes[..])
+		.map_err(|_| anyhow!("memo SCALE decode failed"))?;
+	let (parameters, metadata) = if let Some((gas_budget, message)) = details.ccm_data {
+		let (parameters, ccm_additional_data) =
+			decode_cf_parameters::<EvmAddress, CcmAdditionalData>(&details.cf_parameters)?;
+		(
+			parameters,
+			Some(CcmDepositMetadata::<ForeignChainAddress, _> {
+				source_chain: ForeignChain::Tron,
+				source_address: None,
+				channel_metadata: CcmChannelMetadata { message, gas_budget, ccm_additional_data },
+			}),
+		)
+	} else {
+		let (parameters, ()) = decode_cf_parameters::<EvmAddress, ()>(&details.cf_parameters)?;
+		(parameters, None)
+	};
+	Ok(vault_swap_data!(details.output_asset, details.destination_address, metadata, parameters))
+}
+
 pub async fn fetch_and_decode_transactions<Client>(
 	client: &Client,
 	vault_ingress_transactions: Vec<(TronAsset, u64, H256)>,
@@ -192,9 +240,7 @@ where
 				}));
 			}
 
-			// Missing memo means this transaction isn't a vault swap
-			let memo = transaction.raw_data.data.as_ref()?;
-
+			let memo = transaction.raw_data.data.as_deref();
 			if let Err(reason) = ensure_direct_transfer_to_vault(
 				&transaction.raw_data.contract,
 				asset,
@@ -202,70 +248,12 @@ where
 				vault_address,
 				token_contracts,
 			) {
-				return Some(Err(TronFetchAndDecodeError::NotDirectTransfer { tx_id, reason }));
+				// Protocol fetches into the vault carry no memo, so only report attempted swaps.
+				return memo
+					.is_some()
+					.then_some(Err(TronFetchAndDecodeError::NotDirectTransfer { tx_id, reason }));
 			}
-			let details =
-				match hex::decode(memo).map_err(|_| "hex decode failed").and_then(|bytes| {
-					TronVaultSwapData::decode(&mut &bytes[..]).map_err(|_| "SCALE decode failed")
-				}) {
-					Ok(details) => details,
-					Err(reason) =>
-						return Some(Err(TronFetchAndDecodeError::DecodeVaultSwapData {
-							tx_id,
-							reason,
-						})),
-				};
-
-			// Decode cf_parameters and build deposit_metadata based on whether CCM data is present
-			let (vault_swap_params, deposit_metadata) =
-				if let Some((gas_budget, message)) = details.ccm_data.as_ref() {
-					let (vault_swap_params, ccm_additional_data) =
-						match decode_cf_parameters::<EvmAddress, CcmAdditionalData>(
-							&details.cf_parameters,
-							block_number,
-						) {
-							Ok(result) => result,
-							Err(e) =>
-								return Some(Err(TronFetchAndDecodeError::CfParametersDecode {
-									tx_id,
-									reason: format!("with CCM: {e:?}"),
-								})),
-						};
-
-					let deposit_metadata = Some(CcmDepositMetadata::<ForeignChainAddress, _> {
-						source_chain: ForeignChain::Tron,
-						source_address: Default::default(),
-						channel_metadata: CcmChannelMetadata {
-							message: message.clone(),
-							gas_budget: *gas_budget,
-							ccm_additional_data,
-						},
-					});
-					(vault_swap_params, deposit_metadata)
-				} else {
-					let (vault_swap_params, ()) = match decode_cf_parameters::<EvmAddress, ()>(
-						&details.cf_parameters,
-						block_number,
-					) {
-						Ok(result) => result,
-						Err(e) =>
-							return Some(Err(TronFetchAndDecodeError::CfParametersDecode {
-								tx_id,
-								reason: format!("without CCM: {e:?}"),
-							})),
-					};
-					(vault_swap_params, None)
-				};
-
-			Some(Ok(vault_deposit_witness!(
-				asset,
-				amount.into(),
-				details.output_asset,
-				details.destination_address,
-				deposit_metadata,
-				tx_id,
-				vault_swap_params
-			)))
+			Some(Ok(decode_vault_swap(asset, amount, tx_id, memo, block_number)))
 		})
 		.collect()
 }
@@ -335,7 +323,6 @@ pub async fn witness_vault_swaps<Client: TronRetryRpcApiWithResult + Send + Sync
 	.into_iter()
 	.filter_map(|result| match result {
 		Ok(witness) => Some(witness),
-		// We might submit this as a recoverable deposit in PRO-2832.
 		Err(e) => {
 			tracing::warn!("Skipping Tron vault swap: {e}");
 			None
@@ -355,6 +342,80 @@ mod tests {
 	use cf_utilities::{redact_endpoint_secret::SecretUrl, task_scope};
 	use ethers::types::H160;
 	use futures_util::FutureExt;
+
+	fn vault_memo(ccm: bool) -> TronVaultSwapData {
+		use cf_chains::cf_parameters::{
+			CfParametersV1, VaultSwapParametersV1, VersionedCfParameters,
+		};
+		let parameters = VaultSwapParametersV1 {
+			refund_params: ChannelRefundParameters {
+				retry_duration: 5,
+				refund_address: EvmAddress::repeat_byte(3),
+				min_price: Default::default(),
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
+			},
+			dca_params: None,
+			boost_fee: 0,
+			broker_fee: cf_primitives::Beneficiary {
+				account: cf_primitives::AccountId::new([9; 32]),
+				bps: 0,
+			},
+			affiliate_fees: Default::default(),
+		};
+		let cf_parameters = if ccm {
+			VersionedCfParameters::V1(CfParametersV1 {
+				ccm_additional_data: CcmAdditionalData::default(),
+				vault_swap_parameters: parameters,
+			})
+			.encode()
+		} else {
+			VersionedCfParameters::V1(CfParametersV1 {
+				ccm_additional_data: (),
+				vault_swap_parameters: parameters,
+			})
+			.encode()
+		};
+		TronVaultSwapData {
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth([1; 20]),
+			ccm_data: ccm.then(|| (1000, vec![1, 2].try_into().unwrap())),
+			cf_parameters,
+		}
+	}
+
+	#[test]
+	fn missing_or_malformed_memos_preserve_verified_deposit_facts() {
+		let tx_id = H256::repeat_byte(7);
+		for asset in [TronAsset::Trx, TronAsset::TrxUsdt] {
+			for ccm in [false, true] {
+				let details = vault_memo(ccm);
+				let memo = hex::encode(details.encode());
+				let valid = decode_vault_swap(asset, 1000, tx_id, Some(&memo), 42);
+				assert!(matches!(valid, VaultDepositWitness::Swap { .. }));
+				let mut bad = details.clone();
+				bad.cf_parameters = vec![255];
+				let mut truncated = details;
+				truncated.cf_parameters.pop();
+				for memo in [
+					None,
+					Some(String::new()),
+					Some("not hex".into()),
+					Some("ff".into()),
+					Some(hex::encode(bad.encode())),
+					Some(hex::encode(truncated.encode())),
+				] {
+					let failed = decode_vault_swap(asset, 1000, tx_id, memo.as_deref(), 42);
+					assert!(matches!(failed, VaultDepositWitness::Failed { broker_id: None, .. }));
+					assert_eq!(failed.deposit(), valid.deposit());
+					assert_eq!(
+						failed.deposit().deposit_details,
+						DepositDetails { tx_hashes: Some(vec![tx_id]) }
+					);
+				}
+			}
+		}
+	}
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]

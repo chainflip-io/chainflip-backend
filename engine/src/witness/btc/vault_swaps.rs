@@ -178,6 +178,7 @@ pub fn try_extract_vault_swap_witness(
 	};
 
 	decode_vault_swap_witness().or_else(|| {
+		tracing::warn!(tx_id = %tx.txid, channel_id, "Failed to decode Bitcoin vault swap");
 		Some(VaultDepositWitness::Failed {
 			deposit: pallet_cf_ingress_egress::VaultDepositFacts {
 				channel_id: Some(channel_id),
@@ -187,7 +188,7 @@ pub fn try_extract_vault_swap_witness(
 				tx_id: deposit_details.id.tx_id,
 				deposit_details,
 			},
-			broker_id: None,
+			broker_id: Some(broker_id.clone()),
 		})
 	})
 }
@@ -291,6 +292,69 @@ mod tests {
 		let non_standard = ScriptBuf::from_bytes(vec![0x00, 0x05, 7, 7, 7, 7, 7]);
 		assert_eq!(non_standard.witness_version(), Some(WitnessVersion::V0));
 		assert_eq!(ScriptPubkey::try_from_script_bytes(non_standard.as_bytes()), None);
+	}
+
+	#[test]
+	fn malformed_swaps_retain_the_private_channel_broker_and_utxo() {
+		use bitcoin::Amount;
+		let vault = DepositAddress::new([7; 32], 9);
+		let broker = AccountId::new([4; 32]);
+		let deposit = VerboseTxOut {
+			value: Amount::from_sat(1000),
+			n: 0,
+			script_pubkey: ScriptBuf::from_bytes(vault.script_pubkey().bytes()),
+		};
+		let parameters = VerboseTxOut {
+			value: Amount::ZERO,
+			n: 1,
+			script_pubkey: add_opcodes_to_data(encode_swap_params_in_nulldata_payload(
+				MOCK_SWAP_PARAMS.clone(),
+			)),
+		};
+		let refund = VerboseTxOut {
+			value: Amount::ZERO,
+			n: 2,
+			script_pubkey: ScriptBuf::new_p2pkh(&PubkeyHash::from_byte_array([8; 20])),
+		};
+		let mut bad_parameters = parameters.clone();
+		bad_parameters.script_pubkey = ScriptBuf::from_bytes(vec![OP_RETURN.to_u8(), 1, 255]);
+		let mut nonzero_parameters = parameters.clone();
+		nonzero_parameters.value = Amount::from_sat(1);
+		let mut bad_refund = refund.clone();
+		bad_refund.script_pubkey = ScriptBuf::new();
+		for outputs in [
+			vec![deposit.clone()],
+			vec![deposit.clone(), bad_parameters, refund.clone()],
+			vec![deposit.clone(), nonzero_parameters, refund],
+			vec![deposit, parameters, bad_refund],
+		] {
+			let tx = fake_transaction(outputs, None);
+			let witness = try_extract_vault_swap_witness(&tx, &vault, 9, &broker).unwrap();
+			let VaultDepositWitness::Failed { deposit, broker_id } = witness else {
+				panic!("expected failed witness")
+			};
+			assert_eq!(broker_id, Some(broker.clone()));
+			assert_eq!(deposit.channel_id, Some(9));
+			assert_eq!(deposit.deposit_address, Some(vault.script_pubkey()));
+			assert_eq!(deposit.deposit_amount, 1000);
+			assert_eq!(
+				deposit.deposit_details,
+				Utxo {
+					id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
+					amount: 1000,
+					deposit_address: vault.clone()
+				}
+			);
+		}
+		let tx = fake_transaction(
+			vec![VerboseTxOut {
+				value: Amount::from_sat(1000),
+				n: 0,
+				script_pubkey: ScriptBuf::new(),
+			}],
+			None,
+		);
+		assert!(try_extract_vault_swap_witness(&tx, &vault, 9, &broker).is_none());
 	}
 
 	#[test]
