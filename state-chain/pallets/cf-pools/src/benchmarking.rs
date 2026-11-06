@@ -271,36 +271,6 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn set_maximum_price_impact(n: Linear<1, 6>) {
-		const LIMIT: u32 = 1_000;
-		let limits = Asset::all()
-			.filter(|asset| *asset != STABLE_ASSET)
-			.take(n as usize)
-			.zip(sp_std::iter::repeat(Some(LIMIT)))
-			.collect::<Vec<_>>()
-			.try_into()
-			.unwrap();
-		let call = Call::<T>::set_maximum_price_impact { limits };
-
-		#[block]
-		{
-			assert_ok!(
-				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
-			);
-		}
-
-		for (i, asset) in Asset::all().filter(|asset| *asset != STABLE_ASSET).enumerate() {
-			let asset_pair =
-				asset_pair_try_from::<T>(asset, STABLE_ASSET).expect("Asset Pair must succeed");
-			if (i as u32) < n {
-				assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), Some(LIMIT));
-			} else {
-				assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), None);
-			}
-		}
-	}
-
-	#[benchmark]
 	fn cancel_orders_batch(n: Linear<1, 100>) {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(

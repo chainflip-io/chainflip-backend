@@ -297,6 +297,25 @@ pub enum PalletConfigUpdate {
 		asset: Asset,
 		amount: AssetAmount,
 	},
+	/// Set the per-pool limit (in number of ticks) that determines the allowed change in price of
+	/// the bought asset during a swap.
+	///
+	/// Note that due to how the limit is applied, total measured price impact of a swap can
+	/// exceed the limit. The limit is applied to whichever is *smaller* out of the following
+	/// two metrics:
+	/// - The number of ticks between a swap's mean execution price and the pool price *before* the
+	///   swap.
+	/// - The number of ticks between a swap's mean execution price and the pool price *after* the
+	///   swap.
+	///
+	/// This ensures that small outlying pockets of liquidity cannot individually trigger the
+	/// limit. If the limit is exceeded the swap will fail and will be retried in the next block.
+	///
+	/// Setting the limit to `None` disables it.
+	MaximumPriceImpact {
+		asset: Asset,
+		limit: Option<u32>,
+	},
 }
 
 pub const STORAGE_VERSION_U16: u16 = 10;
@@ -591,7 +610,9 @@ pub mod pallet {
 			order_id: OrderId,
 			dispatch_at: BlockNumberFor<T>,
 		},
-		/// The Price Impact limit has been set for a pool.
+		/// No longer emitted: price impact limits are now reported via `PalletConfigUpdated`.
+		/// Retained so that `cf_lp_events` can still decode historical blocks, which is why the
+		/// variant cannot be removed or moved. See `lp_events_serialization`.
 		PriceImpactLimitSet {
 			asset_pair: AssetPair,
 			limit: Option<u32>,
@@ -973,39 +994,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets per-pool limits (in number of ticks) that determine the allowed change in price of
-		/// the bought asset during a swap.
-		///
-		/// Note that due to how the limit is applied, total measured price impact of a swap can
-		/// exceed the limit. The limit is applied to whichever is *smaller* out of the following
-		/// two metrics:
-		/// - The number of ticks between a swap's mean execution price and the pool price *before*
-		///   the swap.
-		/// - The number of ticks between a swap's mean execution price and the pool price *after*
-		///   the swap.
-		///
-		/// This ensures that small outlying pockets of liquidity cannot individually trigger the
-		/// limit. If the limit is exceeded the swap will fail and will be retried in the next
-		/// block.
-		///
-		/// Setting the limit to `None` disables it.
-		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::set_maximum_price_impact(limits.len() as u32))]
-		pub fn set_maximum_price_impact(
-			origin: OriginFor<T>,
-			limits: BoundedVec<(Asset, Option<u32>), ConstU32<10>>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			for (asset, ticks) in limits {
-				let asset_pair = asset_pair_try_from::<T>(asset, STABLE_ASSET)?;
-				MaximumPriceImpact::<T>::set(asset_pair, ticks);
-				Self::deposit_event(Event::<T>::PriceImpactLimitSet { asset_pair, limit: ticks });
-			}
-
-			Ok(())
-		}
-
+		// Call index 9 is retired and must not be reused: it would decode historical extrinsics as
+		// the wrong call.
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::cancel_orders_batch(orders.len() as u32))]
 		pub fn cancel_orders_batch(
@@ -1089,6 +1079,7 @@ pub mod pallet {
 		/// Requires Governance.
 		#[pallet::call_index(11)]
 		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		#[transactional]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
 			updates: BoundedVec<PalletConfigUpdate, ConstU32<100>>,
@@ -1104,6 +1095,12 @@ pub mod pallet {
 					},
 					PalletConfigUpdate::SetMinimumOrderAmount { asset, amount } => {
 						MinimumOrderAmount::<T>::set(asset, amount);
+					},
+					PalletConfigUpdate::MaximumPriceImpact { asset, limit } => {
+						MaximumPriceImpact::<T>::set(
+							asset_pair_try_from::<T>(asset, STABLE_ASSET)?,
+							limit,
+						);
 					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });

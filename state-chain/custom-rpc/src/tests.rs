@@ -901,6 +901,9 @@ fn lp_events_serialization() {
 				amount: 100_000,
 			},
 		},
+		PoolEvent::PalletConfigUpdated {
+			update: PalletConfigUpdate::MaximumPriceImpact { asset: Asset::Btc, limit: Some(50) },
+		},
 	];
 
 	// Every variant has to appear above. This match is exhaustive, so adding one to `Event`
