@@ -43,6 +43,8 @@ pub const MAX_OPERATOR_FEE: u32 = 10_000;
 
 pub const MAX_VALIDATORS_PER_OPERATOR: usize = 20;
 
+pub const MAX_EXCEPTIONS_PER_OPERATOR: u32 = 1_000;
+
 pub enum AssociationToOperator {
 	Validator,
 	Delegator,
