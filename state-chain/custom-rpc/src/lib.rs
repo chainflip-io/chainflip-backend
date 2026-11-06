@@ -3110,7 +3110,9 @@ where
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
-		Ok(Asset::all().collect())
+		// The node may be ahead of the runtime and know about assets that aren't live yet.
+		self.rpc_backend
+			.with_runtime_api(None, |api, hash| api.cf_supported_assets(hash))
 	}
 
 	fn cf_boost_pool_details(
