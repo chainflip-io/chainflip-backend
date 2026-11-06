@@ -19171,7 +19171,11 @@ export type PalletCfSwappingError =
   /**
    * The account is already bonded, so the broker bond can't be applied.
    **/
-  | 'AccountBonded';
+  | 'AccountBonded'
+  /**
+   * The FLIP to send to the gateway is too small relative to the egress fee.
+   **/
+  | 'FlipToGatewayAmountBelowThreshold';
 
 export type PalletCfLpDeltaStats = { limitOrdersSwapUsdVolume: FixedU128 };
 

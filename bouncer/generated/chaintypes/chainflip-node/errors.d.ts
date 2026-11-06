@@ -1428,6 +1428,11 @@ export interface ChainErrors extends GenericChainErrors {
     AccountBonded: GenericPalletError;
 
     /**
+     * The FLIP to send to the gateway is too small relative to the egress fee.
+     **/
+    FlipToGatewayAmountBelowThreshold: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
