@@ -383,8 +383,13 @@ pub mod pallet {
 	/// delegator is not allowed to delegate if it's in the list of exceptions and vis versa for
 	/// deny.
 	#[pallet::storage]
-	pub type Exceptions<T: Config> =
-		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
+	pub type Exceptions<T: Config> = StorageMap<
+		_,
+		Identity,
+		T::AccountId,
+		BoundedBTreeSet<T::AccountId, ConstU32<MAX_EXCEPTIONS_PER_OPERATOR>>,
+		ValueQuery,
+	>;
 
 	/// Maps operators to a list of their managed validators.
 	#[pallet::storage]
@@ -579,6 +584,8 @@ pub mod pallet {
 		NotLiquidityProvider,
 		/// The account cannot deregister as a Liquidity Provider while actively delegating.
 		StillDelegating,
+		/// The operator's list of delegation exceptions is full.
+		TooManyExceptions,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1126,16 +1133,19 @@ pub mod pallet {
 			if let Some(current_settings) = OperatorSettingsLookup::<T>::get(&operator) {
 				match (current_settings.delegation_acceptance, settings.delegation_acceptance) {
 					(DelegationAcceptance::Allow, DelegationAcceptance::Deny) => {
-						Exceptions::<T>::mutate(&operator, |allowed| {
+						Exceptions::<T>::try_mutate(&operator, |allowed| {
 							allowed.clear();
 							// Any existing delegators need be added to the allowed list.
 							for (delegator, (assigned_operator, _)) in DelegationChoice::<T>::iter()
 							{
 								if assigned_operator == operator {
-									allowed.insert(delegator.clone());
+									allowed
+										.try_insert(delegator)
+										.map_err(|_| Error::<T>::TooManyExceptions)?;
 								}
 							}
-						});
+							Ok::<_, Error<T>>(())
+						})?;
 					},
 					(DelegationAcceptance::Deny, DelegationAcceptance::Allow) => {
 						Exceptions::<T>::remove(&operator);
@@ -1203,9 +1213,10 @@ pub mod pallet {
 						Error::<T>::AccountDoesNotExist
 					);
 
-					Exceptions::<T>::mutate(&operator, |blocked| {
-						blocked.insert(delegator.clone());
-					});
+					Exceptions::<T>::try_mutate(&operator, |blocked| {
+						blocked.try_insert(delegator.clone())
+					})
+					.map_err(|_| Error::<T>::TooManyExceptions)?;
 				},
 			}
 
@@ -1236,9 +1247,10 @@ pub mod pallet {
 						frame_system::Pallet::<T>::account_exists(&delegator),
 						Error::<T>::AccountDoesNotExist
 					);
-					Exceptions::<T>::mutate(&operator, |allowed| {
-						allowed.insert(delegator.clone());
-					});
+					Exceptions::<T>::try_mutate(&operator, |allowed| {
+						allowed.try_insert(delegator.clone())
+					})
+					.map_err(|_| Error::<T>::TooManyExceptions)?;
 				},
 				DelegationAcceptance::Allow => {
 					// If the operator is set to allow, exceptions are the delegators that are
