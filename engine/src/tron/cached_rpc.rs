@@ -293,3 +293,39 @@ impl<Rpc: TronSigningRpcApi + EvmRpcApi> TronRetrySigningRpcApi for TronCachingC
 		self.retry_client.broadcast_transaction(tx).await
 	}
 }
+
+#[cfg(test)]
+pub mod mocks {
+	use super::*;
+	use mockall::mock;
+
+	mock! {
+		pub TronCachingClient {}
+
+		impl Clone for TronCachingClient {
+			fn clone(&self) -> Self;
+		}
+
+		#[async_trait::async_trait]
+		impl TronRetryRpcApiWithResult for TronCachingClient {
+			async fn get_transaction_info_by_id(&self, tx_id: H256) -> anyhow::Result<TransactionInfo>;
+			async fn get_transaction_by_id(&self, tx_id: H256) -> anyhow::Result<TronTransaction>;
+			async fn get_block_balances(
+				&self,
+				block_number: BlockNumber,
+				hash: H256,
+			) -> anyhow::Result<BlockBalance>;
+			async fn chain_id(&self) -> anyhow::Result<U256>;
+			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> anyhow::Result<Vec<Log>>;
+			async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt>;
+			async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>>;
+			async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>>;
+			async fn block_with_txs(
+				&self,
+				block_number: U64,
+			) -> anyhow::Result<Block<ethers::types::Transaction>>;
+			async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<ethers::types::Transaction>;
+			async fn get_block_number(&self) -> anyhow::Result<U64>;
+		}
+	}
+}
