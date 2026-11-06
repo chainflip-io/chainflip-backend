@@ -732,6 +732,11 @@ export interface ChainErrors extends GenericChainErrors {
     InvalidCouncil: GenericPalletError;
 
     /**
+     * At least one emergency preset must be given.
+     **/
+    NoEmergencyPresets: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;

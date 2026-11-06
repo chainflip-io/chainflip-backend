@@ -58,6 +58,7 @@ pub trait WeightInfo {
 	fn set_whitelisted_call_hash() -> Weight;
 	fn submit_govkey_call() -> Weight;
 	fn dispatch_whitelisted_call() -> Weight;
+	fn apply_emergency_presets() -> Weight;
 }
 
 /// Weights for pallet_cf_governance using the Substrate node and recommended hardware.
@@ -218,6 +219,12 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
+	// Placeholder until weights are regenerated.
+	fn apply_emergency_presets() -> Weight {
+		Weight::from_parts(100_000_000, 10_000)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -376,5 +383,11 @@ impl WeightInfo for () {
 		Weight::from_parts(55_759_000, 3793)
 			.saturating_add(ParityDbWeight::get().reads(3_u64))
 			.saturating_add(ParityDbWeight::get().writes(4_u64))
+	}
+	// Placeholder until weights are regenerated.
+	fn apply_emergency_presets() -> Weight {
+		Weight::from_parts(100_000_000, 10_000)
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 }

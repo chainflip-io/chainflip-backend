@@ -34,6 +34,35 @@ macro_rules! impl_mock_runtime_safe_mode {
 	};
 }
 
+use crate::{
+	mocks::{MockPallet, MockPalletStorage},
+	EmergencyPreset, EmergencySafeMode,
+};
+use sp_std::collections::btree_set::BTreeSet;
+
+/// Records every preset applied so far.
+pub struct MockEmergencySafeMode;
+
+impl MockPallet for MockEmergencySafeMode {
+	const PREFIX: &'static [u8] = b"MockEmergencySafeMode";
+}
+
+const APPLIED_PRESETS: &[u8] = b"APPLIED_PRESETS";
+
+impl MockEmergencySafeMode {
+	pub fn applied_presets() -> BTreeSet<EmergencyPreset> {
+		Self::get_value(APPLIED_PRESETS).unwrap_or_default()
+	}
+}
+
+impl EmergencySafeMode for MockEmergencySafeMode {
+	fn apply(presets: &BTreeSet<EmergencyPreset>) {
+		let mut applied = Self::applied_presets();
+		applied.extend(presets.iter().copied());
+		Self::put_value(APPLIED_PRESETS, applied);
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use crate::{

@@ -21,7 +21,7 @@ use cf_primitives::SemVer;
 use cf_traits::{
 	mocks::{
 		account_role_registry::MockAccountRoleRegistry, ensure_origin_mock::FailOnNoneOrigin,
-		funding_info::MockFundingInfo, time_source,
+		funding_info::MockFundingInfo, safe_mode::MockEmergencySafeMode, time_source,
 	},
 	AuthoritiesCfeVersions, CompatibleCfeVersions, ExecutionCondition, RuntimeUpgrade,
 };
@@ -130,6 +130,7 @@ impl pallet_cf_governance::Config for Test {
 	type RuntimeUpgrade = RuntimeUpgradeMock;
 	type AuthoritiesCfeVersions = MockAuthoritiesCfeVersions;
 	type CompatibleCfeVersions = MockCompatibleCfeVersions;
+	type EmergencySafeMode = MockEmergencySafeMode;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

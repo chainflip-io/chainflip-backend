@@ -21,7 +21,10 @@
 
 pub mod migrations;
 
-use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
+use cf_traits::{
+	AuthoritiesCfeVersions, CompatibleCfeVersions, EmergencyPreset, EmergencySafeMode,
+	MAX_EMERGENCY_PRESETS,
+};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
@@ -60,6 +63,12 @@ macro_rules! ensure_governance_member {
 }
 
 pub type ProposalId = u32;
+
+pub type EmergencyPresets = frame_support::BoundedBTreeSet<
+	EmergencyPreset,
+	frame_support::traits::ConstU32<MAX_EMERGENCY_PRESETS>,
+>;
+
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
@@ -169,6 +178,8 @@ pub mod pallet {
 		type CompatibleCfeVersions: CompatibleCfeVersions;
 		/// For getting current authorities' CFE versions.
 		type AuthoritiesCfeVersions: AuthoritiesCfeVersions;
+		/// Applies emergency safe-mode presets.
+		type EmergencySafeMode: EmergencySafeMode;
 	}
 
 	#[pallet::pallet]
@@ -250,6 +261,8 @@ pub mod pallet {
 		GovKeyCallExecutionFailed { call_hash: GovCallHash, error: DispatchError },
 		/// New governance council set
 		NewGovernanceCouncil { new_council: GovernanceCouncil<T::AccountId> },
+		/// A governance member applied emergency safe-mode presets.
+		EmergencyPresetsApplied { member: T::AccountId, presets: EmergencyPresets },
 	}
 
 	#[pallet::error]
@@ -270,6 +283,8 @@ pub mod pallet {
 		NotEnoughAuthoritiesCfesAtTargetVersion,
 		/// The provided council is invalid: either empty or threshold > members.len()
 		InvalidCouncil,
+		/// At least one emergency preset must be given.
+		NoEmergencyPresets,
 	}
 
 	#[pallet::call]
@@ -458,6 +473,27 @@ pub mod pallet {
 			} else {
 				Err(Error::<T>::ProposalNotFound.into())
 			}
+		}
+
+		/// Lets any single governance member switch off parts of the protocol without a vote.
+		///
+		/// Presets can only switch settings off. Switching them back on needs a governance vote.
+		/// Applying a preset that is already in force is a no-op.
+		#[allow(clippy::useless_conversion)]
+		#[pallet::call_index(9)]
+		#[pallet::weight((T::WeightInfo::apply_emergency_presets(), DispatchClass::Operational))]
+		pub fn apply_emergency_presets(
+			origin: OriginFor<T>,
+			presets: EmergencyPresets,
+		) -> DispatchResultWithPostInfo {
+			let (_, member) = ensure_governance_member!(origin);
+			ensure!(!presets.is_empty(), Error::<T>::NoEmergencyPresets);
+
+			T::EmergencySafeMode::apply(&presets);
+			Self::deposit_event(Event::EmergencyPresetsApplied { member, presets });
+
+			// Governance members don't pay transaction fees
+			Ok(Pays::No.into())
 		}
 	}
 
