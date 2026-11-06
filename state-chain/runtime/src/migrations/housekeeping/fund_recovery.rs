@@ -24,7 +24,8 @@
 //!
 //! - Expired Solana deposit channels that still hold funds. A queued `Fetch` is only dispatched
 //!   while its channel is in `DepositChannelLookup`, so any queued `Fetch` for these channels is
-//!   replaced by a fetch broadcast directly.
+//!   replaced by a fetch broadcast directly. `recover_failed_deposits` pays from the vault, so a
+//!   deposit left at a channel address must be swept before it can be recovered that way.
 //! - Ethereum and Tron deposit channel addresses that hold funds but whose `Deposit` contract was
 //!   never deployed. Deploying the contract with the channel's asset puts it at the channel address
 //!   and sweeps that asset. Any other asset at the address is fetched from the new contract in the
@@ -145,14 +146,31 @@ const SOL_RECOVERIES: &[Recovery<Solana>] = &[Recovery {
 	)),
 }];
 
-/// (channel id, channel address) of the expired Solana channels to sweep. Each address is
-/// re-derived from its channel id, and the channel is skipped if the two disagree.
-const SOL_CHANNEL_SWEEPS: &[(ChannelId, [u8; 32])] = &[
+/// (channel id, asset held, channel address) of the expired Solana channels to sweep. A channel's
+/// address doesn't depend on its asset. Each address is re-derived from its channel id, and the
+/// channel is skipped if the two disagree.
+const SOL_CHANNEL_SWEEPS: &[(ChannelId, SolAsset, [u8; 32])] = &[
 	// COM-371: 9YJGWpYPdpGX5Yn3ycC5KuJRPTcsWehcw4Vk1baY1sYv. Its deposit was already returned from
 	// the vault in 2.2.13.
-	(118_758, hex!("7ee2065fd412020955e3e1d849579ea974bfc79493833d45d8ffc0a93e1a3a53")),
+	(
+		118_758,
+		SolAsset::Sol,
+		hex!("7ee2065fd412020955e3e1d849579ea974bfc79493833d45d8ffc0a93e1a3a53"),
+	),
 	// COM-603: 9nue7z71iKXBLhSyEAgxZxuF1SqDVCehTgKdGnsFD6eu, returned above.
-	(139_141, hex!("82a026edbeb40027caa216467f0f4a438dc9065f0a5ebd80647167b3d7ad4f0a")),
+	(
+		139_141,
+		SolAsset::Sol,
+		hex!("82a026edbeb40027caa216467f0f4a438dc9065f0a5ebd80647167b3d7ad4f0a"),
+	),
+	// COM-663: GP8xJnr4SLYFPPydX4Ge2z1aWjysFXYEoDuyGuLAVXz3, holding 243 USDT that was witnessed
+	// after the channel had expired, and so rejected. Swept so that it can be recovered from the
+	// vault with `recover_failed_deposits`.
+	(
+		139_207,
+		SolAsset::SolUsdt,
+		hex!("e48b1327534ed6b89d389ee87bc01a2943cfff65b07b67fca496e0e8f4855674"),
+	),
 ];
 
 /// (channel id, asset the channel address derives from, channel address, other assets to fetch)
@@ -175,7 +193,7 @@ fn is_swept_sol_channel_fetch(request: &FetchOrTransfer<Solana>) -> bool {
 	matches!(
 		request,
 		FetchOrTransfer::Fetch { deposit_address, .. }
-			if SOL_CHANNEL_SWEEPS.iter().any(|(_, address)| *deposit_address == SolAddress(*address))
+			if SOL_CHANNEL_SWEEPS.iter().any(|(.., address)| *deposit_address == SolAddress(*address))
 	)
 }
 
@@ -331,9 +349,9 @@ where
 /// them. Channels whose address does not derive from their id are skipped.
 fn sweep_sol_channels() {
 	let mut fetch_params = Vec::new();
-	for (channel_id, expected) in SOL_CHANNEL_SWEEPS {
+	for (channel_id, asset, expected) in SOL_CHANNEL_SWEEPS {
 		match <AddressDerivation as AddressDerivationApi<Solana>>::generate_address_and_state(
-			SolAsset::Sol,
+			*asset,
 			*channel_id,
 		) {
 			Ok((address, bump)) if address == SolAddress(*expected) =>
@@ -343,7 +361,7 @@ fn sweep_sol_channels() {
 						address,
 						bump,
 					},
-					asset: SolAsset::Sol,
+					asset: *asset,
 				}),
 			other => log::error!(
 				"💸 Solana channel {channel_id}: derived {other:?}, expected {:?}; not sweeping.",
@@ -363,7 +381,10 @@ fn sweep_sol_channels() {
 					<SolanaBroadcaster as Broadcaster<Solana>>::threshold_sign_and_broadcast(call);
 				log::info!(
 					"💸 Solana channels {:?}: fetch broadcast_id={broadcast_id}.",
-					SOL_CHANNEL_SWEEPS.iter().map(|(channel_id, _)| channel_id).collect::<Vec<_>>(),
+					SOL_CHANNEL_SWEEPS
+						.iter()
+						.map(|(channel_id, ..)| channel_id)
+						.collect::<Vec<_>>(),
 				);
 			}
 			ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::mutate(|queue| {
@@ -529,9 +550,11 @@ mod tests {
 		// SolanaApiEnvironment::vault_program on Berghain.
 		let vault_program =
 			SolAddress(hex!("93448d0d660b4cf89feb3486cc8cf39cfb4e8331a0840246ce4357e78c5f13f4"));
-		for ((channel_id, expected), encoded) in SOL_CHANNEL_SWEEPS.iter().zip([
+		assert_eq!(SOL_CHANNEL_SWEEPS.len(), 3);
+		for ((channel_id, _, expected), encoded) in SOL_CHANNEL_SWEEPS.iter().zip([
 			"9YJGWpYPdpGX5Yn3ycC5KuJRPTcsWehcw4Vk1baY1sYv",
 			"9nue7z71iKXBLhSyEAgxZxuF1SqDVCehTgKdGnsFD6eu",
+			"GP8xJnr4SLYFPPydX4Ge2z1aWjysFXYEoDuyGuLAVXz3",
 		]) {
 			let PdaAndBump { address, .. } =
 				derive_deposit_address(*channel_id, vault_program).unwrap();
