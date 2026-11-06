@@ -13,6 +13,8 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
+#[cfg(feature = "std")]
+use super::eip712::Types;
 use super::{
 	eip712::{EIP712Domain, Eip712DomainType, Eip712Error, TypedData},
 	encode_eip712_using_type_info_fast,
@@ -55,36 +57,27 @@ pub fn build_eip712_typed_data<T: TypeInfo + Encode + 'static>(
 	})
 }
 
+/// EIP-712 typed data in the JSON shape expected by `eth_signTypedData_v4` signers (ethers,
+/// viem, MetaMask), as returned by the `cf_encode_non_native_call` RPC.
 #[cfg(feature = "std")]
-pub fn to_ethers_typed_data(
-	typed_data: TypedData,
-) -> Result<ethers_core::types::transaction::eip712::TypedData, String> {
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JsonTypedData {
+	pub domain: EIP712Domain,
+	pub types: Types,
+	#[serde(rename = "primaryType")]
+	pub primary_type: String,
+	pub message: std::collections::BTreeMap<String, serde_json::Value>,
+}
+
+#[cfg(feature = "std")]
+pub fn to_json_typed_data(typed_data: TypedData) -> Result<JsonTypedData, String> {
 	let message_scale_value: scale_value::Value =
 		typed_data.message.clone().stringify_integers().into();
 
-	Ok(ethers_core::types::transaction::eip712::TypedData {
-		domain: ethers_core::types::transaction::eip712::EIP712Domain {
-			name: typed_data.domain.name,
-			version: typed_data.domain.version,
-			chain_id: typed_data.domain.chain_id,
-			verifying_contract: typed_data.domain.verifying_contract,
-			salt: typed_data.domain.salt,
-		},
-		types: typed_data
-			.types
-			.iter()
-			.map(|(s, tys)| {
-				(
-					s.clone(),
-					tys.iter()
-						.map(|t| ethers_core::types::transaction::eip712::Eip712DomainType {
-							name: t.name.clone(),
-							r#type: t.r#type.clone(),
-						})
-						.collect(),
-				)
-			})
-			.collect(),
+	Ok(JsonTypedData {
+		domain: typed_data.domain,
+		types: typed_data.types,
 		primary_type: typed_data.primary_type,
 		message: serde_json::to_value(message_scale_value)
 			.map_err(|e| format!("Failed to serialize message to JSON: {}", e))?
@@ -101,12 +94,23 @@ pub fn to_ethers_typed_data(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::eip712::Eip712;
+
+	/// Cross-checks our hash against an independent implementation that only sees the JSON.
+	fn assert_alloy_signing_hash_matches(typed_data: &TypedData) {
+		let alloy_typed_data: alloy_dyn_abi::TypedData = serde_json::from_value(
+			serde_json::to_value(to_json_typed_data(typed_data.clone()).unwrap()).unwrap(),
+		)
+		.unwrap();
+		assert_eq!(
+			alloy_typed_data.eip712_signing_hash().unwrap().0,
+			crate::hash::keccak256(typed_data.encode_eip712().unwrap())
+		);
+	}
 
 	#[test]
-	fn test_complex_root_ethers_typed_data() {
-		use crate::{
-			eip712::Eip712, extra_tests::test_types::test_complex_type_with_vecs_and_enums::*,
-		};
+	fn test_complex_root_typed_data() {
+		use crate::extra_tests::test_types::test_complex_type_with_vecs_and_enums::*;
 
 		// Create instance with complex nested data
 		let test_value = ComplexRoot {
@@ -142,11 +146,12 @@ mod tests {
 			hex::encode(crate::hash::keccak256(typed_data.encode_eip712().unwrap())),
 			"e44f6b83980196ee164ddac1556600fef8cfe2f4d2c862ce5247ad6f2d4923df"
 		);
+		assert_alloy_signing_hash_matches(&typed_data);
 	}
 
 	#[test]
-	fn test_simple_root_ethers_typed_data() {
-		use crate::{eip712::Eip712, extra_tests::test_types::test_vec_of_enum::*};
+	fn test_simple_root_typed_data() {
+		use crate::extra_tests::test_types::test_vec_of_enum::*;
 
 		// Create instance with sample data
 		let test_value = SimpleRoot {
@@ -163,5 +168,6 @@ mod tests {
 			hex::encode(crate::hash::keccak256(typed_data.encode_eip712().unwrap())),
 			"e3be730ad92618b9a3de27d3d12cdff5bea2a3fe8dd7f4d6f117267088456c8c"
 		);
+		assert_alloy_signing_hash_matches(&typed_data);
 	}
 }

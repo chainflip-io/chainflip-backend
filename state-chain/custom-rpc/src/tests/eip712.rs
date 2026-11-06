@@ -95,7 +95,7 @@ fn test_build_eip712_typed_data(call: RuntimeCall) -> String {
 		"Typed Data: {:#?}",
 		serde_json::to_writer_pretty(
 			std::io::stdout(),
-			&to_ethers_typed_data(typed_data_result.clone()).unwrap()
+			&to_json_typed_data(typed_data_result.clone()).unwrap()
 		)
 		.unwrap()
 	);
