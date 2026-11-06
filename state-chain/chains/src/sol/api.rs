@@ -24,7 +24,6 @@ use core::marker::PhantomData;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::RuntimeDebug;
 use sp_runtime::DispatchError;
 use sp_std::{collections::btree_set::BTreeSet, vec, vec::Vec};
 
@@ -47,17 +46,17 @@ use crate::{
 
 use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 
-#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
-#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, Debug, TypeInfo)]
 pub struct DurableNonce;
-#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, Debug, TypeInfo)]
 pub struct AllNonceAccounts;
-#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, Debug, TypeInfo)]
 pub struct ApiEnvironment;
-#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, Debug, TypeInfo)]
 pub struct CurrentAggKey;
-#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, Debug, TypeInfo)]
 pub struct CurrentOnChainKey;
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
@@ -68,7 +67,7 @@ pub type DurableNonceAndAccount = (SolAddress, SolHash);
 	Decode,
 	DecodeWithMemTracking,
 	PartialEq,
-	RuntimeDebug,
+	Debug,
 	TypeInfo,
 	Copy,
 	Serialize,
@@ -218,7 +217,7 @@ pub struct SolanaApi<Environment: 'static> {
 
 #[derive(
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,
@@ -958,7 +957,7 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 #[derive(
 	Serialize,
 	Deserialize,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Clone,

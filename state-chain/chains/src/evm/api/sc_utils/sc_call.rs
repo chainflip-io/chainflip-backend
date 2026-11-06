@@ -17,13 +17,12 @@
 use crate::evm::{api::EvmCall, tokenizable::Tokenizable};
 use codec::{Decode, Encode};
 use ethabi::Token;
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'callSc'
 /// function.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub struct SCCall {
 	sc_call: Vec<u8>,
 }

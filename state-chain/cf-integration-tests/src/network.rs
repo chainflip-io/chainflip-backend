@@ -29,8 +29,7 @@ use cf_traits::{
 	AccountRoleRegistry, Chainflip, EpochInfo, FundAccount, FundingSource, KeyRotator,
 };
 use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest, TxBroadcastRequest};
-use chainflip_node::test_account_from_seed;
-use codec::{Decode, Encode};
+use codec::Encode;
 use frame_support::{
 	inherent::ProvideInherent,
 	pallet_prelude::InherentData,
@@ -192,11 +191,8 @@ impl Cli {
 
 	#[track_caller]
 	pub fn rotate_keys(account: &NodeId) {
-		assert_ok!(Validator::set_keys(
-			RuntimeOrigin::signed(account.clone()),
-			SessionKeys::decode(&mut &[0xcf; 64][..]).unwrap(),
-			Default::default()
-		));
+		let (keys, proof) = session_keys_and_proof(&format!("{account}-rotated"), account);
+		assert_ok!(Validator::set_keys(RuntimeOrigin::signed(account.clone()), keys, proof));
 	}
 
 	#[track_caller]
@@ -561,16 +557,26 @@ pub(crate) fn setup_account_and_peer_mapping(node_id: &NodeId) {
 
 // Create an account, generate and register the session keys
 pub(crate) fn setup_account(node_id: &NodeId) {
-	let seed = &node_id.clone().to_string();
-
+	let (keys, proof) = session_keys_and_proof(&node_id.to_string(), node_id);
 	assert_ok!(state_chain_runtime::Session::set_keys(
 		RuntimeOrigin::signed(node_id.clone()),
-		SessionKeys {
-			aura: test_account_from_seed::<AuraId>(seed),
-			grandpa: test_account_from_seed::<GrandpaId>(seed),
-		},
-		vec![]
+		keys,
+		proof
 	));
+}
+
+/// Session keys derived from `seed`, and a proof that `owner` holds their private keys.
+pub(crate) fn session_keys_and_proof(seed: &str, owner: &NodeId) -> (SessionKeys, Vec<u8>) {
+	use sp_core::{ed25519, proof_of_possession::ProofOfPossessionGenerator, sr25519, Pair};
+
+	let mut aura = sr25519::Pair::from_string(&format!("//{seed}"), None).unwrap();
+	let mut grandpa = ed25519::Pair::from_string(&format!("//{seed}"), None).unwrap();
+	let owner = owner.encode();
+	(
+		SessionKeys { aura: aura.public().into(), grandpa: grandpa.public().into() },
+		(aura.generate_proof_of_possession(&owner), grandpa.generate_proof_of_possession(&owner))
+			.encode(),
+	)
 }
 
 pub(crate) fn setup_peer_mapping(node_id: &NodeId) {

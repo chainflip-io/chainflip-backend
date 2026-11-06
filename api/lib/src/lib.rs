@@ -27,15 +27,15 @@ pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, 
 use cf_primitives::{DcaParameters, ForeignChain};
 use cf_rpc_apis::grandpa::GrandpaExtApiClient;
 use cf_rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome, RefundParametersRpc};
+use codec::{Decode, Encode};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 pub use pallet_cf_environment::submit_runtime_call::{SignatureData, TransactionMetadata};
 use pallet_cf_governance::ExecutionMode;
+use sc_rpc_api::author::GeneratedSessionKeys;
 use serde::Serialize;
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
+use sp_core::{Bytes, Pair, H256};
 pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall, RuntimeEvent};
 use zeroize::Zeroize;
@@ -117,7 +117,8 @@ impl<
 
 #[async_trait]
 pub trait RotateSessionKeysApi {
-	async fn rotate_session_keys(&self) -> Result<Bytes>;
+	/// Generates new session keys in the node's keystore, with a proof that `owner` holds them.
+	async fn rotate_session_keys(&self, owner: &AccountId32) -> Result<GeneratedSessionKeys>;
 }
 
 #[async_trait]
@@ -126,8 +127,12 @@ impl<
 		SignedExtrinsicClient: Send + Sync + 'static,
 	> RotateSessionKeysApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
 {
-	async fn rotate_session_keys(&self) -> Result<Bytes> {
-		Ok(self.base_rpc_client.raw_rpc_client.rotate_keys().await?)
+	async fn rotate_session_keys(&self, owner: &AccountId32) -> Result<GeneratedSessionKeys> {
+		Ok(self
+			.base_rpc_client
+			.raw_rpc_client
+			.rotate_keys_with_owner(Bytes(owner.encode()))
+			.await?)
 	}
 }
 
@@ -351,18 +356,14 @@ pub trait OperatorApi:
 	}
 
 	async fn rotate_session_keys(&self) -> Result<H256> {
-		let raw_keys = RotateSessionKeysApi::rotate_session_keys(self).await?;
-
-		let aura_key: [u8; 32] = raw_keys[0..32].try_into().unwrap();
-		let grandpa_key: [u8; 32] = raw_keys[32..64].try_into().unwrap();
+		let GeneratedSessionKeys { keys, proof } =
+			RotateSessionKeysApi::rotate_session_keys(self, &self.account_id()).await?;
 
 		Ok(self
 			.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
-				keys: SessionKeys {
-					aura: AuraId::from(SrPublic::from_raw(aura_key)),
-					grandpa: GrandpaId::from(EdPublic::from_raw(grandpa_key)),
-				},
-				proof: [0; 1].to_vec(),
+				keys: SessionKeys::decode(&mut &keys[..]).context("Invalid session keys")?,
+				// No proof iff the runtime predates ownership proofs, and so doesn't check them.
+				proof: proof.map(|proof| proof.0).unwrap_or_default(),
 			})
 			.await
 			.until_in_block()

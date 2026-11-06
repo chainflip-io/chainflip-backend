@@ -26,12 +26,11 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, CeremonyId, Ed25519PublicKey, EpochIndex, Ipv6Addr, Port};
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 
 use sp_std::collections::btree_set::BTreeSet;
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(C))]
 pub struct ThresholdSignatureRequest<ValidatorId, C: ChainCrypto> {
 	pub ceremony_id: CeremonyId,
@@ -42,7 +41,7 @@ pub struct ThresholdSignatureRequest<ValidatorId, C: ChainCrypto> {
 	pub stage_timeout_secs: u32,
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(C))]
 pub struct KeyHandoverRequest<ValidatorId, C: ChainCrypto> {
 	pub ceremony_id: CeremonyId,
@@ -55,7 +54,7 @@ pub struct KeyHandoverRequest<ValidatorId, C: ChainCrypto> {
 	pub stage_timeout_secs: u32,
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct KeygenRequest<ValidatorId> {
 	pub ceremony_id: CeremonyId,
 	pub epoch_index: EpochIndex,
@@ -63,7 +62,7 @@ pub struct KeygenRequest<ValidatorId> {
 	pub stage_timeout_secs: u32,
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(T, C))]
 pub struct TxBroadcastRequest<ValidatorId, C: Chain> {
 	pub broadcast_id: BroadcastId,
@@ -71,7 +70,7 @@ pub struct TxBroadcastRequest<ValidatorId, C: Chain> {
 	pub payload: C::Transaction,
 }
 
-#[derive(Clone, RuntimeDebug, Encode, Decode, DecodeWithMemTracking, PartialEq, Eq, TypeInfo)]
+#[derive(Clone, Debug, Encode, Decode, DecodeWithMemTracking, PartialEq, Eq, TypeInfo)]
 pub enum CfeEvent<ValidatorId> {
 	EvmThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, EvmCrypto>),
 	DotThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, PolkadotCrypto>),
