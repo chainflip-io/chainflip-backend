@@ -2293,6 +2293,71 @@ mod credit_flip_and_transfer {
 	}
 }
 
+mod flip_to_gateway {
+	use super::*;
+
+	const FEE: AssetAmount = 10;
+	// The largest pending amount that is still below the threshold, because the egressed amount
+	// (net of the fee) is just short of the multiple of the fee.
+	const LARGEST_SKIPPED_AMOUNT: AssetAmount = (FLIP_TO_GATEWAY_MULTIPLE + 1) * FEE - 1;
+
+	#[test]
+	fn egress_failure_skips_transfer_and_keeps_flip_pending() {
+		const PREVIOUSLY_PENDING: AssetAmount = 500;
+		const AMOUNT: AssetAmount = 1_000;
+
+		new_test_ext().execute_with(|| {
+			FlipToBeSentToGateway::<Test>::put(PREVIOUSLY_PENDING);
+			MockEgressHandler::<AnyChain>::return_failure(true);
+
+			assert_eq!(Swapping::maybe_trigger_flip_to_gateway_egress(H160::zero(), AMOUNT), 0);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::FlipTransferToGatewaySkipped {
+					reason: DispatchError::Other(_),
+				})
+			);
+			assert_eq!(FlipToBeSentToGateway::<Test>::get(), PREVIOUSLY_PENDING + AMOUNT);
+			assert!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().is_empty());
+		});
+	}
+
+	#[test]
+	fn transfer_below_fee_multiple_is_rolled_back_until_threshold_is_exceeded() {
+		new_test_ext().execute_with(|| {
+			MockEgressHandler::<AnyChain>::set_fee(FEE);
+
+			assert_eq!(
+				Swapping::maybe_trigger_flip_to_gateway_egress(
+					H160::zero(),
+					LARGEST_SKIPPED_AMOUNT
+				),
+				0
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::FlipTransferToGatewaySkipped { reason })
+					if *reason == Error::<Test>::FlipToGatewayAmountBelowThreshold.into()
+			);
+			assert_eq!(FlipToBeSentToGateway::<Test>::get(), LARGEST_SKIPPED_AMOUNT);
+			assert!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().is_empty());
+
+			// The skipped amount carries over, tipping the next attempt over the threshold.
+			assert_eq!(Swapping::maybe_trigger_flip_to_gateway_egress(H160::zero(), 1), FEE);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SentFlipToGateway { amount, .. })
+					if *amount == LARGEST_SKIPPED_AMOUNT + 1 - FEE
+			);
+			assert_eq!(FlipToBeSentToGateway::<Test>::get(), FEE);
+			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
+		});
+	}
+}
+
 mod private_channels {
 
 	use super::*;
