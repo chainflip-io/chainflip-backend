@@ -17,10 +17,14 @@
 //! For filtering runtime calls and other related utilities.
 
 use crate::{Runtime, RuntimeCall};
-use cf_traits::{impl_runtime_safe_mode, CallDispatchFilter};
+use cf_primitives::ForeignChain;
+use cf_traits::{
+	impl_runtime_safe_mode, ApplyEmergencyPresets, CallDispatchFilter, EmergencyPreset,
+};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::instances::*;
 use scale_info::TypeInfo;
+use sp_std::collections::btree_set::BTreeSet;
 
 impl_runtime_safe_mode! {
 	RuntimeSafeMode,
@@ -226,6 +230,207 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 				);
 				false
 			},
+		}
+	}
+}
+
+impl ApplyEmergencyPresets for RuntimeSafeMode {
+	fn apply_emergency_presets(&mut self, presets: &BTreeSet<EmergencyPreset>) {
+		for preset in presets {
+			match *preset {
+				EmergencyPreset::DisableDepositChannelCreation(chain) =>
+					*deposit_channel_creation_enabled(self, chain) = false,
+				EmergencyPreset::DisableNewLoans(asset) =>
+					self.lending_pools.borrowing.disable(asset),
+				EmergencyPreset::DisableLpWithdrawals =>
+					self.liquidity_provider.withdrawal_enabled = false,
+				EmergencyPreset::DisableInternalSwaps =>
+					self.liquidity_provider.internal_swaps_enabled = false,
+			}
+		}
+	}
+}
+
+fn deposit_channel_creation_enabled(
+	safe_mode: &mut RuntimeSafeMode,
+	chain: ForeignChain,
+) -> &mut bool {
+	match chain {
+		ForeignChain::Ethereum =>
+			&mut safe_mode.ingress_egress_ethereum.deposit_channel_creation_enabled,
+		ForeignChain::Polkadot =>
+			&mut safe_mode.ingress_egress_polkadot.deposit_channel_creation_enabled,
+		ForeignChain::Bitcoin =>
+			&mut safe_mode.ingress_egress_bitcoin.deposit_channel_creation_enabled,
+		ForeignChain::Arbitrum =>
+			&mut safe_mode.ingress_egress_arbitrum.deposit_channel_creation_enabled,
+		ForeignChain::Solana =>
+			&mut safe_mode.ingress_egress_solana.deposit_channel_creation_enabled,
+		ForeignChain::Assethub =>
+			&mut safe_mode.ingress_egress_assethub.deposit_channel_creation_enabled,
+		ForeignChain::Tron => &mut safe_mode.ingress_egress_tron.deposit_channel_creation_enabled,
+		ForeignChain::Bsc => &mut safe_mode.ingress_egress_bsc.deposit_channel_creation_enabled,
+	}
+}
+
+#[cfg(test)]
+mod emergency_preset_tests {
+	use super::*;
+	use cf_primitives::Asset;
+	use cf_traits::{SafeMode, SafeModeSet};
+	use proptest::{collection::vec, prelude::*};
+
+	fn applied(
+		safe_mode: &RuntimeSafeMode,
+		presets: &BTreeSet<EmergencyPreset>,
+	) -> RuntimeSafeMode {
+		let mut safe_mode = safe_mode.clone();
+		safe_mode.apply_emergency_presets(presets);
+		safe_mode
+	}
+
+	/// Whether the setting `preset` covers is switched off.
+	fn is_off(safe_mode: &RuntimeSafeMode, preset: EmergencyPreset) -> bool {
+		let mut safe_mode = safe_mode.clone();
+		match preset {
+			EmergencyPreset::DisableDepositChannelCreation(chain) =>
+				!*deposit_channel_creation_enabled(&mut safe_mode, chain),
+			EmergencyPreset::DisableNewLoans(asset) =>
+				safe_mode.lending_pools.borrowing.disabled(&asset),
+			EmergencyPreset::DisableLpWithdrawals =>
+				!safe_mode.liquidity_provider.withdrawal_enabled,
+			EmergencyPreset::DisableInternalSwaps =>
+				!safe_mode.liquidity_provider.internal_swaps_enabled,
+		}
+	}
+
+	/// Resets every setting a preset can cover, so two safe modes can be compared on everything
+	/// else.
+	///
+	/// A preset that covers a new setting must be added here: the property test fails until it is.
+	/// This list is deliberately separate from the code under test, so it can't share its mistakes.
+	fn with_preset_settings_reset(safe_mode: &RuntimeSafeMode) -> RuntimeSafeMode {
+		let mut safe_mode = safe_mode.clone();
+		for chain in ForeignChain::iter() {
+			*deposit_channel_creation_enabled(&mut safe_mode, chain) = true;
+		}
+		safe_mode.lending_pools.borrowing = SafeModeSet::Green;
+		safe_mode.liquidity_provider.withdrawal_enabled = true;
+		safe_mode.liquidity_provider.internal_swaps_enabled = true;
+		safe_mode
+	}
+
+	#[test]
+	fn deposit_channel_preset_reaches_only_that_chains_pallet() {
+		use cf_chains::{
+			instances::ChainInstanceFor, Arbitrum, Assethub, Bitcoin, Bsc, Chain, Ethereum,
+			Polkadot, Solana, Tron,
+		};
+		use frame_support::traits::Get;
+		use std::collections::BTreeMap;
+
+		// Reads the flag the way the chain's own ingress-egress pallet does, independently of
+		// `deposit_channel_creation_enabled`.
+		fn enabled<C: Chain + Get<ForeignChain>>() -> (ForeignChain, bool)
+		where
+			Runtime: pallet_cf_ingress_egress::Config<ChainInstanceFor<C>>,
+		{
+			(
+				C::get(),
+				<Runtime as pallet_cf_ingress_egress::Config<ChainInstanceFor<C>>>::SafeMode::get()
+					.deposit_channel_creation_enabled,
+			)
+		}
+		let enabled_per_chain = || {
+			BTreeMap::from([
+				enabled::<Ethereum>(),
+				enabled::<Polkadot>(),
+				enabled::<Bitcoin>(),
+				enabled::<Arbitrum>(),
+				enabled::<Solana>(),
+				enabled::<Assethub>(),
+				enabled::<Tron>(),
+				enabled::<Bsc>(),
+			])
+		};
+
+		sp_io::TestExternalities::default().execute_with(|| {
+			assert_eq!(enabled_per_chain().len(), ForeignChain::iter().count());
+			for chain in ForeignChain::iter() {
+				pallet_cf_environment::RuntimeSafeMode::<Runtime>::put(applied(
+					&RuntimeSafeMode::code_green(),
+					&BTreeSet::from([EmergencyPreset::DisableDepositChannelCreation(chain)]),
+				));
+				for (pallet_chain, enabled) in enabled_per_chain() {
+					assert_eq!(
+						enabled,
+						pallet_chain != chain,
+						"{chain:?} preset, {pallet_chain:?}"
+					);
+				}
+			}
+		});
+	}
+
+	fn safe_mode_strategy() -> impl Strategy<Value = RuntimeSafeMode> {
+		(
+			any::<bool>(),
+			vec(any::<bool>(), ForeignChain::iter().count()),
+			any::<bool>(),
+			any::<bool>(),
+			0..3u8,
+			vec(any::<bool>(), Asset::all().count()),
+		)
+			.prop_map(|(red, channels, withdrawals, internal_swaps, borrowing, assets_off)| {
+				let mut safe_mode =
+					if red { RuntimeSafeMode::code_red() } else { RuntimeSafeMode::code_green() };
+				for (chain, enabled) in ForeignChain::iter().zip(channels) {
+					*deposit_channel_creation_enabled(&mut safe_mode, chain) = enabled;
+				}
+				safe_mode.liquidity_provider.withdrawal_enabled = withdrawals;
+				safe_mode.liquidity_provider.internal_swaps_enabled = internal_swaps;
+				safe_mode.lending_pools.borrowing = match borrowing {
+					0 => SafeModeSet::Green,
+					1 => SafeModeSet::Red,
+					_ => SafeModeSet::Amber(
+						Asset::all()
+							.zip(assets_off)
+							.filter_map(|(a, off)| off.then_some(a))
+							.collect(),
+					),
+				};
+				safe_mode
+			})
+	}
+
+	fn presets_strategy() -> impl Strategy<Value = BTreeSet<EmergencyPreset>> {
+		vec(any::<bool>(), EmergencyPreset::all().count()).prop_map(|picks| {
+			EmergencyPreset::all()
+				.zip(picks)
+				.filter_map(|(p, pick)| pick.then_some(p))
+				.collect()
+		})
+	}
+
+	proptest! {
+		#[test]
+		fn presets_only_switch_their_own_settings_off(
+			before in safe_mode_strategy(),
+			presets in presets_strategy(),
+		) {
+			let after = applied(&before, &presets);
+
+			for preset in EmergencyPreset::all() {
+				let expected_off = is_off(&before, preset) || presets.contains(&preset);
+				prop_assert_eq!(is_off(&after, preset), expected_off, "{:?}", preset);
+			}
+			// Settings that no preset covers are untouched.
+			prop_assert_eq!(
+				with_preset_settings_reset(&after),
+				with_preset_settings_reset(&before)
+			);
+			// Applying the same presets again changes nothing.
+			prop_assert_eq!(&applied(&after, &presets), &after);
 		}
 	}
 }

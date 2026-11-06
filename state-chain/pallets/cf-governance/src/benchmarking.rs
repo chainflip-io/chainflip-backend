@@ -201,5 +201,19 @@ mod benchmarks {
 		dispatch_whitelisted_call(RawOrigin::Signed(caller.clone()), 1);
 	}
 
+	#[benchmark]
+	fn apply_emergency_presets() {
+		let caller: T::AccountId = whitelisted_caller();
+		<Members<T>>::put(GovernanceCouncil {
+			members: BTreeSet::from([caller.clone()]),
+			threshold: 1,
+		});
+		let presets: EmergencyPresets =
+			EmergencyPreset::all().collect::<BTreeSet<_>>().try_into().unwrap();
+
+		#[extrinsic_call]
+		apply_emergency_presets(RawOrigin::Signed(caller), presets);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
