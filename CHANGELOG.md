@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.22] - 2026-11-06
+
+### Fixes
+
+- One-off fund recovery on Berghain: return six failed deposits (on Assethub, Ethereum, Bitcoin and Solana) to their depositors, and sweep stranded funds into the vault from two expired Solana deposit channels and three Ethereum and Tron deposit channels whose `Deposit` contract was never deployed.
+
 ## [2.2.21] - 2026-10-30
 
 ### Features
