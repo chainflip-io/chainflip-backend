@@ -63,12 +63,11 @@ use cf_primitives::{
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
-	error::BadOrigin,
 	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+		traits::{AtLeast32BitUnsigned, BadOrigin, Bounded, MaybeSerializeDeserialize},
 		BoundedVec, DispatchError, DispatchResult, FixedPointNumber, FixedPointOperand, FixedU128,
-		Percent, RuntimeDebug,
+		Percent,
 	},
 	traits::{ConstU32, EnsureOrigin, Get, IsType, UnfilteredDispatchable},
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
@@ -192,15 +191,7 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 }
 
 #[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	RuntimeDebug,
+	PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Debug,
 )]
 pub struct Bid<Id, Amount> {
 	pub bidder_id: Id,
@@ -385,9 +376,7 @@ pub trait RewardsDistribution {
 ///
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
-#[derive(
-	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default,
-)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId> {
 	/// Those nodes that are considered offline
 	pub offline: Vec<ValidatorId>,
@@ -725,6 +714,9 @@ pub trait Bonding {
 	type Amount;
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::AccountId, bond: Self::Amount);
+
+	/// The current bond of an account.
+	fn bond(account_id: &Self::AccountId) -> Self::Amount;
 }
 
 /// Something that is able to provide block authorship slots that were missed.
@@ -967,7 +959,7 @@ impl<
 	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
-	RuntimeDebug,
+	Debug,
 )]
 pub struct ScheduledEgressDetails<C: Chain> {
 	pub egress_id: EgressId,
@@ -1277,6 +1269,14 @@ pub trait WithdrawalAddressRestriction {
 		dest: cf_chains::AccountOrAddress<&Self::AccountId, &cf_chains::ForeignChainAddress>,
 	) -> DispatchResult;
 
+	/// Whether `owner` has a withdrawal whitelist, limiting it to whitelisted destinations. Other
+	/// restrictions, such as a bound broker withdrawal address, aren't reflected here.
+	fn has_whitelist(owner: &Self::AccountId) -> bool;
+
+	/// Restrict `owner` to a whitelist of the maximum size that includes `allowed`.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_worst_case_whitelist(owner: &Self::AccountId, allowed: cf_chains::ForeignChainAddress);
+
 	/// Permanently bind `owner` to `address`: from here on, Ethereum withdrawals are allowed only
 	/// to it, overriding the whitelist. Bindings are immutable, so this fails with
 	/// [`AlreadyBound`] rather than repointing an existing one.
@@ -1292,6 +1292,18 @@ pub trait WithdrawalAddressRestriction {
 /// Error returned when trying to set a bound withdrawal address when the binding already exists.
 #[derive(Debug, PartialEq, Eq)]
 pub struct WithdrawalAddressAlreadyBound;
+
+/// Read access to the funding pallet's permanent redeem address binding.
+pub trait RedeemAddressBinding {
+	type AccountId;
+
+	/// The account's bound redeem address, if any. A bound on-chain balance can only be redeemed
+	/// to that address (restricted funds excepted) or rebalanced to accounts bound to the same one.
+	fn bound_redeem_address(account_id: &Self::AccountId) -> Option<cf_chains::evm::Address>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn bind_redeem_address(account_id: &Self::AccountId, address: cf_chains::evm::Address);
+}
 
 pub trait DerivedIngressSink<Account, DepositDetails> {
 	fn derive_deposit_details(account: Account) -> DepositDetails;
@@ -1408,6 +1420,49 @@ pub trait AffiliateRegistry {
 
 	/// Return the reverse mapping from account id to affiliate short id.
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
+}
+
+/// Looks up the LP account a broker has linked to receive its failed deposits.
+pub trait BrokerRecoveryApi {
+	type AccountId;
+
+	/// The broker's recovery account, if it has linked one that still has the LP role.
+	fn recovery_account(broker: &Self::AccountId) -> Option<Self::AccountId>;
+}
+
+/// Opaque reference to a failed deposit, e.g. its transaction id or hash.
+pub type FailedDepositReference = BoundedVec<u8, ConstU32<64>>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub enum FailedDepositRecoveryOutcome {
+	/// Egressed to the recovery account's refund address for the asset's chain.
+	Egressed {
+		egress_id: EgressId,
+		destination: ForeignChainAddress,
+		egress_amount: AssetAmount,
+		fee_withheld: AssetAmount,
+	},
+	/// Credited to the recovery account's free balance.
+	Credited,
+}
+
+/// Pays out a failed deposit to the recovery account of the broker it is attributed to.
+pub trait FailedDepositRecovery {
+	type AccountId;
+
+	/// Egresses the funds to the recovery account's refund address, if it has one for the asset's
+	/// chain and the amount covers the egress fee. Otherwise credits the recovery account.
+	///
+	/// Fails if the broker has no recovery account, leaving storage unchanged.
+	fn route_failed_deposit(
+		broker: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<(Self::AccountId, FailedDepositRecoveryOutcome), DispatchError>;
+
+	/// Links a recovery account to the broker, with an Ethereum refund address.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark(_broker: &Self::AccountId) {}
 }
 
 pub trait MinimumDeposit {

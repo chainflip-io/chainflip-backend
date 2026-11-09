@@ -379,6 +379,37 @@ export const palletCfEnvironmentPalletConfigUpdate = z.object({
   disabled: z.boolean(),
 });
 
+export const cfChainsBtcScriptPubkey = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('P2PKH'), value: hexString }),
+  z.object({ __kind: z.literal('P2SH'), value: hexString }),
+  z.object({ __kind: z.literal('P2WPKH'), value: hexString }),
+  z.object({ __kind: z.literal('P2WSH'), value: hexString }),
+  z.object({ __kind: z.literal('Taproot'), value: hexString }),
+  z.object({ __kind: z.literal('OtherSegwit'), version: z.number(), program: hexString }),
+]);
+
+export const cfChainsAddressForeignChainAddress = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('Eth'), value: hexString }),
+  z.object({ __kind: z.literal('Dot'), value: hexString }),
+  z.object({ __kind: z.literal('Btc'), value: cfChainsBtcScriptPubkey }),
+  z.object({ __kind: z.literal('Arb'), value: hexString }),
+  z.object({ __kind: z.literal('Sol'), value: hexString }),
+  z.object({ __kind: z.literal('Hub'), value: hexString }),
+  z.object({ __kind: z.literal('Tron'), value: hexString }),
+  z.object({ __kind: z.literal('Bsc'), value: hexString }),
+]);
+
+export const cfTraitsFailedDepositRecoveryOutcome = z.discriminatedUnion('__kind', [
+  z.object({
+    __kind: z.literal('Egressed'),
+    egressId: z.tuple([cfPrimitivesChainsForeignChain, numberOrHex]),
+    destination: cfChainsAddressForeignChainAddress,
+    egressAmount: numberOrHex,
+    feeWithheld: numberOrHex,
+  }),
+  z.object({ __kind: z.literal('Credited') }),
+]);
+
 export const palletCfFlipImbalancesInternalSource = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Account'), value: accountId }),
   z.object({ __kind: z.literal('Reserve'), value: hexString }),
@@ -627,10 +658,17 @@ export const dispatchResult = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Err'), value: spRuntimeDispatchError }),
 ]);
 
+export const palletCfThresholdSignatureCeremonyStageTimeouts = z.object({
+  signingSecs: z.number(),
+  keygenSecs: z.number(),
+});
+
 export const palletCfThresholdSignaturePalletConfigUpdate = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('ThresholdSignatureResponseTimeout'), newTimeout: z.number() }),
-  z.object({ __kind: z.literal('KeygenResponseTimeout'), newTimeout: z.number() }),
   z.object({ __kind: z.literal('KeygenSlashAmount'), amountToSlash: numberOrHex }),
+  z.object({
+    __kind: z.literal('CeremonyStageTimeouts'),
+    timeouts: palletCfThresholdSignatureCeremonyStageTimeouts,
+  }),
 ]);
 
 export const cfChainsBtcPreviousOrCurrent = simpleEnum(['Previous', 'Current']);
@@ -663,15 +701,6 @@ export const cfChainsDotPolkadotTransactionId = z.object({
 });
 
 export const cfChainsBtcBitcoinTransactionData = z.object({ encodedTransaction: hexString });
-
-export const cfChainsBtcScriptPubkey = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('P2PKH'), value: hexString }),
-  z.object({ __kind: z.literal('P2SH'), value: hexString }),
-  z.object({ __kind: z.literal('P2WPKH'), value: hexString }),
-  z.object({ __kind: z.literal('P2WSH'), value: hexString }),
-  z.object({ __kind: z.literal('Taproot'), value: hexString }),
-  z.object({ __kind: z.literal('OtherSegwit'), version: z.number(), program: hexString }),
-]);
 
 export const cfChainsAddressEncodedAddress = z
   .object({
@@ -810,17 +839,6 @@ export const cfTraitsSwappingSwapRequestTypeGeneric = z.discriminatedUnion('__ki
 
 export const cfPrimitivesBeneficiaryAccountId32 = z.object({ account: accountId, bps: z.number() });
 
-export const cfChainsAddressForeignChainAddress = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('Eth'), value: hexString }),
-  z.object({ __kind: z.literal('Dot'), value: hexString }),
-  z.object({ __kind: z.literal('Btc'), value: cfChainsBtcScriptPubkey }),
-  z.object({ __kind: z.literal('Arb'), value: hexString }),
-  z.object({ __kind: z.literal('Sol'), value: hexString }),
-  z.object({ __kind: z.literal('Hub'), value: hexString }),
-  z.object({ __kind: z.literal('Tron'), value: hexString }),
-  z.object({ __kind: z.literal('Bsc'), value: hexString }),
-]);
-
 export const cfChainsRefundParametersAccountOrAddressForeignChainAddress = z.discriminatedUnion(
   '__kind',
   [
@@ -868,7 +886,7 @@ export const cfChainsCcmChannelMetadataCcmAdditionalData = z.object({
   ccmAdditionalData: hexString,
 });
 
-export const cfChainsRefundParametersChannelRefundParameters = z.object({
+export const cfChainsRefundParametersChannelRefundParametersEncodedAddress = z.object({
   retryDuration: z.number(),
   refundAddress: cfChainsAddressEncodedAddress,
   minPrice: numberOrHex,
@@ -892,11 +910,6 @@ export const palletCfSwappingSwapFailureReason = simpleEnum([
 export const cfPrimitivesSwapLeg = simpleEnum(['FromStable', 'ToStable']);
 
 export const palletCfSwappingPalletConfigUpdate = z.discriminatedUnion('__kind', [
-  z.object({
-    __kind: z.literal('MaximumSwapAmount'),
-    asset: cfPrimitivesChainsAssetsAnyAsset,
-    amount: numberOrHex.nullish(),
-  }),
   z.object({ __kind: z.literal('SwapRetryDelay'), delay: z.number() }),
   z.object({ __kind: z.literal('FlipBuyInterval'), interval: z.number() }),
   z.object({ __kind: z.literal('SetMaxSwapRetryDuration'), blocks: z.number() }),
@@ -1036,7 +1049,7 @@ export const cfPrimitivesBeneficiaryAffiliateShortId = z.object({
   bps: z.number(),
 });
 
-export const cfEthereumChainRefundParametersChannelRefundParameters = z.object({
+export const cfChainsRefundParametersChannelRefundParametersH160 = z.object({
   retryDuration: z.number(),
   refundAddress: hexString,
   minPrice: numberOrHex,
@@ -1056,7 +1069,7 @@ export const palletCfEthereumIngressEgressVaultDepositWitnessEthereum = z.object
   txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
-  refundParams: cfEthereumChainRefundParametersChannelRefundParameters,
+  refundParams: cfChainsRefundParametersChannelRefundParametersH160,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
@@ -1125,13 +1138,14 @@ export const palletCfEthereumIngressEgressPalletConfigUpdateEthereum = z.discrim
     }),
     z.object({ __kind: z.literal('SetDepositChannelLifetimeEthereum'), lifetime: numberOrHex }),
     z.object({ __kind: z.literal('SetWitnessSafetyMarginEthereum'), margin: numberOrHex }),
-    z.object({ __kind: z.literal('SetBoostDelayEthereum'), delayBlocks: z.number() }),
     z.object({
       __kind: z.literal('SetMaximumPreallocatedChannelsEthereum'),
       accountRole: cfPrimitivesAccountRole,
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayEthereum'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayEthereum'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryEthereum'), retryBlocks: numberOrHex }),
   ],
 );
 
@@ -1186,7 +1200,7 @@ export const cfPolkadotChainCcmDepositMetadata = z.object({
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const cfPolkadotChainRefundParametersChannelRefundParameters = z.object({
+export const cfChainsRefundParametersChannelRefundParametersPolkadotAccountId = z.object({
   retryDuration: z.number(),
   refundAddress: hexString,
   minPrice: numberOrHex,
@@ -1206,7 +1220,7 @@ export const palletCfPolkadotIngressEgressVaultDepositWitnessPolkadot = z.object
   txId: cfPrimitivesTxId,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
-  refundParams: cfPolkadotChainRefundParametersChannelRefundParameters,
+  refundParams: cfChainsRefundParametersChannelRefundParametersPolkadotAccountId,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
@@ -1253,13 +1267,14 @@ export const palletCfPolkadotIngressEgressPalletConfigUpdatePolkadot = z.discrim
     }),
     z.object({ __kind: z.literal('SetDepositChannelLifetimePolkadot'), lifetime: z.number() }),
     z.object({ __kind: z.literal('SetWitnessSafetyMarginPolkadot'), margin: z.number() }),
-    z.object({ __kind: z.literal('SetBoostDelayPolkadot'), delayBlocks: z.number() }),
     z.object({
       __kind: z.literal('SetMaximumPreallocatedChannelsPolkadot'),
       accountRole: cfPrimitivesAccountRole,
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayPolkadot'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayPolkadot'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryPolkadot'), retryBlocks: z.number() }),
   ],
 );
 
@@ -1314,7 +1329,7 @@ export const cfBitcoinChainCcmDepositMetadata = z.object({
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const cfBitcoinChainRefundParametersChannelRefundParameters = z.object({
+export const cfChainsRefundParametersChannelRefundParametersScriptPubkey = z.object({
   retryDuration: z.number(),
   refundAddress: cfChainsBtcScriptPubkey,
   minPrice: numberOrHex,
@@ -1334,7 +1349,7 @@ export const palletCfBitcoinIngressEgressVaultDepositWitnessBitcoin = z.object({
   txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
-  refundParams: cfBitcoinChainRefundParametersChannelRefundParameters,
+  refundParams: cfChainsRefundParametersChannelRefundParametersScriptPubkey,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
@@ -1381,13 +1396,14 @@ export const palletCfBitcoinIngressEgressPalletConfigUpdateBitcoin = z.discrimin
     }),
     z.object({ __kind: z.literal('SetDepositChannelLifetimeBitcoin'), lifetime: numberOrHex }),
     z.object({ __kind: z.literal('SetWitnessSafetyMarginBitcoin'), margin: numberOrHex }),
-    z.object({ __kind: z.literal('SetBoostDelayBitcoin'), delayBlocks: z.number() }),
     z.object({
       __kind: z.literal('SetMaximumPreallocatedChannelsBitcoin'),
       accountRole: cfPrimitivesAccountRole,
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayBitcoin'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayBitcoin'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryBitcoin'), retryBlocks: numberOrHex }),
   ],
 );
 
@@ -1500,14 +1516,6 @@ export const cfArbitrumChainCcmDepositMetadata = z.object({
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const cfArbitrumChainRefundParametersChannelRefundParameters = z.object({
-  retryDuration: z.number(),
-  refundAddress: hexString,
-  minPrice: numberOrHex,
-  refundCcmMetadata: cfChainsCcmChannelMetadataCcmAdditionalData.nullish(),
-  maxOraclePriceSlippage: z.number().nullish(),
-});
-
 export const palletCfArbitrumIngressEgressVaultDepositWitnessArbitrum = z.object({
   inputAsset: cfPrimitivesChainsAssetsArbAsset,
   depositAddress: hexString.nullish(),
@@ -1520,7 +1528,7 @@ export const palletCfArbitrumIngressEgressVaultDepositWitnessArbitrum = z.object
   txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
-  refundParams: cfArbitrumChainRefundParametersChannelRefundParameters,
+  refundParams: cfChainsRefundParametersChannelRefundParametersH160,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
@@ -1567,13 +1575,14 @@ export const palletCfArbitrumIngressEgressPalletConfigUpdateArbitrum = z.discrim
     }),
     z.object({ __kind: z.literal('SetDepositChannelLifetimeArbitrum'), lifetime: numberOrHex }),
     z.object({ __kind: z.literal('SetWitnessSafetyMarginArbitrum'), margin: numberOrHex }),
-    z.object({ __kind: z.literal('SetBoostDelayArbitrum'), delayBlocks: z.number() }),
     z.object({
       __kind: z.literal('SetMaximumPreallocatedChannelsArbitrum'),
       accountRole: cfPrimitivesAccountRole,
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayArbitrum'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayArbitrum'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryArbitrum'), retryBlocks: numberOrHex }),
   ],
 );
 
@@ -1676,7 +1685,7 @@ export const cfSolanaChainCcmDepositMetadata = z.object({
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const cfSolanaChainRefundParametersChannelRefundParameters = z.object({
+export const cfChainsRefundParametersChannelRefundParametersAddress = z.object({
   retryDuration: z.number(),
   refundAddress: hexString,
   minPrice: numberOrHex,
@@ -1696,7 +1705,7 @@ export const palletCfSolanaIngressEgressVaultDepositWitnessSolana = z.object({
   txId: z.tuple([hexString, numberOrHex]),
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
-  refundParams: cfSolanaChainRefundParametersChannelRefundParameters,
+  refundParams: cfChainsRefundParametersChannelRefundParametersAddress,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
@@ -1741,13 +1750,14 @@ export const palletCfSolanaIngressEgressPalletConfigUpdateSolana = z.discriminat
   }),
   z.object({ __kind: z.literal('SetDepositChannelLifetimeSolana'), lifetime: numberOrHex }),
   z.object({ __kind: z.literal('SetWitnessSafetyMarginSolana'), margin: numberOrHex }),
-  z.object({ __kind: z.literal('SetBoostDelaySolana'), delayBlocks: z.number() }),
   z.object({
     __kind: z.literal('SetMaximumPreallocatedChannelsSolana'),
     accountRole: cfPrimitivesAccountRole,
     numChannels: z.number(),
   }),
   z.object({ __kind: z.literal('SetIngressDelaySolana'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetRejectionDelaySolana'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetChannelCleanupRetrySolana'), retryBlocks: numberOrHex }),
 ]);
 
 export const palletCfElectionsElectoralSystemsCompositeTuple7ImplsCompositeElectionIdentifierExtra =
@@ -1852,14 +1862,6 @@ export const cfAssethubChainCcmDepositMetadata = z.object({
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const cfAssethubChainRefundParametersChannelRefundParameters = z.object({
-  retryDuration: z.number(),
-  refundAddress: hexString,
-  minPrice: numberOrHex,
-  refundCcmMetadata: cfChainsCcmChannelMetadataCcmAdditionalData.nullish(),
-  maxOraclePriceSlippage: z.number().nullish(),
-});
-
 export const palletCfAssethubIngressEgressVaultDepositWitnessAssethub = z.object({
   inputAsset: cfPrimitivesChainsAssetsHubAsset,
   depositAddress: hexString.nullish(),
@@ -1872,7 +1874,7 @@ export const palletCfAssethubIngressEgressVaultDepositWitnessAssethub = z.object
   txId: cfPrimitivesTxId,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
-  refundParams: cfAssethubChainRefundParametersChannelRefundParameters,
+  refundParams: cfChainsRefundParametersChannelRefundParametersPolkadotAccountId,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
@@ -1919,28 +1921,18 @@ export const palletCfAssethubIngressEgressPalletConfigUpdateAssethub = z.discrim
     }),
     z.object({ __kind: z.literal('SetDepositChannelLifetimeAssethub'), lifetime: z.number() }),
     z.object({ __kind: z.literal('SetWitnessSafetyMarginAssethub'), margin: z.number() }),
-    z.object({ __kind: z.literal('SetBoostDelayAssethub'), delayBlocks: z.number() }),
     z.object({
       __kind: z.literal('SetMaximumPreallocatedChannelsAssethub'),
       accountRole: cfPrimitivesAccountRole,
       numChannels: z.number(),
     }),
     z.object({ __kind: z.literal('SetIngressDelayAssethub'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetRejectionDelayAssethub'), delayBlocks: z.number() }),
+    z.object({ __kind: z.literal('SetChannelCleanupRetryAssethub'), retryBlocks: z.number() }),
   ],
 );
 
 export const palletCfTradingStrategyTradingStrategy = z.discriminatedUnion('__kind', [
-  z.object({
-    __kind: z.literal('TickZeroCentered'),
-    spreadTick: z.number(),
-    baseAsset: cfPrimitivesChainsAssetsAnyAsset,
-  }),
-  z.object({
-    __kind: z.literal('SimpleBuySell'),
-    buyTick: z.number(),
-    sellTick: z.number(),
-    baseAsset: cfPrimitivesChainsAssetsAnyAsset,
-  }),
   z.object({
     __kind: z.literal('InventoryBased'),
     minBuyTick: z.number(),
@@ -2214,14 +2206,6 @@ export const cfTronChainCcmDepositMetadata = z.object({
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const cfTronChainRefundParametersChannelRefundParameters = z.object({
-  retryDuration: z.number(),
-  refundAddress: hexString,
-  minPrice: numberOrHex,
-  refundCcmMetadata: cfChainsCcmChannelMetadataCcmAdditionalData.nullish(),
-  maxOraclePriceSlippage: z.number().nullish(),
-});
-
 export const palletCfTronIngressEgressVaultDepositWitnessTron = z.object({
   inputAsset: cfPrimitivesChainsAssetsTronAsset,
   depositAddress: hexString.nullish(),
@@ -2234,7 +2218,7 @@ export const palletCfTronIngressEgressVaultDepositWitnessTron = z.object({
   txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
-  refundParams: cfTronChainRefundParametersChannelRefundParameters,
+  refundParams: cfChainsRefundParametersChannelRefundParametersH160,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
@@ -2276,13 +2260,14 @@ export const palletCfTronIngressEgressPalletConfigUpdateTron = z.discriminatedUn
   }),
   z.object({ __kind: z.literal('SetDepositChannelLifetimeTron'), lifetime: numberOrHex }),
   z.object({ __kind: z.literal('SetWitnessSafetyMarginTron'), margin: numberOrHex }),
-  z.object({ __kind: z.literal('SetBoostDelayTron'), delayBlocks: z.number() }),
   z.object({
     __kind: z.literal('SetMaximumPreallocatedChannelsTron'),
     accountRole: cfPrimitivesAccountRole,
     numChannels: z.number(),
   }),
   z.object({ __kind: z.literal('SetIngressDelayTron'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetRejectionDelayTron'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetChannelCleanupRetryTron'), retryBlocks: numberOrHex }),
 ]);
 
 export const palletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionIdentifierExtra =
@@ -2351,14 +2336,6 @@ export const cfBscChainCcmDepositMetadata = z.object({
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const cfBscChainRefundParametersChannelRefundParameters = z.object({
-  retryDuration: z.number(),
-  refundAddress: hexString,
-  minPrice: numberOrHex,
-  refundCcmMetadata: cfChainsCcmChannelMetadataCcmAdditionalData.nullish(),
-  maxOraclePriceSlippage: z.number().nullish(),
-});
-
 export const palletCfBscIngressEgressVaultDepositWitnessBsc = z.object({
   inputAsset: cfPrimitivesChainsAssetsBscAsset,
   depositAddress: hexString.nullish(),
@@ -2371,7 +2348,7 @@ export const palletCfBscIngressEgressVaultDepositWitnessBsc = z.object({
   txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
-  refundParams: cfBscChainRefundParametersChannelRefundParameters,
+  refundParams: cfChainsRefundParametersChannelRefundParametersH160,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
@@ -2413,13 +2390,14 @@ export const palletCfBscIngressEgressPalletConfigUpdateBsc = z.discriminatedUnio
   }),
   z.object({ __kind: z.literal('SetDepositChannelLifetimeBsc'), lifetime: numberOrHex }),
   z.object({ __kind: z.literal('SetWitnessSafetyMarginBsc'), margin: numberOrHex }),
-  z.object({ __kind: z.literal('SetBoostDelayBsc'), delayBlocks: z.number() }),
   z.object({
     __kind: z.literal('SetMaximumPreallocatedChannelsBsc'),
     accountRole: cfPrimitivesAccountRole,
     numChannels: z.number(),
   }),
   z.object({ __kind: z.literal('SetIngressDelayBsc'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetRejectionDelayBsc'), delayBlocks: z.number() }),
+  z.object({ __kind: z.literal('SetChannelCleanupRetryBsc'), retryBlocks: numberOrHex }),
 ]);
 
 export const cfChainsWitnessPeriodBlockWitnessRangeBsc = z.object({ root: numberOrHex });

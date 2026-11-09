@@ -373,9 +373,9 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmKeyManagerEvent<Runtime, TronIn
 						})?;
 
 					let signer_id = tx_receipt.from;
-					let contract = tx_receipt.to.ok_or_else(|| {
-						anyhow::anyhow!("No to address in receipt for tx {tx_hash:x}")
-					})?;
+					// See the EVM key manager witnessing: a contract-creation transaction has no
+					// `to`. Failing here would fail the vote for the whole block range.
+					let contract = tx_receipt.to.unwrap_or_default();
 					let fee_limit = tron_tx.raw_data.fee_limit.and_then(|fee| fee.try_into().ok());
 
 					let tx_fee = parse_tron_tx_fee(&tx_info);

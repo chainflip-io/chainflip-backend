@@ -3,11 +3,11 @@
 import type { GenericChainEvents, GenericPalletEvent } from 'dedot/types';
 import type {
   DispatchError,
-  AccountId32,
   H256,
+  AccountId32,
   H160,
-  FixedBytes,
   Bytes,
+  FixedBytes,
   Result,
 } from 'dedot/codecs';
 import type {
@@ -23,6 +23,8 @@ import type {
   CfChainsSolApiSolanaGovCall,
   CfTraitsElectionsElectionInstance,
   PalletCfEnvironmentPalletConfigUpdate,
+  CfPrimitivesChainsAssetsAnyAsset,
+  CfTraitsFailedDepositRecoveryOutcome,
   PalletCfFlipImbalancesImbalanceSource,
   PalletCfFlipPalletConfigUpdate,
   CfTraitsFundingSource,
@@ -61,7 +63,6 @@ import type {
   CfChainsBtcBitcoinTransactionData,
   CfChainsBtcScriptPubkey,
   CfPrimitivesSwapRequestId,
-  CfPrimitivesChainsAssetsAnyAsset,
   CfChainsSwapOrigin,
   CfTraitsSwappingSwapRequestTypeGeneric,
   CfPrimitivesBeneficiary,
@@ -190,9 +191,9 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * `:code` was updated.
+     * `:code` was updated to the code with the given hash.
      **/
-    CodeUpdated: GenericPalletEvent<'System', 'CodeUpdated', null>;
+    CodeUpdated: GenericPalletEvent<'System', 'CodeUpdated', { hash: H256 }>;
 
     /**
      * A new account was created.
@@ -387,6 +388,37 @@ export interface ChainEvents extends GenericChainEvents {
       'Environment',
       'PalletConfigUpdated',
       { update: PalletCfEnvironmentPalletConfigUpdate }
+    >;
+
+    /**
+     * A failed deposit was paid out to the broker's recovery account.
+     **/
+    FailedDepositRecovered: GenericPalletEvent<
+      'Environment',
+      'FailedDepositRecovered',
+      {
+        broker: AccountId32;
+        recoveryAccount: AccountId32;
+        asset: CfPrimitivesChainsAssetsAnyAsset;
+        amount: bigint;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+        reference: Bytes;
+      }
+    >;
+
+    /**
+     * A failed deposit could not be recovered. It can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'Environment',
+      'FailedDepositRecoveryFailed',
+      {
+        broker: AccountId32;
+        asset: CfPrimitivesChainsAssetsAnyAsset;
+        amount: bigint;
+        reference: Bytes;
+        error: DispatchError;
+      }
     >;
 
     /**
@@ -2570,16 +2602,6 @@ export interface ChainEvents extends GenericChainEvents {
       'BatchSwapFailed',
       { asset: CfPrimitivesChainsAssetsAnyAsset; direction: CfPrimitivesSwapLeg; amount: bigint }
     >;
-    SwapAmountConfiscated: GenericPalletEvent<
-      'Swapping',
-      'SwapAmountConfiscated',
-      {
-        swapRequestId: CfPrimitivesSwapRequestId;
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        totalAmount: bigint;
-        confiscatedAmount: bigint;
-      }
-    >;
     SwapEgressIgnored: GenericPalletEvent<
       'Swapping',
       'SwapEgressIgnored',
@@ -2710,6 +2732,15 @@ export interface ChainEvents extends GenericChainEvents {
       'Swapping',
       'FlipTransferToGatewaySkipped',
       { reason: DispatchError }
+    >;
+
+    /**
+     * A broker linked the LP account that receives its failed deposits.
+     **/
+    RecoveryAccountLinked: GenericPalletEvent<
+      'Swapping',
+      'RecoveryAccountLinked',
+      { broker: AccountId32; recoveryAccount: AccountId32 }
     >;
 
     /**

@@ -265,7 +265,7 @@ export async function newVaultSwapCcmMetadata(
     messageMaxLength = ARB_MAX_CCM_MSG_LENGTH;
     if (ccmMessage && ccmMessage.length / 2 > messageMaxLength) {
       throw new Error(
-        `Message length for Solana vault swap must be less than ${messageMaxLength} bytes`,
+        `Message length for Arbitrum vault swap must be less than ${messageMaxLength} bytes`,
       );
     }
   }

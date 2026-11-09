@@ -231,17 +231,13 @@ where
 {
 	pass_through! {
 		cf_authorities() -> AuthoritiesInfo,
-		cf_external_chains_block_height() -> ExternalChainsBlockHeight,
 		cf_btc_utxos() -> BtcUtxos,
 		cf_dot_aggkey() -> PolkadotAccountId,
 		cf_epoch_state() -> RpcEpochState [map: Into::into],
 		cf_redemptions() -> RedemptionsInfo,
-		cf_pending_broadcasts_count() -> PendingBroadcasts,
 		cf_pending_tss_ceremonies_count() -> PendingTssCeremonies,
 		cf_pending_swaps_count() -> u32,
-		cf_open_deposit_channels_count() -> OpenDepositChannels,
 		cf_build_version() -> LastRuntimeUpgradeInfo,
-		cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds,
 		cf_sol_nonces() -> SolanaNonces,
 		cf_sol_aggkey() -> SolAddress,
 		cf_sol_onchain_key() -> SolAddress,
@@ -251,7 +247,7 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(Offence, u32)>> {
-		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+		self.rpc_backend.with_versioned_monitoring_api(at, |api, hash, api_version| {
 			if api_version < 5 {
 				#[expect(deprecated)]
 				api.cf_suspended_validators_before_version_5(hash)
@@ -267,7 +263,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcMonitoringData> {
 		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, api_version| {
+			.with_versioned_monitoring_api(at, |api, hash, api_version| {
 				if api_version < 3 {
 					#[expect(deprecated)]
 					api.cf_monitoring_data_before_version_3(hash).map(MonitoringDataV2::from)
@@ -281,12 +277,90 @@ where
 			.map(Into::into)
 	}
 
+	fn cf_external_chains_block_height(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ExternalChainsBlockHeight> {
+		self.rpc_backend.with_versioned_monitoring_api(at, |api, hash, api_version| {
+			if api_version < 3 {
+				#[expect(deprecated)]
+				api.cf_external_chains_block_height_before_version_3(hash).map(Into::into)
+			} else if api_version < 5 {
+				#[expect(deprecated)]
+				api.cf_external_chains_block_height_before_version_5(hash).map(Into::into)
+			} else {
+				api.cf_external_chains_block_height(hash)
+			}
+		})
+	}
+
+	fn cf_pending_broadcasts_count(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PendingBroadcasts> {
+		self.rpc_backend.with_versioned_monitoring_api(at, |api, hash, api_version| {
+			if api_version < 3 {
+				#[expect(deprecated)]
+				api.cf_pending_broadcasts_count_before_version_3(hash).map(Into::into)
+			} else if api_version < 5 {
+				#[expect(deprecated)]
+				api.cf_pending_broadcasts_count_before_version_5(hash).map(Into::into)
+			} else {
+				api.cf_pending_broadcasts_count(hash)
+			}
+		})
+	}
+
+	fn cf_open_deposit_channels_count(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<OpenDepositChannels> {
+		self.rpc_backend.with_versioned_monitoring_api(at, |api, hash, api_version| {
+			if api_version < 3 {
+				#[expect(deprecated)]
+				api.cf_open_deposit_channels_count_before_version_3(hash).map(Into::into)
+			} else if api_version < 5 {
+				#[expect(deprecated)]
+				api.cf_open_deposit_channels_count_before_version_5(hash).map(Into::into)
+			} else {
+				api.cf_open_deposit_channels_count(hash)
+			}
+		})
+	}
+
+	fn cf_rotation_broadcast_ids(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ActivateKeysBroadcastIds> {
+		self.rpc_backend.with_versioned_monitoring_api(at, |api, hash, api_version| {
+			if api_version < 3 {
+				#[expect(deprecated)]
+				api.cf_rotation_broadcast_ids_before_version_3(hash).map(Into::into)
+			} else if api_version < 5 {
+				#[expect(deprecated)]
+				api.cf_rotation_broadcast_ids_before_version_5(hash).map(Into::into)
+			} else {
+				api.cf_rotation_broadcast_ids(hash)
+			}
+		})
+	}
+
 	fn cf_fee_imbalance(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcFeeImbalance> {
 		self.rpc_backend
-			.with_runtime_api::<_, _>(at, |api, hash| api.cf_fee_imbalance(hash))
+			.with_versioned_monitoring_api(at, |api, hash, api_version| {
+				if api_version < 3 {
+					#[expect(deprecated)]
+					api.cf_fee_imbalance_before_version_3(hash).map(Into::into)
+				} else if api_version < 5 {
+					#[expect(deprecated)]
+					api.cf_fee_imbalance_before_version_5(hash).map(Into::into)
+				} else {
+					api.cf_fee_imbalance(hash)
+				}
+			})
 			.map(|imbalance| imbalance.map(|i| (*i).into()))
 	}
 
@@ -296,7 +370,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>> {
 		let accounts_info =
-			self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+			self.rpc_backend.with_versioned_monitoring_api(at, |api, hash, api_version| {
 				if api_version < 4 {
 					#[expect(deprecated)]
 					api.cf_accounts_info_before_version_4(hash, accounts)

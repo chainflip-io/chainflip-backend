@@ -19,7 +19,9 @@ use crate::{
 		ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
 		common::SigningStageName,
 		gen_keygen_data_verify_hash_comm2, get_key_data_for_test,
-		helpers::{ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_SIGNING_SEED},
+		helpers::{
+			ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_SIGNING_SEED, SIGNING_STAGE_TIMEOUT,
+		},
 		signing::{
 			gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage4, SigningData,
 		},
@@ -136,7 +138,7 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 	// Process a signing request with only 2 participants (us and one other)
 	let participants = BTreeSet::from_iter([our_account_id.clone(), sender_account_id]);
 	let (outgoing_p2p_sender, _outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
-	let initial_stage = prepare_signing_request(
+	let request = prepare_signing_request(
 		DEFAULT_CEREMONY_ID,
 		&our_account_id.clone(),
 		participants.clone(),
@@ -146,10 +148,10 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 		)],
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
+		SIGNING_STAGE_TIMEOUT,
 	)
-	.unwrap()
-	.initial_stage;
-	ceremony_runner.on_ceremony_request(initial_stage).await;
+	.unwrap();
+	ceremony_runner.on_ceremony_request(request).await;
 
 	// Check that the ceremony processed the delayed message and caused it to progress to the next
 	// stage.
@@ -226,7 +228,7 @@ async fn gen_stage_1_signing_state(
 		CeremonyRunner::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0);
 
 	let (outgoing_p2p_sender, outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
-	let initial_stage = prepare_signing_request(
+	let request = prepare_signing_request(
 		DEFAULT_CEREMONY_ID,
 		&our_account_id.clone(),
 		BTreeSet::from_iter(participants.clone()),
@@ -236,10 +238,10 @@ async fn gen_stage_1_signing_state(
 		)],
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
+		SIGNING_STAGE_TIMEOUT,
 	)
-	.unwrap()
-	.initial_stage;
-	ceremony_runner.on_ceremony_request(initial_stage).await;
+	.unwrap();
+	ceremony_runner.on_ceremony_request(request).await;
 
 	(ceremony_runner, outgoing_p2p_receiver)
 }
@@ -370,13 +372,13 @@ async fn should_not_timeout_unauthorised_ceremony() {
 	assert!(!task_handle.is_finished());
 }
 
-#[tokio::test(start_paused = true)]
-async fn should_timeout_authorised_ceremony() {
-	let (task_handle, (_message_sender, request_sender, _outcome_receiver)) =
-		spawn_signing_ceremony_runner();
-
-	// Send a signing request
-	let (outgoing_p2p_sender, _outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
+/// Returns the outgoing p2p receiver, which must be kept alive for the ceremony to progress.
+#[must_use]
+fn send_signing_request_with_stage_timeout(
+	request_sender: oneshot::Sender<PreparedRequest<SigningCeremony<EvmCryptoScheme>>>,
+	stage_timeout: Duration,
+) -> mpsc::UnboundedReceiver<OutgoingMultisigStageMessages> {
+	let (outgoing_p2p_sender, outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
 	let _res = request_sender.send(
 		prepare_signing_request(
 			DEFAULT_CEREMONY_ID,
@@ -390,12 +392,42 @@ async fn should_timeout_authorised_ceremony() {
 			)],
 			&outgoing_p2p_sender,
 			Rng::from_seed(DEFAULT_SIGNING_SEED),
+			stage_timeout,
 		)
 		.unwrap(),
 	);
+	outgoing_p2p_receiver
+}
+
+#[tokio::test(start_paused = true)]
+async fn should_timeout_authorised_ceremony() {
+	let (task_handle, (_message_sender, request_sender, _outcome_receiver)) =
+		spawn_signing_ceremony_runner();
+
+	let _outgoing_p2p_receiver =
+		send_signing_request_with_stage_timeout(request_sender, SIGNING_STAGE_TIMEOUT);
 
 	// Wait for timeout, then check that the task has ended
 	assert!(!task_handle.is_finished());
 	tokio::time::sleep(CEREMONY_TIMEOUT_DURATION).await;
+	assert!(task_handle.is_finished());
+}
+
+#[tokio::test(start_paused = true)]
+async fn should_use_stage_timeout_from_request() {
+	const STAGE_TIMEOUT: Duration = Duration::from_secs(3);
+	assert!(STAGE_TIMEOUT < SIGNING_STAGE_TIMEOUT);
+
+	let (task_handle, (_message_sender, request_sender, _outcome_receiver)) =
+		spawn_signing_ceremony_runner();
+
+	let _outgoing_p2p_receiver =
+		send_signing_request_with_stage_timeout(request_sender, STAGE_TIMEOUT);
+
+	// Without any messages from other parties, the ceremony fails once the first two stages have
+	// timed out.
+	tokio::time::sleep(2 * STAGE_TIMEOUT - Duration::from_millis(50)).await;
+	assert!(!task_handle.is_finished());
+	tokio::time::sleep(Duration::from_millis(100)).await;
 	assert!(task_handle.is_finished());
 }

@@ -4,6 +4,10 @@ on:
     branches:
       - release/*
 
+concurrency:
+  group: ${{ github.ref }}-benchmarks-release
+  cancel-in-progress: true
+
 jobs:
   run-benchmarks-release:
     uses: ./.github/workflows/_27_benchmarks.yml

@@ -31,7 +31,8 @@ use cf_chains::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::{self, select_utxos_for_consolidation, select_utxos_from_pool},
-		AggKey, Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		AggKey, Bitcoin, BitcoinUtxoDiscardReason, BtcAmount, DiscardedBitcoinUtxo, Utxo, UtxoId,
+		BITCOIN_DUST_LIMIT, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	evm::{verify_evm_signature, Address as EvmAddress, Signature as EthereumSignature},
@@ -49,11 +50,13 @@ use cf_primitives::{
 		arb::Asset as ArbAsset, bsc::Asset as BscAsset, eth::Asset as EthAsset,
 		tron::Asset as TrxAsset,
 	},
-	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
+	Asset, AssetAmount, BlockNumber, BroadcastId, ChainflipNetwork, ForeignChain,
+	NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	elections::{authorise_voter, ElectionInstance, ElectionInstancesVoting},
-	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
+	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, FailedDepositRecovery,
+	FailedDepositRecoveryOutcome, FailedDepositReference, GetBitcoinFeeInfo, KeyProvider,
 	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
@@ -66,7 +69,7 @@ use frame_support::{
 };
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
 pub use pallet::*;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec, vec::Vec};
 
 mod benchmarking;
 mod benchmarking_types;
@@ -89,6 +92,21 @@ const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters 
 
 type SignatureNonce = u64;
 
+/// The maximum number of failed deposits that can be recovered in one call.
+pub const MAX_FAILED_DEPOSIT_RECOVERIES: u32 = 50;
+
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, Debug, PartialEq, Eq,
+)]
+pub struct FailedDepositRecoveryRequest<AccountId> {
+	/// The broker the failed deposit is attributed to.
+	pub broker: AccountId,
+	pub asset: Asset,
+	pub amount: AssetAmount,
+	/// Identifies the failed deposit on its chain, e.g. its transaction id.
+	pub reference: FailedDepositReference,
+}
+
 #[derive(
 	Encode,
 	Decode,
@@ -96,7 +114,7 @@ type SignatureNonce = u64;
 	MaxEncodedLen,
 	TypeInfo,
 	Clone,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEq,
 	Eq,
 	Default,
@@ -122,6 +140,8 @@ pub enum PalletConfigUpdate {
 }
 
 #[frame_support::pallet]
+// The `#[pallet::validate_unsigned]` deprecation warning expands to a unit `let` binding.
+#[expect(clippy::let_unit_value)]
 pub mod pallet {
 	use crate::submit_runtime_call::ChainflipExtrinsic;
 
@@ -131,7 +151,7 @@ pub mod pallet {
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::{
 		dispatch::{DispatchInfo, PostDispatchInfo},
-		sp_runtime::traits::{Dispatchable, TransactionExtension},
+		sp_runtime::traits::{Dispatchable, TransactionExtension, TxBaseImplication},
 		traits::OriginTrait,
 		DefaultNoBound,
 	};
@@ -200,12 +220,12 @@ pub mod pallet {
 		type TransactionPayments: TransactionExtension<<Self as Config>::RuntimeCall, Implicit = ()>;
 
 		/// Required as a workaround because TransactionPayments doesn't implement Default.
-		type GetTransactionPayments: Get<(
-			Self::TransactionPayments,
-			<<Self as pallet::Config>::TransactionPayments as TransactionExtension<
-				<Self as Config>::RuntimeCall,
-			>>::Val,
-		)>;
+		type GetTransactionPayments: Get<Self::TransactionPayments>;
+
+		/// Pays out failed deposits to the recovery accounts of the brokers they are attributed to.
+		type FailedDepositRecovery: FailedDepositRecovery<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -232,6 +252,8 @@ pub mod pallet {
 		/// Vote batching is disabled; vote through the per-instance
 		/// `pallet_cf_elections::Call::vote` extrinsic instead.
 		VoteBatchingDisabled,
+		/// The same failed deposit appears more than once in the batch.
+		DuplicateFailedDeposit,
 	}
 
 	#[pallet::pallet]
@@ -298,6 +320,11 @@ pub mod pallet {
 	#[pallet::storage]
 	/// The set of available UTXOs available in our Bitcoin Vault.
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
+
+	#[pallet::storage]
+	/// UTXOs removed from the available pool, retained for inspection and possible recovery.
+	pub type BitcoinDiscardedUtxos<T: Config> =
+		StorageMap<_, Twox64Concat, UtxoId, DiscardedBitcoinUtxo<BlockNumberFor<T>>, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn consolidation_parameters)]
@@ -516,6 +543,23 @@ pub mod pallet {
 		/// A configuration item for this pallet was updated by governance.
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
+		},
+		/// A failed deposit was paid out to the broker's recovery account.
+		FailedDepositRecovered {
+			broker: T::AccountId,
+			recovery_account: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+			outcome: FailedDepositRecoveryOutcome,
+			reference: FailedDepositReference,
+		},
+		/// A failed deposit could not be recovered. It can be retried.
+		FailedDepositRecoveryFailed {
+			broker: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+			reference: FailedDepositReference,
+			error: DispatchError,
 		},
 	}
 
@@ -788,19 +832,25 @@ pub mod pallet {
 				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
 			// Pre-dispatch fee processing
-			let (fee_processor, val) = T::GetTransactionPayments::get();
+			let fee_processor = T::GetTransactionPayments::get();
 			let dispatch_info = chainflip_extrinsic.call.get_dispatch_info();
 			let len = chainflip_extrinsic.call.encoded_size();
 			// TODO: move this and unsigned validation into transaction extension and/or new
 			// AuthorizeCall extension.
-			let pre_dispatch_info = fee_processor
-				.prepare(
-					val,
-					&OriginTrait::signed(signer_account.clone()),
+			// `prepare` only withdraws the fee that `validate` computed, so both must run here.
+			let (_, val, signer_origin) = fee_processor
+				.validate(
+					<T as Config>::RuntimeOrigin::signed(signer_account.clone()),
 					&chainflip_extrinsic.call,
 					&dispatch_info,
 					len,
+					(),
+					&TxBaseImplication(()),
+					TransactionSource::InBlock,
 				)
+				.map_err(|_e| Error::<T>::FailedToProcessFee)?;
+			let pre_dispatch_info = fee_processor
+				.prepare(val, &signer_origin, &chainflip_extrinsic.call, &dispatch_info, len)
 				.map_err(|_e| Error::<T>::FailedToProcessFee)?;
 
 			// Dispatch the inner call
@@ -941,6 +991,60 @@ pub mod pallet {
 					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
+			}
+
+			Ok(())
+		}
+
+		/// Pays out failed deposits to the recovery accounts of the brokers they are attributed
+		/// to: an egress to the recovery account's refund address if it has one and the amount
+		/// covers the egress fee, otherwise a credit to its free balance.
+		///
+		/// Each deposit is recovered independently. One that fails, e.g. because its broker has
+		/// no recovery account, doesn't affect the others, and can be retried.
+		///
+		/// Recoveries are not recorded, so Governance must not resubmit a deposit that has been
+		/// recovered. The batch is rejected if it contains the same deposit twice.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(16)]
+		#[pallet::weight(T::WeightInfo::recover_failed_deposits(requests.len() as u32))]
+		pub fn recover_failed_deposits(
+			origin: OriginFor<T>,
+			requests: BoundedVec<
+				FailedDepositRecoveryRequest<T::AccountId>,
+				ConstU32<MAX_FAILED_DEPOSIT_RECOVERIES>,
+			>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			let mut deposits = BTreeSet::new();
+			ensure!(
+				requests.iter().all(|FailedDepositRecoveryRequest { asset, reference, .. }| {
+					deposits.insert((ForeignChain::from(*asset), reference))
+				}),
+				Error::<T>::DuplicateFailedDeposit
+			);
+
+			for FailedDepositRecoveryRequest { broker, asset, amount, reference } in requests {
+				match T::FailedDepositRecovery::route_failed_deposit(&broker, asset, amount) {
+					Ok((recovery_account, outcome)) =>
+						Self::deposit_event(Event::<T>::FailedDepositRecovered {
+							broker,
+							recovery_account,
+							asset,
+							amount,
+							outcome,
+							reference,
+						}),
+					Err(error) => Self::deposit_event(Event::<T>::FailedDepositRecoveryFailed {
+						broker,
+						asset,
+						amount,
+						reference,
+						error,
+					}),
+				}
 			}
 
 			Ok(())
@@ -1123,6 +1227,34 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
+	fn filter_unusable_utxos(available_utxos: &mut Vec<Utxo>, aggkey: &AggKey) {
+		let discarded_at = frame_system::Pallet::<T>::block_number();
+		let mut stale_utxos = Vec::new();
+		available_utxos.retain(|utxo| {
+			let reason = if utxo.deposit_address.pubkey_x != aggkey.current &&
+				Some(utxo.deposit_address.pubkey_x) != aggkey.previous
+			{
+				BitcoinUtxoDiscardReason::StaleKey
+			} else if utxo.amount < BITCOIN_DUST_LIMIT {
+				BitcoinUtxoDiscardReason::BelowDustLimit
+			} else {
+				return true
+			};
+
+			log::warn!("Discarding Bitcoin UTXO {:?} (reason: {:?})", utxo, reason);
+			stale_utxos.push(utxo.clone());
+			BitcoinDiscardedUtxos::<T>::insert(
+				&utxo.id,
+				DiscardedBitcoinUtxo { utxo: utxo.clone(), reason, discarded_at },
+			);
+			false
+		});
+
+		if !stale_utxos.is_empty() {
+			Self::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale_utxos });
+		}
+	}
+
 	// Calculate the selection of utxos, return them and remove them from the list. The fee required
 	// to spend the input utxos are accounted for while selection. The fee required to include
 	// outputs and the minimum constant tx fee is incorporated by adding to the output amount. The
@@ -1134,54 +1266,21 @@ impl<T: Config> Pallet<T> {
 		let bitcoin_fee_info = T::BitcoinFeeInfo::bitcoin_fee_info();
 		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
 		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
+		let aggkey = T::BitcoinKeyProvider::active_epoch_key().map(|epoch_key| epoch_key.key)?;
 
-		fn filter_stale_utxos<T: Config>(available_utxos: &mut Vec<Utxo>, aggkey: &AggKey) {
-			if let Some(previous) = aggkey.previous {
-				let stale = available_utxos
-					.extract_if(.., |utxo| {
-						utxo.deposit_address.pubkey_x != aggkey.current &&
-							utxo.deposit_address.pubkey_x != previous
-					})
-					.collect::<Vec<_>>();
-				if !stale.is_empty() {
-					log::warn!("Stale utxos detected: {:?}", stale);
-					Pallet::<T>::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale });
-				}
-			}
-		}
+		// Selection failures preserve all remaining inputs. Cleanup persists unless an outer
+		// transaction (such as AllBatch) rolls it back.
+		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
+			Self::filter_unusable_utxos(available_utxos, &aggkey);
 
-		match utxo_selection_type {
-			UtxoSelectionType::SelectForConsolidation =>
-				BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
-					if let Some(cf_traits::EpochKey {
-						key: aggkey @ AggKey { previous, .. }, ..
-					}) = T::BitcoinKeyProvider::active_epoch_key()
-					{
-						filter_stale_utxos::<T>(available_utxos, &aggkey);
-
-						let selected_utxo = select_utxos_for_consolidation(
-							previous,
-							available_utxos,
-							&bitcoin_fee_info,
-							Self::consolidation_parameters(),
-						);
-
-						Self::consolidation_transaction_change_amount(
-							&selected_utxo[..],
-							&bitcoin_fee_info,
-						)
-						.map(|change_amount| (selected_utxo, change_amount))
-					} else {
-						None
-					}
-				}),
-			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
-				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
-					if let Some(cf_traits::EpochKey { key: aggkey, .. }) =
-						T::BitcoinKeyProvider::active_epoch_key()
-					{
-						filter_stale_utxos::<T>(available_utxos, &aggkey);
-					}
+			match utxo_selection_type {
+				UtxoSelectionType::SelectForConsolidation => select_utxos_for_consolidation(
+					aggkey.previous,
+					available_utxos,
+					&bitcoin_fee_info,
+					Self::consolidation_parameters(),
+				),
+				UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 					select_utxos_from_pool(
 						available_utxos,
 						&bitcoin_fee_info,
@@ -1190,39 +1289,15 @@ impl<T: Config> Pallet<T> {
 							min_fee_required_per_tx,
 						Some(Self::consolidation_parameters().consolidation_threshold),
 					)
-					.map_err(|error| {
+					.inspect_err(|error| {
 						log::warn!(
 							"Unable to select desired amount from available utxos. Error: {:?}",
 							error
 						);
-						error
 					})
-				})
-				.ok()
-				.map(|(selected_utxos, total_input_spendable_amount)| {
-					(
-						selected_utxos,
-						total_input_spendable_amount -
-							output_amount - number_of_outputs * fee_per_output_utxo -
-							min_fee_required_per_tx,
-					)
-				}),
-		}
-	}
-
-	fn consolidation_transaction_change_amount(
-		spendable_utxos: &[Utxo],
-		fee_info: &cf_chains::btc::BitcoinFeeInfo,
-	) -> Option<BtcAmount> {
-		if spendable_utxos.is_empty() {
-			return None
-		}
-
-		spendable_utxos.iter().map(|utxo| utxo.amount).sum::<BtcAmount>().checked_sub(
-			fee_info.fee_per_input_utxo() * spendable_utxos.len() as BtcAmount +
-				fee_info.min_fee_required_per_tx() +
-				fee_info.fee_per_output_utxo(),
-		)
+					.ok(),
+			}
+		})
 	}
 
 	pub fn get_sol_nonce_and_account() -> Option<DurableNonceAndAccount> {
@@ -1316,7 +1391,7 @@ impl<T: Config> Pallet<T> {
 				frame_system::Account::<T>::contains_key(&signer_account),
 				InvalidTransaction::BadSigner
 			);
-			T::GetTransactionPayments::get().0.validate(
+			T::GetTransactionPayments::get().validate(
 				OriginTrait::signed(signer_account.clone()),
 				inner_call,
 				&inner_call.get_dispatch_info(),

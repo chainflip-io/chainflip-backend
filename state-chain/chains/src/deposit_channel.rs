@@ -67,9 +67,10 @@ pub trait ChannelLifecycleHooks: Sized {
 		false
 	}
 
-	/// Returns Some(_) if the address can be re-used, otherwise None and the address is discarded.
-	fn maybe_recycle(self) -> Option<Self> {
-		None
+	/// Returns true if the address should be retained for reuse, or false if it should be
+	/// discarded. A retained channel that cannot fetch must wait for completion before reuse.
+	fn maybe_recycle(&self) -> bool {
+		false
 	}
 }
 

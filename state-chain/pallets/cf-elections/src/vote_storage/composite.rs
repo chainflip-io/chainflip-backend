@@ -118,6 +118,9 @@ macro_rules! generate_vote_storage_tuple_impls {
                     }
                 }
 
+                // SAFETY: `get_shared_data` should always return `None` for a `SharedDataHash` that does not correspond
+                // to the variant of the `VoteComponents` being passed in. If any other variant is returned, it will be
+                // treated as if the shared data was not provided.
                 fn components_into_authority_vote<GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>>(
                     vote_components: VoteComponents<Self>,
                     mut get_shared_data: GetSharedData,
@@ -136,10 +139,8 @@ macro_rules! generate_vote_storage_tuple_impls {
                                     |shared_data_hash| {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeSharedData::$t(shared_data)) => Ok(Some(shared_data)),
-                                            None => Ok(None),
-                                            // For when we have a composite of 1
-                                            #[allow(unreachable_patterns)]
-                                            _ => Err(CorruptStorageError::new())
+                                            // Not provided, or data of another variant (see above).
+                                            _ => Ok(None),
                                         }
                                     },
                                 )?.map(|(properties, authority_vote)| {
@@ -164,10 +165,8 @@ macro_rules! generate_vote_storage_tuple_impls {
                                     |shared_data_hash| {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeSharedData::$t(shared_data)) => Ok(Some(shared_data)),
-                                            None => Ok(None),
-                                            // For when we have a composite of 1
-                                            #[allow(unreachable_patterns)]
-                                            _ => Err(CorruptStorageError::new()),
+                                            // Not provided, or data of another variant (see above).
+                                            _ => Ok(None),
                                         }
                                     },
                                 )?.map(|(properties, authority_vote)| {
@@ -192,10 +191,8 @@ macro_rules! generate_vote_storage_tuple_impls {
                                     |shared_data_hash| {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeSharedData::$t(shared_data)) => Ok(Some(shared_data)),
-                                            None => Ok(None),
-                                            // For when we have a composite of 1
-                                            #[allow(unreachable_patterns)]
-                                            _ => Err(CorruptStorageError::new()),
+                                            // Not provided, or data of another variant (see above).
+                                            _ => Ok(None),
                                         }
                                     },
                                 )?.map(|(properties, authority_vote)| {

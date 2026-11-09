@@ -17,12 +17,16 @@ use crate::{
 	AuctionOutcome, Config, DelegationSnapshots, HistoricalAuthorities, HistoricalBonds, Pallet,
 	ValidatorToOperator,
 };
-use cf_primitives::EpochIndex;
+use cf_primitives::{EpochIndex, ONE_AS_BASIS_POINTS};
 use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
-	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill, Saturating},
+	sp_runtime::{
+		helpers_128bit::multiply_by_rational_with_rounding,
+		traits::{AtLeast32BitUnsigned, Zero},
+		Rounding, Saturating,
+	},
 	traits::IsType,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -38,6 +42,8 @@ pub const DEFAULT_MIN_OPERATOR_FEE: u32 = 1_500;
 pub const MAX_OPERATOR_FEE: u32 = 10_000;
 
 pub const MAX_VALIDATORS_PER_OPERATOR: usize = 20;
+
+pub const MAX_EXCEPTIONS_PER_OPERATOR: u32 = 1_000;
 
 pub enum AssociationToOperator {
 	Validator,
@@ -243,7 +249,7 @@ where
 		bond: Amount,
 	) -> impl Iterator<Item = (&Account, Amount)>
 	where
-		Amount: From<Bid> + AtLeast32BitUnsigned + Copy + Sum + From<u64>,
+		Amount: From<Bid> + AtLeast32BitUnsigned + Copy + Sum + Into<u128> + From<u128>,
 	{
 		let total_delegator_stake: Amount = self.total_delegator_bid().into();
 		let total_validator_stake: Amount = self.total_validator_bid().into();
@@ -251,27 +257,43 @@ where
 		// The validators' cut is based on their proportion of the current epoch's bond.
 		let scaled_bond = bond * Bid::from(self.validators.len() as u32).into();
 		let validators_cut = if total_validator_stake < scaled_bond {
-			Perquintill::from_rational(total_validator_stake, scaled_bond)
+			mul_rational_floor(total, total_validator_stake, scaled_bond)
 		} else {
-			Perquintill::one()
-		} * total;
+			total
+		};
 
-		let operator_share = Perquintill::from_rational(self.delegation_fee_bps as u64, 10_000u64);
-		let delegators_cut = (Perquintill::one() - operator_share) * (total - validators_cut);
+		let delegators_cut = mul_rational_floor(
+			total - validators_cut,
+			Amount::from(u128::from(
+				u32::from(ONE_AS_BASIS_POINTS).saturating_sub(self.delegation_fee_bps),
+			)),
+			Amount::from(u128::from(ONE_AS_BASIS_POINTS)),
+		);
 
 		let validator_cuts = self.validators.iter().map(move |(validator, individual_stake)| {
-			let share =
-				Perquintill::from_rational((*individual_stake).into(), total_validator_stake);
-			(validator.into_ref(), share * validators_cut)
+			(
+				validator.into_ref(),
+				mul_rational_floor(
+					validators_cut,
+					(*individual_stake).into(),
+					total_validator_stake,
+				),
+			)
 		});
 		let delegator_cuts = self.delegators.iter().map(move |(delegator, individual_stake)| {
 			// Note we need to use the *uncapped* total delegator stake here to determine shares.
-			let share =
-				Perquintill::from_rational((*individual_stake).into(), total_delegator_stake);
-			(delegator, share * delegators_cut)
+			(
+				delegator,
+				mul_rational_floor(
+					delegators_cut,
+					(*individual_stake).into(),
+					total_delegator_stake,
+				),
+			)
 		});
 
-		// Ensures that all cuts sum to the total amount.
+		// Every cut above rounds down, so the remainder is never negative and all cuts sum to
+		// the total amount.
 		let operator_cut = total
 			.saturating_sub(validator_cuts.clone().map(|(_, stake)| stake).sum::<Amount>())
 			.saturating_sub(delegator_cuts.clone().map(|(_, stake)| stake).sum::<Amount>());
@@ -347,6 +369,22 @@ impl<Account: Ord + Clone, Bid> DelegationSnapshot<Account, Bid> {
 	}
 }
 
+/// `amount * numerator / denominator`, rounded down. Zero if `denominator` is zero.
+fn mul_rational_floor<Amount: Into<u128> + From<u128> + Zero>(
+	amount: Amount,
+	numerator: Amount,
+	denominator: Amount,
+) -> Amount {
+	multiply_by_rational_with_rounding(
+		amount.into(),
+		numerator.into(),
+		denominator.into(),
+		Rounding::Down,
+	)
+	.map(Amount::from)
+	.unwrap_or_else(Zero::zero)
+}
+
 pub struct DelegatedRewardsDistribution<T>(PhantomData<T>);
 
 impl<T> RewardsDistribution for DelegatedRewardsDistribution<T>
@@ -369,8 +407,17 @@ where
 		if authorities_to_reward.is_empty() {
 			return;
 		}
-		let per_authority_amount = total_amount / (authorities_to_reward.len() as u32).into();
 		let bond = HistoricalBonds::<T>::get(epoch_index);
+		if bond.is_zero() {
+			// Without a bond the validator/delegator split is meaningless. Settling nothing leaves
+			// the funds in the reserve for the next distribution.
+			cf_runtime_utilities::log_or_panic!(
+				"No bond recorded for epoch {}; skipping reward distribution.",
+				epoch_index
+			);
+			return;
+		}
+		let per_authority_amount = total_amount / (authorities_to_reward.len() as u32).into();
 
 		// Snapshots are registered for *all* operators at auction resolution, including those
 		// whose pooled stake didn't clear the bond: their last remaining validator is never
@@ -444,16 +491,25 @@ pub fn distribute<T: Config>(
 	total: T::Amount,
 	mut settle: impl FnMut(&T::AccountId, T::Amount),
 ) {
-	use frame_support::sp_runtime::traits::Zero;
 	if total.is_zero() {
 		return;
 	}
 
 	if let Some(operator) = ValidatorToOperator::<T>::get(epoch_index, validator) {
 		if let Some(snapshot) = DelegationSnapshots::<T>::get(epoch_index, &operator) {
-			snapshot
-				.distribute(total, HistoricalBonds::<T>::get(epoch_index))
-				.for_each(|(account, amount)| settle(account, amount));
+			let bond = HistoricalBonds::<T>::get(epoch_index);
+			if bond.is_zero() {
+				settle(validator, total);
+				cf_runtime_utilities::log_or_panic!(
+					"No bond recorded for epoch {}. Settling directly with validator {:?}.",
+					epoch_index,
+					validator
+				);
+			} else {
+				snapshot
+					.distribute(total, bond)
+					.for_each(|(account, amount)| settle(account, amount));
+			}
 		} else {
 			settle(validator, total);
 			cf_runtime_utilities::log_or_panic!(
@@ -475,14 +531,23 @@ mod tests {
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
 	use proptest::{prelude::*, proptest};
 
+	/// Amounts in flipperinos. Sub-FLIP values get their own branch because a uniform range up to
+	/// `max_flip` would almost never generate them.
+	fn flipperinos(max_flip: u128) -> impl Strategy<Value = u128> {
+		prop_oneof![
+			1u128..FLIPPERINOS_PER_FLIP,
+			FLIPPERINOS_PER_FLIP..max_flip * FLIPPERINOS_PER_FLIP,
+		]
+	}
+
 	proptest! {
 		#[test]
 		fn distribute_always_sums_to_total(
-			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
-			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..100),
-			total_to_distribute in 1u128..10_000u128,
+			validator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..10),
+			delegator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..100),
+			total_to_distribute in flipperinos(10_000),
 			delegation_fee_bps in 2_000u32..10_000u32,
-			bond in 100_000u128..10_000_000u128,
+			bond in flipperinos(10_000_000),
 		) {
 			// Create a delegation snapshot
 			let operator_account = 1u64;
@@ -492,21 +557,20 @@ mod tests {
 				delegators: BTreeMap::new(),
 				delegation_fee_bps,
 			};
-			let total_to_distribute = total_to_distribute * FLIPPERINOS_PER_FLIP;
 
 			// Add validators
 			for (i, amount) in validator_amounts.iter().enumerate() {
-				snapshot.validators.insert(i as u64 + 100, *amount * FLIPPERINOS_PER_FLIP);
+				snapshot.validators.insert(i as u64 + 100, *amount);
 			}
 
 			// Add delegators
 			for (i, amount) in delegator_amounts.iter().enumerate() {
-				snapshot.delegators.insert(i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP);
+				snapshot.delegators.insert(i as u64 + 1000, *amount);
 			}
 
 			// Distribute the total amount
 			new_test_ext().execute_with(|| {
-				let distributions: Vec<_> = snapshot.distribute(total_to_distribute, bond * FLIPPERINOS_PER_FLIP).collect();
+				let distributions: Vec<_> = snapshot.distribute(total_to_distribute, bond).collect();
 				let sum: u128 = distributions.iter().map(|(_, amount)| *amount).sum();
 
 				// Property: The sum of all distributed amounts equals the input total
@@ -517,29 +581,75 @@ mod tests {
 				);
 
 				Ok(())
-			});
+			}).into_context()?;
 		}
 	}
 
 	proptest! {
 		#[test]
-		fn distribute_all_sums_to_total(
+		fn distribute_small_totals_sums_to_total(
 			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
-			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 0..50),
-			per_beneficiary_amount in 1u128..10_000u128,
+			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..100),
+			total_to_distribute in 1u128..1_000u128,
+			delegation_fee_bps in prop_oneof![Just(0u32), 0u32..=10_000u32],
+			bond in prop_oneof![1u128..1_000u128, 1u128..10_000_000u128],
+		) {
+			// Small totals, low fees and small bonds (so validators take the whole total) are
+			// where per-account rounding could exceed the operator's cut.
+			let snapshot = DelegationSnapshot::<ValidatorId, u128> {
+				operator: 1u64,
+				validators: validator_amounts.iter().enumerate()
+					.map(|(i, amount)| (i as u64 + 100, *amount))
+					.collect(),
+				delegators: delegator_amounts.iter().enumerate()
+					.map(|(i, amount)| (i as u64 + 1000, *amount))
+					.collect(),
+				delegation_fee_bps,
+			};
+
+			new_test_ext().execute_with(|| {
+				let sum: u128 =
+					snapshot.distribute(total_to_distribute, bond).map(|(_, amount)| amount).sum();
+				prop_assert_eq!(sum, total_to_distribute);
+				Ok(())
+			}).into_context()?;
+		}
+	}
+
+	#[test]
+	fn distribute_does_not_overshoot_small_totals() {
+		// Each validator's exact share is 2/3, which must round down rather than to nearest.
+		let snapshot = DelegationSnapshot::<ValidatorId, u128> {
+			operator: 1,
+			validators: BTreeMap::from_iter([(100, 1), (101, 1), (102, 1)]),
+			delegators: BTreeMap::new(),
+			delegation_fee_bps: 0,
+		};
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				snapshot.distribute(2u128, 1u128).collect::<BTreeMap<_, _>>(),
+				BTreeMap::from_iter([(&1, 2), (&100, 0), (&101, 0), (&102, 0)])
+			);
+		});
+	}
+
+	proptest! {
+		#[test]
+		fn distribute_all_sums_to_total(
+			validator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..10),
+			delegator_amounts in prop::collection::vec(flipperinos(1_000_000), 0..50),
+			per_beneficiary_amount in flipperinos(10_000),
 			delegation_fee_bps in 2_000u32..10_000u32,
-			bond in 100_000u128..10_000_000u128,
+			bond in flipperinos(10_000_000),
 		) {
 			const EPOCH: EpochIndex = 1;
 			let operator_account = 1u64;
-			let per_beneficiary_amount = per_beneficiary_amount * FLIPPERINOS_PER_FLIP;
-			let bond = bond * FLIPPERINOS_PER_FLIP;
 
 			let validators: BTreeMap<ValidatorId, u128> = validator_amounts.iter().enumerate()
-				.map(|(i, amount)| (i as u64 + 100, *amount * FLIPPERINOS_PER_FLIP))
+				.map(|(i, amount)| (i as u64 + 100, *amount))
 				.collect();
 			let delegators: BTreeMap<ValidatorId, u128> = delegator_amounts.iter().enumerate()
-				.map(|(i, amount)| (i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP))
+				.map(|(i, amount)| (i as u64 + 1000, *amount))
 				.collect();
 			// This proptest covers the all-in case: the authority set is exactly this operator's
 			// snapshot validators, so distribute_all routes the whole total through its pool.
@@ -580,7 +690,7 @@ mod tests {
 				);
 
 				Ok(())
-			});
+			}).into_context()?;
 		}
 	}
 
@@ -623,7 +733,7 @@ mod tests {
 				}
 
 				Ok(())
-			});
+			}).into_context()?;
 		}
 	}
 
