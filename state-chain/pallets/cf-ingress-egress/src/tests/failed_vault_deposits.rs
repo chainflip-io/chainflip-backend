@@ -18,11 +18,22 @@ fn failed_eth(amount: u128, broker_id: Option<u64>) -> VaultDepositWitness<Test,
 	VaultDepositWitness::Failed { deposit, broker_id }
 }
 
+/// Ethereum CCMs can't carry additional data, so refund parameters with this metadata are invalid.
+fn invalid_refund_ccm() -> CcmChannelMetadataUnchecked {
+	CcmChannelMetadataUnchecked {
+		message: Default::default(),
+		gas_budget: 0,
+		ccm_additional_data: vec![0].try_into().unwrap(),
+	}
+}
+
 fn unrefundable_eth(amount: u128, broker_id: Option<u64>) -> VaultDepositWitness<Test, Instance1> {
 	let mut witness = eth_vault_deposit_witness();
-	witness.deposit_mut().deposit_amount = amount;
+	let deposit = witness.deposit_mut();
+	deposit.deposit_amount = amount;
+	deposit.deposit_details = DepositDetails { tx_hashes: Some(vec![deposit.tx_id]) };
 	let swap = witness.swap_mut().unwrap();
-	swap.refund_params.refund_address = Ethereum::BURN_ADDRESS;
+	swap.refund_params.refund_ccm_metadata = Some(invalid_refund_ccm());
 	swap.broker_fee = broker_id.map(|account| Beneficiary { account, bps: 0 });
 	witness
 }
@@ -144,6 +155,47 @@ fn unavailable_attribution_or_recovery_queues_exact_remaining_liability() {
 }
 
 #[test]
+fn rejected_deposits_are_queued_instead_of_recovered() {
+	// The screening broker screens every deposit, a broker only its own.
+	for (reporter, broker) in
+		[(WHITELISTED_BROKER, None), (WHITELISTED_BROKER, Some(BROKER)), (BROKER, Some(BROKER))]
+	{
+		for witness in [failed_eth(1_000, broker), unrefundable_eth(1_000, broker)] {
+			new_test_ext().execute_with(|| {
+				crate::RejectionDelayBlocks::<Test, Instance1>::put(5);
+				ChainTracker::<Ethereum>::set_fee(100);
+				MockBrokerRecoveryApi::link(BROKER, RECOVERY_LP);
+				assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
+					OriginTrait::signed(reporter),
+					witness.deposit().tx_id,
+				));
+				submit(witness.clone());
+
+				let entry = FailedVaultDeposits::<Test, Instance1>::iter_values().next().unwrap();
+				assert_eq!(entry.cause, FailedVaultDepositCause::TransactionRejected);
+				assert_eq!(entry.deposit.broker_id, broker);
+				assert_eq!(entry.deposit.remaining_amount, 900);
+				assert_eq!(MockBalance::get_balance(&RECOVERY_LP, Asset::Eth), 0);
+				assert!(crate::ScheduledTransactionsForRejection::<Test, Instance1>::iter()
+					.next()
+					.is_none());
+				assert_no_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::FailedDepositRecovered { .. })
+				);
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {
+						action: DepositAction::Queued { .. },
+						..
+					})
+				);
+			});
+		}
+	}
+}
+
+#[test]
 fn decoded_unrefundable_swap_recovers_to_the_lp() {
 	use cf_traits::{mocks::balance_api::MockRefundAddressRegistry, RefundAddressRegistry};
 	for egress in [false, true] {
@@ -244,7 +296,7 @@ fn distinct_evm_deposits_in_one_transaction_can_be_recovered_independently() {
 		submit(first);
 		submit(second);
 		let mut decoded = eth_vault_deposit_witness();
-		decoded.swap_mut().unwrap().refund_params.refund_address = Ethereum::BURN_ADDRESS;
+		decoded.swap_mut().unwrap().refund_params.refund_ccm_metadata = Some(invalid_refund_ccm());
 		submit(decoded.clone());
 		decoded.swap_mut().unwrap().boost_fee = 5;
 		submit(decoded);
@@ -272,7 +324,7 @@ fn distinct_evm_deposits_in_one_transaction_can_be_recovered_independently() {
 #[test]
 fn failed_and_unrefundable_witnesses_never_enter_boosting() {
 	let mut unrefundable = eth_vault_deposit_witness();
-	unrefundable.swap_mut().unwrap().refund_params.refund_address = Ethereum::BURN_ADDRESS;
+	unrefundable.swap_mut().unwrap().refund_params.refund_ccm_metadata = Some(invalid_refund_ccm());
 	unrefundable.swap_mut().unwrap().boost_fee = 5;
 	for witness in [failed_eth(1_000, Some(BROKER)), unrefundable] {
 		new_test_ext().execute_with(|| {
@@ -310,26 +362,28 @@ fn minimum_and_fee_exhaustion_do_not_create_liabilities() {
 }
 
 #[test]
-fn screening_does_not_consume_reports_or_prevent_queueing() {
+fn failed_deposits_consume_reports_like_other_deposits() {
 	new_test_ext().execute_with(|| {
 		let witness = failed_eth(1_000, Some(BROKER));
-		let status = crate::TransactionRejectionStatus { prewitnessed: false, expires_at: 100 };
+		let tx_id = witness.deposit().tx_id;
 		crate::TransactionsMarkedForRejection::<Test, Instance1>::insert(
 			BROKER,
-			witness.deposit().tx_id,
-			&status,
+			tx_id,
+			crate::TransactionRejectionStatus { prewitnessed: false, expires_at: 100 },
 		);
-		submit(witness.clone());
+		submit(witness);
 		assert_eq!(queue_count(), 1);
 		assert_eq!(
-			crate::TransactionsMarkedForRejection::<Test, Instance1>::get(
-				BROKER,
-				witness.deposit().tx_id
-			),
-			Some(status)
+			crate::TransactionsMarkedForRejection::<Test, Instance1>::get(BROKER, tx_id),
+			Some(crate::TransactionRejectionStatus { prewitnessed: false, expires_at: 0 })
 		);
-		assert!(crate::ScheduledTransactionsForRejection::<Test, Instance1>::get().is_empty());
-		assert!(crate::ReportExpiresAt::<Test, Instance1>::iter().next().is_none());
+		assert_eq!(
+			crate::ReportExpiresAt::<Test, Instance1>::get(System::block_number() + 1),
+			vec![(BROKER, tx_id)]
+		);
+		assert!(crate::ScheduledTransactionsForRejection::<Test, Instance1>::iter()
+			.next()
+			.is_none());
 	});
 }
 
@@ -394,7 +448,7 @@ fn uneconomic_user_refund_preserves_its_existing_policy() {
 			witness.deposit_mut().deposit_amount = 150;
 			let swap = witness.swap_mut().unwrap();
 			// Refund instructions pass validation, while the output address selects a refund.
-			swap.destination_address = EncodedAddress::Btc(vec![]);
+			swap.destination_address = EncodedAddress::Btc(Default::default());
 			if ccm {
 				swap.refund_params.refund_ccm_metadata = Some(CcmChannelMetadataUnchecked {
 					message: bounded_vec![1],
@@ -461,32 +515,76 @@ fn boosted_swap_still_settles_if_broker_validation_changes() {
 }
 
 #[test]
-fn decoded_unrefundable_deposit_leaves_screening_for_a_valid_deposit_in_the_same_tx() {
+fn a_marked_tx_rejects_both_unrefundable_and_valid_deposits() {
 	new_test_ext().execute_with(|| {
+		crate::RejectionDelayBlocks::<Test, Instance1>::put(5);
 		let mut witness = eth_vault_deposit_witness();
 		witness.deposit_mut().deposit_details.tx_hashes = Some(vec![EvmHash::default()]);
-		let status = crate::TransactionRejectionStatus { prewitnessed: false, expires_at: 100 };
 		crate::TransactionsMarkedForRejection::<Test, Instance1>::insert(
 			BROKER,
 			EvmHash::default(),
-			&status,
+			crate::TransactionRejectionStatus { prewitnessed: false, expires_at: 100 },
 		);
 		let mut unrefundable = witness.clone();
-		unrefundable.swap_mut().unwrap().refund_params.refund_address = Ethereum::BURN_ADDRESS;
+		unrefundable.swap_mut().unwrap().refund_params.refund_ccm_metadata =
+			Some(invalid_refund_ccm());
 		submit(unrefundable);
-		assert_eq!(queue_count(), 1);
 		assert_eq!(
-			crate::TransactionsMarkedForRejection::<Test, Instance1>::get(
-				BROKER,
-				EvmHash::default()
-			),
-			Some(status)
+			FailedVaultDeposits::<Test, Instance1>::iter_values().next().unwrap().cause,
+			FailedVaultDepositCause::TransactionRejected
 		);
+		// The report stays active for the rest of the block, so the valid deposit is rejected too.
 		submit(witness);
-		assert_eq!(crate::ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+		assert_eq!(
+			crate::ScheduledTransactionsForRejection::<Test, Instance1>::get(
+				System::block_number() + crate::RejectionDelayBlocks::<Test, Instance1>::get()
+			)
+			.len(),
+			1
+		);
 		assert_eq!(queue_count(), 1);
 		assert_eq!(finalised_count(), 1);
 	});
+}
+
+#[test]
+fn screened_vault_refunds_wait_for_the_rejection_delay() {
+	for (configured_delay, effective_delay) in [(0, 1), (1, 1), (5, 5)] {
+		new_test_ext().execute_with(|| {
+			crate::RejectionDelayBlocks::<Test, Instance1>::put(configured_delay);
+			let mut witness = eth_vault_deposit_witness();
+			let tx_id = witness.deposit().tx_id;
+			witness.deposit_mut().deposit_details.tx_hashes = Some(vec![tx_id]);
+			assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+			submit(witness);
+
+			let rejection_block = System::block_number() + effective_delay;
+			assert_eq!(
+				crate::ScheduledTransactionsForRejection::<Test, Instance1>::iter_keys()
+					.collect::<Vec<_>>(),
+				vec![rejection_block]
+			);
+			EthereumIngressEgress::on_finalize(rejection_block - 1);
+			assert!(MockEgressBroadcasterEth::get_pending_api_calls().is_empty());
+			assert_eq!(
+				crate::ScheduledTransactionsForRejection::<Test, Instance1>::get(rejection_block)
+					.len(),
+				1
+			);
+
+			EthereumIngressEgress::on_finalize(rejection_block);
+			assert!(crate::ScheduledTransactionsForRejection::<Test, Instance1>::iter()
+				.next()
+				.is_none());
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::EthereumIngressEgress(Event::TransactionRejectedByBroker { .. })
+			);
+		});
+	}
 }
 
 /// Only deposits without a usable refund address go to the broker; a marked deposit that can be
@@ -494,10 +592,11 @@ fn decoded_unrefundable_deposit_leaves_screening_for_a_valid_deposit_in_the_same
 #[test]
 fn marked_refundable_deposits_are_rejected_even_with_a_recovery_account() {
 	let mut refund_action = eth_vault_deposit_witness();
-	refund_action.swap_mut().unwrap().destination_address = EncodedAddress::Btc(vec![]);
+	refund_action.swap_mut().unwrap().destination_address = EncodedAddress::Btc(Default::default());
 	for marked_by in [BROKER, SCREENING_ID] {
 		for witness in [eth_vault_deposit_witness(), refund_action.clone()] {
 			new_test_ext().execute_with(|| {
+				crate::RejectionDelayBlocks::<Test, Instance1>::put(5);
 				MockBrokerRecoveryApi::link(BROKER, RECOVERY_LP);
 				let mut witness = witness.clone();
 				let tx_id = witness.deposit().tx_id;
@@ -511,7 +610,9 @@ fn marked_refundable_deposits_are_rejected_even_with_a_recovery_account() {
 
 				submit(witness);
 
-				let rejections = crate::ScheduledTransactionsForRejection::<Test, Instance1>::get();
+				let rejections = crate::ScheduledTransactionsForRejection::<Test, Instance1>::get(
+					System::block_number() + crate::RejectionDelayBlocks::<Test, Instance1>::get(),
+				);
 				assert_eq!(rejections.len(), 1);
 				assert_eq!(
 					rejections[0].refund_address,

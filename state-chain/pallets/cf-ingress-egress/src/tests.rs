@@ -4773,7 +4773,7 @@ fn btc_vault_swap_with_non_standard_refund_address_is_unrefundable() {
 			[FetchOrTransfer::Transfer { destination_address: ScriptPubkey::P2WPKH(address), .. }]
 				if *address == [2; 20]
 		));
-		assert!(ScheduledTransactionsForRejection::<Test, Instance2>::get().is_empty());
+		assert!(ScheduledTransactionsForRejection::<Test, Instance2>::iter().next().is_none());
 		assert!(FailedVaultDeposits::<Test, Instance2>::iter_keys().next().is_none());
 		assert_no_matching_event!(
 			Test,

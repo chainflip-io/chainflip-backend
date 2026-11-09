@@ -7,16 +7,19 @@ use frame_support::Hashable;
 /// Identifies the complete witnessed deposit, including distinct deposits in one transaction.
 pub type FailedVaultDepositId = [u8; 32];
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum FailedVaultDepositCause {
 	UnknownBroker,
 	RecoveryFailed(DispatchError),
 	Unrefundable,
+	/// Reported for rejection. Failed deposits have no trusted refund address, so the deposit
+	/// can't be returned automatically.
+	TransactionRejected,
 }
 
 #[derive(
 	CloneNoBound,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEqNoBound,
 	EqNoBound,
 	Encode,
@@ -38,7 +41,7 @@ pub struct FailedVaultDepositInfo<T: Config<I>, I: 'static> {
 
 #[derive(
 	CloneNoBound,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEqNoBound,
 	EqNoBound,
 	Encode,
@@ -68,6 +71,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			facts.deposit_amount >= MinimumDeposit::<T, I>::get(facts.input_asset),
 			DepositFailedReason::BelowMinimumDeposit
 		);
+		let rejected = Self::is_marked_for_rejection(
+			&facts.deposit_details,
+			witness.broker_id(),
+			facts.deposit_address.as_ref(),
+		);
 
 		T::DepositHandler::on_deposit_made(facts.deposit_details.clone());
 		let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
@@ -85,7 +93,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ingress_fee: fees_withheld,
 			remaining_amount: amount_after_fees,
 		};
-		let action = Self::recover_or_queue_failed_vault_deposit(witness, deposit);
+		let action = if rejected {
+			Self::queue_failed_vault_deposit(
+				witness,
+				deposit,
+				FailedVaultDepositCause::TransactionRejected,
+			)
+		} else {
+			Self::recover_or_queue_failed_vault_deposit(witness, deposit)
+		};
 		Self::deposit_event(Event::DepositFinalised {
 			deposit_address: facts.deposit_address.clone(),
 			asset: facts.input_asset,
@@ -129,6 +145,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				VaultDepositWitness::Failed { .. } => FailedVaultDepositCause::UnknownBroker,
 			}
 		};
+		Self::queue_failed_vault_deposit(witness, deposit, cause)
+	}
+
+	fn queue_failed_vault_deposit(
+		witness: &VaultDepositWitness<T, I>,
+		deposit: FailedVaultDepositInfo<T, I>,
+		cause: FailedVaultDepositCause,
+	) -> DepositAction<T, I> {
 		let queue_id = Self::failed_vault_deposit_id(witness);
 		let entry = FailedVaultDeposit { deposit, cause };
 		// Elections deduplicate witnesses before deposit accounting.

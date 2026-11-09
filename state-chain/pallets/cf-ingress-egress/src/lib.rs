@@ -473,7 +473,7 @@ pub mod pallet {
 
 	#[derive(
 		CloneNoBound,
-		RuntimeDebugNoBound,
+		DebugNoBound,
 		PartialEqNoBound,
 		EqNoBound,
 		Encode,
@@ -510,7 +510,7 @@ pub mod pallet {
 	#[derive_where::derive_where(Ord, PartialOrd;)]
 	#[derive(
 		CloneNoBound,
-		RuntimeDebugNoBound,
+		DebugNoBound,
 		PartialEqNoBound,
 		EqNoBound,
 		Encode,
@@ -3080,6 +3080,66 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	/// Whether the deposit was reported for rejection by the screening broker, by its own broker,
+	/// or through its deposit channel. Matching reports are consumed.
+	///
+	/// The screening broker is checked even when the deposit has no broker, so that every deposit
+	/// is screened.
+	fn is_marked_for_rejection(
+		deposit_details: &<T::TargetChain as Chain>::DepositDetails,
+		broker_id: Option<&T::AccountId>,
+		deposit_address: Option<&TargetChainAccount<T, I>>,
+	) -> bool {
+		if !T::AllowTransactionReports::get() {
+			return false;
+		}
+
+		let transaction_marked = deposit_details.deposit_ids().is_some_and(|tx_ids| {
+			!tx_ids
+				.iter()
+				.filter_map(|tx_id| {
+					// The transaction may have been marked by a whitelisted broker (screening_id)
+					// or, by the channel owner if the owner is not whitelisted.
+					let check_rejection = |id: &AccountIdFor<T>| -> bool {
+						TransactionsMarkedForRejection::<T, I>::mutate(id, tx_id, |status| {
+							match status {
+								Some(status) => {
+									// If expires_at == 0 we know we've already rejected a deposit
+									// for the same tx_id, avoid creating a duplicate expiry entry
+									// for it.
+									if !status.expires_at.is_zero() {
+										ReportExpiresAt::<T, I>::append(
+											<frame_system::Pallet<T>>::block_number()
+												.saturating_add(One::one()),
+											(id.clone(), tx_id),
+										);
+										status.expires_at = Zero::zero();
+									}
+									true
+								},
+								None => false,
+							}
+						})
+					};
+
+					let screening_broker_found = check_rejection(&T::ScreeningBrokerId::get());
+					let broker_found = broker_id.is_some_and(check_rejection);
+
+					(screening_broker_found || broker_found).then_some(())
+				})
+				// Collect to ensure that the iterator is fully consumed.
+				.collect::<Vec<_>>()
+				.is_empty()
+		});
+
+		let channel_marked = deposit_address.is_some_and(|deposit_address| {
+			DepositChannelLookup::<T, I>::get(deposit_address)
+				.is_some_and(|deposit_channel| deposit_channel.is_marked_for_rejection)
+		});
+
+		transaction_marked || channel_marked
+	}
+
 	fn process_full_witness_deposit_inner(
 		deposit_address: Option<TargetChainAccount<T, I>>,
 		asset: TargetChainAsset<T, I>,
@@ -3099,102 +3159,43 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// TODO: track these funds somewhere, for example add them to the withheld fees.
 				return Err(DepositFailedReason::BelowMinimumDeposit);
 			}
-			if T::AllowTransactionReports::get() {
-				let is_marked_by_broker_or_screening_id = {
-					let transaction_marked = if let (Some(tx_ids), Some(broker_id)) =
-						(deposit_details.deposit_ids(), origin.broker_id())
-					{
-						!tx_ids
-							.iter()
-							.filter_map(|tx_id| {
-								// The transaction may have been marked by a whitelisted broker
-								// (screening_id) or, by the channel owner if the owner is not
-								// whitelisted.
-								let screening_id = T::ScreeningBrokerId::get();
-								let check_rejection = |id: &AccountIdFor<T>| -> bool {
-									TransactionsMarkedForRejection::<T, I>::mutate(
-										id,
-										tx_id,
-										|status| match status {
-											Some(status) => {
-												// If expires_at == 0 we know we've already rejected
-												// a deposit for the same tx_id
-												// avoid creating a duplicate expiry entry for it
-												if !status.expires_at.is_zero() {
-													ReportExpiresAt::<T, I>::append(
-														<frame_system::Pallet<T>>::block_number()
-															.saturating_add(One::one()),
-														(id.clone(), tx_id),
-													);
-													status.expires_at = Zero::zero();
-												}
-												true
-											},
-											None => false,
-										},
-									)
-								};
-
-								let screening_broker_found = check_rejection(&screening_id);
-								let broker_found = check_rejection(broker_id);
-
-								if screening_broker_found || broker_found {
-									return Some(())
-								}
-								None
-							})
-							// Collect to ensure that the iterator is fully consumed.
-							.collect::<Vec<_>>()
-							.is_empty()
-					} else {
-						false
-					};
-
-					let channel_marked = if let Some(ref deposit_address) = deposit_address {
-						DepositChannelLookup::<T, I>::get(deposit_address)
-							.is_some_and(|deposit_channel| deposit_channel.is_marked_for_rejection)
-					} else {
-						false
-					};
-
-					transaction_marked || channel_marked
+			if Self::is_marked_for_rejection(
+				&deposit_details,
+				origin.broker_id(),
+				deposit_address.as_ref(),
+			) {
+				let (refund_address, refund_ccm_metadata) = match &action {
+					ChannelAction::Swap { refund_params, .. } => (
+						refund_params.refund_address.clone(),
+						refund_params.refund_ccm_metadata.clone(),
+					),
+					ChannelAction::LiquidityProvision { refund_address, .. } =>
+						(refund_address.clone(), None),
+					ChannelAction::Refund { refund_address, refund_ccm_metadata, .. } => (
+						refund_address.clone().into_foreign_chain_address(),
+						refund_ccm_metadata.clone(),
+					),
+					ChannelAction::Unrefundable => return Err(DepositFailedReason::Unrefundable),
 				};
 
-				if is_marked_by_broker_or_screening_id {
-					let (refund_address, refund_ccm_metadata) = match &action {
-						ChannelAction::Swap { refund_params, .. } => (
-							refund_params.refund_address.clone(),
-							refund_params.refund_ccm_metadata.clone(),
-						),
-						ChannelAction::LiquidityProvision { refund_address, .. } =>
-							(refund_address.clone(), None),
-						ChannelAction::Refund { refund_address, refund_ccm_metadata, .. } => (
-							refund_address.clone().into_foreign_chain_address(),
-							refund_ccm_metadata.clone(),
-						),
-						ChannelAction::Unrefundable =>
-							return Err(DepositFailedReason::Unrefundable),
-					};
+				let rejection_delay_blocks = RejectionDelayBlocks::<T, I>::get()
+					.max(MIN_REJECTION_DELAY_BLOCKS.into())
+					.min(MAX_REJECTION_DELAY_BLOCKS.into());
 
-					let rejection_delay_blocks = RejectionDelayBlocks::<T, I>::get()
-						.max(MIN_REJECTION_DELAY_BLOCKS.into())
-						.min(MAX_REJECTION_DELAY_BLOCKS.into());
+				ScheduledTransactionsForRejection::<T, I>::append(
+					frame_system::Pallet::<T>::block_number()
+						.saturating_add(rejection_delay_blocks),
+					TransactionRejectionDetails {
+						deposit_address: deposit_address.clone(),
+						refund_address,
+						amount: deposit_amount,
+						asset,
+						deposit_details: deposit_details.clone(),
+						refund_ccm_metadata,
+					},
+				);
 
-					ScheduledTransactionsForRejection::<T, I>::append(
-						frame_system::Pallet::<T>::block_number()
-							.saturating_add(rejection_delay_blocks),
-						TransactionRejectionDetails {
-							deposit_address: deposit_address.clone(),
-							refund_address,
-							amount: deposit_amount,
-							asset,
-							deposit_details: deposit_details.clone(),
-							refund_ccm_metadata,
-						},
-					);
-
-					return Err(DepositFailedReason::TransactionRejectedByBroker);
-				}
+				return Err(DepositFailedReason::TransactionRejectedByBroker);
 			}
 		}
 
@@ -3355,10 +3356,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// ------ refund parameters -----
 
 		let refund_address = refund_params.refund_address.clone();
-		if refund_address == <TargetChainOf<T, I> as Chain>::BURN_ADDRESS {
-			return ChannelAction::Unrefundable;
-		}
-
 		let Ok(checked_refund_params) =
 			refund_params.map_refund_address_to_foreign_chain_address().into_checked(
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
@@ -3492,8 +3489,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					if matches!(outcome, FullWitnessDepositOutcome::BoostConsumed) {
 						BoostedVaultTransactions::<T, I>::remove(&tx_id);
 
-						// The transaction is finalised and can no longer be lost, so drop its timeout
-						// entry.
+						// The transaction is finalised and can no longer be lost, so drop its
+						// timeout entry.
 						BoostedVaultTransactionTimeout::<T, I>::mutate(|timeout_queue| {
 							timeout_queue.remove(&tx_id);
 						});

@@ -235,10 +235,6 @@ fn failed_and_unrefundable_btc_deposits_credit_the_lp_and_register_the_utxo() {
 					RuntimeOrigin::signed(BROKER),
 					RECOVERY_ACCOUNT
 				));
-				assert_ok!(BitcoinIngressEgress::mark_transaction_for_rejection(
-					RuntimeOrigin::signed(BROKER),
-					witness.deposit().tx_id
-				));
 				let utxo = witness.deposit().deposit_details.clone();
 				let mut expected_utxos =
 					pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
@@ -273,6 +269,45 @@ fn failed_and_unrefundable_btc_deposits_credit_the_lp_and_register_the_utxo() {
 				assert!(FailedVaultDeposits::<Runtime, BitcoinInstance>::iter_keys()
 					.next()
 					.is_none());
+				assert_eq!(
+					pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get(),
+					expected_utxos
+				);
+			});
+	}
+}
+
+#[test]
+fn rejected_btc_deposits_are_queued_and_register_the_utxo() {
+	use pallet_cf_ingress_egress::{FailedVaultDepositCause, FailedVaultDeposits};
+	use state_chain_runtime::{BitcoinIngressEgress, BitcoinInstance};
+	for witness in [failed_btc_witness(), unrefundable_btc_witness()] {
+		genesis::with_test_defaults()
+			.with_additional_accounts(&[
+				(BROKER, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+				(RECOVERY_ACCOUNT, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			])
+			.build()
+			.execute_with(|| {
+				assert_ok!(Swapping::link_recovery_account(
+					RuntimeOrigin::signed(BROKER),
+					RECOVERY_ACCOUNT
+				));
+				assert_ok!(BitcoinIngressEgress::mark_transaction_for_rejection(
+					RuntimeOrigin::signed(BROKER),
+					witness.deposit().tx_id
+				));
+				let mut expected_utxos =
+					pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
+				expected_utxos.push(witness.deposit().deposit_details.clone());
+
+				BitcoinIngressEgress::process_vault_swap_request_full_witness_inner(100, witness);
+
+				let entry =
+					FailedVaultDeposits::<Runtime, BitcoinInstance>::iter_values().next().unwrap();
+				assert_eq!(entry.cause, FailedVaultDepositCause::TransactionRejected);
+				assert_eq!(entry.deposit.broker_id, Some(BROKER));
+				assert_eq!(FreeBalances::<Runtime>::get(&RECOVERY_ACCOUNT, Asset::Btc), 0);
 				assert_eq!(
 					pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get(),
 					expected_utxos
