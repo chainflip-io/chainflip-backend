@@ -52,6 +52,14 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 			settle(beneficiary, per_beneficiary_amount);
 		}
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark_payees(epoch_index: EpochIndex, payee_count: u32) {
+		Self::set_beneficiaries(
+			epoch_index,
+			(0..payee_count).map(|i| frame_benchmarking::account("payee", i, 0)).collect(),
+		);
+	}
 }
 
 impl<T: Chainflip> MockRewardsDistribution<T> {

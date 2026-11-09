@@ -451,6 +451,32 @@ where
 			settle(authority, per_authority_amount);
 		}
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark_payees(epoch_index: EpochIndex, payee_count: u32) {
+		use frame_benchmarking::account;
+
+		// The authority set is capped, but anyone can delegate, so the worst case is a single pool
+		// whose payees are its operator, one authority and as many delegators as needed.
+		let operator: T::AccountId = account("operator", 0, 0);
+		let validator: T::AccountId = account("validator", 0, 0);
+		HistoricalAuthorities::<T>::insert(
+			epoch_index,
+			vec![crate::ValidatorIdOf::<T>::from(validator.clone())],
+		);
+		// A bond above the validator's stake leaves most of the rewards to the delegators, so
+		// every payee receives a non-zero amount.
+		HistoricalBonds::<T>::insert(epoch_index, T::Amount::from(1_000u32));
+		DelegationSnapshot {
+			operator,
+			validators: BTreeMap::from([(validator, 1u32.into())]),
+			delegators: (0..payee_count.saturating_sub(2))
+				.map(|i| (account("delegator", i, 0), 1u32.into()))
+				.collect(),
+			delegation_fee_bps: DEFAULT_MIN_OPERATOR_FEE,
+		}
+		.register_for_epoch::<T>(epoch_index);
+	}
 }
 
 pub struct DelegationSlasher<T, S>(PhantomData<(T, S)>);

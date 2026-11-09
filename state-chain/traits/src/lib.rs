@@ -370,6 +370,11 @@ pub trait RewardsDistribution {
 		total_amount: Self::Balance,
 		settle: impl FnMut(&Self::AccountId, Self::Balance),
 	);
+
+	/// Registers `payee_count` reward recipients for `epoch_index`, arranged to make
+	/// [Self::distribute_all] as expensive as possible.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark_payees(epoch_index: EpochIndex, payee_count: u32);
 }
 
 /// A representation of the current network state for this heartbeat interval.
