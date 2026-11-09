@@ -2,6 +2,14 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.3.6] - 2026-11-09
+
+### Fixes
+
+- Get `cf_supported_assets` from the runtime, so a node upgraded ahead of the runtime doesn't advertise assets the runtime doesn't support yet ([#7093](https://github.com/chainflip-io/chainflip-backend/issues/7093))
+- Value in-flight liquidations per loan as if settled, so the liquidation fee no longer depends on the order the liquidation swaps execute in ([#7065](https://github.com/chainflip-io/chainflip-backend/issues/7065))
+- Don't let the finalized-head watcher block scope exit, which made `chainflip-cli` commands hang after completing ([#7088](https://github.com/chainflip-io/chainflip-backend/issues/7088))
+
 ## [2.3.5] - 2026-11-05
 
 ### Features
