@@ -39,3 +39,34 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		AssetBalances::trigger_reconciliation();
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use crate::{configs::BlockWeights, Runtime};
+	use pallet_cf_flip::WeightInfo;
+
+	/// Payees that one epoch's reward distribution must be able to settle within a block. There
+	/// are about 400 today, but anyone can add delegators for the 6 FLIP minimum funding.
+	///
+	/// The benchmarked limit is about 31,000 payees (~64µs each, mostly the account write). This
+	/// sits below it as an early warning: if it fails, refactor the distribution before the real
+	/// limit is reached.
+	const MIN_PAYEES_PER_BLOCK: u32 = 25_000;
+
+	// The session pallet charges a full block for the epoch transition however long it takes, so
+	// nothing else catches the distribution outgrowing a block.
+	#[test]
+	fn reward_distribution_fits_in_a_block() {
+		let weight =
+			<Runtime as pallet_cf_flip::Config>::WeightInfo::trigger_flip_reward_distribution(
+				MIN_PAYEES_PER_BLOCK,
+			);
+		let max_block = BlockWeights::get().max_block;
+		assert!(
+			weight.all_lte(max_block),
+			"Distributing rewards to {MIN_PAYEES_PER_BLOCK} payees ({weight:?}) no longer fits in a \
+			 block ({max_block:?}). Reduce the per-payee cost of `trigger_flip_reward_distribution`, \
+			 or limit how many payees one distribution settles."
+		);
+	}
+}
