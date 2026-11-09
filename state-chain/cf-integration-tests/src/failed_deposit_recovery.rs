@@ -195,7 +195,9 @@ fn failed_btc_witness(
 
 fn unrefundable_btc_witness(
 ) -> pallet_cf_ingress_egress::VaultDepositWitness<Runtime, state_chain_runtime::BitcoinInstance> {
-	use cf_chains::{address::EncodedAddress, Bitcoin, Chain, ChannelRefundParametersForChain};
+	use cf_chains::{
+		address::EncodedAddress, btc::ScriptPubkey, Bitcoin, ChannelRefundParametersForChain,
+	};
 	use cf_primitives::Beneficiary;
 	use pallet_cf_ingress_egress::{VaultDepositWitness, VaultSwapData};
 	VaultDepositWitness::Swap {
@@ -208,7 +210,11 @@ fn unrefundable_btc_witness(
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Bitcoin> {
 				retry_duration: 0,
-				refund_address: Bitcoin::BURN_ADDRESS,
+				// Non-standard, so it is rejected as a refund address.
+				refund_address: ScriptPubkey::OtherSegwit {
+					version: 0,
+					program: vec![1; 5].try_into().unwrap(),
+				},
 				min_price: Default::default(),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,

@@ -15,8 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	address::ForeignChainAddress, evm, none::NoneChainCrypto, Chain,
-	DepositDetailsToTransactionInId, FeeRefundCalculator,
+	address::ForeignChainAddress, none::NoneChainCrypto, Chain, DepositDetailsToTransactionInId,
+	FeeRefundCalculator,
 };
 use codec::{FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
@@ -33,7 +33,6 @@ impl Chain for AnyChain {
 	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
 	const WITNESS_PERIOD: u64 = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000;
-	const BURN_ADDRESS: Self::ChainAccount = ForeignChainAddress::Eth(evm::Address::zero());
 	const IS_EVM_CHAIN: bool = false;
 
 	type ChainCrypto = NoneChainCrypto;

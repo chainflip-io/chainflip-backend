@@ -28,7 +28,6 @@ impl Chain for NoneChain {
 	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000;
-	const BURN_ADDRESS: Self::ChainAccount = ForeignChainAddress::Eth(evm::Address::zero());
 	const IS_EVM_CHAIN: bool = false;
 
 	type ChainCrypto = NoneChainCrypto;
