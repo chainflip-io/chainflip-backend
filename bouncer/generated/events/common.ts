@@ -1190,6 +1190,7 @@ export const palletCfEthereumIngressEgressFailedVaultDepositsFailedVaultDepositC
     z.object({ __kind: z.literal('UnknownBroker') }),
     z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
     z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
   ]);
 
 export const palletCfEthereumIngressEgressFailedVaultDepositsFailedVaultDepositEthereum = z.object({
@@ -1367,6 +1368,7 @@ export const palletCfPolkadotIngressEgressFailedVaultDepositsFailedVaultDepositC
     z.object({ __kind: z.literal('UnknownBroker') }),
     z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
     z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
   ]);
 
 export const palletCfPolkadotIngressEgressFailedVaultDepositsFailedVaultDepositPolkadot = z.object({
@@ -1544,6 +1546,7 @@ export const palletCfBitcoinIngressEgressFailedVaultDepositsFailedVaultDepositCa
     z.object({ __kind: z.literal('UnknownBroker') }),
     z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
     z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
   ]);
 
 export const palletCfBitcoinIngressEgressFailedVaultDepositsFailedVaultDepositBitcoin = z.object({
@@ -1771,6 +1774,7 @@ export const palletCfArbitrumIngressEgressFailedVaultDepositsFailedVaultDepositC
     z.object({ __kind: z.literal('UnknownBroker') }),
     z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
     z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
   ]);
 
 export const palletCfArbitrumIngressEgressFailedVaultDepositsFailedVaultDepositArbitrum = z.object({
@@ -1989,6 +1993,7 @@ export const palletCfSolanaIngressEgressFailedVaultDepositsFailedVaultDepositCau
     z.object({ __kind: z.literal('UnknownBroker') }),
     z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
     z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
   ]);
 
 export const palletCfSolanaIngressEgressFailedVaultDepositsFailedVaultDepositSolana = z.object({
@@ -2209,6 +2214,7 @@ export const palletCfAssethubIngressEgressFailedVaultDepositsFailedVaultDepositC
     z.object({ __kind: z.literal('UnknownBroker') }),
     z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
     z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
   ]);
 
 export const palletCfAssethubIngressEgressFailedVaultDepositsFailedVaultDepositAssethub = z.object({
@@ -2591,6 +2597,7 @@ export const palletCfTronIngressEgressFailedVaultDepositsFailedVaultDepositCause
     z.object({ __kind: z.literal('UnknownBroker') }),
     z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
     z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
   ]);
 
 export const palletCfTronIngressEgressFailedVaultDepositsFailedVaultDepositTron = z.object({
@@ -2765,6 +2772,7 @@ export const palletCfBscIngressEgressFailedVaultDepositsFailedVaultDepositCause 
     z.object({ __kind: z.literal('UnknownBroker') }),
     z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
     z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
   ]);
 
 export const palletCfBscIngressEgressFailedVaultDepositsFailedVaultDepositBsc = z.object({

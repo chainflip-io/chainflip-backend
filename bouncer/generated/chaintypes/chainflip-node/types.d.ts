@@ -15688,7 +15688,8 @@ export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoEthere
 export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause =
   | { type: 'UnknownBroker' }
   | { type: 'RecoveryFailed'; value: DispatchError }
-  | { type: 'Unrefundable' };
+  | { type: 'Unrefundable' }
+  | { type: 'TransactionRejected' };
 
 /**
  * The `Event` enum of this pallet
