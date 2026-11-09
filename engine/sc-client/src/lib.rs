@@ -109,7 +109,9 @@ fn spawn_latest_finalized_block_head_watcher<
 	const RESTART_DELAY: Duration = Duration::from_secs(6);
 
 	let (sender, receiver) = watch::channel(initial);
-	scope.spawn(async move {
+	// Weak: this loop never exits, so a strong task would stop short-lived scopes (e.g. the CLI)
+	// from ever returning.
+	scope.spawn_weak(async move {
 		let mut latest = initial.number;
 		loop {
 			match base_rpc_client.subscribe_finalized_block_headers().await {
@@ -1411,5 +1413,31 @@ mod tests {
 		// Empty stream doesn't panic (Note pass a single element here, results in an empty stream
 		// being passed)
 		assert_eq!(&inject_intervening_headers_with([0], chain.clone(), rpc.clone()).await, &[0],);
+	}
+
+	#[tokio::test]
+	async fn finalized_head_watcher_does_not_block_scope_exit() {
+		let mut rpc = MockBaseRpcApi::new();
+		rpc.expect_subscribe_finalized_block_headers()
+			.returning(|| Err(ClientError::Custom("unavailable".into())));
+		let rpc = Arc::new(rpc);
+
+		tokio::time::timeout(
+			Duration::from_secs(5),
+			cf_utilities::task_scope::task_scope(|scope| {
+				async move {
+					let _watcher = spawn_latest_finalized_block_head_watcher(
+						scope,
+						rpc,
+						BlockInfo { parent_hash: H256::zero(), hash: H256::zero(), number: 0 },
+					);
+					Ok::<_, anyhow::Error>(())
+				}
+				.boxed()
+			}),
+		)
+		.await
+		.expect("scope should exit without waiting for the watcher")
+		.unwrap();
 	}
 }
