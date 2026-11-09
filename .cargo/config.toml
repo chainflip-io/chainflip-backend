@@ -8,6 +8,9 @@ CF_TRON_CONTRACT_ABI_ROOT = { value = "contract-interfaces/tron-contract-abis", 
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 # Required by some compilers to allow zeromq to use old cmake version.
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+# Recent nightlies no longer pass `--allow-undefined` for wasm targets. Runtime host functions are
+# undefined symbols that must become wasm imports, so restore it for all wasm-builder runtimes.
+WASM_BUILD_RUSTFLAGS = "-C link-arg=--allow-undefined"
 
 # Note: If you just want to save typing command commands, you can install tab completions for most shells. Type
 # `rustup completions --help` to find out how to set this up.

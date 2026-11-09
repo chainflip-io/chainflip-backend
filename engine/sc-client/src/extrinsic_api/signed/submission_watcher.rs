@@ -921,7 +921,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			// Resubmit any expired requests that have no unexpired submission.
 			// This has to be a separate loop from the above due to not being able to await inside
 			// extract_if
-			for (_request_id, request) in requests.iter_mut() {
+			for request in requests.values_mut() {
 				if request.pending_submissions.is_empty() {
 					info!("Resubmitting extrinsic as all existing submissions have expired.");
 					// If any extrinsics expired, there is likely an issue with the nonce, so reset

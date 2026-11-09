@@ -87,7 +87,7 @@ pub fn redact_secret_endpoint(endpoint: &str) -> String {
 				&capture[0],
 				&format!(
 					"{}****",
-					&capture[0].split_at(capture[0].len().min(MAX_SECRET_CHARACTERS_REVEALED)).0
+					capture[0].split_at(capture[0].len().min(MAX_SECRET_CHARACTERS_REVEALED)).0
 				),
 			);
 		}

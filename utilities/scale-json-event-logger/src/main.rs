@@ -14,8 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#![feature(iterator_try_collect)]
-
 use anyhow::Context;
 use cf_utilities::{dynamic_events::EventDecoder, scale_json::ext::JsonValue};
 use env_logger::Env;

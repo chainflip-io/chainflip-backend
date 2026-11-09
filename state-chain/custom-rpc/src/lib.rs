@@ -13,8 +13,6 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-#![feature(iterator_try_collect)]
-#![feature(duration_constructors)]
 
 use crate::{backend::CustomRpcBackend, boost_pool_rpc::BoostPoolFeesRpc};
 use boost_pool_rpc::BoostPoolDetailsRpc;

@@ -74,7 +74,7 @@ where
 
 		// First update all existing shares given the new total amount
 		let mut remaining_shares = Perquintill::one();
-		for (_, share) in self.lender_shares.iter_mut() {
+		for share in self.lender_shares.values_mut() {
 			*share = *share * scaling_factor;
 			remaining_shares.saturating_reduce(*share);
 		}

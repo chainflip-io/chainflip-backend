@@ -3263,11 +3263,9 @@ pub mod pallet {
 			// Restrict the number of chunks based on the minimum chunk size.
 			let dca_params = dca_params.map(|mut dca_params| {
 				let minimum_chunk_size = MinimumChunkSize::<T>::get(input_asset);
-				if minimum_chunk_size > 0 {
-					dca_params.number_of_chunks = core::cmp::min(
-						max((input_amount / minimum_chunk_size) as u32, 1),
-						dca_params.number_of_chunks,
-					);
+				if let Some(max_chunks) = input_amount.checked_div(minimum_chunk_size) {
+					dca_params.number_of_chunks =
+						core::cmp::min(max(max_chunks as u32, 1), dca_params.number_of_chunks);
 				}
 
 				// There has to be a at least one chunk

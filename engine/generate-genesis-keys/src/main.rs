@@ -65,13 +65,13 @@ where
                 assert!(
                     node_names.insert(name.clone()),
                     "Duplicate node name {} in csv",
-                    &name
+                    name
                 );
                 assert!(
                     node_ids.insert(id.clone()),
                     "Duplicate node id {} reused by {}",
-                    &id,
-                    &name
+                    id,
+                    name
                 );
                 (id, name)
             })

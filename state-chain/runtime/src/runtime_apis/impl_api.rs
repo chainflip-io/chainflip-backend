@@ -1347,7 +1347,7 @@ impl_runtime_apis! {
 							}
 						}).unwrap_or(0);
 
-						let owed_amount = details.pending_boosts.into_iter().flat_map(|(_, pending_deposits)| {
+						let owed_amount = details.pending_boosts.into_values().flat_map(|pending_deposits| {
 							pending_deposits.into_iter().filter_map(|(id, amount)| {
 								if id == account_id {
 									Some(amount.total)

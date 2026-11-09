@@ -135,7 +135,7 @@ mod tests {
 					async move {
 						let resp = reqwest::get(&format!(
 							"http://{}:{}/{}",
-							&health_check.hostname, &health_check.port, path
+							health_check.hostname, health_check.port, path
 						))
 						.await
 						.unwrap();
