@@ -959,10 +959,16 @@ mod withdrawal_whitelist {
 			);
 
 			// Weight for exactly two changes: they apply in submission order and the rest are
-			// carried over.
+			// carried over. The budget mirrors `on_idle`'s accounting: `on_idle_apply_change(2)`
+			// alone can fall short, because `on_idle` starts from the component-wise max of
+			// `on_idle_check` and `on_idle_apply_change(0)`.
+			let per_change = <() as crate::WeightInfo>::on_idle_apply_change(1)
+				.saturating_sub(<() as crate::WeightInfo>::on_idle_apply_change(0));
 			let _ = Pallet::<Test>::on_idle(
 				System::block_number(),
-				<() as crate::WeightInfo>::on_idle_apply_change(2),
+				<() as crate::WeightInfo>::on_idle_check()
+					.max(<() as crate::WeightInfo>::on_idle_apply_change(0))
+					.saturating_add(per_change.saturating_mul(2)),
 			);
 			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_1));
 			assert_ok!(ensure_allowed_external(&who, &ETH_ADDR_2));
