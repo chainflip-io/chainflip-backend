@@ -38,7 +38,10 @@ use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
 use subxt::{
-	backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder, ext::subxt_rpcs, OnlineClient,
+	backend::LegacyBackend,
+	config::DefaultExtrinsicParamsBuilder,
+	rpcs::{self as subxt_rpcs, client::RpcClient},
+	OnlineClient,
 };
 use thiserror::Error;
 use tokio::sync::watch;
@@ -753,16 +756,18 @@ where
 {
 	<SemVer as codec::Decode>::decode(
 		&mut subxt_client
+			.at_current_block()
+			.await?
 			.storage()
-			.at_latest()
+			.fetch(
+				subxt::dynamic::storage::<(subxt::utils::AccountId32,), subxt::dynamic::Value>(
+					"Validator",
+					"NodeCFEVersion",
+				),
+				(subxt_signer.account_id(),),
+			)
 			.await?
-			.fetch_or_default(&subxt::storage::dynamic(
-				"Validator",
-				"NodeCFEVersion",
-				subxt::storage::StaticStorageKey::new(&subxt_signer.account_id()),
-			))
-			.await?
-			.encoded(),
+			.bytes(),
 	)
 	.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))
 }
@@ -867,20 +872,20 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 
 			let rpc_client = RpcClient::new(SubxtInterface(base_rpc_client.clone()));
 
-			let subxt_client = subxt::client::OnlineClient::<StateChainConfig>::from_rpc_client(
-				rpc_client.clone(),
-			)
+			let subxt_client = OnlineClient::<StateChainConfig>::from_backend(Arc::new(
+				LegacyBackend::builder().build(rpc_client.clone()),
+			))
 			.await?;
 			let subxt_signer = {
 				struct SubxtSignerInterface<T>(subxt::utils::AccountId32, T);
 				impl subxt::tx::Signer<StateChainConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {
 					fn account_id(&self) -> <StateChainConfig as subxt::Config>::AccountId {
-						self.0.clone()
+						self.0
 					}
 
 					fn sign(&self, bytes: &[u8]) -> <StateChainConfig as subxt::Config>::Signature {
 						use sp_core::Pair;
-						state_chain_runtime::Signature::Sr25519(self.1.sign(bytes))
+						subxt::utils::MultiSignature::Sr25519(self.1.sign(bytes).0)
 					}
 				}
 				SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair)
@@ -916,32 +921,50 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 							)
 							.await?;
 
-						subxt_client
-							.tx()
-							.create_signed(
-								&subxt::dynamic::tx(
-									"Validator",
-									"cfe_version",
-									vec![(
-										"new_version",
-										vec![
-											("major", CFE_VERSION.major),
-											("minor", CFE_VERSION.minor),
-											("patch", CFE_VERSION.patch),
-										],
-									)],
-								),
-								&subxt_signer,
-								DefaultExtrinsicParamsBuilder::new()
-									.mortal(SIGNED_EXTRINSIC_LIFETIME.into())
-									.nonce(current_nonce.into())
-									.build(),
-							)
-							.await?
-							.submit_and_watch()
-							.await?
-							.wait_for_finalized()
-							.await
+						Ok::<_, subxt::Error>(
+							subxt_client
+								.tx()
+								.await?
+								.create_signed(
+									&subxt::dynamic::tx(
+										"Validator",
+										"cfe_version",
+										subxt::ext::scale_value::Composite::named([(
+											"new_version",
+											subxt::dynamic::Value::named_composite([
+												(
+													"major",
+													subxt::dynamic::Value::u128(
+														CFE_VERSION.major.into(),
+													),
+												),
+												(
+													"minor",
+													subxt::dynamic::Value::u128(
+														CFE_VERSION.minor.into(),
+													),
+												),
+												(
+													"patch",
+													subxt::dynamic::Value::u128(
+														CFE_VERSION.patch.into(),
+													),
+												),
+											]),
+										)]),
+									),
+									&subxt_signer,
+									DefaultExtrinsicParamsBuilder::new()
+										.mortal(SIGNED_EXTRINSIC_LIFETIME.into())
+										.nonce(current_nonce.into())
+										.build(),
+								)
+								.await?
+								.submit_and_watch()
+								.await?
+								.wait_for_finalized()
+								.await?,
+						)
 					})
 					.await
 					.map_err(|_| anyhow::anyhow!("Timed out trying to submit CFE version"))

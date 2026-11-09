@@ -20,5 +20,7 @@ pub mod retry_rpc;
 pub mod rpc;
 
 pub type PolkadotHash =
-	<<subxt::PolkadotConfig as subxt::Config>::Hasher as subxt::config::Hasher>::Output;
+	<<subxt::PolkadotConfig as subxt::Config>::Hasher as subxt::config::Hasher>::Hash;
 pub type PolkadotHeader = <subxt::PolkadotConfig as subxt::Config>::Header;
+/// `Arc`-wrapped since [subxt::events::Events] isn't `Clone`.
+pub type PolkadotEvents = std::sync::Arc<subxt::events::Events<subxt::PolkadotConfig>>;

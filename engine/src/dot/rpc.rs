@@ -18,12 +18,12 @@ use async_trait::async_trait;
 use cf_chains::dot::{PolkadotAccountId, RuntimeVersion};
 use cf_primitives::{chains::assets::hub::Asset as HubAsset, PolkadotBlockNumber};
 use subxt::{
-	backend::legacy::rpc_methods::{BlockDetails, Bytes},
-	events::Events,
+	config::RpcConfigFor,
+	rpcs::methods::legacy::{BlockDetails, Bytes},
 	PolkadotConfig,
 };
 
-use crate::dot::{PolkadotHash, PolkadotHeader};
+use crate::dot::{PolkadotEvents, PolkadotHash, PolkadotHeader};
 use anyhow::Result;
 
 /// The trait that defines the stateless / non-subscription requests to Polkadot.
@@ -35,8 +35,10 @@ pub trait DotRpcApi: Send + Sync {
 
 	async fn header(&self, block_hash: PolkadotHash) -> Result<Option<PolkadotHeader>>;
 
-	async fn block(&self, block_hash: PolkadotHash)
-		-> Result<Option<BlockDetails<PolkadotConfig>>>;
+	async fn block(
+		&self,
+		block_hash: PolkadotHash,
+	) -> Result<Option<BlockDetails<RpcConfigFor<PolkadotConfig>>>>;
 
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Result<Option<Vec<Bytes>>>;
 
@@ -44,7 +46,7 @@ pub trait DotRpcApi: Send + Sync {
 		&self,
 		block_hash: PolkadotHash,
 		parent_hash: PolkadotHash,
-	) -> Result<Option<Events<PolkadotConfig>>>;
+	) -> Result<Option<PolkadotEvents>>;
 
 	async fn runtime_version(&self, at: Option<PolkadotHash>) -> Result<RuntimeVersion>;
 

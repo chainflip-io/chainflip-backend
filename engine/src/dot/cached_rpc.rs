@@ -18,13 +18,13 @@ use crate::{
 	caching_request::CachingRequest,
 	dot::{
 		retry_rpc::{DotRetryRpcClient, DotRetrySigningRpcApi},
-		PolkadotHash, PolkadotHeader,
+		PolkadotEvents, PolkadotHash, PolkadotHeader,
 	},
 };
 use cf_chains::dot::{PolkadotAccountId, RuntimeVersion};
 use cf_primitives::{chains::assets::hub::Asset as HubAsset, PolkadotBlockNumber};
 use cf_utilities::task_scope::Scope;
-use subxt::{backend::legacy::rpc_methods::Bytes, events::Events, PolkadotConfig};
+use subxt::rpcs::methods::legacy::Bytes;
 use tokio::sync::mpsc;
 
 type RawPolkadotAccountId = [u8; 32];
@@ -46,7 +46,7 @@ pub trait DotRetryRpcApiWithResult: Clone {
 		&self,
 		block_hash: PolkadotHash,
 		parent_hash: PolkadotHash,
-	) -> anyhow::Result<Option<Events<PolkadotConfig>>>;
+	) -> anyhow::Result<Option<PolkadotEvents>>;
 
 	async fn runtime_version(
 		&self,
@@ -68,11 +68,7 @@ pub struct DotCachingClient {
 	finalized_head: CachingRequest<(), PolkadotHash, DotRetryRpcClient>,
 	header: CachingRequest<PolkadotHash, Option<PolkadotHeader>, DotRetryRpcClient>,
 	extrinsics: CachingRequest<PolkadotHash, Vec<Bytes>, DotRetryRpcClient>,
-	events: CachingRequest<
-		(PolkadotHash, PolkadotHash),
-		Option<Events<PolkadotConfig>>,
-		DotRetryRpcClient,
-	>,
+	events: CachingRequest<(PolkadotHash, PolkadotHash), Option<PolkadotEvents>, DotRetryRpcClient>,
 	runtime_version: CachingRequest<Option<PolkadotHash>, RuntimeVersion, DotRetryRpcClient>,
 	liquid_account_balance:
 		CachingRequest<(RawPolkadotAccountId, HubAsset, PolkadotHash), u128, DotRetryRpcClient>,
@@ -101,7 +97,7 @@ impl DotCachingClient {
 		>::new(scope, client.clone());
 		let (events, events_cache) = CachingRequest::<
 			(PolkadotHash, PolkadotHash),
-			Option<Events<PolkadotConfig>>,
+			Option<PolkadotEvents>,
 			DotRetryRpcClient,
 		>::new(scope, client.clone());
 		let (runtime_version, runtime_version_cache) = CachingRequest::<
@@ -206,7 +202,7 @@ impl DotRetryRpcApiWithResult for DotCachingClient {
 		&self,
 		block_hash: PolkadotHash,
 		parent_hash: PolkadotHash,
-	) -> anyhow::Result<Option<Events<PolkadotConfig>>> {
+	) -> anyhow::Result<Option<PolkadotEvents>> {
 		self.events
 			.get_or_fetch(
 				Box::pin(move |client| {
