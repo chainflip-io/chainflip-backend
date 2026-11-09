@@ -4612,6 +4612,29 @@ export interface ChainTx<
     >;
 
     /**
+     * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+     * current recovery LP. Failed payout leaves the entry unchanged.
+     *
+     * @param {FixedBytes<32>} queueId
+     * @param {AccountId32Like} brokerId
+     **/
+    attributeFailedVaultDeposit: GenericTxCall<
+      (
+        queueId: FixedBytes<32>,
+        brokerId: AccountId32Like,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'EthereumIngressEgress';
+          palletCall: {
+            name: 'AttributeFailedVaultDeposit';
+            params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -4783,6 +4806,29 @@ export interface ChainTx<
     >;
 
     /**
+     * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+     * current recovery LP. Failed payout leaves the entry unchanged.
+     *
+     * @param {FixedBytes<32>} queueId
+     * @param {AccountId32Like} brokerId
+     **/
+    attributeFailedVaultDeposit: GenericTxCall<
+      (
+        queueId: FixedBytes<32>,
+        brokerId: AccountId32Like,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'PolkadotIngressEgress';
+          palletCall: {
+            name: 'AttributeFailedVaultDeposit';
+            params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -4945,6 +4991,29 @@ export interface ChainTx<
           palletCall: {
             name: 'MarkDepositChannelForRejection';
             params: { depositAddress: CfChainsBtcScriptPubkey };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+     * current recovery LP. Failed payout leaves the entry unchanged.
+     *
+     * @param {FixedBytes<32>} queueId
+     * @param {AccountId32Like} brokerId
+     **/
+    attributeFailedVaultDeposit: GenericTxCall<
+      (
+        queueId: FixedBytes<32>,
+        brokerId: AccountId32Like,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BitcoinIngressEgress';
+          palletCall: {
+            name: 'AttributeFailedVaultDeposit';
+            params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
           };
         },
         ChainKnownTypes
@@ -5769,6 +5838,29 @@ export interface ChainTx<
     >;
 
     /**
+     * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+     * current recovery LP. Failed payout leaves the entry unchanged.
+     *
+     * @param {FixedBytes<32>} queueId
+     * @param {AccountId32Like} brokerId
+     **/
+    attributeFailedVaultDeposit: GenericTxCall<
+      (
+        queueId: FixedBytes<32>,
+        brokerId: AccountId32Like,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'ArbitrumIngressEgress';
+          palletCall: {
+            name: 'AttributeFailedVaultDeposit';
+            params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -6403,6 +6495,29 @@ export interface ChainTx<
           palletCall: {
             name: 'MarkDepositChannelForRejection';
             params: { depositAddress: SolPrimAddress };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+     * current recovery LP. Failed payout leaves the entry unchanged.
+     *
+     * @param {FixedBytes<32>} queueId
+     * @param {AccountId32Like} brokerId
+     **/
+    attributeFailedVaultDeposit: GenericTxCall<
+      (
+        queueId: FixedBytes<32>,
+        brokerId: AccountId32Like,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'SolanaIngressEgress';
+          palletCall: {
+            name: 'AttributeFailedVaultDeposit';
+            params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
           };
         },
         ChainKnownTypes
@@ -7361,6 +7476,29 @@ export interface ChainTx<
           palletCall: {
             name: 'MarkDepositChannelForRejection';
             params: { depositAddress: CfChainsDotPolkadotAccountId };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+     * current recovery LP. Failed payout leaves the entry unchanged.
+     *
+     * @param {FixedBytes<32>} queueId
+     * @param {AccountId32Like} brokerId
+     **/
+    attributeFailedVaultDeposit: GenericTxCall<
+      (
+        queueId: FixedBytes<32>,
+        brokerId: AccountId32Like,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubIngressEgress';
+          palletCall: {
+            name: 'AttributeFailedVaultDeposit';
+            params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
           };
         },
         ChainKnownTypes
@@ -9575,6 +9713,29 @@ export interface ChainTx<
     >;
 
     /**
+     * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+     * current recovery LP. Failed payout leaves the entry unchanged.
+     *
+     * @param {FixedBytes<32>} queueId
+     * @param {AccountId32Like} brokerId
+     **/
+    attributeFailedVaultDeposit: GenericTxCall<
+      (
+        queueId: FixedBytes<32>,
+        brokerId: AccountId32Like,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'TronIngressEgress';
+          palletCall: {
+            name: 'AttributeFailedVaultDeposit';
+            params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -10396,6 +10557,29 @@ export interface ChainTx<
           palletCall: {
             name: 'MarkDepositChannelForRejection';
             params: { depositAddress: H160 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+     * current recovery LP. Failed payout leaves the entry unchanged.
+     *
+     * @param {FixedBytes<32>} queueId
+     * @param {AccountId32Like} brokerId
+     **/
+    attributeFailedVaultDeposit: GenericTxCall<
+      (
+        queueId: FixedBytes<32>,
+        brokerId: AccountId32Like,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscIngressEgress';
+          palletCall: {
+            name: 'AttributeFailedVaultDeposit';
+            params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
           };
         },
         ChainKnownTypes

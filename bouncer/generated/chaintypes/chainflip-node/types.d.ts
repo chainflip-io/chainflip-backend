@@ -1087,16 +1087,35 @@ export type StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEvent
   | { type: 'VaultDepositEthereum'; value: PalletCfIngressEgressVaultDepositWitnessEthereum }
   | { type: 'TransferFailedEthereum'; value: PalletCfIngressEgressTransferFailedWitnessEthereum };
 
-export type PalletCfIngressEgressVaultDepositWitnessEthereum = {
+export type PalletCfIngressEgressVaultDepositWitnessEthereum =
+  | {
+      type: 'SwapEthereum';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsEthereum;
+        swap: PalletCfIngressEgressVaultSwapDataEthereum;
+      };
+    }
+  | {
+      type: 'FailedEthereum';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsEthereum;
+        brokerId?: AccountId32 | undefined;
+      };
+    };
+
+export type PalletCfIngressEgressVaultDepositFactsEthereum = {
   inputAsset: CfPrimitivesChainsAssetsEthAsset;
   depositAddress?: H160 | undefined;
   channelId?: bigint | undefined;
   depositAmount: bigint;
   depositDetails: CfChainsEvmDepositDetails;
+  txId: H256;
+};
+
+export type PalletCfIngressEgressVaultSwapDataEthereum = {
   outputAsset: CfPrimitivesChainsAssetsAnyAsset;
   destinationAddress: CfChainsAddressEncodedAddress;
   depositMetadata?: CfChainsCcmDepositMetadata | undefined;
-  txId: H256;
   brokerFee?: CfPrimitivesBeneficiary | undefined;
   affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
   refundParams: CfChainsRefundParametersChannelRefundParameters;
@@ -1336,16 +1355,35 @@ export type CfChainsBtcDepositAddressTapscriptPath = {
 
 export type CfChainsBtcBitcoinScript = { bytes: Bytes };
 
-export type PalletCfIngressEgressVaultDepositWitnessBitcoin = {
+export type PalletCfIngressEgressVaultDepositWitnessBitcoin =
+  | {
+      type: 'SwapBitcoin';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsBitcoin;
+        swap: PalletCfIngressEgressVaultSwapDataBitcoin;
+      };
+    }
+  | {
+      type: 'FailedBitcoin';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsBitcoin;
+        brokerId?: AccountId32 | undefined;
+      };
+    };
+
+export type PalletCfIngressEgressVaultDepositFactsBitcoin = {
   inputAsset: CfPrimitivesChainsAssetsBtcAsset;
   depositAddress?: CfChainsBtcScriptPubkey | undefined;
   channelId?: bigint | undefined;
   depositAmount: bigint;
   depositDetails: CfChainsBtcUtxo;
+  txId: H256;
+};
+
+export type PalletCfIngressEgressVaultSwapDataBitcoin = {
   outputAsset: CfPrimitivesChainsAssetsAnyAsset;
   destinationAddress: CfChainsAddressEncodedAddress;
   depositMetadata?: CfChainsCcmDepositMetadata | undefined;
-  txId: H256;
   brokerFee?: CfPrimitivesBeneficiary | undefined;
   affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
   refundParams: CfChainsRefundParametersChannelRefundParametersScriptPubkey;
@@ -1441,16 +1479,35 @@ export type StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEvent
   | { type: 'VaultDepositArbitrum'; value: PalletCfIngressEgressVaultDepositWitnessArbitrum }
   | { type: 'TransferFailedArbitrum'; value: PalletCfIngressEgressTransferFailedWitnessArbitrum };
 
-export type PalletCfIngressEgressVaultDepositWitnessArbitrum = {
+export type PalletCfIngressEgressVaultDepositWitnessArbitrum =
+  | {
+      type: 'SwapArbitrum';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsArbitrum;
+        swap: PalletCfIngressEgressVaultSwapDataArbitrum;
+      };
+    }
+  | {
+      type: 'FailedArbitrum';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsArbitrum;
+        brokerId?: AccountId32 | undefined;
+      };
+    };
+
+export type PalletCfIngressEgressVaultDepositFactsArbitrum = {
   inputAsset: CfPrimitivesChainsAssetsArbAsset;
   depositAddress?: H160 | undefined;
   channelId?: bigint | undefined;
   depositAmount: bigint;
   depositDetails: CfChainsEvmDepositDetails;
+  txId: H256;
+};
+
+export type PalletCfIngressEgressVaultSwapDataArbitrum = {
   outputAsset: CfPrimitivesChainsAssetsAnyAsset;
   destinationAddress: CfChainsAddressEncodedAddress;
   depositMetadata?: CfChainsCcmDepositMetadata | undefined;
-  txId: H256;
   brokerFee?: CfPrimitivesBeneficiary | undefined;
   affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
   refundParams: CfChainsRefundParametersChannelRefundParameters;
@@ -1571,7 +1628,7 @@ export type PalletCfElectionsElectoralSystemsSolanaVaultSwapAccountsSolanaVaultS
   newAccounts: Array<
     [
       CfChainsSolApiVaultSwapAccountAndSender,
-      StateChainRuntimeChainflipWitnessingSolanaElectionsSolanaVaultSwapDetails | undefined,
+      PalletCfIngressEgressVaultDepositWitnessSolana | undefined,
     ]
   >;
   confirmClosedAccounts: Array<CfChainsSolApiVaultSwapAccountAndSender>;
@@ -1582,22 +1639,47 @@ export type CfChainsSolApiVaultSwapAccountAndSender = {
   swapSender: SolPrimAddress;
 };
 
-export type StateChainRuntimeChainflipWitnessingSolanaElectionsSolanaVaultSwapDetails = {
-  from: CfPrimitivesChainsAssetsSolAsset;
-  to: CfPrimitivesChainsAssetsAnyAsset;
+export type PalletCfIngressEgressVaultDepositWitnessSolana =
+  | {
+      type: 'SwapSolana';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsSolana;
+        swap: PalletCfIngressEgressVaultSwapDataSolana;
+      };
+    }
+  | {
+      type: 'FailedSolana';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsSolana;
+        brokerId?: AccountId32 | undefined;
+      };
+    };
+
+export type PalletCfIngressEgressVaultDepositFactsSolana = {
+  inputAsset: CfPrimitivesChainsAssetsSolAsset;
+  depositAddress?: SolPrimAddress | undefined;
+  channelId?: bigint | undefined;
   depositAmount: bigint;
-  destinationAddress: CfChainsAddressEncodedAddress;
-  depositMetadata?: CfChainsCcmDepositMetadata | undefined;
-  swapAccount: SolPrimAddress;
-  creationSlot: bigint;
-  brokerFee: CfPrimitivesBeneficiary;
-  refundParams: CfChainsRefundParametersChannelRefundParametersAddress;
-  dcaParams?: CfPrimitivesDcaParameters | undefined;
-  boostFee: number;
-  affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
+  depositDetails: CfChainsSolVaultSwapOrDepositChannelId;
+  txId: [SolPrimAddress, bigint];
 };
 
 export type CfPrimitivesChainsAssetsSolAsset = 'Sol' | 'SolUsdc' | 'SolUsdt';
+
+export type CfChainsSolVaultSwapOrDepositChannelId =
+  | { type: 'Channel'; value: SolPrimAddress }
+  | { type: 'VaultSwapAccount'; value: [SolPrimAddress, bigint] };
+
+export type PalletCfIngressEgressVaultSwapDataSolana = {
+  outputAsset: CfPrimitivesChainsAssetsAnyAsset;
+  destinationAddress: CfChainsAddressEncodedAddress;
+  depositMetadata?: CfChainsCcmDepositMetadata | undefined;
+  brokerFee?: CfPrimitivesBeneficiary | undefined;
+  affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
+  refundParams: CfChainsRefundParametersChannelRefundParametersAddress;
+  dcaParams?: CfPrimitivesDcaParameters | undefined;
+  boostFee: number;
+};
 
 export type CfChainsRefundParametersChannelRefundParametersAddress = {
   retryDuration: number;
@@ -1760,16 +1842,35 @@ export type StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEvent
   | { type: 'VaultDepositTron'; value: PalletCfIngressEgressVaultDepositWitnessTron }
   | { type: 'TransferFailedTron'; value: PalletCfIngressEgressTransferFailedWitnessTron };
 
-export type PalletCfIngressEgressVaultDepositWitnessTron = {
+export type PalletCfIngressEgressVaultDepositWitnessTron =
+  | {
+      type: 'SwapTron';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsTron;
+        swap: PalletCfIngressEgressVaultSwapDataTron;
+      };
+    }
+  | {
+      type: 'FailedTron';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsTron;
+        brokerId?: AccountId32 | undefined;
+      };
+    };
+
+export type PalletCfIngressEgressVaultDepositFactsTron = {
   inputAsset: CfPrimitivesChainsAssetsTronAsset;
   depositAddress?: H160 | undefined;
   channelId?: bigint | undefined;
   depositAmount: bigint;
   depositDetails: CfChainsEvmDepositDetails;
+  txId: H256;
+};
+
+export type PalletCfIngressEgressVaultSwapDataTron = {
   outputAsset: CfPrimitivesChainsAssetsAnyAsset;
   destinationAddress: CfChainsAddressEncodedAddress;
   depositMetadata?: CfChainsCcmDepositMetadata | undefined;
-  txId: H256;
   brokerFee?: CfPrimitivesBeneficiary | undefined;
   affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
   refundParams: CfChainsRefundParametersChannelRefundParameters;
@@ -1883,16 +1984,35 @@ export type StateChainRuntimeChainflipWitnessingPalletHooksEvmVaultContractEvent
   | { type: 'VaultDepositBsc'; value: PalletCfIngressEgressVaultDepositWitnessBsc }
   | { type: 'TransferFailedBsc'; value: PalletCfIngressEgressTransferFailedWitnessBsc };
 
-export type PalletCfIngressEgressVaultDepositWitnessBsc = {
+export type PalletCfIngressEgressVaultDepositWitnessBsc =
+  | {
+      type: 'SwapBsc';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsBsc;
+        swap: PalletCfIngressEgressVaultSwapDataBsc;
+      };
+    }
+  | {
+      type: 'FailedBsc';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsBsc;
+        brokerId?: AccountId32 | undefined;
+      };
+    };
+
+export type PalletCfIngressEgressVaultDepositFactsBsc = {
   inputAsset: CfPrimitivesChainsAssetsBscAsset;
   depositAddress?: H160 | undefined;
   channelId?: bigint | undefined;
   depositAmount: bigint;
   depositDetails: CfChainsEvmDepositDetails;
+  txId: H256;
+};
+
+export type PalletCfIngressEgressVaultSwapDataBsc = {
   outputAsset: CfPrimitivesChainsAssetsAnyAsset;
   destinationAddress: CfChainsAddressEncodedAddress;
   depositMetadata?: CfChainsCcmDepositMetadata | undefined;
-  txId: H256;
   brokerFee?: CfPrimitivesBeneficiary | undefined;
   affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
   refundParams: CfChainsRefundParametersChannelRefundParameters;
@@ -5078,7 +5198,15 @@ export type PalletCfIngressEgressCall =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessEthereum };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+    };
 
 export type PalletCfIngressEgressCallLike =
   /**
@@ -5126,7 +5254,15 @@ export type PalletCfIngressEgressCallLike =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessEthereum };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+    };
 
 export type PalletCfIngressEgressPalletConfigUpdateEthereum =
   | { type: 'ChannelOpeningFeeEthereum'; value: { fee: bigint } }
@@ -5207,6 +5343,14 @@ export type PalletCfIngressEgressCall002 =
   | {
       name: 'MarkDepositChannelForRejection';
       params: { depositAddress: CfChainsDotPolkadotAccountId };
+    }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
     };
 
 export type PalletCfIngressEgressCallLike002 =
@@ -5262,6 +5406,14 @@ export type PalletCfIngressEgressCallLike002 =
   | {
       name: 'MarkDepositChannelForRejection';
       params: { depositAddress: CfChainsDotPolkadotAccountId };
+    }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
     };
 
 export type CfPrimitivesChainsAssetsDotAsset = 'Dot';
@@ -5289,16 +5441,35 @@ export type PalletCfIngressEgressPalletConfigUpdatePolkadot =
   | { type: 'SetRejectionDelayPolkadot'; value: { delayBlocks: number } }
   | { type: 'SetChannelCleanupRetryPolkadot'; value: { retryBlocks: number } };
 
-export type PalletCfIngressEgressVaultDepositWitnessPolkadot = {
+export type PalletCfIngressEgressVaultDepositWitnessPolkadot =
+  | {
+      type: 'SwapPolkadot';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsPolkadot;
+        swap: PalletCfIngressEgressVaultSwapDataPolkadot;
+      };
+    }
+  | {
+      type: 'FailedPolkadot';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsPolkadot;
+        brokerId?: AccountId32 | undefined;
+      };
+    };
+
+export type PalletCfIngressEgressVaultDepositFactsPolkadot = {
   inputAsset: CfPrimitivesChainsAssetsDotAsset;
   depositAddress?: CfChainsDotPolkadotAccountId | undefined;
   channelId?: bigint | undefined;
   depositAmount: bigint;
   depositDetails: number;
+  txId: CfPrimitivesTxId;
+};
+
+export type PalletCfIngressEgressVaultSwapDataPolkadot = {
   outputAsset: CfPrimitivesChainsAssetsAnyAsset;
   destinationAddress: CfChainsAddressEncodedAddress;
   depositMetadata?: CfChainsCcmDepositMetadata | undefined;
-  txId: CfPrimitivesTxId;
   brokerFee?: CfPrimitivesBeneficiary | undefined;
   affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
   refundParams: CfChainsRefundParametersChannelRefundParametersPolkadotAccountId;
@@ -5367,7 +5538,15 @@ export type PalletCfIngressEgressCall003 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBitcoin };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: CfChainsBtcScriptPubkey } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: CfChainsBtcScriptPubkey } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+    };
 
 export type PalletCfIngressEgressCallLike003 =
   /**
@@ -5419,7 +5598,15 @@ export type PalletCfIngressEgressCallLike003 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBitcoin };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: CfChainsBtcScriptPubkey } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: CfChainsBtcScriptPubkey } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+    };
 
 export type PalletCfIngressEgressPalletConfigUpdateBitcoin =
   | { type: 'ChannelOpeningFeeBitcoin'; value: { fee: bigint } }
@@ -6047,7 +6234,15 @@ export type PalletCfIngressEgressCall004 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessArbitrum };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+    };
 
 export type PalletCfIngressEgressCallLike004 =
   /**
@@ -6095,7 +6290,15 @@ export type PalletCfIngressEgressCallLike004 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessArbitrum };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+    };
 
 export type PalletCfIngressEgressPalletConfigUpdateArbitrum =
   | { type: 'ChannelOpeningFeeArbitrum'; value: { fee: bigint } }
@@ -6589,7 +6792,15 @@ export type PalletCfIngressEgressCall005 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessSolana };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: SolPrimAddress } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: SolPrimAddress } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+    };
 
 export type PalletCfIngressEgressCallLike005 =
   /**
@@ -6641,7 +6852,15 @@ export type PalletCfIngressEgressCallLike005 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessSolana };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: SolPrimAddress } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: SolPrimAddress } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+    };
 
 export type PalletCfIngressEgressDepositWitnessSolana = {
   depositAddress: SolPrimAddress;
@@ -6649,10 +6868,6 @@ export type PalletCfIngressEgressDepositWitnessSolana = {
   amount: bigint;
   depositDetails: CfChainsSolVaultSwapOrDepositChannelId;
 };
-
-export type CfChainsSolVaultSwapOrDepositChannelId =
-  | { type: 'Channel'; value: SolPrimAddress }
-  | { type: 'VaultSwapAccount'; value: [SolPrimAddress, bigint] };
 
 export type PalletCfIngressEgressPalletConfigUpdateSolana =
   | { type: 'ChannelOpeningFeeSolana'; value: { fee: bigint } }
@@ -6669,23 +6884,6 @@ export type PalletCfIngressEgressPalletConfigUpdateSolana =
   | { type: 'SetIngressDelaySolana'; value: { delayBlocks: number } }
   | { type: 'SetRejectionDelaySolana'; value: { delayBlocks: number } }
   | { type: 'SetChannelCleanupRetrySolana'; value: { retryBlocks: bigint } };
-
-export type PalletCfIngressEgressVaultDepositWitnessSolana = {
-  inputAsset: CfPrimitivesChainsAssetsSolAsset;
-  depositAddress?: SolPrimAddress | undefined;
-  channelId?: bigint | undefined;
-  depositAmount: bigint;
-  depositDetails: CfChainsSolVaultSwapOrDepositChannelId;
-  outputAsset: CfPrimitivesChainsAssetsAnyAsset;
-  destinationAddress: CfChainsAddressEncodedAddress;
-  depositMetadata?: CfChainsCcmDepositMetadata | undefined;
-  txId: [SolPrimAddress, bigint];
-  brokerFee?: CfPrimitivesBeneficiary | undefined;
-  affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
-  refundParams: CfChainsRefundParametersChannelRefundParametersAddress;
-  dcaParams?: CfPrimitivesDcaParameters | undefined;
-  boostFee: number;
-};
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -8775,6 +8973,14 @@ export type PalletCfIngressEgressCall006 =
   | {
       name: 'MarkDepositChannelForRejection';
       params: { depositAddress: CfChainsDotPolkadotAccountId };
+    }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
     };
 
 export type PalletCfIngressEgressCallLike006 =
@@ -8830,6 +9036,14 @@ export type PalletCfIngressEgressCallLike006 =
   | {
       name: 'MarkDepositChannelForRejection';
       params: { depositAddress: CfChainsDotPolkadotAccountId };
+    }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
     };
 
 export type PalletCfIngressEgressPalletConfigUpdateAssethub =
@@ -8848,16 +9062,35 @@ export type PalletCfIngressEgressPalletConfigUpdateAssethub =
   | { type: 'SetRejectionDelayAssethub'; value: { delayBlocks: number } }
   | { type: 'SetChannelCleanupRetryAssethub'; value: { retryBlocks: number } };
 
-export type PalletCfIngressEgressVaultDepositWitnessAssethub = {
+export type PalletCfIngressEgressVaultDepositWitnessAssethub =
+  | {
+      type: 'SwapAssethub';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsAssethub;
+        swap: PalletCfIngressEgressVaultSwapDataAssethub;
+      };
+    }
+  | {
+      type: 'FailedAssethub';
+      value: {
+        deposit: PalletCfIngressEgressVaultDepositFactsAssethub;
+        brokerId?: AccountId32 | undefined;
+      };
+    };
+
+export type PalletCfIngressEgressVaultDepositFactsAssethub = {
   inputAsset: CfPrimitivesChainsAssetsHubAsset;
   depositAddress?: CfChainsDotPolkadotAccountId | undefined;
   channelId?: bigint | undefined;
   depositAmount: bigint;
   depositDetails: CfPrimitivesTxId;
+  txId: CfPrimitivesTxId;
+};
+
+export type PalletCfIngressEgressVaultSwapDataAssethub = {
   outputAsset: CfPrimitivesChainsAssetsAnyAsset;
   destinationAddress: CfChainsAddressEncodedAddress;
   depositMetadata?: CfChainsCcmDepositMetadata | undefined;
-  txId: CfPrimitivesTxId;
   brokerFee?: CfPrimitivesBeneficiary | undefined;
   affiliateFees: Array<CfPrimitivesBeneficiaryAffiliateShortId>;
   refundParams: CfChainsRefundParametersChannelRefundParametersPolkadotAccountId;
@@ -11305,7 +11538,15 @@ export type PalletCfIngressEgressCall007 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessTron };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+    };
 
 export type PalletCfIngressEgressCallLike007 =
   /**
@@ -11357,7 +11598,15 @@ export type PalletCfIngressEgressCallLike007 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessTron };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+    };
 
 export type PalletCfIngressEgressPalletConfigUpdateTron =
   | { type: 'ChannelOpeningFeeTron'; value: { fee: bigint } }
@@ -12117,7 +12366,15 @@ export type PalletCfIngressEgressCall008 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBsc };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+    };
 
 export type PalletCfIngressEgressCallLike008 =
   /**
@@ -12165,7 +12422,15 @@ export type PalletCfIngressEgressCallLike008 =
       name: 'VaultSwapRequest';
       params: { blockHeight: bigint; deposit: PalletCfIngressEgressVaultDepositWitnessBsc };
     }
-  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } };
+  | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
+  /**
+   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
+   * current recovery LP. Failed payout leaves the entry unchanged.
+   **/
+  | {
+      name: 'AttributeFailedVaultDeposit';
+      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+    };
 
 export type PalletCfIngressEgressPalletConfigUpdateBsc =
   | { type: 'ChannelOpeningFeeBsc'; value: { fee: bigint } }
@@ -15261,6 +15526,23 @@ export type PalletCfIngressEgressEvent =
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: H160 };
+    }
+  | {
+      name: 'FailedDepositQueued';
+      data: {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositEthereum;
+      };
+    }
+  | {
+      name: 'FailedDepositRecovered';
+      data: {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoEthereum;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
     };
 
 export type PalletCfIngressEgressDepositAction =
@@ -15283,7 +15565,16 @@ export type PalletCfIngressEgressDepositAction =
         amount: bigint;
       };
     }
-  | { type: 'Unrefundable' };
+  | { type: 'Unrefundable' }
+  | {
+      type: 'BrokerRecovery';
+      value: {
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
+    }
+  | { type: 'Queued'; value: { queueId: FixedBytes<32> } };
 
 export type CfPrimitivesPrewitnessedDepositId = bigint;
 
@@ -15379,6 +15670,25 @@ export type CfChainsRejectError =
   | 'NotRequired'
   | 'Other'
   | 'FailedToBuildRejection';
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositEthereum = {
+  deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoEthereum;
+  cause: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoEthereum = {
+  facts: PalletCfIngressEgressVaultDepositFactsEthereum;
+  blockHeight: bigint;
+  recordedAt: number;
+  brokerId?: AccountId32 | undefined;
+  ingressFee: bigint;
+  remainingAmount: bigint;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause =
+  | { type: 'UnknownBroker' }
+  | { type: 'RecoveryFailed'; value: DispatchError }
+  | { type: 'Unrefundable' };
 
 /**
  * The `Event` enum of this pallet
@@ -15533,6 +15843,23 @@ export type PalletCfIngressEgressEvent002 =
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: CfChainsDotPolkadotAccountId };
+    }
+  | {
+      name: 'FailedDepositQueued';
+      data: {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositPolkadot;
+      };
+    }
+  | {
+      name: 'FailedDepositRecovered';
+      data: {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoPolkadot;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsPolkadot =
@@ -15549,6 +15876,20 @@ export type CfTraitsScheduledEgressDetailsPolkadot = {
   egressId: [CfPrimitivesChainsForeignChain, bigint];
   egressAmount: bigint;
   feeWithheld: bigint;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositPolkadot = {
+  deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoPolkadot;
+  cause: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoPolkadot = {
+  facts: PalletCfIngressEgressVaultDepositFactsPolkadot;
+  blockHeight: number;
+  recordedAt: number;
+  brokerId?: AccountId32 | undefined;
+  ingressFee: bigint;
+  remainingAmount: bigint;
 };
 
 /**
@@ -15701,6 +16042,23 @@ export type PalletCfIngressEgressEvent003 =
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: CfChainsBtcScriptPubkey };
+    }
+  | {
+      name: 'FailedDepositQueued';
+      data: {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBitcoin;
+      };
+    }
+  | {
+      name: 'FailedDepositRecovered';
+      data: {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBitcoin;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
     };
 
 export type PalletCfIngressEgressDepositAction002 =
@@ -15723,7 +16081,16 @@ export type PalletCfIngressEgressDepositAction002 =
         amount: bigint;
       };
     }
-  | { type: 'Unrefundable' };
+  | { type: 'Unrefundable' }
+  | {
+      type: 'BrokerRecovery';
+      value: {
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
+    }
+  | { type: 'Queued'; value: { queueId: FixedBytes<32> } };
 
 export type PalletCfIngressEgressDepositFailedDetailsBitcoin =
   | {
@@ -15739,6 +16106,20 @@ export type CfTraitsScheduledEgressDetailsBitcoin = {
   egressId: [CfPrimitivesChainsForeignChain, bigint];
   egressAmount: bigint;
   feeWithheld: bigint;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBitcoin = {
+  deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBitcoin;
+  cause: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBitcoin = {
+  facts: PalletCfIngressEgressVaultDepositFactsBitcoin;
+  blockHeight: bigint;
+  recordedAt: number;
+  brokerId?: AccountId32 | undefined;
+  ingressFee: bigint;
+  remainingAmount: bigint;
 };
 
 /**
@@ -16015,6 +16396,23 @@ export type PalletCfIngressEgressEvent004 =
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: H160 };
+    }
+  | {
+      name: 'FailedDepositQueued';
+      data: {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositArbitrum;
+      };
+    }
+  | {
+      name: 'FailedDepositRecovered';
+      data: {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoArbitrum;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsArbitrum =
@@ -16031,6 +16429,20 @@ export type CfTraitsScheduledEgressDetailsArbitrum = {
   egressId: [CfPrimitivesChainsForeignChain, bigint];
   egressAmount: bigint;
   feeWithheld: bigint;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositArbitrum = {
+  deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoArbitrum;
+  cause: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoArbitrum = {
+  facts: PalletCfIngressEgressVaultDepositFactsArbitrum;
+  blockHeight: bigint;
+  recordedAt: number;
+  brokerId?: AccountId32 | undefined;
+  ingressFee: bigint;
+  remainingAmount: bigint;
 };
 
 /**
@@ -16422,6 +16834,23 @@ export type PalletCfIngressEgressEvent005 =
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: SolPrimAddress };
+    }
+  | {
+      name: 'FailedDepositQueued';
+      data: {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositSolana;
+      };
+    }
+  | {
+      name: 'FailedDepositRecovered';
+      data: {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoSolana;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
     };
 
 export type PalletCfIngressEgressDepositAction003 =
@@ -16444,7 +16873,16 @@ export type PalletCfIngressEgressDepositAction003 =
         amount: bigint;
       };
     }
-  | { type: 'Unrefundable' };
+  | { type: 'Unrefundable' }
+  | {
+      type: 'BrokerRecovery';
+      value: {
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
+    }
+  | { type: 'Queued'; value: { queueId: FixedBytes<32> } };
 
 export type PalletCfIngressEgressDepositFailedDetailsSolana =
   | {
@@ -16460,6 +16898,20 @@ export type CfTraitsScheduledEgressDetailsSolana = {
   egressId: [CfPrimitivesChainsForeignChain, bigint];
   egressAmount: bigint;
   feeWithheld: bigint;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositSolana = {
+  deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoSolana;
+  cause: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoSolana = {
+  facts: PalletCfIngressEgressVaultDepositFactsSolana;
+  blockHeight: bigint;
+  recordedAt: number;
+  brokerId?: AccountId32 | undefined;
+  ingressFee: bigint;
+  remainingAmount: bigint;
 };
 
 /**
@@ -16859,6 +17311,23 @@ export type PalletCfIngressEgressEvent006 =
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: CfChainsDotPolkadotAccountId };
+    }
+  | {
+      name: 'FailedDepositQueued';
+      data: {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositAssethub;
+      };
+    }
+  | {
+      name: 'FailedDepositRecovered';
+      data: {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoAssethub;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsAssethub =
@@ -16875,6 +17344,20 @@ export type CfTraitsScheduledEgressDetailsAssethub = {
   egressId: [CfPrimitivesChainsForeignChain, bigint];
   egressAmount: bigint;
   feeWithheld: bigint;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositAssethub = {
+  deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoAssethub;
+  cause: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoAssethub = {
+  facts: PalletCfIngressEgressVaultDepositFactsAssethub;
+  blockHeight: number;
+  recordedAt: number;
+  brokerId?: AccountId32 | undefined;
+  ingressFee: bigint;
+  remainingAmount: bigint;
 };
 
 /**
@@ -17452,6 +17935,23 @@ export type PalletCfIngressEgressEvent007 =
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: H160 };
+    }
+  | {
+      name: 'FailedDepositQueued';
+      data: {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositTron;
+      };
+    }
+  | {
+      name: 'FailedDepositRecovered';
+      data: {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoTron;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsTron =
@@ -17468,6 +17968,20 @@ export type CfTraitsScheduledEgressDetailsTron = {
   egressId: [CfPrimitivesChainsForeignChain, bigint];
   egressAmount: bigint;
   feeWithheld: bigint;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositTron = {
+  deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoTron;
+  cause: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoTron = {
+  facts: PalletCfIngressEgressVaultDepositFactsTron;
+  blockHeight: bigint;
+  recordedAt: number;
+  brokerId?: AccountId32 | undefined;
+  ingressFee: bigint;
+  remainingAmount: bigint;
 };
 
 /**
@@ -17667,6 +18181,23 @@ export type PalletCfIngressEgressEvent008 =
   | {
       name: 'ChannelRejectionRequestReceived';
       data: { accountId: AccountId32; depositAddress: H160 };
+    }
+  | {
+      name: 'FailedDepositQueued';
+      data: {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBsc;
+      };
+    }
+  | {
+      name: 'FailedDepositRecovered';
+      data: {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBsc;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsBsc =
@@ -17683,6 +18214,20 @@ export type CfTraitsScheduledEgressDetailsBsc = {
   egressId: [CfPrimitivesChainsForeignChain, bigint];
   egressAmount: bigint;
   feeWithheld: bigint;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBsc = {
+  deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBsc;
+  cause: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositCause;
+};
+
+export type PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBsc = {
+  facts: PalletCfIngressEgressVaultDepositFactsBsc;
+  blockHeight: bigint;
+  recordedAt: number;
+  brokerId?: AccountId32 | undefined;
+  ingressFee: bigint;
+  remainingAmount: bigint;
 };
 
 /**
@@ -19482,7 +20027,8 @@ export type PalletCfIngressEgressError =
   /**
    * The supplied configuration parameters are not valid.
    **/
-  | 'InvalidConfigurationParameters';
+  | 'InvalidConfigurationParameters'
+  | 'UnknownFailedVaultDeposit';
 
 export type PalletCfIngressEgressDepositChannelDetailsPolkadot = {
   owner: AccountId32;

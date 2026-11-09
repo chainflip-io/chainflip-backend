@@ -1631,6 +1631,7 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
 
     /**
      * The supplied configuration parameters are not valid.
@@ -1735,6 +1736,7 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
 
     /**
      * The supplied configuration parameters are not valid.
@@ -1839,6 +1841,7 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
 
     /**
      * The supplied configuration parameters are not valid.
@@ -2144,6 +2147,7 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
 
     /**
      * The supplied configuration parameters are not valid.
@@ -2372,6 +2376,7 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
 
     /**
      * The supplied configuration parameters are not valid.
@@ -2652,6 +2657,7 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
 
     /**
      * The supplied configuration parameters are not valid.
@@ -3103,6 +3109,7 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
 
     /**
      * The supplied configuration parameters are not valid.
@@ -3300,6 +3307,7 @@ export interface ChainErrors extends GenericChainErrors {
      * The amount is not valid for the chain.
      **/
     InvalidAmount: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
 
     /**
      * The supplied configuration parameters are not valid.
