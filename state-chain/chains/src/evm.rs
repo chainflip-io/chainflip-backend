@@ -55,6 +55,13 @@ pub trait EvmWitnessingConfig {
 	const WITNESS_FINALIZED_BLOCKS: bool;
 }
 
+/// How we price the transactions we broadcast on an EVM chain.
+pub trait EvmTransactionPricing {
+	/// Whether we set the max fee and the priority fee per gas to the same value, so that our
+	/// transactions pay a single price per gas, whatever the base fee.
+	const MAX_FEE_EQUALS_PRIORITY_FEE: bool;
+}
+
 #[derive(
 	Clone,
 	Debug,
@@ -478,8 +485,9 @@ pub struct EvmTransactionMetadata {
 	pub gas_limit: Option<U256>,
 }
 
-impl<C: Chain<Transaction = Transaction, TransactionRef = H256>> TransactionMetadata<C>
-	for EvmTransactionMetadata
+impl<C> TransactionMetadata<C> for EvmTransactionMetadata
+where
+	C: Chain<Transaction = Transaction, TransactionRef = H256> + EvmTransactionPricing,
 {
 	fn extract_metadata(transaction: &<C as Chain>::Transaction) -> Self {
 		Self {
@@ -497,9 +505,22 @@ impl<C: Chain<Transaction = Transaction, TransactionRef = H256>> TransactionMeta
 			};
 		}
 
+		// Exception for BSC: ethers-rs converts the engine's EIP-1559 transactions to legacy ones
+		// on chains it lists as not supporting EIP-1559, including BSC. Legacy and EIP-2930
+		// transactions pay a single gas price and have no EIP-1559 fee fields.
+		// Accepting them is safe only where our max fee equals our priority fee: there is then no
+		// separate tip to inflate, and the refund is capped at our max fee per gas whatever the
+		// transaction type. Elsewhere, their price could include a larger tip than we chose.
+		// TODO: remove this, and `EvmTransactionPricing`, once no supported engine version uses
+		// ethers-rs to sign transactions.
+		let single_price = C::MAX_FEE_EQUALS_PRIORITY_FEE &&
+			self.max_fee_per_gas.is_none() &&
+			self.max_priority_fee_per_gas.is_none();
+
 		self.contract == expected_metadata.contract &&
-			check_optional!(max_fee_per_gas) &&
-			check_optional!(max_priority_fee_per_gas) &&
+			(single_price ||
+				(check_optional!(max_fee_per_gas) &&
+					check_optional!(max_priority_fee_per_gas))) &&
 			check_optional!(gas_limit)
 	}
 }
@@ -934,4 +955,90 @@ fn metadata_verification() {
 		&submitted_metadata,
 		&EvmTransactionMetadata { contract: sp_core::H160::repeat_byte(1u8), ..submitted_metadata }
 	));
+}
+
+#[test]
+fn single_price_transactions_are_accepted_only_where_fees_are_equal() {
+	fn verify<C>(witnessed: &EvmTransactionMetadata, expected: &EvmTransactionMetadata) -> bool
+	where
+		C: Chain<Transaction = Transaction, TransactionRef = H256> + EvmTransactionPricing,
+	{
+		<EvmTransactionMetadata as TransactionMetadata<C>>::verify_metadata(witnessed, expected)
+	}
+
+	let fee = Some(U256::from(100_000_000u64));
+	let expected = EvmTransactionMetadata {
+		max_fee_per_gas: fee,
+		max_priority_fee_per_gas: fee,
+		contract: sp_core::H160::repeat_byte(2u8),
+		gas_limit: Some(U256::from(200_000u64)),
+	};
+	let legacy = EvmTransactionMetadata {
+		max_fee_per_gas: None,
+		max_priority_fee_per_gas: None,
+		..expected
+	};
+
+	assert!(verify::<Bsc>(&legacy, &expected));
+	assert!(!verify::<Ethereum>(&legacy, &expected));
+	assert!(!verify::<Arbitrum>(&legacy, &expected));
+
+	// A transaction with only one of the fee fields is not a single-price transaction.
+	assert!(!verify::<Bsc>(&EvmTransactionMetadata { max_fee_per_gas: fee, ..legacy }, &expected));
+	assert!(!verify::<Bsc>(
+		&EvmTransactionMetadata { max_priority_fee_per_gas: fee, ..legacy },
+		&expected
+	));
+
+	// The contract and the gas limit are still checked.
+	assert!(!verify::<Bsc>(
+		&EvmTransactionMetadata { contract: sp_core::H160::repeat_byte(3u8), ..legacy },
+		&expected
+	));
+	assert!(!verify::<Bsc>(
+		&EvmTransactionMetadata { gas_limit: Some(U256::from(300_000u64)), ..legacy },
+		&expected
+	));
+
+	// EIP-1559 fees, when present, must still match.
+	assert!(verify::<Bsc>(&expected, &expected));
+	assert!(!verify::<Bsc>(
+		&EvmTransactionMetadata {
+			max_fee_per_gas: Some(U256::one()),
+			max_priority_fee_per_gas: Some(U256::one()),
+			..expected
+		},
+		&expected
+	));
+}
+
+// The single-price exception in `verify_metadata` relies on this cap.
+#[test]
+fn bsc_refund_is_capped_at_our_max_fee() {
+	const MAX_FEE: u128 = 150_000_000;
+	const GAS_USED: u128 = 100_000;
+
+	let transaction = Transaction {
+		max_fee_per_gas: Some(MAX_FEE.into()),
+		max_priority_fee_per_gas: Some(MAX_FEE.into()),
+		..Default::default()
+	};
+	let refund = |effective_gas_price| {
+		<Transaction as FeeRefundCalculator<Bsc>>::return_fee_refund(
+			&transaction,
+			TransactionFee { effective_gas_price, gas_used: GAS_USED },
+		)
+	};
+
+	assert_eq!(refund(10 * MAX_FEE), MAX_FEE * GAS_USED);
+	assert_eq!(refund(MAX_FEE / 2), MAX_FEE / 2 * GAS_USED);
+
+	// Without a max fee from us, nothing is refunded.
+	assert_eq!(
+		<Transaction as FeeRefundCalculator<Bsc>>::return_fee_refund(
+			&Transaction::default(),
+			TransactionFee { effective_gas_price: MAX_FEE, gas_used: GAS_USED },
+		),
+		0
+	);
 }

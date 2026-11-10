@@ -76,6 +76,10 @@ impl Chain for Arbitrum {
 	type ReplayProtection = evm::api::EvmReplayProtection;
 }
 
+impl evm::EvmTransactionPricing for Arbitrum {
+	const MAX_FEE_EQUALS_PRIORITY_FEE: bool = false;
+}
+
 #[derive(
 	Copy,
 	Clone,
