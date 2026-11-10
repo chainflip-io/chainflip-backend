@@ -18324,7 +18324,15 @@ export type PalletCfValidatorError =
   /**
    * Delegator funds cannot be transferred between accounts.
    **/
-  | 'DelegatorTransferRestricted';
+  | 'DelegatorTransferRestricted'
+  /**
+   * Only accounts registered as a Liquidity Provider can delegate.
+   **/
+  | 'NotLiquidityProvider'
+  /**
+   * The account cannot deregister as a Liquidity Provider while actively delegating.
+   **/
+  | 'StillDelegating';
 
 export type SpStakingOffenceOffenceSeverity = Perbill;
 
