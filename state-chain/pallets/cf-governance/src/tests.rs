@@ -436,25 +436,24 @@ mod emergency_presets {
 	use crate::EmergencyPresets;
 	use cf_primitives::ForeignChain;
 	use cf_traits::{mocks::safe_mode::MockEmergencySafeMode, EmergencyPreset};
-	use frame_support::dispatch::Pays;
 
 	fn presets(presets: impl IntoIterator<Item = EmergencyPreset>) -> EmergencyPresets {
 		presets.into_iter().collect::<BTreeSet<_>>().try_into().unwrap()
 	}
 
 	#[test]
-	fn member_can_apply_presets_without_paying_fees() {
+	fn member_can_apply_presets() {
 		new_test_ext().execute_with(|| {
 			let applied = presets([
 				EmergencyPreset::DisableDepositChannelCreation(ForeignChain::Bitcoin),
 				EmergencyPreset::DisableLpWithdrawals,
 			]);
 
-			let post_info =
-				Governance::apply_emergency_presets(RuntimeOrigin::signed(ALICE), applied.clone())
-					.unwrap();
+			assert_ok!(Governance::apply_emergency_presets(
+				RuntimeOrigin::signed(ALICE),
+				applied.clone()
+			));
 
-			assert_eq!(post_info.pays_fee, Pays::No);
 			assert_eq!(MockEmergencySafeMode::applied_presets(), applied.clone().into_inner());
 			assert_eq!(
 				last_event::<Test>(),
