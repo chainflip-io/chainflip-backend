@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
-use frame_support::{ensure, pallet_prelude::RuntimeDebug};
+use frame_support::ensure;
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
@@ -30,7 +30,7 @@ pub const MAX_MEMBERS: usize = 64;
 ///
 /// Approvals are tracked as a flat set of individual accounts: a group reaches quorum once enough
 /// of its members do, counted by number (`SimpleGroup`) or by weight (`WeightedGroup`).
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 #[codec(encode_bound(AccountId: Encode))]
 #[codec(decode_bound(AccountId: Decode))]
 #[codec(decode_with_mem_tracking_bound(AccountId: DecodeWithMemTracking))]
@@ -48,7 +48,7 @@ impl<AccountId> Default for Council<AccountId> {
 	}
 }
 
-#[derive(Clone, Copy, RuntimeDebug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InvalidCouncil {
 	TooDeep,
 	TooManyMembers,
