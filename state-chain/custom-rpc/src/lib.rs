@@ -269,6 +269,8 @@ pub enum RpcAccountInfo {
 		btc_vault_deposit_address: Option<String>,
 		#[serde(skip_serializing_if = "Option::is_none")]
 		bound_fee_withdrawal_address: Option<EvmAddress>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		recovery_account: Option<AccountId32>,
 	},
 	LiquidityProvider {
 		refund_addresses: BTreeMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
@@ -287,7 +289,6 @@ pub enum RpcAccountInfo {
 		is_qualified: bool,
 		is_online: bool,
 		is_bidding: bool,
-		apy_bp: Option<u32>,
 		bid: U256,
 		max_bid: Option<U256>,
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -330,6 +331,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					affiliates,
 					btc_vault_deposit_address: btc_vault_deposit_address.map(Into::into),
 					bound_fee_withdrawal_address: None,
+					recovery_account: None,
 				},
 			},
 			OldRpcAccountInfo::LiquidityProvider {
@@ -365,7 +367,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 				is_online,
 				is_bidding,
 				bound_redeem_address,
-				apy_bp,
+				apy_bp: _,
 				restricted_balances,
 				estimated_redeemable_balance,
 			} => Self {
@@ -387,7 +389,6 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					is_qualified,
 					is_online,
 					is_bidding,
-					apy_bp,
 					bid: flip_balance.into(),
 					max_bid: None,
 					operator: None,
@@ -501,6 +502,7 @@ pub mod account_info_before_api_v7 {
 				reputation_points: info.reputation_points,
 				keyholder_epochs: info.keyholder_epochs,
 				is_current_authority: info.is_current_authority,
+				#[expect(deprecated)]
 				is_current_backup: info.is_current_backup,
 				is_qualified: info.is_qualified,
 				is_online: info.is_online,
@@ -531,7 +533,6 @@ pub struct RpcAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EvmAddress>,
-	pub apy_bp: Option<u32>,
 	pub restricted_balances: BTreeMap<EvmAddress, u128>,
 	pub estimated_redeemable_balance: NumberOrHex,
 }
@@ -657,6 +658,7 @@ pub struct IngressEgressEnvironment {
 	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
 	pub ingress_delays: HashMap<ForeignChain, u32>,
+	/// Always zero; retained for API compatibility.
 	pub boost_delays: HashMap<ForeignChain, u32>,
 	pub boost_minimum_add_funds_amounts: any::AssetMap<NumberOrHex>,
 }
@@ -669,6 +671,7 @@ pub struct FundingEnvironment {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SwappingEnvironment {
+	#[deprecated(note = "The maximum swap amount no longer exists.")]
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
 	#[deprecated(note = "Use network_fees field instead")]
 	network_fee_hundredth_pips: Permill,
@@ -1182,6 +1185,7 @@ pub trait CustomApi {
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 
+	#[deprecated(note = "The maximum swap amount no longer exists.")]
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>>;
 	#[subscription(name = "subscribe_pool_price", item = BlockUpdate<PoolPriceV1>)]
@@ -1270,6 +1274,8 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BoostPoolFeesResponse>;
 
+	/// Returns the runtime safe mode. Flags are `true` when enabled, and per-asset sets list the
+	/// enabled assets.
 	#[method(name = "safe_mode_statuses")]
 	fn cf_safe_mode_statuses(
 		&self,
@@ -1609,6 +1615,28 @@ where
 	}
 }
 
+/// Older runtimes can have recovery links without exposing the runtime API, so retain the storage
+/// fallback while queries against those runtimes are supported.
+pub(crate) fn broker_recovery_account<C, B>(
+	client: &C,
+	api: &impl CustomRuntimeApi<B>,
+	hash: <B as BlockT>::Hash,
+	api_version: u32,
+	broker: &AccountId32,
+) -> Result<Option<AccountId32>, CfApiError>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash>,
+	C: CallApiAt<B>,
+{
+	if api_version >= 24 {
+		return Ok(api.cf_broker_recovery_account(hash, broker.clone())?);
+	}
+
+	Ok(client.state_at(hash).map_err(CfApiError::from)?.inspect_state(|| {
+		pallet_cf_swapping::BrokerRecoveryAccount::<state_chain_runtime::Runtime>::get(broker)
+	}))
+}
+
 pub struct StorageQueryApi<'a, C, B>(&'a C, PhantomData<B>);
 
 impl<'a, C, B> StorageQueryApi<'a, C, B>
@@ -1799,8 +1827,9 @@ fn handle_dynamic_event_error(
 
 #[macro_export]
 macro_rules! pass_through {
-	($( $name:ident ( $( $arg:ident: $argt:ty ),* $(,)? ) -> $result_type:ty $([map: $mapping:expr])? ),+ $(,)?) => {
+	($( $(#[$attr:meta])? $name:ident ( $( $arg:ident: $argt:ty ),* $(,)? ) -> $result_type:ty $([map: $mapping:expr])? ),+ $(,)?) => {
 		$(
+			$(#[$attr])?
 			fn $name(&self, $( $arg: $argt, )* at: Option<state_chain_runtime::Hash>,) -> RpcResult<$result_type> {
 				self.rpc_backend.with_runtime_api(at, |api, hash| api.$name(hash, $($arg),* ))
 					$(.map($mapping))?
@@ -1866,7 +1895,9 @@ where
 		cf_current_epoch() -> u32,
 		cf_epoch_duration() -> u32,
 		cf_current_epoch_started_at() -> u32,
+		#[expect(deprecated)]
 		cf_authority_emission_per_block() -> NumberOrHex [map: Into::into],
+		#[expect(deprecated)]
 		cf_backup_emission_per_block() -> NumberOrHex [map: Into::into],
 		cf_flip_supply() -> (NumberOrHex, NumberOrHex) [map: |(issuance, offchain_supply)| (issuance.into(), offchain_supply.into())],
 		cf_accounts() -> Vec<(state_chain_runtime::AccountId, String)> [map: |accounts| {
@@ -1963,6 +1994,9 @@ where
 			} else if version < 19 {
 				#[expect(deprecated)]
 				Ok(api.cf_safe_mode_statuses_before_version_19(hash)?.into())
+			} else if version < 23 {
+				#[expect(deprecated)]
+				Ok(api.cf_safe_mode_statuses_before_version_23(hash)?.into())
 			} else {
 				api.cf_safe_mode_statuses(hash)
 			}
@@ -2191,6 +2225,7 @@ where
 	}
 
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>> {
+		#[expect(deprecated)]
 		self.rpc_backend
 			.with_runtime_api(None, |api, hash| api.cf_max_swap_amount(hash, asset))
 	}
@@ -2259,6 +2294,12 @@ where
 							.into_iter()
 							.map(Into::into)
 							.collect::<Vec<_>>()
+					} else if api_version < 23 {
+						#[expect(deprecated)]
+						api.cf_all_account_infos_before_version_23(hash, roles)?
+							.into_iter()
+							.map(Into::into)
+							.collect::<Vec<_>>()
 					} else {
 						api.cf_all_account_infos(hash, roles)?
 					};
@@ -2299,6 +2340,20 @@ where
 											.btc_vault_deposit_address,
 										bound_fee_withdrawal_address: broker_info
 											.bound_fee_withdrawal_address,
+										recovery_account: common_items
+											.account_id
+											.as_ref()
+											.map(|broker| {
+												broker_recovery_account(
+													&*self.rpc_backend.client,
+													api,
+													hash,
+													api_version,
+													broker,
+												)
+											})
+											.transpose()?
+											.flatten(),
 									}
 								},
 								RuntimeApiAccountInfo::LiquidityProvider(lp_info) =>
@@ -2358,7 +2413,6 @@ where
 										is_qualified,
 										is_online,
 										is_bidding,
-										apy_bp,
 										bid,
 										max_bid,
 										operator,
@@ -2373,7 +2427,6 @@ where
 										is_qualified,
 										is_online,
 										is_bidding,
-										apy_bp,
 										bid: bid.into(),
 										max_bid: max_bid.map(Into::into),
 										operator,
@@ -2550,6 +2603,13 @@ where
 								affiliates: affiliates.into_iter().map(Into::into).collect(),
 								btc_vault_deposit_address,
 								bound_fee_withdrawal_address,
+								recovery_account: broker_recovery_account(
+									&*self.rpc_backend.client,
+									api,
+									hash,
+									api_version,
+									&account_id,
+								)?,
 							}
 						},
 						AccountRole::LiquidityProvider => {
@@ -2639,7 +2699,6 @@ where
 								is_qualified,
 								is_online,
 								is_bidding,
-								apy_bp,
 								max_bid,
 								bid,
 								operator,
@@ -2647,6 +2706,9 @@ where
 							} = if api_version < 19 {
 								#[expect(deprecated)]
 								api.cf_validator_info_before_version_19(hash, &account_id)?.into()
+							} else if api_version < 23 {
+								#[expect(deprecated)]
+								api.cf_validator_info_before_version_23(hash, &account_id)?.into()
 							} else {
 								api.cf_validator_info(hash, &account_id)?
 							};
@@ -2659,7 +2721,6 @@ where
 								is_qualified,
 								is_online,
 								is_bidding,
-								apy_bp,
 								max_bid: max_bid.map(Into::into),
 								bid: bid.into(),
 								operator,
@@ -2681,9 +2742,21 @@ where
 		account_id: state_chain_runtime::AccountId,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<RpcAccountInfoV2> {
-		let account_info = self
-			.rpc_backend
-			.with_runtime_api(at, |api, hash| api.cf_validator_info(hash, &account_id))?;
+		let account_info =
+			self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+				if api_version < 7 {
+					#[expect(deprecated)]
+					api.cf_validator_info_before_version_7(hash, &account_id).map(Into::into)
+				} else if api_version < 19 {
+					#[expect(deprecated)]
+					api.cf_validator_info_before_version_19(hash, &account_id).map(Into::into)
+				} else if api_version < 23 {
+					#[expect(deprecated)]
+					api.cf_validator_info_before_version_23(hash, &account_id).map(Into::into)
+				} else {
+					api.cf_validator_info(hash, &account_id)
+				}
+			})?;
 
 		Ok(RpcAccountInfoV2 {
 			balance: account_info.balance.into(),
@@ -2698,7 +2771,6 @@ where
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
-			apy_bp: account_info.apy_bp,
 			restricted_balances: account_info.restricted_balances,
 			estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 		})
@@ -2834,7 +2906,8 @@ where
 				// These fields were added in version 8 of the runtime API
 				if version >= 8 {
 					ingress_delays.insert(chain, api.cf_ingress_delay(hash, chain)?);
-					boost_delays.insert(chain, api.cf_boost_delay(hash, chain)?);
+					// Always zero; retained for API compatibility.
+					boost_delays.insert(chain, 0);
 				}
 			}
 
@@ -2915,6 +2988,7 @@ where
 				api.cf_network_fees(hash)?
 			};
 			Ok::<_, CfApiError>(SwappingEnvironment {
+				#[expect(deprecated)]
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					let chain = ForeignChain::from(asset);
 					if version < 17 && chain == ForeignChain::Tron ||
@@ -2922,6 +2996,7 @@ where
 					{
 						return Ok(None);
 					}
+					#[expect(deprecated)]
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
 				#[expect(deprecated)]
@@ -3201,7 +3276,9 @@ where
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
-		Ok(Asset::all().collect())
+		// The node may be ahead of the runtime and know about assets that aren't live yet.
+		self.rpc_backend
+			.with_runtime_api(None, |api, hash| api.cf_supported_assets(hash))
 	}
 
 	fn cf_boost_pool_details(
@@ -3535,9 +3612,20 @@ where
 			let strategies = if api_version < 4 {
 				// Strategies didn't exist in earlier versions:
 				vec![]
-			} else {
-				api.cf_get_trading_strategies(hash, lp)
+			} else if api_version < 22 {
+				// Strategies of the removed types are omitted.
+				#[expect(deprecated)]
+				api.cf_get_trading_strategies_before_version_22(hash, lp)
 					.map_err(CfApiError::from)?
+					.into_iter()
+					.filter_map(|info| info.into_current())
+					.collect()
+			} else {
+				api.cf_get_trading_strategies(hash, lp).map_err(CfApiError::from)?
+			};
+
+			Ok::<_, CfApiError>(
+				strategies
 					.into_iter()
 					.map(|info| TradingStrategyInfo {
 						lp_id: info.lp_id,
@@ -3549,10 +3637,8 @@ where
 							.map(|(asset, amount)| (asset, amount.into()))
 							.collect(),
 					})
-					.collect()
-			};
-
-			Ok::<_, CfApiError>(strategies)
+					.collect::<Vec<_>>(),
+			)
 		})
 	}
 

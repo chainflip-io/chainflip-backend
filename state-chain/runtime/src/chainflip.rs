@@ -19,6 +19,7 @@ pub mod address_derivation;
 pub mod cons_key_rotator;
 pub mod decompose_recompose;
 pub mod deregistration_hooks;
+pub mod elections;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 pub mod multi_vault_activator;
@@ -41,15 +42,13 @@ use crate::{
 		},
 		solana_elections::SolanaChainTrackingProvider,
 	},
-	constants::common::YEAR,
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
 	BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber,
-	BscChainTracking, BscIngressEgress, Emissions, Environment, EthereumBroadcaster,
-	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
-	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaBroadcaster, SolanaIngressEgress, SolanaThresholdSigner, System, TronIngressEgress,
-	Validator,
+	BscChainTracking, BscIngressEgress, Environment, EthereumBroadcaster, EthereumChainTracking,
+	EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster, PolkadotChainTracking,
+	PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall, SolanaBroadcaster,
+	SolanaIngressEgress, SolanaThresholdSigner, System, TronIngressEgress, Validator,
 };
 #[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 use cf_amm::math::Price;
@@ -102,21 +101,21 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChainflipNetwork,
-	ChannelId, DcaParameters, ONE_AS_BASIS_POINTS,
+	ChannelId, DcaParameters,
 };
 use cf_traits::{
-	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
-	Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	FeeMultiplierProvider, FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider,
-	OnBroadcastReady, OnDeposit, OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
+	AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey, Broadcaster,
+	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
+	FailedDepositRecovery, FailedDepositRecoveryOutcome, FeeMultiplierProvider,
+	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
+	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
-
 use codec::{Decode, DecodeWithMemTracking, Encode};
 pub use deregistration_hooks::RuntimeDeregistrationHooks;
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
-	sp_runtime::{FixedPointNumber, FixedU64},
+	sp_runtime::FixedU64,
 	traits::{Defensive, Get},
 };
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -126,7 +125,6 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
-use sp_runtime::Permill;
 use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 use witnessing::*;
 
@@ -987,6 +985,54 @@ impl_egress_api_for_anychain!(
 	(Tron, TronIngressEgress)
 );
 
+/// Routes each failed deposit to the ingress-egress instance for its asset's chain.
+pub struct FailedDepositRecoveryRouter;
+
+impl FailedDepositRecovery for FailedDepositRecoveryRouter {
+	type AccountId = AccountId;
+
+	fn route_failed_deposit(
+		broker: &AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<(AccountId, FailedDepositRecoveryOutcome), DispatchError> {
+		match ForeignChain::from(asset) {
+			ForeignChain::Ethereum =>
+				EthereumIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Polkadot =>
+				Err(pallet_cf_ingress_egress::Error::<Runtime, PolkadotInstance>::ChainDeprecated
+					.into()),
+			ForeignChain::Bitcoin =>
+				BitcoinIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Arbitrum =>
+				ArbitrumIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Solana =>
+				SolanaIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Assethub =>
+				AssethubIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Tron => TronIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Bsc => BscIngressEgress::route_failed_deposit(broker, asset, amount),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark(broker: &AccountId) {
+		use cf_traits::RefundAddressRegistry;
+
+		let recovery_account = AccountId::new([0xfe; 32]);
+		for account in [broker, &recovery_account] {
+			frame_system::Pallet::<Runtime>::inc_providers(account);
+		}
+		AccountRoles::register_as_broker(broker).unwrap();
+		AccountRoles::register_as_liquidity_provider(&recovery_account).unwrap();
+		<crate::AssetBalances as RefundAddressRegistry>::register_liquidity_refund_address(
+			&recovery_account,
+			ForeignChainAddress::Eth(Default::default()),
+		);
+		pallet_cf_swapping::BrokerRecoveryAccount::<Runtime>::insert(broker, recovery_account);
+	}
+}
+
 pub struct DepositHandler;
 impl OnDeposit<Ethereum> for DepositHandler {}
 impl OnDeposit<Polkadot> for DepositHandler {}
@@ -1044,17 +1090,14 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
 					.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
 			for (i, output) in outputs.iter().enumerate() {
-				if [
-					ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
-					ScriptPubkey::Taproot(btc_key.current),
-				]
-				.contains(&output.script_pubkey)
-				{
-					Environment::add_bitcoin_change_utxo(
-						output.amount,
-						UtxoId { tx_id, vout: i as u32 },
-						batch_transfer.change_utxo_key,
-					);
+				if let ScriptPubkey::Taproot(pubkey_x) = &output.script_pubkey {
+					if *pubkey_x == btc_key.current || Some(*pubkey_x) == btc_key.previous {
+						Environment::add_bitcoin_change_utxo(
+							output.amount,
+							UtxoId { tx_id, vout: i as u32 },
+							*pubkey_x,
+						);
+					}
 				}
 			}
 		}
@@ -1090,30 +1133,6 @@ impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualifica
 	fn is_qualified(id: &<Runtime as Chainflip>::ValidatorId) -> bool {
 		AccountRoles::has_account_role(id, AccountRole::Validator)
 	}
-}
-
-// Calculates the APY of a given account, returned in Basis Points (1 b.p. = 0.01%)
-// Returns Some(APY) if the account is an Authority, otherwise returns None.
-pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
-	pallet_cf_validator::CurrentAuthorities::<Runtime>::get()
-		.contains(account_id)
-		.then(|| {
-			// Authority: reward is earned by authoring a block.
-			Emissions::current_authority_emission_per_block() * YEAR as u128 /
-				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_non_dedup_len()
-					.expect("Current authorities must exists and non-empty.") as u128
-		})
-		.map(|total_reward_pa| {
-			let mab = pallet_cf_validator::Bond::<Runtime>::get();
-
-			let validator_reward_pa =
-				Permill::from_rational(Flip::bond(account_id), mab) * total_reward_pa;
-
-			let apy = FixedU64::from_rational(validator_reward_pa, Flip::balance(account_id));
-
-			// Convert APY to Basis Point.
-			apy.checked_mul_int(ONE_AS_BASIS_POINTS as u32).unwrap_or_default()
-		})
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Encode, Decode)]

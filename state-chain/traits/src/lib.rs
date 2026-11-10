@@ -40,6 +40,7 @@ pub use swapping::{
 	SwapRequestTypeEncoded, SwapType,
 };
 
+pub mod elections;
 pub mod mocks;
 pub mod offence_reporting;
 
@@ -62,12 +63,11 @@ use cf_primitives::{
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
-	error::BadOrigin,
 	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+		traits::{AtLeast32BitUnsigned, BadOrigin, Bounded, MaybeSerializeDeserialize},
 		BoundedVec, DispatchError, DispatchResult, FixedPointNumber, FixedPointOperand, FixedU128,
-		Percent, RuntimeDebug,
+		Percent,
 	},
 	traits::{ConstU32, EnsureOrigin, Get, IsType, UnfilteredDispatchable},
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
@@ -191,15 +191,7 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 }
 
 #[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	RuntimeDebug,
+	PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Debug,
 )]
 pub struct Bid<Id, Amount> {
 	pub bidder_id: Id,
@@ -366,44 +358,13 @@ pub trait AccountInfo {
 	fn liquid_funds(account_id: &Self::AccountId) -> Self::Amount;
 }
 
-/// Trait for managing token issuance.
-pub trait Issuance {
-	type AccountId;
-	type Balance;
-
-	/// Mint new funds.
-	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance);
-
-	/// Returns the total issuance.
-	fn total_issuance() -> Self::Balance;
-
-	/// Burn some funds that are off-chain (eg. in the StateChainGateway contract).
-	///
-	/// Use with care.
-	fn burn_offchain(amount: Self::Balance);
-
-	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
-	/// rather than burned.
-	fn is_flip_2_1_activated() -> bool;
-}
-
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	type Balance;
 	type AccountId;
 
-	/// Distribute some rewards accrued during `epoch_index`.
-	fn distribute(
-		epoch_index: EpochIndex,
-		amount: Self::Balance,
-		beneficiary: &Self::AccountId,
-		settle: impl FnMut(&Self::AccountId, Self::Balance),
-	);
-
 	/// Splits `total_amount` evenly across `epoch_index`'s complete set of reward recipients
 	/// (e.g. that epoch's full authority set), as determined by the implementation.
-	/// To settle a partial
-	/// set, call [Self::distribute] per beneficiary instead.
 	fn distribute_all(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
@@ -415,9 +376,7 @@ pub trait RewardsDistribution {
 ///
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
-#[derive(
-	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default,
-)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId> {
 	/// Those nodes that are considered offline
 	pub offline: Vec<ValidatorId>,
@@ -755,6 +714,9 @@ pub trait Bonding {
 	type Amount;
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::AccountId, bond: Self::Amount);
+
+	/// The current bond of an account.
+	fn bond(account_id: &Self::AccountId) -> Self::Amount;
 }
 
 /// Something that is able to provide block authorship slots that were missed.
@@ -763,36 +725,25 @@ pub trait MissedAuthorshipSlots {
 	fn missed_slots() -> sp_std::ops::Range<u64>;
 }
 
-/// Allows accounts to pay for things by burning fees.
+/// Handles fee taking actions
 pub trait FeePayment {
 	type Amount;
 	type AccountId;
 	/// Helper function to mint FLIP to an account.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
+	fn credit_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
 		unimplemented!()
 	}
 
-	/// Helper function to activate FLIP 2.1 from the current epoch.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_flip_2_1() {
-		unimplemented!()
-	}
-
-	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
+	/// Takes fee equivalent to the amount, if the account has enough. Otherwise fails.
 	fn try_take_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 
 	/// Accumulate FLIP to be distributed off-chain (e.g. via the StateChainGateway).
 	fn add_to_offchain_flip_to_be_distributed(amount: i128);
 
-	/// Burns `amount` of off-chain funds (eg. in the StateChainGateway contract), unless FLIP 2.1
-	/// is active, in which case the funds are bridged in and reserved for distribution to
-	/// authorities instead.
-	fn burn_or_reserve_offchain(amount: Self::Amount);
-
-	/// Whether FLIP 2.1 is active: fee rewards are accumulated for distribution to authorities
-	/// rather than burned.
-	fn is_flip_2_1_activated() -> bool;
+	/// Bridges `amount` of off-chain funds (eg. in the StateChainGateway contract) in and
+	/// reserves it for distribution to authorities as fee rewards.
+	fn bridge_in_to_onchain_reserve(amount: Self::Amount);
 }
 
 /// Provides information about on-chain funds.
@@ -1008,7 +959,7 @@ impl<
 	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
-	RuntimeDebug,
+	Debug,
 )]
 pub struct ScheduledEgressDetails<C: Chain> {
 	pub egress_id: EgressId,
@@ -1072,16 +1023,6 @@ pub trait BroadcastAnyChainGovKey {
 pub trait CommKeyBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey);
 }
-
-/// Provides an interface to access the amount of Flip that is ready to be burned,
-/// moved to the state-chain-gateway or to be offsetted against the burn
-pub trait FlipBurnOrMoveInfo {
-	/// Takes the available Flip and returns it.
-	fn take_flip_to_burn() -> i128;
-
-	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
-}
-
 /// Allows Flip held in the Vault to be earmarked for transfer to the State Chain Gateway.
 ///
 /// Whenever Flip is credited to an on-chain balance without a corresponding Gateway deposit, the
@@ -1328,6 +1269,14 @@ pub trait WithdrawalAddressRestriction {
 		dest: cf_chains::AccountOrAddress<&Self::AccountId, &cf_chains::ForeignChainAddress>,
 	) -> DispatchResult;
 
+	/// Whether `owner` has a withdrawal whitelist, limiting it to whitelisted destinations. Other
+	/// restrictions, such as a bound broker withdrawal address, aren't reflected here.
+	fn has_whitelist(owner: &Self::AccountId) -> bool;
+
+	/// Restrict `owner` to a whitelist of the maximum size that includes `allowed`.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_worst_case_whitelist(owner: &Self::AccountId, allowed: cf_chains::ForeignChainAddress);
+
 	/// Permanently bind `owner` to `address`: from here on, Ethereum withdrawals are allowed only
 	/// to it, overriding the whitelist. Bindings are immutable, so this fails with
 	/// [`AlreadyBound`] rather than repointing an existing one.
@@ -1343,6 +1292,18 @@ pub trait WithdrawalAddressRestriction {
 /// Error returned when trying to set a bound withdrawal address when the binding already exists.
 #[derive(Debug, PartialEq, Eq)]
 pub struct WithdrawalAddressAlreadyBound;
+
+/// Read access to the funding pallet's permanent redeem address binding.
+pub trait RedeemAddressBinding {
+	type AccountId;
+
+	/// The account's bound redeem address, if any. A bound on-chain balance can only be redeemed
+	/// to that address (restricted funds excepted) or rebalanced to accounts bound to the same one.
+	fn bound_redeem_address(account_id: &Self::AccountId) -> Option<cf_chains::evm::Address>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn bind_redeem_address(account_id: &Self::AccountId, address: cf_chains::evm::Address);
+}
 
 pub trait DerivedIngressSink<Account, DepositDetails> {
 	fn derive_deposit_details(account: Account) -> DepositDetails;
@@ -1459,6 +1420,49 @@ pub trait AffiliateRegistry {
 
 	/// Return the reverse mapping from account id to affiliate short id.
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
+}
+
+/// Looks up the LP account a broker has linked to receive its failed deposits.
+pub trait BrokerRecoveryApi {
+	type AccountId;
+
+	/// The broker's recovery account, if it has linked one that still has the LP role.
+	fn recovery_account(broker: &Self::AccountId) -> Option<Self::AccountId>;
+}
+
+/// Opaque reference to a failed deposit, e.g. its transaction id or hash.
+pub type FailedDepositReference = BoundedVec<u8, ConstU32<64>>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub enum FailedDepositRecoveryOutcome {
+	/// Egressed to the recovery account's refund address for the asset's chain.
+	Egressed {
+		egress_id: EgressId,
+		destination: ForeignChainAddress,
+		egress_amount: AssetAmount,
+		fee_withheld: AssetAmount,
+	},
+	/// Credited to the recovery account's free balance.
+	Credited,
+}
+
+/// Pays out a failed deposit to the recovery account of the broker it is attributed to.
+pub trait FailedDepositRecovery {
+	type AccountId;
+
+	/// Egresses the funds to the recovery account's refund address, if it has one for the asset's
+	/// chain and the amount covers the egress fee. Otherwise credits the recovery account.
+	///
+	/// Fails if the broker has no recovery account, leaving storage unchanged.
+	fn route_failed_deposit(
+		broker: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<(Self::AccountId, FailedDepositRecoveryOutcome), DispatchError>;
+
+	/// Links a recovery account to the broker, with an Ethereum refund address.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark(_broker: &Self::AccountId) {}
 }
 
 pub trait MinimumDeposit {

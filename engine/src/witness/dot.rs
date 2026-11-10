@@ -16,7 +16,6 @@
 
 mod dot_chain_tracking;
 mod dot_deposits;
-mod dot_source;
 
 use cf_chains::dot::{
 	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotSignature,
@@ -34,32 +33,16 @@ use subxt::{
 
 use tracing::error;
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::collections::BTreeSet;
 
-use cf_utilities::task_scope::Scope;
-
-use crate::{
-	db::PersistentKeyDB,
-	dot::{
-		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
-		PolkadotHash,
-	},
-	witness::common::chain_source::extension::ChainSourceExt,
-};
-use engine_sc_client::{
-	extrinsic_api::signed::SignedExtrinsicApi,
-	storage_api::StorageApi,
-	stream_api::{StreamApi, FINALIZED},
-	STATE_CHAIN_CONNECTION,
+use crate::dot::{
+	retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
+	PolkadotHash,
 };
 
 use anyhow::Result;
-pub use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 
-use super::common::{
-	chain_source::Header,
-	epoch_source::{EpochSourceBuilder, Vault},
-};
+use super::common::{chain_source::Header, epoch_source::Vault};
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
 // subxt metadata --version=14 --pallets Proxy,Balances,TransactionPayment,System --url
@@ -199,83 +182,6 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 			},
 		}
 	}
-}
-
-pub async fn start<StateChainClient, ProcessCall, ProcessingFut>(
-	scope: &Scope<'_, anyhow::Error>,
-	dot_client: DotRetryRpcClient,
-	process_call: ProcessCall,
-	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
-	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
-	db: Arc<PersistentKeyDB>,
-) -> Result<()>
-where
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	ProcessingFut: Future<Output = ()> + Send + 'static,
-{
-	let unfinalised_source = DotUnfinalisedSource::new(dot_client.clone())
-		.strictly_monotonic()
-		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
-		.shared(scope);
-
-	unfinalised_source
-		.clone()
-		.chunk_by_time(epoch_source.clone(), scope)
-		.chain_tracking(state_chain_client.clone(), dot_client.clone())
-		.logging("chain tracking")
-		.spawn(scope);
-
-	let epoch_source = epoch_source
-		.filter_map(
-			|state_chain_client, _epoch_index, hash, _info| async move {
-				state_chain_client
-					.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(
-						hash,
-					)
-					.await
-					.expect(STATE_CHAIN_CONNECTION)
-			},
-			|_state_chain_client, _epoch, _block_hash, historic_info| async move { Some(historic_info) },
-		)
-		.await;
-
-	let vaults = epoch_source.vaults::<cf_chains::Polkadot>().await;
-
-	// Full witnessing
-	DotFinalisedSource::new(dot_client.clone())
-		.strictly_monotonic()
-		.logging("finalised block produced")
-		.then(|header| async move {
-			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
-		})
-		.chunk_by_vault(vaults, scope)
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		// Deposit witnessing
-		.dot_deposits(process_call.clone())
-		// Proxy added witnessing
-		.then(proxy_added_witnessing)
-		// Broadcast success
-		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		.then({
-			let process_call = process_call.clone();
-			let dot_client = dot_client.clone();
-			move |epoch, header| {
-				process_egress(epoch, header, process_call.clone(), dot_client.clone())
-			}
-		})
-		.continuous("Polkadot".to_string(), db)
-		.logging("witnessing")
-		.spawn(scope);
-
-	Ok(())
 }
 
 fn transaction_fee_paids(

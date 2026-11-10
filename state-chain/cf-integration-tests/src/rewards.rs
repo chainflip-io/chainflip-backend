@@ -25,7 +25,6 @@ use crate::{
 use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountInfo, EpochInfo, FeePayment, FundAccount, FundingSource};
 use frame_support::assert_ok;
-use pallet_cf_flip::PalletConfigUpdate;
 use pallet_cf_validator::{DelegationAmount, DelegationSnapshots, HistoricalBonds};
 use state_chain_runtime::{Flip, Funding, Runtime, RuntimeEvent, RuntimeOrigin, System, Validator};
 
@@ -44,7 +43,7 @@ fn move_through_epoch_transition(testnet: &mut network::Network) -> Vec<RuntimeE
 }
 
 #[test]
-fn fee_rewards_are_burned_before_activation_and_distributed_after() {
+fn fee_rewards_accrue_and_are_distributed_at_epoch_transition() {
 	const EPOCH_DURATION_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 3;
 
@@ -75,44 +74,7 @@ fn fee_rewards_are_burned_before_activation_and_distributed_after() {
 				},
 			);
 
-			// Pre-activation, fees are burned and nothing accrues to the distribution reserve.
-			let issuance_before = pallet_cf_flip::TotalIssuance::<Runtime>::get();
-			assert_ok!(<Flip as FeePayment>::try_take_fee(&fee_payer, ONCHAIN_FEE));
-			assert_eq!(
-				pallet_cf_flip::TotalIssuance::<Runtime>::get(),
-				issuance_before - ONCHAIN_FEE
-			);
-			assert_eq!(Flip::pending_rewards(), 0);
-
-			// Activate FLIP 2.1 from the next epoch.
-			let activation_epoch = Validator::epoch_index() + 1;
-			assert_ok!(Flip::update_pallet_config(
-				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-				vec![PalletConfigUpdate::SetFeeRewardsActivationEpoch(activation_epoch)]
-					.try_into()
-					.unwrap(),
-			));
-
-			// The transition into the activation epoch forces a final supply sync and does not
-			// distribute anything.
-			let events = move_through_epoch_transition(&mut testnet);
-			assert_eq!(Validator::epoch_index(), activation_epoch);
-			assert!(
-				events.iter().any(|event| matches!(
-					event,
-					RuntimeEvent::Emissions(
-						pallet_cf_emissions::Event::SupplyUpdateBroadcastRequested(..)
-					)
-				)),
-				"Expected a forced supply update at the activation epoch transition",
-			);
-			assert!(!events.iter().any(|event| matches!(
-				event,
-				RuntimeEvent::Flip(pallet_cf_flip::Event::FlipDistributed { .. })
-			)));
-
-			// Post-activation, on-chain fees accrue to the distribution reserve instead of being
-			// burned...
+			// On-chain fees accrue to the distribution reserve instead of being burned...
 			let issuance_before = pallet_cf_flip::TotalIssuance::<Runtime>::get();
 			assert_ok!(<Flip as FeePayment>::try_take_fee(&fee_payer, ONCHAIN_FEE));
 			assert_eq!(pallet_cf_flip::TotalIssuance::<Runtime>::get(), issuance_before);
@@ -228,14 +190,8 @@ fn fee_rewards_are_split_according_to_the_snapshot_and_bond_of_the_epoch_in_whic
 				[(departing_delegator.clone(), 2 * GENESIS_BALANCE)].into(),
 			);
 
-			// Activate FLIP 2.1 as of the current epoch and accrue some fees.
+			// Accrue some fees during the current epoch.
 			let fee_epoch = Validator::epoch_index();
-			assert_ok!(Flip::update_pallet_config(
-				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-				vec![PalletConfigUpdate::SetFeeRewardsActivationEpoch(fee_epoch)]
-					.try_into()
-					.unwrap(),
-			));
 			let fee_payer = AccountId::from([0xfe; 32]);
 			Funding::fund_account(
 				fee_payer.clone(),

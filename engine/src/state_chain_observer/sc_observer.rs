@@ -71,6 +71,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	ceremony_id: CeremonyId,
 	epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
+	stage_timeout: Duration,
 ) where
 	MultisigClient: MultisigClientApi<C::CryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
@@ -83,8 +84,12 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
-		let keygen_result_future =
-			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
+		let keygen_result_future = multisig_client.initiate_keygen(
+			ceremony_id,
+			epoch_index,
+			keygen_participants,
+			stage_timeout,
+		);
 		scope.spawn(async move {
 			state_chain_client
 				.finalize_signed_extrinsic(
@@ -117,6 +122,7 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 	receiving_participants: BTreeSet<AccountId32>,
 	key_to_share: btc::AggKey,
 	mut new_key: btc::AggKey,
+	stage_timeout: Duration,
 ) where
 	MultisigClient: MultisigClientApi<BtcCryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
@@ -131,6 +137,7 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 			to_epoch,
 			sharing_participants,
 			receiving_participants,
+			stage_timeout,
 		);
 		scope.spawn(async move {
 			let _result = state_chain_client
@@ -162,6 +169,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	ceremony_id: CeremonyId,
 	signers: BTreeSet<AccountId>,
 	signing_info: Vec<(KeyId, C::SigningPayload)>,
+	stage_timeout: Duration,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: SignedExtrinsicApi + UnsignedExtrinsicApi + 'static + Send + Sync,
@@ -176,7 +184,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, signers, signing_info);
+			multisig_client.initiate_signing(ceremony_id, signers, signing_info, stage_timeout);
 
 		scope.spawn(async move {
 			match signing_result_future.await {
@@ -344,6 +352,7 @@ where
                                             KeyId::new(req.epoch_index, req.key),
                                             multisig::eth::SigningPayload(req.payload.0)
                                         )],
+                                        Duration::from_secs(req.stage_timeout_secs.into()),
                                         ).await;
                                     }
                                     CfeEvent::DotThresholdSignatureRequest(req) => {
@@ -359,10 +368,11 @@ where
                                                 multisig::polkadot::SigningPayload::new(req.payload.0)
                                                     .expect("Payload should be correct size")
                                             )],
+                                            Duration::from_secs(req.stage_timeout_secs.into()),
                                         ).await;
 
                                     }
-                                    CfeEvent::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<Runtime, _> { ceremony_id, epoch_index, key, signatories, payload : payloads }) => {
+                                    CfeEvent::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<Runtime, _> { ceremony_id, epoch_index, key, signatories, payload : payloads, stage_timeout_secs }) => {
                                         if payloads.len() > multisig::MAX_BTC_SIGNING_PAYLOADS {
                                             error!(ceremony_id = ceremony_id, "Too many payloads, ignoring Bitcoin signing request ({}/{})", payloads.len(), multisig::MAX_BTC_SIGNING_PAYLOADS);
                                             btc_multisig_client.update_latest_ceremony_id(ceremony_id);
@@ -389,6 +399,7 @@ where
                                                 ceremony_id,
                                                 signatories,
                                                 signing_info,
+                                                Duration::from_secs(stage_timeout_secs.into()),
                                             ).await;
                                         }
                                     }
@@ -400,6 +411,7 @@ where
                                             req.ceremony_id,
                                             req.epoch_index,
                                             req.participants,
+                                            Duration::from_secs(req.stage_timeout_secs.into()),
                                         ).await;
                                     }
                                     CfeEvent::BtcKeygenRequest(req) => {
@@ -410,6 +422,7 @@ where
                                             req.ceremony_id,
                                             req.epoch_index,
                                             req.participants,
+                                            Duration::from_secs(req.stage_timeout_secs.into()),
                                         ).await;
                                     }
                                     CfeEvent::DotKeygenRequest(req) => {
@@ -420,6 +433,7 @@ where
                                             req.ceremony_id,
                                             req.epoch_index,
                                             req.participants,
+                                            Duration::from_secs(req.stage_timeout_secs.into()),
                                         ).await;
                                     }
                                     CfeEvent::BtcKeyHandoverRequest(req) => {
@@ -435,6 +449,7 @@ where
                                             req.receiving_participants,
                                             req.key_to_share,
                                             req.new_key,
+                                            Duration::from_secs(req.stage_timeout_secs.into()),
                                         ).await;
                                     }
                                     CfeEvent::BtcTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
@@ -601,6 +616,7 @@ where
                                                 multisig::ed25519::SigningPayload::new(req.payload.serialize())
                                                     .expect("Payload should be correct size")
                                             )],
+                                            Duration::from_secs(req.stage_timeout_secs.into()),
                                         ).await;
 
                                     }
@@ -612,6 +628,7 @@ where
                                             req.ceremony_id,
                                             req.epoch_index,
                                             req.participants,
+                                            Duration::from_secs(req.stage_timeout_secs.into()),
                                         ).await;
                                     }
                                     CfeEvent::SolTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {

@@ -13,6 +13,7 @@ jobs:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
   force-version-bump:
+    needs: pre-check
     uses: ./.github/workflows/_05_force_version_bump.yml
     secrets: inherit
     with:
@@ -23,9 +24,11 @@ jobs:
       network: "sisyphos"
     secrets: inherit
   test:
+    needs: pre-check
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
   coverage:
+    needs: pre-check
     uses: ./.github/workflows/_11_coverage.yml
     with:
       test_features: runtime-benchmarks
@@ -107,10 +110,9 @@ jobs:
       run-job: true
   publish:
     needs: [package]
-    uses: ./.github/workflows/_30_publish.yml
+    uses: ./.github/workflows/_31_publish.yml
     with:
-      version: "sisyphos/"
-      environment: "development"
+      network: "sisyphos"
     secrets: inherit
   invalidate-apt-cache:
     needs: [publish]

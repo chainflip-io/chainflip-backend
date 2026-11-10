@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{AccountInfo, Chainflip, FundAccount, FundingInfo, FundingSource};
+use crate::{
+	AccountInfo, Chainflip, FundAccount, FundingInfo, FundingSource, RedeemAddressBinding,
+};
+use cf_chains::evm::Address as EthereumAddress;
 use frame_support::{
 	sp_runtime::{
 		traits::{CheckedSub, Zero},
@@ -34,6 +37,7 @@ impl<T> MockPallet for MockFundingInfo<T> {
 
 const BALANCES: &[u8] = b"BALANCES";
 const LAST_FUNDING_SOURCE: &[u8] = b"LAST_FUNDING_SOURCE";
+const BOUND_REDEEM_ADDRESS: &[u8] = b"BOUND_REDEEM_ADDRESS";
 
 impl<T: Chainflip> MockFundingInfo<T> {
 	pub fn credit_funds(account_id: &T::AccountId, amount: T::Amount) {
@@ -129,8 +133,25 @@ impl<T: Chainflip> FundAccount for MockFundingInfo<T> {
 	}
 }
 
+impl<T: Chainflip> RedeemAddressBinding for MockFundingInfo<T> {
+	type AccountId = T::AccountId;
+
+	fn bound_redeem_address(account_id: &Self::AccountId) -> Option<EthereumAddress> {
+		<Self as MockPalletStorage>::get_storage(BOUND_REDEEM_ADDRESS, account_id)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn bind_redeem_address(account_id: &Self::AccountId, address: EthereumAddress) {
+		Self::set_bound_redeem_address(account_id, address);
+	}
+}
+
 impl<T: Chainflip> MockFundingInfo<T> {
 	pub fn last_funding_source() -> Option<FundingSource> {
 		<Self as MockPalletStorage>::get_value(LAST_FUNDING_SOURCE)
+	}
+
+	pub fn set_bound_redeem_address(account_id: &T::AccountId, address: EthereumAddress) {
+		<Self as MockPalletStorage>::put_storage(BOUND_REDEEM_ADDRESS, account_id, address);
 	}
 }

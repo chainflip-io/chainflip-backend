@@ -19,6 +19,6 @@ RUN chmod +x /usr/local/bin/generate-genesis-keys \
     && useradd -m -u 1000 -U -s /bin/sh -d /flip flip \
     && chown -R 1000:1000 /etc/chainflip
 
-USER flip
+USER 1000:1000
 
 CMD ["/usr/local/bin/generate-genesis-keys"]

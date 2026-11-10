@@ -17,7 +17,6 @@ import type {
   AccountId32Like,
   FixedBytes,
   Percent,
-  FixedU128,
   Result,
 } from 'dedot/codecs';
 import type {
@@ -34,6 +33,9 @@ import type {
   CfChainsSolApiSolanaGovCall,
   PalletCfEnvironmentSubmitRuntimeCallChainflipExtrinsic,
   PalletCfEnvironmentSubmitRuntimeCallSignatureData,
+  StateChainRuntimeChainflipElectionsAllElectionInstancesVotes,
+  PalletCfEnvironmentPalletConfigUpdate,
+  PalletCfEnvironmentFailedDepositRecoveryRequest,
   PalletCfFlipPalletConfigUpdate,
   PalletCfFundingRedemptionAmount,
   PalletCfFundingEthereumDepositAndSCCall,
@@ -52,6 +54,7 @@ import type {
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
   CfChainsChainState,
+  PalletCfChainTrackingPalletConfigUpdate,
   CfChainsChainStatePolkadot,
   CfChainsChainStateBitcoin,
   CfChainsEvmAggKey,
@@ -71,7 +74,7 @@ import type {
   CfPrimitivesChainsAssetsAnyAsset,
   CfChainsAddressEncodedAddress,
   CfChainsCcmChannelMetadata,
-  CfChainsRefundParametersChannelRefundParameters,
+  CfChainsRefundParametersChannelRefundParametersEncodedAddress,
   PalletCfSwappingPalletConfigUpdate,
   CfPrimitivesBeneficiary,
   CfPrimitivesDcaParameters,
@@ -109,8 +112,8 @@ import type {
   PalletCfIngressEgressDepositWitnessSolana,
   PalletCfIngressEgressPalletConfigUpdateSolana,
   PalletCfIngressEgressVaultDepositWitnessSolana,
-  PalletCfElectionsElectionIdentifier,
-  PalletCfElectionsVoteStorageAuthorityVote,
+  PalletCfElectionsElectionIdentifier004,
+  PalletCfElectionsVoteStorageAuthorityVote005,
   PalletCfElectionsVoteStorageCompositeTuple7ImplsCompositeSharedData,
   PalletCfElectionsInitialState,
   StateChainRuntimeChainflipWitnessingSolanaElectionsSolanaIngressSettings,
@@ -132,27 +135,27 @@ import type {
   PalletCfLendingPoolsBoostBoostPoolId,
   CfTraitsLendingLoanId,
   CfTraitsLendingRepaymentAmount,
-  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-  PalletCfElectionsVoteStorageAuthorityVoteCompositePartialVote,
+  PalletCfElectionsElectionIdentifier003,
+  PalletCfElectionsVoteStorageAuthorityVote003,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedData,
   PalletCfElectionsInitialState002,
   PalletCfElectionsElectoralSystemsBlockHeightWitnesserBlockHeightWitnesserSettings,
   PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBlockWitnesserSettings,
   StateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinFeeSettings,
   StateChainRuntimeChainflipWitnessingBitcoinElectionsElectionTypes,
-  PalletCfElectionsElectionIdentifier003,
-  PalletCfElectionsVoteStorageAuthorityVote003,
+  PalletCfElectionsElectionIdentifier,
+  PalletCfElectionsVoteStorageAuthorityVote,
   PalletCfElectionsVoteStorageCompositeTuple1ImplsCompositeSharedData,
   PalletCfElectionsInitialState003,
   PalletCfElectionsElectoralSystemsOraclePriceStateMachineOraclePriceSettings,
   StateChainRuntimeChainflipWitnessingGenericElectionsChainlinkOraclePriceSettings,
-  PalletCfElectionsElectionIdentifier004,
-  PalletCfElectionsVoteStorageAuthorityVote004,
+  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+  PalletCfElectionsVoteStorageAuthorityVoteCompositePartialVote,
   PalletCfElectionsVoteStorageCompositeTuple8ImplsCompositeSharedData,
   PalletCfElectionsInitialState004,
   StateChainRuntimeChainflipWitnessingEthereumElectionsElectionTypes,
-  PalletCfElectionsVoteStorageAuthorityVote005,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+  PalletCfElectionsVoteStorageAuthorityVote004,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
   PalletCfElectionsInitialState005,
   CfChainsWitnessPeriodBlockWitnessRange,
   StateChainRuntimeChainflipWitnessingArbitrumElectionsElectionTypes,
@@ -165,7 +168,7 @@ import type {
   PalletCfIngressEgressPalletConfigUpdateTron,
   PalletCfIngressEgressVaultDepositWitnessTron,
   PalletCfElectionsElectionIdentifier005,
-  PalletCfElectionsVoteStorageAuthorityVote006,
+  PalletCfElectionsVoteStorageAuthorityVote007,
   PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData,
   PalletCfElectionsInitialState006,
   StateChainRuntimeChainflipWitnessingTronElectionsElectionTypes,
@@ -175,13 +178,13 @@ import type {
   PalletCfIngressEgressDepositWitnessBsc,
   PalletCfIngressEgressPalletConfigUpdateBsc,
   PalletCfIngressEgressVaultDepositWitnessBsc,
-  PalletCfElectionsVoteStorageAuthorityVote007,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+  PalletCfElectionsVoteStorageAuthorityVote008,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
   PalletCfElectionsInitialState007,
   CfChainsWitnessPeriodBlockWitnessRangeBsc,
   StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes,
-  PalletCfElectionsVoteStorageAuthorityVote008,
-  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+  PalletCfElectionsVoteStorageAuthorityVote006,
+  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
   PalletCfElectionsInitialState008,
   CfChainsWitnessPeriodBlockWitnessRangeAssethub,
   StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes,
@@ -781,6 +784,77 @@ export interface ChainTx<
     >;
 
     /**
+     * Record a validator's election votes across every `pallet-cf-elections` instance in
+     * one extrinsic.
+     *
+     * @param {StateChainRuntimeChainflipElectionsAllElectionInstancesVotes} votes
+     **/
+    submitElectionsVotes: GenericTxCall<
+      (
+        votes: StateChainRuntimeChainflipElectionsAllElectionInstancesVotes,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Environment';
+          palletCall: {
+            name: 'SubmitElectionsVotes';
+            params: { votes: StateChainRuntimeChainflipElectionsAllElectionInstancesVotes };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Apply a list of configuration updates to the pallet.
+     *
+     * Requires Governance.
+     *
+     * @param {Array<PalletCfEnvironmentPalletConfigUpdate>} updates
+     **/
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfEnvironmentPalletConfigUpdate>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Environment';
+          palletCall: {
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfEnvironmentPalletConfigUpdate> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Pays out failed deposits to the recovery accounts of the brokers they are attributed
+     * to: an egress to the recovery account's refund address if it has one and the amount
+     * covers the egress fee, otherwise a credit to its free balance.
+     *
+     * Each deposit is recovered independently. One that fails, e.g. because its broker has
+     * no recovery account, doesn't affect the others, and can be retried.
+     *
+     * Recoveries are not recorded, so Governance must not resubmit a deposit that has been
+     * recovered. The batch is rejected if it contains the same deposit twice.
+     *
+     * Requires Governance.
+     *
+     * @param {Array<PalletCfEnvironmentFailedDepositRecoveryRequest>} requests
+     **/
+    recoverFailedDeposits: GenericTxCall<
+      (
+        requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest>,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Environment';
+          palletCall: {
+            name: 'RecoverFailedDeposits';
+            params: { requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -803,53 +877,6 @@ export interface ChainTx<
           palletCall: {
             name: 'UpdatePalletConfig';
             params: { updates: Array<PalletCfFlipPalletConfigUpdate> };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     * Generic pallet tx call
-     **/
-    [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
-  };
-  /**
-   * Pallet `Emissions`'s transaction calls
-   **/
-  emissions: {
-    /**
-     * Updates the emission rate to Validators.
-     *
-     * Can only be called by the root origin.
-     *
-     * @param {number} inflation
-     **/
-    updateCurrentAuthorityEmissionInflation: GenericTxCall<
-      (inflation: number) => ChainSubmittableExtrinsic<
-        {
-          pallet: 'Emissions';
-          palletCall: {
-            name: 'UpdateCurrentAuthorityEmissionInflation';
-            params: { inflation: number };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
-     * Updates the Supply Update interval.
-     *
-     * @param {number} value
-     **/
-    updateSupplyUpdateInterval: GenericTxCall<
-      (value: number) => ChainSubmittableExtrinsic<
-        {
-          pallet: 'Emissions';
-          palletCall: {
-            name: 'UpdateSupplyUpdateInterval';
-            params: { value: number };
           };
         },
         ChainKnownTypes
@@ -1011,7 +1038,7 @@ export interface ChainTx<
      * - If the source account has a bound redeem address, the destination account must also
      * have the same bound redeem address.
      * - If the source account is currently bidding, the destination account must also be
-     * bidding.
+     * bidding. Bidding accounts cannot rebalance at all while a rotation is in progress.
      * - If the funds to be transferred are associated with a restricted address, the
      * restrictions will be transferred to the destination account.
      *
@@ -1042,7 +1069,7 @@ export interface ChainTx<
 
     /**
      * Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
-     * process the deposit since those two are independant actions.
+     * process the deposit since those two are independent actions.
      *
      * @param {PalletCfFundingEthereumDepositAndSCCall} depositAndCall
      * @param {H160} caller
@@ -1786,14 +1813,16 @@ export interface ChainTx<
   session: {
     /**
      * Sets the session key(s) of the function caller to `keys`.
+     *
      * Allows an account to set its session key prior to becoming a validator.
      * This doesn't take effect until the next session.
      *
-     * The dispatch origin of this function must be signed.
-     *
-     * ## Complexity
-     * - `O(1)`. Actual cost depends on the number of length of `T::Keys::key_ids()` which is
-     * fixed.
+     * - `origin`: The dispatch origin of this function must be signed.
+     * - `keys`: The new session keys to set. These are the public keys of all sessions keys
+     * setup in the runtime.
+     * - `proof`: The proof that `origin` has access to the private keys of `keys`. See
+     * [`impl_opaque_keys`](sp_runtime::impl_opaque_keys) for more information about the
+     * proof format.
      *
      * @param {StateChainRuntimeOpaqueSessionKeys} keys
      * @param {BytesLike} proof
@@ -1823,10 +1852,6 @@ export interface ChainTx<
      * convertible to a validator ID using the chain's typical addressing system (this usually
      * means being a controller account) or directly convertible into a validator ID (which
      * usually means being a stash account).
-     *
-     * ## Complexity
-     * - `O(1)` in number of key types. Actual cost depends on the number of length of
-     * `T::Keys::key_ids()` which is fixed.
      *
      **/
     purgeKeys: GenericTxCall<
@@ -2297,19 +2322,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'EthereumChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -2344,19 +2369,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'PolkadotChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -2391,19 +2416,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'BitcoinChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -3836,7 +3861,7 @@ export interface ChainTx<
      * @param {number} brokerCommission
      * @param {CfChainsCcmChannelMetadata | undefined} channelMetadata
      * @param {number} boostFee
-     * @param {CfChainsRefundParametersChannelRefundParameters} refundParameters
+     * @param {CfChainsRefundParametersChannelRefundParametersEncodedAddress} refundParameters
      **/
     requestSwapDepositAddress: GenericTxCall<
       (
@@ -3846,7 +3871,7 @@ export interface ChainTx<
         brokerCommission: number,
         channelMetadata: CfChainsCcmChannelMetadata | undefined,
         boostFee: number,
-        refundParameters: CfChainsRefundParametersChannelRefundParameters,
+        refundParameters: CfChainsRefundParametersChannelRefundParametersEncodedAddress,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'Swapping';
@@ -3859,7 +3884,7 @@ export interface ChainTx<
               brokerCommission: number;
               channelMetadata: CfChainsCcmChannelMetadata | undefined;
               boostFee: number;
-              refundParameters: CfChainsRefundParametersChannelRefundParameters;
+              refundParameters: CfChainsRefundParametersChannelRefundParametersEncodedAddress;
             };
           };
         },
@@ -3958,7 +3983,7 @@ export interface ChainTx<
      * @param {CfChainsCcmChannelMetadata | undefined} channelMetadata
      * @param {number} boostFee
      * @param {Array<CfPrimitivesBeneficiary>} affiliateFees
-     * @param {CfChainsRefundParametersChannelRefundParameters} refundParameters
+     * @param {CfChainsRefundParametersChannelRefundParametersEncodedAddress} refundParameters
      * @param {CfPrimitivesDcaParameters | undefined} dcaParameters
      **/
     requestSwapDepositAddressWithAffiliates: GenericTxCall<
@@ -3970,7 +3995,7 @@ export interface ChainTx<
         channelMetadata: CfChainsCcmChannelMetadata | undefined,
         boostFee: number,
         affiliateFees: Array<CfPrimitivesBeneficiary>,
-        refundParameters: CfChainsRefundParametersChannelRefundParameters,
+        refundParameters: CfChainsRefundParametersChannelRefundParametersEncodedAddress,
         dcaParameters: CfPrimitivesDcaParameters | undefined,
       ) => ChainSubmittableExtrinsic<
         {
@@ -3985,7 +4010,7 @@ export interface ChainTx<
               channelMetadata: CfChainsCcmChannelMetadata | undefined;
               boostFee: number;
               affiliateFees: Array<CfPrimitivesBeneficiary>;
-              refundParameters: CfChainsRefundParametersChannelRefundParameters;
+              refundParameters: CfChainsRefundParametersChannelRefundParametersEncodedAddress;
               dcaParameters: CfPrimitivesDcaParameters | undefined;
             };
           };
@@ -4038,8 +4063,9 @@ export interface ChainTx<
      * withdrawal address.
      *
      * Affiliates have a unique account id that can only be accessed through the affiliate's
-     * broker. The affiliate account id is derived from the broker account id using a short id
-     * that is unique to that combination of broker and affiliate.
+     * broker. The affiliate account id is derived from the broker account id, the short id and
+     * the withdrawal address. Short ids are recycled on deregistration, so the withdrawal
+     * address is what keeps the derived account id distinct across re-registrations.
      *
      * @param {H160} withdrawalAddress
      **/
@@ -4162,6 +4188,26 @@ export interface ChainTx<
           palletCall: {
             name: 'BindBrokerFeeWithdrawalAddress';
             params: { address: H160 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Links the LP account that receives the broker's failed deposits.
+     *
+     * The link can only be set once.
+     *
+     * @param {AccountId32Like} recoveryAccount
+     **/
+    linkRecoveryAccount: GenericTxCall<
+      (recoveryAccount: AccountId32Like) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Swapping';
+          palletCall: {
+            name: 'LinkRecoveryAccount';
+            params: { recoveryAccount: AccountId32Like };
           };
         },
         ChainKnownTypes
@@ -4374,6 +4420,10 @@ export interface ChainTx<
      *
      * The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
      * external address.
+     *
+     * Redemptions don't consult the withdrawal whitelist, so an account with a whitelist must
+     * first bind its redeem address (see the funding pallet) to a destination the whitelist
+     * allows.
      *
      * @param {bigint} amount
      **/
@@ -5248,19 +5298,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'ArbitrumChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -6370,12 +6420,12 @@ export interface ChainTx<
   solanaElections: {
     /**
      *
-     * @param {Array<[PalletCfElectionsElectionIdentifier, PalletCfElectionsVoteStorageAuthorityVote]>} authorityVotes
+     * @param {Array<[PalletCfElectionsElectionIdentifier004, PalletCfElectionsVoteStorageAuthorityVote005]>} authorityVotes
      **/
     vote: GenericTxCall<
       (
         authorityVotes: Array<
-          [PalletCfElectionsElectionIdentifier, PalletCfElectionsVoteStorageAuthorityVote]
+          [PalletCfElectionsElectionIdentifier004, PalletCfElectionsVoteStorageAuthorityVote005]
         >,
       ) => ChainSubmittableExtrinsic<
         {
@@ -6384,7 +6434,10 @@ export interface ChainTx<
             name: 'Vote';
             params: {
               authorityVotes: Array<
-                [PalletCfElectionsElectionIdentifier, PalletCfElectionsVoteStorageAuthorityVote]
+                [
+                  PalletCfElectionsElectionIdentifier004,
+                  PalletCfElectionsVoteStorageAuthorityVote005,
+                ]
               >;
             };
           };
@@ -6446,15 +6499,15 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifier} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier004} electionIdentifier
      **/
     deleteVote: GenericTxCall<
-      (electionIdentifier: PalletCfElectionsElectionIdentifier) => ChainSubmittableExtrinsic<
+      (electionIdentifier: PalletCfElectionsElectionIdentifier004) => ChainSubmittableExtrinsic<
         {
           pallet: 'SolanaElections';
           palletCall: {
             name: 'DeleteVote';
-            params: { electionIdentifier: PalletCfElectionsElectionIdentifier };
+            params: { electionIdentifier: PalletCfElectionsElectionIdentifier004 };
           };
         },
         ChainKnownTypes
@@ -6557,13 +6610,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifier} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier004} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     clearElectionVotes: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifier,
+        electionIdentifier: PalletCfElectionsElectionIdentifier004,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -6572,7 +6625,7 @@ export interface ChainTx<
           palletCall: {
             name: 'ClearElectionVotes';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifier;
+              electionIdentifier: PalletCfElectionsElectionIdentifier004;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -6584,13 +6637,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifier} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier004} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     invalidateElectionConsensusCache: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifier,
+        electionIdentifier: PalletCfElectionsElectionIdentifier004,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -6599,7 +6652,7 @@ export interface ChainTx<
           palletCall: {
             name: 'InvalidateElectionConsensusCache';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifier;
+              electionIdentifier: PalletCfElectionsElectionIdentifier004;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -6725,19 +6778,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'SolanaChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -6840,19 +6893,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'AssethubChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -7667,15 +7720,12 @@ export interface ChainTx<
   bitcoinElections: {
     /**
      *
-     * @param {Array<[PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra, PalletCfElectionsVoteStorageAuthorityVoteCompositePartialVote]>} authorityVotes
+     * @param {Array<[PalletCfElectionsElectionIdentifier003, PalletCfElectionsVoteStorageAuthorityVote003]>} authorityVotes
      **/
     vote: GenericTxCall<
       (
         authorityVotes: Array<
-          [
-            PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-            PalletCfElectionsVoteStorageAuthorityVoteCompositePartialVote,
-          ]
+          [PalletCfElectionsElectionIdentifier003, PalletCfElectionsVoteStorageAuthorityVote003]
         >,
       ) => ChainSubmittableExtrinsic<
         {
@@ -7685,8 +7735,8 @@ export interface ChainTx<
             params: {
               authorityVotes: Array<
                 [
-                  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-                  PalletCfElectionsVoteStorageAuthorityVoteCompositePartialVote,
+                  PalletCfElectionsElectionIdentifier003,
+                  PalletCfElectionsVoteStorageAuthorityVote003,
                 ]
               >;
             };
@@ -7749,19 +7799,15 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      **/
     deleteVote: GenericTxCall<
-      (
-        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-      ) => ChainSubmittableExtrinsic<
+      (electionIdentifier: PalletCfElectionsElectionIdentifier003) => ChainSubmittableExtrinsic<
         {
           pallet: 'BitcoinElections';
           palletCall: {
             name: 'DeleteVote';
-            params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
-            };
+            params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 };
           };
         },
         ChainKnownTypes
@@ -7874,13 +7920,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     clearElectionVotes: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        electionIdentifier: PalletCfElectionsElectionIdentifier003,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -7889,7 +7935,7 @@ export interface ChainTx<
           palletCall: {
             name: 'ClearElectionVotes';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+              electionIdentifier: PalletCfElectionsElectionIdentifier003;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -7901,13 +7947,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     invalidateElectionConsensusCache: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        electionIdentifier: PalletCfElectionsElectionIdentifier003,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -7916,7 +7962,7 @@ export interface ChainTx<
           palletCall: {
             name: 'InvalidateElectionConsensusCache';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+              electionIdentifier: PalletCfElectionsElectionIdentifier003;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -8032,12 +8078,12 @@ export interface ChainTx<
   genericElections: {
     /**
      *
-     * @param {Array<[PalletCfElectionsElectionIdentifier003, PalletCfElectionsVoteStorageAuthorityVote003]>} authorityVotes
+     * @param {Array<[PalletCfElectionsElectionIdentifier, PalletCfElectionsVoteStorageAuthorityVote]>} authorityVotes
      **/
     vote: GenericTxCall<
       (
         authorityVotes: Array<
-          [PalletCfElectionsElectionIdentifier003, PalletCfElectionsVoteStorageAuthorityVote003]
+          [PalletCfElectionsElectionIdentifier, PalletCfElectionsVoteStorageAuthorityVote]
         >,
       ) => ChainSubmittableExtrinsic<
         {
@@ -8046,10 +8092,7 @@ export interface ChainTx<
             name: 'Vote';
             params: {
               authorityVotes: Array<
-                [
-                  PalletCfElectionsElectionIdentifier003,
-                  PalletCfElectionsVoteStorageAuthorityVote003,
-                ]
+                [PalletCfElectionsElectionIdentifier, PalletCfElectionsVoteStorageAuthorityVote]
               >;
             };
           };
@@ -8111,15 +8154,15 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier} electionIdentifier
      **/
     deleteVote: GenericTxCall<
-      (electionIdentifier: PalletCfElectionsElectionIdentifier003) => ChainSubmittableExtrinsic<
+      (electionIdentifier: PalletCfElectionsElectionIdentifier) => ChainSubmittableExtrinsic<
         {
           pallet: 'GenericElections';
           palletCall: {
             name: 'DeleteVote';
-            params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 };
+            params: { electionIdentifier: PalletCfElectionsElectionIdentifier };
           };
         },
         ChainKnownTypes
@@ -8204,13 +8247,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     clearElectionVotes: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifier003,
+        electionIdentifier: PalletCfElectionsElectionIdentifier,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -8219,7 +8262,7 @@ export interface ChainTx<
           palletCall: {
             name: 'ClearElectionVotes';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifier003;
+              electionIdentifier: PalletCfElectionsElectionIdentifier;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -8231,13 +8274,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     invalidateElectionConsensusCache: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifier003,
+        electionIdentifier: PalletCfElectionsElectionIdentifier,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -8246,7 +8289,7 @@ export interface ChainTx<
           palletCall: {
             name: 'InvalidateElectionConsensusCache';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifier003;
+              electionIdentifier: PalletCfElectionsElectionIdentifier;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -8355,12 +8398,15 @@ export interface ChainTx<
   ethereumElections: {
     /**
      *
-     * @param {Array<[PalletCfElectionsElectionIdentifier004, PalletCfElectionsVoteStorageAuthorityVote004]>} authorityVotes
+     * @param {Array<[PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra, PalletCfElectionsVoteStorageAuthorityVoteCompositePartialVote]>} authorityVotes
      **/
     vote: GenericTxCall<
       (
         authorityVotes: Array<
-          [PalletCfElectionsElectionIdentifier004, PalletCfElectionsVoteStorageAuthorityVote004]
+          [
+            PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+            PalletCfElectionsVoteStorageAuthorityVoteCompositePartialVote,
+          ]
         >,
       ) => ChainSubmittableExtrinsic<
         {
@@ -8370,8 +8416,8 @@ export interface ChainTx<
             params: {
               authorityVotes: Array<
                 [
-                  PalletCfElectionsElectionIdentifier004,
-                  PalletCfElectionsVoteStorageAuthorityVote004,
+                  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+                  PalletCfElectionsVoteStorageAuthorityVoteCompositePartialVote,
                 ]
               >;
             };
@@ -8434,15 +8480,19 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifier004} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
      **/
     deleteVote: GenericTxCall<
-      (electionIdentifier: PalletCfElectionsElectionIdentifier004) => ChainSubmittableExtrinsic<
+      (
+        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+      ) => ChainSubmittableExtrinsic<
         {
           pallet: 'EthereumElections';
           palletCall: {
             name: 'DeleteVote';
-            params: { electionIdentifier: PalletCfElectionsElectionIdentifier004 };
+            params: {
+              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+            };
           };
         },
         ChainKnownTypes
@@ -8541,13 +8591,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifier004} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     clearElectionVotes: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifier004,
+        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -8556,7 +8606,7 @@ export interface ChainTx<
           palletCall: {
             name: 'ClearElectionVotes';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifier004;
+              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -8568,13 +8618,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifier004} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     invalidateElectionConsensusCache: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifier004,
+        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -8583,7 +8633,7 @@ export interface ChainTx<
           palletCall: {
             name: 'InvalidateElectionConsensusCache';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifier004;
+              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -8699,15 +8749,12 @@ export interface ChainTx<
   arbitrumElections: {
     /**
      *
-     * @param {Array<[PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra, PalletCfElectionsVoteStorageAuthorityVote005]>} authorityVotes
+     * @param {Array<[PalletCfElectionsElectionIdentifier003, PalletCfElectionsVoteStorageAuthorityVote004]>} authorityVotes
      **/
     vote: GenericTxCall<
       (
         authorityVotes: Array<
-          [
-            PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-            PalletCfElectionsVoteStorageAuthorityVote005,
-          ]
+          [PalletCfElectionsElectionIdentifier003, PalletCfElectionsVoteStorageAuthorityVote004]
         >,
       ) => ChainSubmittableExtrinsic<
         {
@@ -8717,8 +8764,8 @@ export interface ChainTx<
             params: {
               authorityVotes: Array<
                 [
-                  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-                  PalletCfElectionsVoteStorageAuthorityVote005,
+                  PalletCfElectionsElectionIdentifier003,
+                  PalletCfElectionsVoteStorageAuthorityVote004,
                 ]
               >;
             };
@@ -8730,18 +8777,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'ArbitrumElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum;
             };
           };
         },
@@ -8781,19 +8828,15 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      **/
     deleteVote: GenericTxCall<
-      (
-        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-      ) => ChainSubmittableExtrinsic<
+      (electionIdentifier: PalletCfElectionsElectionIdentifier003) => ChainSubmittableExtrinsic<
         {
           pallet: 'ArbitrumElections';
           palletCall: {
             name: 'DeleteVote';
-            params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
-            };
+            params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 };
           };
         },
         ChainKnownTypes
@@ -8888,13 +8931,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     clearElectionVotes: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        electionIdentifier: PalletCfElectionsElectionIdentifier003,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -8903,7 +8946,7 @@ export interface ChainTx<
           palletCall: {
             name: 'ClearElectionVotes';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+              electionIdentifier: PalletCfElectionsElectionIdentifier003;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -8915,13 +8958,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     invalidateElectionConsensusCache: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        electionIdentifier: PalletCfElectionsElectionIdentifier003,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -8930,7 +8973,7 @@ export interface ChainTx<
           palletCall: {
             name: 'InvalidateElectionConsensusCache';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+              electionIdentifier: PalletCfElectionsElectionIdentifier003;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -9066,19 +9109,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'TronChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -9542,12 +9585,12 @@ export interface ChainTx<
   tronElections: {
     /**
      *
-     * @param {Array<[PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote006]>} authorityVotes
+     * @param {Array<[PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote007]>} authorityVotes
      **/
     vote: GenericTxCall<
       (
         authorityVotes: Array<
-          [PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote006]
+          [PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote007]
         >,
       ) => ChainSubmittableExtrinsic<
         {
@@ -9558,7 +9601,7 @@ export interface ChainTx<
               authorityVotes: Array<
                 [
                   PalletCfElectionsElectionIdentifier005,
-                  PalletCfElectionsVoteStorageAuthorityVote006,
+                  PalletCfElectionsVoteStorageAuthorityVote007,
                 ]
               >;
             };
@@ -9894,19 +9937,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'BscChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -10370,15 +10413,12 @@ export interface ChainTx<
   bscElections: {
     /**
      *
-     * @param {Array<[PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra, PalletCfElectionsVoteStorageAuthorityVote007]>} authorityVotes
+     * @param {Array<[PalletCfElectionsElectionIdentifier003, PalletCfElectionsVoteStorageAuthorityVote008]>} authorityVotes
      **/
     vote: GenericTxCall<
       (
         authorityVotes: Array<
-          [
-            PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-            PalletCfElectionsVoteStorageAuthorityVote007,
-          ]
+          [PalletCfElectionsElectionIdentifier003, PalletCfElectionsVoteStorageAuthorityVote008]
         >,
       ) => ChainSubmittableExtrinsic<
         {
@@ -10388,8 +10428,8 @@ export interface ChainTx<
             params: {
               authorityVotes: Array<
                 [
-                  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-                  PalletCfElectionsVoteStorageAuthorityVote007,
+                  PalletCfElectionsElectionIdentifier003,
+                  PalletCfElectionsVoteStorageAuthorityVote008,
                 ]
               >;
             };
@@ -10401,18 +10441,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'BscElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc;
             };
           };
         },
@@ -10452,19 +10492,15 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      **/
     deleteVote: GenericTxCall<
-      (
-        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-      ) => ChainSubmittableExtrinsic<
+      (electionIdentifier: PalletCfElectionsElectionIdentifier003) => ChainSubmittableExtrinsic<
         {
           pallet: 'BscElections';
           palletCall: {
             name: 'DeleteVote';
-            params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
-            };
+            params: { electionIdentifier: PalletCfElectionsElectionIdentifier003 };
           };
         },
         ChainKnownTypes
@@ -10559,13 +10595,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     clearElectionVotes: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        electionIdentifier: PalletCfElectionsElectionIdentifier003,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -10574,7 +10610,7 @@ export interface ChainTx<
           palletCall: {
             name: 'ClearElectionVotes';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+              electionIdentifier: PalletCfElectionsElectionIdentifier003;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -10586,13 +10622,13 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra} electionIdentifier
+     * @param {PalletCfElectionsElectionIdentifier003} electionIdentifier
      * @param {PalletCfElectionsCorruptStorageAdherance} ignoreCorruptStorage
      * @param {boolean} checkElectionExists
      **/
     invalidateElectionConsensusCache: GenericTxCall<
       (
-        electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
+        electionIdentifier: PalletCfElectionsElectionIdentifier003,
         ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance,
         checkElectionExists: boolean,
       ) => ChainSubmittableExtrinsic<
@@ -10601,7 +10637,7 @@ export interface ChainTx<
           palletCall: {
             name: 'InvalidateElectionConsensusCache';
             params: {
-              electionIdentifier: PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra;
+              electionIdentifier: PalletCfElectionsElectionIdentifier003;
               ignoreCorruptStorage: PalletCfElectionsCorruptStorageAdherance;
               checkElectionExists: boolean;
             };
@@ -10720,12 +10756,12 @@ export interface ChainTx<
   assethubElections: {
     /**
      *
-     * @param {Array<[PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote008]>} authorityVotes
+     * @param {Array<[PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote006]>} authorityVotes
      **/
     vote: GenericTxCall<
       (
         authorityVotes: Array<
-          [PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote008]
+          [PalletCfElectionsElectionIdentifier005, PalletCfElectionsVoteStorageAuthorityVote006]
         >,
       ) => ChainSubmittableExtrinsic<
         {
@@ -10736,7 +10772,7 @@ export interface ChainTx<
               authorityVotes: Array<
                 [
                   PalletCfElectionsElectionIdentifier005,
-                  PalletCfElectionsVoteStorageAuthorityVote008,
+                  PalletCfElectionsVoteStorageAuthorityVote006,
                 ]
               >;
             };
@@ -10748,18 +10784,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'AssethubElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub;
             };
           };
         },

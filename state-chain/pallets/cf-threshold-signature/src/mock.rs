@@ -154,6 +154,18 @@ parameter_types! {
 	pub const CeremonyRetryDelay: BlockNumberFor<Test> = 4;
 }
 
+pub fn threshold_signature_response_timeout() -> BlockNumberFor<Test> {
+	crate::StageTimeouts::<Test, Instance1>::get()
+		.signing_response_timeout_blocks()
+		.into()
+}
+
+pub fn keygen_response_timeout() -> BlockNumberFor<Test> {
+	crate::StageTimeouts::<Test, Instance1>::get()
+		.keygen_response_timeout_blocks()
+		.into()
+}
+
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
@@ -321,7 +333,6 @@ impl TestHelper for TestRunner<()> {
 }
 
 pub const GENESIS_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"genk");
-pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 pub const NEW_AGG_PUB_KEY_PRE_HANDOVER: MockAggKey = MockAggKey(*b"next");
 pub const NEW_AGG_PUB_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"hand");
 
@@ -335,8 +346,6 @@ cf_test_utilities::impl_test_helpers! {
 		system:Default::default(),
 		evm_threshold_signer: EvmThresholdSignerConfig {
 			key: Some(GENESIS_AGG_PUB_KEY),
-			threshold_signature_response_timeout: 1,
-			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			_instance: PhantomData,
 	} },

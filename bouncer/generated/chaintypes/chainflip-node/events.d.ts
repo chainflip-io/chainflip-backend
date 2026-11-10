@@ -3,12 +3,11 @@
 import type { GenericChainEvents, GenericPalletEvent } from 'dedot/types';
 import type {
   DispatchError,
-  AccountId32,
   H256,
+  AccountId32,
   H160,
-  FixedBytes,
   Bytes,
-  FixedU128,
+  FixedBytes,
   Result,
 } from 'dedot/codecs';
 import type {
@@ -22,9 +21,12 @@ import type {
   SolPrimAddress,
   SolPrimDigest,
   CfChainsSolApiSolanaGovCall,
+  CfTraitsElectionsElectionInstance,
+  PalletCfEnvironmentPalletConfigUpdate,
+  CfPrimitivesChainsAssetsAnyAsset,
+  CfTraitsFailedDepositRecoveryOutcome,
   PalletCfFlipImbalancesImbalanceSource,
   PalletCfFlipPalletConfigUpdate,
-  CfPrimitivesChainsForeignChain,
   CfTraitsFundingSource,
   StateChainRuntimeChainflipEthereumScCallsEthereumSCApi,
   SpRuntimeDispatchErrorWithPostInfo,
@@ -40,9 +42,11 @@ import type {
   SpConsensusGrandpaAppPublic,
   PalletCfGovernanceGovernanceCouncil,
   PalletCfTokenholderGovernanceProposal,
+  CfPrimitivesChainsForeignChain,
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
   CfChainsChainState,
+  PalletCfChainTrackingPalletConfigUpdate,
   CfChainsChainStatePolkadot,
   CfChainsChainStateBitcoin,
   CfChainsEvmAggKey,
@@ -59,7 +63,6 @@ import type {
   CfChainsBtcBitcoinTransactionData,
   CfChainsBtcScriptPubkey,
   CfPrimitivesSwapRequestId,
-  CfPrimitivesChainsAssetsAnyAsset,
   CfChainsSwapOrigin,
   CfTraitsSwappingSwapRequestTypeGeneric,
   CfPrimitivesBeneficiary,
@@ -68,7 +71,7 @@ import type {
   PalletCfSwappingSwapRequestCompletionReason,
   CfChainsAddressEncodedAddress,
   CfChainsCcmChannelMetadataDecodedCcmAdditionalData,
-  CfChainsRefundParametersChannelRefundParameters,
+  CfChainsRefundParametersChannelRefundParametersEncodedAddress,
   CfPrimitivesSwapId,
   CfTraitsSwappingSwapType,
   PalletCfSwappingSwapFailureReason,
@@ -120,7 +123,7 @@ import type {
   PalletCfIngressEgressDepositFailedDetailsSolana,
   CfTraitsScheduledEgressDetailsSolana,
   PalletCfIngressEgressPalletConfigUpdateSolana,
-  PalletCfElectionsElectionIdentifier,
+  PalletCfElectionsElectionIdentifier004,
   CfChainsChainStateSolana,
   PalletCfAssetBalancesPalletConfigUpdate,
   PalletCfAssetBalancesWhitelistWhitelistChangeForeignChainAddress,
@@ -140,11 +143,11 @@ import type {
   PalletCfLendingPoolsGeneralLendingLiquidationType,
   PalletCfLendingPoolsGeneralLendingLiquidationCompletionReason,
   PalletCfLendingPoolsLoanRepaidActionType,
-  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
-  StateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinElectoralEvents,
   PalletCfElectionsElectionIdentifier003,
+  StateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinElectoralEvents,
+  PalletCfElectionsElectionIdentifier,
   StateChainRuntimeChainflipWitnessingGenericElectionsGenericElectoralEvents,
-  PalletCfElectionsElectionIdentifier004,
+  PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra,
   StateChainRuntimeChainflipWitnessingEthereumElectionsEthereumElectoralEvents,
   StateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumElectoralEvents,
   CfChainsChainStateTron,
@@ -188,9 +191,9 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * `:code` was updated.
+     * `:code` was updated to the code with the given hash.
      **/
-    CodeUpdated: GenericPalletEvent<'System', 'CodeUpdated', null>;
+    CodeUpdated: GenericPalletEvent<'System', 'CodeUpdated', { hash: H256 }>;
 
     /**
      * A new account was created.
@@ -369,6 +372,56 @@ export interface ChainEvents extends GenericChainEvents {
     BscInitialized: GenericPalletEvent<'Environment', 'BscInitialized', null>;
 
     /**
+     * Votes submitted via [`Call::submit_elections_votes`] were rejected by one election
+     * instance. The other instances in the same call are unaffected.
+     **/
+    ElectionInstanceVotesRejected: GenericPalletEvent<
+      'Environment',
+      'ElectionInstanceVotesRejected',
+      { instance: CfTraitsElectionsElectionInstance; error: DispatchError }
+    >;
+
+    /**
+     * A configuration item for this pallet was updated by governance.
+     **/
+    PalletConfigUpdated: GenericPalletEvent<
+      'Environment',
+      'PalletConfigUpdated',
+      { update: PalletCfEnvironmentPalletConfigUpdate }
+    >;
+
+    /**
+     * A failed deposit was paid out to the broker's recovery account.
+     **/
+    FailedDepositRecovered: GenericPalletEvent<
+      'Environment',
+      'FailedDepositRecovered',
+      {
+        broker: AccountId32;
+        recoveryAccount: AccountId32;
+        asset: CfPrimitivesChainsAssetsAnyAsset;
+        amount: bigint;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+        reference: Bytes;
+      }
+    >;
+
+    /**
+     * A failed deposit could not be recovered. It can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'Environment',
+      'FailedDepositRecoveryFailed',
+      {
+        broker: AccountId32;
+        asset: CfPrimitivesChainsAssetsAnyAsset;
+        amount: bigint;
+        reference: Bytes;
+        error: DispatchError;
+      }
+    >;
+
+    /**
      * Generic pallet event
      **/
     [prop: string]: GenericPalletEvent;
@@ -400,7 +453,6 @@ export interface ChainEvents extends GenericChainEvents {
       'PalletConfigUpdated',
       { update: PalletCfFlipPalletConfigUpdate }
     >;
-    FlipMinted: GenericPalletEvent<'Flip', 'FlipMinted', { to: AccountId32; amount: bigint }>;
     BondUpdated: GenericPalletEvent<
       'Flip',
       'BondUpdated',
@@ -411,56 +463,6 @@ export interface ChainEvents extends GenericChainEvents {
       'FlipDistributed',
       { amounts: Array<[AccountId32, bigint]> }
     >;
-
-    /**
-     * Generic pallet event
-     **/
-    [prop: string]: GenericPalletEvent;
-  };
-  /**
-   * Pallet `Emissions`'s events
-   **/
-  emissions: {
-    /**
-     * Supply Update has been Broadcasted [block_number]
-     **/
-    SupplyUpdateBroadcastRequested: GenericPalletEvent<
-      'Emissions',
-      'SupplyUpdateBroadcastRequested',
-      number
-    >;
-
-    /**
-     * Current authority inflation emission has been updated \[new\]
-     **/
-    CurrentAuthorityInflationEmissionsUpdated: GenericPalletEvent<
-      'Emissions',
-      'CurrentAuthorityInflationEmissionsUpdated',
-      number
-    >;
-
-    /**
-     * SupplyUpdateInterval has been updated [block_number]
-     **/
-    SupplyUpdateIntervalUpdated: GenericPalletEvent<
-      'Emissions',
-      'SupplyUpdateIntervalUpdated',
-      number
-    >;
-
-    /**
-     * The Flip that was bought using the network fee has been burned.
-     **/
-    NetworkFeeBurned: GenericPalletEvent<
-      'Emissions',
-      'NetworkFeeBurned',
-      { amount: bigint; egressId: [CfPrimitivesChainsForeignChain, bigint] }
-    >;
-
-    /**
-     * The Flip burn was skipped.
-     **/
-    FlipBurnSkipped: GenericPalletEvent<'Emissions', 'FlipBurnSkipped', { reason: DispatchError }>;
 
     /**
      * Generic pallet event
@@ -1201,12 +1203,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'EthereumChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -1228,12 +1230,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'PolkadotChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -1255,12 +1257,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'BitcoinChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -2498,7 +2500,7 @@ export interface ChainEvents extends GenericChainEvents {
         boostFee: number;
         channelOpeningFee: bigint;
         affiliateFees: Array<CfPrimitivesBeneficiary>;
-        refundParameters: CfChainsRefundParametersChannelRefundParameters;
+        refundParameters: CfChainsRefundParametersChannelRefundParametersEncodedAddress;
         dcaParameters?: CfPrimitivesDcaParameters | undefined;
       }
     >;
@@ -2599,16 +2601,6 @@ export interface ChainEvents extends GenericChainEvents {
       'Swapping',
       'BatchSwapFailed',
       { asset: CfPrimitivesChainsAssetsAnyAsset; direction: CfPrimitivesSwapLeg; amount: bigint }
-    >;
-    SwapAmountConfiscated: GenericPalletEvent<
-      'Swapping',
-      'SwapAmountConfiscated',
-      {
-        swapRequestId: CfPrimitivesSwapRequestId;
-        asset: CfPrimitivesChainsAssetsAnyAsset;
-        totalAmount: bigint;
-        confiscatedAmount: bigint;
-      }
     >;
     SwapEgressIgnored: GenericPalletEvent<
       'Swapping',
@@ -2740,6 +2732,15 @@ export interface ChainEvents extends GenericChainEvents {
       'Swapping',
       'FlipTransferToGatewaySkipped',
       { reason: DispatchError }
+    >;
+
+    /**
+     * A broker linked the LP account that receives its failed deposits.
+     **/
+    RecoveryAccountLinked: GenericPalletEvent<
+      'Swapping',
+      'RecoveryAccountLinked',
+      { broker: AccountId32; recoveryAccount: AccountId32 }
     >;
 
     /**
@@ -3598,12 +3599,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'ArbitrumChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -4605,7 +4606,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'SolanaElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifier
+      PalletCfElectionsElectionIdentifier004
     >;
 
     /**
@@ -4632,12 +4633,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'SolanaChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -4771,12 +4772,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'AssethubChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -5362,7 +5363,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'BitcoinElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+      PalletCfElectionsElectionIdentifier003
     >;
 
     /**
@@ -5410,7 +5411,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'GenericElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifier003
+      PalletCfElectionsElectionIdentifier
     >;
 
     /**
@@ -5458,7 +5459,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'EthereumElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifier004
+      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
     >;
 
     /**
@@ -5506,7 +5507,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'ArbitrumElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+      PalletCfElectionsElectionIdentifier003
     >;
 
     /**
@@ -5537,12 +5538,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'TronChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -5974,12 +5975,12 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The fee multiplier for this chain has been updated.
+     * A pallet config item has been updated.
      **/
-    FeeMultiplierUpdated: GenericPalletEvent<
+    PalletConfigUpdated: GenericPalletEvent<
       'BscChainTracking',
-      'FeeMultiplierUpdated',
-      { newFeeMultiplier: FixedU128 }
+      'PalletConfigUpdated',
+      { update: PalletCfChainTrackingPalletConfigUpdate }
     >;
 
     /**
@@ -6380,7 +6381,7 @@ export interface ChainEvents extends GenericChainEvents {
     UnknownElection: GenericPalletEvent<
       'BscElections',
       'UnknownElection',
-      PalletCfElectionsElectionIdentifierCompositeElectionIdentifierExtra
+      PalletCfElectionsElectionIdentifier003
     >;
 
     /**

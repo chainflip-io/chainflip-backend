@@ -35,10 +35,11 @@ jobs:
       count: ${{ steps.collect.outputs.count }}
     steps:
       - name: Checkout main
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Collect commits to forward-port
         id: collect
@@ -94,10 +95,11 @@ jobs:
         commit: ${{ fromJSON(needs.prepare.outputs.commits) }}
     steps:
       - name: Checkout main
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Git 🛠️
         uses: ./.github/actions/setup-git
@@ -114,7 +116,7 @@ jobs:
           git cherry-pick -x "${{ matrix.commit.sha }}"
 
       - name: Create Pull Request 🐂
-        uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           commit-message: "forward-port: ${{ matrix.commit.sha }} to main"
@@ -131,3 +133,29 @@ jobs:
           # the pusher, and normal review rules (CODEOWNERS) still apply.
           labels: cherry-pick
           delete-branch: true
+
+  # A failed forward-port means a release fix may never reach `main`, so alert on every failure
+  # (each one is a different commit) rather than only on a pass -> fail transition.
+  notify-discord-on-failure:
+    needs: [prepare, forward-port]
+    if: failure()
+    runs-on: namespace-profile-default-light
+    steps:
+      - name: Notify on failed forward-port 📢
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+          # Discord @Protocol role.
+          PROTOCOL_ROLE_ID: "960793434170458112"
+        run: |
+          set -euo pipefail
+          # Matrix job names carry the commit, eg. "forward-port (<sha>, <subject>)".
+          failed=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
+            | jq -r '[.jobs[] | select(.conclusion == "failure") | "• `" + .name + "`"] | join("\n")')
+          jq -n --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg branch "$GITHUB_REF_NAME" --arg failed "$failed" --arg role "$PROTOCOL_ROLE_ID" '{
+            username: "Forward-port",
+            content: ("<@&" + $role + "> 🍒⚠️ Forward-porting `" + $branch + "` to `main` failed, so these commits need a manual port:\n" + $failed + "\n🔗 Link to job: <" + $url + ">"),
+            allowed_mentions: { roles: [$role] }
+          }' | curl -fsSL -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"

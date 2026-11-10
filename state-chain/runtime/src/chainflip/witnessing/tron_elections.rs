@@ -36,7 +36,7 @@ use pallet_cf_elections::{
 	electoral_system_runner::RunnerStorageAccessTrait,
 	electoral_systems::{
 		block_height_witnesser::{
-			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
+			consensus::BlockHeightWitnesserConsensus, primitives::BHWVote,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
 			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
@@ -58,8 +58,7 @@ use pallet_cf_elections::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use sp_core::{Decode, Encode, Get};
-use sp_runtime::RuntimeDebug;
+use sp_core::{ConstU32, Decode, Encode, Get};
 use sp_std::vec::Vec;
 
 pub type TronElectoralSystemRunner = CompositeRunner<
@@ -88,7 +87,7 @@ pub const TRON_MAINNET_SAFETY_MARGIN: u32 = 19;
 pub const TRON_MAINNET_SAFETY_BUFFER: u32 = 25;
 pub const TRON_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 16;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, Debug, TypeInfo)]
 pub enum TronElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<<Tron as Chain>::ChainBlockNumber> },
 }
@@ -104,12 +103,14 @@ impls! {
 		type BlockHeightChangeHook = Self;
 		type Chain = TronChain;
 		type ReorgHook = Self;
+		// Engine votes carry up to `MAX_SUBMIT_HEADERS + 2` headers.
+		type MaxVoteHeaders = ConstU32<{ TRON_MAX_SUBMIT_HEADERS_IN_BHW_VOTER + 2 }>;
 	}
 
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-		type VoteStorage = vote_storage::bitmap::Bitmap<NonemptyContinuousHeaders<TronChain>>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<BHWVote<Self>>;
 
 		type OnFinalizeReturnItem = Option<ChainProgress<TronChain>>;
 

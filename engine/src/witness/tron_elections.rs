@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
+	elections::{
+		vote_submitter::VoteSubmitter,
+		voter_api::{CompositeVoter, VoterApi},
+	},
 	evm::event::{Event, EvmEventSource},
 	tron::{
 		cached_rpc::{TronCachingClient, TronRetryRpcApiWithResult},
@@ -370,9 +373,9 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmKeyManagerEvent<Runtime, TronIn
 						})?;
 
 					let signer_id = tx_receipt.from;
-					let contract = tx_receipt.to.ok_or_else(|| {
-						anyhow::anyhow!("No to address in receipt for tx {tx_hash:x}")
-					})?;
+					// See the EVM key manager witnessing: a contract-creation transaction has no
+					// `to`. Failing here would fail the vote for the whole block range.
+					let contract = tx_receipt.to.unwrap_or_default();
 					let fee_limit = tron_tx.raw_data.fee_limit.and_then(|fee| fee.try_into().ok());
 
 					let tx_fee = parse_tron_tx_fee(&tx_info);
@@ -432,6 +435,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
 	state_chain_client: Arc<StateChainClient>,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -493,6 +497,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_submitter = vote_submitter.clone();
 			let deposit_channel_config = deposit_channel_config.clone();
 			let vault_deposit_config = vault_deposit_config.clone();
 			let key_manager_config = key_manager_config.clone();
@@ -520,6 +525,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Tron",
+							vote_submitter,
 						)
 						.continuously_vote()
 						.await;

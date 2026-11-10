@@ -96,7 +96,6 @@ mod benches {
 		[pallet_timestamp, Timestamp]
 		[pallet_cf_environment, Environment]
 		[pallet_cf_flip, Flip]
-		[pallet_cf_emissions, Emissions]
 		[pallet_cf_funding, Funding]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
@@ -127,7 +126,7 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn execute_block(block: Block) {
+		fn execute_block(block: <Block as BlockT>::LazyBlock) {
 			Executive::execute_block(block);
 		}
 
@@ -164,7 +163,7 @@ impl_runtime_apis! {
 		}
 
 		fn check_inherents(
-			block: Block,
+			block: <Block as BlockT>::LazyBlock,
 			data: sp_inherents::InherentData,
 		) -> sp_inherents::CheckInherentsResult {
 			data.check_extrinsics(&block)
@@ -198,8 +197,11 @@ impl_runtime_apis! {
 	}
 
 	impl sp_session::SessionKeys<Block> for Runtime {
-		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
-			opaque::SessionKeys::generate(seed)
+		fn generate_session_keys(
+			owner: Vec<u8>,
+			seed: Option<Vec<u8>>,
+		) -> sp_session::OpaqueGeneratedSessionKeys {
+			opaque::SessionKeys::generate(&owner, seed).into()
 		}
 
 		fn decode_session_keys(encoded: Vec<u8>) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
@@ -305,7 +307,7 @@ impl_runtime_apis! {
 		}
 
 		fn execute_block(
-			block: Block,
+			block: <Block as BlockT>::LazyBlock,
 			state_root_check: bool,
 			signature_check: bool,
 			select: frame_try_runtime::TryStateSelect,
@@ -363,7 +365,21 @@ impl_runtime_apis! {
 			use cf_session_benchmarking::Pallet as SessionBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 
-			impl cf_session_benchmarking::Config for Runtime {}
+			impl cf_session_benchmarking::Config for Runtime {
+				fn generate_session_keys_and_proof(
+					owner: crate::AccountId,
+				) -> (opaque::SessionKeys, Vec<u8>) {
+					let keys = opaque::SessionKeys::generate(&owner.encode(), None);
+					(keys.keys, keys.proof.encode())
+				}
+			}
+			impl pallet_cf_validator::benchmarking::RuntimeConfig for Runtime {
+				fn generate_session_keys_and_proof(
+					owner: crate::AccountId,
+				) -> (opaque::SessionKeys, Vec<u8>) {
+					<Runtime as cf_session_benchmarking::Config>::generate_session_keys_and_proof(owner)
+				}
+			}
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 
@@ -745,7 +761,7 @@ impl_runtime_apis! {
 			Validator::current_epoch_started_at()
 		}
 		fn cf_authority_emission_per_block() -> u128 {
-			Emissions::current_authority_emission_per_block()
+			0 // Emissions don't exist any more.
 		}
 		fn cf_backup_emission_per_block() -> u128 {
 			0 // Backups don't exist any more.
@@ -935,13 +951,6 @@ impl_runtime_apis! {
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
 			let is_bidding = Validator::is_bidding(account_id);
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
-			// Once FLIP 2.1 is active, we dont return apy anymore. We move to cf_reward_distribution_estimate
-			// for estimating rewards which can be used to calculate apy.
-			let apy_bp = if Flip::is_flip_2_1_activated() {
-				None
-			} else {
-				calculate_account_apy(account_id)
-			};
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
@@ -961,7 +970,6 @@ impl_runtime_apis! {
 				is_online: HeartbeatQualification::<Runtime>::is_qualified(account_id),
 				is_bidding,
 				bound_redeem_address,
-				apy_bp,
 				restricted_balances,
 				estimated_redeemable_balance,
 				operator: pallet_cf_validator::OperatorChoice::<Runtime>::get(account_id),
@@ -981,7 +989,7 @@ impl_runtime_apis! {
 				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
 					account_id,
 					AssociationToOperator::Validator,
-					|account_id, _| pallet_cf_flip::Pallet::<Runtime>::balance(account_id)
+					|account_id, _| pallet_cf_validator::Pallet::<Runtime>::validator_bid(account_id)
 				),
 				settings,
 				allowed,
@@ -1000,8 +1008,6 @@ impl_runtime_apis! {
 
 		/// Projects each operator/validator/delegator's cumulative FLIP 2.1 fee-reward cut for the
 		/// in-progress epoch, as if the currently accumulated reserve were distributed right now.
-		/// Returns an empty reward pool (and zeroed pool amounts) if FLIP 2.1's fee-reward
-		/// distribution has not yet been activated for the current epoch.
 		fn cf_reward_distribution_estimate() -> RewardDistributionEstimate<FlipBalance> {
 			let epoch_index = Validator::current_epoch();
 			let current_block = System::block_number();
@@ -1011,10 +1017,8 @@ impl_runtime_apis! {
 			let authorities = pallet_cf_validator::CurrentAuthorities::<Runtime>::get();
 			let authority_count = authorities.len() as u32;
 
-			let is_active = epoch_index >= pallet_cf_flip::FeeRewardsActivationEpoch::<Runtime>::get();
-
 			let (total_rewards, per_authority_share, reward_pool) =
-				if is_active && authority_count > 0 {
+				if authority_count > 0 {
 					let total_rewards = Flip::pending_rewards();
 					let per_authority_share = total_rewards / authority_count as FlipBalance;
 
@@ -1293,8 +1297,8 @@ impl_runtime_apis! {
 			Environment::network_environment()
 		}
 
-		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount> {
-			Swapping::maximum_swap_amount(asset)
+		fn cf_max_swap_amount(_asset: Asset) -> Option<AssetAmount> {
+			None // The maximum swap amount doesn't exist any more.
 		}
 
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
@@ -1513,6 +1517,10 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_broker_recovery_account(broker: AccountId) -> Option<AccountId> {
+			pallet_cf_swapping::BrokerRecoveryAccount::<Runtime>::get(broker)
+		}
+
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
 			pallet_cf_account_roles::AccountRoles::<Runtime>::get(account_id)
 		}
@@ -1613,17 +1621,8 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_boost_delay(chain: ForeignChain) -> u32 {
-			match chain {
-				ForeignChain::Ethereum => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, EthereumInstance>::get(),
-				ForeignChain::Polkadot => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, PolkadotInstance>::get(),
-				ForeignChain::Bitcoin => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, BitcoinInstance>::get(),
-				ForeignChain::Arbitrum => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, ArbitrumInstance>::get(),
-				ForeignChain::Bsc => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, BscInstance>::get(),
-				ForeignChain::Solana => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, SolanaInstance>::get(),
-				ForeignChain::Assethub => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, AssethubInstance>::get(),
-				ForeignChain::Tron => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, TronInstance>::get(),
-			}
+		fn cf_boost_delay(_chain: ForeignChain) -> u32 {
+			0
 		}
 
 		fn cf_boost_config() -> BoostConfiguration {
@@ -2331,6 +2330,12 @@ impl_runtime_apis! {
 			use pallet_cf_environment::submit_runtime_call::ChainflipExtrinsic;
 			use ethereum_eip712::build_eip712_data::build_eip712_typed_data;
 			use ethereum_eip712::eip712::TypedData;
+
+			if call.len() > pallet_cf_environment::MAX_NON_NATIVE_CALL_SIZE {
+				return Err(DispatchErrorWithMessage::from(
+					"Call exceeds the maximum size for non-native signed calls",
+				));
+			}
 
 			let spec_version = <Runtime as frame_system::Config>::Version::get().spec_version;
 			let current_block_number = <frame_system::Pallet<Runtime>>::block_number();

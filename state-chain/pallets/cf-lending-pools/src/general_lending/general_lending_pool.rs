@@ -110,8 +110,14 @@ where
 		let remaining_owed_amount = total_owed_amount.saturating_sub(amount_to_withdraw);
 
 		// Update `lender`'s share but don't take the change of the total amount into account yet
-		// (to keep it consistent with shares of other participants):
-		*share = Perquintill::from_rational(remaining_owed_amount, old_total_amount);
+		// (to keep it consistent with shares of other participants). A pool whose total was
+		// fully written off owes every lender nothing; `from_rational` would fall back to 100%
+		// on the zero denominator and leave a phantom share behind.
+		*share = if old_total_amount == 0 {
+			Perquintill::zero()
+		} else {
+			Perquintill::from_rational(remaining_owed_amount, old_total_amount)
+		};
 
 		if *share == Perquintill::zero() {
 			self.lender_shares.remove(lender);
@@ -438,5 +444,30 @@ mod tests {
 
 		assert_eq!(chp_pool.total_amount, 0);
 		assert_eq!(chp_pool.available_amount, 0);
+	}
+
+	#[test]
+	fn lenders_can_exit_fully_written_off_pool() {
+		let mut chp_pool = LendingPool::<AccountId>::new();
+		chp_pool.add_funds(&LENDER_1, 600);
+		chp_pool.add_funds(&LENDER_2, 400);
+		assert_ok!(chp_pool.provide_funds_for_loan(1000));
+
+		chp_pool.write_off_unrecoverable_debt(1000);
+		assert_eq!(chp_pool.total_amount, 0);
+
+		// Exiting an empty pool withdraws nothing and removes the lender rather than leaving a
+		// phantom share that would be rescaled onto the remaining lenders:
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_1, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 0, remaining_amount: 0 })
+		);
+		check_shares(&chp_pool, [(LENDER_2, Perquintill::one())]);
+
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_2, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 0, remaining_amount: 0 })
+		);
+		check_shares(&chp_pool, []);
 	}
 }

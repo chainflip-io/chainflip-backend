@@ -24,10 +24,7 @@ use std::collections::HashMap;
 use cf_primitives::{Asset, FlipBalance};
 use cf_utilities::{
 	for_each_runtime_version,
-	migrations::{
-		basics::{CanonicalPatchVersion, Version},
-		v20000, v20100, v20200, v20300,
-	},
+	migrations::basics::{CanonicalPatchVersion, Version},
 };
 use frame_support::sp_runtime::AccountId32;
 use state_chain_runtime::runtime_apis::custom_api::types::{

@@ -149,6 +149,8 @@ fn consensus_when_all_votes_the_same() {
 
 #[test]
 fn consensus_when_all_votes_the_same_but_different_blocks() {
+	// The block is the one at index `num_votes - SUCCESS_THRESHOLD` of the agreeing votes (blocks
+	// 1, 2, 3..), so that it is never higher than a block voted by an honest authority.
 	with_default_state().expect_consensus(
 		generate_votes_with_different_slots(
 			SUCCESS_THRESHOLD,
@@ -156,7 +158,7 @@ fn consensus_when_all_votes_the_same_but_different_blocks() {
 			3,
 			MonotonicChangeVote { value: 0, block: 0 },
 		),
-		Some((1, 7)),
+		Some((1, 1)),
 	);
 	with_default_state().expect_consensus(
 		generate_votes_with_different_slots(
@@ -165,7 +167,23 @@ fn consensus_when_all_votes_the_same_but_different_blocks() {
 			0,
 			MonotonicChangeVote { value: 0, block: 0 },
 		),
-		Some((1, 7)),
+		Some((1, AUTHORITY_COUNT - SUCCESS_THRESHOLD + 1)),
+	);
+}
+
+#[test]
+fn single_authority_cannot_dictate_the_block_at_minimal_quorum() {
+	const HONEST_BLOCK: Slot = 5;
+	// The election resolves as soon as the agreeing votes reach the success threshold, here with
+	// one authority voting the right value at the highest possible block.
+	with_default_state().expect_consensus(
+		generate_votes(
+			SUCCESS_THRESHOLD - 1,
+			MonotonicChangeVote { value: 1, block: HONEST_BLOCK },
+			1,
+			MonotonicChangeVote { value: 1, block: Slot::MAX },
+		),
+		Some((1, HONEST_BLOCK)),
 	);
 }
 

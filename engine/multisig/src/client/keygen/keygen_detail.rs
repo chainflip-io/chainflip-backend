@@ -516,10 +516,19 @@ pub fn derive_local_pubkeys_for_parties<P: ECPoint>(
 	// commitments.
 	// I.e. y_i = G * f_1(i) + G * f_2(i) + ... G * f_n(i), where
 	// G * f_j(i) = G * s_j + G * c_j_1(i) + G * c_j_2(i) + ... + c_j_{t-1}(i)
+	//
+	// The sum over parties can be pulled inside the polynomial: y_i = A(i), where A's
+	// k-th coefficient commitment is the sum of every party's k-th coefficient
+	// commitment. Aggregating first costs n * t point additions and then only one
+	// degree-t evaluation per receiving party, rather than one per (party, receiver)
+	// pair: n * t point multiplications instead of n^2 * t.
 
 	use rayon::prelude::*;
 
 	// TODO: As a sanity check, assert that commitments are only from sharing parties
+
+	let aggregate_commitments =
+		aggregate_coefficient_commitments(sharing_params.key_params.threshold, commitments);
 
 	sharing_params
 		.indexes_to_share_at
@@ -527,18 +536,20 @@ pub fn derive_local_pubkeys_for_parties<P: ECPoint>(
 		.map(|IndexPair { current_index, future_index }| {
 			(
 				*current_index,
-				commitments
-					.values()
-					.map(|party_commitments| {
-						evaluate_polynomial::<_, _, P::Scalar>(
-							(0..=sharing_params.key_params.threshold)
-								.map(|k| &party_commitments.commitments.0[k as usize]),
-							*future_index,
-						)
-					})
-					.sum(),
+				evaluate_polynomial::<_, _, P::Scalar>(aggregate_commitments.iter(), *future_index),
 			)
 		})
+		.collect()
+}
+
+/// Coefficient-wise sum of all parties' commitment vectors, i.e. the commitments to the
+/// coefficients of the aggregate sharing polynomial `f_1 + f_2 + ... + f_n`.
+fn aggregate_coefficient_commitments<P: ECPoint>(
+	threshold: AuthorityCount,
+	commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+) -> Vec<P> {
+	(0..=threshold as usize)
+		.map(|k| commitments.values().map(|c| c.commitments.0[k]).sum())
 		.collect()
 }
 
@@ -629,6 +640,95 @@ mod tests {
 		);
 
 		assert_eq!(secret, reconstruct_secret(&shares));
+	}
+
+	/// Reference implementation of [derive_local_pubkeys_for_parties]: evaluate every
+	/// party's commitment polynomial at each receiver's index and sum the results.
+	/// Deliberately mirrors the pre-aggregation implementation, including reading exactly
+	/// `threshold + 1` coefficients by index rather than iterating the whole vector.
+	fn derive_local_pubkeys_naive<P: ECPoint>(
+		sharing_params: &SharingParameters,
+		commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+	) -> BTreeMap<AuthorityCount, P> {
+		sharing_params
+			.indexes_to_share_at
+			.iter()
+			.map(|IndexPair { current_index, future_index }| {
+				(
+					*current_index,
+					commitments
+						.values()
+						.map(|c| {
+							evaluate_polynomial::<_, _, P::Scalar>(
+								(0..=sharing_params.key_params.threshold)
+									.map(|k| &c.commitments.0[k as usize]),
+								*future_index,
+							)
+						})
+						.sum(),
+				)
+			})
+			.collect()
+	}
+
+	/// Check `derive_local_pubkeys_for_parties` against the naive reference and against
+	/// the secret shares themselves (each derived pubkey must be `G * sum of shares`).
+	fn check_derived_pubkeys<C: CryptoScheme>(
+		rng: &mut Rng,
+		sharing_params: &SharingParameters,
+		dealer_idxs: &[AuthorityCount],
+	) {
+		let (commitments, outgoing_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = dealer_idxs
+			.iter()
+			.map(|idx| {
+				let (_secret, commitments, shares) =
+					generate_secret_and_shares::<C::Point>(rng, sharing_params, None);
+				((*idx, DKGCommitment { commitments }), (*idx, shares))
+			})
+			.unzip();
+
+		let derived = derive_local_pubkeys_for_parties(sharing_params, &commitments);
+
+		assert_eq!(derived, derive_local_pubkeys_naive(sharing_params, &commitments));
+
+		assert_eq!(derived.len(), sharing_params.indexes_to_share_at.len());
+		for (receiver_idx, pubkey) in &derived {
+			let secret_share: <C::Point as ECPoint>::Scalar =
+				outgoing_shares.values().map(|shares| shares[receiver_idx].value.clone()).sum();
+			assert_eq!(*pubkey, C::Point::from_scalar(&secret_share));
+		}
+	}
+
+	fn derived_pubkeys_match_naive_for_scheme<C: CryptoScheme>() {
+		use rand::SeedableRng;
+		let mut rng = Rng::from_seed([1; 32]);
+
+		// Regular keygen: every party deals and receives, current and future indexes coincide.
+		let params = ThresholdParameters::from_share_count(7);
+		check_derived_pubkeys::<C>(
+			&mut rng,
+			&SharingParameters::for_keygen(params),
+			&[1, 2, 3, 4, 5, 6, 7],
+		);
+
+		// Key handover: only some parties deal, only some receive, and receivers are
+		// evaluated at their (non-consecutive w.r.t. the current ceremony) future indexes.
+		let handover_params = SharingParameters {
+			indexes_to_share_at: BTreeSet::from_iter([
+				IndexPair { current_index: 2, future_index: 1 },
+				IndexPair { current_index: 3, future_index: 2 },
+				IndexPair { current_index: 6, future_index: 3 },
+				IndexPair { current_index: 8, future_index: 4 },
+			]),
+			key_params: ThresholdParameters::from_share_count(4),
+		};
+		check_derived_pubkeys::<C>(&mut rng, &handover_params, &[1, 4, 5, 6, 7]);
+	}
+
+	#[test]
+	fn derived_pubkeys_match_naive() {
+		use crate::client::helpers::test_all_crypto_schemes;
+		test_all_crypto_schemes!(derived_pubkeys_match_naive_for_scheme());
 	}
 
 	#[test]

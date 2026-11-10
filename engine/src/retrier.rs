@@ -128,16 +128,28 @@ type SubmissionFutureOutput =
 type SubmissionFuture = Pin<Box<dyn Future<Output = SubmissionFutureOutput> + Send + 'static>>;
 type SubmissionFutures = FuturesUnordered<SubmissionFuture>;
 
+// The error of the attempt that caused the delay is carried along so that it can be reported to
+// the caller if we end up giving up on the request.
 type RetryDelays = FuturesUnordered<
-	Pin<Box<dyn Future<Output = (RequestId, RequestLog, Attempt, RetryLimit)> + Send + 'static>>,
+	Pin<
+		Box<
+			dyn Future<Output = (RequestId, RequestLog, Attempt, RetryLimit, anyhow::Error)>
+				+ Send
+				+ 'static,
+		>,
+	>,
 >;
 
 type BoxAny = Box<dyn Any + Send>;
 
-type RequestPackage<Client> = (oneshot::Sender<BoxAny>, FutureAnyGenerator<Client>);
+/// What is sent back to the caller: either the response, or the reason we stopped trying to get
+/// one.
+type RequestResponse = Result<BoxAny>;
+
+type RequestPackage<Client> = (oneshot::Sender<RequestResponse>, FutureAnyGenerator<Client>);
 
 type RequestSent<Client> =
-	(oneshot::Sender<BoxAny>, RequestLog, FutureAnyGenerator<Client>, RetryLimit);
+	(oneshot::Sender<RequestResponse>, RequestLog, FutureAnyGenerator<Client>, RetryLimit);
 
 /// Tracks all the retries
 #[derive(Clone)]
@@ -367,7 +379,7 @@ pub trait RetryLimitReturn: Send + 'static {
 	fn into_retry_limit(param_type: Self) -> RetryLimit;
 
 	fn inner_to_return_type<T: Send + 'static>(
-		inner: Result<BoxAny, tokio::sync::oneshot::error::RecvError>,
+		inner: Result<RequestResponse, tokio::sync::oneshot::error::RecvError>,
 		log_message: String,
 	) -> Self::ReturnType<T>;
 }
@@ -382,12 +394,14 @@ impl RetryLimitReturn for NoRetryLimit {
 	}
 
 	fn inner_to_return_type<T: Send + 'static>(
-		inner: Result<BoxAny, tokio::sync::oneshot::error::RecvError>,
+		inner: Result<RequestResponse, tokio::sync::oneshot::error::RecvError>,
 		_log_message: String,
 	) -> Self::ReturnType<T> {
-		let result: BoxAny = inner.expect(
-			"Since there is no limit on the number of retries, we should eventually get a value",
-		);
+		let result: BoxAny = inner
+			.expect(
+				"Since there is no limit on the number of retries, we should eventually get a value",
+			)
+			.expect("We only report an error once a retry limit is reached, and there is none here");
 		*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error.")
 	}
 }
@@ -400,10 +414,12 @@ impl RetryLimitReturn for u32 {
 	}
 
 	fn inner_to_return_type<T: Send + 'static>(
-		inner: Result<BoxAny, tokio::sync::oneshot::error::RecvError>,
+		inner: Result<RequestResponse, tokio::sync::oneshot::error::RecvError>,
 		log_message: String,
 	) -> Self::ReturnType<T> {
-		let result: BoxAny = inner.map_err(|_| anyhow::anyhow!("{log_message}"))?;
+		// The outer error only tells us the retrier dropped the channel without responding, which
+		// it shouldn't do. The error of the request itself comes through the inner result.
+		let result: BoxAny = inner.map_err(|e| anyhow::anyhow!("{log_message}: {e}"))??;
 		Ok(*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error."))
 	}
 }
@@ -425,7 +441,37 @@ where
 		max_retry_delay: Duration,
 		maximum_concurrent_submissions: u32,
 	) -> Self {
-		let (request_sender, mut request_receiver) = mpsc::channel::<RequestSent<Client>>(1);
+		Self::new_with_request_capacity(
+			scope,
+			name,
+			primary_client_fut,
+			backup_client_fut,
+			initial_request_timeout,
+			max_retry_delay,
+			maximum_concurrent_submissions,
+			1,
+		)
+	}
+
+	/// Like [Self::new], but buffers up to `request_capacity` requests that have not yet been
+	/// picked up by the retrier.
+	///
+	/// With a small capacity, a request future that is polled once and then neither polled nor
+	/// dropped can hold the only free slot, blocking every other request. Use a large capacity
+	/// for clients whose requests are made from within nested witnessing streams.
+	pub fn new_with_request_capacity<ClientFut: Future<Output = Client> + Send + 'static>(
+		scope: &Scope<'_, anyhow::Error>,
+		// The name of the retrier that appears in the logs.
+		name: &'static str,
+		primary_client_fut: ClientFut,
+		backup_client_fut: Option<ClientFut>,
+		initial_request_timeout: Duration,
+		max_retry_delay: Duration,
+		maximum_concurrent_submissions: u32,
+		request_capacity: usize,
+	) -> Self {
+		let (request_sender, mut request_receiver) =
+			mpsc::channel::<RequestSent<Client>>(request_capacity);
 
 		let mut request_holder = RequestHolder::new();
 
@@ -449,6 +495,7 @@ where
 						request_holder.insert(request_id, (response_sender, closure));
 					} else {
 						tracing::warn!("Retrier {name}: No clients available for request when received `{request_log}` with id `{request_id}`. Dropping request.");
+						let _result = response_sender.send(Err(anyhow::anyhow!("Retrier {name}: No clients available for request `{request_log}` with id `{request_id}`.")));
 					}
 				},
 				let (request_id, request_log, retry_limit, primary_or_backup, result) = submission_holder.next_or_pending() => {
@@ -456,7 +503,7 @@ where
 					match result {
 						Ok(value) => {
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
-								let _result = response_sender.send(value);
+								let _result = response_sender.send(Ok(value));
 							}
 						},
 						Err((e, attempt)) => {
@@ -479,13 +526,13 @@ where
 								async move {
 									tokio::time::sleep(sleep_duration).await;
 									// pass in primary or backup so we know which client to use.
-									(request_id, request_log, attempt, retry_limit)
+									(request_id, request_log, attempt, retry_limit, e)
 								}
 							));
 						},
 					}
 				},
-				let (request_id, request_log, attempt, retry_limit) = retry_delays.next_or_pending() => {
+				let (request_id, request_log, attempt, retry_limit, last_error) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
 
 					let (response_sender, closure) = request_holder.get(&request_id).expect("We only remove these on success, and if it's in `retry_delays` then it must still be in `request_holder`");
@@ -497,7 +544,9 @@ where
 						match retry_limit {
 							RetryLimit::Limit(max_attempts) if next_attempt >= max_attempts => {
 								tracing::trace!("Retrier {name}: Has reached maximum attempts of `{max_attempts}` for `{request_log}` with id `{request_id}`. Not retrying.");
-								request_holder.remove(&request_id);
+								if let Some((response_sender, _)) = request_holder.remove(&request_id) {
+									let _result = response_sender.send(Err(anyhow::anyhow!("Retrier {name}: Reached maximum attempts of `{max_attempts}` for request `{request_log}` with id `{request_id}`. Last error: {last_error}")));
+								}
 							}
 							_ => {
 								// This await should always return immediately since we must already have a client if we've already made a request.
@@ -506,7 +555,9 @@ where
 									submission_holder.push(submission_future(next_client, request_log, retry_limit, closure, request_id, initial_request_timeout, next_attempt, max_retry_delay, next_primary_or_backup));
 								} else {
 									tracing::warn!("Retrier {name}: No clients available for request `{request_log}` with id `{request_id}`. Dropping request.");
-									request_holder.remove(&request_id);
+									if let Some((response_sender, _)) = request_holder.remove(&request_id) {
+										let _result = response_sender.send(Err(anyhow::anyhow!("Retrier {name}: No clients available for request `{request_log}` with id `{request_id}`. Last error: {last_error}")));
+									}
 								}
 							}
 						}
@@ -525,7 +576,7 @@ where
 		specific_closure: TypedFutureGenerator<T, Client>,
 		request_log: RequestLog,
 		retry_limit: RetryLimit,
-	) -> oneshot::Receiver<BoxAny> {
+	) -> oneshot::Receiver<RequestResponse> {
 		let future_any_fn: FutureAnyGenerator<Client> = Box::pin(move |client| {
 			let future = specific_closure(client);
 			Box::pin(async move {
@@ -534,7 +585,7 @@ where
 				Ok(result)
 			})
 		});
-		let (tx, rx) = oneshot::channel::<BoxAny>();
+		let (tx, rx) = oneshot::channel::<RequestResponse>();
 		let _result = self.request_sender.send((tx, request_log, future_any_fn, retry_limit)).await;
 		rx
 	}
@@ -562,7 +613,7 @@ where
 		let rx = self.send_request(specific_closure, request_log.clone(), retry_limit).await;
 		R::inner_to_return_type(
 			rx.await,
-			format!("Maximum attempt of `{retry_limit:?}` reached for request `{request_log}`."),
+			format!("Retrier dropped request `{request_log}` (limit `{retry_limit:?}`) without returning a result."),
 		)
 	}
 }
@@ -603,10 +654,10 @@ mod tests {
 	}
 
 	async fn check_result<T: PartialEq + std::fmt::Debug + Send + Clone + 'static>(
-		result_rx: oneshot::Receiver<BoxAny>,
+		result_rx: oneshot::Receiver<RequestResponse>,
 		expected: T,
 	) {
-		let result: Box<dyn Any> = result_rx.await.unwrap();
+		let result: Box<dyn Any> = result_rx.await.unwrap().unwrap();
 		let downcasted = result.downcast_ref::<T>().unwrap();
 		assert_eq!(downcasted, &expected);
 	}
@@ -769,6 +820,63 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn requests_that_are_no_longer_polled_do_not_block_other_requests() {
+		task_scope(|scope| {
+			async move {
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
+
+				let retrier_client = RetrierClient::new_with_request_capacity(
+					scope,
+					"test",
+					async move {},
+					None,
+					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
+					100,
+					tokio::sync::Semaphore::MAX_PERMITS,
+				);
+
+				// Poll each request once and then abandon it without dropping it, as happens to a
+				// request made from within a stream that its consumer has stopped polling.
+				let mut abandoned = (0..3u32)
+					.map(|i| {
+						retrier_client
+							.request(
+								RequestLog::new(format!("abandoned {i}"), None),
+								specific_fut_closure(i, INITIAL_TIMEOUT),
+							)
+							.boxed()
+					})
+					.collect::<Vec<_>>();
+				for request in &mut abandoned {
+					assert!(futures::poll!(request).is_pending());
+				}
+				// Give the retrier a chance to receive requests.
+				tokio::time::sleep(INITIAL_TIMEOUT).await;
+
+				const REQUEST: u32 = 42;
+				assert_eq!(
+					REQUEST,
+					tokio::time::timeout(
+						Duration::from_secs(5),
+						retrier_client.request(
+							RequestLog::new("request".to_string(), None),
+							specific_fut_closure(REQUEST, INITIAL_TIMEOUT),
+						),
+					)
+					.await
+					.expect("Request should not be blocked by abandoned requests")
+				);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
 	async fn using_the_request_with_limit_interface_works() {
 		task_scope(|scope| {
 			async move {
@@ -894,13 +1002,15 @@ mod tests {
 		.unwrap();
 	}
 
+	const REQUEST_ERROR: &str = "Sorry, this just doesn't work.";
+
 	fn specific_fut_err<T: Send + Clone + 'static, Client: Debug>(
 		timeout: Duration,
 	) -> TypedFutureGenerator<T, Client> {
 		Box::pin(move |_client| {
 			Box::pin(async move {
 				tokio::time::sleep(timeout).await;
-				Err(anyhow::anyhow!("Sorry, this just doesn't work."))
+				Err(anyhow::anyhow!("{REQUEST_ERROR}"))
 			})
 		})
 	}
@@ -921,7 +1031,7 @@ mod tests {
 					100,
 				);
 
-				retrier_client
+				let error = retrier_client
 					.request_with_limit(
 						RequestLog::new("request".to_string(), None),
 						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
@@ -929,6 +1039,13 @@ mod tests {
 					)
 					.await
 					.unwrap_err();
+
+				// The error of the last attempt should be reported to the caller, rather than
+				// only ending up in the logs.
+				assert!(
+					error.to_string().contains(REQUEST_ERROR),
+					"Expected the request error to be reported, got: {error}"
+				);
 
 				Ok(())
 			}

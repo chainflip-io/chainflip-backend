@@ -29,20 +29,20 @@ use cf_chains::{
 	SwapOrigin,
 };
 use cf_primitives::{
-	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
-	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId,
-	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP,
+	basis_points::SignedBasisPoints, AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount,
+	BasisPoints, Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain,
+	SwapId, SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP,
 	FLIP_TO_GATEWAY_MULTIPLE, ONE_AS_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET,
 	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationHooks, ExpiryBehaviour,
-	FeePayment, FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi,
-	LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
-	WithdrawalAddressRestriction,
+	impl_pallet_safe_mode, AccountRoleRegistry, AffiliateRegistry, AssetConverter, BalanceApi,
+	Bonding, BrokerRecoveryApi, ChainflipNetworkInfo, ChannelIdAllocator, DepositApi,
+	DeregistrationHooks, ExpiryBehaviour, FeePayment, FundingInfo, FundingSource,
+	GetMinimumFunding, IngressEgressFeeApi, LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry,
+	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -55,7 +55,7 @@ use frame_support::{
 		DispatchError, Permill, TransactionOutcome,
 	},
 	storage::{with_storage_layer, with_transaction_unchecked},
-	traits::HandleLifetime,
+	traits::{HandleLifetime, OnKilledAccount},
 	transactional, CloneNoBound, Hashable,
 };
 use frame_system::pallet_prelude::*;
@@ -88,7 +88,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const STORAGE_VERSION_U16: u16 = 17;
+pub const STORAGE_VERSION_U16: u16 = 19;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
@@ -122,12 +122,30 @@ enum EgressType {
 	Refund { refund_fee: AssetAmount },
 }
 
+/// AffiliateDetails are assumed to be immutable for the lifetime of the affiliate account. In
+/// particular, the withdrawal address cannot be updated. If an affiliate wishes to change the
+/// withdrawal address, they can create a new affiliate account with a new short id.
 #[derive(
 	Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Copy, Clone, Debug,
 )]
 pub struct AffiliateDetails {
 	pub short_id: AffiliateShortId,
+	/// NOTE: this address should never be updated, it is part of the Affiliate's identity.
 	pub withdrawal_address: EthereumAddress,
+}
+
+impl AffiliateDetails {
+	pub fn derive_account_id<T: Config>(
+		&self,
+		broker_id: T::AccountId,
+	) -> Result<T::AccountId, Error<T>> {
+		Decode::decode(&mut TrailingZeroInput::new(
+			(*b"chainflip/affiliate", broker_id.clone(), self.short_id, self.withdrawal_address)
+				.blake2_256()
+				.as_ref(),
+		))
+		.map_err(|_| Error::<T>::AffiliateAccountIdDerivationFailed)
+	}
 }
 
 /// Refund parameter used within the swapping pallet.
@@ -536,7 +554,7 @@ impl<T: Config> SwapRequest<T> {
 
 #[derive(
 	Clone,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 	PartialEq,
 	Eq,
 	Encode,
@@ -547,8 +565,6 @@ impl<T: Config> SwapRequest<T> {
 )]
 #[scale_info(skip_type_params(T, I))]
 pub enum PalletConfigUpdate<T: Config> {
-	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.
-	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
 	/// Set the delay in blocks before retrying a previously failed swap.
 	SwapRetryDelay { delay: BlockNumberFor<T> },
 	/// Set the interval at which we buy FLIP using the swap fee that was taken in USDC.
@@ -717,15 +733,6 @@ pub mod pallet {
 	pub type CollectedRejectedFunds<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
-	/// Maximum amount allowed to be put into a swap. Excess amounts are confiscated.
-	#[pallet::storage]
-	#[pallet::getter(fn maximum_swap_amount)]
-	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
-
-	/// FLIP ready to be burned.
-	#[pallet::storage]
-	pub type FlipToBurn<T: Config> = StorageValue<_, i128, ValueQuery>;
-
 	/// FLIP ready to be sent to gateway.
 	#[pallet::storage]
 	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
@@ -828,6 +835,13 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type VaultSwapMinimumBrokerFee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, BasisPoints, ValueQuery>;
+
+	/// The LP account each broker has linked to receive its failed deposits.
+	///
+	/// Kept when the broker deregisters and only removed when the account is reaped.
+	#[pallet::storage]
+	pub type BrokerRecoveryAccount<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
 
 	#[pallet::storage]
 	pub type DefaultOraclePriceSlippageProtection<T: Config> = StorageMap<
@@ -943,12 +957,6 @@ pub mod pallet {
 			direction: SwapLeg,
 			amount: AssetAmount,
 		},
-		SwapAmountConfiscated {
-			swap_request_id: SwapRequestId,
-			asset: Asset,
-			total_amount: AssetAmount,
-			confiscated_amount: AssetAmount,
-		},
 		SwapEgressIgnored {
 			swap_request_id: SwapRequestId,
 			asset: Asset,
@@ -1032,6 +1040,11 @@ pub mod pallet {
 		/// FLIP egress to the State Chain Gateway was skipped.
 		FlipTransferToGatewaySkipped {
 			reason: DispatchError,
+		},
+		/// A broker linked the LP account that receives its failed deposits.
+		RecoveryAccountLinked {
+			broker: T::AccountId,
+			recovery_account: T::AccountId,
 		},
 	}
 	#[pallet::error]
@@ -1124,6 +1137,14 @@ pub mod pallet {
 		PoolDoesNotExist,
 		/// The account has a pending swap request.
 		PendingSwapRequest,
+		/// The broker has already linked a recovery account.
+		RecoveryAccountAlreadyLinked,
+		/// The recovery account must be a liquidity provider.
+		RecoveryAccountNotLiquidityProvider,
+		/// The account is already bonded, so the broker bond can't be applied.
+		AccountBonded,
+		/// The FLIP to send to the gateway is too small relative to the egress fee.
+		FlipToGatewayAmountBelowThreshold,
 	}
 
 	#[pallet::genesis_config]
@@ -1308,9 +1329,6 @@ pub mod pallet {
 
 			for update in updates {
 				match update {
-					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
-						MaximumSwapAmount::<T>::set(asset, amount);
-					},
 					PalletConfigUpdate::SwapRetryDelay { delay } => {
 						ensure!(
 							delay != BlockNumberFor::<T>::zero(),
@@ -1547,6 +1565,10 @@ pub mod pallet {
 				Error::<T>::InsufficientFunds
 			);
 
+			// The bond is a single value per account, so setting the broker bond would overwrite
+			// (and closing the channel would release) a bond from another source.
+			ensure!(T::Bonder::bond(&broker_id).is_zero(), Error::<T>::AccountBonded);
+
 			let channel_id = T::ChannelIdAllocator::allocate_private_channel_id()?;
 
 			BrokerPrivateBtcChannels::<T>::insert(broker_id.clone(), channel_id);
@@ -1584,8 +1606,9 @@ pub mod pallet {
 		/// withdrawal address.
 		///
 		/// Affiliates have a unique account id that can only be accessed through the affiliate's
-		/// broker. The affiliate account id is derived from the broker account id using a short id
-		/// that is unique to that combination of broker and affiliate.
+		/// broker. The affiliate account id is derived from the broker account id, the short id and
+		/// the withdrawal address. Short ids are recycled on deregistration, so the withdrawal
+		/// address is what keeps the derived account id distinct across re-registrations.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
@@ -1605,10 +1628,8 @@ pub mod pallet {
 					.ok_or(Error::<T>::AffiliateShortIdOutOfBounds)?,
 			);
 
-			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
-				(*b"chainflip/affiliate", broker_id.clone(), short_id).blake2_256().as_ref(),
-			))
-			.map_err(|_| Error::<T>::AffiliateAccountIdDerivationFailed)?;
+			let affiliate_details = AffiliateDetails { short_id, withdrawal_address };
+			let affiliate_id = affiliate_details.derive_account_id::<T>(broker_id.clone())?;
 
 			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
 			if !frame_system::Pallet::<T>::account_exists(&affiliate_id) {
@@ -1616,11 +1637,7 @@ pub mod pallet {
 				let _ = frame_system::Provider::<T>::created(&affiliate_id);
 			}
 
-			AffiliateAccountDetails::<T>::insert(
-				&broker_id,
-				&affiliate_id,
-				AffiliateDetails { short_id, withdrawal_address },
-			);
+			AffiliateAccountDetails::<T>::insert(&broker_id, &affiliate_id, affiliate_details);
 
 			Self::deposit_event(Event::<T>::AffiliateRegistration {
 				broker_id,
@@ -1822,6 +1839,35 @@ pub mod pallet {
 			T::WithdrawalRestriction::bind_broker_withdrawal_address(&broker, address)
 				.map_err(|_| Error::<T>::BrokerAlreadyBound)?;
 			Self::deposit_event(Event::BoundBrokerWithdrawalAddress { broker, address });
+			Ok(())
+		}
+
+		/// Links the LP account that receives the broker's failed deposits.
+		///
+		/// The link can only be set once.
+		#[pallet::call_index(20)]
+		#[pallet::weight(T::WeightInfo::link_recovery_account())]
+		pub fn link_recovery_account(
+			origin: OriginFor<T>,
+			recovery_account: T::AccountId,
+		) -> DispatchResult {
+			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(
+					&recovery_account,
+					AccountRole::LiquidityProvider
+				),
+				Error::<T>::RecoveryAccountNotLiquidityProvider
+			);
+
+			BrokerRecoveryAccount::<T>::try_mutate(&broker, |linked| {
+				ensure!(linked.is_none(), Error::<T>::RecoveryAccountAlreadyLinked);
+				*linked = Some(recovery_account.clone());
+				Ok::<_, Error<T>>(())
+			})?;
+
+			Self::deposit_event(Event::RecoveryAccountLinked { broker, recovery_account });
+
 			Ok(())
 		}
 	}
@@ -2162,11 +2208,12 @@ pub mod pallet {
 					)
 				};
 
-				// Sum the deltas or just use a single leg delta if the other leg doesn't have
-				// an oracle price.
+				// Compound the deltas or just use a single leg delta if the other leg doesn't have
+				// an oracle price. The deltas must not be summed: legs that deviate in opposite
+				// directions would cancel out and hide a large loss on the route as a whole.
 				let total_delta = match (to_stable_delta, from_stable_delta) {
 					(Ok(Some(to_stable)), Ok(Some(from_stable))) =>
-						Ok(Some(to_stable.saturating_add(&from_stable))),
+						Ok(Some(to_stable.compound(&from_stable))),
 					// Use the one sided slippage as long as that side is not USDC.
 					(Ok(Some(delta)), Ok(None)) if swap.input_asset() != STABLE_ASSET =>
 						Ok(Some(delta)),
@@ -2647,20 +2694,15 @@ pub mod pallet {
 									if request.output_asset == Asset::Flip {
 										if output_amount < *flip_to_subtract_from_swap_output {
 											// In the rare event that this occurs we will track the
-											// deficit and offset it against the next burn
+											// deficit and offset it against the accumulated fees
+											// pot
 											let deficit: i128 = flip_to_subtract_from_swap_output
 												.saturating_sub(output_amount)
 												.try_into()
 												.unwrap_or(i128::MAX);
-											if T::FeePayment::is_flip_2_1_activated() {
-												T::FeePayment::add_to_offchain_flip_to_be_distributed(
-													-deficit,
-												);
-											} else {
-												FlipToBurn::<T>::mutate(|total| {
-													total.saturating_reduce(deficit);
-												});
-											}
+											T::FeePayment::add_to_offchain_flip_to_be_distributed(
+												-deficit,
+											);
 										} else {
 											T::FundAccount::fund_account(
 												account_id.clone(),
@@ -2683,17 +2725,9 @@ pub mod pallet {
 					},
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
-						if T::FeePayment::is_flip_2_1_activated() {
-							T::FeePayment::add_to_offchain_flip_to_be_distributed(
-								output_amount.try_into().unwrap_or(i128::MAX),
-							);
-						} else {
-							FlipToBurn::<T>::mutate(|total| {
-								total.saturating_accrue(
-									output_amount.try_into().unwrap_or(i128::MAX),
-								);
-							});
-						}
+						T::FeePayment::add_to_offchain_flip_to_be_distributed(
+							output_amount.try_into().unwrap_or(i128::MAX),
+						);
 					} else {
 						log_or_panic!(
 							"NetworkFee burning should not be in asset: {:?}",
@@ -3186,8 +3220,8 @@ pub mod pallet {
 				.map_err(Into::into)
 				.and_then(
 					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
-						if egress_amount < FLIP_TO_GATEWAY_MULTIPLE * fee_withheld {
-							Err(DispatchError::Other("flip to gateway multiple below threshold"))
+						if egress_amount <= FLIP_TO_GATEWAY_MULTIPLE * fee_withheld {
+							Err(Error::<T>::FlipToGatewayAmountBelowThreshold.into())
 						} else {
 							Ok(result)
 						}
@@ -3228,33 +3262,6 @@ pub mod pallet {
 				*id
 			});
 
-			// Do not limit the maximum swap amount for network fee swaps.
-			let net_amount = if matches!(
-				request_type,
-				SwapRequestType::NetworkFee | SwapRequestType::IngressEgressFee
-			) {
-				input_amount
-			} else {
-				let (swap_amount, confiscated_amount) =
-					match MaximumSwapAmount::<T>::get(input_asset) {
-						Some(max) =>
-							(sp_std::cmp::min(input_amount, max), input_amount.saturating_sub(max)),
-						None => (input_amount, Zero::zero()),
-					};
-				if !confiscated_amount.is_zero() {
-					CollectedRejectedFunds::<T>::mutate(input_asset, |fund| {
-						*fund = fund.saturating_add(confiscated_amount)
-					});
-					Self::deposit_event(Event::<T>::SwapAmountConfiscated {
-						swap_request_id: request_id,
-						asset: input_asset,
-						total_amount: input_amount,
-						confiscated_amount,
-					});
-				}
-				swap_amount
-			};
-
 			// Restrict the number of chunks based on the minimum chunk size.
 			let dca_params = dca_params.map(|mut dca_params| {
 				let minimum_chunk_size = MinimumChunkSize::<T>::get(input_asset);
@@ -3288,7 +3295,7 @@ pub mod pallet {
 					Self::schedule_swap(
 						input_asset,
 						output_asset,
-						net_amount,
+						input_amount,
 						// No refund parameters for network fee swaps
 						None,
 						SwapType::NetworkFee,
@@ -3310,7 +3317,7 @@ pub mod pallet {
 					Self::schedule_swap(
 						input_asset,
 						output_asset,
-						net_amount,
+						input_amount,
 						// No refund parameters for ingress/egress fee swaps
 						None,
 						SwapType::IngressEgressFee,
@@ -3330,7 +3337,7 @@ pub mod pallet {
 				},
 				SwapRequestType::Regular { ref output_action } |
 				SwapRequestType::RegularNoNetworkFee { ref output_action } => {
-					let mut dca_state = DcaState::new(net_amount, dca_params.clone());
+					let mut dca_state = DcaState::new(input_amount, dca_params.clone());
 					let chunk_input_amount = dca_state.calculate_next_chunk().unwrap_or_default();
 
 					// Choose correct network fee for the swap
@@ -3585,15 +3592,6 @@ impl<T: Config> DeregistrationHooks for PendingSwapDeregistrationCheck<T> {
 	}
 }
 
-impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
-	fn take_flip_to_burn() -> i128 {
-		FlipToBurn::<T>::take()
-	}
-	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
-		FlipToBeSentToGateway::<T>::take()
-	}
-}
-
 impl<T: Config> cf_traits::MoveFlipToGateway for Pallet<T> {
 	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount) {
 		FlipToBeSentToGateway::<T>::mutate(|total| {
@@ -3683,6 +3681,29 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 
 	fn get_minimum_vault_swap_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints {
 		VaultSwapMinimumBrokerFee::<T>::get(broker_id)
+	}
+}
+
+impl<T: Config> BrokerRecoveryApi for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn recovery_account(broker: &Self::AccountId) -> Option<Self::AccountId> {
+		BrokerRecoveryAccount::<T>::get(broker).filter(|recovery_account| {
+			T::AccountRoleRegistry::has_account_role(
+				recovery_account,
+				AccountRole::LiquidityProvider,
+			)
+		})
+	}
+}
+
+/// Removes the recovery account link when the broker account is reaped. Deregistering as a broker
+/// keeps the link, so it can't be cleared by deregistering and registering again.
+pub struct DeleteRecoveryAccount<T: Config>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteRecoveryAccount<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		BrokerRecoveryAccount::<T>::remove(who);
 	}
 }
 

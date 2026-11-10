@@ -356,7 +356,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	Clone,
 	PartialEq,
 	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
+	Debug,
 )]
 pub struct WitnesserCallPermission {
 	pub governance: bool,
@@ -427,9 +427,7 @@ impl From<WitnesserCallPermission> for crate::safe_mode::WitnesserCallPermission
 }
 
 // The v16 LendingPoolsSafeMode, with add_collateral/remove_collateral removed in v17.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct LendingPoolsSafeMode {
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
@@ -456,11 +454,9 @@ impl From<LendingPoolsSafeMode> for pallet_cf_lending_pools::PalletSafeMode {
 
 // The v16 RuntimeSafeMode: no broadcast_tron, ingress_egress_tron, or tron_elections fields,
 // and with the old LendingPoolsSafeMode and WitnesserCallPermission.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct RuntimeSafeMode {
-	pub emissions: pallet_cf_emissions::PalletSafeMode,
+	pub emissions: super::before_version_23::EmissionsSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,
 	pub swapping: pallet_cf_swapping::PalletSafeMode,
 	pub liquidity_provider: before_version_19::LiquidityProviderSafeMode,
@@ -510,7 +506,6 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 				pallet_cf_witnesser::PalletSafeMode::CodeAmber(old_perms.into()),
 		};
 		Self {
-			emissions: old.emissions,
 			funding: old.funding,
 			swapping: old.swapping,
 			liquidity_provider: old.liquidity_provider.into(),

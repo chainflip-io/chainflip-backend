@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
+	elections::{
+		vote_submitter::VoteSubmitter,
+		voter_api::{CompositeVoter, VoterApi},
+	},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
 		event::{Event, EvmEventSource},
@@ -50,7 +53,11 @@ use crate::{
 		},
 	},
 };
-use cf_chains::{assets, eth::EthereumTrackedData, evm::ToAccountId32};
+use cf_chains::{
+	assets,
+	eth::EthereumTrackedData,
+	evm::{EvmWitnessingConfig, ToAccountId32},
+};
 use cf_primitives::chains::assets::eth::Asset as EthAsset;
 use cf_utilities::{
 	context,
@@ -72,7 +79,7 @@ use pallet_cf_elections::{
 	},
 	ElectoralSystemTypes, VoteOf,
 };
-use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
+use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall, ScCallBytes};
 use sp_core::{H160, H256};
 use state_chain_runtime::{
 	chainflip::witnessing::ethereum_elections::{
@@ -114,7 +121,7 @@ impl EvmBlockQuery for EvmSingleBlockQuery {
 	}
 }
 trait EvmSingleBlockChainTypes =
-	ChainTypes<ChainBlockNumber = u64, ChainBlockHash = H256> + Sync + Send;
+	ChainTypes<ChainBlockNumber = u64, ChainBlockHash = H256> + EvmWitnessingConfig + Sync + Send;
 
 #[async_trait::async_trait]
 impl<Chain: EvmSingleBlockChainTypes> WitnessClient<Chain>
@@ -123,12 +130,12 @@ impl<Chain: EvmSingleBlockChainTypes> WitnessClient<Chain>
 	type BlockQuery = EvmSingleBlockQuery;
 
 	async fn best_block_number(&self) -> Result<u64> {
-		Ok(self.client.get_block_number().await?.low_u64())
+		self.highest_witnessable_block_number().await
 	}
 
 	async fn best_block_header(&self) -> Result<Header<Chain>> {
-		let best_number = self.client.get_block_number().await?;
-		Ok(self.block_header_by_height(best_number.low_u64()).await?)
+		self.block_header_by_height(self.highest_witnessable_block_number().await?)
+			.await
 	}
 
 	async fn block_header_by_height(&self, height: u64) -> Result<Header<Chain>> {
@@ -311,6 +318,19 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScGatewayEvent>>
 }
 
 // --- sc utils witnessing ---
+/// The runtime rejects calls longer than `MAX_SC_CALL_LENGTH`. A longer call is dropped, but the
+/// deposit is still witnessed so the funds are credited. Every engine must apply the same rule for
+/// the votes to agree.
+fn bounded_sc_call(sc_call: &[u8]) -> ScCallBytes {
+	sc_call.to_vec().try_into().unwrap_or_else(|_| {
+		tracing::warn!(
+			"Dropping SC Utils call of {} bytes, which exceeds the limit.",
+			sc_call.len()
+		);
+		Default::default()
+	})
+}
+
 #[derive(Clone)]
 pub struct EthereumScUtilsWitnessingConfig {
 	sc_utils: EvmEventSource<ScUtilsEvents>,
@@ -354,7 +374,7 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 						deposit: EthereumDeposit::FlipToSCGateway {
 							amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 						},
-						call: sc_call.to_vec(),
+						call: bounded_sc_call(&sc_call),
 					},
 					caller: sender,
 					// use 0 padded ethereum address as account_id which the flip funds
@@ -380,7 +400,7 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 									asset: *asset,
 									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 								},
-								call: sc_call.to_vec(),
+								call: bounded_sc_call(&sc_call),
 							},
 							caller: sender,
 							// use 0 padded ethereum address as account_id which the
@@ -412,7 +432,7 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 									destination: to,
 								},
-								call: sc_call.to_vec(),
+								call: bounded_sc_call(&sc_call),
 							},
 							caller: sender,
 							// use 0 padded ethereum address as account_id which the
@@ -429,7 +449,7 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 					.push(ScUtilsCall {
 						deposit_and_call: EthereumDepositAndSCCall {
 							deposit: EthereumDeposit::NoDeposit,
-							call: sc_call.to_vec(),
+							call: bounded_sc_call(&sc_call),
 						},
 						caller: sender,
 						// use 0 padded ethereum address as account_id which the
@@ -504,6 +524,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -599,6 +620,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_submitter = vote_submitter.clone();
 			let vault_event_source = vault_event_source.clone();
 			let key_manager_event_source = key_manager_event_source.clone();
 			let sc_gateway_event_source = sc_gateway_event_source.clone();
@@ -653,6 +675,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Ethereum",
+							vote_submitter,
 						)
 						.continuously_vote()
 						.await;

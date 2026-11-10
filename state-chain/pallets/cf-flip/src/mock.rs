@@ -107,18 +107,10 @@ pub type Mint = u128;
 
 #[derive(Clone, Debug)]
 pub enum FlipOperation {
-	MintExternal(FlipBalance, FlipBalance),
-	BurnExternal(FlipBalance, FlipBalance),
-	BurnReverts(FlipBalance),
-	MintReverts(FlipBalance),
 	CreditReverts(FlipBalance),
 	DebitReverts(FlipBalance),
 	BridgeInReverts(FlipBalance),
 	BridgeOutReverts(FlipBalance),
-	MintToReserve(FlipBalance),
-	BurnFromReserve(FlipBalance),
-	BurnFromAccount(AccountId, FlipBalance),
-	MintToAccount(AccountId, FlipBalance),
 	ExternalTransferOut(AccountId, FlipBalance),
 	ExternalTransferIn(AccountId, FlipBalance),
 	UpdateBalanceAndBond(AccountId, FlipBalance, FlipBalance),

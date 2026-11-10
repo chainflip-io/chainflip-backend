@@ -158,7 +158,6 @@ mod benchmarks {
 	) -> T::AccountId {
 		let caller: T::AccountId = account("booster", 0, seed);
 
-		// TODO: remove once https://github.com/chainflip-io/chainflip-backend/pull/4716 is merged
 		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
 			frame_system::Pallet::<T>::inc_providers(&caller);
 		}
@@ -167,7 +166,7 @@ mod benchmarks {
 		T::Balance::credit_account(&caller, asset.into(), 1_000_000);
 
 		// A non-zero balance is required to pay for the channel opening fee.
-		T::FeePayment::mint_to_account(&caller, u32::MAX.into());
+		T::FeePayment::credit_to_account(&caller, u32::MAX.into());
 
 		T::Balance::credit_account(&caller, asset.into(), 5_000_000_000_000_000_000u128);
 

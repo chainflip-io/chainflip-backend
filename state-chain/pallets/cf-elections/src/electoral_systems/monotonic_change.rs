@@ -23,7 +23,7 @@ use crate::{
 	vote_storage, CorruptStorageError,
 };
 use cf_runtime_utilities::log_or_panic;
-use cf_utilities::{success_threshold_from_share_count, threshold_from_share_count};
+use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
@@ -222,11 +222,17 @@ impl<
 				let num_votes = blocks_height.len() as u32;
 				if num_votes >= success_threshold {
 					let mut blocks_height = blocks_height.clone();
-					let (_, consensus_block_height, _) = {
-						blocks_height.select_nth_unstable(threshold_from_share_count(
-							num_authorities,
-						) as usize)
-					};
+					let (_, consensus_block_height, _) = blocks_height
+						// NOTE: Each authority is voting for the highest seen block height with the
+						// corresponding value. Therefore, taking the `success_threshold`-th
+						// highest reported block height guarantees that at least success_threshold
+						// authorities agree on lowest block height for the value, and
+						// importantly that a minority cannot determine the consensus
+						// block height.
+						//
+						// NOTE: Cannot panic because blocks_height.len() == num_votes >=
+						// success_threshold and success_threshold >= 1.
+						.select_nth_unstable(num_votes.saturating_sub(success_threshold) as usize);
 					Some((vote.clone(), *consensus_block_height))
 				} else {
 					None

@@ -17,7 +17,10 @@
 #[cfg(test)]
 mod tests;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	marker::PhantomData,
+};
 
 use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
@@ -171,8 +174,59 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 pub struct HashComm1(pub sp_core::H256);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, PartialOrd, Ord, PartialEq, Eq)]
 pub struct PubkeyShares0<P: ECPoint>(#[serde(bound = "")] pub BTreeMap<AuthorityCount, P>);
+
+// Manual, size-bounded `Deserialize`. `PubkeyShares0` is the only keygen message that
+// eagerly deserializes - and cryptographically validates - one EC point per map entry, and it is
+// accepted from *unauthorised* ceremonies, before we know the participant set. A peer could
+// otherwise declare an enormous map and make us validate an unbounded number of attacker-chosen
+// points inside the single-threaded, per-chain ceremony manager - starving honest ceremony
+// traffic (e.g. secret-share delivery) on that chain. Bound the entry count to `MAX_AUTHORITIES`
+// before any point is decoded, so the per-message cost cannot exceed that of a legitimate
+// ceremony. (`is_initial_stage_data_size_valid` also checks this, but only *after* the whole map
+// has been deserialized - too late to bound the work.)
+impl<'de, P: ECPoint> Deserialize<'de> for PubkeyShares0<P> {
+	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		struct MapVisitor<P>(PhantomData<P>);
+
+		impl<'de, P: ECPoint> serde::de::Visitor<'de> for MapVisitor<P> {
+			type Value = BTreeMap<AuthorityCount, P>;
+
+			fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+				write!(f, "a map of at most {MAX_AUTHORITIES} pubkey shares")
+			}
+
+			fn visit_map<A: serde::de::MapAccess<'de>>(
+				self,
+				mut access: A,
+			) -> Result<Self::Value, A::Error> {
+				let max = MAX_AUTHORITIES as usize;
+
+				// Reject from the declared length first, before decoding a single point...
+				if access.size_hint().is_some_and(|len| len > max) {
+					return Err(serde::de::Error::custom(
+						"PubkeyShares0 map exceeds MAX_AUTHORITIES",
+					))
+				}
+
+				let mut map = BTreeMap::new();
+				while let Some((k, v)) = access.next_entry::<AuthorityCount, P>()? {
+					// ...and again as we decode, in case the deserializer under-reports the hint.
+					if map.len() >= max {
+						return Err(serde::de::Error::custom(
+							"PubkeyShares0 map exceeds MAX_AUTHORITIES",
+						))
+					}
+					map.insert(k, v);
+				}
+				Ok(map)
+			}
+		}
+
+		deserializer.deserialize_map(MapVisitor::<P>(PhantomData)).map(PubkeyShares0)
+	}
+}
 
 pub type VerifyHashComm2 = BroadcastVerificationMessage<HashComm1>;
 

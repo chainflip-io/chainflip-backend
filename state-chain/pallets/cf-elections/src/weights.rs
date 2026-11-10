@@ -48,7 +48,8 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_elections.
 pub trait WeightInfo {
-	fn vote(n: u32, ) -> Weight;
+	fn authorise_voter() -> Weight;
+	fn do_vote(n: u32, ) -> Weight;
 	fn stop_ignoring_my_votes() -> Weight;
 	fn ignore_my_votes() -> Weight;
 	fn recheck_contributed_to_consensuses() -> Weight;
@@ -69,32 +70,18 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_elections using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:0)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionProperties` (r:16 w:0)
-	/// Proof: `SolanaElections::ElectionProperties` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::BitmapComponents` (r:16 w:16)
-	/// Proof: `SolanaElections::BitmapComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::CurrentAuthorities` (r:1 w:0)
-	/// Proof: `Validator::CurrentAuthorities` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:0 w:16)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 16]`.
-	fn vote(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1725 + n * (22 ±0)`
-		//  Estimated: `5189 + n * (2498 ±0)`
-		// Minimum execution time: 61_214_000 picoseconds.
+	/// TODO: placeholder - regenerate from the `authorise_voter` benchmark. Only its storage
+	/// reads: its execution time is still inside the `do_vote` placeholder below, which is a copy
+	/// of the superseded `vote` measurement, so the pair cannot under-charge until both are
+	/// regenerated.
+	fn authorise_voter() -> Weight {
+		T::DbWeight::get().reads(2_u64)
+	}
+	/// TODO: placeholder - regenerate from the `do_vote` benchmark. Deliberately a copy of the
+	/// superseded `vote` measurement, which also covered authorisation, so this cannot
+	/// under-charge until then.
+	fn do_vote(n: u32, ) -> Weight {
 		Weight::from_parts(52_121_618, 5189)
-			// Standard Error: 24_664
 			.saturating_add(Weight::from_parts(9_515_477, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().reads((2_u64).saturating_mul(n.into())))
@@ -389,32 +376,18 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ContributingAuthorities` (r:1 w:0)
-	/// Proof: `SolanaElections::ContributingAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionProperties` (r:16 w:0)
-	/// Proof: `SolanaElections::ElectionProperties` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::BitmapComponents` (r:16 w:16)
-	/// Proof: `SolanaElections::BitmapComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::CurrentAuthorities` (r:1 w:0)
-	/// Proof: `Validator::CurrentAuthorities` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:0 w:16)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 16]`.
-	fn vote(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1725 + n * (22 ±0)`
-		//  Estimated: `5189 + n * (2498 ±0)`
-		// Minimum execution time: 61_214_000 picoseconds.
+	/// TODO: placeholder - regenerate from the `authorise_voter` benchmark. Only its storage
+	/// reads: its execution time is still inside the `do_vote` placeholder below, which is a copy
+	/// of the superseded `vote` measurement, so the pair cannot under-charge until both are
+	/// regenerated.
+	fn authorise_voter() -> Weight {
+		ParityDbWeight::get().reads(2_u64)
+	}
+	/// TODO: placeholder - regenerate from the `do_vote` benchmark. Deliberately a copy of the
+	/// superseded `vote` measurement, which also covered authorisation, so this cannot
+	/// under-charge until then.
+	fn do_vote(n: u32, ) -> Weight {
 		Weight::from_parts(52_121_618, 5189)
-			// Standard Error: 24_664
 			.saturating_add(Weight::from_parts(9_515_477, 0).saturating_mul(n.into()))
 			.saturating_add(ParityDbWeight::get().reads(6_u64))
 			.saturating_add(ParityDbWeight::get().reads((2_u64).saturating_mul(n.into())))

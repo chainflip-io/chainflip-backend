@@ -22,7 +22,10 @@ use sp_core::ConstU32;
 use sp_runtime::BoundedVec;
 use sp_std::vec::Vec;
 
-// The maximum length of data that can be encoded in a nulldata utxo
+// Historically Bitcoin Core's default OP_RETURN relay limit (`-datacarriersize`
+// defaulted to 83 bytes, ~80 usable). Since v30.0 (Oct 2025) the default is
+// 100,000 bytes, so this is no longer network-enforced — just a conservative
+// capacity hint that comfortably fits the payload below.
 const MAX_NULLDATA_LENGTH: usize = 80;
 
 #[repr(u8)]

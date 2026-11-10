@@ -22,17 +22,14 @@
 use crate::{self as Flip, Config, ReserveId};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
-	sp_runtime::{
-		traits::{CheckedAdd, CheckedSub, Saturating, Zero},
-		RuntimeDebug,
-	},
+	sp_runtime::traits::{CheckedAdd, Saturating, Zero},
 	traits::{tokens::imbalance::TryMerge, Imbalance, SameOrOther, TryDrop},
 };
 use scale_info::TypeInfo;
 use sp_std::{cmp, mem, result};
 
 /// Internal sources of funds.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum InternalSource<AccountId> {
 	/// A user account.
 	Account(AccountId),
@@ -43,14 +40,12 @@ pub enum InternalSource<AccountId> {
 }
 
 /// The origin of an imbalance.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ImbalanceSource<AccountId> {
 	/// External, aka. off-chain.
 	External,
 	/// Internal, aka. on-chain.
 	Internal(InternalSource<AccountId>),
-	/// Emissions, aka. a mint or burn.
-	Emissions,
 }
 
 impl<AccountId> ImbalanceSource<AccountId> {
@@ -73,7 +68,7 @@ impl<AccountId> ImbalanceSource<AccountId> {
 /// been added from *somewhere*, and that we need to account for this by cancelling it against a
 /// corresponding [Deficit].
 #[must_use = "This surplus needs to be reconciled - if not any remaining imblance will be reverted."]
-#[derive(RuntimeDebug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Surplus<T: Config> {
 	amount: T::Balance,
 	pub(super) source: ImbalanceSource<T::AccountId>,
@@ -83,25 +78,6 @@ impl<T: Config> Surplus<T> {
 	/// Create a new surplus.
 	fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
 		Surplus { amount, source }
-	}
-
-	/// Funds surplus from minting new funds. This surplus needs to be allocated somewhere or the
-	/// mint will be [reverted](RevertImbalance).
-	pub(super) fn from_mint(amount: T::Balance) -> Self {
-		Self::new(
-			if amount.is_zero() {
-				Zero::zero()
-			} else {
-				Flip::TotalIssuance::<T>::mutate(|total| match total.checked_add(&amount) {
-					Some(new_total) => {
-						*total = new_total;
-						amount
-					},
-					None => Zero::zero(),
-				})
-			},
-			ImbalanceSource::Emissions,
-		)
 	}
 
 	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has
@@ -196,7 +172,7 @@ impl<T: Config> Surplus<T> {
 /// been removed to *somewhere*, and that we need to account for this by cancelling it against a
 /// corresponding [Surplus].
 #[must_use = "This deficit needs to be reconciled - if not any remaining imbalance will be reverted."]
-#[derive(RuntimeDebug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Deficit<T: Config> {
 	amount: T::Balance,
 	pub(super) source: ImbalanceSource<T::AccountId>,
@@ -206,21 +182,6 @@ impl<T: Config> Deficit<T> {
 	/// Create a new deficit from a balance.
 	fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
 		Deficit { amount, source }
-	}
-
-	/// Burn funds, creating a corresponding deficit. The deficit needs to be applied somewhere or
-	/// the burn will be [reverted](RevertImbalance).
-	pub(super) fn from_burn(mut amount: T::Balance) -> Self {
-		if amount.is_zero() {
-			return Self::new(Zero::zero(), ImbalanceSource::Emissions)
-		}
-		Flip::TotalIssuance::<T>::mutate(|issued| {
-			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
-				amount = *issued;
-				Zero::zero()
-			});
-		});
-		Self::new(amount, ImbalanceSource::Emissions)
 	}
 
 	/// Credit funds to an account.
@@ -307,7 +268,7 @@ impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 	type Opposite = Deficit<T>;
 
 	fn zero() -> Self {
-		Self { amount: Zero::zero(), source: ImbalanceSource::Emissions }
+		Self { amount: Zero::zero(), source: ImbalanceSource::External }
 	}
 	fn drop_zero(self) -> result::Result<(), Self> {
 		if self.amount.is_zero() {
@@ -379,7 +340,7 @@ impl<T: Config> Imbalance<T::Balance> for Deficit<T> {
 	type Opposite = Surplus<T>;
 
 	fn zero() -> Self {
-		Self { amount: Zero::zero(), source: ImbalanceSource::Emissions }
+		Self { amount: Zero::zero(), source: ImbalanceSource::External }
 	}
 	fn drop_zero(self) -> result::Result<(), Self> {
 		if self.amount.is_zero() {
@@ -457,11 +418,6 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 					*total = total.saturating_add(self.amount)
 				});
 			},
-			ImbalanceSource::Emissions => {
-				// This means some Flip were minted without allocating them somewhere. We revert by
-				// burning them again.
-				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_sub(self.amount))
-			},
 			ImbalanceSource::Internal(internal) => {
 				match internal {
 					InternalSource::Account(account_id) => {
@@ -499,11 +455,6 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 				Flip::OffchainFunds::<T>::mutate(|total| {
 					*total = total.saturating_sub(self.amount)
 				});
-			},
-			ImbalanceSource::Emissions => {
-				// This means some funds were burned without specifying the source. If this happens,
-				// we add this back on to the total issuance again.
-				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_add(self.amount))
 			},
 			ImbalanceSource::Internal(internal) => {
 				match internal {

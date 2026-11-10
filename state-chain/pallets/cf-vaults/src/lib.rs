@@ -61,15 +61,7 @@ pub type ThresholdSignatureFor<T, I = ()> =
 
 /// The current status of a vault rotation.
 #[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	RuntimeDebugNoBound,
-	EnumVariant,
+	PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo, DebugNoBound, EnumVariant,
 )]
 #[scale_info(skip_type_params(T, I))]
 pub enum VaultActivationStatus<T: Config<I>, I: 'static = ()> {

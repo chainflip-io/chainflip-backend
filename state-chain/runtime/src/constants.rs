@@ -17,7 +17,6 @@
 pub mod common {
 	use cf_primitives::{
 		AuthorityCount, BlockNumber, FlipBalance, FLIPPERINOS_PER_FLIP, MILLISECONDS_PER_BLOCK,
-		SECONDS_PER_BLOCK,
 	};
 
 	pub use cf_primitives::CHAINFLIP_SS58_PREFIX;
@@ -28,40 +27,6 @@ pub mod common {
 	};
 
 	pub const MAX_AUTHORITIES: AuthorityCount = 150;
-
-	// ======= Keygen and signing =======
-
-	/// Maximum duration a ceremony stage can last
-	pub const MAX_STAGE_DURATION_SECONDS: u32 = 30;
-
-	const EXPECTED_FINALITY_DELAY_BLOCKS: u32 = 4;
-
-	/// The transaction with the ceremony outcome needs some
-	/// time to propagate to other nodes.
-	const NETWORK_DELAY_SECONDS: u32 = 6;
-	/// Buffer for final key computation.
-	const KEY_DERIVATION_DELAY_SECONDS: u32 = 120;
-
-	const TIMEOUT_BUFFER_SECONDS: u32 =
-		EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) + NETWORK_DELAY_SECONDS;
-
-	const KEYGEN_TIMEOUT_BUFFER_SECONDS: u32 =
-		TIMEOUT_BUFFER_SECONDS + KEY_DERIVATION_DELAY_SECONDS;
-
-	const NUM_THRESHOLD_SIGNING_STAGES: u32 = 4;
-
-	const NUM_KEYGEN_STAGES: u32 = 9;
-
-	/// The number of blocks to wait for a threshold signature ceremony to complete.
-	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 =
-		((MAX_STAGE_DURATION_SECONDS * NUM_THRESHOLD_SIGNING_STAGES) + TIMEOUT_BUFFER_SECONDS) /
-			SECONDS_PER_BLOCK as u32;
-
-	/// The maximum number of blocks to wait for a keygen to complete.
-	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 = ((MAX_STAGE_DURATION_SECONDS *
-		(NUM_KEYGEN_STAGES + NUM_THRESHOLD_SIGNING_STAGES)) +
-		KEYGEN_TIMEOUT_BUFFER_SECONDS) /
-		SECONDS_PER_BLOCK as u32;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.
@@ -78,8 +43,8 @@ pub mod common {
 	pub const MILLISECONDS_PER_BLOCK_POLKADOT: u32 = 6 * 1000;
 	pub const MILLISECONDS_PER_BLOCK_BITCOIN: u64 = 10 * 60 * 1000;
 	pub const MILLISECONDS_PER_BLOCK_ARBITRUM: u64 = 250;
-	pub const MILLISECONDS_PER_BLOCK_SOLANA: u64 = 400;
-	pub const MILLISECONDS_PER_BLOCK_ASSETHUB: u32 = 12 * 1000;
+	pub const MILLISECONDS_PER_BLOCK_SOLANA: u64 = 200;
+	pub const MILLISECONDS_PER_BLOCK_ASSETHUB: u32 = 2 * 1000;
 	pub const MILLISECONDS_PER_BLOCK_TRON: u64 = 3 * 1000;
 	pub const MILLISECONDS_PER_BLOCK_BSC: u64 = 450;
 
@@ -98,12 +63,6 @@ pub mod common {
 	/// The duration of the heartbeat interval in blocks. 150 blocks at a 6 second block time is
 	/// equivalent to 15 minutes.
 	pub const HEARTBEAT_BLOCK_INTERVAL: BlockNumber = 150;
-
-	/// The interval at which we update the per-block emission rate.
-	///
-	/// **Important**: If this constant is changed, we must also change
-	/// [CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL].
-	pub const COMPOUNDING_INTERVAL: u32 = HEARTBEAT_BLOCK_INTERVAL;
 
 	/// The multiplier used to convert transaction weight into fees paid by the validators.
 	///

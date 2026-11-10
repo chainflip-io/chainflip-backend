@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	tron::{cached_rpc::TronRetryRpcApiWithResult, rpc_client_api::TransactionResultStatus},
+	tron::{
+		cached_rpc::TronRetryRpcApiWithResult,
+		rpc_client_api::{TransactionResultStatus, TronAddress},
+	},
 	witness::{
 		eth_elections::EvmSingleBlockQuery,
 		evm::{
@@ -35,15 +38,18 @@ use cf_chains::{
 };
 use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
-use ethers::types::H256;
+use ethers::types::{H256, U256};
 use futures::future;
 use itertools::Itertools;
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::{Runtime, TronInstance};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
+
+/// Selector of `transfer(address,uint256)`.
+const TRC20_TRANSFER_SELECTOR: [u8; 4] = [0xa9, 0x05, 0x9c, 0xbb];
 
 #[derive(Debug, Error)]
 pub enum TronFetchAndDecodeError {
@@ -53,6 +59,8 @@ pub enum TronFetchAndDecodeError {
 	NonSuccessStatus { tx_id: H256, status: TransactionResultStatus },
 	#[error("Transaction ID mismatch: expected {expected:?}, got {actual:?}")]
 	TxIdMismatch { expected: H256, actual: H256 },
+	#[error("Transaction {tx_id:#x} is not a direct transfer to the vault: {reason}")]
+	NotDirectTransfer { tx_id: H256, reason: &'static str },
 	#[error("Failed to decode vault swap data for tx {tx_id:#x}: {reason}")]
 	DecodeVaultSwapData { tx_id: H256, reason: &'static str },
 	#[error("Failed to decode cf_parameters for tx {tx_id:#x}: {reason}")]
@@ -73,10 +81,79 @@ pub struct TronVaultSwapData {
 	pub cf_parameters: Vec<u8>,
 }
 
+/// The memo of a Tron transaction is signed by whoever broadcasts it, not by whoever moved the
+/// funds. Anyone can therefore attach a memo to a re-broadcast of our own signed Vault calls (for
+/// example a deposit-channel fetch, which moves funds into the vault) and forge a vault swap.
+///
+/// We only accept a vault swap if the funds were moved by the transaction owner itself, i.e. the
+/// transaction is a plain TRX `TransferContract` to the vault, or a `transfer(vault, amount)` call
+/// on the token contract, and the transferred amount matches the witnessed ingress amount.
+fn ensure_direct_transfer_to_vault(
+	contracts: &[serde_json::Value],
+	asset: TronAsset,
+	amount: u64,
+	vault_address: EvmAddress,
+	token_contracts: &HashMap<TronAsset, EvmAddress>,
+) -> Result<(), &'static str> {
+	let [contract] = contracts else {
+		return Err("expected exactly one contract");
+	};
+	let value = &contract["parameter"]["value"];
+	let address = |field: &str| {
+		serde_json::from_value::<TronAddress>(value[field].clone())
+			.map(TronAddress::to_evm_address)
+			.map_err(|_| "invalid address")
+	};
+	match (asset, contract["type"].as_str()) {
+		(TronAsset::Trx, Some("TransferContract")) => {
+			if address("to_address")? != vault_address {
+				return Err("TRX transfer is not to the vault");
+			}
+			if value["amount"].as_u64() != Some(amount) {
+				return Err("TRX amount mismatch");
+			}
+		},
+		(token, Some("TriggerSmartContract")) => {
+			let token_contract = token_contracts.get(&token).ok_or("unsupported token")?;
+			if address("contract_address")? != *token_contract {
+				return Err("call target is not the token contract");
+			}
+			// `transfer(address to, uint256 amount)` call data: a 4-byte selector followed by two
+			// 32-byte ABI words.
+			let data = hex::decode(value["data"].as_str().ok_or("missing call data")?)
+				.map_err(|_| "invalid call data")?;
+			if data.len() != 4 + 32 + 32 {
+				return Err("call is not transfer(address,uint256)");
+			}
+			let (selector, to_word, amount_word) = (&data[..4], &data[4..36], &data[36..]);
+			if selector != TRC20_TRANSFER_SELECTOR {
+				return Err("call is not transfer(address,uint256)");
+			}
+			// An address word is the 20-byte address left-padded to 32 bytes. The TVM reads only
+			// the low 20 bytes, so the padding is either all zeros or, in Tron's own encoding,
+			// 11 zero bytes followed by the 0x41 address prefix. Both forms occur in the wild.
+			let (padding, to) = to_word.split_at(12);
+			if padding[..11] != [0u8; 11] || !matches!(padding[11], 0x00 | 0x41) {
+				return Err("malformed address word");
+			}
+			if EvmAddress::from_slice(to) != vault_address {
+				return Err("token transfer is not to the vault");
+			}
+			if U256::from_big_endian(amount_word) != U256::from(amount) {
+				return Err("token amount mismatch");
+			}
+		},
+		_ => return Err("unexpected contract type"),
+	}
+	Ok(())
+}
+
 pub async fn fetch_and_decode_transactions<Client>(
 	client: &Client,
 	vault_ingress_transactions: Vec<(TronAsset, u64, H256)>,
 	block_number: u64,
+	vault_address: EvmAddress,
+	token_contracts: &HashMap<TronAsset, EvmAddress>,
 ) -> Vec<Result<VaultDepositWitness<Runtime, TronInstance>, TronFetchAndDecodeError>>
 where
 	Client: TronRetryRpcApiWithResult + Send + Sync + Clone,
@@ -115,10 +192,20 @@ where
 				}));
 			}
 
-			// Missing raw_data means this transaction isn't a vault swap
-			let raw_data = transaction.raw_data.data?;
+			// Missing memo means this transaction isn't a vault swap
+			let memo = transaction.raw_data.data.as_ref()?;
+
+			if let Err(reason) = ensure_direct_transfer_to_vault(
+				&transaction.raw_data.contract,
+				asset,
+				amount,
+				vault_address,
+				token_contracts,
+			) {
+				return Some(Err(TronFetchAndDecodeError::NotDirectTransfer { tx_id, reason }));
+			}
 			let details =
-				match hex::decode(&raw_data).map_err(|_| "hex decode failed").and_then(|bytes| {
+				match hex::decode(memo).map_err(|_| "hex decode failed").and_then(|bytes| {
 					TronVaultSwapData::decode(&mut &bytes[..]).map_err(|_| "SCALE decode failed")
 				}) {
 					Ok(details) => details,
@@ -231,18 +318,30 @@ pub async fn witness_vault_swaps<Client: TronRetryRpcApiWithResult + Send + Sync
 		}
 	}
 
-	Ok(fetch_and_decode_transactions(client, vault_ingress_transactions, block_number)
-		.await
-		.into_iter()
-		.filter_map(|result| match result {
-			Ok(witness) => Some(witness),
-			// We might submit this as a recoverable deposit in PRO-2832.
-			Err(e) => {
-				tracing::warn!("Skipping Tron vault swap: {e}");
-				None
-			},
-		})
-		.collect())
+	let token_contracts = config
+		.supported_assets
+		.iter()
+		.map(|(asset, event_source)| (*asset, event_source.contract_address))
+		.collect();
+
+	Ok(fetch_and_decode_transactions(
+		client,
+		vault_ingress_transactions,
+		block_number,
+		vault_address,
+		&token_contracts,
+	)
+	.await
+	.into_iter()
+	.filter_map(|result| match result {
+		Ok(witness) => Some(witness),
+		// We might submit this as a recoverable deposit in PRO-2832.
+		Err(e) => {
+			tracing::warn!("Skipping Tron vault swap: {e}");
+			None
+		},
+	})
+	.collect())
 }
 
 #[cfg(test)]
@@ -420,11 +519,16 @@ mod tests {
 					.into_iter()
 					.map(|(_addr, amount, tx_id)| (TronAsset::Trx, amount, tx_id))
 					.collect();
-				let vault_swaps =
-					fetch_and_decode_transactions(&retry_client, ingresses, block_num)
-						.await
-						.into_iter()
-						.collect::<Result<Vec<_>, _>>()?;
+				let vault_swaps = fetch_and_decode_transactions(
+					&retry_client,
+					ingresses,
+					block_num,
+					vault_address,
+					&HashMap::new(),
+				)
+				.await
+				.into_iter()
+				.collect::<Result<Vec<_>, _>>()?;
 
 				let expected_refund_params = ChannelRefundParameters {
 					retry_duration: 100,
@@ -490,6 +594,128 @@ mod tests {
 		})
 		.await
 		.unwrap();
+	}
+
+	const VAULT: &str = "32e07e5dfcb75c2977adddc593eb8d6b6e71f96e";
+	const USDT: &str = "a614f803b6fd780986a42c78ec9c7f77e6ded13c";
+
+	fn trigger_smart_contract(contract_address: &str, data: &str) -> serde_json::Value {
+		serde_json::json!({
+			"parameter": {
+				"value": {
+					"owner_address": "41e092bce6dc52c38fbf7441edc8ea5b89b48a8a5a",
+					"contract_address": format!("41{contract_address}"),
+					"data": data,
+				},
+				"type_url": "type.googleapis.com/protocol.TriggerSmartContract"
+			},
+			"type": "TriggerSmartContract"
+		})
+	}
+
+	fn trc20_transfer_call(to: &str, amount: u64) -> String {
+		format!("{}{:0>64}{:0>64x}", hex::encode(TRC20_TRANSFER_SELECTOR), to, amount)
+	}
+
+	fn check(
+		contracts: &[serde_json::Value],
+		asset: TronAsset,
+		amount: u64,
+	) -> Result<(), &'static str> {
+		ensure_direct_transfer_to_vault(
+			contracts,
+			asset,
+			amount,
+			VAULT.parse().unwrap(),
+			&HashMap::from([(TronAsset::TrxUsdt, USDT.parse().unwrap())]),
+		)
+	}
+
+	#[test]
+	fn accepts_direct_trx_transfer() {
+		let contracts = [serde_json::json!({
+			"parameter": {
+				"value": {
+					"amount": 1000000000u64,
+					"owner_address": "4177743208ce9708cce78592dc8677ef3a3cef3490",
+					"to_address": format!("41{VAULT}"),
+				},
+				"type_url": "type.googleapis.com/protocol.TransferContract"
+			},
+			"type": "TransferContract"
+		})];
+		assert_eq!(check(&contracts, TronAsset::Trx, 1000000000), Ok(()));
+		assert!(check(&contracts, TronAsset::Trx, 999999999).is_err());
+		assert!(check(&contracts, TronAsset::TrxUsdt, 1000000000).is_err());
+	}
+
+	#[test]
+	fn accepts_direct_trc20_transfer() {
+		let contracts = [trigger_smart_contract(USDT, &trc20_transfer_call(VAULT, 13000))];
+		assert_eq!(check(&contracts, TronAsset::TrxUsdt, 13000), Ok(()));
+		assert!(check(&contracts, TronAsset::TrxUsdt, 13001).is_err());
+		assert!(check(&contracts, TronAsset::Trx, 13000).is_err());
+
+		// Tron's own encoding keeps the 0x41 address prefix inside the padding.
+		let contracts =
+			[trigger_smart_contract(USDT, &trc20_transfer_call(&format!("41{VAULT}"), 13000))];
+		assert_eq!(check(&contracts, TronAsset::TrxUsdt, 13000), Ok(()));
+
+		// Any other non-zero padding is rejected.
+		for prefix in ["01", "ff", "4100"] {
+			let contracts = [trigger_smart_contract(
+				USDT,
+				&trc20_transfer_call(&format!("{prefix}{VAULT}"), 13000),
+			)];
+			assert_eq!(
+				check(&contracts, TronAsset::TrxUsdt, 13000),
+				Err("malformed address word"),
+				"prefix {prefix}"
+			);
+		}
+
+		// Transfer to somewhere other than the vault.
+		let contracts = [trigger_smart_contract(
+			USDT,
+			&trc20_transfer_call("e092bce6dc52c38fbf7441edc8ea5b89b48a8a5a", 13000),
+		)];
+		assert!(check(&contracts, TronAsset::TrxUsdt, 13000).is_err());
+
+		// Transfer call to a contract that is not the token.
+		let contracts = [trigger_smart_contract(VAULT, &trc20_transfer_call(VAULT, 13000))];
+		assert!(check(&contracts, TronAsset::TrxUsdt, 13000).is_err());
+	}
+
+	#[test]
+	fn rejects_rebroadcast_vault_fetch() {
+		// A re-broadcast of one of our own `fetch` calls, which moves funds from a deposit channel
+		// into the vault, with a forged memo attached by the broadcaster.
+		let contracts = [trigger_smart_contract(
+			VAULT,
+			"5f8c0f9ad368062cba9fa834848601526b8a12a5a6b3e6ae7d1bf86c7f45960854d8646e\
+			00000000000000000000000000000000000000000000000000000000000014ee\
+			000000000000000000000000e8ae3af2abe83aef5821d525344dea99f90c9273\
+			00000000000000000000000000000000000000000000000000000000000000c0\
+			00000000000000000000000000000000000000000000000000000000000000e0\
+			0000000000000000000000000000000000000000000000000000000000000140\
+			0000000000000000000000000000000000000000000000000000000000000000\
+			0000000000000000000000000000000000000000000000000000000000000001\
+			000000000000000000000000bb215fb95320dde10b544a1505bc30acd1e7653c\
+			000000000000000000000000a614f803b6fd780986a42c78ec9c7f77e6ded13c\
+			0000000000000000000000000000000000000000000000000000000000000000",
+		)];
+		assert_eq!(
+			check(&contracts, TronAsset::TrxUsdt, 12995684310),
+			Err("call target is not the token contract")
+		);
+		assert_eq!(check(&contracts, TronAsset::Trx, 1), Err("unsupported token"));
+	}
+
+	#[test]
+	fn rejects_multi_contract_transactions() {
+		let mut contracts = vec![trigger_smart_contract(USDT, &trc20_transfer_call(VAULT, 1))];
+		contracts.push(contracts[0].clone());
+		assert_eq!(check(&contracts, TronAsset::TrxUsdt, 1), Err("expected exactly one contract"));
 	}
 
 	#[test]

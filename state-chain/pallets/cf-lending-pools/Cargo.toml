@@ -45,6 +45,7 @@ cf-test-utilities = { workspace = true, default-features = true }
 cf-traits = { workspace = true, features = ["mocks"] }
 cf-utilities = { workspace = true, default-features = true }
 cf-amm-math = { workspace = true, features = ["test"] }
+proptest = { workspace = true, default-features = true }
 
 [features]
 default = ["std"]

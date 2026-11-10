@@ -161,9 +161,12 @@ mod tests {
 		bitmap::Bitmap,
 		bitmap_numerical::BitmapNoHash,
 		change::{MonotonicChange, MonotonicChangeVote},
-		composite::tuple_5_impls::{CompositePartialVote, CompositeVoteProperties},
-		individual::{identity::Identity, Individual},
-		ComponentStorageKind, VoteComponents, VoteStorage,
+		composite::tuple_5_impls::{
+			CompositeBitmapComponent, CompositeIndividualComponent, CompositePartialVote,
+			CompositeSharedData, CompositeVoteProperties,
+		},
+		individual::{identity::Identity, shared::Shared, Individual},
+		AuthorityVote, ComponentStorageKind, VoteComponents, VoteStorage,
 	};
 	use crate::SharedDataHash;
 	use cf_utilities::{assert_err, assert_ok};
@@ -298,5 +301,70 @@ mod tests {
 		assert_ok!(ComponentStorageKind::Both.ensure_matches(&individual_present));
 		assert_ok!(ComponentStorageKind::BitmapOnly.ensure_matches(&neither_present));
 		assert_ok!(ComponentStorageKind::IndividualOnly.ensure_matches(&neither_present));
+	}
+
+	/// Shared data is hashed together with its composite variant, so data of another variant can
+	/// never be what a vote referenced. Any single validator can create this pairing, by voting
+	/// with the hash of another variant's data and then providing that data, so it must leave the
+	/// vote unresolved rather than be reported as corrupt storage, which pauses the whole
+	/// instance.
+	#[test]
+	fn shared_data_of_another_variant_leaves_the_vote_partial() {
+		// One variant per generated match arm: bitmap only, individual only, and both.
+		type Composite = (
+			Bitmap<u64>,
+			Individual<(), Shared<u64>>,
+			MonotonicChange<u64, u32>,
+			Bitmap<u32>,
+			BitmapNoHash<u64>,
+		);
+
+		let other_variant_data = CompositeSharedData::D(7u32);
+		let hash = SharedDataHash::of(&other_variant_data);
+		let reconstruct = |vote_components| {
+			<Composite as VoteStorage>::components_into_authority_vote(vote_components, |_| {
+				Ok(Some(other_variant_data.clone()))
+			})
+		};
+
+		assert_eq!(
+			reconstruct(VoteComponents {
+				individual_component: None,
+				bitmap_component: Some(CompositeBitmapComponent::A(hash)),
+			}),
+			Ok(Some((
+				CompositeVoteProperties::A(()),
+				AuthorityVote::PartialVote(CompositePartialVote::A(hash)),
+			))),
+		);
+		assert_eq!(
+			reconstruct(VoteComponents {
+				individual_component: Some((
+					CompositeVoteProperties::B(()),
+					CompositeIndividualComponent::B(hash),
+				)),
+				bitmap_component: None,
+			}),
+			Ok(Some((
+				CompositeVoteProperties::B(()),
+				AuthorityVote::PartialVote(CompositePartialVote::B(hash)),
+			))),
+		);
+		assert_eq!(
+			reconstruct(VoteComponents {
+				individual_component: Some((
+					CompositeVoteProperties::C(()),
+					CompositeIndividualComponent::C(1u32),
+				)),
+				bitmap_component: Some(CompositeBitmapComponent::C(hash)),
+			}),
+			Ok(Some((
+				CompositeVoteProperties::C(()),
+				AuthorityVote::PartialVote(CompositePartialVote::C(MonotonicChangeVote {
+					value: hash,
+					block: 1u32,
+				})),
+			))),
+		);
 	}
 }

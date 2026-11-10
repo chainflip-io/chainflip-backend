@@ -59,8 +59,13 @@ use cf_traits::{
 	DummyIngressSource, NoLimit,
 };
 
+use frame_support::{
+	derive_impl,
+	instances::*,
+	sp_runtime::traits::{BlakeTwo256, ConvertInto, One, OpaqueKeys, Verify},
+};
 pub use frame_support::{
-	debug, parameter_types,
+	parameter_types,
 	traits::{
 		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, Get, KeyOwnerProofSystem,
 		Randomness, StorageInfo,
@@ -73,11 +78,6 @@ pub use frame_support::{
 		ConstantMultiplier, IdentityFee, Weight,
 	},
 	StorageValue,
-};
-use frame_support::{
-	derive_impl,
-	instances::*,
-	sp_runtime::traits::{BlakeTwo256, ConvertInto, One, OpaqueKeys, Verify},
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use frame_system::Call as SystemCall;
@@ -161,24 +161,9 @@ parameter_types! {
 /// `pallet_transaction_payment::ChargeTransactionPayment`.
 pub struct GetTransactionPayments;
 
-impl
-	Get<(
-		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-		pallet_transaction_payment::Val<Runtime>,
-	)> for GetTransactionPayments
-{
-	fn get() -> (
-		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-		pallet_transaction_payment::Val<Runtime>,
-	) {
-		(
-			pallet_transaction_payment::ChargeTransactionPayment::from(Default::default()),
-			// Used as a default value for the implicit parameter in transaction payment validation
-			// for non-native signed calls. This parameter is currently ignored, pending
-			// replacement of the current legacy implementation with TransactionExtension based
-			// validation.
-			pallet_transaction_payment::Val::NoCharge,
-		)
+impl Get<pallet_transaction_payment::ChargeTransactionPayment<Runtime>> for GetTransactionPayments {
+	fn get() -> pallet_transaction_payment::ChargeTransactionPayment<Runtime> {
+		pallet_transaction_payment::ChargeTransactionPayment::from(Default::default())
 	}
 }
 
@@ -226,7 +211,9 @@ impl pallet_cf_environment::Config for Runtime {
 	type SolanaBroadcaster = SolanaBroadcaster;
 	type TransactionPayments = pallet_transaction_payment::ChargeTransactionPayment<Self>;
 	type GetTransactionPayments = GetTransactionPayments;
+	type FailedDepositRecovery = chainflip::FailedDepositRecoveryRouter;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
+	type ElectionInstances = chainflip::elections::AllElectionInstances;
 }
 
 parameter_types! {
@@ -336,6 +323,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	const RE_SIGN_FAILED_CALLS: bool = true;
 	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -361,12 +349,15 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type RefundAddressRegistry = AssetBalances;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	// Same immortal, fixed-nonce extrinsics as Assethub (see below).
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = DummyIngressSource<Polkadot, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -392,12 +383,15 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type RefundAddressRegistry = AssetBalances;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	// Bitcoin txs never need re-signing: the signature stays valid across rotations.
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = BtcDepositChannelFreshness;
@@ -423,12 +417,14 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type RefundAddressRegistry = AssetBalances;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	const RE_SIGN_FAILED_CALLS: bool = true;
 	type IngressSource = DummyIngressSource<Arbitrum, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -454,12 +450,15 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type RefundAddressRegistry = AssetBalances;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = false;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	// A plain re-sign keeps the old key as signer in the message, so it can never be valid.
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = SolanaIngress;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -485,12 +484,16 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type RefundAddressRegistry = AssetBalances;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	// Extrinsics are immortal and keep their nonce when re-signed, so a re-signed copy of a call
+	// that actually landed could be submitted later for a second payout.
+	const RE_SIGN_FAILED_CALLS: bool = false;
 	type IngressSource = DummyIngressSource<Assethub, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -516,12 +519,14 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type RefundAddressRegistry = AssetBalances;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	const RE_SIGN_FAILED_CALLS: bool = true;
 	type IngressSource = DummyIngressSource<Tron, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -547,12 +552,14 @@ impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type RefundAddressRegistry = AssetBalances;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance8> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	const RE_SIGN_FAILED_CALLS: bool = true;
 	type IngressSource = DummyIngressSource<Bsc, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
@@ -578,6 +585,7 @@ impl pallet_cf_ingress_egress::Config<Instance8> for Runtime {
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
 	type RefundAddressRegistry = AssetBalances;
+	type BrokerRecoveryApi = Swapping;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -604,6 +612,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type MinimumDeposit = MinimumDepositProvider;
 	type FundAccount = Funding;
 	type MinimumFunding = Funding;
+	type RedeemAddressBinding = Funding;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -646,8 +655,12 @@ parameter_types! {
 			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
 			NORMAL_DISPATCH_RATIO,
 		);
-	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
-		::max_with_normal_ratio(MAX_BLOCK_LENGTH, BLOCK_LENGTH_RATIO);
+	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength::builder()
+		.max_length(MAX_BLOCK_LENGTH)
+		.modify_max_length_for_class(frame_support::dispatch::DispatchClass::Normal, |m| {
+			*m = BLOCK_LENGTH_RATIO * *m
+		})
+		.build();
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -679,6 +692,7 @@ impl frame_system::Config for Runtime {
 		pallet_cf_pools::DeleteHistoricalEarnedFees<Self>,
 		pallet_cf_asset_balances::DeleteAccount<Self>,
 		pallet_cf_validator::DelegatedAccountCleanup<Self>,
+		pallet_cf_swapping::DeleteRecoveryAccount<Self>,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
@@ -742,7 +756,7 @@ impl pallet_timestamp::Config for Runtime {
 
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
-	type EventHandler = Emissions;
+	type EventHandler = ();
 }
 
 impl pallet_cf_flip::Config for Runtime {
@@ -803,21 +817,6 @@ impl pallet_cf_governance::Config for Runtime {
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 	type CompatibleCfeVersions = Environment;
 	type AuthoritiesCfeVersions = Validator;
-}
-
-impl pallet_cf_emissions::Config for Runtime {
-	type HostChain = Ethereum;
-	type FlipBalance = FlipBalance;
-	type ApiCall = eth::api::EthereumApi<EvmEnvironment>;
-	type Broadcaster = EthereumBroadcaster;
-	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type RewardsDistribution = DelegatedRewardsDistribution<Runtime>;
-	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
-	type EthEnvironment = EvmEnvironment;
-	type FlipToBurnOrMove = Swapping;
-	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
-	type SafeMode = RuntimeSafeMode;
-	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {

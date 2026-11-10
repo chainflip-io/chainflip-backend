@@ -32,6 +32,7 @@ use crate::{
 use cf_chains::{
 	arb::ArbitrumTrackedData,
 	assets,
+	evm::EvmWitnessingConfig,
 	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange, SaturatingStep},
 	Arbitrum, ChainWitnessConfig,
 };
@@ -61,7 +62,10 @@ use state_chain_runtime::{
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
+	elections::{
+		vote_submitter::VoteSubmitter,
+		voter_api::{CompositeVoter, VoterApi},
+	},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
 		event::EvmEventSource,
@@ -93,8 +97,8 @@ trait EvmBlockRangeChainType<C: ChainWitnessConfig> =
 	ChainTypes<ChainBlockNumber = BlockWitnessRange<C>, ChainBlockHash = H256> + Sync + Send;
 
 #[async_trait::async_trait]
-impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chain>
-	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConfig>
+	WitnessClient<Chain> for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	type BlockQuery = EvmBlockRangeQuery<W>;
 
@@ -118,7 +122,7 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chai
 	}
 
 	async fn best_block_number(&self) -> Result<BlockWitnessRange<W>> {
-		let best_block = self.client.get_block_number().await?.low_u64();
+		let best_block = self.highest_witnessable_block_number().await?;
 		let range = block_witness_range(W::WITNESS_PERIOD, best_block);
 		let block_witness_range =
 			BlockWitnessRange::try_new(block_witness_root(W::WITNESS_PERIOD, best_block))
@@ -180,8 +184,8 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chai
 }
 
 #[async_trait::async_trait]
-impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmEventClient<Chain>
-	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConfig>
+	EvmEventClient<Chain> for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	async fn events_from_block_query<Data: std::fmt::Debug>(
 		&self,
@@ -210,8 +214,8 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmEventClient<Cha
 }
 
 #[async_trait::async_trait]
-impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmAddressStateClient<Chain>
-	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConfig>
+	EvmAddressStateClient<Chain> for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	async fn address_states(
 		&self,
@@ -301,6 +305,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
+	vote_submitter: VoteSubmitter<StateChainClient>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi
@@ -368,6 +373,7 @@ where
 		move || {
 			let client = client.clone();
 			let state_chain_client = state_chain_client.clone();
+			let vote_submitter = vote_submitter.clone();
 			let vault_event_source = vault_event_source.clone();
 			let key_manager_event_source = key_manager_event_source.clone();
 			let supported_asset_address_and_event_type =
@@ -407,6 +413,7 @@ where
 							)),
 							Some(client.cache_invalidation_senders),
 							"Arbitrum",
+							vote_submitter,
 						)
 						.continuously_vote()
 						.await;

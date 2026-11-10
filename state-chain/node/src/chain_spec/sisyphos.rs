@@ -462,3 +462,4 @@ pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
 pub const TRON_SAFETY_MARGIN: u64 = 19;
+pub const BSC_SAFETY_MARGIN: u64 = 2;

@@ -34,7 +34,7 @@ use subxt::{
 		},
 		rpc::{RawRpcFuture, RawRpcSubscription, RawValue, RpcClient, RpcClientT},
 	},
-	error::{BlockError, RpcError},
+	error::BlockError,
 	events::{Events, EventsClient},
 	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
@@ -84,11 +84,8 @@ impl RpcClientT for PolkadotHttpClient {
 		params: Option<Box<RawValue>>,
 	) -> RawRpcFuture<'a, Box<RawValue>> {
 		Box::pin(async move {
-			let res = self
-				.0
-				.request(method, Params(params))
-				.await
-				.map_err(|e| subxt_rpcs::Error::Client(Box::new(e)))?;
+			let res =
+				self.0.request(method, Params(params)).await.map_err(subxt_rpcs::Error::from)?;
 			Ok(res)
 		})
 	}
@@ -103,7 +100,7 @@ impl RpcClientT for PolkadotHttpClient {
 	}
 }
 
-/// Adds a default port to the url based on the scheme (http, https, ws, wss),
+/// Adds a default port to the URL based on its scheme,
 /// if none exists. Otherwise preservers existing port.
 ///
 /// This function assumes that `url` is already validated, i.e.:
@@ -142,7 +139,6 @@ fn ensure_port(url: &SecretUrl) -> Result<SecretUrl> {
 
 #[derive(Clone)]
 pub struct DotRpcClientBuilder {
-	ws_url: SecretUrl,
 	http_url: SecretUrl,
 	http_rpc_client: Arc<OnceLock<DotRpcClient>>,
 	expected_genesis_hash: Option<PolkadotHash>,
@@ -158,29 +154,13 @@ pub struct DotRpcClient {
 }
 
 impl DotRpcClientBuilder {
-	pub fn new(
-		ws_url: SecretUrl,
-		http_url: SecretUrl,
-		expected_genesis_hash: Option<PolkadotHash>,
-	) -> Result<Self> {
+	pub fn new(http_url: SecretUrl, expected_genesis_hash: Option<PolkadotHash>) -> Result<Self> {
 		// Currently, the jsonrpsee library used by the PolkadotHttpClient expects
 		// a port number to be always present in the url. Here we ensure this,
 		// adding the default port if none is present.
-		let ws_url = ensure_port(&ws_url)?;
 		let http_url = ensure_port(&http_url)?;
 
-		Ok(Self {
-			ws_url,
-			http_url,
-			expected_genesis_hash,
-			http_rpc_client: Arc::new(OnceLock::new()),
-		})
-	}
-
-	/// Creates a new websocket client. This always creates a new websocket client and does not
-	/// cache it.
-	pub async fn ws_client(&self) -> DotRpcClient {
-		self.connect(WsOrHttp::Ws).await
+		Ok(Self { http_url, expected_genesis_hash, http_rpc_client: Arc::new(OnceLock::new()) })
 	}
 
 	/// Creates or returns a cached http client.
@@ -188,28 +168,22 @@ impl DotRpcClientBuilder {
 		if let Some(client) = self.http_rpc_client.get() {
 			client.clone()
 		} else {
-			let new_client = self.connect(WsOrHttp::Http).await;
+			let new_client = self.connect().await;
 			let _ = self.http_rpc_client.set(new_client.clone());
 			new_client
 		}
 	}
 
-	async fn connect(&self, ws_or_http: WsOrHttp) -> DotRpcClient {
+	async fn connect(&self) -> DotRpcClient {
 		// We don't want to return an error here. Returning an error means that we'll exit the
 		// CFE. So on client creation we wait until we can be successfully connected to the
 		// Polkadot node. So the other chains are unaffected
-		let url = match ws_or_http {
-			WsOrHttp::Ws => self.ws_url.clone(),
-			WsOrHttp::Http => self.http_url.clone(),
-		};
+		let url = self.http_url.clone();
 		let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
 		let (rpc_client, online_client) = loop {
 			poll_interval.tick().await;
 
-			let rpc_client = match ws_or_http {
-				WsOrHttp::Ws => RpcClient::from_insecure_url(url.clone()).await.map_err(Into::into),
-				WsOrHttp::Http => PolkadotHttpClient::new(&url).map(RpcClient::new),
-			};
+			let rpc_client = PolkadotHttpClient::new(&url).map(RpcClient::new);
 
 			let maybe_online_client: anyhow::Result<_> = match rpc_client {
 				Ok(rpc_client) =>
@@ -254,11 +228,6 @@ impl DotRpcClientBuilder {
 			events_lock: Arc::new(tokio::sync::Mutex::new(())),
 		}
 	}
-}
-
-enum WsOrHttp {
-	Ws,
-	Http,
 }
 
 impl DotRpcClient {
@@ -357,15 +326,16 @@ impl DotRpcApi for DotRpcClient {
 	/// Submits a raw encoded extrinsic, returning its hash once it is accepted into the
 	/// transaction pool.
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		let tx = subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
-			self.online_client.clone(),
-			encoded_bytes,
-		);
-		match tx.submit().await {
-			// The pool already holds this exact transaction; treat the resubmission as a success.
-			Err(subxt::Error::Rpc(RpcError::ClientError(subxt_rpcs::Error::User(user_error))))
+		//we need to use `author_submit_extrinsic` because despite its name, Subxt 0.42’s submit()
+		// uses a subscription to wait for the first transaction status.
+		match self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await {
+			Err(subxt_rpcs::Error::User(user_error))
 				if user_error.code == POOL_ALREADY_IMPORTED =>
-				Ok(tx.hash()),
+				Ok(subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
+					self.online_client.clone(),
+					encoded_bytes,
+				)
+				.hash()),
 			result => Ok(result?),
 		}
 	}
@@ -427,30 +397,11 @@ mod tests {
 	#[ignore = "requires local node"]
 	#[tokio::test]
 	async fn test_http_rpc() {
-		let dot_http_rpc = DotRpcClientBuilder::new(
-			"ws://localhost:9945".into(),
-			"http://localhost:9945".into(),
-			None,
-		)
-		.unwrap()
-		.http_client()
-		.await;
+		let dot_http_rpc = DotRpcClientBuilder::new("http://localhost:9945".into(), None)
+			.unwrap()
+			.http_client()
+			.await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
-		println!("block_hash: {:?}", block_hash);
-	}
-
-	#[ignore = "requires local node"]
-	#[tokio::test]
-	async fn test_ws_rpc() {
-		let dot_ws_rpc = DotRpcClientBuilder::new(
-			"ws://localhost:9945".into(),
-			"http://localhost:9945".into(),
-			None,
-		)
-		.unwrap()
-		.ws_client()
-		.await;
-		let block_hash = dot_ws_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}
 
@@ -487,14 +438,11 @@ mod tests {
 			.unwrap(),
 		];
 
-		let dot_http_rpc = DotRpcClientBuilder::new(
-			"ws://polkadot-rpc-tn.dwellir.com:443".into(),
-			"https://polkadot-rpc-tn.dwellir.com:443".into(),
-			None,
-		)
-		.unwrap()
-		.http_client()
-		.await;
+		let dot_http_rpc =
+			DotRpcClientBuilder::new("https://polkadot-rpc-tn.dwellir.com:443".into(), None)
+				.unwrap()
+				.http_client()
+				.await;
 
 		for block_hash in block_hash_of_runtime_updates {
 			println!("TRYING BLOCK: {:?}", block_hash);

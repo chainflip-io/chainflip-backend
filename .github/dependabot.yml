@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    # "/" only covers .github/workflows plus a root-level action.yml, so the
+    # glob is needed to reach our composite actions under .github/actions.
+    directories:
+      - "/"
+      - "/.github/actions/*"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "Europe/Berlin"
+    # Minimum age before an update is eligible, so a compromised release has
+    # time to be spotted and yanked before it reaches us. Only default-days is
+    # supported for github-actions; the semver-* variants are not.
+    cooldown:
+      default-days: 14
+    # ci-pr.yml enforces conventional-commit PR titles; the default
+    # "Bump <action> from x to y" would fail that check.
+    commit-message:
+      prefix: "chore"
+    # Minor/patch bumps land as a single PR. Majors stay ungrouped so a
+    # breaking runtime bump can be reviewed and reverted on its own.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5

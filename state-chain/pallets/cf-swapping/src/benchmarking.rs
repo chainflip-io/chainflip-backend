@@ -44,7 +44,7 @@ mod benchmarks {
 		.unwrap();
 
 		// A non-zero balance is required to pay for the channel opening fee.
-		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
 		let origin = RawOrigin::Signed(caller.clone());
 		let call = Call::<T>::request_swap_deposit_address {
@@ -77,7 +77,7 @@ mod benchmarks {
 		.unwrap();
 
 		// A non-zero balance is required to pay for the channel opening fee.
-		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
 		let affiliate_fees = (0..4)
 			.map(|i| {
@@ -164,7 +164,7 @@ mod benchmarks {
 
 		let caller = OriginFor::<T>::signed(broker_id.clone());
 
-		T::FeePayment::mint_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
 
 		#[block]
 		{
@@ -184,7 +184,7 @@ mod benchmarks {
 
 		let caller = OriginFor::<T>::signed(broker_id.clone());
 
-		T::FeePayment::mint_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
 
 		assert_ok!(Pallet::<T>::open_private_btc_channel(caller.clone()));
 
@@ -315,7 +315,7 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::credit_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
 		let origin = RawOrigin::Signed(caller.clone());
 		let require_channel_call = Call::<T>::request_swap_deposit_address {
@@ -390,6 +390,22 @@ mod benchmarks {
 			),
 			Error::<T>::BrokerAlreadyBound
 		);
+	}
+
+	#[benchmark]
+	fn link_recovery_account() {
+		let broker = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
+		let lp = account::<T::AccountId>("recovery", 0, 0);
+		frame_system::Pallet::<T>::inc_providers(&lp);
+		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&lp).unwrap();
+
+		#[extrinsic_call]
+		link_recovery_account(RawOrigin::Signed(broker.clone()), lp.clone());
+
+		assert_eq!(BrokerRecoveryAccount::<T>::get(&broker), Some(lp));
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

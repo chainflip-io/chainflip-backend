@@ -25,6 +25,7 @@ mod threshold_signing;
 mod account;
 mod authorities;
 mod delegation;
+mod failed_deposit_recovery;
 mod fee_scaling;
 mod funding;
 mod genesis;
@@ -49,13 +50,12 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnInitialize, Time},
 };
 use pallet_cf_funding::EthTransactionHash;
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::crypto::Pair;
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, BitcoinVault, Emissions, EthereumVault,
-	Flip, Funding, PolkadotVault, Reputation, Runtime, RuntimeCall, RuntimeOrigin, SolanaVault,
-	System, Timestamp, Validator, Weight, Witnesser,
+	constants::common::*, opaque::SessionKeys, AccountId, BitcoinVault, EthereumVault, Flip,
+	Funding, PolkadotVault, Reputation, Runtime, RuntimeCall, RuntimeOrigin, SolanaVault, System,
+	Timestamp, Validator, Weight, Witnesser,
 };
 
 type NodeId = AccountId32;

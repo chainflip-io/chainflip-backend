@@ -19,13 +19,14 @@ mod config;
 mod dca;
 mod fees;
 mod fill_or_kill;
+mod recovery_account;
 
 use std::sync::LazyLock;
 
 use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
-	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
+	CollectedRejectedFunds, Error, Event, Pallet, Swap, SwapOrigin, SwapType,
 };
 use cf_amm_math::Price;
 use cf_chains::{
@@ -45,6 +46,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		balance_api::MockBalance,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
+		fee_payment::MockFeePayment,
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		pool_price_api::MockPoolPriceApi,
@@ -73,15 +75,6 @@ const OUTPUT_ASSET: Asset = Asset::Eth;
 
 static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
-
-fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
-	assert_ok!(Swapping::update_pallet_config(
-		OriginTrait::root(),
-		vec![PalletConfigUpdate::MaximumSwapAmount { asset, amount }]
-			.try_into()
-			.unwrap()
-	));
-}
 
 struct TestSwapParams {
 	input_asset: Asset,
@@ -832,47 +825,6 @@ fn can_handle_swaps_with_zero_outputs() {
 				"No egresses should be scheduled."
 			);
 		});
-}
-
-#[test]
-fn swap_excess_are_confiscated() {
-	const MAX_SWAP: AssetAmount = 100;
-	const AMOUNT: AssetAmount = 1_000;
-	const CONFISCATED_AMOUNT: AssetAmount = AMOUNT - MAX_SWAP;
-
-	new_test_ext().execute_with(|| {
-		let from: Asset = Asset::Usdc;
-		let to: Asset = Asset::Flip;
-
-		set_maximum_swap_amount(from, Some(MAX_SWAP));
-
-		swap_with_custom_broker_fee(from, to, AMOUNT, bounded_vec![]);
-
-		// Excess fee is confiscated
-		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountConfiscated {
-			swap_request_id: SwapRequestId(1),
-			asset: from,
-			total_amount: AMOUNT,
-			confiscated_amount: CONFISCATED_AMOUNT,
-		}));
-
-		assert_eq!(
-			ScheduledSwaps::<Test>::get(),
-			BTreeMap::from([(
-				1.into(),
-				Swap::new(
-					1.into(),
-					1.into(),
-					from,
-					to,
-					MAX_SWAP,
-					None,
-					System::block_number() + SWAP_DELAY_BLOCKS as u64
-				)
-			)])
-		);
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
-	});
 }
 
 #[test]
@@ -2259,7 +2211,7 @@ mod credit_flip_and_transfer {
 
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
-				assert_eq!(FlipToBurn::<Test>::get(), 0);
+				assert_eq!(MockFeePayment::<Test>::get_offchain_flip_to_be_distributed(), 0);
 				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
@@ -2277,7 +2229,7 @@ mod credit_flip_and_transfer {
 				);
 
 				assert_eq!(
-					FlipToBurn::<Test>::get(),
+					MockFeePayment::<Test>::get_offchain_flip_to_be_distributed(),
 					0i128.saturating_sub(
 						INITIAL_FLIP_FUNDING
 							.saturating_sub(EXPECTED_OUTPUT_AMOUNT)
@@ -2289,6 +2241,71 @@ mod credit_flip_and_transfer {
 				// account's initial funding was already earmarked when the deposit was credited.
 				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
 			});
+	}
+}
+
+mod flip_to_gateway {
+	use super::*;
+
+	const FEE: AssetAmount = 10;
+	// The largest pending amount that is still below the threshold, because the egressed amount
+	// (net of the fee) is exactly the multiple of the fee.
+	const LARGEST_SKIPPED_AMOUNT: AssetAmount = (FLIP_TO_GATEWAY_MULTIPLE + 1) * FEE;
+
+	#[test]
+	fn egress_failure_skips_transfer_and_keeps_flip_pending() {
+		const PREVIOUSLY_PENDING: AssetAmount = 500;
+		const AMOUNT: AssetAmount = 1_000;
+
+		new_test_ext().execute_with(|| {
+			FlipToBeSentToGateway::<Test>::put(PREVIOUSLY_PENDING);
+			MockEgressHandler::<AnyChain>::return_failure(true);
+
+			assert_eq!(Swapping::maybe_trigger_flip_to_gateway_egress(H160::zero(), AMOUNT), 0);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::FlipTransferToGatewaySkipped {
+					reason: DispatchError::Other(_),
+				})
+			);
+			assert_eq!(FlipToBeSentToGateway::<Test>::get(), PREVIOUSLY_PENDING + AMOUNT);
+			assert!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().is_empty());
+		});
+	}
+
+	#[test]
+	fn transfer_below_fee_multiple_is_rolled_back_until_threshold_is_exceeded() {
+		new_test_ext().execute_with(|| {
+			MockEgressHandler::<AnyChain>::set_fee(FEE);
+
+			assert_eq!(
+				Swapping::maybe_trigger_flip_to_gateway_egress(
+					H160::zero(),
+					LARGEST_SKIPPED_AMOUNT
+				),
+				0
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::FlipTransferToGatewaySkipped { reason })
+					if *reason == Error::<Test>::FlipToGatewayAmountBelowThreshold.into()
+			);
+			assert_eq!(FlipToBeSentToGateway::<Test>::get(), LARGEST_SKIPPED_AMOUNT);
+			assert!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().is_empty());
+
+			// The skipped amount carries over, tipping the next attempt over the threshold.
+			assert_eq!(Swapping::maybe_trigger_flip_to_gateway_egress(H160::zero(), 1), FEE);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SentFlipToGateway { amount, .. })
+					if *amount == LARGEST_SKIPPED_AMOUNT + 1 - FEE
+			);
+			assert_eq!(FlipToBeSentToGateway::<Test>::get(), FEE);
+			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
+		});
 	}
 }
 
@@ -2383,6 +2400,23 @@ mod private_channels {
 			// The same broker can re-open a (different) private channel:
 			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
 			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(CHANNEL_ID + 1));
+		});
+	}
+
+	#[test]
+	fn cannot_open_private_btc_channel_if_already_bonded() {
+		use cf_traits::{mocks::bonding::MockBonderFor, Bonding};
+
+		new_test_ext().execute_with(|| {
+			const OTHER_BOND: u128 = FLIPPERINOS_PER_FLIP * 1_000;
+			MockFundingInfo::<Test>::credit_funds(&BROKER, OTHER_BOND);
+			MockBonderFor::<Test>::update_bond(&BROKER, OTHER_BOND);
+
+			assert_noop!(
+				Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)),
+				Error::<Test>::AccountBonded
+			);
+			assert_eq!(MockBonderFor::<Test>::get_bond(&BROKER), OTHER_BOND);
 		});
 	}
 
@@ -2661,6 +2695,43 @@ mod affiliates {
 			));
 
 			assert!(AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID).is_some());
+		});
+	}
+
+	#[test]
+	fn reregistering_with_new_withdrawal_address_yields_distinct_id() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+
+			let register_and_deregister = |withdrawal_address: EthereumAddress| {
+				assert_ok!(Swapping::register_affiliate(
+					OriginTrait::signed(BROKER),
+					withdrawal_address,
+				));
+
+				let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+					.expect("Affiliate must be registered!");
+
+				assert_ok!(Swapping::deregister_affiliate(
+					OriginTrait::signed(BROKER),
+					affiliate_account_id,
+				));
+
+				affiliate_account_id
+			};
+
+			// The short id is recycled on deregistration, so the withdrawal address is what keeps
+			// the derived account id distinct.
+			assert_ne!(
+				register_and_deregister([0xaa; 20].into()),
+				register_and_deregister([0xbb; 20].into()),
+			);
+
+			// Conversely, the same inputs must still derive the same account id.
+			assert_eq!(
+				register_and_deregister([0xaa; 20].into()),
+				register_and_deregister([0xaa; 20].into()),
+			);
 		});
 	}
 
