@@ -2564,7 +2564,7 @@ mod delegation {
 
 			assert_noop!(
 				ValidatorPallet::delegate(OriginTrait::signed(ALICE), BOB, DelegationAmount::Max),
-				Error::<Test>::DelegationNotAllowed
+				Error::<Test>::NotLiquidityProvider
 			);
 		});
 	}
@@ -2590,14 +2590,11 @@ mod delegation {
 				BOB
 			));
 
-			// Delegate while unregistered, then become a broker.
+			// A broker can no longer delegate, but a delegation choice may predate the LP role
+			// requirement.
 			MockFlip::credit_funds(&ALICE, BID);
-			assert_ok!(ValidatorPallet::delegate(
-				OriginTrait::signed(ALICE),
-				BOB,
-				DelegationAmount::Max
-			));
 			assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE));
+			DelegationChoice::<Test>::insert(ALICE, (BOB, BID));
 
 			let (snapshots, _) = ValidatorPallet::build_delegation_snapshots::<
 				<Test as crate::Config>::KeygenQualification,
@@ -2682,6 +2679,130 @@ mod delegation {
 					max_bid: BID
 				}),
 			);
+		});
+	}
+
+	#[test]
+	fn delegate_auto_registers_unregistered_account_as_liquidity_provider() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&ALICE, 1_000);
+
+			assert!(!<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
+
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max
+			));
+
+			assert!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
+		});
+	}
+
+	#[test]
+	fn delegate_fails_for_accounts_with_an_incompatible_role() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&ALICE, 1_000);
+
+			assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(ALICE), BOB, DelegationAmount::Max),
+				Error::<Test>::NotLiquidityProvider
+			);
+		});
+	}
+
+	#[test]
+	fn undelegate_to_zero_deregisters_liquidity_provider_role() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&ALICE, 1_000);
+
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
+
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(ALICE),
+				DelegationAmount::Max
+			));
+
+			assert!(!<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
+		});
+	}
+
+	#[test]
+	fn undelegate_partial_decrease_keeps_liquidity_provider_role() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&ALICE, 1_000);
+
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(ALICE),
+				DelegationAmount::Some(1),
+			));
+
+			assert!(DelegationChoice::<Test>::contains_key(ALICE));
+			assert!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
+		});
+	}
+
+	#[test]
+	fn delegator_deregistration_check_blocks_while_actively_delegating() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			MockFlip::credit_funds(&ALICE, 1_000);
+
+			assert_ok!(DelegatorDeregistrationCheck::<Test>::check(&ALICE));
+
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max
+			));
+
+			assert_matches!(
+				DelegatorDeregistrationCheck::<Test>::check(&ALICE),
+				Err(Error::<Test>::StillDelegating)
+			);
+
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(ALICE),
+				DelegationAmount::Max
+			));
+
+			assert_ok!(DelegatorDeregistrationCheck::<Test>::check(&ALICE));
 		});
 	}
 
