@@ -25,6 +25,7 @@ mod benchmarking;
 mod failed_vault_deposits;
 pub use failed_vault_deposits::{
 	FailedVaultDeposit, FailedVaultDepositCause, FailedVaultDepositId, FailedVaultDepositInfo,
+	MAX_FAILED_VAULT_DEPOSIT_RECOVERIES,
 };
 
 pub mod migrations;
@@ -1263,6 +1264,12 @@ pub mod pallet {
 			recovery_account: T::AccountId,
 			outcome: FailedDepositRecoveryOutcome,
 		},
+		/// A queued deposit could not be recovered. It stays queued and can be retried.
+		FailedDepositRecoveryFailed {
+			queue_id: FailedVaultDepositId,
+			broker_id: T::AccountId,
+			error: DispatchError,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1307,6 +1314,8 @@ pub mod pallet {
 		/// The supplied configuration parameters are not valid.
 		InvalidConfigurationParameters,
 		UnknownFailedVaultDeposit,
+		/// The failed vault deposit is attributed to a different broker.
+		BrokerMismatch,
 	}
 
 	#[pallet::hooks]
@@ -1807,34 +1816,32 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Attribute an unpaid vault deposit and route its remaining liability to the broker's
-		/// current recovery LP. Failed payout leaves the entry unchanged.
+		/// Routes the remaining liability of queued vault deposits to their brokers' current
+		/// recovery LPs. A deposit already attributed to a broker can only be recovered to that
+		/// broker.
+		///
+		/// Each deposit is recovered independently: one that fails stays queued and doesn't
+		/// affect the others.
 		#[pallet::call_index(15)]
-		// TODO: wire the generated attribution weight before the coordinated release.
-		#[pallet::weight(T::WeightInfo::vault_swap_request())]
-		#[transactional]
-		pub fn attribute_failed_vault_deposit(
+		// TODO: wire the generated recovery weight before the coordinated release.
+		#[pallet::weight(T::WeightInfo::vault_swap_request().saturating_mul(recoveries.len() as u64))]
+		pub fn recover_failed_vault_deposits(
 			origin: OriginFor<T>,
-			queue_id: FailedVaultDepositId,
-			broker_id: T::AccountId,
+			recoveries: BoundedVec<
+				(FailedVaultDepositId, T::AccountId),
+				ConstU32<MAX_FAILED_VAULT_DEPOSIT_RECOVERIES>,
+			>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let entry = FailedVaultDeposits::<T, I>::get(queue_id)
-				.ok_or(Error::<T, I>::UnknownFailedVaultDeposit)?;
-			let deposit = entry.deposit;
-			let (recovery_account, outcome) = Self::route_failed_deposit(
-				&broker_id,
-				deposit.facts.input_asset.into(),
-				deposit.remaining_amount.into(),
-			)?;
-			FailedVaultDeposits::<T, I>::remove(queue_id);
-			Self::deposit_event(Event::FailedDepositRecovered {
-				queue_id: Some(queue_id),
-				deposit,
-				broker_id,
-				recovery_account,
-				outcome,
-			});
+			for (queue_id, broker_id) in recoveries {
+				if let Err(error) = Self::recover_failed_vault_deposit(queue_id, &broker_id) {
+					Self::deposit_event(Event::FailedDepositRecoveryFailed {
+						queue_id,
+						broker_id,
+						error,
+					});
+				}
+			}
 			Ok(())
 		}
 	}

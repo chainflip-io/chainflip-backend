@@ -291,16 +291,23 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn attribute_failed_vault_deposit() {
-		let witness = failed_vault_witness::<T, I>();
-		let broker_id = witness.broker_id().unwrap().clone();
-		let queue_id = Pallet::<T, I>::failed_vault_deposit_id(&witness);
-		Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+	fn recover_failed_vault_deposits(n: Linear<1, MAX_FAILED_VAULT_DEPOSIT_RECOVERIES>) {
+		// Queued before the recovery account is linked.
+		let recoveries = (0..n)
+			.map(|i| {
+				let mut witness = failed_vault_witness::<T, I>();
+				witness.deposit_mut().channel_id = Some(i.into());
+				let broker_id = witness.broker_id().unwrap().clone();
+				let queue_id = Pallet::<T, I>::failed_vault_deposit_id(&witness);
+				Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+				(queue_id, broker_id)
+			})
+			.collect::<Vec<_>>();
+		assert_eq!(FailedVaultDeposits::<T, I>::iter_keys().count(), n as usize);
 		setup_recovery::<T, I>(true);
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		#[extrinsic_call]
-		_(origin as T::RuntimeOrigin, queue_id, broker_id);
-		assert!(!FailedVaultDeposits::<T, I>::contains_key(queue_id));
+		_(origin as T::RuntimeOrigin, recoveries.try_into().unwrap());
 		assert!(FailedVaultDeposits::<T, I>::iter_keys().next().is_none());
 	}
 
@@ -393,11 +400,11 @@ mod benchmarks {
 				Pallet::<Test, Instance1>::test_benchmark_failed_vault_deposit_queued,
 				Pallet::<Test, Instance1>::test_benchmark_failed_vault_deposit_credit,
 				Pallet::<Test, Instance1>::test_benchmark_failed_vault_deposit_egress,
-				Pallet::<Test, Instance1>::test_benchmark_attribute_failed_vault_deposit,
+				Pallet::<Test, Instance1>::test_benchmark_recover_failed_vault_deposits,
 				Pallet::<Test, Instance2>::test_benchmark_failed_vault_deposit_queued,
 				Pallet::<Test, Instance2>::test_benchmark_failed_vault_deposit_credit,
 				Pallet::<Test, Instance2>::test_benchmark_failed_vault_deposit_egress,
-				Pallet::<Test, Instance2>::test_benchmark_attribute_failed_vault_deposit,
+				Pallet::<Test, Instance2>::test_benchmark_recover_failed_vault_deposits,
 			] {
 				new_test_ext().execute_with(|| {
 					assert_ok!(benchmark());

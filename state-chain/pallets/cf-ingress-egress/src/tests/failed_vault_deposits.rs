@@ -46,6 +46,31 @@ fn submit(witness: VaultDepositWitness<Test, Instance1>) {
 	));
 }
 
+fn recover(recoveries: Vec<(crate::FailedVaultDepositId, u64)>) {
+	assert_ok!(EthereumIngressEgress::recover_failed_vault_deposits(
+		RuntimeOrigin::root(),
+		recoveries.try_into().unwrap()
+	));
+}
+
+fn recovery_failures() -> Vec<(crate::FailedVaultDepositId, DispatchError)> {
+	System::events()
+		.into_iter()
+		.filter_map(|record| match record.event {
+			RuntimeEvent::EthereumIngressEgress(Event::FailedDepositRecoveryFailed {
+				queue_id,
+				error,
+				..
+			}) => Some((queue_id, error)),
+			_ => None,
+		})
+		.collect()
+}
+
+fn error(error: crate::Error<Test, Instance1>) -> DispatchError {
+	DispatchError::from(error).stripped()
+}
+
 fn queue_count() -> usize {
 	FailedVaultDeposits::<Test, Instance1>::iter_keys().count()
 }
@@ -259,29 +284,74 @@ fn decoded_unrefundable_swap_recovers_to_the_lp() {
 }
 
 #[test]
-fn governance_reassigns_and_pays_once_without_repeating_ingress_fees() {
+fn governance_pays_the_attributed_broker_once_without_repeating_ingress_fees() {
 	new_test_ext().execute_with(|| {
 		ChainTracker::<Ethereum>::set_fee(100);
 		let witness = failed_eth(1_000, Some(BROKER));
 		let id = EthereumIngressEgress::failed_vault_deposit_id(&witness);
 		submit(witness.clone());
 		let entry = FailedVaultDeposits::<Test, Instance1>::iter_values().next().unwrap();
-		assert_noop!(EthereumIngressEgress::attribute_failed_vault_deposit(RuntimeOrigin::signed(BROKER), id, BROKER), DispatchError::BadOrigin);
-		assert_noop!(EthereumIngressEgress::attribute_failed_vault_deposit(RuntimeOrigin::root(), id, BROKER), crate::Error::<Test, Instance1>::NoRecoveryAccount);
+		assert_noop!(
+			EthereumIngressEgress::recover_failed_vault_deposits(
+				RuntimeOrigin::signed(BROKER),
+				vec![(id, BROKER)].try_into().unwrap()
+			),
+			DispatchError::BadOrigin
+		);
+		let other_broker = BROKER + 1;
+		MockBrokerRecoveryApi::link(other_broker, RECOVERY_LP);
+		recover(vec![(id, BROKER)]);
+		recover(vec![(id, other_broker)]);
+		assert_eq!(
+			recovery_failures(),
+			vec![
+				(id, error(crate::Error::NoRecoveryAccount)),
+				(id, error(crate::Error::BrokerMismatch))
+			]
+		);
 		assert_eq!(FailedVaultDeposits::<Test, Instance1>::get(id), Some(entry));
-		let new_broker = BROKER + 1;
-		MockBrokerRecoveryApi::link(new_broker, RECOVERY_LP);
+		MockBrokerRecoveryApi::link(BROKER, RECOVERY_LP);
 		assert_eq!(MockBalance::get_balance(&RECOVERY_LP, Asset::Eth), 0);
-		assert_ok!(EthereumIngressEgress::attribute_failed_vault_deposit(RuntimeOrigin::root(), id, new_broker));
+		recover(vec![(id, BROKER)]);
 		assert_eq!(MockBalance::get_balance(&RECOVERY_LP, Asset::Eth), 900);
 		assert_eq!(MockAssetWithholding::withheld_assets(Asset::Eth), 100);
 		assert_eq!(queue_count(), 0);
-		assert_noop!(EthereumIngressEgress::attribute_failed_vault_deposit(RuntimeOrigin::root(), id, new_broker), crate::Error::<Test, Instance1>::UnknownFailedVaultDeposit);
+		recover(vec![(id, BROKER)]);
+		assert_eq!(
+			recovery_failures().last(),
+			Some(&(id, error(crate::Error::UnknownFailedVaultDeposit)))
+		);
 		assert_eq!(finalised_count(), 1);
 		assert_eq!(MockBalance::get_balance(&RECOVERY_LP, Asset::Eth), 900);
 		assert_has_matching_event!(Test, RuntimeEvent::EthereumIngressEgress(Event::FailedDepositRecovered {
-			queue_id: Some(queue_id), broker_id, deposit: crate::FailedVaultDepositInfo { broker_id: Some(BROKER), .. }, ..
-		}) if *broker_id == new_broker && *queue_id == id);
+			queue_id: Some(queue_id), broker_id: BROKER, deposit: crate::FailedVaultDepositInfo { broker_id: Some(BROKER), .. }, ..
+		}) if *queue_id == id);
+	});
+}
+
+#[test]
+fn a_failed_recovery_does_not_affect_the_rest_of_the_batch() {
+	new_test_ext().execute_with(|| {
+		let attributed = failed_eth(1_000, Some(BROKER));
+		let unattributed = failed_eth(2_000, None);
+		let ids = [&attributed, &unattributed].map(EthereumIngressEgress::failed_vault_deposit_id);
+		submit(attributed);
+		submit(unattributed);
+		let other_broker = BROKER + 1;
+		MockBrokerRecoveryApi::link(other_broker, RECOVERY_LP);
+		let unknown = [0; 32];
+		recover(vec![(ids[0], other_broker), (ids[1], other_broker), (unknown, other_broker)]);
+		// Only the unattributed deposit can be recovered to another broker.
+		assert_eq!(MockBalance::get_balance(&RECOVERY_LP, Asset::Eth), 2_000);
+		assert!(FailedVaultDeposits::<Test, Instance1>::contains_key(ids[0]));
+		assert!(!FailedVaultDeposits::<Test, Instance1>::contains_key(ids[1]));
+		assert_eq!(
+			recovery_failures(),
+			vec![
+				(ids[0], error(crate::Error::BrokerMismatch)),
+				(unknown, error(crate::Error::UnknownFailedVaultDeposit))
+			]
+		);
 	});
 }
 
@@ -302,11 +372,7 @@ fn distinct_evm_deposits_in_one_transaction_can_be_recovered_independently() {
 		submit(decoded);
 		assert_eq!(queue_count(), 4);
 		MockBrokerRecoveryApi::link(BROKER, RECOVERY_LP);
-		assert_ok!(EthereumIngressEgress::attribute_failed_vault_deposit(
-			RuntimeOrigin::root(),
-			first_id,
-			BROKER
-		));
+		recover(vec![(first_id, BROKER)]);
 		assert!(!FailedVaultDeposits::<Test, Instance1>::contains_key(first_id));
 		assert_eq!(
 			FailedVaultDeposits::<Test, Instance1>::get(second_id)
@@ -411,7 +477,7 @@ proptest::proptest! {
 			assert_eq!(MockAssetWithholding::withheld_assets(Asset::Eth), fee);
 			if !linked {
 				MockBrokerRecoveryApi::link(BROKER, RECOVERY_LP);
-				assert_ok!(EthereumIngressEgress::attribute_failed_vault_deposit(RuntimeOrigin::root(), id, BROKER));
+				recover(vec![(id, BROKER)]);
 			}
 			assert_eq!(MockBalance::get_balance(&RECOVERY_LP, Asset::Eth), net_amount);
 			assert_eq!(queue_count(), 0);

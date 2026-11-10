@@ -364,11 +364,26 @@ fn missing_or_inactive_link_queues_btc_until_governance_processes_it() {
 					let utxos = pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
 					assert_eq!(utxos.len(), initial_utxos + 1);
 					assert!(utxos.contains(&witness.deposit().deposit_details));
-					let gov = || pallet_cf_governance::RawOrigin::GovernanceApproval.into();
-					frame_support::assert_noop!(
-						BitcoinIngressEgress::attribute_failed_vault_deposit(gov(), queue_id, BROKER),
-						pallet_cf_ingress_egress::Error::<Runtime, BitcoinInstance>::NoRecoveryAccount
-					);
+					let recover = || {
+						assert_ok!(BitcoinIngressEgress::recover_failed_vault_deposits(
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+							vec![(queue_id, BROKER)].try_into().unwrap()
+						));
+					};
+					let recovery_failed =
+						|error: pallet_cf_ingress_egress::Error<Runtime, BitcoinInstance>| {
+							RuntimeEvent::BitcoinIngressEgress(
+								pallet_cf_ingress_egress::Event::FailedDepositRecoveryFailed {
+									queue_id,
+									broker_id: BROKER,
+									error: sp_runtime::DispatchError::from(error).stripped(),
+								},
+							)
+						};
+					recover();
+					System::assert_last_event(recovery_failed(
+						pallet_cf_ingress_egress::Error::NoRecoveryAccount,
+					));
 					assert_eq!(
 						FailedVaultDeposits::<Runtime, BitcoinInstance>::get(queue_id),
 						Some(entry.clone())
@@ -382,11 +397,7 @@ fn missing_or_inactive_link_queues_btc_until_governance_processes_it() {
 						));
 					}
 					assert_eq!(FreeBalances::<Runtime>::get(&RECOVERY_ACCOUNT, Asset::Btc), 0);
-					assert_ok!(BitcoinIngressEgress::attribute_failed_vault_deposit(
-						gov(),
-						queue_id,
-						BROKER
-					));
+					recover();
 					assert_eq!(
 						FreeBalances::<Runtime>::get(&RECOVERY_ACCOUNT, Asset::Btc),
 						u128::from(entry.deposit.remaining_amount)
@@ -394,9 +405,13 @@ fn missing_or_inactive_link_queues_btc_until_governance_processes_it() {
 					assert!(FailedVaultDeposits::<Runtime, BitcoinInstance>::iter_keys()
 						.next()
 						.is_none());
-					frame_support::assert_noop!(
-						BitcoinIngressEgress::attribute_failed_vault_deposit(gov(), queue_id, BROKER),
-						pallet_cf_ingress_egress::Error::<Runtime, BitcoinInstance>::UnknownFailedVaultDeposit
+					recover();
+					System::assert_last_event(recovery_failed(
+						pallet_cf_ingress_egress::Error::UnknownFailedVaultDeposit,
+					));
+					assert_eq!(
+						FreeBalances::<Runtime>::get(&RECOVERY_ACCOUNT, Asset::Btc),
+						u128::from(entry.deposit.remaining_amount)
 					);
 				});
 		}
