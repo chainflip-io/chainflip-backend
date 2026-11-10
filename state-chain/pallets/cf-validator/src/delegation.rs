@@ -229,16 +229,25 @@ where
 
 	/// Returns a mapping of the bond amounts for each validator such that
 	/// the full bond is accounted for.
+	///
+	/// Each validator is bonded at least the epoch bond (capped at its bid), so that no
+	/// authority can hold a negligible bond while its pool-mates cover the operator's total.
+	/// Validators only qualify with a bid of at least `MinimumValidatorStake`, so neither their
+	/// bids nor the epoch bond can be lower, and every validator is bonded at least that much.
+	/// The remainder goes to validators that bid above the epoch bond.
 	pub fn validator_bond_distribution(&self, bond: Bid) -> BTreeMap<Account, Bid> {
-		let mut total_bond = bond * Bid::from(self.validators.len() as u32);
+		let mut remainder = bond
+			.saturating_mul(Bid::from(self.validators.len() as u32))
+			.saturating_sub(self.validators.values().map(|bid| core::cmp::min(*bid, bond)).sum());
 		let mut validator_bids = self.validators.clone().into_iter().collect::<Vec<_>>();
 		validator_bids.sort_by_key(|(_, v)| *v);
 		validator_bids
 			.into_iter()
 			.map(|(id, bid)| {
-				let individual_bond = core::cmp::min(bid, total_bond);
-				total_bond.saturating_reduce(individual_bond);
-				(id, individual_bond)
+				let floor = core::cmp::min(bid, bond);
+				let top_up = core::cmp::min(bid.saturating_sub(floor), remainder);
+				remainder.saturating_reduce(top_up);
+				(id, floor.saturating_add(top_up))
 			})
 			.collect()
 	}
@@ -730,6 +739,12 @@ mod tests {
 						"validator {} bonded {} above its bid {}",
 						validator, individual_bond, snapshot.validators[validator]
 					);
+					let floor = core::cmp::min(snapshot.validators[validator], bond);
+					prop_assert!(
+						*individual_bond >= floor,
+						"validator {} bonded {} below its floor {}",
+						validator, individual_bond, floor
+					);
 				}
 
 				Ok(())
@@ -751,5 +766,18 @@ mod tests {
 		assert_eq!(distribution[&100], 700);
 		assert_eq!(distribution[&101], 300);
 		assert_eq!(distribution[&102], 200);
+	}
+
+	#[test]
+	fn validator_bond_distribution_bonds_every_validator() {
+		let snapshot = DelegationSnapshot::<u64, u128> {
+			operator: 1,
+			validators: [(100, 100), (101, 100), (102, 100)].into_iter().collect(),
+			..Default::default()
+		};
+
+		let distribution = snapshot.validator_bond_distribution(50);
+
+		assert_eq!(distribution.values().copied().collect::<Vec<_>>(), vec![50, 50, 50]);
 	}
 }

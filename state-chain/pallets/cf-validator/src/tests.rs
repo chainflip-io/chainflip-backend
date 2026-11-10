@@ -802,6 +802,33 @@ mod bond_expiry {
 			assert_eq!(EpochHistory::<Test>::active_bond(&3), 99);
 		});
 	}
+
+	#[test]
+	fn every_managed_authority_is_bonded_at_least_the_epoch_bond() {
+		// The operator's pool exceeds bond * n, so a greedy split would leave one authority
+		// bonded at zero.
+		const BOND: u128 = 50;
+		const MANAGED: [u64; 3] = [100, 101, 102];
+		const INDEPENDENT: u64 = 103;
+
+		new_test_ext().execute_with(|| {
+			DelegationSnapshot::<u64, u128> {
+				operator: 1,
+				validators: MANAGED.iter().map(|v| (*v, 100)).collect(),
+				..Default::default()
+			}
+			.register_for_epoch::<Test>(ValidatorPallet::current_epoch() + 1);
+
+			ValidatorPallet::transition_to_next_epoch(
+				MANAGED.into_iter().chain([INDEPENDENT]).collect(),
+				BOND,
+			);
+
+			for authority in MANAGED.into_iter().chain([INDEPENDENT]) {
+				assert_eq!(EpochHistory::<Test>::active_bond(&authority), BOND);
+			}
+		});
+	}
 }
 
 #[test]
