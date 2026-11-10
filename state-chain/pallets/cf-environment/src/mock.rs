@@ -40,8 +40,7 @@ use cf_traits::{
 	elections::{ElectionInstance, ElectionInstancesVoting, VoterContext},
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
 	mocks::{failed_deposit_recovery::MockFailedDepositRecovery, key_provider::MockKeyProvider},
-	ApplyEmergencyPresets, Broadcaster, EmergencyPreset, GetBitcoinFeeInfo,
-	VaultKeyWitnessedHandler,
+	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{
 	derive_impl,
@@ -253,14 +252,6 @@ impl Broadcaster<Solana> for MockSolanaBroadcaster {
 
 impl_pallet_safe_mode!(MockPalletSafeMode; flag1, flag2);
 impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
-
-impl ApplyEmergencyPresets for MockRuntimeSafeMode {
-	fn apply_emergency_presets(&mut self, presets: &BTreeSet<EmergencyPreset>) {
-		if !presets.is_empty() {
-			self.mock.flag1 = false;
-		}
-	}
-}
 
 pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 

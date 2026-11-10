@@ -16,11 +16,9 @@
 
 //! For filtering runtime calls and other related utilities.
 
-use crate::{Runtime, RuntimeCall};
+use crate::{Environment, Runtime, RuntimeCall};
 use cf_primitives::ForeignChain;
-use cf_traits::{
-	impl_runtime_safe_mode, ApplyEmergencyPresets, CallDispatchFilter, EmergencyPreset,
-};
+use cf_traits::{impl_runtime_safe_mode, CallDispatchFilter, EmergencyPreset, EmergencySafeMode};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::instances::*;
 use scale_info::TypeInfo;
@@ -234,19 +232,23 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 	}
 }
 
-impl ApplyEmergencyPresets for RuntimeSafeMode {
-	fn apply_emergency_presets(&mut self, presets: &BTreeSet<EmergencyPreset>) {
-		for preset in presets {
-			match *preset {
-				EmergencyPreset::DisableDepositChannelCreation(chain) =>
-					*deposit_channel_creation_enabled(self, chain) = false,
-				EmergencyPreset::DisableNewLoans(asset) =>
-					self.lending_pools.borrowing.disable(asset),
-				EmergencyPreset::DisableLpWithdrawals =>
-					self.liquidity_provider.withdrawal_enabled = false,
-				EmergencyPreset::DisableInternalSwaps =>
-					self.liquidity_provider.internal_swaps_enabled = false,
-			}
+impl EmergencySafeMode for RuntimeSafeMode {
+	fn apply(presets: &BTreeSet<EmergencyPreset>) {
+		Environment::mutate_safe_mode(|safe_mode| apply_emergency_presets(safe_mode, presets));
+	}
+}
+
+fn apply_emergency_presets(safe_mode: &mut RuntimeSafeMode, presets: &BTreeSet<EmergencyPreset>) {
+	for preset in presets {
+		match *preset {
+			EmergencyPreset::DisableDepositChannelCreation(chain) =>
+				*deposit_channel_creation_enabled(safe_mode, chain) = false,
+			EmergencyPreset::DisableNewLoans(asset) =>
+				safe_mode.lending_pools.borrowing.disable(asset),
+			EmergencyPreset::DisableLpWithdrawals =>
+				safe_mode.liquidity_provider.withdrawal_enabled = false,
+			EmergencyPreset::DisableInternalSwaps =>
+				safe_mode.liquidity_provider.internal_swaps_enabled = false,
 		}
 	}
 }
@@ -285,7 +287,7 @@ mod emergency_preset_tests {
 		presets: &BTreeSet<EmergencyPreset>,
 	) -> RuntimeSafeMode {
 		let mut safe_mode = safe_mode.clone();
-		safe_mode.apply_emergency_presets(presets);
+		apply_emergency_presets(&mut safe_mode, presets);
 		safe_mode
 	}
 
