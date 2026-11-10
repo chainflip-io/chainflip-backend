@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.3.7] - 2026-11-10
+
+### Fixes
+
+- Refund BSC broadcasts sent as legacy transactions, which engines signing with ethers-rs produce on BSC ([#7104](https://github.com/chainflip-io/chainflip-backend/issues/7104))
+
 ## [2.3.6] - 2026-11-09
 
 ### Fixes
@@ -33,10 +39,6 @@ All notable changes included in each Chainflip release will be documented in thi
 
 - Speed up EIP-712 payload construction and hashing ([#6920](https://github.com/chainflip-io/chainflip-backend/issues/6920))
 - Read Solana state at `finalized` commitment instead of `confirmed` ([#7079](https://github.com/chainflip-io/chainflip-backend/issues/7079))
-
-### Dependencies
-
-- Security update flagged by `cargo audit`: libz-sys 1.1.31.
 
 ## [2.3.3] - 2026-10-27
 
