@@ -55,10 +55,9 @@ use cf_primitives::{
 };
 use cf_traits::{
 	elections::{authorise_voter, ElectionInstance, ElectionInstancesVoting},
-	ApplyEmergencyPresets, Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions,
-	EmergencyPreset, EmergencySafeMode, FailedDepositRecovery, FailedDepositRecoveryOutcome,
-	FailedDepositReference, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
-	SolanaNonceWatch,
+	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, FailedDepositRecovery,
+	FailedDepositRecoveryOutcome, FailedDepositReference, GetBitcoinFeeInfo, KeyProvider,
+	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -189,11 +188,7 @@ pub mod pallet {
 		type ElectionInstances: ElectionInstancesVoting<Self>;
 
 		/// The runtime's safe mode is stored in this pallet.
-		type RuntimeSafeMode: cf_traits::SafeMode
-			+ ApplyEmergencyPresets
-			+ Member
-			+ Parameter
-			+ Default;
+		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
 
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
@@ -1180,12 +1175,13 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> EmergencySafeMode for Pallet<T> {
-	/// Emits `RuntimeSafeModeUpdated` only if the safe mode changed.
-	fn apply(presets: &BTreeSet<EmergencyPreset>) {
+impl<T: Config> Pallet<T> {
+	/// Changes the stored safe mode in place, without any governance check. Emits
+	/// `RuntimeSafeModeUpdated` only if the safe mode changed.
+	pub fn mutate_safe_mode(f: impl FnOnce(&mut T::RuntimeSafeMode)) {
 		let old = RuntimeSafeMode::<T>::get();
 		let mut new = old.clone();
-		new.apply_emergency_presets(presets);
+		f(&mut new);
 		if new != old {
 			RuntimeSafeMode::<T>::put(new.clone());
 			Self::deposit_event(Event::<T>::RuntimeSafeModeUpdated {
@@ -1193,9 +1189,7 @@ impl<T: Config> EmergencySafeMode for Pallet<T> {
 			});
 		}
 	}
-}
 
-impl<T: Config> Pallet<T> {
 	pub fn update_current_release_version() {
 		CurrentReleaseVersion::<T>::set(T::CurrentReleaseVersion::get());
 	}

@@ -37,12 +37,9 @@ use cf_chains::{
 	},
 };
 use cf_primitives::ForeignChain;
-use cf_traits::{
-	elections::ElectionInstance, BalanceApi, EmergencyPreset, EmergencySafeMode, GetBitcoinFeeInfo,
-	SafeMode,
-};
+use cf_traits::{elections::ElectionInstance, BalanceApi, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{assert_noop, assert_ok, sp_runtime::BoundedVec, traits::OriginTrait};
-use std::{collections::BTreeSet, str::FromStr};
+use std::str::FromStr;
 
 fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
 	Utxo {
@@ -187,11 +184,9 @@ fn update_safe_mode() {
 }
 
 #[test]
-fn emergency_presets_emit_event_only_on_change() {
+fn mutate_safe_mode_emits_event_only_on_change() {
 	new_test_ext().execute_with(|| {
-		let presets = BTreeSet::from([EmergencyPreset::DisableLpWithdrawals]);
-
-		<Environment as EmergencySafeMode>::apply(&presets);
+		Environment::mutate_safe_mode(|safe_mode| safe_mode.mock.flag1 = false);
 		let expected =
 			MockRuntimeSafeMode { mock: MockPalletSafeMode { flag1: false, flag2: true } };
 		assert_eq!(RuntimeSafeMode::<Test>::get(), expected);
@@ -200,7 +195,7 @@ fn emergency_presets_emit_event_only_on_change() {
 		}));
 
 		System::reset_events();
-		<Environment as EmergencySafeMode>::apply(&presets);
+		Environment::mutate_safe_mode(|safe_mode| safe_mode.mock.flag1 = false);
 		assert_eq!(RuntimeSafeMode::<Test>::get(), expected);
 		assert!(System::events().is_empty());
 	});

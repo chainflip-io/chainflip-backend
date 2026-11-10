@@ -375,11 +375,6 @@ pub trait EmergencySafeMode {
 	fn apply(presets: &BTreeSet<EmergencyPreset>);
 }
 
-/// Maps presets onto the settings of a runtime safe mode.
-pub trait ApplyEmergencyPresets {
-	fn apply_emergency_presets(&mut self, presets: &BTreeSet<EmergencyPreset>);
-}
-
 #[cfg(test)]
 pub(crate) mod test {
 	use super::*;
