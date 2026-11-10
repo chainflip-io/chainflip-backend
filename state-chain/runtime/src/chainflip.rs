@@ -1321,3 +1321,30 @@ impl cf_traits::ChainflipNetworkInfo for ChainflipNetworkProvider {
 		Environment::chainflip_network()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use cf_chains::{bsc::BscTrackedData, evm::EvmTransactionPricing, ChainState};
+
+	// Fee refunds for BSC transactions without EIP-1559 fee fields rely on this.
+	#[test]
+	fn bsc_transactions_set_equal_max_and_priority_fees() {
+		const { assert!(<Bsc as EvmTransactionPricing>::MAX_FEE_EQUALS_PRIORITY_FEE) };
+
+		sp_io::TestExternalities::default().execute_with(|| {
+			// Below and above the minimum fee per gas.
+			for priority_fee in [0u128, 10_000_000_000] {
+				pallet_cf_chain_tracking::CurrentChainState::<Runtime, BscInstance>::put(
+					ChainState { block_height: 0, tracked_data: BscTrackedData { priority_fee } },
+				);
+
+				let mut transaction = cf_chains::evm::Transaction::default();
+				BscTransactionBuilder::refresh_unsigned_data(&mut transaction);
+
+				assert!(transaction.max_fee_per_gas.is_some());
+				assert_eq!(transaction.max_fee_per_gas, transaction.max_priority_fee_per_gas);
+			}
+		});
+	}
+}
