@@ -74,6 +74,11 @@ impl Chain for Bsc {
 	type ReplayProtection = evm::api::EvmReplayProtection;
 }
 
+impl evm::EvmTransactionPricing for Bsc {
+	/// The runtime's BSC transaction builder sets both fees to the same value.
+	const MAX_FEE_EQUALS_PRIORITY_FEE: bool = true;
+}
+
 #[derive(
 	Copy,
 	Clone,

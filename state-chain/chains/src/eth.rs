@@ -89,6 +89,10 @@ impl Chain for Ethereum {
 	type ReplayProtection = EvmReplayProtection;
 }
 
+impl evm::EvmTransactionPricing for Ethereum {
+	const MAX_FEE_EQUALS_PRIORITY_FEE: bool = false;
+}
+
 #[derive(
 	Copy,
 	Clone,
