@@ -213,9 +213,34 @@ impl_transaction_builder_for_evm_chain!(
 	BscTransactionBuilder,
 	BscApi<EvmEnvironment>,
 	BscChainTracking,
-	// we use priority fee multiplier in bsc's case since base fee is anyways always 0 in bsc
+	// BSC has no base fee, so this multiplier sets the price actually paid per gas.
 	BSC_PRIORITY_FEE_MULTIPLIER
 );
+
+#[cfg(test)]
+mod bsc_fee_tests {
+	use super::*;
+	use cf_chains::bsc::BscTrackedData;
+
+	#[test]
+	fn bsc_fee_paid_per_gas_matches_fee_charged() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			// Below, at and above the minimum fee per gas of 0.1 gwei.
+			for priority_fee in [0u128, 50_000_000, 100_000_000, 1_000_000_000] {
+				let tracked_data = BscTrackedData { priority_fee };
+				pallet_cf_chain_tracking::CurrentChainState::<Runtime, BscInstance>::put(
+					ChainState { block_height: 0, tracked_data },
+				);
+				let mut transaction = cf_chains::evm::Transaction::default();
+				BscTransactionBuilder::refresh_unsigned_data(&mut transaction);
+
+				let charged_per_gas = U256::from(tracked_data.calculate_transaction_fee(1));
+				assert_eq!(transaction.max_fee_per_gas, Some(charged_per_gas));
+				assert_eq!(transaction.max_priority_fee_per_gas, Some(charged_per_gas));
+			}
+		});
+	}
+}
 
 pub struct TronTransactionBuilder;
 impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilder {
