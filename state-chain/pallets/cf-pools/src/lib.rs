@@ -220,10 +220,10 @@ impl<T: Config> LimitOrderUpdate<T> {
 					dispatch_at,
 				});
 
-				Ok(())
+				Ok::<_, Error<T>>(())
 			})?;
 
-			Ok(())
+			Ok::<_, Error<T>>(())
 		})?;
 		Ok(())
 	}
@@ -1116,6 +1116,16 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> From<cf_amm::SwapError> for Error<T> {
+	fn from(error: cf_amm::SwapError) -> Self {
+		match error {
+			cf_amm::SwapError::InsufficientLiquidity => Error::<T>::InsufficientLiquidity,
+			cf_amm::SwapError::MaxFillsExceeded => Error::<T>::MaxFillsExceeded,
+			cf_amm::SwapError::PriceImpactLimitExceeded => Error::<T>::PriceImpactLimitExceeded,
+		}
+	}
+}
+
 impl<T: Config> SwappingApi for Pallet<T> {
 	#[transactional]
 	fn swap_single_leg(
@@ -1139,13 +1149,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 				} = pool
 					.pool_state
 					.swap(side, input_amount, MaximumPriceImpact::<T>::get(asset_pair))
-					.map_err(|error| match error {
-						cf_amm::SwapError::InsufficientLiquidity =>
-							Error::<T>::InsufficientLiquidity,
-						cf_amm::SwapError::MaxFillsExceeded => Error::<T>::MaxFillsExceeded,
-						cf_amm::SwapError::PriceImpactLimitExceeded =>
-							Error::<T>::PriceImpactLimitExceeded,
-					})?;
+					.map_err(Error::<T>::from)?;
 
 				// Process any limit order fills that occurred during the swap. This will credit the
 				// LPs with the proceeds of the swap.
