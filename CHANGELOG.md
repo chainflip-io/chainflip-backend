@@ -2,6 +2,23 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.3.8] - 2026-11-11
+
+### Features
+
+- Require the Liquidity Provider role to delegate: `delegate` registers unregistered accounts as Liquidity Providers, Liquidity Providers can't deregister while delegating, and existing delegators are migrated to the role ([#6738](https://github.com/chainflip-io/chainflip-backend/issues/6738))
+- Keep the Liquidity Provider role after undelegating ([#7053](https://github.com/chainflip-io/chainflip-backend/issues/7053))
+
+### Fixes
+
+- Bond every managed validator at least the epoch bond ([#7106](https://github.com/chainflip-io/chainflip-backend/issues/7106))
+- Run every deregistration check regardless of the account's role ([#7070](https://github.com/chainflip-io/chainflip-backend/issues/7070))
+- Bound each operator's list of delegation exceptions to 1,000 entries ([#7083](https://github.com/chainflip-io/chainflip-backend/issues/7083))
+
+### Testing
+
+- Close FLIP 2.1 testing gaps, and keep the reason when the FLIP transfer to the gateway is skipped ([#7091](https://github.com/chainflip-io/chainflip-backend/issues/7091))
+
 ## [2.3.7] - 2026-11-10
 
 ### Fixes
