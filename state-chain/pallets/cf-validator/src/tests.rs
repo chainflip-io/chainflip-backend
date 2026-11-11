@@ -829,6 +829,48 @@ mod bond_expiry {
 			}
 		});
 	}
+
+	/// A validator demoted to delegator still has its previous authority epoch active. Expiring
+	/// that epoch must not release the bond backing its delegation in the current epoch.
+	#[test]
+	fn demoted_validator_keeps_delegator_bond_after_previous_epoch_expires() {
+		new_test_ext().execute_with(|| {
+			const BOND: u128 = 100;
+			const DEMOTED_BID: u128 = 80;
+			const OPERATOR: u64 = 456;
+			const STAYING_AUTHORITY: u64 = 1;
+			const DEMOTED_VALIDATOR: u64 = 2;
+
+			ValidatorPallet::transition_to_next_epoch(
+				vec![STAYING_AUTHORITY, DEMOTED_VALIDATOR],
+				BOND,
+			);
+			let authority_epoch = ValidatorPallet::current_epoch();
+			assert_eq!(MockBonderFor::<Test>::get_bond(&DEMOTED_VALIDATOR), BOND);
+
+			// The auction for the next epoch moved the validator into its operator's delegators.
+			DelegationSnapshot::<u64, u128> {
+				operator: OPERATOR,
+				validators: [(STAYING_AUTHORITY, BOND)].into_iter().collect(),
+				delegators: [(DEMOTED_VALIDATOR, DEMOTED_BID)].into_iter().collect(),
+				delegation_fee_bps: 0,
+			}
+			.register_for_epoch::<Test>(authority_epoch + 1);
+
+			ValidatorPallet::transition_to_next_epoch(vec![STAYING_AUTHORITY], BOND);
+			// Still a keyholder for the previous epoch, so the higher authority bond applies.
+			assert_eq!(MockBonderFor::<Test>::get_bond(&DEMOTED_VALIDATOR), BOND);
+
+			ValidatorPallet::expire_epoch(authority_epoch);
+
+			assert_eq!(MockBonderFor::<Test>::get_bond(&STAYING_AUTHORITY), BOND);
+			assert_eq!(
+				MockBonderFor::<Test>::get_bond(&DEMOTED_VALIDATOR),
+				DEMOTED_BID,
+				"delegator bond for the current epoch was released by the epoch expiry"
+			);
+		});
+	}
 }
 
 #[test]
@@ -4798,6 +4840,127 @@ mod keygen_failure_with_delegation {
 			assert!(!updated_op2.validators.contains_key(&VALIDATOR_4));
 			assert!(updated_op2.delegators.contains_key(&VALIDATOR_4));
 		});
+	}
+
+	/// A managed authority can lower its own bid while its pool partner keeps the pool's average
+	/// bid high enough to remain a candidate, then fail keygen deliberately. The ban moves it into
+	/// the next snapshot's delegators at its lowered bid. It is still a keyholder for the old
+	/// epoch until that epoch expires, so its bond must not drop below its active-epoch bond.
+	#[test]
+	fn banned_authority_keeps_active_epoch_bond_while_still_keyholder() {
+		// Accounts 0..7 hold genesis session keys (WINNING_BIDS + LOSING_BIDS), so the session
+		// authority invariant checks pass when they become authorities.
+		const ATTACKER: u64 = 0;
+		const PARTNER: u64 = 1;
+		const INDEPENDENT_LOSER: u64 = 2;
+		const OPERATOR: u64 = 1000;
+
+		new_test_ext()
+			.then_execute_with_checks(|| {
+				MockEpochInfo::set_epoch(GENESIS_EPOCH);
+				set_default_test_bids();
+
+				MockFlip::credit_funds(&OPERATOR, 1000);
+				assert_ok!(ValidatorPallet::register_as_operator(
+					OriginTrait::signed(OPERATOR),
+					OPERATOR_SETTINGS,
+					vanity()
+				));
+
+				for validator in [ATTACKER, PARTNER] {
+					MockFlip::credit_funds(&validator, 500);
+					assert_ok!(ValidatorPallet::claim_validator(
+						OriginTrait::signed(OPERATOR),
+						validator
+					));
+					assert_ok!(ValidatorPallet::accept_operator(
+						OriginTrait::signed(validator),
+						OPERATOR
+					));
+				}
+
+				// Rotation 1: the pool validators outbid the defaults and become authorities.
+				ValidatorPallet::start_authority_rotation();
+				MockKeyRotatorA::keygen_success();
+			})
+			.then_advance_n_blocks_and_execute_with_checks(2, || {
+				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+				MockKeyRotatorA::key_handover_success();
+			})
+			.then_advance_n_blocks_and_execute_with_checks(2, || {
+				assert_rotation_phase_matches!(RotationPhase::ActivatingKeys(..));
+				MockKeyRotatorA::keys_activated();
+			})
+			.then_advance_n_blocks_and_execute_with_checks(2, || {
+				assert_rotation_phase_matches!(RotationPhase::Idle);
+				assert_epoch_index(GENESIS_EPOCH + 1);
+
+				assert!(ValidatorPallet::current_authorities().contains(&ATTACKER));
+				let attacker_active_bond = EpochHistory::<Test>::active_bond(&ATTACKER);
+				assert!(attacker_active_bond > 0);
+				assert_eq!(MockBonderFor::<Test>::get_bond(&ATTACKER), attacker_active_bond);
+				assert!(EpochHistory::<Test>::active_bond(&INDEPENDENT_LOSER) > 0);
+
+				// The independent authority also lowers its bid and loses the next auction. It
+				// never enters a snapshot, so it serves as the control.
+				assert_ok!(ValidatorPallet::set_validator_max_bid(
+					RuntimeOrigin::signed(ATTACKER),
+					Some(MinimumValidatorStake::<Test>::get())
+				));
+				assert_ok!(ValidatorPallet::set_validator_max_bid(
+					RuntimeOrigin::signed(INDEPENDENT_LOSER),
+					Some(MinimumValidatorStake::<Test>::get())
+				));
+
+				// Rotation 2: the attacker remains a candidate via the pool's average bid, then
+				// fails keygen.
+				MockEpochInfo::set_epoch(GENESIS_EPOCH + 1);
+				ValidatorPallet::start_authority_rotation();
+				MockKeyRotatorA::failed([ATTACKER]);
+			})
+			.then_advance_n_blocks_and_execute_with_checks(2, || {
+				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+
+				let next_epoch = CurrentEpoch::<Test>::get() + 1;
+				let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
+				assert!(snapshot.delegators.contains_key(&ATTACKER));
+				assert!(!snapshot.validators.contains_key(&ATTACKER));
+
+				MockKeyRotatorA::keygen_success();
+			})
+			.then_advance_n_blocks_and_execute_with_checks(2, || {
+				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+				MockKeyRotatorA::key_handover_success();
+			})
+			.then_advance_n_blocks_and_execute_with_checks(2, || {
+				assert_rotation_phase_matches!(RotationPhase::ActivatingKeys(..));
+				MockKeyRotatorA::keys_activated();
+			})
+			.then_advance_n_blocks_and_execute_with_checks(2, || {
+				assert_rotation_phase_matches!(RotationPhase::Idle);
+				assert_epoch_index(GENESIS_EPOCH + 2);
+
+				assert!(!ValidatorPallet::current_authorities().contains(&ATTACKER));
+				assert_eq!(
+					EpochHistory::<Test>::active_epochs_for_authority(&ATTACKER)
+						.into_iter()
+						.map(|(e, _)| e)
+						.collect::<Vec<_>>(),
+					vec![GENESIS_EPOCH + 1]
+				);
+				let attacker_active_bond = EpochHistory::<Test>::active_bond(&ATTACKER);
+				assert!(attacker_active_bond > 0);
+
+				assert_eq!(
+					MockBonderFor::<Test>::get_bond(&ATTACKER),
+					attacker_active_bond,
+					"bond of a live keyholder must not drop below its active-epoch bond"
+				);
+				assert_eq!(
+					MockBonderFor::<Test>::get_bond(&INDEPENDENT_LOSER),
+					EpochHistory::<Test>::active_bond(&INDEPENDENT_LOSER)
+				);
+			});
 	}
 }
 
