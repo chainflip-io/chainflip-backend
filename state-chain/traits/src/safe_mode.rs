@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_set::BTreeSet;
@@ -70,11 +69,10 @@ macro_rules! impl_runtime_safe_mode {
 			use frame_support::{
 				storage::StorageValue,
 				traits::Get,
-				pallet_prelude::RuntimeDebug,
 			};
 			use scale_info::TypeInfo;
 
-			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Debug)]
 			pub struct $runtime_safe_mode {
 				$( pub $name: $pallet_safe_mode ),*
 			}
@@ -162,7 +160,7 @@ macro_rules! impl_pallet_safe_mode {
 	(
 		$pallet_safe_mode:ident; $($flag:ident),+ $(,)?
 	) => {
-		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, Debug)]
 		pub struct $pallet_safe_mode {
 			$(
 				pub $flag: bool,
@@ -197,7 +195,7 @@ macro_rules! impl_pallet_safe_mode {
 	(
 		$pallet_safe_mode:ident<$generic:ident>; $($flag:ident),+ $(,)?
 	) => {
-		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, Debug)]
 		#[scale_info(skip_type_params($generic))]
 		pub struct $pallet_safe_mode<$generic: 'static> {
 			$(
@@ -238,6 +236,9 @@ macro_rules! impl_pallet_safe_mode {
 
 /// A wrapper around a BTreeSet to make setting safe mode for all items easier. Amber contains a
 /// list of disabled items.
+///
+/// The JSON form (e.g. in RPC output) is instead a plain list of the *enabled* items; see the
+/// `Serialize` impl.
 #[derive(
 	Deserialize,
 	Encode,
@@ -247,7 +248,7 @@ macro_rules! impl_pallet_safe_mode {
 	Clone,
 	PartialEq,
 	Eq,
-	RuntimeDebug,
+	Debug,
 	Default,
 )]
 pub enum SafeModeSet<T: Ord> {
@@ -279,8 +280,8 @@ impl<T: Ord> SafeMode for SafeModeSet<T> {
 	}
 }
 
-/// Custom serialization for SafeModeSet so that it serializes like a normal BTreeSet without the
-/// enum wrapper.
+/// Serializes as the set of *enabled* items, without the enum wrapper, matching the `true` =
+/// enabled convention of the bool flags it sits next to in RPC output.
 impl<T: Ord + Serialize + strum::IntoEnumIterator> Serialize for SafeModeSet<T> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -289,7 +290,10 @@ impl<T: Ord + Serialize + strum::IntoEnumIterator> Serialize for SafeModeSet<T> 
 		match self {
 			Self::Red => BTreeSet::<T>::new().serialize(serializer),
 			Self::Green => T::iter().collect::<BTreeSet<_>>().serialize(serializer),
-			Self::Amber(set) => set.serialize(serializer),
+			Self::Amber(disabled) => T::iter()
+				.filter(|t| !disabled.contains(t))
+				.collect::<BTreeSet<_>>()
+				.serialize(serializer),
 		}
 	}
 }
@@ -447,5 +451,21 @@ pub(crate) mod test {
 					ExampleSafeModeA::code_green(),
 			);
 		});
+	}
+
+	#[test]
+	fn safe_mode_set_serializes_enabled_items() {
+		use cf_primitives::Asset;
+
+		let to_json = |set: SafeModeSet<Asset>| serde_json::to_value(set).unwrap();
+		let expected = |assets: BTreeSet<Asset>| serde_json::to_value(assets).unwrap();
+
+		assert_eq!(to_json(SafeModeSet::Green), expected(Asset::all().collect()));
+		assert_eq!(to_json(SafeModeSet::Red), expected(BTreeSet::new()));
+		assert_eq!(
+			to_json(SafeModeSet::Amber(BTreeSet::from([Asset::Btc]))),
+			expected(Asset::all().filter(|a| *a != Asset::Btc).collect()),
+		);
+		assert_eq!(to_json(SafeModeSet::Amber(Asset::all().collect())), expected(BTreeSet::new()));
 	}
 }

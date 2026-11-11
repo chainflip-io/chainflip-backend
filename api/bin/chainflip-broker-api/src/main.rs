@@ -41,7 +41,7 @@ use chainflip_api::{
 	OperatorApi, SignedExtrinsicApi, StateChainApi,
 };
 use clap::Parser;
-use custom_rpc::CustomApiClient;
+use custom_rpc::{CustomApiClient, RpcAccountInfo};
 use futures::{stream, FutureExt, StreamExt};
 use jsonrpsee::{
 	core::{__reexports::serde_json, async_trait, client::SubscriptionClientT},
@@ -386,6 +386,25 @@ impl BrokerRpcApiServer for RpcServerImpl {
 
 	async fn bind_fee_withdrawal_address(&self, address: EthereumAddress) -> RpcResult<H256> {
 		Ok(self.api.broker_api().bind_fee_withdrawal_address(address).await?)
+	}
+
+	async fn link_recovery_account(&self, recovery_account: AccountId32) -> RpcResult<H256> {
+		Ok(self.api.broker_api().link_recovery_account(recovery_account).await?)
+	}
+
+	async fn recovery_account(&self) -> RpcResult<Option<AccountId32>> {
+		Ok(
+			match self
+				.api
+				.raw_client()
+				.cf_account_info(self.api.state_chain_client.account_id(), None)
+				.await?
+				.role_specific
+			{
+				RpcAccountInfo::Broker { recovery_account, .. } => recovery_account,
+				_ => None,
+			},
+		)
 	}
 }
 

@@ -110,7 +110,10 @@ async fn handle_key_manager_event<T: pallet_hooks::Config<I, TargetChain: EvmCha
 
 			let transaction = client.get_transaction(tx_hash).await?;
 			let tx_metadata = EvmTransactionMetadata {
-				contract: to.expect("To have a contract"),
+				// A contract-creation transaction has no `to`, but anyone can submit a signed call
+				// from a constructor. The signature was still consumed, so we report it, with an
+				// address that won't match the expected contract, so no fee is refunded.
+				contract: to.unwrap_or_default(),
 				max_fee_per_gas: transaction.max_fee_per_gas,
 				max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
 				gas_limit: Some(transaction.gas),
@@ -131,4 +134,57 @@ async fn handle_key_manager_event<T: pallet_hooks::Config<I, TargetChain: EvmCha
 			EvmKeyManagerEvent::SetWhitelistedCallHash(call_hash),
 		_ => return Ok(None),
 	}))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use cf_chains::evm::Address;
+	use ethers::types::{Transaction, U256};
+	use state_chain_runtime::{EthereumInstance, Runtime};
+
+	struct ContractCreationClient;
+
+	#[async_trait::async_trait]
+	impl EvmTransactionClient for ContractCreationClient {
+		async fn transaction_receipt(&self, _tx_hash: H256) -> Result<TransactionReceipt> {
+			Ok(TransactionReceipt {
+				to: None,
+				gas_used: Some(U256::one()),
+				effective_gas_price: Some(U256::one()),
+				..Default::default()
+			})
+		}
+
+		async fn get_transaction(&self, _tx_hash: H256) -> Result<Transaction> {
+			Ok(Transaction::default())
+		}
+	}
+
+	#[tokio::test]
+	async fn signature_accepted_by_a_contract_creation_is_witnessed() {
+		let event = handle_key_manager_event::<Runtime, EthereumInstance>(
+			&ContractCreationClient,
+			KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter {
+				sig_data: SigData {
+					sig: U256::one(),
+					nonce: U256::zero(),
+					k_times_g_address: Default::default(),
+				},
+				signer: Default::default(),
+			}),
+			H256::zero(),
+			0,
+		)
+		.await
+		.unwrap();
+
+		assert!(matches!(
+			event,
+			Some(EvmKeyManagerEvent::SignatureAccepted(TransactionConfirmation {
+				tx_metadata: EvmTransactionMetadata { contract, .. },
+				..
+			})) if contract == Address::zero()
+		));
+	}
 }

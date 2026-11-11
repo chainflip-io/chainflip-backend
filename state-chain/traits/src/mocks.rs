@@ -41,6 +41,7 @@ pub mod egress_handler;
 pub mod ensure_origin_mock;
 pub mod epoch_info;
 pub mod eth_environment_provider;
+pub mod failed_deposit_recovery;
 pub mod fee_payment;
 pub mod fetches_transfers_limit_provider;
 pub mod flip_move_to_gateway;

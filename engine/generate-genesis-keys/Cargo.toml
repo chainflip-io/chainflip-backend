@@ -24,7 +24,7 @@ chainflip-engine = { workspace = true }
 chainflip-node = { workspace = true }
 multisig = { workspace = true, default-features = true }
 state-chain-runtime = { workspace = true, default-features = true }
-rocksdb = { workspace = true, features = ["lz4"] }
+rocksdb = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

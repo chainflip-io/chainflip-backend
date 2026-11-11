@@ -113,43 +113,32 @@ fn build_rpc_loan_account<T: Config>(
 	borrower_id: T::AccountId,
 	loan_account: LoanAccount<T>,
 	price_cache: &OraclePriceCache<T>,
+	config: &LendingConfiguration,
 ) -> RpcLoanAccount<T::AccountId, AssetAmount> {
-	let mut loans = loan_account.loans.clone();
-
-	// Accounting for any partially executed liquidation swaps
-	// when reporting on the outstanding principal amount:
-	if let LiquidationStatus::Liquidating { liquidation_swaps, .. } =
-		&loan_account.liquidation_status
-	{
-		for (swap_request_id, LiquidationSwap { loan_id, .. }) in liquidation_swaps {
-			if let Some(swap_progress) =
-				T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
-			{
-				if let Some(loan) = loans.get_mut(loan_id) {
-					loan.owed_principal.saturating_reduce(swap_progress.accumulated_output_amount);
-				}
-			} else {
-				log_or_panic!("Failed to inspect swap request: {swap_request_id}");
-			}
-		}
-	}
+	// Reporting the account as it would be once any partially executed liquidation swaps settle:
+	let projection = loan_account.project_liquidation_settlement(config);
 
 	RpcLoanAccount {
 		account: borrower_id.clone(),
-		ltv_ratio: loan_account.derive_ltv(price_cache).ok(),
+		ltv_ratio: loan_account.projected_ltv(&projection, price_cache).ok(),
 		collateral: loan_account
-			.get_total_collateral()
+			.projected_collateral(&projection)
 			.into_iter()
 			.map(|(asset, amount)| AssetAndAmount { asset, amount })
 			.collect(),
-		loans: loans
+		loans: loan_account
+			.loans
 			.into_iter()
 			.map(|(loan_id, loan)| RpcLoan {
 				loan_id,
 				loan_type: LoanType::User(borrower_id.clone()),
 				asset: loan.asset,
 				created_at: loan.created_at_block.unique_saturated_into(),
-				principal_amount: loan.owed_principal,
+				// The debt left once any in-flight liquidation swaps settle, excluding pending
+				// interest (which `RpcLoan` never reports):
+				principal_amount: loan
+					.owed_principal
+					.saturating_sub(projection.repaid_for(&loan_id)),
 				broker: loan.broker,
 			})
 			.collect(),
@@ -174,18 +163,19 @@ pub fn get_loan_accounts<T: Config>(
 	borrower_id: Option<T::AccountId>,
 ) -> Vec<RpcLoanAccount<T::AccountId, AssetAmount>> {
 	let price_cache = OraclePriceCache::<T>::default();
+	let config = LendingConfig::<T>::get();
 
 	if let Some(borrower_id) = borrower_id {
 		LoanAccounts::<T>::get(&borrower_id)
 			.into_iter()
 			.map(|loan_account| {
-				build_rpc_loan_account(borrower_id.clone(), loan_account, &price_cache)
+				build_rpc_loan_account(borrower_id.clone(), loan_account, &price_cache, &config)
 			})
 			.collect()
 	} else {
 		LoanAccounts::<T>::iter()
 			.map(|(borrower_id, loan_account)| {
-				build_rpc_loan_account(borrower_id.clone(), loan_account, &price_cache)
+				build_rpc_loan_account(borrower_id.clone(), loan_account, &price_cache, &config)
 			})
 			.collect()
 	}

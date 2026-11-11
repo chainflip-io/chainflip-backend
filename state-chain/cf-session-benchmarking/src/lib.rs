@@ -23,10 +23,13 @@ use frame_support::{assert_ok, sp_runtime::traits::Convert};
 use frame_system::RawOrigin;
 use pallet_session::*;
 use rand::{RngCore, SeedableRng};
-use sp_std::{prelude::*, vec};
+use sp_std::prelude::*;
 
 pub struct Pallet<T: Config>(pallet_session::Pallet<T>);
-pub trait Config: pallet_session::Config {}
+pub trait Config: pallet_session::Config {
+	/// Session keys together with a proof that `owner` holds their private keys.
+	fn generate_session_keys_and_proof(owner: Self::AccountId) -> (Self::Keys, Vec<u8>);
+}
 
 fn generate_key<T: Config>(seed: u64) -> T::Keys {
 	let mut key = [0u8; 128];
@@ -46,10 +49,10 @@ mod benchmarks {
 		<NextKeys<T>>::insert(validator_id.clone(), generate_key::<T>(1));
 		frame_system::Pallet::<T>::inc_providers(&caller);
 		assert_ok!(frame_system::Pallet::<T>::inc_consumers(&caller));
-		let new_key = generate_key::<T>(0);
+		let (new_key, proof) = T::generate_session_keys_and_proof(caller.clone());
 
 		#[extrinsic_call]
-		set_keys(RawOrigin::Signed(caller), new_key.clone(), vec![]);
+		set_keys(RawOrigin::Signed(caller), new_key.clone(), proof);
 
 		assert_eq!(<NextKeys<T>>::get(validator_id).expect("No key for id"), new_key);
 	}

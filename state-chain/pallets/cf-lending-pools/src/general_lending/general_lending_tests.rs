@@ -187,6 +187,12 @@ fn take_network_fee(full_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
 	(network_fee, full_amount - network_fee)
 }
 
+/// Liquidation fee charged when a swap output covers the whole of `owed_amount`.
+fn full_repayment_liquidation_fee(asset: Asset, owed_amount: AssetAmount) -> AssetAmount {
+	// `MAX` so the provided amount is never what limits the fee.
+	liquidation_fee_amount(CONFIG.liquidation_fee(asset), AssetAmount::MAX, owed_amount)
+}
+
 fn get_collateral() -> AssetAmount {
 	GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
 		.unwrap()
@@ -1135,8 +1141,25 @@ fn pending_interest_settled_when_loan_liquidated() {
 					accumulated_output_amount: RECOVERED,
 				},
 			);
+
+			let loan = &LoanAccounts::<Test>::get(BORROWER).unwrap().loans[&LOAN_ID];
+			assert!(loan.total_owed() > loan.owed_principal, "some interest must be pending");
+			loan.total_owed()
 		})
-		.then_execute_at_next_block(|_| {
+		.then_execute_at_next_block(|total_owed| {
+			// The liquidation fee covers the pending interest too, as it is part of the debt
+			// repaid:
+			let (network_fee, pool_fee) =
+				take_network_fee(full_repayment_liquidation_fee(LOAN_ASSET, total_owed));
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
+					loan_id: LOAN_ID,
+					pool_fee: actual_pool_fee,
+					network_fee: actual_network_fee,
+				}) if *actual_pool_fee == pool_fee && *actual_network_fee == network_fee
+			);
+
 			// The broker interest is paid from the liquidation proceeds (not forgiven), and the
 			// loan is settled with no write-off.
 			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), expected_broker_interest);
@@ -1532,7 +1555,11 @@ fn basic_liquidation() {
 	// How much of principal asset is bought during first liquidation:
 	const SWAPPED_PRINCIPAL: AssetAmount = EXECUTED_COLLATERAL / NEW_SWAP_RATE;
 
-	let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL;
+	let liquidation_fee_1 = liquidation_fee_amount(
+		CONFIG.liquidation_fee(LOAN_ASSET),
+		SWAPPED_PRINCIPAL,
+		PRINCIPAL + ORIGINATION_FEE,
+	);
 	let (liquidation_fee_network_1, liquidation_fee_pool_1) = take_network_fee(liquidation_fee_1);
 
 	// This much will be repaid via first liquidation (everything swapped minus liquidation fee)
@@ -1546,7 +1573,11 @@ fn basic_liquidation() {
 	// This much will be repaid via second liquidation (full principal after first repayment)
 	let repaid_amount_2 = PRINCIPAL + ORIGINATION_FEE - repaid_amount_1;
 
-	let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * repaid_amount_2;
+	let liquidation_fee_2 = liquidation_fee_amount(
+		CONFIG.liquidation_fee(LOAN_ASSET),
+		SWAPPED_PRINCIPAL_2,
+		repaid_amount_2,
+	);
 	let (liquidation_fee_network_2, liquidation_fee_pool_2) = take_network_fee(liquidation_fee_2);
 
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
@@ -1616,7 +1647,12 @@ fn basic_liquidation() {
 			// Despite collateral having been moved to the swapping pallet, we
 			// can still calculate its value:
 			assert_eq!(
-				loan_account.total_collateral_usd_value(&OraclePriceCache::default()).unwrap(),
+				loan_account
+					.total_collateral_usd_value(
+						&OraclePriceCache::default(),
+						&LendingConfig::<Test>::get()
+					)
+					.unwrap(),
 				INIT_COLLATERAL
 			);
 
@@ -1824,8 +1860,8 @@ fn basic_liquidation() {
 					available_amount: expected_total_amount,
 					// Borrower now has a small amount in the loan asset pool:
 					lender_shares: BTreeMap::from([
-						(LENDER, Perquintill::from_parts(996_405_890_220_689_421)),
-						(BORROWER, Perquintill::from_parts(3_594_109_779_310_579)),
+						(LENDER, Perquintill::from_parts(996_405_811_082_721_245)),
+						(BORROWER, Perquintill::from_parts(3_594_188_917_278_755)),
 					]),
 				}
 			);
@@ -1913,11 +1949,17 @@ fn soft_liquidation_escalates_to_hard() {
 				}
 			);
 
-			let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAP_1_OUTPUT_AMOUNT;
+			let liquidation_fee_1 = liquidation_fee_amount(
+				CONFIG.liquidation_fee(LOAN_ASSET),
+				SWAP_1_OUTPUT_AMOUNT,
+				PRINCIPAL + ORIGINATION_FEE,
+			);
 
 			let total_owed_after_swap_1 =
 				PRINCIPAL + ORIGINATION_FEE + liquidation_fee_1 - SWAP_1_OUTPUT_AMOUNT;
-			let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * total_owed_after_swap_1;
+
+			let liquidation_fee_2 =
+				full_repayment_liquidation_fee(LOAN_ASSET, total_owed_after_swap_1);
 
 			// Swap 2 happens to result in exactly the amount we need to repay the loan + fees:
 			let swap_2_output_amount = total_owed_after_swap_1 + liquidation_fee_2;
@@ -2073,9 +2115,12 @@ fn liquidation_fully_repays_loan_when_aborted() {
 			);
 		})
 		.then_execute_at_next_block(|_| {
-			// Liquidation fee is computed on the total amount to repay:
-			let liquidation_fee =
-				CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL + ORIGINATION_FEE);
+			// The output clears the loan, so the fee is computed on the total amount to repay:
+			let liquidation_fee = liquidation_fee_amount(
+				CONFIG.liquidation_fee(LOAN_ASSET),
+				RECOVERED_LOAN_ASSET,
+				PRINCIPAL + ORIGINATION_FEE,
+			);
 
 			// The loan has been repaid, the account is removed, and the remaining collateral amount
 			// and the excess loan asset amount are credited to supply pools:
@@ -2143,7 +2188,11 @@ fn liquidation_with_outstanding_principal() {
 				RECOVERED_PRINCIPAL,
 			);
 
-			let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * RECOVERED_PRINCIPAL;
+			let liquidation_fee = liquidation_fee_amount(
+				CONFIG.liquidation_fee(LOAN_ASSET),
+				RECOVERED_PRINCIPAL,
+				PRINCIPAL + ORIGINATION_FEE,
+			);
 			let (liquidation_fee_network, liquidation_fee_pool) = take_network_fee(liquidation_fee);
 
 			let repaid_principal = RECOVERED_PRINCIPAL - liquidation_fee;
@@ -2250,9 +2299,17 @@ mod multi_asset_collateral_liquidation {
 		// This should trigger soft liquidation
 		const NEW_SWAP_RATE: u128 = 27;
 
-		let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAP_2_OUTPUT_AMOUNT;
-		let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) *
-			(TOTAL_OWED + liquidation_fee_1 - SWAP_2_OUTPUT_AMOUNT);
+		// Swap 2 settles first and partially repays the loan; swap 1 clears the rest.
+		let liquidation_fee_1 = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAP_2_OUTPUT_AMOUNT,
+			TOTAL_OWED,
+		);
+		let liquidation_fee_2 = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAP_1_OUTPUT_AMOUNT,
+			TOTAL_OWED + liquidation_fee_1 - SWAP_2_OUTPUT_AMOUNT,
+		);
 
 		let total_liquidation_fee = liquidation_fee_1 + liquidation_fee_2;
 
@@ -2398,15 +2455,15 @@ mod multi_asset_collateral_liquidation {
 	fn one_liquidation_swap_completely_covers_the_loan_the_other_aborts() {
 		const TOTAL_OWED: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
 
-		let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * TOTAL_OWED;
-
 		const EXCESS_AMOUNT: AssetAmount = PRINCIPAL / 100;
 
 		// This should trigger soft liquidation
 		const NEW_SWAP_RATE: u128 = 27;
 
-		// Swap 1 will be executed fully with some excess amount of the total owed principal
-		let swap_1_output_amount = TOTAL_OWED + EXCESS_AMOUNT + liquidation_fee;
+		// Swap 1 will be executed fully, clearing the debt and its liquidation fee with some
+		// excess left over
+		let swap_1_output_amount =
+			TOTAL_OWED + full_repayment_liquidation_fee(LOAN_ASSET, TOTAL_OWED) + EXCESS_AMOUNT;
 
 		// Swap 2 will only be executed half way through
 		const SWAP_2_REMAINING_INPUT_AMOUNT: AssetAmount = OTHER_COLLATERAL_ASSET_AMOUNT / 2;
@@ -2697,13 +2754,19 @@ mod multi_asset_collateral_liquidation {
 					)])
 				);
 
-				// This covers the full amount repaid by the first swap
-				let liquidation_fee_1 =
-					CONFIG.liquidation_fee(LOAN_ASSET) * SWAP_OUTPUT_LOAN_1_SWAP_1;
+				// The first swap only partially repays the loan
+				let liquidation_fee_1 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					SWAP_OUTPUT_LOAN_1_SWAP_1,
+					PRINCIPAL + ORIGINATION_FEE,
+				);
 
-				// This covers the remainder (which now also includes liquidation_fee_1)
-				let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) *
-					(PRINCIPAL + ORIGINATION_FEE + liquidation_fee_1 - SWAP_OUTPUT_LOAN_1_SWAP_1);
+				// The second swap clears the rest of the debt
+				let liquidation_fee_2 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					SWAP_OUTPUT_LOAN_1_SWAP_3,
+					PRINCIPAL + ORIGINATION_FEE + liquidation_fee_1 - SWAP_OUTPUT_LOAN_1_SWAP_1,
+				);
 
 				let excess_loan_asset_amount = SWAP_OUTPUT_LOAN_1_SWAP_1 +
 					SWAP_OUTPUT_LOAN_1_SWAP_3 -
@@ -2743,8 +2806,19 @@ mod multi_asset_collateral_liquidation {
 			.then_execute_at_next_block(|excess_loan_asset_amount| {
 				assert_eq!(get_loan_account().liquidation_status, LiquidationStatus::NoLiquidation);
 
-				let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) *
-					(SWAP_OUTPUT_LOAN_2_SWAP_2 + SWAP_OUTPUT_LOAN_2_SWAP_4);
+				// Both swaps are aborted and settle in swap id order, each partially repaying:
+				let liquidation_fee_swap_2 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET_2),
+					SWAP_OUTPUT_LOAN_2_SWAP_2,
+					PRINCIPAL_2 + ORIGINATION_FEE_2,
+				);
+				let liquidation_fee_swap_4 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET_2),
+					SWAP_OUTPUT_LOAN_2_SWAP_4,
+					PRINCIPAL_2 + ORIGINATION_FEE_2 + liquidation_fee_swap_2 -
+						SWAP_OUTPUT_LOAN_2_SWAP_2,
+				);
+				let liquidation_fee = liquidation_fee_swap_2 + liquidation_fee_swap_4;
 
 				assert_eq!(
 					get_loan_account().loans,
@@ -2774,6 +2848,562 @@ mod multi_asset_collateral_liquidation {
 						),
 					])
 				);
+			});
+	}
+
+	/// While liquidation swaps are in flight, the account is valued as if they settled now: each
+	/// loan's output only repays that loan (net of the liquidation fee), and output beyond the
+	/// loan's debt counts as collateral. The valuation must match what settlement then produces,
+	/// whichever order the swaps settle in.
+	#[test]
+	fn in_flight_liquidation_valued_as_settled() {
+		const COLLATERAL_ASSET_2: Asset = Asset::Sol;
+		const LOAN_ASSET_2: Asset = Asset::Usdc;
+		const INIT_COLLATERAL_2: AssetAmount = INIT_COLLATERAL / 5;
+		const PRINCIPAL_2: AssetAmount = PRINCIPAL / 5;
+		const LOAN_ID_2: LoanId = LoanId(1);
+
+		const ORIGINATION_FEE_2: AssetAmount =
+			portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL_2);
+
+		// This should trigger soft liquidation
+		const NEW_SWAP_RATE: u128 = 26;
+
+		const LIQUIDATION_SWAP_3: SwapRequestId = SwapRequestId(2);
+		const LIQUIDATION_SWAP_4: SwapRequestId = SwapRequestId(3);
+
+		// Loan 1's swaps (1 and 3) together overshoot its debt; loan 2's swaps (2 and 4) only
+		// repay part of it, and swap 2 has input left to swap.
+		const SWAP_1_OUTPUT: AssetAmount = 7 * PRINCIPAL / 10;
+		const SWAP_3_OUTPUT: AssetAmount = 5 * PRINCIPAL / 10;
+		const SWAP_2_OUTPUT: AssetAmount = PRINCIPAL_2 / 5;
+		const SWAP_4_OUTPUT: AssetAmount = PRINCIPAL_2 / 2;
+		const SWAP_2_REMAINING_INPUT: AssetAmount = INIT_COLLATERAL / 5;
+
+		const TOTAL_OWED_1: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
+		const TOTAL_OWED_2: AssetAmount = PRINCIPAL_2 + ORIGINATION_FEE_2;
+
+		// Sequential settlement rounds at most one unit of loan asset per swap:
+		const TOLERANCE_USD: AssetAmount = 4 * NEW_SWAP_RATE;
+
+		let excess_1 = SWAP_1_OUTPUT + SWAP_3_OUTPUT -
+			TOTAL_OWED_1 -
+			full_repayment_liquidation_fee(LOAN_ASSET, TOTAL_OWED_1);
+
+		let repaid_2 = SWAP_2_OUTPUT + SWAP_4_OUTPUT -
+			liquidation_fee_amount(
+				CONFIG.liquidation_fee(LOAN_ASSET_2),
+				SWAP_2_OUTPUT + SWAP_4_OUTPUT,
+				TOTAL_OWED_2,
+			);
+
+		// Settle the swaps in two different orders: either all aborted at once (in swap request
+		// id order), or some completed first, in reverse order, and the rest aborted.
+		for completed_before_abort in [
+			vec![],
+			vec![
+				(LIQUIDATION_SWAP_3, LOAN_ID, SWAP_3_OUTPUT),
+				(LIQUIDATION_SWAP_1, LOAN_ID, SWAP_1_OUTPUT),
+				(LIQUIDATION_SWAP_4, LOAN_ID_2, SWAP_4_OUTPUT),
+			],
+		] {
+			new_test_ext()
+				.execute_with(|| {
+					MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, SWAP_RATE);
+					setup_pool_with_funds(LOAN_ASSET, PRINCIPAL * 2);
+
+					MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET_2, SWAP_RATE);
+					setup_pool_with_funds(LOAN_ASSET_2, PRINCIPAL * 2);
+
+					MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET, 1);
+					MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET_2, 1);
+				})
+				.then_execute_with(|_| {
+					MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+					MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, INIT_COLLATERAL_2);
+					MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
+					MockRefundAddressRegistry::register_refund_address(
+						BORROWER,
+						ForeignChain::Ethereum,
+					);
+
+					assert_eq!(
+						create_loan_and_supply_collateral(
+							BORROWER,
+							LOAN_ASSET,
+							PRINCIPAL,
+							BTreeMap::from([
+								(COLLATERAL_ASSET, INIT_COLLATERAL),
+								(COLLATERAL_ASSET_2, INIT_COLLATERAL_2),
+							])
+						),
+						Ok(LOAN_ID)
+					);
+
+					assert_eq!(
+						LendingPools::new_loan(BORROWER, LOAN_ASSET_2, PRINCIPAL_2, None),
+						Ok(LOAN_ID_2)
+					);
+
+					MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, NEW_SWAP_RATE);
+				})
+				.then_execute_at_next_block(|_| {
+					assert_matches!(
+						get_loan_account().liquidation_status,
+						LiquidationStatus::Liquidating { ref liquidation_swaps, .. }
+							if liquidation_swaps.len() == 4
+					);
+
+					for (swap_request_id, remaining_input_amount, accumulated_output_amount) in [
+						(LIQUIDATION_SWAP_1, 0, SWAP_1_OUTPUT),
+						(LIQUIDATION_SWAP_2, SWAP_2_REMAINING_INPUT, SWAP_2_OUTPUT),
+						(LIQUIDATION_SWAP_3, 0, SWAP_3_OUTPUT),
+						(LIQUIDATION_SWAP_4, 0, SWAP_4_OUTPUT),
+					] {
+						MockSwapRequestHandler::<Test>::set_swap_request_progress(
+							swap_request_id,
+							SwapExecutionProgress {
+								remaining_input_amount,
+								accumulated_output_amount,
+							},
+						);
+					}
+
+					let config = LendingConfig::<Test>::get();
+					let price_cache = OraclePriceCache::<Test>::default();
+					let loan_account = get_loan_account();
+
+					assert_eq!(
+						loan_account.project_liquidation_settlement(&config),
+						ProjectedSettlement {
+							repaid: BTreeMap::from([
+								(LOAN_ID, TOTAL_OWED_1),
+								(LOAN_ID_2, repaid_2)
+							]),
+							returned_collateral: BTreeMap::from([
+								(COLLATERAL_ASSET, SWAP_2_REMAINING_INPUT),
+								(COLLATERAL_ASSET_2, 0),
+								(LOAN_ASSET, excess_1),
+							]),
+						}
+					);
+
+					let projected_owed_usd =
+						loan_account.total_owed_usd_value(&price_cache, &config).unwrap();
+
+					// Loan 1's excess does not reduce loan 2's debt:
+					assert_eq!(projected_owed_usd, (TOTAL_OWED_2 - repaid_2) * SWAP_RATE);
+
+					let projected_collateral_usd =
+						loan_account.total_collateral_usd_value(&price_cache, &config).unwrap();
+
+					for (swap_request_id, loan_id, output) in completed_before_abort {
+						LendingPools::process_loan_swap_outcome(
+							swap_request_id,
+							LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id },
+							output,
+						);
+					}
+
+					// Aborts whatever is still in flight, in swap request id order:
+					LoanAccounts::<Test>::mutate(BORROWER, |account| {
+						account.as_mut().unwrap().abort_liquidation_swaps(
+							LiquidationCompletionReason::LtvChange,
+							&config,
+						)
+					});
+
+					let loan_account = get_loan_account();
+					assert_eq!(loan_account.liquidation_status, LiquidationStatus::NoLiquidation);
+					assert_eq!(loan_account.loans.keys().copied().collect::<Vec<_>>(), [LOAN_ID_2]);
+
+					let settled_owed_usd =
+						loan_account.total_owed_usd_value(&price_cache, &config).unwrap();
+					let settled_collateral_usd =
+						loan_account.total_collateral_usd_value(&price_cache, &config).unwrap();
+
+					assert!(
+						settled_owed_usd.abs_diff(projected_owed_usd) <= TOLERANCE_USD,
+						"owed: settled {settled_owed_usd} vs projected {projected_owed_usd}"
+					);
+					assert!(
+						settled_collateral_usd.abs_diff(projected_collateral_usd) <= TOLERANCE_USD,
+						"collateral: settled {settled_collateral_usd} vs projected \
+						 {projected_collateral_usd}"
+					);
+				});
+		}
+	}
+
+	proptest::proptest! {
+		/// For any swap progress and any settlement order (some swaps completing, in a random
+		/// order, the rest aborted together), the account's debt and collateral after settlement
+		/// match what was projected while the swaps were in flight.
+		#[test]
+		fn projected_valuation_matches_settlement(
+			liquidation_type in proptest::prop_oneof![
+				proptest::strategy::Just(LiquidationType::Soft),
+				proptest::strategy::Just(LiquidationType::Hard),
+				proptest::strategy::Just(LiquidationType::SoftVoluntary),
+			],
+			// Each swap's output as a share (in thousandths) of its loan's debt. A loan's swaps
+			// sell collateral worth about its debt plus a small buffer, so realistic outputs
+			// stay near 50% per swap. The range goes well beyond that, as if prices moved
+			// sharply mid-swap: a single swap can repay the loan on its own with excess left
+			// over, and a loan's two swaps together can overshoot it by far, as well as fall
+			// short or deliver nothing. The projection must match settlement in every case:
+			output_per_thousand in proptest::collection::vec(0..=1500u128, 4),
+			remaining_input_per_thousand in proptest::collection::vec(0..=1000u128, 4),
+			settlement_order in proptest::strategy::Strategy::prop_shuffle(
+				proptest::strategy::Just(vec![0usize, 1, 2, 3])
+			),
+			// At least one swap is aborted, so settlement always ends with an abort (completing
+			// every swap can instead write off unrecoverable loans).
+			completed_count in 0..=3usize,
+		) {
+			projected_valuation_matches_settlement_case(
+				liquidation_type,
+				output_per_thousand,
+				remaining_input_per_thousand,
+				settlement_order,
+				completed_count,
+			);
+		}
+	}
+
+	fn projected_valuation_matches_settlement_case(
+		liquidation_type: LiquidationType,
+		output_per_thousand: Vec<u128>,
+		remaining_input_per_thousand: Vec<u128>,
+		settlement_order: Vec<usize>,
+		completed_count: usize,
+	) {
+		const COLLATERAL_ASSET_2: Asset = Asset::Sol;
+		const LOAN_ASSET_2: Asset = Asset::Usdc;
+		const INIT_COLLATERAL_2: AssetAmount = INIT_COLLATERAL / 5;
+		const PRINCIPAL_2: AssetAmount = PRINCIPAL / 5;
+		const LOAN_ID_2: LoanId = LoanId(1);
+
+		// Loan asset prices that put the account into soft and hard liquidation:
+		const SOFT_SWAP_RATE: u128 = 26;
+		const HARD_SWAP_RATE: u128 = 28;
+
+		// Settlement rounds the fee and the repayment by at most one unit of loan asset per swap:
+		const TOLERANCE_USD: AssetAmount = 4 * 2 * HARD_SWAP_RATE;
+
+		new_test_ext()
+			.execute_with(|| {
+				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, SWAP_RATE);
+				setup_pool_with_funds(LOAN_ASSET, PRINCIPAL * 2);
+
+				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET_2, SWAP_RATE);
+				setup_pool_with_funds(LOAN_ASSET_2, PRINCIPAL * 2);
+
+				MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET, 1);
+				MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET_2, 1);
+			})
+			.then_execute_with(|_| {
+				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, INIT_COLLATERAL_2);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(
+					BORROWER,
+					ForeignChain::Ethereum,
+				);
+
+				assert_eq!(
+					create_loan_and_supply_collateral(
+						BORROWER,
+						LOAN_ASSET,
+						PRINCIPAL,
+						BTreeMap::from([
+							(COLLATERAL_ASSET, INIT_COLLATERAL),
+							(COLLATERAL_ASSET_2, INIT_COLLATERAL_2),
+						])
+					),
+					Ok(LOAN_ID)
+				);
+				assert_eq!(
+					LendingPools::new_loan(BORROWER, LOAN_ASSET_2, PRINCIPAL_2, None),
+					Ok(LOAN_ID_2)
+				);
+
+				match liquidation_type {
+					LiquidationType::Soft =>
+						MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, SOFT_SWAP_RATE),
+					LiquidationType::Hard =>
+						MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, HARD_SWAP_RATE),
+					LiquidationType::SoftVoluntary => {
+						assert_ok!(LendingPools::initiate_voluntary_liquidation(
+							RuntimeOrigin::signed(BORROWER)
+						));
+					},
+				}
+			})
+			.then_execute_at_next_block(|_| {
+				let config = LendingConfig::<Test>::get();
+				let price_cache = OraclePriceCache::<Test>::default();
+
+				let LiquidationStatus::Liquidating {
+					liquidation_swaps,
+					liquidation_type: started_liquidation_type,
+				} = get_loan_account().liquidation_status
+				else {
+					panic!("expected the account to be in liquidation");
+				};
+				assert_eq!(started_liquidation_type, liquidation_type);
+
+				let swaps: Vec<(SwapRequestId, LoanId)> = liquidation_swaps
+					.into_iter()
+					.map(|(swap_request_id, swap)| (swap_request_id, swap.loan_id))
+					.collect();
+				assert_eq!(swaps.len(), 4);
+
+				let completed = &settlement_order[..completed_count];
+				let swap_requests = MockSwapRequestHandler::<Test>::get_swap_requests();
+
+				let outputs: Vec<AssetAmount> = swaps
+					.iter()
+					.enumerate()
+					.map(|(i, (swap_request_id, loan_id))| {
+						let output = get_loan_account().loans[loan_id].total_owed() *
+							output_per_thousand[i] /
+							1000;
+						// A completed swap has no input left:
+						let remaining_input = if completed.contains(&i) {
+							0
+						} else {
+							swap_requests[swap_request_id].input_amount *
+								remaining_input_per_thousand[i] /
+								1000
+						};
+
+						MockSwapRequestHandler::<Test>::set_swap_request_progress(
+							*swap_request_id,
+							SwapExecutionProgress {
+								remaining_input_amount: remaining_input,
+								accumulated_output_amount: output,
+							},
+						);
+						output
+					})
+					.collect();
+
+				let owed_and_collateral_usd = || {
+					let account = get_loan_account();
+					(
+						account.total_owed_usd_value(&price_cache, &config).unwrap(),
+						account.total_collateral_usd_value(&price_cache, &config).unwrap(),
+					)
+				};
+
+				let (projected_owed_usd, projected_collateral_usd) = owed_and_collateral_usd();
+
+				for &i in completed {
+					let (swap_request_id, loan_id) = swaps[i];
+					LendingPools::process_loan_swap_outcome(
+						swap_request_id,
+						LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id },
+						outputs[i],
+					);
+				}
+
+				LoanAccounts::<Test>::mutate(BORROWER, |account| {
+					account
+						.as_mut()
+						.unwrap()
+						.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange, &config)
+				});
+				assert_eq!(get_loan_account().liquidation_status, LiquidationStatus::NoLiquidation);
+
+				let (settled_owed_usd, settled_collateral_usd) = owed_and_collateral_usd();
+
+				assert!(
+					settled_owed_usd.abs_diff(projected_owed_usd) <= TOLERANCE_USD,
+					"owed: settled {settled_owed_usd} vs projected {projected_owed_usd}"
+				);
+				assert!(
+					settled_collateral_usd.abs_diff(projected_collateral_usd) <= TOLERANCE_USD,
+					"collateral: settled {settled_collateral_usd} vs projected \
+					 {projected_collateral_usd}"
+				);
+			});
+	}
+
+	/// A voluntary liquidation keeps its swaps running until every loan is covered by its own
+	/// swaps: one loan's excess output does not count towards a sibling loan's debt. No
+	/// liquidation fee is taken.
+	#[test]
+	fn voluntary_liquidation_with_multiple_loans_needs_every_loan_covered() {
+		const COLLATERAL_ASSET_2: Asset = Asset::Sol;
+		const LOAN_ASSET_2: Asset = Asset::Usdc;
+		const INIT_COLLATERAL_2: AssetAmount = INIT_COLLATERAL / 5;
+		const PRINCIPAL_2: AssetAmount = PRINCIPAL / 5;
+		const LOAN_ID_2: LoanId = LoanId(1);
+
+		const TOTAL_OWED_1: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
+		const TOTAL_OWED_2: AssetAmount =
+			PRINCIPAL_2 + portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL_2);
+
+		const LIQUIDATION_SWAP_3: SwapRequestId = SwapRequestId(2);
+		const LIQUIDATION_SWAP_4: SwapRequestId = SwapRequestId(3);
+
+		// Each loan's swaps sell collateral worth about its debt plus a small buffer, drawn from
+		// each collateral asset in proportion to its value (ETH collateral is worth 5 times the
+		// SOL collateral), and the swaps are nearly finished. Loan 1's swaps have delivered 101%
+		// of its debt (e.g. after a favourable price move) and loan 2's 99% of its own:
+		const REMAINING_INPUT: AssetAmount = INIT_COLLATERAL_2 / 1000;
+		const LOAN_1_SWAP_1_OUTPUT: AssetAmount = TOTAL_OWED_1 * 842 / 1000;
+		const LOAN_1_SWAP_3_OUTPUT: AssetAmount = TOTAL_OWED_1 * 168 / 1000;
+		const LOAN_2_SWAP_2_OUTPUT: AssetAmount = TOTAL_OWED_2 * 825 / 1000;
+		const LOAN_2_SWAP_4_SHORT_OUTPUT: AssetAmount = TOTAL_OWED_2 * 165 / 1000;
+		// Swap 4 then sells a little more and covers the rest of loan 2's debt:
+		const LOAN_2_SWAP_4_FULL_OUTPUT: AssetAmount = TOTAL_OWED_2 - LOAN_2_SWAP_2_OUTPUT;
+
+		// Loan 1's excess is worth more than loan 2's shortfall (both loan assets have the same
+		// price), yet loan 2 still counts as owed: each loan is only repaid by its own swaps.
+		const _: () = assert!(
+			(LOAN_1_SWAP_1_OUTPUT + LOAN_1_SWAP_3_OUTPUT - TOTAL_OWED_1) >
+				(TOTAL_OWED_2 - LOAN_2_SWAP_2_OUTPUT - LOAN_2_SWAP_4_SHORT_OUTPUT)
+		);
+
+		new_test_ext()
+			.execute_with(|| {
+				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, SWAP_RATE);
+				setup_pool_with_funds(LOAN_ASSET, PRINCIPAL * 2);
+
+				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET_2, SWAP_RATE);
+				setup_pool_with_funds(LOAN_ASSET_2, PRINCIPAL * 2);
+
+				MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET, 1);
+				MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET_2, 1);
+			})
+			.then_execute_with(|_| {
+				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, INIT_COLLATERAL_2);
+				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockRefundAddressRegistry::register_refund_address(
+					BORROWER,
+					ForeignChain::Ethereum,
+				);
+
+				assert_eq!(
+					create_loan_and_supply_collateral(
+						BORROWER,
+						LOAN_ASSET,
+						PRINCIPAL,
+						BTreeMap::from([
+							(COLLATERAL_ASSET, INIT_COLLATERAL),
+							(COLLATERAL_ASSET_2, INIT_COLLATERAL_2),
+						])
+					),
+					Ok(LOAN_ID)
+				);
+				assert_eq!(
+					LendingPools::new_loan(BORROWER, LOAN_ASSET_2, PRINCIPAL_2, None),
+					Ok(LOAN_ID_2)
+				);
+
+				assert_ok!(LendingPools::initiate_voluntary_liquidation(RuntimeOrigin::signed(
+					BORROWER
+				)));
+			})
+			.then_execute_at_next_block(|_| {
+				// One swap per collateral asset for each loan:
+				assert_eq!(
+					get_loan_account().liquidation_status,
+					LiquidationStatus::Liquidating {
+						liquidation_swaps: BTreeMap::from([
+							(
+								LIQUIDATION_SWAP_1,
+								LiquidationSwap {
+									loan_id: LOAN_ID,
+									from_asset: COLLATERAL_ASSET,
+									to_asset: LOAN_ASSET
+								}
+							),
+							(
+								LIQUIDATION_SWAP_2,
+								LiquidationSwap {
+									loan_id: LOAN_ID_2,
+									from_asset: COLLATERAL_ASSET,
+									to_asset: LOAN_ASSET_2
+								}
+							),
+							(
+								LIQUIDATION_SWAP_3,
+								LiquidationSwap {
+									loan_id: LOAN_ID,
+									from_asset: COLLATERAL_ASSET_2,
+									to_asset: LOAN_ASSET
+								}
+							),
+							(
+								LIQUIDATION_SWAP_4,
+								LiquidationSwap {
+									loan_id: LOAN_ID_2,
+									from_asset: COLLATERAL_ASSET_2,
+									to_asset: LOAN_ASSET_2
+								}
+							),
+						]),
+						liquidation_type: LiquidationType::SoftVoluntary,
+					}
+				);
+
+				for (swap_request_id, accumulated_output_amount) in [
+					(LIQUIDATION_SWAP_1, LOAN_1_SWAP_1_OUTPUT),
+					(LIQUIDATION_SWAP_2, LOAN_2_SWAP_2_OUTPUT),
+					(LIQUIDATION_SWAP_3, LOAN_1_SWAP_3_OUTPUT),
+					(LIQUIDATION_SWAP_4, LOAN_2_SWAP_4_SHORT_OUTPUT),
+				] {
+					MockSwapRequestHandler::<Test>::set_swap_request_progress(
+						swap_request_id,
+						SwapExecutionProgress {
+							remaining_input_amount: REMAINING_INPUT,
+							accumulated_output_amount,
+						},
+					);
+				}
+			})
+			.then_execute_at_next_block(|_| {
+				// Loan 2 is still owed despite loan 1's excess, so the liquidation carries on:
+				assert_no_matching_event!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted { .. })
+				);
+				assert_matches!(
+					get_loan_account().liquidation_status,
+					LiquidationStatus::Liquidating {
+						liquidation_type: LiquidationType::SoftVoluntary,
+						..
+					}
+				);
+
+				MockSwapRequestHandler::<Test>::set_swap_request_progress(
+					LIQUIDATION_SWAP_4,
+					SwapExecutionProgress {
+						remaining_input_amount: REMAINING_INPUT / 2,
+						accumulated_output_amount: LOAN_2_SWAP_4_FULL_OUTPUT,
+					},
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// Now every loan is covered, so the liquidation ends as fully swapped, without
+				// taking any liquidation fee:
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletionReason::FullySwapped,
+					})
+				);
+				assert_no_matching_event!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. })
+				);
+				assert!(LoanAccounts::<Test>::get(BORROWER)
+					.is_none_or(|account| account.loans.is_empty()));
 			});
 	}
 
@@ -2852,7 +3482,11 @@ mod multi_asset_collateral_liquidation {
 				// even though no collateral remains in supply pools.
 				assert!(acc.loans.contains_key(&LOAN_ID));
 
-				let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * LOAN_1_SWAP_OUTPUT;
+				let liquidation_fee_1 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					LOAN_1_SWAP_OUTPUT,
+					PRINCIPAL + ORIGINATION_FEE,
+				);
 				let l1_repaid = LOAN_1_SWAP_OUTPUT - liquidation_fee_1;
 				assert_eq!(
 					acc.loans[&LOAN_ID].owed_principal,
@@ -2954,7 +3588,11 @@ mod multi_asset_collateral_liquidation {
 				assert!(!acc.loans.contains_key(&LOAN_ID_2));
 				assert!(acc.loans.contains_key(&LOAN_ID));
 
-				let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * LOAN_1_SWAP_OUTPUT;
+				let liquidation_fee_1 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					LOAN_1_SWAP_OUTPUT,
+					PRINCIPAL + ORIGINATION_FEE,
+				);
 				let l1_repaid = LOAN_1_SWAP_OUTPUT - liquidation_fee_1;
 				assert_eq!(
 					acc.loans[&LOAN_ID].owed_principal,
@@ -2966,8 +3604,11 @@ mod multi_asset_collateral_liquidation {
 
 				// Loan 2's excess (after the loan-2 liquidation fee) sits in the loan-asset
 				// supply pool, available as collateral for the next upkeep round.
-				let liquidation_fee_2 =
-					CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL_2 + ORIGINATION_FEE);
+				let liquidation_fee_2 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET),
+					LOAN_2_SWAP_OUTPUT,
+					PRINCIPAL_2 + ORIGINATION_FEE,
+				);
 				let expected_excess =
 					LOAN_2_SWAP_OUTPUT - (PRINCIPAL_2 + ORIGINATION_FEE) - liquidation_fee_2;
 				assert_eq!(
@@ -3528,7 +4169,9 @@ fn adding_collateral_during_liquidation() {
 			MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, NEW_SWAP_RATE);
 
 			assert_eq!(
-				get_account().derive_ltv(&OraclePriceCache::default()).unwrap(),
+				get_account()
+					.derive_ltv(&OraclePriceCache::default(), &LendingConfig::<Test>::get())
+					.unwrap(),
 				ltv_at_liquidation
 			);
 		})
@@ -3571,8 +4214,9 @@ fn adding_collateral_during_liquidation() {
 
 			// The extra collateral does reduce LTV however:
 			assert!(
-				get_account().derive_ltv(&OraclePriceCache::default()).unwrap() <
-					ltv_at_liquidation
+				get_account()
+					.derive_ltv(&OraclePriceCache::default(), &LendingConfig::<Test>::get())
+					.unwrap() < ltv_at_liquidation
 			);
 
 			// Simulate partial liquidation:
@@ -3595,8 +4239,9 @@ fn adding_collateral_during_liquidation() {
 			fund_account_and_add_supply(EXTRA_COLLATERAL_2);
 
 			assert!(
-				get_account().derive_ltv(&OraclePriceCache::default()).unwrap() <
-					CONFIG.ltv_thresholds.hard_liquidation.into()
+				get_account()
+					.derive_ltv(&OraclePriceCache::default(), &LendingConfig::<Test>::get())
+					.unwrap() < CONFIG.ltv_thresholds.hard_liquidation.into()
 			);
 		})
 		.then_execute_at_next_block(|_| {
@@ -3672,8 +4317,9 @@ fn adding_collateral_during_liquidation() {
 			fund_account_and_add_supply(EXTRA_COLLATERAL_3);
 
 			assert!(
-				get_account().derive_ltv(&OraclePriceCache::default()).unwrap() <
-					CONFIG.ltv_thresholds.target.into()
+				get_account()
+					.derive_ltv(&OraclePriceCache::default(), &LendingConfig::<Test>::get())
+					.unwrap() < CONFIG.ltv_thresholds.target.into()
 			);
 
 			// Simulate partial liquidation:
@@ -3938,6 +4584,21 @@ fn full_loan_repayment_during_partial_liquidation() {
 						liquidation_type: LiquidationType::Hard
 					},
 					voluntary_liquidation_requested: false
+				}
+			);
+
+			// With the loan gone, the swap's output and unspent input are both valued as
+			// collateral, which is what settlement does below:
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER)
+					.unwrap()
+					.project_liquidation_settlement(&LendingConfig::<Test>::get()),
+				ProjectedSettlement {
+					repaid: Default::default(),
+					returned_collateral: BTreeMap::from([
+						(COLLATERAL_ASSET, INIT_COLLATERAL - EXECUTED_COLLATERAL),
+						(LOAN_ASSET, SWAP_OUTPUT_AMOUNT),
+					]),
 				}
 			);
 		})
@@ -4218,7 +4879,12 @@ mod voluntary_liquidation {
 		const SWAPPED_COLLATERAL_2: AssetAmount = INIT_COLLATERAL / 10;
 		const SWAPPED_PRINCIPAL_2: AssetAmount = SWAPPED_COLLATERAL_2 / NEW_SWAP_RATE;
 
-		let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_2;
+		// The first (voluntary) liquidation is fee-free, so it repays its full output:
+		let liquidation_fee = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAPPED_PRINCIPAL_2,
+			PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1,
+		);
 
 		let owed_after_liquidation_2 =
 			PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1 - SWAPPED_PRINCIPAL_2 +
@@ -4899,6 +5565,94 @@ mod liquidation_math_tests {
 		)
 	}
 
+	const USDC_UNIT: AssetAmount = 1_000_000;
+
+	/// Settles liquidation swap outputs against a loan one at a time, the way
+	/// `repay_via_liquidation` does. Returns (total fee, total repaid, total excess).
+	fn settle_sequentially(
+		mut owed: AssetAmount,
+		outputs: &[AssetAmount],
+		fee_rate: Permill,
+	) -> (AssetAmount, AssetAmount, AssetAmount) {
+		let (mut fee_total, mut repaid_total, mut excess_total) = (0, 0, 0);
+		for &output in outputs {
+			let fee = liquidation_fee_amount(fee_rate, output, owed);
+			let repaid = (output - fee).min(owed);
+			owed -= repaid;
+			fee_total += fee;
+			repaid_total += repaid;
+			excess_total += output - fee - repaid;
+		}
+		(fee_total, repaid_total, excess_total)
+	}
+
+	#[test]
+	fn liquidation_fee_is_charged_on_debt_repaid() {
+		let rate = Permill::from_percent(2);
+		let owed = 10_000 * USDC_UNIT;
+
+		// Partial repayment: 5,000 repays 5,000 / 1.02 and the rest is the fee.
+		assert_eq!(liquidation_fee_amount(rate, 5_000 * USDC_UNIT, owed), 98_039_216);
+
+		// Clearing the debt: the fee is 2% of the debt, the rest is excess.
+		assert_eq!(liquidation_fee_amount(rate, 11_000 * USDC_UNIT, owed), 200 * USDC_UNIT);
+		assert_eq!(liquidation_fee_amount(rate, 10_200 * USDC_UNIT, owed), 200 * USDC_UNIT);
+
+		// No jump at the boundary between the two cases.
+		assert_eq!(liquidation_fee_amount(rate, 10_200 * USDC_UNIT - 1, owed), 200 * USDC_UNIT);
+
+		assert_eq!(liquidation_fee_amount(rate, 0, owed), 0);
+		assert_eq!(liquidation_fee_amount(rate, 5_000 * USDC_UNIT, 0), 0);
+		assert_eq!(liquidation_fee_amount(Permill::zero(), 5_000 * USDC_UNIT, owed), 0);
+	}
+
+	#[test]
+	fn liquidation_fee_does_not_depend_on_swap_order() {
+		let rate = Permill::from_percent(2);
+		let owed = 10_000 * USDC_UNIT;
+
+		// Two collateral swaps for the same loan, settled in either order:
+		assert_eq!(
+			settle_sequentially(owed, &[5_000 * USDC_UNIT, 6_000 * USDC_UNIT], rate),
+			(200 * USDC_UNIT, owed, 800 * USDC_UNIT)
+		);
+		assert_eq!(
+			settle_sequentially(owed, &[6_000 * USDC_UNIT, 5_000 * USDC_UNIT], rate),
+			(200 * USDC_UNIT, owed, 800 * USDC_UNIT)
+		);
+
+		// Any split and order of the same total output matches settling it in one go, up to
+		// rounding of at most one unit per swap.
+		for outputs in [
+			vec![3_000, 3_000, 3_000, 3_000],
+			vec![1_000, 2_000, 9_000],
+			vec![9_999, 1],
+			vec![2_500, 2_500, 2_500],
+		] {
+			let outputs: Vec<_> = outputs.into_iter().map(|o| o * USDC_UNIT).collect();
+			let one_go = settle_sequentially(owed, &[outputs.iter().sum()], rate);
+			let tolerance = outputs.len() as AssetAmount;
+
+			let mut sequences = vec![outputs.clone()];
+			sequences.extend((1..outputs.len()).map(|k| {
+				let mut rotated = outputs.clone();
+				rotated.rotate_left(k);
+				rotated
+			}));
+			sequences.push(outputs.iter().rev().copied().collect());
+
+			for sequence in sequences {
+				let (fee, repaid, excess) = settle_sequentially(owed, &sequence, rate);
+				assert!(
+					fee.abs_diff(one_go.0) <= tolerance,
+					"{sequence:?}: fee {fee} vs {one_go:?}"
+				);
+				assert!(repaid.abs_diff(one_go.1) <= tolerance, "{sequence:?}: repaid {repaid}");
+				assert!(excess.abs_diff(one_go.2) <= tolerance, "{sequence:?}: excess {excess}");
+			}
+		}
+	}
+
 	#[test]
 	fn required_collateral_with_no_buffer_equals_owed() {
 		assert_eq!(required_collateral_with_buffer(1_000, Permill::zero()), 1_000);
@@ -5577,13 +6331,21 @@ mod rpcs {
 
 				let (pool_interest_2, network_interest_2) = interest_loan_2.collect();
 
+				let total_owed_2 =
+					PRINCIPAL_2 + ORIGINATION_FEE_2 + pool_interest_2 + network_interest_2;
+				let liquidation_fee_2 = liquidation_fee_amount(
+					CONFIG.liquidation_fee(LOAN_ASSET_2),
+					ACCUMULATED_OUTPUT_AMOUNT,
+					total_owed_2,
+				);
+
 				// Both accounts should be returned since we don't specify any:
 				assert_eq!(
 					super::rpc::get_loan_accounts::<Test>(None),
 					vec![
 						RpcLoanAccount {
 							account: BORROWER_2,
-							ltv_ratio: Some(FixedU64::from_rational(1_173_483_513, 1_000_000_000)),
+							ltv_ratio: Some(FixedU64::from_rational(1_173_646_765, 1_000_000_000)),
 							// NOTE: all of collateral is in liquidation swaps, but we include
 							// any amount that has not been swapped yet:
 							collateral: vec![AssetAndAmount {
@@ -5596,10 +6358,9 @@ mod rpcs {
 								asset: LOAN_ASSET_2,
 								created_at: INIT_BLOCK as u32,
 								// NOTE: we account for the principal asset already swapped in
-								// liquidation swaps:
-								principal_amount: PRINCIPAL_2 +
-									ORIGINATION_FEE_2 + pool_interest_2 +
-									network_interest_2 - ACCUMULATED_OUTPUT_AMOUNT,
+								// liquidation swaps (net of the liquidation fee):
+								principal_amount: total_owed_2 -
+									(ACCUMULATED_OUTPUT_AMOUNT - liquidation_fee_2),
 								broker: None,
 							}],
 							liquidation_status: Some(RpcLiquidationStatus {
@@ -6180,7 +6941,11 @@ mod supply_as_collateral {
 		);
 		let pool_remainder_after_init = INIT_COLLATERAL - liquidation_input;
 
-		let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL + ORIGINATION_FEE);
+		let liquidation_fee = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAPPED_PRINCIPAL,
+			PRINCIPAL + ORIGINATION_FEE,
+		);
 
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
@@ -6321,20 +7086,24 @@ mod supply_as_collateral {
 		// Selling 80% of collateral will recover 80% of principal
 		const SWAPPED_PRINCIPAL_1: AssetAmount = 4 * PRINCIPAL / 5;
 
-		let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_1;
+		let liquidation_fee_1 = liquidation_fee_amount(
+			CONFIG.liquidation_fee(LOAN_ASSET),
+			SWAPPED_PRINCIPAL_1,
+			PRINCIPAL + ORIGINATION_FEE,
+		);
 
 		const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
 
 		let amount_owed_after_first_liquidation =
 			PRINCIPAL + ORIGINATION_FEE - (SWAPPED_PRINCIPAL_1 - liquidation_fee_1);
 
-		let liquidation_fee_2 =
-			CONFIG.liquidation_fee(LOAN_ASSET) * amount_owed_after_first_liquidation;
-
 		const EXCESS_AMOUNT: AssetAmount = PRINCIPAL / 10;
 
-		let swapped_principal_2 =
-			amount_owed_after_first_liquidation + liquidation_fee_2 + EXCESS_AMOUNT;
+		// The second liquidation clears the remaining debt and its liquidation fee with some
+		// excess left over
+		let swapped_principal_2 = amount_owed_after_first_liquidation +
+			full_repayment_liquidation_fee(LOAN_ASSET, amount_owed_after_first_liquidation) +
+			EXCESS_AMOUNT;
 
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
@@ -6561,7 +7330,9 @@ mod supply_as_collateral {
 
 				// The user's LTV should now be right at the target:
 				assert_eq!(
-					get_account().derive_ltv(&OraclePriceCache::default()).unwrap(),
+					get_account()
+						.derive_ltv(&OraclePriceCache::default(), &LendingConfig::<Test>::get())
+						.unwrap(),
 					CONFIG.ltv_thresholds.target.into()
 				);
 
@@ -7011,7 +7782,9 @@ mod pending_interest_is_debt {
 				));
 
 				assert_eq!(
-					account().derive_ltv(&OraclePriceCache::default()).unwrap(),
+					account()
+						.derive_ltv(&OraclePriceCache::default(), &LendingConfig::<Test>::get())
+						.unwrap(),
 					CONFIG.ltv_thresholds.target.into()
 				);
 
