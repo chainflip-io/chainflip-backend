@@ -12384,10 +12384,7 @@ export type PalletCfElectionsElectoralSystemsBlockWitnesserStateMachineBwElectio
   | { type: 'OptimisticBscDepositChannel' }
   | { type: 'ByHashBscDepositChannel'; value: H256 }
   | { type: 'SafeBlockHeightBscDepositChannel' }
-  | {
-      type: 'GovernanceBscDepositChannel';
-      value: Array<CfChainsDepositChannelDepositChannelBsc>;
-    };
+  | { type: 'GovernanceBscDepositChannel'; value: Array<CfChainsDepositChannelDepositChannelBsc> };
 
 export type CfChainsDepositChannelDepositChannelBsc = {
   channelId: bigint;
