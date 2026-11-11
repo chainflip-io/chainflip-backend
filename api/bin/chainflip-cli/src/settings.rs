@@ -238,7 +238,7 @@ pub enum CliCommand {
 		eth_address: String,
 	},
 	#[clap(
-		about = "Shows what restricts where this account can withdraw to: the withdrawal whitelist, 		         any registered refund addresses, and a bound broker withdrawal address"
+		about = "Shows what restricts where this account can withdraw to: the withdrawal whitelist, any registered refund addresses, and a bound broker withdrawal address"
 	)]
 	GetWithdrawalRestrictions,
 	#[clap(about = "Shows the redeem address your account is bound to")]
