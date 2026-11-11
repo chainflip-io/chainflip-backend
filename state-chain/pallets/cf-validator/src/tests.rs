@@ -4109,7 +4109,6 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 #[test]
 fn distribute_all_matches_looped_distribute() {
 	use crate::delegation::{distribute, DelegatedRewardsDistribution};
-	use cf_traits::RewardsDistribution;
 
 	new_test_ext().execute_with(|| {
 		const VALIDATOR_A: u64 = 100;
@@ -4194,10 +4193,77 @@ fn distribute_all_matches_looped_distribute() {
 	});
 }
 
+#[test]
+fn distribution_in_chunks_matches_distribute_all() {
+	use crate::delegation::DelegatedRewardsDistribution;
+	use cf_traits::RewardsDistribution;
+	use frame_support::weights::{Weight, WeightMeter};
+
+	const EPOCH: u32 = 10;
+	const TOTAL: u128 = 1_000_003;
+	// Dwarfs the storage reads charged on top, so a budget of `n` units settles `n` payees.
+	const UNIT: u64 = 1_000_000_000_000;
+
+	new_test_ext().execute_with(|| {
+		crate::HistoricalBonds::<Test>::insert(EPOCH, 1_000_000u128);
+		crate::HistoricalAuthorities::<Test>::insert(EPOCH, vec![100, 101, 102, 500, 501]);
+		for (operator, validators, delegators) in [
+			(200, vec![100, 101], vec![300, 301, 302]),
+			(201, vec![102], vec![303]),
+			// Not an authority: earns nothing.
+			(202, vec![600], vec![304]),
+		] {
+			DelegationSnapshot::<u64, u128> {
+				operator,
+				validators: validators.into_iter().map(|v| (v, 400_000)).collect(),
+				delegators: delegators.into_iter().map(|d| (d, 700_000)).collect(),
+				delegation_fee_bps: 2000,
+			}
+			.register_for_epoch::<Test>(EPOCH);
+		}
+
+		let mut expected = Vec::new();
+		DelegatedRewardsDistribution::<Test>::distribute_all(EPOCH, TOTAL, |account, amount| {
+			expected.push((*account, amount))
+		});
+		assert_eq!(expected.len(), 11);
+
+		for payees_per_step in 1..=expected.len() as u64 {
+			let mut settled = Vec::new();
+			let mut cursor = None;
+			let mut steps = 0;
+			loop {
+				let mut meter = WeightMeter::with_limit(Weight::from_parts(
+					payees_per_step * UNIT + UNIT / 2,
+					u64::MAX,
+				));
+				cursor = DelegatedRewardsDistribution::<Test>::distribute(
+					EPOCH,
+					TOTAL,
+					cursor,
+					&mut meter,
+					|payees, _| Weight::from_parts(u64::from(payees) * UNIT, 0),
+					|account, amount| settled.push((*account, amount)),
+				);
+				steps += 1;
+				if cursor.is_none() {
+					break;
+				}
+			}
+			assert_eq!(settled, expected, "{payees_per_step} payees per step");
+			// Only settling a payee is costly, so no step is spent on reads alone.
+			assert_eq!(
+				steps,
+				(expected.len() as u64).div_ceil(payees_per_step),
+				"{payees_per_step} payees per step"
+			);
+		}
+	});
+}
+
 mod zero_bond {
 	use super::*;
 	use crate::delegation::{distribute, DelegatedRewardsDistribution};
-	use cf_traits::RewardsDistribution;
 
 	const EPOCH: u32 = 10;
 	const VALIDATOR: u64 = 100;

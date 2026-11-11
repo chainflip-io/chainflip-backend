@@ -25,10 +25,10 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Witnesser as EpochTransitionHandler>::on_expired_epoch(expired);
 	}
 	fn on_epoch_ending(ending: EpochIndex) {
-		let flip_distributed = Flip::trigger_flip_reward_distribution(ending);
+		let flip_bridged_in = Flip::trigger_flip_reward_distribution(ending);
 		let egress_fee_consumed = Swapping::maybe_trigger_flip_to_gateway_egress(
 			Environment::state_chain_gateway_address(),
-			flip_distributed,
+			flip_bridged_in,
 		);
 		Flip::add_to_offchain_flip_to_be_distributed(
 			i128::try_from(egress_fee_consumed).unwrap_or(i128::MAX).saturating_neg(),
@@ -43,30 +43,34 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 #[cfg(test)]
 mod tests {
 	use crate::{configs::BlockWeights, Runtime};
+	use frame_support::dispatch::DispatchClass;
 	use pallet_cf_flip::WeightInfo;
 
-	/// Payees that one epoch's reward distribution must be able to settle within a block. There
-	/// are about 400 today, but anyone can add delegators for the 6 FLIP minimum funding.
-	///
-	/// The benchmarked limit is about 31,000 payees (~64µs each, mostly the account write). This
-	/// sits below it as an early warning: if it fails, refactor the distribution before the real
-	/// limit is reached.
-	const MIN_PAYEES_PER_BLOCK: u32 = 25_000;
+	/// Payees of one operator's delegation pool that a reward distribution step must be able to
+	/// make progress on. Anyone can delegate for the 6 FLIP minimum funding.
+	const MIN_GROUP_PAYEES: u32 = 1_000_000;
 
-	// The session pallet charges a full block for the epoch transition however long it takes, so
-	// nothing else catches the distribution outgrowing a block.
+	// A step settles a pool's payees only after computing all of their cuts, so a pool too large
+	// for the idle weight would stop the distribution.
 	#[test]
-	fn reward_distribution_fits_in_a_block() {
-		let weight =
-			<Runtime as pallet_cf_flip::Config>::WeightInfo::trigger_flip_reward_distribution(
-				MIN_PAYEES_PER_BLOCK,
-			);
-		let max_block = BlockWeights::get().max_block;
+	fn a_large_delegation_pool_fits_in_a_busy_block() {
+		let weight = <Runtime as pallet_cf_flip::Config>::WeightInfo::continue_reward_distribution(
+			1,
+			MIN_GROUP_PAYEES,
+		)
+		.saturating_add(<Runtime as frame_system::Config>::DbWeight::get().reads(2));
+		let block_weights = BlockWeights::get();
+		let idle_weight = block_weights.max_block.saturating_sub(
+			block_weights
+				.get(DispatchClass::Normal)
+				.max_total
+				.unwrap_or(block_weights.max_block),
+		);
 		assert!(
-			weight.all_lte(max_block),
-			"Distributing rewards to {MIN_PAYEES_PER_BLOCK} payees ({weight:?}) no longer fits in a \
-			 block ({max_block:?}). Reduce the per-payee cost of `trigger_flip_reward_distribution`, \
-			 or limit how many payees one distribution settles."
+			weight.all_lte(idle_weight),
+			"Settling one payee of a pool of {MIN_GROUP_PAYEES} ({weight:?}) no longer fits in the \
+			 weight left by a full block ({idle_weight:?}). Reduce the per-payee cost of computing \
+			 a pool's cuts."
 		);
 	}
 }

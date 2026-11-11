@@ -41,6 +41,7 @@ import type {
   PalletCfFlipFlipAccount,
   PalletCfFlipOpaqueCallIndex,
   PalletCfFlipOnChargeTransactionFeeScalingRateConfig,
+  PalletCfFlipRewardDistributionProgress,
   PalletCfFundingPendingRedemptionInfo,
   CfPrimitivesAccountRole,
   PalletTransactionPaymentReleases,
@@ -938,6 +939,15 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<bigint> =} callback
      **/
     flipToDistribute: GenericStorageQuery<() => bigint>;
+
+    /**
+     * The rewards of the last ended epoch, paid out in `on_idle`.
+     *
+     * @param {Callback<PalletCfFlipRewardDistributionProgress | undefined> =} callback
+     **/
+    pendingRewardDistribution: GenericStorageQuery<
+      () => PalletCfFlipRewardDistributionProgress | undefined
+    >;
 
     /**
      * Generic pallet storage query

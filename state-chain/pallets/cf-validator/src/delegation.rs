@@ -27,16 +27,13 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, Zero},
 		Rounding, Saturating,
 	},
-	traits::IsType,
+	traits::{Get, IsType},
+	weights::{Weight, WeightMeter},
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	marker::PhantomData,
-	prelude::*,
-};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 pub const DEFAULT_MIN_OPERATOR_FEE: u32 = 1_500;
 pub const MAX_OPERATOR_FEE: u32 = 10_000;
@@ -385,7 +382,39 @@ fn mul_rational_floor<Amount: Into<u128> + From<u128> + Zero>(
 	.unwrap_or_else(Zero::zero)
 }
 
+/// Where a partial reward distribution stopped. Delegation snapshots are settled first, then
+/// authorities without an operator.
+#[derive(
+	Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
+pub enum DistributionCursor<AccountId> {
+	/// At the given payee index of the given operator's snapshot, or at the first snapshot.
+	Snapshots(Option<(AccountId, u32)>),
+	/// At the given index of the epoch's authorities.
+	IndependentAuthorities(u32),
+}
+
 pub struct DelegatedRewardsDistribution<T>(PhantomData<T>);
+
+#[cfg(test)]
+impl<T: Config> DelegatedRewardsDistribution<T> {
+	/// Settles every payee at once.
+	pub(crate) fn distribute_all(
+		epoch_index: EpochIndex,
+		total_amount: T::Amount,
+		settle: impl FnMut(&T::AccountId, T::Amount),
+	) {
+		let resume_from = <Self as RewardsDistribution>::distribute(
+			epoch_index,
+			total_amount,
+			None,
+			&mut WeightMeter::new(),
+			|_, _| Weight::zero(),
+			settle,
+		);
+		assert!(resume_from.is_none());
+	}
+}
 
 impl<T> RewardsDistribution for DelegatedRewardsDistribution<T>
 where
@@ -393,19 +422,28 @@ where
 {
 	type Balance = T::Amount;
 	type AccountId = T::AccountId;
+	type Cursor = DistributionCursor<T::AccountId>;
 
-	fn distribute_all(
+	fn distribute(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
+		resume_from: Option<Self::Cursor>,
+		meter: &mut WeightMeter,
+		weight: impl Fn(u32, u32) -> Weight,
 		mut settle: impl FnMut(&T::AccountId, T::Amount),
-	) {
-		let mut authorities_to_reward: BTreeSet<T::AccountId> =
-			HistoricalAuthorities::<T>::get(epoch_index)
-				.into_iter()
-				.map(Into::into)
-				.collect();
-		if authorities_to_reward.is_empty() {
-			return;
+	) -> Option<Self::Cursor> {
+		let authorities: Vec<T::AccountId> = HistoricalAuthorities::<T>::get(epoch_index)
+			.into_iter()
+			.map(Into::into)
+			.collect();
+		if authorities.is_empty() {
+			// Only expected if the epoch expired before its rewards were paid out. Settling nothing
+			// leaves the funds in the reserve for the next distribution.
+			cf_runtime_utilities::log_or_panic!(
+				"No authorities recorded for epoch {}; skipping reward distribution.",
+				epoch_index
+			);
+			return None;
 		}
 		let bond = HistoricalBonds::<T>::get(epoch_index);
 		if bond.is_zero() {
@@ -415,41 +453,110 @@ where
 				"No bond recorded for epoch {}; skipping reward distribution.",
 				epoch_index
 			);
-			return;
+			return None;
 		}
-		let per_authority_amount = total_amount / (authorities_to_reward.len() as u32).into();
+		let per_authority_amount = total_amount / (authorities.len() as u32).into();
+		let read_weight = T::DbWeight::get().reads(1);
+		// All of a group's cuts are computed even when only some of them are settled.
+		let group_weight = |payee_count: u32| weight(0, payee_count).saturating_sub(weight(0, 0));
+		let payee_weight =
+			|payee_count: u32| weight(1, payee_count).saturating_sub(weight(0, payee_count));
+		// Each payee's account and bid; their size gives a snapshot's payee count before decoding.
+		let payee_encoded_len = T::AccountId::max_encoded_len() + T::Amount::max_encoded_len();
 
-		// Snapshots are registered for *all* operators at auction resolution, including those
-		// whose pooled stake didn't clear the bond: their last remaining validator is never
-		// demoted to delegator, so `snapshot.validators` can contain a non-authority. Only
-		// authority validators earn a share of the rewards. `remove` doubles as the membership
-		// check, draining `authorities` so that only independent (operator-less) authorities
-		// remain for the loop below.
-		for (operator, snapshot) in DelegationSnapshots::<T>::iter_prefix(epoch_index) {
-			let authority_count =
-				snapshot.validators.keys().filter(|v| authorities_to_reward.remove(*v)).count()
-					as u32;
-			if authority_count == 0 {
+		let next_authority = match resume_from.unwrap_or(DistributionCursor::Snapshots(None)) {
+			DistributionCursor::Snapshots(position) => {
+				let (resumed, remaining) = match position {
+					None => (None, DelegationSnapshots::<T>::iter_key_prefix(epoch_index)),
+					Some((operator, next_payee)) => (
+						Some((operator.clone(), next_payee)),
+						DelegationSnapshots::<T>::iter_key_prefix_from(
+							epoch_index,
+							DelegationSnapshots::<T>::hashed_key_for(epoch_index, &operator),
+						),
+					),
+				};
+				for (operator, next_payee) in
+					resumed.into_iter().chain(remaining.map(|operator| (operator, 0)))
+				{
+					// Snapshots can be large, so they are only decoded once their cost is charged.
+					if meter.try_consume(read_weight).is_err() {
+						return Some(DistributionCursor::Snapshots(Some((operator, next_payee))));
+					}
+					let Some(encoded) = frame_support::storage::unhashed::get_raw(
+						&DelegationSnapshots::<T>::hashed_key_for(epoch_index, &operator),
+					) else {
+						continue;
+					};
+					let payee_count =
+						(1 + encoded.len().checked_div(payee_encoded_len).unwrap_or_default())
+							as u32;
+					if meter.try_consume(group_weight(payee_count)).is_err() {
+						return Some(DistributionCursor::Snapshots(Some((operator, next_payee))));
+					}
+					let Ok(snapshot) =
+						DelegationSnapshot::<T::AccountId, T::Amount>::decode(&mut &encoded[..])
+					else {
+						cf_runtime_utilities::log_or_panic!(
+							"Undecodable delegation snapshot of operator {:?} for epoch {}.",
+							operator,
+							epoch_index
+						);
+						continue;
+					};
+					// Snapshots are registered for *all* operators at auction resolution,
+					// including those whose pooled stake didn't clear the bond: their last
+					// remaining validator is never demoted to delegator, so `snapshot.validators`
+					// can contain a non-authority. Only authority validators earn a share of the
+					// rewards.
+					let authority_count =
+						snapshot.validators.keys().filter(|v| authorities.contains(v)).count()
+							as u32;
+					if authority_count == 0 {
+						continue;
+					}
+					if next_payee == 0 && (authority_count as usize) < snapshot.validators.len() {
+						// The auction fixed point guarantees a snapshot's validators are all-in or
+						// all-out of the authority set; a mixed snapshot means that invariant
+						// broke.
+						cf_runtime_utilities::log_or_panic!(
+							"Delegation snapshot of operator {:?} for epoch {} contains non-authority validators.",
+							operator,
+							epoch_index
+						);
+					}
+					let total = per_authority_amount.saturating_mul(authority_count.into());
+					for (index, (account, amount)) in
+						snapshot.distribute(total, bond).enumerate().skip(next_payee as usize)
+					{
+						if meter.try_consume(payee_weight(payee_count)).is_err() {
+							return Some(DistributionCursor::Snapshots(Some((
+								operator.clone(),
+								index as u32,
+							))));
+						}
+						settle(account, amount);
+					}
+				}
+				0
+			},
+			DistributionCursor::IndependentAuthorities(next_index) => next_index,
+		};
+
+		// Authorities with an operator were settled with their operator's snapshot.
+		for (index, authority) in authorities.iter().enumerate().skip(next_authority as usize) {
+			if meter.try_consume(read_weight).is_err() {
+				return Some(DistributionCursor::IndependentAuthorities(index as u32));
+			}
+			if ValidatorToOperator::<T>::contains_key(epoch_index, authority) {
 				continue;
 			}
-			if (authority_count as usize) < snapshot.validators.len() {
-				// The auction fixed point guarantees a snapshot's validators are all-in or
-				// all-out of the authority set; a mixed snapshot means that invariant broke.
-				cf_runtime_utilities::log_or_panic!(
-					"Delegation snapshot of operator {:?} for epoch {} contains non-authority validators.",
-					operator,
-					epoch_index
-				);
+			if meter.try_consume(payee_weight(1)).is_err() {
+				return Some(DistributionCursor::IndependentAuthorities(index as u32));
 			}
-			let total = per_authority_amount.saturating_mul(authority_count.into());
-			snapshot
-				.distribute(total, bond)
-				.for_each(|(account, amount)| settle(account, amount));
-		}
-
-		for authority in &authorities_to_reward {
 			settle(authority, per_authority_amount);
 		}
+		None
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -467,15 +574,22 @@ where
 		// A bond above the validator's stake leaves most of the rewards to the delegators, so
 		// every payee receives a non-zero amount.
 		HistoricalBonds::<T>::insert(epoch_index, T::Amount::from(1_000u32));
-		DelegationSnapshot {
+		let snapshot = DelegationSnapshot {
 			operator,
 			validators: BTreeMap::from([(validator, 1u32.into())]),
 			delegators: (0..payee_count.saturating_sub(2))
 				.map(|i| (account("delegator", i, 0), 1u32.into()))
 				.collect(),
 			delegation_fee_bps: DEFAULT_MIN_OPERATOR_FEE,
+		};
+		// Rewards are only paid to accounts that still exist.
+		for payee in core::iter::once(&snapshot.operator)
+			.chain(snapshot.validators.keys())
+			.chain(snapshot.delegators.keys())
+		{
+			frame_system::Pallet::<T>::inc_providers(payee);
 		}
-		.register_for_epoch::<T>(epoch_index);
+		snapshot.register_for_epoch::<T>(epoch_index);
 	}
 }
 
