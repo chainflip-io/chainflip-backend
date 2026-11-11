@@ -2063,9 +2063,9 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcWithdrawalRestrictions> {
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
-			// These restrictions only exist from version 21 onwards, so there is nothing sensible
+			// These restrictions only exist from version 25 onwards, so there is nothing sensible
 			// to return for older blocks.
-			if version < 21 {
+			if version < 25 {
 				Err(CfApiError::ErrorObject(call_error(
 					"cf_withdrawal_restrictions is not supported at this block",
 					CfErrorCode::UnsupportedRuntimeApiVersion,

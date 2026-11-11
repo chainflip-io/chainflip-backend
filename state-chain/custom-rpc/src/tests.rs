@@ -467,7 +467,7 @@ fn test_withdrawal_restrictions_serialization() {
 			PendingWhitelistUpdate {
 				activates_at: 1_700_000_000,
 				update: WhitelistUpdate::Allow(WhitelistDestination::ExternalAddress(
-					EncodedAddress::Btc(b"bc1qxyz".to_vec()),
+					EncodedAddress::Btc(b"bc1qxyz".to_vec().try_into().unwrap()),
 				)),
 			},
 			PendingWhitelistUpdate {
@@ -481,7 +481,10 @@ fn test_withdrawal_restrictions_serialization() {
 		],
 		refund_addresses: vec![
 			(ForeignChain::Ethereum, EncodedAddress::Eth([0xab; 20])),
-			(ForeignChain::Bitcoin, EncodedAddress::Btc(b"bc1qrefund".to_vec())),
+			(
+				ForeignChain::Bitcoin,
+				EncodedAddress::Btc(b"bc1qrefund".to_vec().try_into().unwrap()),
+			),
 		],
 		bound_broker_withdrawal_address: Some(EncodedAddress::Eth([0xbb; 20])),
 	});
