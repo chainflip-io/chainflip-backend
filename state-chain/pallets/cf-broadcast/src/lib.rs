@@ -38,7 +38,7 @@ use cf_traits::{
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
-	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
+	pallet_prelude::{ensure, DispatchResult},
 	sp_runtime::{
 		traits::{One, Saturating},
 		DispatchError,
@@ -142,14 +142,7 @@ pub mod pallet {
 
 	/// All data contained in a Broadcast
 	#[derive(
-		RuntimeDebug,
-		PartialEq,
-		Eq,
-		Encode,
-		Decode,
-		DecodeWithMemTracking,
-		GenericTypeInfo,
-		CloneNoBound,
+		Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo, CloneNoBound,
 	)]
 	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct BroadcastData<T: Config<I>, I: 'static> {
@@ -287,7 +280,7 @@ pub mod pallet {
 		Eq,
 		Copy,
 		Clone,
-		RuntimeDebug,
+		Debug,
 		Encode,
 		Decode,
 		DecodeWithMemTracking,
@@ -848,9 +841,75 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
+		Self::record_transaction_fee(
+			broadcast_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			&transaction_ref,
+		);
+
+		T::BroadcastOutcomeHandler::on_broadcast_success(broadcast_id, witnessed_at_block);
+
+		// Report the people who failed to broadcast this tx during its whole lifetime.
+		let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
+		if !failed_broadcasters.is_empty() {
+			T::OffenceReporter::report_many(
+				PalletOffence::FailedToBroadcastTransaction(T::TargetChain::get()),
+				failed_broadcasters,
+			);
+		}
+
+		Self::clean_up_broadcast_storage(broadcast_id);
+
+		Self::deposit_event(Event::<T, I>::BroadcastSuccess {
+			broadcast_id,
+			transaction_out_id: tx_out_id,
+			transaction_ref,
+		});
+		Ok(())
+	}
+
+	/// For transactions that were included on the target chain but failed to execute, so the fee
+	/// was still paid. The broadcast is aborted so that it can be recovered manually, as when no
+	/// authority manages to broadcast it. Failed broadcasters are not reported: the transaction
+	/// may have been submitted by anyone, so their failures may have been correct.
+	pub fn egress_execution_failed(
+		TransactionConfirmation {
+			tx_out_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			transaction_ref,
+		}: TransactionConfirmation<T, I>,
+	) -> DispatchResult {
+		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
+			.ok_or(Error::<T, I>::InvalidPayload)?;
+
+		Self::record_transaction_fee(
+			broadcast_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			&transaction_ref,
+		);
+		// It may have already been aborted if every authority's submission was rejected.
+		if PendingBroadcasts::<T, I>::get().contains(&broadcast_id) {
+			Self::abort_broadcast(broadcast_id);
+		}
+		Ok(())
+	}
+
+	fn record_transaction_fee(
+		broadcast_id: BroadcastId,
+		signer_id: SignerIdFor<T, I>,
+		tx_fee: TransactionFeeFor<T, I>,
+		tx_metadata: TransactionMetadataFor<T, I>,
+		transaction_ref: &TransactionRefFor<T, I>,
+	) {
 		if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 			if tx_metadata.verify_metadata(&expected_tx_metadata) {
-				if RefundedTransactions::<T, I>::contains_key(&transaction_ref) {
+				if RefundedTransactions::<T, I>::contains_key(transaction_ref) {
 					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRefused {
 						beneficiary: signer_id,
 					});
@@ -873,7 +932,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						to_refund.into(),
 					);
 
-					RefundedTransactions::<T, I>::insert(&transaction_ref, ());
+					RefundedTransactions::<T, I>::insert(transaction_ref, ());
 
 					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
 						beneficiary: signer_id,
@@ -900,26 +959,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_id
 			);
 		}
-
-		T::BroadcastOutcomeHandler::on_broadcast_success(broadcast_id, witnessed_at_block);
-
-		// Report the people who failed to broadcast this tx during its whole lifetime.
-		let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
-		if !failed_broadcasters.is_empty() {
-			T::OffenceReporter::report_many(
-				PalletOffence::FailedToBroadcastTransaction(T::TargetChain::get()),
-				failed_broadcasters,
-			);
-		}
-
-		Self::clean_up_broadcast_storage(broadcast_id);
-
-		Self::deposit_event(Event::<T, I>::BroadcastSuccess {
-			broadcast_id,
-			transaction_out_id: tx_out_id,
-			transaction_ref,
-		});
-		Ok(())
 	}
 
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {

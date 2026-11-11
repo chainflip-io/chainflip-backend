@@ -101,6 +101,7 @@ scale-info = { workspace = true, default-features = true, features = [
 	"derive",
 ] }
 sp-core = { workspace = true, default-features = true }
+sp-crypto-hashing = { workspace = true, default-features = true }
 sp-rpc = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-version = { workspace = true, default-features = true }

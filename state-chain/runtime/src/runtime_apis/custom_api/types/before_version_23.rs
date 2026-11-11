@@ -21,9 +21,7 @@ use cf_chains::instances::{
 	SolanaInstance, TronInstance,
 };
 
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct EmissionsSafeMode {
 	pub emissions_sync_enabled: bool,
 }
@@ -36,16 +34,7 @@ impl Default for EmissionsSafeMode {
 
 // The runtime safe mode before the emissions pallet was removed. Also the on-chain storage format
 // of `pallet_cf_environment::RuntimeSafeMode` prior to the v2.4 runtime.
-#[derive(
-	Encode,
-	Decode,
-	TypeInfo,
-	Default,
-	Clone,
-	PartialEq,
-	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Default, Clone, PartialEq, Eq, Debug)]
 pub struct RuntimeSafeMode {
 	pub emissions: EmissionsSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,

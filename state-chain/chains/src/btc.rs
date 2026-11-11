@@ -40,7 +40,6 @@ use cf_utilities::SliceToArray;
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
-	pallet_prelude::RuntimeDebug,
 	traits::{ConstBool, ConstU32},
 	BoundedVec, Parameter,
 };
@@ -69,9 +68,7 @@ pub const BITCOIN_DUST_LIMIT: u64 = 600;
 
 pub type BlockNumber = u64;
 
-#[derive(
-	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy,
-)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq, Copy)]
 pub struct BitcoinFetchId(pub u64);
 
 pub type BtcAmount = u64;
@@ -85,7 +82,7 @@ pub type Hash = H256;
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	Default,
 	PartialEq,
 	Eq,
@@ -106,9 +103,7 @@ pub struct AggKey {
 	pub current: [u8; 32],
 }
 
-#[derive(
-	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
-)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BitcoinTransactionData {
 	pub encoded_transaction: Vec<u8>,
 }
@@ -125,7 +120,7 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,
@@ -192,7 +187,7 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,
@@ -426,7 +421,7 @@ fn verify_single_threshold_signature(
 	DecodeWithMemTracking,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	MaxEncodedLen,
@@ -452,10 +447,12 @@ impl From<&DepositChannel<Bitcoin>> for BitcoinFetchId {
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
+	/// The address is longer than [MAX_BTC_ADDRESS_LENGTH]
+	AddressTooLong,
 }
 #[derive(
 	Encode,
@@ -463,7 +460,7 @@ pub enum Error {
 	DecodeWithMemTracking,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Serialize,
@@ -489,15 +486,13 @@ impl DepositDetailsToTransactionInId<BitcoinCrypto> for Utxo {
 	}
 }
 
-#[derive(
-	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq,
-)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitcoinUtxoDiscardReason {
 	BelowDustLimit,
 	StaleKey,
 }
 
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub struct DiscardedBitcoinUtxo<BlockNumber> {
 	pub utxo: Utxo,
 	pub reason: BitcoinUtxoDiscardReason,
@@ -505,15 +500,7 @@ pub struct DiscardedBitcoinUtxo<BlockNumber> {
 }
 
 #[derive(
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Clone,
-	RuntimeDebug,
-	PartialEq,
-	Eq,
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Clone, Debug, PartialEq, Eq,
 )]
 pub struct BitcoinOutput {
 	pub amount: u64,
@@ -640,7 +627,20 @@ const SEGWIT_VERSION_TAPROOT: u8 = 1;
 const SEGWIT_VERSION_MAX: u8 = 16;
 const MIN_SEGWIT_PROGRAM_BYTES: u32 = 2;
 const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
+/// BIP173 caps bech32 strings at 90 characters; base58 addresses are shorter. The longest address
+/// we can produce is a 40-byte segwit program on regtest (76 characters).
+pub const MAX_BTC_ADDRESS_LENGTH: u32 = 90;
 
+/// A Bitcoin output script (scriptPubKey), which is how Bitcoin accounts are represented in the
+/// State Chain: deposit channels, egress destinations, refund addresses and [Bitcoin::BURN_ADDRESS]
+/// are all values of this type. Only output types that have a standard address encoding are
+/// representable, and [Self::to_address] / [Self::try_from_address] convert to and from that
+/// encoding.
+///
+/// Every variant corresponds to a script that is relayed under Bitcoin Core's default policy,
+/// except `OtherSegwit`, which can also express non-standard witness programs (version 0 with a
+/// length other than 20 or 32). Since values can arrive SCALE-encoded from untrusted sources, check
+/// [Self::is_standard] before paying to one.
 #[derive(
 	Clone,
 	Debug,
@@ -749,7 +749,81 @@ impl ScriptPubkey {
 		}
 	}
 
+	/// Classifies a segwit witness program, applying Bitcoin Core's default standardness policy:
+	/// a version 0 program must be exactly 20 (P2WPKH) or 32 (P2WSH) bytes, anything else is
+	/// refused relay by default nodes. Higher versions are relayed as long as the program length
+	/// is within the BIP141 bounds.
+	fn from_witness_program(version: u8, program: &[u8]) -> Option<Self> {
+		match (version, program.len() as u32) {
+			(SEGWIT_VERSION_ZERO, 20) => Some(ScriptPubkey::P2WPKH(program.copy_to_array())),
+			(SEGWIT_VERSION_ZERO, 32) => Some(ScriptPubkey::P2WSH(program.copy_to_array())),
+			(SEGWIT_VERSION_TAPROOT, 32) => Some(ScriptPubkey::Taproot(program.copy_to_array())),
+			(
+				SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX,
+				MIN_SEGWIT_PROGRAM_BYTES..=MAX_SEGWIT_PROGRAM_BYTES,
+			) => Some(ScriptPubkey::OtherSegwit {
+				version,
+				program: program.to_vec().try_into().expect("Checked for MAX_SEGWIT_PROGRAM_BYTES"),
+			}),
+			_ => None,
+		}
+	}
+
+	/// Parses a raw scriptPubKey, accepting exactly the output types that
+	/// [Self::try_from_address] accepts. Use this rather than ad-hoc script inspection whenever
+	/// the script comes from an untrusted source such as an on-chain transaction output.
+	///
+	/// Only the engine parses raw scripts, so this is kept out of the runtime.
+	#[cfg(feature = "std")]
+	pub fn try_from_script_bytes(script_bytes: &[u8]) -> Option<Self> {
+		let script = bitcoin::Script::from_bytes(script_bytes);
+
+		if script.is_p2pkh() {
+			Some(ScriptPubkey::P2PKH(script_bytes.get(3..23)?.copy_to_array()))
+		} else if script.is_p2sh() {
+			Some(ScriptPubkey::P2SH(script_bytes.get(2..22)?.copy_to_array()))
+		} else {
+			// rust-bitcoin only checks the generic witness program shape here and accepts any
+			// version with any program length from 2 to 40, so the standardness rules must come
+			// from `from_witness_program`.
+			let version = script.witness_version()?;
+			Self::from_witness_program(version.to_num(), script_bytes.get(2..)?)
+		}
+	}
+
+	/// Whether an output paying to this script is relayed under Bitcoin Core's default policy.
+	///
+	/// Values may come from untrusted SCALE-encoded input, so egress paths must check this before
+	/// including the script in a transaction: a single non-standard output makes the whole
+	/// transaction unbroadcastable.
+	///
+	/// Only `OtherSegwit` can be non-standard. Version 0 `OtherSegwit` is always rejected, since
+	/// Core only relays its 20 and 32 byte programs and those are the `P2WPKH` and `P2WSH`
+	/// variants. Version 1 with 32 bytes is likewise rejected in favour of `Taproot`. Versions 1 to
+	/// 16 are otherwise accepted with programs of 2 to 40 bytes: Core treats them as undefined
+	/// rather than invalid and relays them for future soft forks.
+	pub fn is_standard(&self) -> bool {
+		match self {
+			ScriptPubkey::OtherSegwit { version, program } => {
+				let len = program.len() as u32;
+				(SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX).contains(version) &&
+					(MIN_SEGWIT_PROGRAM_BYTES..=MAX_SEGWIT_PROGRAM_BYTES).contains(&len) &&
+					!(*version == SEGWIT_VERSION_TAPROOT && len == 32)
+			},
+			ScriptPubkey::P2PKH(_) |
+			ScriptPubkey::P2SH(_) |
+			ScriptPubkey::P2WPKH(_) |
+			ScriptPubkey::P2WSH(_) |
+			ScriptPubkey::Taproot(_) => true,
+		}
+	}
+
 	pub fn try_from_address(address: &str, network: &BitcoinNetwork) -> Result<Self, Error> {
+		// Base58 decoding is quadratic in the input length, so reject oversized input up front.
+		if address.len() > MAX_BTC_ADDRESS_LENGTH as usize {
+			return Err(Error::AddressTooLong)
+		}
+
 		// See https://en.bitcoin.it/wiki/Base58Check_encoding
 		fn try_decode_as_base58(address: &str, network: &BitcoinNetwork) -> Option<ScriptPubkey> {
 			const CHECKSUM_LENGTH: usize = 4;
@@ -787,21 +861,11 @@ impl ScriptPubkey {
 			if hrp == network.bech32_and_bech32m_address_hrp() {
 				let version = data.first()?.to_u8();
 				let program = Vec::from_base32(&data[1..]).ok()?;
-				match (version, variant, program.len() as u32) {
-					(SEGWIT_VERSION_ZERO, Variant::Bech32, 20) =>
-						Some(ScriptPubkey::P2WPKH(program.copy_to_array())),
-					(SEGWIT_VERSION_ZERO, Variant::Bech32, 32) =>
-						Some(ScriptPubkey::P2WSH(program.copy_to_array())),
-					(SEGWIT_VERSION_TAPROOT, Variant::Bech32m, 32) =>
-						Some(ScriptPubkey::Taproot(program.copy_to_array())),
-					(
-						SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX,
-						Variant::Bech32m,
-						(MIN_SEGWIT_PROGRAM_BYTES..=MAX_SEGWIT_PROGRAM_BYTES),
-					) => Some(ScriptPubkey::OtherSegwit {
-						version,
-						program: program.try_into().expect("Checked for MAX_SEGWIT_PROGRAM_BYTES"),
-					}),
+				// BIP350: version 0 uses bech32, every later version uses bech32m.
+				match (version, variant) {
+					(SEGWIT_VERSION_ZERO, Variant::Bech32) |
+					(SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX, Variant::Bech32m) =>
+						ScriptPubkey::from_witness_program(version, &program),
 					_ => None,
 				}
 			} else {
@@ -815,7 +879,7 @@ impl ScriptPubkey {
 	}
 }
 
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub struct BitcoinTransaction {
 	pub inputs: Vec<Utxo>,
 	pub outputs: Vec<BitcoinOutput>,
@@ -1081,15 +1145,7 @@ impl<T: SerializeBtc> SerializeBtc for &[T] {
 ///
 /// For reference see https://en.bitcoin.it/wiki/Script
 #[derive(
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Clone,
-	RuntimeDebug,
-	PartialEq,
-	Eq,
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Clone, Debug, PartialEq, Eq,
 )]
 pub enum BitcoinOp {
 	PushUint { value: u32 },
@@ -1113,7 +1169,7 @@ pub enum BitcoinOp {
 	DecodeWithMemTracking,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	serde::Serialize,
@@ -1348,6 +1404,31 @@ mod test {
 	}
 
 	#[test]
+	fn try_from_address_rejects_oversized_input() {
+		let network = BitcoinNetwork::Regtest;
+		let longest = ScriptPubkey::OtherSegwit {
+			version: SEGWIT_VERSION_MAX,
+			program: vec![0xff; MAX_SEGWIT_PROGRAM_BYTES as usize].try_into().unwrap(),
+		};
+		let address = longest.to_address(&network);
+		assert_eq!(ScriptPubkey::try_from_address(&address, &network), Ok(longest));
+
+		// Padding breaks the checksum, so only the error tells us which check rejected it.
+		let padded_to = |len: usize| format!("{address}{}", "q".repeat(len - address.len()));
+		assert_eq!(
+			ScriptPubkey::try_from_address(&padded_to(MAX_BTC_ADDRESS_LENGTH as usize), &network),
+			Err(Error::InvalidAddress)
+		);
+		assert_eq!(
+			ScriptPubkey::try_from_address(
+				&padded_to(MAX_BTC_ADDRESS_LENGTH as usize + 1),
+				&network
+			),
+			Err(Error::AddressTooLong)
+		);
+	}
+
+	#[test]
 	fn test_scriptpubkey_from_address() {
 		// Test cases from: https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki
 
@@ -1372,6 +1453,13 @@ mod test {
 				pk.to_address(&intended_btc_net).to_uppercase(),
 				valid_address.to_uppercase()
 			);
+			// The raw-script parser must agree with the address parser.
+			assert_eq!(
+				ScriptPubkey::try_from_script_bytes(expected_scriptpubkey),
+				Some(pk.clone()),
+				"Input was {valid_address}"
+			);
+			assert!(pk.is_standard());
 		}
 
 		let invalid_addresses = [
@@ -1470,6 +1558,107 @@ mod test {
 				ScriptPubkey::try_from_address(address, &BitcoinNetwork::Mainnet,).is_ok(),
 				validity
 			);
+		}
+	}
+
+	#[test]
+	fn test_scriptpubkey_from_script_bytes_rejects_non_standard_scripts() {
+		let other_segwit = |version: u8, program: &[u8]| ScriptPubkey::OtherSegwit {
+			version,
+			program: program.to_vec().try_into().unwrap(),
+		};
+
+		// Segwit v0 programs that are not 20 or 32 bytes are well-formed witness programs but
+		// Bitcoin Core classifies them as non-standard and refuses to relay them.
+		for program in [&[1u8; 2][..], &[1u8; 5], &[1u8; 21], &[1u8; 40]] {
+			let script = [&[0u8, program.len() as u8][..], program].concat();
+			assert_eq!(ScriptPubkey::try_from_script_bytes(&script), None, "{script:?}");
+			assert!(!other_segwit(0, program).is_standard(), "{program:?}");
+		}
+
+		// Higher witness versions with the same lengths are relayed as `witness_unknown`.
+		for (version, program) in [(1u8, &[1u8; 5][..]), (2, &[1u8; 40]), (16, &[1u8; 2])] {
+			let script = [&[0x50 + version, program.len() as u8][..], program].concat();
+			assert_eq!(
+				ScriptPubkey::try_from_script_bytes(&script),
+				Some(other_segwit(version, program)),
+			);
+			assert!(other_segwit(version, program).is_standard());
+		}
+
+		// Malformed or unsupported scripts.
+		for script in [
+			&[][..],
+			&[0x51],                   // OP_TRUE
+			&[0x00, 0x14, 1, 2, 3],    // push length disagrees with the script length
+			&[0x61, 0x02, 1, 2],       // OP_NOP is not a witness version
+			&[0x76, 0xa9, 0x14, 1, 2], // truncated P2PKH
+			&[0x6a, 0x02, 1, 2],       // OP_RETURN
+		] {
+			assert_eq!(ScriptPubkey::try_from_script_bytes(script), None, "{script:?}");
+		}
+
+		// `OtherSegwit` values that cannot come from parsing but can be SCALE-decoded.
+		assert!(!other_segwit(17, &[1; 5]).is_standard());
+		assert!(!other_segwit(1, &[1; 1]).is_standard());
+		assert!(!other_segwit(1, &[]).is_standard());
+		// Byte-identical to a P2WPKH output, but only the canonical `P2WPKH` spelling is accepted.
+		assert!(!other_segwit(0, &[1; 20]).is_standard());
+		assert!(ScriptPubkey::P2WPKH([1; 20]).is_standard());
+		// Likewise for Taproot.
+		assert!(!other_segwit(1, &[1; 32]).is_standard());
+		assert!(ScriptPubkey::Taproot([1; 32]).is_standard());
+
+		// Corrupting any fixed byte of a legacy script must reject it rather than misclassify.
+		let p2pkh = ScriptPubkey::P2PKH([1; 20]).bytes();
+		let p2sh = ScriptPubkey::P2SH([1; 20]).bytes();
+		for (script, fixed_positions) in [(p2pkh, vec![0, 1, 2, 23, 24]), (p2sh, vec![0, 1, 22])] {
+			assert!(ScriptPubkey::try_from_script_bytes(&script).is_some());
+			for position in fixed_positions {
+				let mut corrupted = script.clone();
+				corrupted[position] ^= 0x01;
+				assert_eq!(ScriptPubkey::try_from_script_bytes(&corrupted), None, "{corrupted:?}");
+			}
+			assert_eq!(ScriptPubkey::try_from_script_bytes(&script[..script.len() - 1]), None);
+			assert_eq!(ScriptPubkey::try_from_script_bytes(&[&script[..], &[0]].concat()), None);
+		}
+	}
+
+	/// Sweeps every (leading opcode, push length) pair a witness-program-shaped script can have,
+	/// checking the parser against the BIP141 / Bitcoin Core rules written out independently.
+	#[test]
+	fn test_scriptpubkey_from_script_bytes_exhaustive_witness_programs() {
+		const OP_1: u8 = 0x51;
+		const OP_16: u8 = 0x60;
+		for leading_op in 0..=u8::MAX {
+			for program_len in 0..=(MAX_SEGWIT_PROGRAM_BYTES + 1) as usize {
+				let program = vec![0xab; program_len];
+				let script = [&[leading_op, program_len as u8][..], &program].concat();
+
+				let version = match leading_op {
+					0 => Some(0),
+					OP_1..=OP_16 => Some(leading_op - OP_1 + 1),
+					_ => None,
+				};
+				let expected = match (version, program_len) {
+					(Some(0), 20) => Some(ScriptPubkey::P2WPKH([0xab; 20])),
+					(Some(0), 32) => Some(ScriptPubkey::P2WSH([0xab; 32])),
+					(Some(1), 32) => Some(ScriptPubkey::Taproot([0xab; 32])),
+					(Some(0), _) => None,
+					(Some(version), 2..=40) => Some(ScriptPubkey::OtherSegwit {
+						version,
+						program: program.clone().try_into().unwrap(),
+					}),
+					_ => None,
+				};
+
+				let parsed = ScriptPubkey::try_from_script_bytes(&script);
+				assert_eq!(parsed, expected, "leading_op={leading_op:#04x} len={program_len}");
+				if let Some(parsed) = parsed {
+					assert_eq!(parsed.bytes(), script);
+					assert!(parsed.is_standard());
+				}
+			}
 		}
 	}
 

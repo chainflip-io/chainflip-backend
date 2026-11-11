@@ -22,11 +22,9 @@ use crate::btc::{AggKey, BitcoinCrypto, BitcoinOutput, BitcoinTransaction, Utxo}
 
 use crate::{ApiCall, ChainCrypto};
 
-use frame_support::sp_runtime::RuntimeDebug;
-
 /// Represents all the arguments required to build the call to fetch assets for all given channel
 /// ids.
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub struct BatchTransfer {
 	pub bitcoin_transaction: BitcoinTransaction,
 	pub change_utxo_key: [u8; 32],

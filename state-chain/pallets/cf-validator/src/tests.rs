@@ -33,7 +33,7 @@ use cf_traits::{
 use cf_utilities::{assert_matches, success_threshold_from_share_count};
 use frame_support::{
 	assert_noop, assert_ok,
-	error::BadOrigin,
+	sp_runtime::traits::BadOrigin,
 	traits::{HandleLifetime, OriginTrait},
 };
 use frame_system::RawOrigin;
@@ -802,6 +802,33 @@ mod bond_expiry {
 			assert_eq!(EpochHistory::<Test>::active_bond(&3), 99);
 		});
 	}
+
+	#[test]
+	fn every_managed_authority_is_bonded_at_least_the_epoch_bond() {
+		// The operator's pool exceeds bond * n, so a greedy split would leave one authority
+		// bonded at zero.
+		const BOND: u128 = 50;
+		const MANAGED: [u64; 3] = [100, 101, 102];
+		const INDEPENDENT: u64 = 103;
+
+		new_test_ext().execute_with(|| {
+			DelegationSnapshot::<u64, u128> {
+				operator: 1,
+				validators: MANAGED.iter().map(|v| (*v, 100)).collect(),
+				..Default::default()
+			}
+			.register_for_epoch::<Test>(ValidatorPallet::current_epoch() + 1);
+
+			ValidatorPallet::transition_to_next_epoch(
+				MANAGED.into_iter().chain([INDEPENDENT]).collect(),
+				BOND,
+			);
+
+			for authority in MANAGED.into_iter().chain([INDEPENDENT]) {
+				assert_eq!(EpochHistory::<Test>::active_bond(&authority), BOND);
+			}
+		});
+	}
 }
 
 #[test]
@@ -1351,10 +1378,11 @@ fn validator_registration_and_deregistration() {
 		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
 		assert_ok!(frame_system::Provider::<Test>::created(&ALICE)); // session keys requires a provider ref.
 		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+		let keys = MockSessionKeys::from(UintAuthorityId(ALICE));
 		assert_ok!(ValidatorPallet::set_keys(
 			RuntimeOrigin::signed(ALICE),
-			MockSessionKeys::from(UintAuthorityId(ALICE)),
-			Default::default(),
+			keys.clone(),
+			create_set_keys_proof(ALICE, &keys),
 		));
 
 		assert!(pallet_session::NextKeys::<Test>::contains_key(ALICE));
@@ -2395,6 +2423,86 @@ mod operator {
 		});
 	}
 
+	fn fill_exceptions(operator: u64) -> BTreeSet<u64> {
+		let exceptions: BTreeSet<u64> =
+			(0..MAX_EXCEPTIONS_PER_OPERATOR as u64).map(|i| 10_000 + i).collect();
+		Exceptions::<Test>::insert(
+			operator,
+			BoundedBTreeSet::try_from(exceptions.clone()).unwrap(),
+		);
+		exceptions
+	}
+
+	#[test]
+	fn exceptions_list_is_bounded() {
+		for (acceptance, add_exception, remove_exception) in [
+			(
+				DelegationAcceptance::Allow,
+				ValidatorPallet::block_delegator as fn(_, _) -> _,
+				ValidatorPallet::allow_delegator as fn(_, _) -> _,
+			),
+			(
+				DelegationAcceptance::Deny,
+				ValidatorPallet::allow_delegator as fn(_, _) -> _,
+				ValidatorPallet::block_delegator as fn(_, _) -> _,
+			),
+		] {
+			new_test_ext().execute_with(|| {
+				assert_ok!(ValidatorPallet::register_as_operator(
+					OriginTrait::signed(ALICE),
+					OperatorSettings { fee_bps: 2000, delegation_acceptance: acceptance },
+					vanity()
+				));
+				let exceptions = fill_exceptions(ALICE);
+				let existing = *exceptions.first().unwrap();
+				frame_system::Pallet::<Test>::inc_providers(&BOB);
+				frame_system::Pallet::<Test>::inc_providers(&existing);
+
+				assert_noop!(
+					add_exception(OriginTrait::signed(ALICE), BOB),
+					Error::<Test>::TooManyExceptions
+				);
+
+				// Re-adding an existing exception doesn't grow the list.
+				assert_ok!(add_exception(OriginTrait::signed(ALICE), existing));
+
+				// A full list can still be shrunk, making room for new exceptions.
+				assert_ok!(remove_exception(OriginTrait::signed(ALICE), existing));
+				assert_ok!(add_exception(OriginTrait::signed(ALICE), BOB));
+				assert_eq!(
+					Exceptions::<Test>::get(ALICE).len() as u32,
+					MAX_EXCEPTIONS_PER_OPERATOR
+				);
+			});
+		}
+	}
+
+	#[test]
+	fn cannot_switch_to_deny_with_more_delegators_than_exceptions_limit() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			for delegator in 0..=MAX_EXCEPTIONS_PER_OPERATOR as u64 {
+				DelegationChoice::<Test>::insert(10_000 + delegator, (ALICE, 100u128));
+			}
+
+			assert_noop!(
+				ValidatorPallet::update_operator_settings(
+					OriginTrait::signed(ALICE),
+					OperatorSettings {
+						fee_bps: OPERATOR_SETTINGS.fee_bps,
+						delegation_acceptance: DelegationAcceptance::Deny,
+					}
+				),
+				Error::<Test>::TooManyExceptions
+			);
+			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(OPERATOR_SETTINGS));
+		});
+	}
+
 	#[test]
 	fn exceptions_list_is_reset_when_operator_settings_are_updated() {
 		new_test_ext().execute_with(|| {
@@ -2404,7 +2512,10 @@ mod operator {
 				vanity()
 			));
 
-			Exceptions::<Test>::insert(ALICE, vec![BOB].into_iter().collect::<BTreeSet<_>>());
+			Exceptions::<Test>::insert(
+				ALICE,
+				BoundedBTreeSet::try_from(BTreeSet::from([BOB])).unwrap(),
+			);
 			assert_ok!(ValidatorPallet::update_operator_settings(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
@@ -2643,7 +2754,7 @@ mod delegation {
 	}
 
 	#[test]
-	fn undelegate_to_zero_deregisters_liquidity_provider_role() {
+	fn undelegate_to_zero_keeps_liquidity_provider_role() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
@@ -2664,7 +2775,8 @@ mod delegation {
 				DelegationAmount::Max
 			));
 
-			assert!(!<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
+			assert!(!DelegationChoice::<Test>::contains_key(ALICE));
+			assert!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(&ALICE, AccountRole::LiquidityProvider));
 		});
 	}
 
@@ -4766,11 +4878,12 @@ mod grandpa_delegation {
 		new_test_ext().then_execute_with_checks(|| {
 			// Use a WINNING_BID account — small id so arithmetic is safe.
 			let authority = WINNING_BIDS[0].bidder_id;
-			let new_keys = UintAuthorityId(authority + 100).into();
+			let new_keys: MockSessionKeys = UintAuthorityId(authority + 100).into();
+			let proof = create_set_keys_proof(authority, &new_keys);
 			assert_ok!(ValidatorPallet::set_keys(
 				RuntimeOrigin::signed(authority),
 				new_keys,
-				vec![],
+				proof
 			));
 		});
 	}

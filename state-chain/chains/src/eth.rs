@@ -36,7 +36,7 @@ use evm::api::EvmReplayProtection;
 use frame_support::{
 	sp_runtime::{
 		traits::{Member, Zero},
-		FixedPointNumber, FixedU64, RuntimeDebug,
+		FixedPointNumber, FixedU64,
 	},
 	Parameter,
 };
@@ -92,7 +92,7 @@ impl Chain for Ethereum {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,

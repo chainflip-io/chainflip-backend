@@ -15,11 +15,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use cf_chains::instances::{
-	ArbitrumInstance, AssethubInstance, BitcoinCryptoInstance, BitcoinInstance, EthereumInstance,
-	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaCryptoInstance, SolanaInstance,
+use cf_chains::{
+	btc::MAX_BTC_ADDRESS_LENGTH,
+	instances::{
+		ArbitrumInstance, AssethubInstance, BitcoinCryptoInstance, BitcoinInstance,
+		EthereumInstance, EvmInstance, PolkadotCryptoInstance, PolkadotInstance,
+		SolanaCryptoInstance, SolanaInstance,
+	},
 };
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
+use frame_support::traits::ConstU32;
 use pallet_cf_lending_pools::LendingPoolConfiguration;
 
 #[derive(
@@ -28,7 +33,7 @@ use pallet_cf_lending_pools::LendingPoolConfiguration;
 pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),
-	Btc(Vec<u8>),
+	Btc(BoundedVec<u8, ConstU32<MAX_BTC_ADDRESS_LENGTH>>),
 	Arb([u8; 20]),
 	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
 	Hub([u8; 32]),
@@ -347,7 +352,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	Clone,
 	PartialEq,
 	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
+	Debug,
 )]
 pub struct WitnesserCallPermission {
 	pub governance: bool,
@@ -422,9 +427,7 @@ impl From<WitnesserCallPermission> for crate::safe_mode::WitnesserCallPermission
 }
 
 // The liquidity provider safe mode before `flip_to_on_chain_balance_enabled` was added.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct LiquidityProviderSafeMode {
 	pub deposit_enabled: bool,
 	pub withdrawal_enabled: bool,
@@ -449,16 +452,7 @@ impl From<LiquidityProviderSafeMode> for pallet_cf_lp::PalletSafeMode {
 	}
 }
 
-#[derive(
-	Encode,
-	Decode,
-	TypeInfo,
-	Default,
-	Clone,
-	PartialEq,
-	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Default, Clone, PartialEq, Eq, Debug)]
 pub struct RuntimeSafeMode {
 	pub emissions: super::before_version_23::EmissionsSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,

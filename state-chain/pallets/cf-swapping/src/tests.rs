@@ -19,6 +19,7 @@ mod config;
 mod dca;
 mod fees;
 mod fill_or_kill;
+mod recovery_account;
 
 use std::sync::LazyLock;
 
@@ -2244,6 +2245,77 @@ mod credit_flip_and_transfer {
 	}
 }
 
+mod flip_to_gateway {
+	use super::*;
+
+	const FEE: AssetAmount = 10;
+	// The largest pending amount that is still below the threshold, because the egressed amount
+	// (net of the fee) is exactly the multiple of the fee.
+	const LARGEST_SKIPPED_AMOUNT: AssetAmount = (FLIP_TO_GATEWAY_MULTIPLE + 1) * FEE;
+
+	#[test]
+	fn egress_failure_skips_transfer_and_keeps_flip_pending() {
+		const PREVIOUSLY_PENDING: AssetAmount = 500;
+		const AMOUNT: AssetAmount = 1_000;
+
+		new_test_ext().execute_with(|| {
+			MockMoveFlipToGateway::set_flip_to_be_sent_to_gateway(PREVIOUSLY_PENDING);
+			MockEgressHandler::<AnyChain>::return_failure(true);
+
+			assert_eq!(Swapping::maybe_trigger_flip_to_gateway_egress(H160::zero(), AMOUNT), 0);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::FlipTransferToGatewaySkipped {
+					reason: DispatchError::Other(_),
+				})
+			);
+			assert_eq!(
+				MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(),
+				PREVIOUSLY_PENDING + AMOUNT
+			);
+			assert!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().is_empty());
+		});
+	}
+
+	#[test]
+	fn transfer_below_fee_multiple_is_rolled_back_until_threshold_is_exceeded() {
+		new_test_ext().execute_with(|| {
+			MockEgressHandler::<AnyChain>::set_fee(FEE);
+
+			assert_eq!(
+				Swapping::maybe_trigger_flip_to_gateway_egress(
+					H160::zero(),
+					LARGEST_SKIPPED_AMOUNT
+				),
+				0
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::FlipTransferToGatewaySkipped { reason })
+					if *reason == Error::<Test>::FlipToGatewayAmountBelowThreshold.into()
+			);
+			assert_eq!(
+				MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(),
+				LARGEST_SKIPPED_AMOUNT
+			);
+			assert!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().is_empty());
+
+			// The skipped amount carries over, tipping the next attempt over the threshold.
+			assert_eq!(Swapping::maybe_trigger_flip_to_gateway_egress(H160::zero(), 1), FEE);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SentFlipToGateway { amount, .. })
+					if *amount == LARGEST_SKIPPED_AMOUNT + 1 - FEE
+			);
+			assert_eq!(MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(), FEE);
+			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
+		});
+	}
+}
+
 mod private_channels {
 
 	use super::*;
@@ -2335,6 +2407,23 @@ mod private_channels {
 			// The same broker can re-open a (different) private channel:
 			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
 			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(CHANNEL_ID + 1));
+		});
+	}
+
+	#[test]
+	fn cannot_open_private_btc_channel_if_already_bonded() {
+		use cf_traits::{mocks::bonding::MockBonderFor, Bonding};
+
+		new_test_ext().execute_with(|| {
+			const OTHER_BOND: u128 = FLIPPERINOS_PER_FLIP * 1_000;
+			MockFundingInfo::<Test>::credit_funds(&BROKER, OTHER_BOND);
+			MockBonderFor::<Test>::update_bond(&BROKER, OTHER_BOND);
+
+			assert_noop!(
+				Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)),
+				Error::<Test>::AccountBonded
+			);
+			assert_eq!(MockBonderFor::<Test>::get_bond(&BROKER), OTHER_BOND);
 		});
 	}
 

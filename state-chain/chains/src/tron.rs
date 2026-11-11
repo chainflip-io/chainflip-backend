@@ -49,7 +49,6 @@ use crate::{
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Tron;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::cmp::min;
@@ -100,7 +99,7 @@ impl Chain for Tron {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,
@@ -219,7 +218,7 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 	Decode,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	Default,
 	PartialEq,
 	Eq,
@@ -293,7 +292,7 @@ pub struct TronTransactionFee {
 	Decode,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	Default,
 	PartialEq,
 	Eq,

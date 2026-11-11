@@ -43,6 +43,8 @@ pub const MAX_OPERATOR_FEE: u32 = 10_000;
 
 pub const MAX_VALIDATORS_PER_OPERATOR: usize = 20;
 
+pub const MAX_EXCEPTIONS_PER_OPERATOR: u32 = 1_000;
+
 pub enum AssociationToOperator {
 	Validator,
 	Delegator,
@@ -227,16 +229,25 @@ where
 
 	/// Returns a mapping of the bond amounts for each validator such that
 	/// the full bond is accounted for.
+	///
+	/// Each validator is bonded at least the epoch bond (capped at its bid), so that no
+	/// authority can hold a negligible bond while its pool-mates cover the operator's total.
+	/// Validators only qualify with a bid of at least `MinimumValidatorStake`, so neither their
+	/// bids nor the epoch bond can be lower, and every validator is bonded at least that much.
+	/// The remainder goes to validators that bid above the epoch bond.
 	pub fn validator_bond_distribution(&self, bond: Bid) -> BTreeMap<Account, Bid> {
-		let mut total_bond = bond * Bid::from(self.validators.len() as u32);
+		let mut remainder = bond
+			.saturating_mul(Bid::from(self.validators.len() as u32))
+			.saturating_sub(self.validators.values().map(|bid| core::cmp::min(*bid, bond)).sum());
 		let mut validator_bids = self.validators.clone().into_iter().collect::<Vec<_>>();
 		validator_bids.sort_by_key(|(_, v)| *v);
 		validator_bids
 			.into_iter()
 			.map(|(id, bid)| {
-				let individual_bond = core::cmp::min(bid, total_bond);
-				total_bond.saturating_reduce(individual_bond);
-				(id, individual_bond)
+				let floor = core::cmp::min(bid, bond);
+				let top_up = core::cmp::min(bid.saturating_sub(floor), remainder);
+				remainder.saturating_reduce(top_up);
+				(id, floor.saturating_add(top_up))
 			})
 			.collect()
 	}
@@ -529,14 +540,23 @@ mod tests {
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
 	use proptest::{prelude::*, proptest};
 
+	/// Amounts in flipperinos. Sub-FLIP values get their own branch because a uniform range up to
+	/// `max_flip` would almost never generate them.
+	fn flipperinos(max_flip: u128) -> impl Strategy<Value = u128> {
+		prop_oneof![
+			1u128..FLIPPERINOS_PER_FLIP,
+			FLIPPERINOS_PER_FLIP..max_flip * FLIPPERINOS_PER_FLIP,
+		]
+	}
+
 	proptest! {
 		#[test]
 		fn distribute_always_sums_to_total(
-			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
-			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..100),
-			total_to_distribute in 1u128..10_000u128,
+			validator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..10),
+			delegator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..100),
+			total_to_distribute in flipperinos(10_000),
 			delegation_fee_bps in 2_000u32..10_000u32,
-			bond in 100_000u128..10_000_000u128,
+			bond in flipperinos(10_000_000),
 		) {
 			// Create a delegation snapshot
 			let operator_account = 1u64;
@@ -546,21 +566,20 @@ mod tests {
 				delegators: BTreeMap::new(),
 				delegation_fee_bps,
 			};
-			let total_to_distribute = total_to_distribute * FLIPPERINOS_PER_FLIP;
 
 			// Add validators
 			for (i, amount) in validator_amounts.iter().enumerate() {
-				snapshot.validators.insert(i as u64 + 100, *amount * FLIPPERINOS_PER_FLIP);
+				snapshot.validators.insert(i as u64 + 100, *amount);
 			}
 
 			// Add delegators
 			for (i, amount) in delegator_amounts.iter().enumerate() {
-				snapshot.delegators.insert(i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP);
+				snapshot.delegators.insert(i as u64 + 1000, *amount);
 			}
 
 			// Distribute the total amount
 			new_test_ext().execute_with(|| {
-				let distributions: Vec<_> = snapshot.distribute(total_to_distribute, bond * FLIPPERINOS_PER_FLIP).collect();
+				let distributions: Vec<_> = snapshot.distribute(total_to_distribute, bond).collect();
 				let sum: u128 = distributions.iter().map(|(_, amount)| *amount).sum();
 
 				// Property: The sum of all distributed amounts equals the input total
@@ -626,22 +645,20 @@ mod tests {
 	proptest! {
 		#[test]
 		fn distribute_all_sums_to_total(
-			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
-			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 0..50),
-			per_beneficiary_amount in 1u128..10_000u128,
+			validator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..10),
+			delegator_amounts in prop::collection::vec(flipperinos(1_000_000), 0..50),
+			per_beneficiary_amount in flipperinos(10_000),
 			delegation_fee_bps in 2_000u32..10_000u32,
-			bond in 100_000u128..10_000_000u128,
+			bond in flipperinos(10_000_000),
 		) {
 			const EPOCH: EpochIndex = 1;
 			let operator_account = 1u64;
-			let per_beneficiary_amount = per_beneficiary_amount * FLIPPERINOS_PER_FLIP;
-			let bond = bond * FLIPPERINOS_PER_FLIP;
 
 			let validators: BTreeMap<ValidatorId, u128> = validator_amounts.iter().enumerate()
-				.map(|(i, amount)| (i as u64 + 100, *amount * FLIPPERINOS_PER_FLIP))
+				.map(|(i, amount)| (i as u64 + 100, *amount))
 				.collect();
 			let delegators: BTreeMap<ValidatorId, u128> = delegator_amounts.iter().enumerate()
-				.map(|(i, amount)| (i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP))
+				.map(|(i, amount)| (i as u64 + 1000, *amount))
 				.collect();
 			// This proptest covers the all-in case: the authority set is exactly this operator's
 			// snapshot validators, so distribute_all routes the whole total through its pool.
@@ -722,6 +739,12 @@ mod tests {
 						"validator {} bonded {} above its bid {}",
 						validator, individual_bond, snapshot.validators[validator]
 					);
+					let floor = core::cmp::min(snapshot.validators[validator], bond);
+					prop_assert!(
+						*individual_bond >= floor,
+						"validator {} bonded {} below its floor {}",
+						validator, individual_bond, floor
+					);
 				}
 
 				Ok(())
@@ -743,5 +766,18 @@ mod tests {
 		assert_eq!(distribution[&100], 700);
 		assert_eq!(distribution[&101], 300);
 		assert_eq!(distribution[&102], 200);
+	}
+
+	#[test]
+	fn validator_bond_distribution_bonds_every_validator() {
+		let snapshot = DelegationSnapshot::<u64, u128> {
+			operator: 1,
+			validators: [(100, 100), (101, 100), (102, 100)].into_iter().collect(),
+			..Default::default()
+		};
+
+		let distribution = snapshot.validator_bond_distribution(50);
+
+		assert_eq!(distribution.values().copied().collect::<Vec<_>>(), vec![50, 50, 50]);
 	}
 }

@@ -51,9 +51,12 @@ mod p2p_crypto {
 #[storage_alias]
 type LastSeenSlot = StorageValue<AuraSlotExtraction, u64>;
 
-pub trait RuntimeConfig: Config + FundingConfig + SessionConfig + ReputationConfig {}
-
-impl<T: Config + FundingConfig + SessionConfig + ReputationConfig> RuntimeConfig for T {}
+pub trait RuntimeConfig: Config + FundingConfig + SessionConfig + ReputationConfig {
+	/// Session keys together with a proof that `owner` holds their private keys.
+	fn generate_session_keys_and_proof(
+		owner: <Self as frame_system::Config>::AccountId,
+	) -> (<Self as SessionConfig>::Keys, Vec<u8>);
+}
 
 pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>, I: Into<u32>>(
 	size: I,
@@ -99,14 +102,8 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 			signature.into(),
 		));
 
-		// Reuse the random peer id for the session keys, we don't need real ones.
-		let fake_key = public_key.to_raw_vec().repeat(4);
-		assert_ok!(pallet_session::Pallet::<T>::set_keys(
-			bidder_origin.clone(),
-			// Public key is 32 bytes, we need 128 bytes.
-			T::Keys::decode(&mut &fake_key[..]).unwrap(),
-			vec![],
-		));
+		let (keys, proof) = T::generate_session_keys_and_proof(bidder.clone());
+		assert_ok!(pallet_session::Pallet::<T>::set_keys(bidder_origin.clone(), keys, proof));
 
 		assert_ok!(pallet_cf_reputation::Pallet::<T>::heartbeat(bidder_origin.clone(),));
 	}
@@ -137,17 +134,23 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 fn register_grandpa_key<T: RuntimeConfig>(account: &T::AccountId) -> GrandpaAuthorityId {
 	use frame_support::sp_runtime::traits::OpaqueKeys;
 
-	let session_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
-	// Session keys are 128 bytes (four 32-byte keys); reuse the same key for all of them.
-	let keys = T::Keys::decode(&mut &session_key.to_raw_vec().repeat(4)[..]).unwrap();
+	let (keys, proof) = T::generate_session_keys_and_proof(account.clone());
 	assert_ok!(pallet_session::Pallet::<T>::set_keys(
 		RawOrigin::Signed(account.clone()).into(),
 		keys.clone(),
-		vec![],
+		proof,
 	));
 
 	GrandpaAuthorityId::decode(&mut keys.get_raw(sp_consensus_grandpa::KEY_TYPE))
 		.expect("GRANDPA key was just registered.")
+}
+
+/// Leaves room for one more entry, so that benchmarked inserts succeed against a full-size list.
+fn fill_exceptions<T: Config>(operator: &T::AccountId) {
+	let exceptions = (1..MAX_EXCEPTIONS_PER_OPERATOR)
+		.map(|i| account::<T::AccountId>("exception", i, 0))
+		.collect::<BTreeSet<_>>();
+	Exceptions::<T>::insert(operator, BoundedBTreeSet::try_from(exceptions).unwrap());
 }
 
 const OPERATOR_SETTINGS: OperatorSettings =
@@ -514,10 +517,26 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		#[extrinsic_call]
-		update_operator_settings(RawOrigin::Signed(caller.clone()), OPERATOR_SETTINGS);
+		// Switching from Allow to Deny is the costly path: the old list is replaced by one holding
+		// every current delegator, which we make as large as the bound allows.
+		OperatorSettingsLookup::<T>::insert(&caller, OPERATOR_SETTINGS);
+		fill_exceptions::<T>(&caller);
+		for i in 0..MAX_EXCEPTIONS_PER_OPERATOR {
+			DelegationChoice::<T>::insert(
+				account::<T::AccountId>("delegator", i, 0),
+				(caller.clone(), T::Amount::default()),
+			);
+		}
+		let new_settings = OperatorSettings {
+			fee_bps: OPERATOR_SETTINGS.fee_bps,
+			delegation_acceptance: DelegationAcceptance::Deny,
+		};
 
-		assert_eq!(OperatorSettingsLookup::<T>::get(caller), Some(OPERATOR_SETTINGS));
+		#[extrinsic_call]
+		update_operator_settings(RawOrigin::Signed(caller.clone()), new_settings.clone());
+
+		assert_eq!(OperatorSettingsLookup::<T>::get(&caller), Some(new_settings));
+		assert_eq!(Exceptions::<T>::get(&caller).len() as u32, MAX_EXCEPTIONS_PER_OPERATOR);
 	}
 
 	#[benchmark]
@@ -529,8 +548,14 @@ mod benchmarks {
 
 		let account_id = whitelisted_caller();
 
+		// Allow mode is the costlier path: it also has to check that the delegator exists.
+		OperatorSettingsLookup::<T>::insert(&operator, OPERATOR_SETTINGS);
+		fill_exceptions::<T>(&operator);
+
 		#[extrinsic_call]
-		block_delegator(RawOrigin::Signed(operator), account_id);
+		block_delegator(RawOrigin::Signed(operator.clone()), account_id);
+
+		assert_eq!(Exceptions::<T>::get(&operator).len() as u32, MAX_EXCEPTIONS_PER_OPERATOR);
 	}
 
 	#[benchmark]
@@ -542,8 +567,17 @@ mod benchmarks {
 
 		let account_id = whitelisted_caller();
 
+		// Deny mode is the costlier path: it also has to check that the delegator exists.
+		OperatorSettingsLookup::<T>::insert(
+			&operator,
+			OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Deny },
+		);
+		fill_exceptions::<T>(&operator);
+
 		#[extrinsic_call]
-		allow_delegator(RawOrigin::Signed(operator), account_id);
+		allow_delegator(RawOrigin::Signed(operator.clone()), account_id);
+
+		assert_eq!(Exceptions::<T>::get(&operator).len() as u32, MAX_EXCEPTIONS_PER_OPERATOR);
 	}
 
 	#[benchmark]
@@ -591,6 +625,7 @@ mod benchmarks {
 			RawOrigin::Signed(operator.clone()).into(),
 			OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow }
 		));
+		fill_exceptions::<T>(&operator);
 
 		#[extrinsic_call]
 		delegate(RawOrigin::Signed(delegator.clone()), operator.clone(), DelegationAmount::Max);

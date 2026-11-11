@@ -117,7 +117,6 @@ import type {
   PalletCfIngressEgressTransactionRejectionStatus,
   PalletCfIngressEgressTransactionRejectionDetailsEthereum,
   PalletCfIngressEgressBoostStatus,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry,
   PalletCfIngressEgressDepositWitnessEthereum,
   PalletCfIngressEgressVaultDepositWitnessEthereum,
   PalletCfIngressEgressBroadcastAction,
@@ -128,7 +127,6 @@ import type {
   CfChainsDepositChannelDepositChannelPolkadot,
   CfPrimitivesTxId,
   PalletCfIngressEgressTransactionRejectionDetailsPolkadot,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry002,
   PalletCfIngressEgressDepositWitnessPolkadot,
   PalletCfIngressEgressVaultDepositWitnessPolkadot,
   PalletCfIngressEgressBroadcastActionPolkadotAccountId,
@@ -140,7 +138,6 @@ import type {
   CfChainsDepositChannelDepositChannelBitcoin,
   PalletCfIngressEgressTransactionRejectionDetailsBitcoin,
   PalletCfIngressEgressBoostStatusU64,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry003,
   PalletCfIngressEgressDepositWitnessBitcoin,
   PalletCfIngressEgressVaultDepositWitnessBitcoin,
   PalletCfIngressEgressBroadcastActionScriptPubkey,
@@ -155,7 +152,6 @@ import type {
   PalletCfIngressEgressCrossChainMessageArbitrum,
   CfChainsDepositChannelDepositChannelArbitrum,
   PalletCfIngressEgressTransactionRejectionDetailsArbitrum,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry004,
   PalletCfIngressEgressDepositWitnessArbitrum,
   PalletCfIngressEgressVaultDepositWitnessArbitrum,
   PalletCfVaultsVaultActivationStatus004,
@@ -172,7 +168,6 @@ import type {
   CfPrimitivesChainsAssetsSolAsset,
   CfChainsDepositChannelDepositChannelSolana,
   PalletCfIngressEgressTransactionRejectionDetailsSolana,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry005,
   PalletCfIngressEgressDepositWitnessSolana,
   PalletCfIngressEgressVaultDepositWitnessSolana,
   PalletCfIngressEgressBroadcastActionAddress,
@@ -208,7 +203,6 @@ import type {
   CfPrimitivesChainsAssetsHubAsset,
   CfChainsDepositChannelDepositChannelAssethub,
   PalletCfIngressEgressTransactionRejectionDetailsAssethub,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry006,
   PalletCfIngressEgressDepositWitnessAssethub,
   PalletCfIngressEgressVaultDepositWitnessAssethub,
   PalletCfTradingStrategyTradingStrategy,
@@ -288,7 +282,6 @@ import type {
   PalletCfIngressEgressCrossChainMessageTron,
   CfChainsDepositChannelDepositChannelTron,
   PalletCfIngressEgressTransactionRejectionDetailsTron,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry007,
   PalletCfIngressEgressDepositWitnessTron,
   PalletCfIngressEgressVaultDepositWitnessTron,
   PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData,
@@ -313,7 +306,6 @@ import type {
   PalletCfIngressEgressCrossChainMessageBsc,
   CfChainsDepositChannelDepositChannelBsc,
   PalletCfIngressEgressTransactionRejectionDetailsBsc,
-  PalletCfIngressEgressPendingPrewitnessedDepositEntry008,
   PalletCfIngressEgressDepositWitnessBsc,
   PalletCfIngressEgressVaultDepositWitnessBsc,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
@@ -372,11 +364,13 @@ export interface ChainStorage extends GenericChainStorage {
     blockWeight: GenericStorageQuery<() => FrameSupportDispatchPerDispatchClass>;
 
     /**
-     * Total length (in bytes) for all extrinsics put together, for the current block.
+     * Total size (in bytes) of the current block.
+     *
+     * Tracks the size of the header and all extrinsics.
      *
      * @param {Callback<number | undefined> =} callback
      **/
-    allExtrinsicsLen: GenericStorageQuery<() => number | undefined>;
+    blockSize: GenericStorageQuery<() => number | undefined>;
 
     /**
      * Map of block numbers to block hashes.
@@ -458,6 +452,13 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<FrameSystemLastRuntimeUpgradeInfo | undefined> =} callback
      **/
     lastRuntimeUpgrade: GenericStorageQuery<() => FrameSystemLastRuntimeUpgradeInfo | undefined>;
+
+    /**
+     * Number of blocks till the pending code upgrade is applied.
+     *
+     * @param {Callback<number | undefined> =} callback
+     **/
+    blocksTillUpgrade: GenericStorageQuery<() => number | undefined>;
 
     /**
      * True if we have upgraded so that `type RefCount` is `u32`. False (default) if not.
@@ -1088,6 +1089,15 @@ export interface ChainStorage extends GenericChainStorage {
     storageVersion: GenericStorageQuery<() => PalletTransactionPaymentReleases>;
 
     /**
+     * The `OnChargeTransaction` stores the withdrawn tx fee here.
+     *
+     * Use `withdraw_txfee` and `remaining_txfee` to access from outside the crate.
+     *
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    txPaymentCredit: GenericStorageQuery<() => [] | undefined>;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
@@ -1528,6 +1538,17 @@ export interface ChainStorage extends GenericChainStorage {
       (arg: [SpCoreCryptoKeyTypeId, BytesLike]) => AccountId32 | undefined,
       [SpCoreCryptoKeyTypeId, Bytes]
     >;
+
+    /**
+     * Accounts whose keys were set via `SessionInterface` (external path) without
+     * incrementing the consumer reference or placing a key deposit. `do_purge_keys`
+     * only decrements consumers for accounts that were registered through the local
+     * session pallet.
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<[] | undefined> =} callback
+     **/
+    externallySetKeys: GenericStorageQuery<(arg: AccountId32Like) => [] | undefined, AccountId32>;
 
     /**
      * Generic pallet storage query
@@ -3237,6 +3258,19 @@ export interface ChainStorage extends GenericChainStorage {
     vaultSwapMinimumBrokerFee: GenericStorageQuery<(arg: AccountId32Like) => number, AccountId32>;
 
     /**
+     * The LP account each broker has linked to receive its failed deposits.
+     *
+     * Kept when the broker deregisters and only removed when the account is reaped.
+     *
+     * @param {AccountId32Like} arg
+     * @param {Callback<AccountId32 | undefined> =} callback
+     **/
+    brokerRecoveryAccount: GenericStorageQuery<
+      (arg: AccountId32Like) => AccountId32 | undefined,
+      AccountId32
+    >;
+
+    /**
      *
      * @param {CfAmmCommonAssetPair} arg
      * @param {Callback<number> =} callback
@@ -3422,6 +3456,14 @@ export interface ChainStorage extends GenericChainStorage {
     depositChannelRecycleBlocks: GenericStorageQuery<() => Array<[bigint, H160]>>;
 
     /**
+     * External-chain blocks between channel cleanup attempts.
+     * Defaults to roughly ten minutes on chains supporting transaction rejection.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    channelCleanupRetryBlocks: GenericStorageQuery<() => bigint>;
+
+    /**
      *
      * @param {Callback<bigint | undefined> =} callback
      **/
@@ -3435,18 +3477,19 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
      **/
     ingressDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    rejectionDelayBlocks: GenericStorageQuery<() => number>;
 
     /**
      * Stores the latest prewitnessed deposit id used.
@@ -3475,12 +3518,14 @@ export interface ChainStorage extends GenericChainStorage {
     reportExpiresAt: GenericStorageQuery<(arg: number) => Array<[AccountId32, H256]>, number>;
 
     /**
-     * Stores the details of transactions that are scheduled for rejecting.
+     * Transactions scheduled for rejection, keyed by their State Chain processing block.
      *
+     * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsEthereum>> =} callback
      **/
     scheduledTransactionsForRejection: GenericStorageQuery<
-      () => Array<PalletCfIngressEgressTransactionRejectionDetailsEthereum>
+      (arg: number) => Array<PalletCfIngressEgressTransactionRejectionDetailsEthereum>,
+      number
     >;
 
     /**
@@ -3522,16 +3567,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsEthAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry>,
-      number
     >;
 
     /**
@@ -3729,6 +3764,14 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * External-chain blocks between channel cleanup attempts.
+     * Defaults to roughly ten minutes on chains supporting transaction rejection.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    channelCleanupRetryBlocks: GenericStorageQuery<() => number>;
+
+    /**
      *
      * @param {Callback<number | undefined> =} callback
      **/
@@ -3742,18 +3785,19 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
      **/
     ingressDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    rejectionDelayBlocks: GenericStorageQuery<() => number>;
 
     /**
      * Stores the latest prewitnessed deposit id used.
@@ -3787,12 +3831,14 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Stores the details of transactions that are scheduled for rejecting.
+     * Transactions scheduled for rejection, keyed by their State Chain processing block.
      *
+     * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsPolkadot>> =} callback
      **/
     scheduledTransactionsForRejection: GenericStorageQuery<
-      () => Array<PalletCfIngressEgressTransactionRejectionDetailsPolkadot>
+      (arg: number) => Array<PalletCfIngressEgressTransactionRejectionDetailsPolkadot>,
+      number
     >;
 
     /**
@@ -3834,16 +3880,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[CfPrimitivesTxId, [number, CfPrimitivesChainsAssetsDotAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry002>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry002>,
-      number
     >;
 
     /**
@@ -4041,6 +4077,14 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * External-chain blocks between channel cleanup attempts.
+     * Defaults to roughly ten minutes on chains supporting transaction rejection.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    channelCleanupRetryBlocks: GenericStorageQuery<() => bigint>;
+
+    /**
      *
      * @param {Callback<bigint | undefined> =} callback
      **/
@@ -4054,18 +4098,19 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
      **/
     ingressDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    rejectionDelayBlocks: GenericStorageQuery<() => number>;
 
     /**
      * Stores the latest prewitnessed deposit id used.
@@ -4094,12 +4139,14 @@ export interface ChainStorage extends GenericChainStorage {
     reportExpiresAt: GenericStorageQuery<(arg: number) => Array<[AccountId32, H256]>, number>;
 
     /**
-     * Stores the details of transactions that are scheduled for rejecting.
+     * Transactions scheduled for rejection, keyed by their State Chain processing block.
      *
+     * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsBitcoin>> =} callback
      **/
     scheduledTransactionsForRejection: GenericStorageQuery<
-      () => Array<PalletCfIngressEgressTransactionRejectionDetailsBitcoin>
+      (arg: number) => Array<PalletCfIngressEgressTransactionRejectionDetailsBitcoin>,
+      number
     >;
 
     /**
@@ -4141,16 +4188,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsBtcAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry003>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry003>,
-      number
     >;
 
     /**
@@ -4670,6 +4707,14 @@ export interface ChainStorage extends GenericChainStorage {
     depositChannelRecycleBlocks: GenericStorageQuery<() => Array<[bigint, H160]>>;
 
     /**
+     * External-chain blocks between channel cleanup attempts.
+     * Defaults to roughly ten minutes on chains supporting transaction rejection.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    channelCleanupRetryBlocks: GenericStorageQuery<() => bigint>;
+
+    /**
      *
      * @param {Callback<bigint | undefined> =} callback
      **/
@@ -4683,18 +4728,19 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
      **/
     ingressDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    rejectionDelayBlocks: GenericStorageQuery<() => number>;
 
     /**
      * Stores the latest prewitnessed deposit id used.
@@ -4723,12 +4769,14 @@ export interface ChainStorage extends GenericChainStorage {
     reportExpiresAt: GenericStorageQuery<(arg: number) => Array<[AccountId32, H256]>, number>;
 
     /**
-     * Stores the details of transactions that are scheduled for rejecting.
+     * Transactions scheduled for rejection, keyed by their State Chain processing block.
      *
+     * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsArbitrum>> =} callback
      **/
     scheduledTransactionsForRejection: GenericStorageQuery<
-      () => Array<PalletCfIngressEgressTransactionRejectionDetailsArbitrum>
+      (arg: number) => Array<PalletCfIngressEgressTransactionRejectionDetailsArbitrum>,
+      number
     >;
 
     /**
@@ -4770,16 +4818,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsArbAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry004>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry004>,
-      number
     >;
 
     /**
@@ -5342,6 +5380,14 @@ export interface ChainStorage extends GenericChainStorage {
     depositChannelRecycleBlocks: GenericStorageQuery<() => Array<[bigint, SolPrimAddress]>>;
 
     /**
+     * External-chain blocks between channel cleanup attempts.
+     * Defaults to roughly ten minutes on chains supporting transaction rejection.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    channelCleanupRetryBlocks: GenericStorageQuery<() => bigint>;
+
+    /**
      *
      * @param {Callback<bigint | undefined> =} callback
      **/
@@ -5355,18 +5401,19 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
      **/
     ingressDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    rejectionDelayBlocks: GenericStorageQuery<() => number>;
 
     /**
      * Stores the latest prewitnessed deposit id used.
@@ -5400,12 +5447,14 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Stores the details of transactions that are scheduled for rejecting.
+     * Transactions scheduled for rejection, keyed by their State Chain processing block.
      *
+     * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsSolana>> =} callback
      **/
     scheduledTransactionsForRejection: GenericStorageQuery<
-      () => Array<PalletCfIngressEgressTransactionRejectionDetailsSolana>
+      (arg: number) => Array<PalletCfIngressEgressTransactionRejectionDetailsSolana>,
+      number
     >;
 
     /**
@@ -5447,16 +5496,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[[SolPrimAddress, bigint], [bigint, CfPrimitivesChainsAssetsSolAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry005>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry005>,
-      number
     >;
 
     /**
@@ -6271,6 +6310,14 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * External-chain blocks between channel cleanup attempts.
+     * Defaults to roughly ten minutes on chains supporting transaction rejection.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    channelCleanupRetryBlocks: GenericStorageQuery<() => number>;
+
+    /**
      *
      * @param {Callback<number | undefined> =} callback
      **/
@@ -6284,18 +6331,19 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
      **/
     ingressDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    rejectionDelayBlocks: GenericStorageQuery<() => number>;
 
     /**
      * Stores the latest prewitnessed deposit id used.
@@ -6329,12 +6377,14 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Stores the details of transactions that are scheduled for rejecting.
+     * Transactions scheduled for rejection, keyed by their State Chain processing block.
      *
+     * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsAssethub>> =} callback
      **/
     scheduledTransactionsForRejection: GenericStorageQuery<
-      () => Array<PalletCfIngressEgressTransactionRejectionDetailsAssethub>
+      (arg: number) => Array<PalletCfIngressEgressTransactionRejectionDetailsAssethub>,
+      number
     >;
 
     /**
@@ -6376,16 +6426,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[CfPrimitivesTxId, [number, CfPrimitivesChainsAssetsHubAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry006>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry006>,
-      number
     >;
 
     /**
@@ -7943,6 +7983,14 @@ export interface ChainStorage extends GenericChainStorage {
     depositChannelRecycleBlocks: GenericStorageQuery<() => Array<[bigint, H160]>>;
 
     /**
+     * External-chain blocks between channel cleanup attempts.
+     * Defaults to roughly ten minutes on chains supporting transaction rejection.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    channelCleanupRetryBlocks: GenericStorageQuery<() => bigint>;
+
+    /**
      *
      * @param {Callback<bigint | undefined> =} callback
      **/
@@ -7956,18 +8004,19 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
      **/
     ingressDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    rejectionDelayBlocks: GenericStorageQuery<() => number>;
 
     /**
      * Stores the latest prewitnessed deposit id used.
@@ -7996,12 +8045,14 @@ export interface ChainStorage extends GenericChainStorage {
     reportExpiresAt: GenericStorageQuery<(arg: number) => Array<[AccountId32, H256]>, number>;
 
     /**
-     * Stores the details of transactions that are scheduled for rejecting.
+     * Transactions scheduled for rejection, keyed by their State Chain processing block.
      *
+     * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsTron>> =} callback
      **/
     scheduledTransactionsForRejection: GenericStorageQuery<
-      () => Array<PalletCfIngressEgressTransactionRejectionDetailsTron>
+      (arg: number) => Array<PalletCfIngressEgressTransactionRejectionDetailsTron>,
+      number
     >;
 
     /**
@@ -8043,16 +8094,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsTronAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry007>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry007>,
-      number
     >;
 
     /**
@@ -8699,6 +8740,14 @@ export interface ChainStorage extends GenericChainStorage {
     depositChannelRecycleBlocks: GenericStorageQuery<() => Array<[bigint, H160]>>;
 
     /**
+     * External-chain blocks between channel cleanup attempts.
+     * Defaults to roughly ten minutes on chains supporting transaction rejection.
+     *
+     * @param {Callback<bigint> =} callback
+     **/
+    channelCleanupRetryBlocks: GenericStorageQuery<() => bigint>;
+
+    /**
      *
      * @param {Callback<bigint | undefined> =} callback
      **/
@@ -8712,18 +8761,19 @@ export interface ChainStorage extends GenericChainStorage {
     channelOpeningFee: GenericStorageQuery<() => bigint>;
 
     /**
-     * How many blocks to wait before processing a prewitnessed deposit.
-     *
-     * @param {Callback<number> =} callback
-     **/
-    boostDelayBlocks: GenericStorageQuery<() => number>;
-
-    /**
      * How many blocks to wait before processing a new deposit.
      *
      * @param {Callback<number> =} callback
      **/
     ingressDelayBlocks: GenericStorageQuery<() => number>;
+
+    /**
+     * How many State Chain blocks to hold a rejected deposit before initiating its refund.
+     * Zero is treated as one block, since deposits may arrive after this pallet's finalization.
+     *
+     * @param {Callback<number> =} callback
+     **/
+    rejectionDelayBlocks: GenericStorageQuery<() => number>;
 
     /**
      * Stores the latest prewitnessed deposit id used.
@@ -8752,12 +8802,14 @@ export interface ChainStorage extends GenericChainStorage {
     reportExpiresAt: GenericStorageQuery<(arg: number) => Array<[AccountId32, H256]>, number>;
 
     /**
-     * Stores the details of transactions that are scheduled for rejecting.
+     * Transactions scheduled for rejection, keyed by their State Chain processing block.
      *
+     * @param {number} arg
      * @param {Callback<Array<PalletCfIngressEgressTransactionRejectionDetailsBsc>> =} callback
      **/
     scheduledTransactionsForRejection: GenericStorageQuery<
-      () => Array<PalletCfIngressEgressTransactionRejectionDetailsBsc>
+      (arg: number) => Array<PalletCfIngressEgressTransactionRejectionDetailsBsc>,
+      number
     >;
 
     /**
@@ -8799,16 +8851,6 @@ export interface ChainStorage extends GenericChainStorage {
      **/
     boostedVaultTransactionTimeout: GenericStorageQuery<
       () => Array<[H256, [bigint, CfPrimitivesChainsAssetsBscAsset]]>
-    >;
-
-    /**
-     *
-     * @param {number} arg
-     * @param {Callback<Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry008>> =} callback
-     **/
-    pendingPrewitnessedDeposits: GenericStorageQuery<
-      (arg: number) => Array<PalletCfIngressEgressPendingPrewitnessedDepositEntry008>,
-      number
     >;
 
     /**

@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
+use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN};
 use cf_amm::math::Price;
 use cf_chains::{
 	assets::btc::Asset as BtcAsset,
@@ -26,7 +26,6 @@ use cf_chains::{
 };
 
 use cf_primitives::{AccountId, Beneficiary, ChannelId, DcaParameters};
-use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
 use state_chain_runtime::BitcoinInstance;
@@ -73,31 +72,6 @@ fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 	Some(data_bytes)
 }
 
-fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
-	fn data_from_script<const LEN: usize>(script: &ScriptBuf, bytes_to_skip: usize) -> [u8; LEN] {
-		script.bytes().skip(bytes_to_skip).take(LEN).collect_vec().copy_to_array()
-	}
-
-	let pubkey = if script.is_p2pkh() {
-		ScriptPubkey::P2PKH(data_from_script(script, 3))
-	} else if script.is_p2sh() {
-		ScriptPubkey::P2SH(data_from_script(script, 2))
-	} else if script.is_p2tr() {
-		ScriptPubkey::Taproot(data_from_script(script, 2))
-	} else if script.is_p2wsh() {
-		ScriptPubkey::P2WSH(data_from_script(script, 2))
-	} else if script.is_p2wpkh() {
-		ScriptPubkey::P2WPKH(data_from_script(script, 2))
-	} else {
-		ScriptPubkey::OtherSegwit {
-			version: script.witness_version()?.to_num(),
-			program: script.bytes().skip(2).collect_vec().try_into().ok()?,
-		}
-	};
-
-	Some(pubkey)
-}
-
 type VaultDepositWitness =
 	pallet_cf_ingress_egress::VaultDepositWitness<state_chain_runtime::Runtime, BitcoinInstance>;
 
@@ -142,8 +116,10 @@ pub fn try_extract_vault_swap_witness(
 		};
 
 		// Third output must be a "change utxo" whose address we assume to also be the refund
-		// address:
-		let refund_address = script_buf_to_script_pubkey(&change_utxo.script_pubkey)?;
+		// address. Only standard output scripts are accepted: a non-standard one would make the
+		// refund transaction unbroadcastable.
+		let refund_address =
+			ScriptPubkey::try_from_script_bytes(change_utxo.script_pubkey.as_bytes())?;
 		let deposit_amount = deposit_details.amount;
 
 		Some(VaultDepositWitness {
@@ -215,7 +191,7 @@ mod tests {
 		blockdata::script::{witness_program::WitnessProgram, witness_version::WitnessVersion},
 		hashes::Hash,
 		key::TweakedPublicKey,
-		PubkeyHash, ScriptHash, WPubkeyHash, WScriptHash,
+		PubkeyHash, ScriptBuf, ScriptHash, WPubkeyHash, WScriptHash,
 	};
 	use cf_chains::{
 		address::EncodedAddress,
@@ -262,7 +238,8 @@ mod tests {
 
 	#[test]
 	fn script_buf_to_script_pubkey_conversion() {
-		// Check that we can convert from all types of bitcoin addresses:
+		// Check that we can convert from all types of bitcoin addresses, using rust-bitcoin as an
+		// independent reference for the script layouts:
 		for (script_buf, script_pubkey) in [
 			(
 				ScriptBuf::new_p2pkh(&PubkeyHash::from_byte_array([7; 20])),
@@ -293,8 +270,18 @@ mod tests {
 				ScriptPubkey::OtherSegwit { version: 2, program: bounded_vec![7; 40] },
 			),
 		] {
-			assert_eq!(script_buf_to_script_pubkey(&script_buf), Some(script_pubkey));
+			assert_eq!(
+				ScriptPubkey::try_from_script_bytes(script_buf.as_bytes()),
+				Some(script_pubkey)
+			);
 		}
+
+		// A segwit v0 program that is neither 20 nor 32 bytes is non-standard, so it must be
+		// rejected. rust-bitcoin's script classifier still recognises it as a witness program (only
+		// its `WitnessProgram` constructor refuses it), so it cannot be relied on for this check.
+		let non_standard = ScriptBuf::from_bytes(vec![0x00, 0x05, 7, 7, 7, 7, 7]);
+		assert_eq!(non_standard.witness_version(), Some(WitnessVersion::V0));
+		assert_eq!(ScriptPubkey::try_from_script_bytes(non_standard.as_bytes()), None);
 	}
 
 	#[test]
