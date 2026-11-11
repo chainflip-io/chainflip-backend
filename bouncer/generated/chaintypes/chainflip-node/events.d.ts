@@ -3065,6 +3065,15 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'EthereumIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
+    >;
+
+    /**
      * Generic pallet event
      **/
     [prop: string]: GenericPalletEvent;
@@ -3294,6 +3303,15 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'PolkadotIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
+    >;
+
+    /**
      * Generic pallet event
      **/
     [prop: string]: GenericPalletEvent;
@@ -3520,6 +3538,15 @@ export interface ChainEvents extends GenericChainEvents {
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'BitcoinIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
     >;
 
     /**
@@ -4059,6 +4086,15 @@ export interface ChainEvents extends GenericChainEvents {
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'ArbitrumIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
     >;
 
     /**
@@ -4682,6 +4718,15 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'SolanaIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
+    >;
+
+    /**
      * Generic pallet event
      **/
     [prop: string]: GenericPalletEvent;
@@ -5274,6 +5319,15 @@ export interface ChainEvents extends GenericChainEvents {
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'AssethubIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
     >;
 
     /**
@@ -6058,6 +6112,15 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'TronIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
+    >;
+
+    /**
      * Generic pallet event
      **/
     [prop: string]: GenericPalletEvent;
@@ -6511,6 +6574,15 @@ export interface ChainEvents extends GenericChainEvents {
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'BscIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
     >;
 
     /**

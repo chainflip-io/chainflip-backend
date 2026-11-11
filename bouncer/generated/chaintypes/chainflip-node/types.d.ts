@@ -5200,12 +5200,16 @@ export type PalletCfIngressEgressCall =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32]> };
     };
 
 export type PalletCfIngressEgressCallLike =
@@ -5256,12 +5260,16 @@ export type PalletCfIngressEgressCallLike =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
     };
 
 export type PalletCfIngressEgressPalletConfigUpdateEthereum =
@@ -5345,12 +5353,16 @@ export type PalletCfIngressEgressCall002 =
       params: { depositAddress: CfChainsDotPolkadotAccountId };
     }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32]> };
     };
 
 export type PalletCfIngressEgressCallLike002 =
@@ -5408,12 +5420,16 @@ export type PalletCfIngressEgressCallLike002 =
       params: { depositAddress: CfChainsDotPolkadotAccountId };
     }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
     };
 
 export type CfPrimitivesChainsAssetsDotAsset = 'Dot';
@@ -5540,12 +5556,16 @@ export type PalletCfIngressEgressCall003 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: CfChainsBtcScriptPubkey } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32]> };
     };
 
 export type PalletCfIngressEgressCallLike003 =
@@ -5600,12 +5620,16 @@ export type PalletCfIngressEgressCallLike003 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: CfChainsBtcScriptPubkey } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
     };
 
 export type PalletCfIngressEgressPalletConfigUpdateBitcoin =
@@ -6236,12 +6260,16 @@ export type PalletCfIngressEgressCall004 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32]> };
     };
 
 export type PalletCfIngressEgressCallLike004 =
@@ -6292,12 +6320,16 @@ export type PalletCfIngressEgressCallLike004 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
     };
 
 export type PalletCfIngressEgressPalletConfigUpdateArbitrum =
@@ -6794,12 +6826,16 @@ export type PalletCfIngressEgressCall005 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: SolPrimAddress } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32]> };
     };
 
 export type PalletCfIngressEgressCallLike005 =
@@ -6854,12 +6890,16 @@ export type PalletCfIngressEgressCallLike005 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: SolPrimAddress } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
     };
 
 export type PalletCfIngressEgressDepositWitnessSolana = {
@@ -8975,12 +9015,16 @@ export type PalletCfIngressEgressCall006 =
       params: { depositAddress: CfChainsDotPolkadotAccountId };
     }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32]> };
     };
 
 export type PalletCfIngressEgressCallLike006 =
@@ -9038,12 +9082,16 @@ export type PalletCfIngressEgressCallLike006 =
       params: { depositAddress: CfChainsDotPolkadotAccountId };
     }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
     };
 
 export type PalletCfIngressEgressPalletConfigUpdateAssethub =
@@ -11540,12 +11588,16 @@ export type PalletCfIngressEgressCall007 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32]> };
     };
 
 export type PalletCfIngressEgressCallLike007 =
@@ -11600,12 +11652,16 @@ export type PalletCfIngressEgressCallLike007 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
     };
 
 export type PalletCfIngressEgressPalletConfigUpdateTron =
@@ -12368,12 +12424,16 @@ export type PalletCfIngressEgressCall008 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32 };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32]> };
     };
 
 export type PalletCfIngressEgressCallLike008 =
@@ -12424,12 +12484,16 @@ export type PalletCfIngressEgressCallLike008 =
     }
   | { name: 'MarkDepositChannelForRejection'; params: { depositAddress: H160 } }
   /**
-   * Attribute an unpaid vault deposit and route its remaining liability to the broker's
-   * current recovery LP. Failed payout leaves the entry unchanged.
+   * Routes the remaining liability of queued vault deposits to their brokers' current
+   * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+   * broker.
+   *
+   * Each deposit is recovered independently: one that fails stays queued and doesn't
+   * affect the others.
    **/
   | {
-      name: 'AttributeFailedVaultDeposit';
-      params: { queueId: FixedBytes<32>; brokerId: AccountId32Like };
+      name: 'RecoverFailedVaultDeposits';
+      params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
     };
 
 export type PalletCfIngressEgressPalletConfigUpdateBsc =
@@ -15543,6 +15607,13 @@ export type PalletCfIngressEgressEvent =
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       };
+    }
+  /**
+   * A queued deposit could not be recovered. It stays queued and can be retried.
+   **/
+  | {
+      name: 'FailedDepositRecoveryFailed';
+      data: { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError };
     };
 
 export type PalletCfIngressEgressDepositAction =
@@ -15861,6 +15932,13 @@ export type PalletCfIngressEgressEvent002 =
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       };
+    }
+  /**
+   * A queued deposit could not be recovered. It stays queued and can be retried.
+   **/
+  | {
+      name: 'FailedDepositRecoveryFailed';
+      data: { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsPolkadot =
@@ -16060,6 +16138,13 @@ export type PalletCfIngressEgressEvent003 =
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       };
+    }
+  /**
+   * A queued deposit could not be recovered. It stays queued and can be retried.
+   **/
+  | {
+      name: 'FailedDepositRecoveryFailed';
+      data: { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError };
     };
 
 export type PalletCfIngressEgressDepositAction002 =
@@ -16414,6 +16499,13 @@ export type PalletCfIngressEgressEvent004 =
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       };
+    }
+  /**
+   * A queued deposit could not be recovered. It stays queued and can be retried.
+   **/
+  | {
+      name: 'FailedDepositRecoveryFailed';
+      data: { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsArbitrum =
@@ -16852,6 +16944,13 @@ export type PalletCfIngressEgressEvent005 =
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       };
+    }
+  /**
+   * A queued deposit could not be recovered. It stays queued and can be retried.
+   **/
+  | {
+      name: 'FailedDepositRecoveryFailed';
+      data: { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError };
     };
 
 export type PalletCfIngressEgressDepositAction003 =
@@ -17329,6 +17428,13 @@ export type PalletCfIngressEgressEvent006 =
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       };
+    }
+  /**
+   * A queued deposit could not be recovered. It stays queued and can be retried.
+   **/
+  | {
+      name: 'FailedDepositRecoveryFailed';
+      data: { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsAssethub =
@@ -17953,6 +18059,13 @@ export type PalletCfIngressEgressEvent007 =
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       };
+    }
+  /**
+   * A queued deposit could not be recovered. It stays queued and can be retried.
+   **/
+  | {
+      name: 'FailedDepositRecoveryFailed';
+      data: { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsTron =
@@ -18199,6 +18312,13 @@ export type PalletCfIngressEgressEvent008 =
         recoveryAccount: AccountId32;
         outcome: CfTraitsFailedDepositRecoveryOutcome;
       };
+    }
+  /**
+   * A queued deposit could not be recovered. It stays queued and can be retried.
+   **/
+  | {
+      name: 'FailedDepositRecoveryFailed';
+      data: { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError };
     };
 
 export type PalletCfIngressEgressDepositFailedDetailsBsc =
@@ -20029,7 +20149,11 @@ export type PalletCfIngressEgressError =
    * The supplied configuration parameters are not valid.
    **/
   | 'InvalidConfigurationParameters'
-  | 'UnknownFailedVaultDeposit';
+  | 'UnknownFailedVaultDeposit'
+  /**
+   * The failed vault deposit is attributed to a different broker.
+   **/
+  | 'BrokerMismatch';
 
 export type PalletCfIngressEgressDepositChannelDetailsPolkadot = {
   owner: AccountId32;

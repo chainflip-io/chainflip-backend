@@ -17,6 +17,7 @@
 mod boost;
 mod failed_deposit_recovery;
 mod failed_vault_deposits;
+mod rejection_delay;
 mod screening;
 
 use crate::{
