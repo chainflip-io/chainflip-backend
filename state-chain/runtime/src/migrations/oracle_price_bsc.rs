@@ -278,8 +278,8 @@ fn perseverance_and_sisyphos_oracle_feeds() -> OracleFeeds {
 			H160(hex_literal::hex!("80EDee6f667eCc9f63a0a6f55578F870651f06A4")),
 			// Wbtc (BTC feed)
 			H160(hex_literal::hex!("56a43EB56Da12C0dc1D972ACb089c06a5dEF8e69")),
-			// Bnb (ETH feed)
-			H160(hex_literal::hex!("d30e2101a97dcbAeBCBC04F14C3f624E67A35165")),
+			// Bnb
+			H160(hex_literal::hex!("53ab995fBb01C617aa1256698aD55b417168bfF9")),
 			// Dot (SOL feed)
 			H160(hex_literal::hex!("32377717BC9F9bA8Db45A244bCE77e7c0Cc5A775")),
 		],
@@ -300,22 +300,22 @@ fn perseverance_and_sisyphos_oracle_feeds() -> OracleFeeds {
 			H160(hex_literal::hex!("694AA1769357215DE4FAC081bf1f309aDC325306")),
 		],
 		bsc: [
-			// Btc (BNB feed)
-			H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
-			// Eth (BNB feed)
-			H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
+			// Btc
+			H160(hex_literal::hex!("5741306c21795FdCBb9b265Ea0255F499DFe515C")),
+			// Eth
+			H160(hex_literal::hex!("143db3CEEfbdfe5631aDD3E50f7614B6ba708BA7")),
 			// Sol (BNB feed)
 			H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
-			// Usdc (BNB feed)
-			H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
-			// Usdt (BNB feed)
-			H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
-			// Trx (BNB feed)
-			H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
+			// Usdc
+			H160(hex_literal::hex!("90c069C4538adAc136E051052E14c1cD799C41B7")),
+			// Usdt
+			H160(hex_literal::hex!("Eca2605f0BCF2BA5966372C99837b1F182d3D620")),
+			// Trx
+			H160(hex_literal::hex!("135deD16bFFEB51E01afab45362D3C4be31AA2B0")),
 			// Bnb
 			H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
-			// Dot (BNB feed)
-			H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
+			// Dot
+			H160(hex_literal::hex!("EA8731FD0685DB8AeAde9EcAE90C4fdf1d8164ed")),
 		],
 	}
 }
