@@ -220,10 +220,10 @@ impl<T: Config> LimitOrderUpdate<T> {
 					dispatch_at,
 				});
 
-				Ok(())
+				Ok::<_, Error<T>>(())
 			})?;
 
-			Ok(())
+			Ok::<_, Error<T>>(())
 		})?;
 		Ok(())
 	}
@@ -510,6 +510,8 @@ pub mod pallet {
 		BelowMinimumOrderAmount,
 		/// The swap would move the pool's price further than the pool's configured limit.
 		PriceImpactLimitExceeded,
+		/// The swap could not be filled because it reached the max number of order fills.
+		MaxFillsExceeded,
 	}
 
 	#[pallet::event]
@@ -1114,6 +1116,16 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> From<cf_amm::SwapError> for Error<T> {
+	fn from(error: cf_amm::SwapError) -> Self {
+		match error {
+			cf_amm::SwapError::InsufficientLiquidity => Error::<T>::InsufficientLiquidity,
+			cf_amm::SwapError::MaxFillsExceeded => Error::<T>::MaxFillsExceeded,
+			cf_amm::SwapError::PriceImpactLimitExceeded => Error::<T>::PriceImpactLimitExceeded,
+		}
+	}
+}
+
 impl<T: Config> SwappingApi for Pallet<T> {
 	#[transactional]
 	fn swap_single_leg(
@@ -1129,49 +1141,21 @@ impl<T: Config> SwappingApi for Pallet<T> {
 			} else {
 				let input_amount: Amount = input_amount.into();
 
-				let tick_before =
-					pool.pool_state.current_price(side).ok_or(Error::<T>::InsufficientLiquidity)?.2;
-				let cf_amm::SwapOutcome {
+				let cf_amm::SwapExecutionOutcome {
 					output_amount,
-					remaining_input_amount,
 					limit_order_fills,
 					limit_order_input_dust,
-				} = pool.pool_state.swap(side, input_amount, None);
-
-				// Any leftover amount means we ran out of liquidity. It'a all or nothing at this
-				// point.
-				ensure!(remaining_input_amount.is_zero(), Error::<T>::InsufficientLiquidity);
+					..
+				} = pool
+					.pool_state
+					.swap(side, input_amount, MaximumPriceImpact::<T>::get(asset_pair))
+					.map_err(Error::<T>::from)?;
 
 				// Process any limit order fills that occurred during the swap. This will credit the
 				// LPs with the proceeds of the swap.
 				Self::process_limit_order_fills(pool, &asset_pair, side, limit_order_fills)?;
 				if !limit_order_input_dust.is_zero() {
 					T::AssetWithholding::withhold_assets(from, limit_order_input_dust.try_into()?);
-				}
-
-				let tick_after =
-					pool.pool_state.current_price(side).ok_or(Error::<T>::InsufficientLiquidity)?.2;
-
-				let swap_tick = PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
-					side,
-					input_amount,
-					output_amount,
-				)
-				.to_tick();
-				let bounded_swap_tick = if tick_after < tick_before {
-					core::cmp::min(core::cmp::max(tick_after, swap_tick), tick_before)
-				} else {
-					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
-				};
-
-				if let Some(maximum_price_impact) = MaximumPriceImpact::<T>::get(asset_pair) {
-					if core::cmp::min(
-						bounded_swap_tick.abs_diff(tick_after),
-						bounded_swap_tick.abs_diff(tick_before),
-					) > maximum_price_impact
-					{
-						return Err(Error::<T>::PriceImpactLimitExceeded.into());
-					}
 				}
 
 				output_amount.try_into().map_err(|_| Error::<T>::OutputOverflow)?
@@ -2206,11 +2190,12 @@ impl<T: Config> Pallet<T> {
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
-						let cf_amm::SwapOutcome {
-							output_amount: sold_base_amount,
-							remaining_input_amount: remaining_quote_amount,
-							..
-						} = pool_state.swap(Side::Buy, Amount::MAX, Some(sqrt_price));
+						let (
+							cf_amm::SwapExecutionOutcome {
+								output_amount: sold_base_amount, ..
+							},
+							remaining_quote_amount,
+						) = pool_state.swap_to_price(Side::Buy, Amount::MAX, sqrt_price);
 
 						let bought_quote_amount = Amount::MAX - remaining_quote_amount;
 
@@ -2235,11 +2220,12 @@ impl<T: Config> Pallet<T> {
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
-						let cf_amm::SwapOutcome {
-							output_amount: sold_quote_amount,
-							remaining_input_amount: remaining_base_amount,
-							..
-						} = pool_state.swap(Side::Sell, Amount::MAX, Some(sqrt_price));
+						let (
+							cf_amm::SwapExecutionOutcome {
+								output_amount: sold_quote_amount, ..
+							},
+							remaining_base_amount,
+						) = pool_state.swap_to_price(Side::Sell, Amount::MAX, sqrt_price);
 
 						let bought_base_amount = Amount::MAX - remaining_base_amount;
 
@@ -2372,8 +2358,6 @@ impl<T: Config> Pallet<T> {
 						let position = pool
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
-							.ok()
-							.flatten()
 							.or_else(|| {
 								// The cache is expected to be in sync with the pool. Report and
 								// skip.
