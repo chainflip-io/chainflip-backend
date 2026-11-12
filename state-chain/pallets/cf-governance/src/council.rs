@@ -14,10 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use codec::{Decode, DecodeWithMemTracking, Encode};
+use codec::{Compact, Decode, DecodeWithMemTracking, Encode, Input};
 use frame_support::{ensure, PalletError};
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, mem::size_of, vec::Vec};
 
 pub type VoteWeight = u32;
 
@@ -30,15 +30,68 @@ pub const MAX_MEMBERS: usize = 64;
 ///
 /// Approvals are tracked as a flat set of individual accounts: a group reaches quorum once enough
 /// of its members do, counted by number (`SimpleGroup`) or by weight (`WeightedGroup`).
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
+///
+/// `Decode` is implemented by hand to bound the nesting and group size while decoding, so
+/// untrusted input can't recurse up to the extrinsic depth limit or allocate oversized groups.
+#[derive(Encode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 #[codec(encode_bound(AccountId: Encode))]
-#[codec(decode_bound(AccountId: Decode))]
 #[codec(decode_with_mem_tracking_bound(AccountId: DecodeWithMemTracking))]
 #[scale_info(bounds(AccountId: TypeInfo + 'static))]
 pub enum Council<AccountId> {
+	#[codec(index = 0)]
 	WeightedGroup { threshold: VoteWeight, members: Vec<(VoteWeight, Council<AccountId>)> },
+	#[codec(index = 1)]
 	SimpleGroup { threshold: u8, members: Vec<Council<AccountId>> },
+	#[codec(index = 2)]
 	Individual { id: AccountId },
+}
+
+impl<AccountId: Decode> Decode for Council<AccountId> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+		Self::decode_at(input, 1)
+	}
+}
+
+impl<AccountId: Decode> Council<AccountId> {
+	/// Mirrors the derived encoding, rejecting shapes `validate` would reject anyway: nesting
+	/// beyond `MAX_DEPTH` (counted the same way) and groups wider than `MAX_MEMBERS`.
+	fn decode_at<I: Input>(input: &mut I, depth: u32) -> Result<Self, codec::Error> {
+		if depth > MAX_DEPTH {
+			return Err("Council is nested deeper than MAX_DEPTH".into())
+		}
+		let depth = depth.saturating_add(1);
+		Ok(match input.read_byte()? {
+			0 => Self::WeightedGroup {
+				threshold: VoteWeight::decode(input)?,
+				members: decode_members(input, |input| {
+					Ok((VoteWeight::decode(input)?, Self::decode_at(input, depth)?))
+				})?,
+			},
+			1 => Self::SimpleGroup {
+				threshold: u8::decode(input)?,
+				members: decode_members(input, |input| Self::decode_at(input, depth))?,
+			},
+			2 => Self::Individual { id: AccountId::decode(input)? },
+			_ => return Err("Invalid Council variant".into()),
+		})
+	}
+}
+
+/// Decodes a `Vec` the way the codec does, after checking its length against `MAX_MEMBERS`.
+fn decode_members<I: Input, T>(
+	input: &mut I,
+	mut decode_member: impl FnMut(&mut I) -> Result<T, codec::Error>,
+) -> Result<Vec<T>, codec::Error> {
+	let len = usize::try_from(Compact::<u32>::decode(input)?.0)
+		.map_err(|_| "Council group length overflows usize")?;
+	if len > MAX_MEMBERS {
+		return Err("Council group has more than MAX_MEMBERS members".into())
+	}
+	input.descend_ref()?;
+	input.on_before_alloc_mem(len.saturating_mul(size_of::<T>()))?;
+	let members = (0..len).map(|_| decode_member(input)).collect();
+	input.ascend_ref();
+	members
 }
 
 /// Disables governance: with no members, quorum can never be reached. `validate` rejects it, so
@@ -273,6 +326,14 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn decoding_rejects_groups_wider_than_max_members() {
+		let widest = Council::simple_group(1, 0..MAX_MEMBERS as u64);
+		assert_eq!(Council::decode(&mut &widest.encode()[..]), Ok(widest));
+		let too_wide = Council::<u64>::simple_group(1, 0..=MAX_MEMBERS as u64);
+		assert!(Council::<u64>::decode(&mut &too_wide.encode()[..]).is_err());
+	}
+
+	#[test]
 	fn default_is_unreachable() {
 		let council = Council::<u64>::default();
 		assert!(!council.quorum_reached(&approvals([1, 2, 3])));
@@ -384,6 +445,19 @@ pub(crate) mod tests {
 				.fold(council, |inner, _| SimpleGroup { threshold: 1, members: vec![inner] });
 			prop_assert_eq!(depth(&too_deep), MAX_DEPTH + 1);
 			prop_assert_eq!(too_deep.validate(), Err(TooDeep));
+			prop_assert!(Council::<u64>::decode(&mut &too_deep.encode()[..]).is_err());
+		}
+
+		/// `arb_council` reaches one level past `MAX_DEPTH` but stays well under `MAX_MEMBERS`
+		/// per group, so only the depth decides whether the round trip succeeds.
+		#[test]
+		fn decoding_round_trips_up_to_max_depth(council in arb_council()) {
+			let decoded = Council::<u64>::decode(&mut &council.encode()[..]);
+			if depth(&council) <= MAX_DEPTH {
+				prop_assert_eq!(decoded, Ok(council));
+			} else {
+				prop_assert!(decoded.is_err());
+			}
 		}
 
 		#[test]

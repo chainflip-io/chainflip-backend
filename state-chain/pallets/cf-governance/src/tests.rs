@@ -23,6 +23,7 @@ use crate::{
 use cf_primitives::SemVer;
 use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
+use codec::{Decode, Encode};
 use frame_support::{assert_err, assert_noop, assert_ok};
 use sp_runtime::{BuildStorage, DispatchError, ModuleError, Percent};
 use sp_std::collections::btree_set::BTreeSet;
@@ -506,4 +507,15 @@ fn invalid_council_error_encoding() {
 		panic!("expected a module error")
 	};
 	assert_eq!(error, [7, 7, 0, 0]);
+}
+
+#[test]
+fn set_council_calls_decode_up_to_max_depth() {
+	let call = |new_council| RuntimeCall::Governance(crate::Call::set_council { new_council });
+	let deepest =
+		Council::SimpleGroup { threshold: 1, members: vec![Council::simple_group(1, [ALICE])] };
+	let valid = call(deepest.clone());
+	assert_eq!(RuntimeCall::decode(&mut &valid.encode()[..]), Ok(valid));
+	let too_deep = call(Council::SimpleGroup { threshold: 1, members: vec![deepest] });
+	assert!(RuntimeCall::decode(&mut &too_deep.encode()[..]).is_err());
 }
