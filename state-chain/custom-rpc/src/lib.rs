@@ -97,16 +97,15 @@ use state_chain_runtime::{
 		custom_api::CustomRuntimeApi,
 		elections_api::ElectoralRuntimeApi,
 		types::{
-			before_version_21, AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts,
-			DelegationSnapshot, DispatchErrorWithMessage, EncodedNonNativeCall,
-			EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators,
-			FeeTypes, IngressEvents, LendingPosition, LiquidityProviderBoostPoolInfo,
-			LiquidityProviderInfo, NetworkFees, NonceOrAccount, OpenedDepositChannels,
-			OperatorInfo, RewardDistributionEstimate, RpcAccountInfoCommonItems, RpcLendingConfig,
-			RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty, ShouldSweep,
-			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-			VaultSwapDetails,
+			AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts, DelegationSnapshot,
+			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
+			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, IngressEvents,
+			LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
+			NonceOrAccount, OpenedDepositChannels, OperatorInfo, RewardDistributionEstimate,
+			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo,
+			RuntimeApiPenalty, ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
+			VaultAddresses, VaultSwapDetails,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -1812,6 +1811,7 @@ where
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
+		cf_suspensions() -> RpcSuspensions,
 	}
 
 	fn cf_penalties(
@@ -1819,15 +1819,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(Offence, RpcPenalty)>> {
 		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, api_version| {
-				if api_version < 21 {
-					#[expect(deprecated)]
-					api.cf_penalties_before_version_21(hash)
-						.map(before_version_21::into_current_offences)
-				} else {
-					api.cf_penalties(hash)
-				}
-			})
+			.with_runtime_api(at, |api, hash| api.cf_penalties(hash))
 			.map(|penalties| {
 				penalties
 					.into_iter()
@@ -1841,18 +1833,6 @@ where
 					)
 					.collect()
 			})
-	}
-
-	fn cf_suspensions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcSuspensions> {
-		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
-			if api_version < 21 {
-				#[expect(deprecated)]
-				api.cf_suspensions_before_version_21(hash)
-					.map(before_version_21::into_current_offences)
-			} else {
-				api.cf_suspensions(hash)
-			}
-		})
 	}
 
 	pass_through_and_flatten! {
