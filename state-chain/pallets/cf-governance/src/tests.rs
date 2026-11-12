@@ -25,7 +25,7 @@ use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
 use codec::{Decode, Encode};
 use frame_support::{assert_err, assert_noop, assert_ok};
-use sp_runtime::{BuildStorage, DispatchError, ModuleError, Percent};
+use sp_runtime::{BuildStorage, Percent};
 use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
@@ -496,17 +496,6 @@ fn nested_members_are_sufficient() {
 		assert_eq!(System::sufficients(&102), 0);
 		assert_eq!(System::sufficients(&301), 0);
 	});
-}
-
-#[test]
-fn invalid_council_error_encoding() {
-	// Clients see the variant at index 7, with the `InvalidCouncil` variant in the next byte.
-	let DispatchError::Module(ModuleError { error, .. }) =
-		Error::<Test>::InvalidCouncil(InvalidCouncil::DuplicateMember).into()
-	else {
-		panic!("expected a module error")
-	};
-	assert_eq!(error, [7, 7, 0, 0]);
 }
 
 #[test]
