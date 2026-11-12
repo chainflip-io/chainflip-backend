@@ -1004,9 +1004,9 @@ where
 	}
 }
 
-pub struct FreeBalancesDeregistrationCheck<T: Config>(PhantomData<T>);
+pub struct FreeBalancesDeregistrationHooks<T: Config>(PhantomData<T>);
 
-impl<T: Config> DeregistrationHooks for FreeBalancesDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for FreeBalancesDeregistrationHooks<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
@@ -1020,9 +1020,9 @@ impl<T: Config> DeregistrationHooks for FreeBalancesDeregistrationCheck<T> {
 	}
 }
 
-pub struct WithdrawalWhitelistDeregistrationCheck<T: Config>(PhantomData<T>);
+pub struct WithdrawalWhitelistDeregistrationHooks<T: Config>(PhantomData<T>);
 
-impl<T: Config> DeregistrationHooks for WithdrawalWhitelistDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for WithdrawalWhitelistDeregistrationHooks<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
@@ -1033,6 +1033,25 @@ impl<T: Config> DeregistrationHooks for WithdrawalWhitelistDeregistrationCheck<T
 		);
 
 		Ok(())
+	}
+
+	fn on_deregistered(account_id: &Self::AccountId, _account_role: AccountRole) {
+		<Pallet<T> as WithdrawalAddressRestriction>::clear_pending_withdrawal_changes(account_id);
+	}
+}
+
+pub struct RefundAddressDeregistrationHooks<T: Config>(PhantomData<T>);
+
+impl<T: Config> DeregistrationHooks for RefundAddressDeregistrationHooks<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(_account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		Ok(())
+	}
+
+	fn on_deregistered(account_id: &Self::AccountId, _account_role: AccountRole) {
+		Pallet::<T>::clear_refund_addresses(account_id);
 	}
 }
 

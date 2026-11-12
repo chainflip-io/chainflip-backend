@@ -15,10 +15,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{MockPallet, MockPalletStorage};
-use crate::{AccountRoleRegistry, VanityName};
+use crate::{AccountRoleRegistry, DeregistrationHooks, VanityName};
 use cf_primitives::AccountRole;
 use frame_support::{pallet_prelude::DispatchError, sp_runtime::DispatchResult};
 use frame_system::{ensure_signed, Config};
+use sp_std::marker::PhantomData;
 
 pub struct MockAccountRoleRegistry;
 
@@ -93,5 +94,45 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 			},
 			Err(_) => Err(frame_support::sp_runtime::traits::BadOrigin),
 		}
+	}
+}
+
+/// Like [MockAccountRoleRegistry], but runs the given [DeregistrationHooks] on deregistration, in
+/// the same order as the real registry. Shares storage with [MockAccountRoleRegistry].
+pub struct MockAccountRoleRegistryWithHooks<H>(PhantomData<H>);
+
+impl<T: Config, H: DeregistrationHooks<AccountId = T::AccountId>> AccountRoleRegistry<T>
+	for MockAccountRoleRegistryWithHooks<H>
+{
+	fn register_account_role(account_id: &T::AccountId, role: AccountRole) -> DispatchResult {
+		<MockAccountRoleRegistry as AccountRoleRegistry<T>>::register_account_role(account_id, role)
+	}
+
+	fn deregister_account_role(account_id: &T::AccountId, role: AccountRole) -> DispatchResult {
+		H::check(account_id).map_err(Into::into)?;
+		<MockAccountRoleRegistry as AccountRoleRegistry<T>>::deregister_account_role(
+			account_id, role,
+		)?;
+		H::on_deregistered(account_id, role);
+		Ok(())
+	}
+
+	fn set_vanity_name(who: &T::AccountId, name: VanityName) -> DispatchResult {
+		<MockAccountRoleRegistry as AccountRoleRegistry<T>>::set_vanity_name(who, name)
+	}
+
+	fn account_role(who: &T::AccountId) -> AccountRole {
+		<MockAccountRoleRegistry as AccountRoleRegistry<T>>::account_role(who)
+	}
+
+	fn has_account_role(who: &T::AccountId, role: AccountRole) -> bool {
+		<MockAccountRoleRegistry as AccountRoleRegistry<T>>::has_account_role(who, role)
+	}
+
+	fn ensure_account_role(
+		origin: T::RuntimeOrigin,
+		role: AccountRole,
+	) -> Result<T::AccountId, frame_support::sp_runtime::traits::BadOrigin> {
+		<MockAccountRoleRegistry as AccountRoleRegistry<T>>::ensure_account_role(origin, role)
 	}
 }

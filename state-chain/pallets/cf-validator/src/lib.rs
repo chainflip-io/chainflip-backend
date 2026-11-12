@@ -929,32 +929,8 @@ pub mod pallet {
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_validator())]
 		pub fn deregister_as_validator(origin: OriginFor<T>) -> DispatchResult {
-			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
-
-			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
-
-			// Revoke any active GRANDPA delegation before purging keys.
-			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
-				let _ = T::GrandpaDelegation::remove_vote_delegation(grandpa_key);
-			}
-
-			// This can only error if the validator didn't register any keys, in which case we want
-			// to continue with the deregistration anyway.
-			let _ = pallet_session::Pallet::<T>::purge_keys(origin);
-
-			if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
-				MappedPeers::<T>::remove(peer_id);
-				T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
-			}
-
-			Self::do_remove_from_operator(account_id.clone());
-
-			ClaimedValidators::<T>::remove(&account_id);
-			ValidatorMaxBid::<T>::remove(&account_id);
-
-			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
-
-			Ok(())
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			T::AccountRoleRegistry::deregister_as_validator(&account_id)
 		}
 
 		/// Signals a non-bidding node's intent to start bidding, and participate in the
@@ -1285,44 +1261,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_operator())]
 		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
-			ensure!(
-				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
-				Error::<T>::RotationInProgress
-			);
-
-			for (validator, ()) in Self::get_all_associations_by_operator(
-				&operator,
-				AssociationToOperator::Validator,
-				|_, _| (),
-			) {
-				OperatorChoice::<T>::remove(&validator);
-				Self::deposit_event(Event::ValidatorRemovedFromOperator {
-					validator,
-					operator: operator.clone(),
-				});
-			}
-
-			for (delegator, ()) in Self::get_all_associations_by_operator(
-				&operator,
-				AssociationToOperator::Delegator,
-				|_, _| (),
-			) {
-				if let Some((_, max_bid)) = DelegationChoice::<T>::take(&delegator) {
-					Self::deposit_event(Event::Undelegated {
-						delegator,
-						operator: operator.clone(),
-						max_bid,
-					});
-				}
-			}
-
-			ManagedValidators::<T>::remove(&operator);
-			Exceptions::<T>::remove(&operator);
-			OperatorSettingsLookup::<T>::remove(&operator);
-
-			T::AccountRoleRegistry::deregister_as_operator(&operator)?;
-
-			Ok(())
+			T::AccountRoleRegistry::deregister_as_operator(&operator)
 		}
 
 		#[pallet::call_index(18)]
@@ -1716,7 +1655,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Removes a validator from an operator's managed pool, cleaning up both storage items and
 	/// emitting the `ValidatorRemovedFromOperator` event. This is the single source of truth for
-	/// this operation, called from both `remove_validator` and `deregister_as_validator`.
+	/// this operation, called from both `remove_validator` and validator deregistration.
 	fn do_remove_from_operator(validator: T::AccountId) {
 		if let Some(operator) = OperatorChoice::<T>::take(&validator) {
 			ManagedValidators::<T>::mutate(&operator, |validators| {
@@ -2593,9 +2532,11 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 	}
 }
 
-pub struct ValidatorDeregistrationCheck<T>(PhantomData<T>);
+/// Deregistration checks and cleanup for the Validator and Operator roles, so that these roles can
+/// be deregistered through [AccountRoleRegistry] without going through this pallet's extrinsics.
+pub struct ValidatorDeregistrationHooks<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationHooks for ValidatorDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for ValidatorDeregistrationHooks<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
@@ -2607,6 +2548,11 @@ impl<T: Config> DeregistrationHooks for ValidatorDeregistrationCheck<T> {
 
 			ensure!(!EpochHistory::<T>::is_keyholder(validator_id), Error::<T>::StillKeyHolder);
 		} else if T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator) {
+			// Delegations can't be removed mid-rotation.
+			ensure!(
+				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
+				Error::<T>::RotationInProgress
+			);
 			ensure!(
 				((Pallet::<T>::last_expired_epoch() + 1)..=Pallet::<T>::current_epoch()).all(
 					|epoch_index| !DelegationSnapshots::<T>::contains_key(epoch_index, account_id)
@@ -2617,11 +2563,78 @@ impl<T: Config> DeregistrationHooks for ValidatorDeregistrationCheck<T> {
 
 		Ok(())
 	}
+
+	fn on_deregistered(account_id: &Self::AccountId, account_role: AccountRole) {
+		match account_role {
+			AccountRole::Validator => Self::on_validator_deregistered(account_id),
+			AccountRole::Operator => Self::on_operator_deregistered(account_id),
+			_ => {},
+		}
+	}
 }
 
-pub struct DelegatorDeregistrationCheck<T>(PhantomData<T>);
+impl<T: Config> ValidatorDeregistrationHooks<T> {
+	fn on_validator_deregistered(account_id: &T::AccountId) {
+		let validator_id = ValidatorIdOf::<T>::from_ref(account_id);
 
-impl<T: Config> DeregistrationHooks for DelegatorDeregistrationCheck<T> {
+		// Revoke any active GRANDPA delegation before purging keys.
+		if let Some(grandpa_key) = Pallet::<T>::grandpa_key_for(validator_id) {
+			let _ = T::GrandpaDelegation::remove_vote_delegation(grandpa_key);
+		}
+
+		// This can only error if the validator didn't register any keys, in which case we want
+		// to continue with the deregistration anyway.
+		let _ = pallet_session::Pallet::<T>::purge_keys(
+			frame_system::RawOrigin::Signed(account_id.clone()).into(),
+		);
+
+		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(account_id) {
+			MappedPeers::<T>::remove(peer_id);
+			T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
+		}
+
+		Pallet::<T>::do_remove_from_operator(account_id.clone());
+
+		ClaimedValidators::<T>::remove(account_id);
+		ValidatorMaxBid::<T>::remove(account_id);
+	}
+
+	fn on_operator_deregistered(operator: &T::AccountId) {
+		for (validator, ()) in Pallet::<T>::get_all_associations_by_operator(
+			operator,
+			AssociationToOperator::Validator,
+			|_, _| (),
+		) {
+			OperatorChoice::<T>::remove(&validator);
+			Pallet::<T>::deposit_event(Event::ValidatorRemovedFromOperator {
+				validator,
+				operator: operator.clone(),
+			});
+		}
+
+		for (delegator, ()) in Pallet::<T>::get_all_associations_by_operator(
+			operator,
+			AssociationToOperator::Delegator,
+			|_, _| (),
+		) {
+			if let Some((_, max_bid)) = DelegationChoice::<T>::take(&delegator) {
+				Pallet::<T>::deposit_event(Event::Undelegated {
+					delegator,
+					operator: operator.clone(),
+					max_bid,
+				});
+			}
+		}
+
+		ManagedValidators::<T>::remove(operator);
+		Exceptions::<T>::remove(operator);
+		OperatorSettingsLookup::<T>::remove(operator);
+	}
+}
+
+pub struct DelegatorDeregistrationHooks<T>(PhantomData<T>);
+
+impl<T: Config> DeregistrationHooks for DelegatorDeregistrationHooks<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

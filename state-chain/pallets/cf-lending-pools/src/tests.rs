@@ -1072,7 +1072,7 @@ fn deregistration_check_requires_no_lending_storage_keys() {
 		));
 
 		assert_noop!(
-			PoolsDeregistrationCheck::<Test>::check(&LP),
+			PoolsDeregistrationHooks::<Test>::check(&LP),
 			Error::<Test>::BoostedFundsRemaining
 		);
 
@@ -1087,7 +1087,7 @@ fn deregistration_check_requires_no_lending_storage_keys() {
 		GeneralLendingPools::<Test>::insert(BOOST_ASSET, lending_pool);
 
 		assert_noop!(
-			PoolsDeregistrationCheck::<Test>::check(&LP),
+			PoolsDeregistrationHooks::<Test>::check(&LP),
 			Error::<Test>::LendingFundsRemaining
 		);
 
@@ -1097,7 +1097,7 @@ fn deregistration_check_requires_no_lending_storage_keys() {
 		LoanAccounts::<Test>::insert(LP, LoanAccount::<Test>::new(LP));
 
 		assert_noop!(
-			PoolsDeregistrationCheck::<Test>::check(&LP),
+			PoolsDeregistrationHooks::<Test>::check(&LP),
 			Error::<Test>::LendingFundsRemaining
 		);
 	});
@@ -1779,7 +1779,7 @@ fn deregistration_check() {
 		<Test as crate::Config>::Balance::credit_account(&LP, BOOST_ASSET, BOOST_FUNDS);
 		<Test as crate::Config>::Balance::credit_account(&LP, Asset::Flip, LENDER_FUNDS);
 
-		assert_ok!(PoolsDeregistrationCheck::<Test>::check(&LP));
+		assert_ok!(PoolsDeregistrationHooks::<Test>::check(&LP));
 
 		// Test with lending funds: deregistration should fail when LP has active lending funds
 		// First create a lending pool for the asset
@@ -1792,13 +1792,13 @@ fn deregistration_check() {
 		));
 
 		assert!(matches!(
-			PoolsDeregistrationCheck::<Test>::check(&LP),
+			PoolsDeregistrationHooks::<Test>::check(&LP),
 			Err(Error::<Test>::LendingFundsRemaining)
 		));
 
 		// Remove lending funds - deregistration should succeed
 		assert_ok!(LendingPools::remove_lender_funds(RuntimeOrigin::signed(LP), Asset::Flip, None));
 
-		assert_ok!(PoolsDeregistrationCheck::<Test>::check(&LP));
+		assert_ok!(PoolsDeregistrationHooks::<Test>::check(&LP));
 	});
 }

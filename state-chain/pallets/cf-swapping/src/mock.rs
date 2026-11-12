@@ -22,11 +22,18 @@ use cf_primitives::{Asset, AssetAmount, ChainflipNetwork, ChannelId, STABLE_ASSE
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
-		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
-		fee_payment::MockFeePayment, ingress_egress_fee_handler::MockIngressEgressFeeHandler,
-		lending_pools::MockLendingSystemApi, minimum_funding::MockMinimumFundingProvider,
-		pool_price_api::MockPoolPriceApi, price_feed_api::MockPriceFeedApi,
+		account_role_registry::{MockAccountRoleRegistry, MockAccountRoleRegistryWithHooks},
+		address_converter::MockAddressConverter,
+		balance_api::MockBalance,
+		bonding::MockBonderFor,
+		deposit_handler::MockDepositHandler,
+		egress_handler::MockEgressHandler,
+		fee_payment::MockFeePayment,
+		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
+		lending_pools::MockLendingSystemApi,
+		minimum_funding::MockMinimumFundingProvider,
+		pool_price_api::MockPoolPriceApi,
+		price_feed_api::MockPriceFeedApi,
 		withdrawal_address_restriction::MockWithdrawalAddressRestriction,
 	},
 	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
@@ -50,7 +57,12 @@ impl frame_system::Config for Test {
 	type Block = Block;
 }
 
-impl_mock_chainflip!(Test);
+impl_mock_chainflip!(
+	Test,
+	AccountRoleRegistry = MockAccountRoleRegistryWithHooks<
+		crate::BrokerDeregistrationHooks<Test>,
+	>
+);
 impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 
 // NOTE: the use of u128 lets us avoid type conversions in tests:
