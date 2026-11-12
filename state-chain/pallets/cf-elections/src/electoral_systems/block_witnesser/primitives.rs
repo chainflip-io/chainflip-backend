@@ -179,8 +179,10 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// schedule at most `max_new_elections`
 		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
 
+		// we only schedule optimistic elections for blocks that we haven't received data for
 		let opti_elections = (self.seen_heights_below..
 			self.seen_heights_below.saturating_forward(max_optimistic as usize))
+			.filter(|height| !self.optimistic_block_cache.contains_key(height))
 			.map(|x| (x, Optimistic));
 
 		let all_block_heights = self
@@ -244,14 +246,9 @@ impl<T: BWTypes> ElectionTracker<T> {
 		received_hash: &Option<ChainBlockHashOf<T::Chain>>,
 		received_data: T::BlockData,
 	) -> Option<T::BlockData> {
-		// update the lowest unseen block,
-		// currently this only has an effect if we get an Optimistic block
-		self.seen_heights_below = max(self.seen_heights_below, height.saturating_forward(1));
-
 		// Note: if we receive blockdata for a block number, and
 		// in the same statechain block there's a reorg which changes the hash of this block,
 		// then we shouldn't close the election.
-
 		use BWElectionType::*;
 		self.ongoing
 			.get(&height)
