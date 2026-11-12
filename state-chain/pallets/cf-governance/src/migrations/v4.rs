@@ -50,7 +50,7 @@ pub struct Migration<T>(PhantomData<T>);
 
 impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
-		let _ = Members::<T>::translate::<old::GovernanceCouncil<T::AccountId>, _>(|old| {
+		match Members::<T>::translate::<old::GovernanceCouncil<T::AccountId>, _>(|old| {
 			old.map(|old::GovernanceCouncil { members, threshold }| {
 				log::info!(
 					"Migrating flat governance council {:?} with threshold {} to a nested council",
@@ -59,33 +59,36 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				);
 				Council::simple_group(u8::try_from(threshold).unwrap_or(u8::MAX), members)
 			})
-		})
-		.inspect_err(|_| log::error!("Failed to migrate the governance council"));
+		}) {
+			Ok(Some(_)) => {},
+			Ok(None) => log::error!("No governance council to migrate"),
+			Err(_) => log::error!("Failed to migrate the governance council"),
+		}
 
 		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(old::Members::<T>::get().encode())
+		// `get` also returns `None` if the stored council fails to decode.
+		Ok(old::Members::<T>::get()
+			.ok_or(DispatchError::Other("No decodable governance council to migrate"))?
+			.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		if let Some(old::GovernanceCouncil { members, threshold }) =
-			Option::<old::GovernanceCouncil<T::AccountId>>::decode(&mut &state[..])
-				.map_err(|_| DispatchError::Other("Failed to decode the old governance council"))?
-		{
-			let council = Members::<T>::get();
-			ensure!(
-				council ==
-					Council::simple_group(u8::try_from(threshold).unwrap_or(u8::MAX), members),
-				DispatchError::Other("Migrated council does not match the old one")
-			);
-			council
-				.validate()
-				.map_err(|_| DispatchError::Other("Migrated council is invalid"))?;
-		}
+		let old::GovernanceCouncil { members, threshold } =
+			old::GovernanceCouncil::<T::AccountId>::decode(&mut &state[..])
+				.map_err(|_| DispatchError::Other("Failed to decode the old governance council"))?;
+		let council = Members::<T>::get();
+		ensure!(
+			council == Council::simple_group(u8::try_from(threshold).unwrap_or(u8::MAX), members),
+			DispatchError::Other("Migrated council does not match the old one")
+		);
+		council
+			.validate()
+			.map_err(|_| DispatchError::Other("Migrated council is invalid"))?;
 		Ok(())
 	}
 }
