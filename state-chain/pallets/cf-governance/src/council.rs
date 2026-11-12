@@ -41,7 +41,8 @@ pub enum Council<AccountId> {
 	Individual { id: AccountId },
 }
 
-/// Unreachable by construction: nobody is a member, so nothing can ever be approved.
+/// Disables governance: with no members, quorum can never be reached. `validate` rejects it, so
+/// only an empty genesis config can set it.
 impl<AccountId> Default for Council<AccountId> {
 	fn default() -> Self {
 		Self::SimpleGroup { threshold: 1, members: Vec::new() }

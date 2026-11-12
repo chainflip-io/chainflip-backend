@@ -461,15 +461,18 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			let council = Council::simple_group(
-				u8::try_from(self.members.len().div_ceil(2)).unwrap_or(u8::MAX),
-				self.members.iter().cloned(),
-			);
-			// No members (the default) means governance is disabled, which `validate` would reject
-			// as an empty group.
-			if !self.members.is_empty() {
+			// `construct_runtime!` generates a test that builds `RuntimeGenesisConfig::default()`,
+			// which has no members, so that case leaves governance disabled instead of panicking.
+			let council = if self.members.is_empty() {
+				Council::default()
+			} else {
+				let council = Council::simple_group(
+					u8::try_from(self.members.len().div_ceil(2)).unwrap_or(u8::MAX),
+					self.members.iter().cloned(),
+				);
 				council.validate().expect("The genesis council must be valid");
-			}
+				council
+			};
 			for member in &self.members {
 				<frame_system::Pallet<T>>::inc_sufficients(member);
 			}
