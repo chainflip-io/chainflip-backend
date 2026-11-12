@@ -17,14 +17,14 @@
 use crate::{
 	council::{tests::nested_council, MAX_MEMBERS},
 	mock::*,
-	ActiveProposals, Council, Error, Event, ExecutionMode, ExecutionPipeline, ExpiryTime, Members,
-	PreAuthorisedGovCalls, ProposalIdCounter,
+	ActiveProposals, Council, Error, Event, ExecutionMode, ExecutionPipeline, ExpiryTime,
+	InvalidCouncil, Members, PreAuthorisedGovCalls, ProposalIdCounter,
 };
 use cf_primitives::SemVer;
 use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_err, assert_noop, assert_ok};
-use sp_runtime::{BuildStorage, Percent};
+use sp_runtime::{BuildStorage, DispatchError, ModuleError, Percent};
 use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
@@ -404,14 +404,14 @@ fn replacing_governance_members() {
 				crate::RawOrigin::GovernanceApproval.into(),
 				Council::simple_group(4, [EVE, PETER, MAX]),
 			),
-			Error::<Test>::UnreachableCouncilThreshold
+			Error::<Test>::InvalidCouncil(InvalidCouncil::ThresholdUnreachable)
 		);
 		assert_noop!(
 			Governance::set_council(
 				crate::RawOrigin::GovernanceApproval.into(),
 				Council::SimpleGroup { threshold: 1, members: vec![] },
 			),
-			Error::<Test>::EmptyCouncilGroup
+			Error::<Test>::InvalidCouncil(InvalidCouncil::EmptyGroup)
 		);
 
 		assert_ok!(Governance::set_council(
@@ -495,4 +495,15 @@ fn nested_members_are_sufficient() {
 		assert_eq!(System::sufficients(&102), 0);
 		assert_eq!(System::sufficients(&301), 0);
 	});
+}
+
+#[test]
+fn invalid_council_error_encoding() {
+	// Clients see the variant at index 7, with the `InvalidCouncil` variant in the next byte.
+	let DispatchError::Module(ModuleError { error, .. }) =
+		Error::<Test>::InvalidCouncil(InvalidCouncil::DuplicateMember).into()
+	else {
+		panic!("expected a module error")
+	};
+	assert_eq!(error, [7, 7, 0, 0]);
 }

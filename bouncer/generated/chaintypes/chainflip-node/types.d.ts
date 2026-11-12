@@ -18413,63 +18413,45 @@ export type PalletCfGovernanceError =
   /**
    * An account already approved a proposal
    **/
-  | 'AlreadyApproved'
+  | { name: 'AlreadyApproved' }
   /**
    * The signer of an extrinsic is no member of the current governance
    **/
-  | 'NotMember'
+  | { name: 'NotMember' }
   /**
    * The proposal was not found - it may have expired or it may already be executed
    **/
-  | 'ProposalNotFound'
+  | { name: 'ProposalNotFound' }
   /**
    * Decode of call failed
    **/
-  | 'DecodeOfCallFailed'
+  | { name: 'DecodeOfCallFailed' }
   /**
    * A runtime upgrade has failed because the upgrade conditions were not satisfied
    **/
-  | 'UpgradeConditionsNotMet'
+  | { name: 'UpgradeConditionsNotMet' }
   /**
    * The call hash was not whitelisted
    **/
-  | 'CallHashNotWhitelisted'
+  | { name: 'CallHashNotWhitelisted' }
   /**
    * Insufficient number of CFEs are at the target version to receive the runtime upgrade.
    **/
-  | 'NotEnoughAuthoritiesCfesAtTargetVersion'
+  | { name: 'NotEnoughAuthoritiesCfesAtTargetVersion' }
   /**
-   * The council is nested deeper than `council::MAX_DEPTH`.
+   * The council can never reach quorum, or exceeds the size limits.
    **/
-  | 'CouncilTooDeep'
-  /**
-   * The council has more than `council::MAX_MEMBERS` members.
-   **/
-  | 'TooManyCouncilMembers'
-  /**
-   * A group in the council has no members.
-   **/
-  | 'EmptyCouncilGroup'
-  /**
-   * A group in the council has a threshold of zero, which would approve anything.
-   **/
-  | 'ZeroCouncilThreshold'
-  /**
-   * A member of a weighted council group has zero weight.
-   **/
-  | 'ZeroCouncilWeight'
-  /**
-   * The weights of a council group overflow.
-   **/
-  | 'CouncilWeightOverflow'
-  /**
-   * A council group's threshold exceeds its members' combined count or weight.
-   **/
-  | 'UnreachableCouncilThreshold'
-  /**
-   * An account appears more than once in the council.
-   **/
-  | 'DuplicateCouncilMember';
+  | { name: 'InvalidCouncil'; data: PalletCfGovernanceCouncilInvalidCouncil };
+
+export type PalletCfGovernanceCouncilInvalidCouncil =
+  | 'TooDeep'
+  | 'TooManyMembers'
+  | 'EmptyGroup'
+  | 'ZeroThreshold'
+  | 'ZeroWeight'
+  | 'WeightOverflow'
+  | 'ThresholdUnreachable'
+  | 'DuplicateMember';
 
 /**
  * The `Error` enum of this pallet.

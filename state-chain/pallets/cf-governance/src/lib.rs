@@ -22,8 +22,7 @@
 pub mod council;
 pub mod migrations;
 
-pub use council::Council;
-use council::InvalidCouncil;
+pub use council::{Council, InvalidCouncil};
 
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
@@ -241,22 +240,8 @@ pub mod pallet {
 		CallHashNotWhitelisted,
 		/// Insufficient number of CFEs are at the target version to receive the runtime upgrade.
 		NotEnoughAuthoritiesCfesAtTargetVersion,
-		/// The council is nested deeper than `council::MAX_DEPTH`.
-		CouncilTooDeep,
-		/// The council has more than `council::MAX_MEMBERS` members.
-		TooManyCouncilMembers,
-		/// A group in the council has no members.
-		EmptyCouncilGroup,
-		/// A group in the council has a threshold of zero, which would approve anything.
-		ZeroCouncilThreshold,
-		/// A member of a weighted council group has zero weight.
-		ZeroCouncilWeight,
-		/// The weights of a council group overflow.
-		CouncilWeightOverflow,
-		/// A council group's threshold exceeds its members' combined count or weight.
-		UnreachableCouncilThreshold,
-		/// An account appears more than once in the council.
-		DuplicateCouncilMember,
+		/// The council can never reach quorum, or exceeds the size limits.
+		InvalidCouncil(InvalidCouncil),
 	}
 
 	#[pallet::call]
@@ -420,7 +405,7 @@ pub mod pallet {
 			new_council: Council<T::AccountId>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			new_council.validate().map_err(Error::<T>::from)?;
+			new_council.validate().map_err(Error::<T>::InvalidCouncil)?;
 
 			for proposal_id in ActiveProposals::<T>::take() {
 				Proposals::<T>::remove(proposal_id.proposal_id);
@@ -516,21 +501,6 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<OuterOrigin, ()> {
 		Ok(RawOrigin::GovernanceApproval.into())
-	}
-}
-
-impl<T> From<InvalidCouncil> for Error<T> {
-	fn from(error: InvalidCouncil) -> Self {
-		match error {
-			InvalidCouncil::TooDeep => Error::CouncilTooDeep,
-			InvalidCouncil::TooManyMembers => Error::TooManyCouncilMembers,
-			InvalidCouncil::EmptyGroup => Error::EmptyCouncilGroup,
-			InvalidCouncil::ZeroThreshold => Error::ZeroCouncilThreshold,
-			InvalidCouncil::ZeroWeight => Error::ZeroCouncilWeight,
-			InvalidCouncil::WeightOverflow => Error::CouncilWeightOverflow,
-			InvalidCouncil::ThresholdUnreachable => Error::UnreachableCouncilThreshold,
-			InvalidCouncil::DuplicateMember => Error::DuplicateCouncilMember,
-		}
 	}
 }
 

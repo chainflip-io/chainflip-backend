@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
-use frame_support::ensure;
+use frame_support::{ensure, PalletError};
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
@@ -49,15 +49,25 @@ impl<AccountId> Default for Council<AccountId> {
 	}
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, PalletError, Clone, Copy, Debug, PartialEq, Eq,
+)]
 pub enum InvalidCouncil {
+	/// Nested deeper than `MAX_DEPTH`.
 	TooDeep,
+	/// More than `MAX_MEMBERS` members.
 	TooManyMembers,
+	/// A group has no members.
 	EmptyGroup,
+	/// A group has a threshold of zero, which would approve anything.
 	ZeroThreshold,
+	/// A member of a weighted group has zero weight.
 	ZeroWeight,
+	/// A group's weights overflow.
 	WeightOverflow,
+	/// A group's threshold exceeds its members' combined count or weight.
 	ThresholdUnreachable,
+	/// An account appears more than once.
 	DuplicateMember,
 }
 
