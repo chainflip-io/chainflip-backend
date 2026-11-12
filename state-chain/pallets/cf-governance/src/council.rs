@@ -151,7 +151,7 @@ pub(crate) mod tests {
 	};
 	use proptest::{prelude::*, proptest};
 
-	pub fn pro_3132_council() -> Council<u64> {
+	pub fn nested_council() -> Council<u64> {
 		WeightedGroup {
 			threshold: 50,
 			members: vec![
@@ -176,8 +176,8 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn pro_3132_scenario() {
-		let council = pro_3132_council();
+	fn nested_council_quorum() {
+		let council = nested_council();
 		assert_eq!(council.validate(), Ok(()));
 		// Member 1 of group 1 proposes; individual 1 approves: 20 of 50.
 		assert!(!council.quorum_reached(&approvals([101, 301])));
@@ -191,7 +191,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn membership_is_flattened() {
-		let council = pro_3132_council();
+		let council = nested_council();
 		assert!(council.is_member(&104));
 		assert!(council.is_member(&303));
 		assert!(!council.is_member(&108));

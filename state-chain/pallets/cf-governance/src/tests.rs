@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	council::{tests::pro_3132_council, MAX_MEMBERS},
+	council::{tests::nested_council, MAX_MEMBERS},
 	mock::*,
 	ActiveProposals, Council, Error, Event, ExecutionMode, ExecutionPipeline, ExpiryTime, Members,
 	PreAuthorisedGovCalls, ProposalIdCounter,
@@ -447,7 +447,7 @@ fn weighted_council_passes_proposal_across_groups() {
 		.execute_with(|| {
 			assert_ok!(Governance::set_council(
 				crate::RawOrigin::GovernanceApproval.into(),
-				pro_3132_council(),
+				nested_council(),
 			));
 			// Member 1 of group 1 proposes.
 			assert_ok!(Governance::propose_governance_extrinsic(
@@ -477,9 +477,9 @@ fn nested_members_are_sufficient() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Governance::set_council(
 			crate::RawOrigin::GovernanceApproval.into(),
-			pro_3132_council(),
+			nested_council(),
 		));
-		for member in pro_3132_council().members() {
+		for member in nested_council().members() {
 			assert_eq!(System::sufficients(&member), 1);
 		}
 		for member in [ALICE, BOB, CHARLES] {
