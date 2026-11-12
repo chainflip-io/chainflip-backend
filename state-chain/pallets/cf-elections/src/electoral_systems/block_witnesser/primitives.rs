@@ -152,7 +152,13 @@ defx! {
 		elections_queued_by_safe_are_outside_safety_buffer:
 			this.queued_safe_elections.get_all_heights().iter().all(
 				|height| height.saturating_forward(this.safety_buffer as usize) < this.seen_heights_below
-			)
+			),
+
+		//--- optimistic elections ---
+		// resolving optimistic elections doesn't affect seen_heights_below
+		optimistic_elections_dont_affect_seen_heights_below:
+			this.optimistic_block_cache.keys().all(|height| height >= &this.seen_heights_below)
+
 	}
 }
 
