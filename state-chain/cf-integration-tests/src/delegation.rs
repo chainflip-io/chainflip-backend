@@ -25,7 +25,8 @@ use crate::{
 	AccountId, AuthorityCount, RuntimeOrigin,
 };
 
-use cf_primitives::{AccountRole, AssetAmount, FlipBalance};
+use cf_primitives::{AccountRole, AssetAmount, EpochIndex, FlipBalance};
+use cf_test_utilities::assert_has_matching_event;
 use cf_traits::{AccountInfo, AccountRoleRegistry, EpochInfo, FundAccount, FundingSource};
 use frame_support::{assert_noop, assert_ok};
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
@@ -96,6 +97,17 @@ pub(crate) fn setup_delegation(
 	testnet.move_to_the_next_epoch();
 	assert!(pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&validator));
 	assert!(Flip::balance(&validator) < pallet_cf_validator::Bond::<Runtime>::get());
+}
+
+/// Schedules FLIP 2.1 far enough ahead that it doesn't activate during the test, which is enough
+/// to require the Liquidity Provider role for delegation.
+fn require_lp_role_for_delegation() {
+	assert_ok!(Flip::update_pallet_config(
+		pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+		vec![pallet_cf_flip::PalletConfigUpdate::SetFeeRewardsActivationEpoch(EpochIndex::MAX - 1)]
+			.try_into()
+			.unwrap(),
+	));
 }
 
 #[test]
@@ -345,7 +357,7 @@ fn can_calculate_account_apy_for_validator_with_delegation() {
 }
 
 #[test]
-fn delegator_stays_bonded_until_rotation_after_undelegating() {
+fn delegator_stays_bonded_until_rotation_after_undelegating_once_lp_role_is_required() {
 	const MAX_AUTHORITIES: AuthorityCount = 3;
 	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
 	super::genesis::with_test_defaults()
@@ -357,6 +369,7 @@ fn delegator_stays_bonded_until_rotation_after_undelegating() {
 		)])
 		.build()
 		.execute_with(|| {
+			require_lp_role_for_delegation();
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			let delegator = AccountId::from([0xA0; 32]);
@@ -396,7 +409,7 @@ fn delegator_stays_bonded_until_rotation_after_undelegating() {
 }
 
 #[test]
-fn pending_delegator_cannot_become_broker_during_rotation() {
+fn pending_delegator_cannot_become_broker_during_rotation_once_lp_role_is_required() {
 	const MAX_AUTHORITIES: AuthorityCount = 3;
 	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
 	super::genesis::with_test_defaults()
@@ -408,6 +421,7 @@ fn pending_delegator_cannot_become_broker_during_rotation() {
 		)])
 		.build()
 		.execute_with(|| {
+			require_lp_role_for_delegation();
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			let operator = AccountId::from([0xe1; 32]);
@@ -469,10 +483,203 @@ fn pending_delegator_cannot_become_broker_during_rotation() {
 			);
 			assert_noop!(
 				Swapping::register_as_broker(RuntimeOrigin::signed(late_delegator.clone())),
-				pallet_cf_account_roles::Error::<Runtime>::AccountRoleAlreadyRegistered
+				pallet_cf_swapping::Error::<Runtime>::AccountIsDelegating
 			);
 
 			testnet.move_to_the_next_epoch();
 			assert!(!Flip::bond(&late_delegator).is_zero());
+		});
+}
+
+#[test]
+fn bonded_delegator_cannot_shed_its_bond() {
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
+	super::genesis::with_test_defaults()
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[(
+			managed_validator.clone(),
+			AccountRole::Validator,
+			GENESIS_BALANCE / 5,
+		)])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			let becomes_broker = AccountId::from([0xA0; 32]);
+			let becomes_lp = AccountId::from([0xA1; 32]);
+			setup_delegation(
+				&mut testnet,
+				managed_validator,
+				AccountId::from([0xe1; 32]),
+				2000,
+				BTreeMap::from_iter([
+					(becomes_broker.clone(), 2 * GENESIS_BALANCE),
+					(becomes_lp.clone(), 2 * GENESIS_BALANCE),
+				]),
+			);
+			for delegator in [&becomes_broker, &becomes_lp] {
+				assert!(!Flip::bond(delegator).is_zero());
+				assert_ok!(Validator::undelegate(
+					RuntimeOrigin::signed(delegator.clone()),
+					pallet_cf_validator::DelegationAmount::Max,
+				));
+			}
+
+			// A bonded broker can't open a private channel, which would replace the bond.
+			assert_ok!(Swapping::register_as_broker(RuntimeOrigin::signed(becomes_broker.clone())));
+			assert_noop!(
+				Swapping::open_private_btc_channel(RuntimeOrigin::signed(becomes_broker.clone())),
+				pallet_cf_swapping::Error::<Runtime>::AccountBonded
+			);
+
+			// A bonded LP can't deregister.
+			assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(
+				becomes_lp.clone()
+			)));
+			assert_noop!(
+				LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(becomes_lp.clone())),
+				pallet_cf_flip::Error::<Runtime>::AccountBonded
+			);
+
+			testnet.move_to_the_next_epoch();
+
+			assert!(Flip::bond(&becomes_broker).is_zero());
+			assert_ok!(Swapping::open_private_btc_channel(RuntimeOrigin::signed(
+				becomes_broker.clone()
+			)));
+			assert!(Flip::bond(&becomes_lp).is_zero());
+			assert_ok!(LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(
+				becomes_lp.clone()
+			)));
+		});
+}
+
+#[test]
+fn pending_delegator_cannot_become_broker_during_rotation() {
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
+	super::genesis::with_test_defaults()
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[(
+			managed_validator.clone(),
+			AccountRole::Validator,
+			GENESIS_BALANCE / 5,
+		)])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			let operator = AccountId::from([0xe1; 32]);
+			setup_delegation(
+				&mut testnet,
+				managed_validator,
+				operator.clone(),
+				2000,
+				BTreeMap::from_iter([(AccountId::from([0xA0; 32]), 2 * GENESIS_BALANCE)]),
+			);
+
+			let late_delegator = AccountId::from([0xA1; 32]);
+			Funding::fund_account(
+				late_delegator.clone(),
+				GENESIS_BALANCE,
+				FundingSource::EthTransaction {
+					tx_hash: Default::default(),
+					funder: Default::default(),
+				},
+			);
+			assert_ok!(Validator::delegate(
+				RuntimeOrigin::signed(late_delegator.clone()),
+				operator.clone(),
+				pallet_cf_validator::DelegationAmount::Max
+			));
+
+			// Start the rotation: the auction puts the delegator in the pending snapshot, but its
+			// bond is only applied once the new epoch starts.
+			testnet.move_to_the_end_of_epoch();
+			testnet.move_forward_blocks(1);
+			assert_ne!(
+				pallet_cf_validator::CurrentRotationPhase::<Runtime>::get(),
+				pallet_cf_validator::RotationPhase::Idle
+			);
+			assert!(pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
+				Validator::epoch_index() + 1,
+				&operator
+			)
+			.unwrap()
+			.delegators
+			.contains_key(&late_delegator));
+			assert!(Flip::bond(&late_delegator).is_zero());
+
+			// Becoming a broker now would let it open a private channel, whose close sheds the
+			// delegation bond applied in the meantime.
+			assert_noop!(
+				Validator::undelegate(
+					RuntimeOrigin::signed(late_delegator.clone()),
+					pallet_cf_validator::DelegationAmount::Max,
+				),
+				pallet_cf_validator::Error::<Runtime>::RotationInProgress
+			);
+			assert_noop!(
+				Swapping::register_as_broker(RuntimeOrigin::signed(late_delegator.clone())),
+				pallet_cf_swapping::Error::<Runtime>::AccountIsDelegating
+			);
+
+			testnet.move_to_the_next_epoch();
+			assert!(!Flip::bond(&late_delegator).is_zero());
+		});
+}
+
+#[test]
+fn scheduling_flip_2_1_gives_existing_delegators_the_lp_role() {
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
+	super::genesis::with_test_defaults()
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[(
+			managed_validator.clone(),
+			AccountRole::Validator,
+			GENESIS_BALANCE / 5,
+		)])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			let delegator = AccountId::from([0xA0; 32]);
+			setup_delegation(
+				&mut testnet,
+				managed_validator,
+				AccountId::from([0xe1; 32]),
+				2000,
+				BTreeMap::from_iter([(delegator.clone(), 2 * GENESIS_BALANCE)]),
+			);
+			let account_role =
+				|| <AccountRoles as AccountRoleRegistry<Runtime>>::account_role(&delegator);
+			assert_eq!(account_role(), AccountRole::Unregistered);
+
+			let activation_epoch = Validator::epoch_index() + 1;
+			assert_ok!(Flip::update_pallet_config(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				vec![pallet_cf_flip::PalletConfigUpdate::SetFeeRewardsActivationEpoch(
+					activation_epoch
+				)]
+				.try_into()
+				.unwrap(),
+			));
+
+			assert_eq!(account_role(), AccountRole::LiquidityProvider);
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::AccountRoles(pallet_cf_account_roles::Event::AccountRoleRegistered {
+					account_id,
+					role: AccountRole::LiquidityProvider,
+				}) if account_id == &delegator
+			);
+			assert!(!Flip::is_flip_2_1_activated());
+
+			testnet.move_to_the_next_epoch();
+
+			assert!(Flip::is_flip_2_1_activated());
+			assert!(!Flip::bond(&delegator).is_zero());
 		});
 }

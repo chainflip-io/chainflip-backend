@@ -543,6 +543,7 @@ pub mod benchmarks_mock {
 		type RewardsDistribution = MockRewardsDistribution<Self>;
 		type RuntimeHoldReason = ();
 		type CallIndexer = ();
+		type OnFeeRewardsActivationScheduled = ();
 	}
 
 	cf_test_utilities::impl_test_helpers! {

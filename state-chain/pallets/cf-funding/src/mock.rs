@@ -71,6 +71,7 @@ impl pallet_cf_flip::Config for Test {
 	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type CallIndexer = ();
 	type RuntimeHoldReason = ();
+	type OnFeeRewardsActivationScheduled = ();
 }
 
 #[derive(

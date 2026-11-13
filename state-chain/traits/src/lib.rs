@@ -761,6 +761,30 @@ pub trait Bonding {
 	fn bond(account_id: &Self::AccountId) -> Self::Amount;
 }
 
+pub trait DelegationInfo {
+	type AccountId;
+	/// Whether the account has chosen an operator to delegate to.
+	fn is_delegating(account_id: &Self::AccountId) -> bool;
+}
+
+/// Whether delegation is restricted to Liquidity Providers. Governance switches this on together
+/// with scheduling FLIP 2.1, ahead of the activation epoch itself.
+pub trait LpRoleRequiredForDelegation {
+	fn is_required() -> bool;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn require();
+}
+
+/// Called when governance schedules the FLIP 2.1 activation epoch.
+pub trait OnFeeRewardsActivationScheduled {
+	fn on_fee_rewards_activation_scheduled();
+}
+
+impl OnFeeRewardsActivationScheduled for () {
+	fn on_fee_rewards_activation_scheduled() {}
+}
+
 /// Something that is able to provide block authorship slots that were missed.
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.

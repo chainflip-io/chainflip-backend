@@ -19231,6 +19231,10 @@ export type PalletCfSwappingError =
    **/
   | 'AccountBonded'
   /**
+   * Delegators can't register as brokers.
+   **/
+  | 'AccountIsDelegating'
+  /**
    * The FLIP to send to the gateway is too small relative to the egress fee.
    **/
   | 'FlipToGatewayAmountBelowThreshold';
