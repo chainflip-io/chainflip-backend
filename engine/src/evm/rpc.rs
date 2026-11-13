@@ -38,7 +38,7 @@ use crate::{
 	evm::conversions::{IntoAlloy, IntoSpCore},
 	rpc_utils,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use cf_utilities::make_periodic_tick;
 use std::{path::PathBuf, str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
@@ -271,6 +271,7 @@ pub struct EvmRpcSigningClient {
 	signer: PrivateKeySigner,
 	rpc_client: EvmRpcClient,
 	nonce_info: Arc<Mutex<Option<NonceInfo>>>,
+	chain_id: u64,
 	chain_name: &'static str,
 }
 
@@ -296,7 +297,13 @@ impl EvmRpcSigningClient {
 
 		Ok(async move {
 			let rpc_client = rpc_client_fut.await;
-			Self { signer, nonce_info: Arc::new(Mutex::new(None)), rpc_client, chain_name }
+			Self {
+				signer,
+				nonce_info: Arc::new(Mutex::new(None)),
+				rpc_client,
+				chain_id: expected_chain_id,
+				chain_name,
+			}
 		})
 	}
 
@@ -337,8 +344,20 @@ impl EvmRpcSigningClient {
 	}
 }
 
-/// Signs an EIP-1559 transaction, returning its EIP-2718 encoding.
-fn sign_transaction(signer: &PrivateKeySigner, tx: TransactionRequest) -> Result<Bytes> {
+/// Signs an EIP-1559 transaction for `chain_id`, returning its EIP-2718 encoding.
+///
+/// The transaction's chain id is set to `chain_id` if missing (alloy would otherwise default to
+/// chain 1), and the transaction is rejected if it targets a different chain.
+fn sign_transaction(
+	signer: &PrivateKeySigner,
+	chain_id: u64,
+	mut tx: TransactionRequest,
+) -> Result<Bytes> {
+	let tx_chain_id = *tx.chain_id.get_or_insert(chain_id);
+	ensure!(
+		tx_chain_id == chain_id,
+		"Transaction chain id {tx_chain_id} does not match the signer's chain id {chain_id}"
+	);
 	let unsigned_tx = tx
 		.build_1559()
 		.map_err(|e| anyhow!("Failed to build EIP-1559 transaction: {e}"))?;
@@ -453,7 +472,7 @@ impl EvmSigningRpcApi for EvmRpcSigningClient {
 		tx.nonce = Some(self.get_next_nonce().await?);
 
 		let res = async {
-			let signed_tx = sign_transaction(&self.signer, tx)?;
+			let signed_tx = sign_transaction(&self.signer, self.chain_id, tx)?;
 			self.rpc_client
 				.request::<B256>("eth_sendRawTransaction", json!([signed_tx]))
 				.await
@@ -530,24 +549,30 @@ mod tests {
 			H160::from_str("0x2c7536E3605D9C16a7a3D7b1898e529396a65c23").unwrap()
 		);
 
-		let signed_tx = sign_transaction(
-			&signer,
-			TransactionRequest {
-				to: Some(TxKind::Call(H160::repeat_byte(0x11).into_alloy())),
-				input: data_only_input(vec![1u8, 2, 3, 4]),
-				chain_id: Some(1),
-				value: Some(U256::from(12345u64).into_alloy()),
-				max_fee_per_gas: Some(30_000_000_000),
-				max_priority_fee_per_gas: Some(1_000_000_000),
-				gas: Some(100_000),
-				access_list: Some(AccessList::default()),
-				from: Some(signer.address()),
-				nonce: Some(7),
-				transaction_type: Some(2),
-				..Default::default()
-			},
-		)
-		.unwrap();
+		let tx = TransactionRequest {
+			to: Some(TxKind::Call(H160::repeat_byte(0x11).into_alloy())),
+			input: data_only_input(vec![1u8, 2, 3, 4]),
+			chain_id: Some(1),
+			value: Some(U256::from(12345u64).into_alloy()),
+			max_fee_per_gas: Some(30_000_000_000),
+			max_priority_fee_per_gas: Some(1_000_000_000),
+			gas: Some(100_000),
+			access_list: Some(AccessList::default()),
+			from: Some(signer.address()),
+			nonce: Some(7),
+			transaction_type: Some(2),
+			..Default::default()
+		};
+		let signed_tx = sign_transaction(&signer, 1, tx.clone()).unwrap();
+
+		// A missing chain id is filled in with the signer's chain id.
+		assert_eq!(
+			sign_transaction(&signer, 1, TransactionRequest { chain_id: None, ..tx.clone() })
+				.unwrap(),
+			signed_tx
+		);
+		// A transaction for a different chain is rejected.
+		assert!(sign_transaction(&signer, 42161, tx).is_err());
 
 		assert_eq!(
 			hex::encode(&signed_tx),
