@@ -100,6 +100,7 @@ use sp_version::RuntimeVersion;
 impl pallet_cf_validator::Config for Runtime {
 	type Offence = chainflip::Offence;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
+	type LpRoleRequiredForDelegation = chainflip::LpDelegationRequirement;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type KeyRotator = cons_key_rotator!(
 		EvmThresholdSigner,
@@ -237,6 +238,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
+	type DelegationInfo = Validator;
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
 	type FundAccount = Funding;
@@ -765,6 +767,7 @@ impl pallet_cf_flip::Config for Runtime {
 	// Required to satisfy trait bounds on InspectHold implementation, required by
 	// pallet_session::Config::Currency.
 	type RuntimeHoldReason = pallet_session::HoldReason;
+	type OnFeeRewardsActivationScheduled = chainflip::LpDelegationRequirement;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {

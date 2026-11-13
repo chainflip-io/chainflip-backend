@@ -44,9 +44,9 @@ use cf_primitives::{
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AccountRoleRegistry,
 	AsyncResult, AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip,
-	DeregistrationHooks, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo,
-	HistoricalEpoch, KeyRotator, MissedAuthorshipSlots, QualifyNode, RedemptionCheck,
-	ReputationResetter, SetSafeMode, VanityName,
+	DelegationInfo, DeregistrationHooks, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	FundingInfo, HistoricalEpoch, KeyRotator, LpRoleRequiredForDelegation, MissedAuthorshipSlots,
+	QualifyNode, RedemptionCheck, ReputationResetter, SetSafeMode, VanityName,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -115,7 +115,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const STORAGE_VERSION_U16: u16 = 11;
+pub const STORAGE_VERSION_U16: u16 = 10;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
@@ -238,6 +238,8 @@ pub mod pallet {
 
 		/// GRANDPA vote delegation manager.
 		type GrandpaDelegation: GrandpaVoteDelegation;
+
+		type LpRoleRequiredForDelegation: LpRoleRequiredForDelegation;
 	}
 
 	/// Percentage of epoch we allow redemptions.
@@ -1342,14 +1344,19 @@ pub mod pallet {
 		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			// Delegation is only available to Liquidity Providers. Accounts that haven't yet
-			// registered a role (e.g. freshly-funded accounts delegating via the SC Utils EVM
-			// contract) are implicitly registered as Liquidity Providers on first delegation.
-			match T::AccountRoleRegistry::account_role(&delegator) {
-				AccountRole::Unregistered =>
-					T::AccountRoleRegistry::register_as_liquidity_provider(&delegator)?,
-				AccountRole::LiquidityProvider => {},
-				_ => return Err(Error::<T>::NotLiquidityProvider.into()),
+			// Once required, delegation is only available to Liquidity Providers. Accounts that
+			// haven't yet registered a role (e.g. freshly-funded accounts delegating via the SC
+			// Utils EVM contract) are implicitly registered as Liquidity Providers on first
+			// delegation.
+			if T::LpRoleRequiredForDelegation::is_required() {
+				match T::AccountRoleRegistry::account_role(&delegator) {
+					AccountRole::Unregistered =>
+						T::AccountRoleRegistry::register_as_liquidity_provider(&delegator)?,
+					AccountRole::LiquidityProvider => {},
+					_ => return Err(Error::<T>::NotLiquidityProvider.into()),
+				}
+			} else {
+				ensure!(Self::is_delegation_eligible(&delegator), Error::<T>::DelegationNotAllowed);
 			}
 
 			ensure!(
@@ -2263,9 +2270,37 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Only an LP can delegate
 	pub(crate) fn is_delegation_eligible(account_id: &T::AccountId) -> bool {
-		T::AccountRoleRegistry::has_account_role(account_id, AccountRole::LiquidityProvider)
+		if T::LpRoleRequiredForDelegation::is_required() {
+			T::AccountRoleRegistry::has_account_role(account_id, AccountRole::LiquidityProvider)
+		} else {
+			!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Validator) &&
+				!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator) &&
+				!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Broker)
+		}
+	}
+
+	/// Gives the Liquidity Provider role to every Unregistered delegator, so that existing
+	/// delegations stay eligible once the role is required. Delegators with any other role are
+	/// left as they are and become ineligible.
+	pub fn assign_lp_role_to_delegators() {
+		for delegator in DelegationChoice::<T>::iter_keys() {
+			match T::AccountRoleRegistry::account_role(&delegator) {
+				AccountRole::Unregistered =>
+					if T::AccountRoleRegistry::register_as_liquidity_provider(&delegator).is_err() {
+						cf_runtime_utilities::log_or_panic!(
+							"Failed to register delegator {:?} as a Liquidity Provider",
+							delegator
+						);
+					},
+				AccountRole::LiquidityProvider => {},
+				other => log::warn!(
+					"Delegator {:?} has role {:?} and will no longer be eligible to delegate",
+					delegator,
+					other
+				),
+			}
+		}
 	}
 
 	/// Builds the delegation snapshots for the next epoch.
@@ -2624,6 +2659,14 @@ impl<T: Config> DeregistrationHooks for ValidatorDeregistrationCheck<T> {
 		}
 
 		Ok(())
+	}
+}
+
+impl<T: Config> DelegationInfo for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn is_delegating(account_id: &Self::AccountId) -> bool {
+		DelegationChoice::<T>::contains_key(account_id)
 	}
 }
 

@@ -6,7 +6,7 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Features
 
-- Require the Liquidity Provider role to delegate: `delegate` registers unregistered accounts as Liquidity Providers, Liquidity Providers can't deregister while delegating, and existing delegators are migrated to the role ([#6738](https://github.com/chainflip-io/chainflip-backend/issues/6738))
+- Require the Liquidity Provider role to delegate once governance schedules FLIP 2.1: from then on, `delegate` registers unregistered accounts as Liquidity Providers, and existing delegators are given the role when the activation epoch is set. Liquidity Providers can't deregister while delegating ([#6738](https://github.com/chainflip-io/chainflip-backend/issues/6738))
 - Keep the Liquidity Provider role after undelegating ([#7053](https://github.com/chainflip-io/chainflip-backend/issues/7053))
 
 ### Fixes
@@ -14,6 +14,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Bond every managed validator at least the epoch bond ([#7106](https://github.com/chainflip-io/chainflip-backend/issues/7106))
 - Run every deregistration check regardless of the account's role ([#7070](https://github.com/chainflip-io/chainflip-backend/issues/7070))
 - Bound each operator's list of delegation exceptions to 1,000 entries ([#7083](https://github.com/chainflip-io/chainflip-backend/issues/7083))
+- Bump rust-zmq to fix the libzmq assertion that aborts engines ([#7117](https://github.com/chainflip-io/chainflip-backend/issues/7117))
 
 ### Testing
 

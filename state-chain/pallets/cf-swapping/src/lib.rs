@@ -38,8 +38,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AffiliateRegistry, AssetConverter, BalanceApi,
-	Bonding, BrokerRecoveryApi, ChainflipNetworkInfo, ChannelIdAllocator, DepositApi,
-	DeregistrationHooks, ExpiryBehaviour, FeePayment, FundingInfo, FundingSource,
+	Bonding, BrokerRecoveryApi, ChainflipNetworkInfo, ChannelIdAllocator, DelegationInfo,
+	DepositApi, DeregistrationHooks, ExpiryBehaviour, FeePayment, FundingInfo, FundingSource,
 	GetMinimumFunding, IngressEgressFeeApi, LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry,
 	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
 	SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
@@ -701,6 +701,8 @@ pub mod pallet {
 			Amount = <Self as Chainflip>::Amount,
 		>;
 
+		type DelegationInfo: DelegationInfo<AccountId = <Self as frame_system::Config>::AccountId>;
+
 		type MinimumFunding: GetMinimumFunding;
 
 		type RuntimeCall: Member + Parameter + From<frame_system::Call<Self>> + From<Call<Self>>;
@@ -1160,6 +1162,8 @@ pub mod pallet {
 		RecoveryAccountNotLiquidityProvider,
 		/// The account is already bonded, so the broker bond can't be applied.
 		AccountBonded,
+		/// Delegators can't register as brokers.
+		AccountIsDelegating,
 		/// The FLIP to send to the gateway is too small relative to the egress fee.
 		FlipToGatewayAmountBelowThreshold,
 	}
@@ -1326,6 +1330,14 @@ pub mod pallet {
 			ensure!(
 				T::SafeMode::get().broker_registration_enabled,
 				Error::<T>::BrokerRegistrationDisabled,
+			);
+			// Delegation bonds in a pending snapshot aren't applied until the new epoch, so the
+			// bond check in `open_private_btc_channel` can't see them. `DelegationChoice` can't
+			// be removed while a rotation is in progress, so checking it here covers that
+			// window.
+			ensure!(
+				!T::DelegationInfo::is_delegating(&account_id),
+				Error::<T>::AccountIsDelegating
 			);
 
 			T::AccountRoleRegistry::register_as_broker(&account_id)?;
