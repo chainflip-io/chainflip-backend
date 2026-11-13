@@ -100,7 +100,7 @@ fn check_incompatibilities(incompatibilities: Vec<TypeIncompatibilityInfo>) -> R
 
 		println!("{BLUE}# Diff {diff_number}:{RESET}");
 		println!("```");
-		print!("{}", &incompatibility.type_diff);
+		print!("{}", incompatibility.type_diff);
 		println!("```");
 		println!("original error: {}", incompatibility.sub_type_incompat.error);
 		println!("");

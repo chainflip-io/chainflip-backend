@@ -15,8 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![feature(trait_alias)]
-#![feature(step_trait)]
-#![feature(impl_trait_in_assoc_type)]
+#![cfg_attr(test, feature(impl_trait_in_assoc_type))]
 #![feature(associated_type_defaults)]
 #![feature(lazy_type_alias)]
 #![allow(incomplete_features)]

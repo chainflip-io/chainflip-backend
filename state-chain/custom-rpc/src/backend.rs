@@ -202,7 +202,7 @@ impl<B: BlockT, BE: Backend<B>, C> SubscriptionCleaner<B, BE, C> {
 				)
 				.await
 			{
-				log::warn!("Failed to unpin blocks for subscription: {:?} , {:?}", &self.sub_id, e);
+				log::warn!("Failed to unpin blocks for subscription: {:?} , {:?}", self.sub_id, e);
 			}
 		}
 	}

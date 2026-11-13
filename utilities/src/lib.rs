@@ -18,7 +18,6 @@
 #![feature(step_trait)]
 #![cfg_attr(any(feature = "test-utils", test), feature(closure_track_caller))]
 #![feature(async_fn_track_caller)]
-#![feature(iterator_try_collect)]
 #![feature(decl_macro)]
 #![feature(associated_type_defaults)]
 #![feature(trait_alias)]

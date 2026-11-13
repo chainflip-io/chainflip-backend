@@ -21,7 +21,6 @@ use frame_support::{
 
 use cf_traits::{
 	mocks::{account_role_registry::MockAccountRoleRegistry, flip_slasher::MockFlipSlasher},
-	offence_reporting::*,
 	AccountRoleRegistry, EpochInfo, QualifyNode, SetSafeMode,
 };
 
