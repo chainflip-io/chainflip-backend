@@ -14,7 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use codec::{Decode, DecodeWithMemTracking, Encode};
+use cf_primitives::{Asset, ForeignChain};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -271,6 +272,16 @@ impl<T: Ord> SafeModeSet<T> {
 			SafeModeSet::Amber(set) => set.contains(t),
 		}
 	}
+	/// Disables `t`, leaving every other item as it was.
+	pub fn disable(&mut self, t: T) {
+		match self {
+			SafeModeSet::Red => {},
+			SafeModeSet::Green => *self = SafeModeSet::Amber(BTreeSet::from([t])),
+			SafeModeSet::Amber(set) => {
+				set.insert(t);
+			},
+		}
+	}
 }
 
 impl<T: Ord> SafeMode for SafeModeSet<T> {
@@ -298,6 +309,95 @@ impl<T: Ord + Serialize + strum::IntoEnumIterator> Serialize for SafeModeSet<T> 
 				.serialize(serializer),
 		}
 	}
+}
+
+/// Safe-mode changes that any single governance member can apply without a vote.
+///
+/// Rule for adding a preset: a member can apply any combination of presets on top of any state
+/// governance has approved. So every combination must be safe on top of any approved state, and a
+/// preset may only switch settings off.
+///
+/// Codec indices are fixed: never renumber or reuse them.
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	RuntimeDebug,
+)]
+pub enum EmergencyPreset {
+	/// Stops new deposit channels on this chain. Open channels and vault swaps keep working.
+	#[codec(index = 0)]
+	DisableDepositChannelCreation(ForeignChain),
+	/// Stops new loans and additions to existing loans in this asset. Boost still borrows from
+	/// the lending pool; see `DisableBoost`.
+	#[codec(index = 1)]
+	DisableNewLoans(Asset),
+	/// Stops LP withdrawals, LP-to-LP transfers and transfers of FLIP to the on-chain balance.
+	/// Broker withdrawals are covered by `DisableBrokerWithdrawals`.
+	#[codec(index = 2)]
+	DisableLpWithdrawals,
+	/// Stops LP internal swaps.
+	#[codec(index = 3)]
+	DisableInternalSwaps,
+	/// Stops boosting deposits on this chain. Deposits are credited at full confirmation instead.
+	#[codec(index = 4)]
+	DisableBoost(ForeignChain),
+	/// Stops broker and affiliate fee withdrawals.
+	#[codec(index = 5)]
+	DisableBrokerWithdrawals,
+	/// Stops new FLIP redemption requests. Redemptions already requested are unaffected.
+	#[codec(index = 6)]
+	DisableRedemptions,
+	/// Pauses witnessing of deposits to channels and vault swaps on this chain. They are credited
+	/// once witnessing is switched back on; deposits already prewitnessed still complete. Solana's
+	/// witnessing doesn't honour this yet (PRO-3360).
+	#[codec(index = 7)]
+	DisableIngressWitnessing(ForeignChain),
+}
+
+impl EmergencyPreset {
+	/// Every distinct preset. Only for benchmarks and tests.
+	#[cfg(any(test, feature = "runtime-benchmarks", feature = "mocks"))]
+	pub fn all() -> impl Iterator<Item = Self> {
+		// Adding a variant fails to compile here until it is listed below.
+		let _ = |preset: Self| match preset {
+			Self::DisableDepositChannelCreation(_) |
+			Self::DisableNewLoans(_) |
+			Self::DisableLpWithdrawals |
+			Self::DisableInternalSwaps |
+			Self::DisableBoost(_) |
+			Self::DisableBrokerWithdrawals |
+			Self::DisableRedemptions |
+			Self::DisableIngressWitnessing(_) => (),
+		};
+		ForeignChain::iter()
+			.map(Self::DisableDepositChannelCreation)
+			.chain(Asset::all().map(Self::DisableNewLoans))
+			.chain(ForeignChain::iter().map(Self::DisableBoost))
+			.chain(ForeignChain::iter().map(Self::DisableIngressWitnessing))
+			.chain([
+				Self::DisableLpWithdrawals,
+				Self::DisableInternalSwaps,
+				Self::DisableBrokerWithdrawals,
+				Self::DisableRedemptions,
+			])
+	}
+}
+
+/// Enough for every chain, every asset and every global preset in a single call.
+pub const MAX_EMERGENCY_PRESETS: u32 = 64;
+
+pub trait EmergencySafeMode {
+	/// Applies each preset to the runtime safe mode.
+	fn apply(presets: &BTreeSet<EmergencyPreset>);
 }
 
 #[cfg(test)]
@@ -469,5 +569,29 @@ pub(crate) mod test {
 			expected(Asset::all().filter(|a| *a != Asset::Btc).collect()),
 		);
 		assert_eq!(to_json(SafeModeSet::Amber(Asset::all().collect())), expected(BTreeSet::new()));
+	}
+
+	#[test]
+	fn safe_mode_set_disable() {
+		let disabled = |mut set: SafeModeSet<u8>, item| {
+			set.disable(item);
+			set
+		};
+
+		assert_eq!(disabled(SafeModeSet::Green, 1), SafeModeSet::Amber(BTreeSet::from([1])));
+		assert_eq!(
+			disabled(SafeModeSet::Amber(BTreeSet::from([2])), 1),
+			SafeModeSet::Amber(BTreeSet::from([1, 2]))
+		);
+		assert_eq!(
+			disabled(SafeModeSet::Amber(BTreeSet::from([1])), 1),
+			SafeModeSet::Amber(BTreeSet::from([1]))
+		);
+		assert_eq!(disabled(SafeModeSet::Red, 1), SafeModeSet::Red);
+	}
+
+	#[test]
+	fn every_emergency_preset_fits_in_one_call() {
+		assert!(EmergencyPreset::all().count() <= MAX_EMERGENCY_PRESETS as usize);
 	}
 }

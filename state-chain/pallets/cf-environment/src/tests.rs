@@ -184,6 +184,24 @@ fn update_safe_mode() {
 }
 
 #[test]
+fn mutate_safe_mode_emits_event_only_on_change() {
+	new_test_ext().execute_with(|| {
+		Environment::mutate_safe_mode(|safe_mode| safe_mode.mock.flag1 = false);
+		let expected =
+			MockRuntimeSafeMode { mock: MockPalletSafeMode { flag1: false, flag2: true } };
+		assert_eq!(RuntimeSafeMode::<Test>::get(), expected);
+		System::assert_last_event(RuntimeEvent::Environment(Event::RuntimeSafeModeUpdated {
+			safe_mode: SafeModeUpdate::CodeAmber(expected.clone()),
+		}));
+
+		System::reset_events();
+		Environment::mutate_safe_mode(|safe_mode| safe_mode.mock.flag1 = false);
+		assert_eq!(RuntimeSafeMode::<Test>::get(), expected);
+		assert!(System::events().is_empty());
+	});
+}
+
+#[test]
 fn utxos_selected_for_consolidation_are_kept_if_change_cannot_cover_the_fee() {
 	let epoch_1 = [0xAA; 32];
 	let epoch_2 = [0xBB; 32];

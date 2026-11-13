@@ -43,6 +43,7 @@ import type {
   CfPrimitivesWitnessingTaskName,
   SpConsensusGrandpaAppPublic,
   PalletCfGovernanceGovernanceCouncil,
+  CfTraitsSafeModeEmergencyPreset,
   PalletCfTokenholderGovernanceProposal,
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
@@ -1121,6 +1122,15 @@ export interface ChainEvents extends GenericChainEvents {
       'Governance',
       'NewGovernanceCouncil',
       { newCouncil: PalletCfGovernanceGovernanceCouncil }
+    >;
+
+    /**
+     * A governance member applied emergency safe-mode presets.
+     **/
+    EmergencyPresetsApplied: GenericPalletEvent<
+      'Governance',
+      'EmergencyPresetsApplied',
+      { member: AccountId32; presets: Array<CfTraitsSafeModeEmergencyPreset> }
     >;
 
     /**

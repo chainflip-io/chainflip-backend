@@ -2946,7 +2946,14 @@ export type PalletCfGovernanceCall =
    * Submit a call to be executed if the gov key has already committed to it.
    **/
   | { name: 'SubmitGovkeyCall'; params: { call: StateChainRuntimeRuntimeCall } }
-  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } };
+  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } }
+  /**
+   * Lets any single governance member switch off parts of the protocol without a vote.
+   *
+   * Presets can only switch settings off. Switching them back on needs a governance vote.
+   * Applying a preset that is already in force is a no-op.
+   **/
+  | { name: 'ApplyEmergencyPresets'; params: { presets: Array<CfTraitsSafeModeEmergencyPreset> } };
 
 export type PalletCfGovernanceCallLike =
   /**
@@ -3005,9 +3012,26 @@ export type PalletCfGovernanceCallLike =
    * Submit a call to be executed if the gov key has already committed to it.
    **/
   | { name: 'SubmitGovkeyCall'; params: { call: StateChainRuntimeRuntimeCallLike } }
-  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } };
+  | { name: 'DispatchWhitelistedCall'; params: { approvedId: number } }
+  /**
+   * Lets any single governance member switch off parts of the protocol without a vote.
+   *
+   * Presets can only switch settings off. Switching them back on needs a governance vote.
+   * Applying a preset that is already in force is a no-op.
+   **/
+  | { name: 'ApplyEmergencyPresets'; params: { presets: Array<CfTraitsSafeModeEmergencyPreset> } };
 
 export type PalletCfGovernanceExecutionMode = 'Automatic' | 'Manual';
+
+export type CfTraitsSafeModeEmergencyPreset =
+  | { type: 'DisableDepositChannelCreation'; value: CfPrimitivesChainsForeignChain }
+  | { type: 'DisableNewLoans'; value: CfPrimitivesChainsAssetsAnyAsset }
+  | { type: 'DisableLpWithdrawals' }
+  | { type: 'DisableInternalSwaps' }
+  | { type: 'DisableBoost'; value: CfPrimitivesChainsForeignChain }
+  | { type: 'DisableBrokerWithdrawals' }
+  | { type: 'DisableRedemptions' }
+  | { type: 'DisableIngressWitnessing'; value: CfPrimitivesChainsForeignChain };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -13877,7 +13901,14 @@ export type PalletCfGovernanceEvent =
   /**
    * New governance council set
    **/
-  | { name: 'NewGovernanceCouncil'; data: { newCouncil: PalletCfGovernanceGovernanceCouncil } };
+  | { name: 'NewGovernanceCouncil'; data: { newCouncil: PalletCfGovernanceGovernanceCouncil } }
+  /**
+   * A governance member applied emergency safe-mode presets.
+   **/
+  | {
+      name: 'EmergencyPresetsApplied';
+      data: { member: AccountId32; presets: Array<CfTraitsSafeModeEmergencyPreset> };
+    };
 
 export type PalletCfGovernanceGovernanceCouncil = {
   members: Array<AccountId32>;
@@ -18472,7 +18503,11 @@ export type PalletCfGovernanceError =
   /**
    * The provided council is invalid: either empty or threshold > members.len()
    **/
-  | 'InvalidCouncil';
+  | 'InvalidCouncil'
+  /**
+   * At least one emergency preset must be given.
+   **/
+  | 'NoEmergencyPresets';
 
 /**
  * The `Error` enum of this pallet.

@@ -15,9 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use frame_support::dispatch::GetDispatchInfo;
+use cf_primitives::{AccountRole, Asset, ForeignChain};
+use cf_traits::EmergencyPreset;
+use frame_support::{assert_noop, dispatch::GetDispatchInfo};
 use pallet_cf_flip::FlipTransactionPayment;
 use pallet_transaction_payment::OnChargeTransaction;
+use state_chain_runtime::{BitcoinInstance, Governance, LiquidityProvider};
+use std::collections::BTreeSet;
 
 #[test]
 // Governance is allowed to make free calls to governance gated extrinsics.
@@ -25,8 +29,15 @@ fn governance_members_pay_no_fees_for_governance_extrinsics() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
 		let call: state_chain_runtime::RuntimeCall =
 			frame_system::Call::remark { remark: vec![] }.into();
-		let gov_call: state_chain_runtime::RuntimeCall =
-			pallet_cf_governance::Call::approve { approved_id: 1 }.into();
+		let gov_calls: [state_chain_runtime::RuntimeCall; 2] = [
+			pallet_cf_governance::Call::approve { approved_id: 1 }.into(),
+			pallet_cf_governance::Call::apply_emergency_presets {
+				presets: BTreeSet::from([EmergencyPreset::DisableInternalSwaps])
+					.try_into()
+					.unwrap(),
+			}
+			.into(),
+		];
 		// Expect a successful normal call to work
 		let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(
 			&ALICE.into(),
@@ -39,15 +50,29 @@ fn governance_members_pay_no_fees_for_governance_extrinsics() {
 			ordinary.expect("we have a result").is_some(),
 			"expected Some((Surplus, CallInfoId))"
 		);
-		// Expect a successful gov call to work
-		let gov = FlipTransactionPayment::<Runtime>::withdraw_fee(
-			&ERIN.into(),
-			&gov_call,
-			&gov_call.get_dispatch_info(),
-			5000,
-			0,
-		);
-		assert!(gov.expect("we have a result").is_none(), "expected None");
+		for gov_call in &gov_calls {
+			// Expect a gov call by a member to be free
+			let gov = FlipTransactionPayment::<Runtime>::withdraw_fee(
+				&ERIN.into(),
+				gov_call,
+				&gov_call.get_dispatch_info(),
+				5000,
+				0,
+			);
+			assert!(gov.expect("we have a result").is_none(), "expected None for {gov_call:?}");
+			// Expect a non-member to pay for a gov call
+			let non_member = FlipTransactionPayment::<Runtime>::withdraw_fee(
+				&ALICE.into(),
+				gov_call,
+				&gov_call.get_dispatch_info(),
+				5,
+				0,
+			);
+			assert!(
+				non_member.expect("we have a result").is_some(),
+				"expected Some for {gov_call:?}"
+			);
+		}
 		// Expect a non gov call to fail when it's executed by gov member
 		let gov_err = FlipTransactionPayment::<Runtime>::withdraw_fee(
 			&ERIN.into(),
@@ -57,5 +82,35 @@ fn governance_members_pay_no_fees_for_governance_extrinsics() {
 			0,
 		);
 		assert!(gov_err.is_err(), "expected an error");
+	});
+}
+
+#[test]
+fn member_can_apply_emergency_preset() {
+	const LP: AccountId = AccountId::new([0x11; 32]);
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		crate::network::new_account(&LP, AccountRole::LiquidityProvider);
+
+		assert_ok!(Governance::apply_emergency_presets(
+			RuntimeOrigin::signed(ERIN.into()),
+			BTreeSet::from([EmergencyPreset::DisableDepositChannelCreation(ForeignChain::Bitcoin)])
+				.try_into()
+				.unwrap(),
+		));
+
+		assert_noop!(
+			LiquidityProvider::request_liquidity_deposit_address(
+				RuntimeOrigin::signed(LP),
+				Asset::Btc,
+				0
+			),
+			pallet_cf_ingress_egress::Error::<Runtime, BitcoinInstance>::DepositChannelCreationDisabled
+		);
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP),
+			Asset::Eth,
+			0
+		));
 	});
 }
