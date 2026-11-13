@@ -54,9 +54,7 @@ pub trait SolanaVaultSwapAccountsHook<Account, SwapDetails, E> {
 	fn get_number_of_available_sol_nonce_accounts(critical: bool) -> usize;
 }
 
-pub trait FromSolOrNot {
-	fn sol_or_not(s: &Self) -> bool;
-}
+pub use cf_chains::sol::FromSolOrNot;
 
 pub type SolanaVaultSwapAccountsLastClosedAt<BlockNumber> = BlockNumber;
 

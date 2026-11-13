@@ -33,6 +33,7 @@ use cf_chains::{
 };
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
+use pallet_cf_ingress_egress::{VaultDepositFacts, VaultSwapData};
 use sol_prim::program_instructions::{
 	swap_endpoints::types::{SwapEndpointDataAccount, SwapEvent},
 	ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
@@ -98,129 +99,141 @@ pub async fn get_vault_swaps(
 					.ok(),
 			)
 		})
-		.map(
-			|(
-				vault_swap_account,
-				SwapEvent {
-					creation_slot,
-					sender,
-					dst_chain,
-					dst_address,
-					dst_token,
-					amount,
-					src_token,
-					ccm_parameters,
-					cf_parameters,
-				},
-			)| {
-				{
-					let vault_swap_details = move || {
-						let from_asset =
-							if let Some(token) = src_token {
-								if token == usdc_token_mint_pubkey.into() {
-									SolAsset::SolUsdc
-								} else if token == usdt_token_mint_pubkey.into() {
-									SolAsset::SolUsdt
-								} else {
-									bail!("Unsupported input token for the witnessed solana vault swap.");
-								}
-							} else {
-								SolAsset::Sol
-							};
-
-						let (
-							deposit_metadata,
-							VaultSwapParametersV1 {
-								refund_params,
-								dca_params,
-								boost_fee,
-								broker_fee,
-								affiliate_fees,
-							},
-						) = match ccm_parameters {
-							None => {
-								let (vault_swap_parameters, ()) =
-									decode_cf_parameters(&cf_parameters[..], creation_slot)?;
-								(None, vault_swap_parameters)
-							},
-							Some(ccm_parameters) => {
-								let (vault_swap_parameters, ccm_additional_data) =
-									decode_cf_parameters(&cf_parameters[..], creation_slot)?;
-
-								(
-									Some(CcmDepositMetadata {
-										source_chain: cf_primitives::ForeignChain::Solana,
-										source_address: Some(ForeignChainAddress::Sol(
-											sender.into(),
-										)),
-										channel_metadata: CcmChannelMetadata {
-											message: ccm_parameters
-												.message
-												.to_vec()
-												.try_into()
-												.map_err(|_| {
-													anyhow!(
-														"Failed to deposit CCM: `message` too long."
-													)
-												})?,
-											gas_budget: ccm_parameters.gas_amount.into(),
-											ccm_additional_data,
-										},
-									}),
-									vault_swap_parameters,
-								)
-							},
-						};
-						Ok(SolanaVaultSwapDetails {
-							from: from_asset,
-							deposit_amount: amount,
-							destination_address: EncodedAddress::from_chain_bytes(
-								dst_chain.try_into().map_err(|e| {
-									anyhow!("Error while parsing destination chain for solana vault swap:{}.", e)
-								})?,
-								dst_address.to_vec(),
-							)
-							.map_err(|e| {
-								anyhow!("Failed to decode the destination address for solana vault swap:{}.", e)
-							})?,
-							to: dst_token.try_into().map_err(|e| {
-								anyhow!("Error while decoding destination token for solana vault swap: {}.", e)
-							})?,
-							deposit_metadata,
-							swap_account: vault_swap_account,
-							creation_slot,
-							broker_fee,
-							affiliate_fees: affiliate_fees
-								.into_iter()
-								.map(|entry| cf_primitives::Beneficiary { account: entry.affiliate, bps: entry.fee.into() })
-								.collect_vec()
-								.try_into()
-								.map_err(|_| {
-									anyhow!("runtime supports at least as many affiliates as we allow in cf_parameters encoding")
-								})?,
-							refund_params,
-							dca_params,
-							boost_fee,
-						})
-					};
-					(
-						VaultSwapAccountAndSender {
-							vault_swap_account,
-							swap_sender: sender.into(),
-						},
-						vault_swap_details()
-							.inspect_err(|e| {
-								warn!("Unable to derive swap details for account `{vault_swap_account}`: {e}")
-							})
-							.ok(),
-					)
-				}
-			},
-		)
+		.map(|(vault_swap_account, event)| {
+			let account =
+				VaultSwapAccountAndSender { vault_swap_account, swap_sender: event.sender.into() };
+			let details =
+				derive_vault_swap_details(
+					vault_swap_account,
+					event,
+					usdc_token_mint_pubkey,
+					usdt_token_mint_pubkey,
+				)
+				.inspect_err(|error| {
+					warn!("Unable to derive deposit facts for account `{vault_swap_account}`: {error:#}");
+				})
+				.ok();
+			(account, details)
+		})
 		.collect()
 		.await;
 
 	Ok((new_swaps, closed_accounts))
+}
+
+fn derive_vault_swap_details(
+	vault_swap_account: SolAddress,
+	event: SwapEvent,
+	usdc_token_mint_pubkey: SolAddress,
+	usdt_token_mint_pubkey: SolAddress,
+) -> Result<SolanaVaultSwapDetails, anyhow::Error> {
+	let SwapEvent {
+		creation_slot,
+		sender,
+		dst_chain,
+		dst_address,
+		dst_token,
+		amount,
+		src_token,
+		ccm_parameters,
+		cf_parameters,
+	} = event;
+	let from_asset = if let Some(token) = src_token {
+		if token == usdc_token_mint_pubkey.into() {
+			SolAsset::SolUsdc
+		} else if token == usdt_token_mint_pubkey.into() {
+			SolAsset::SolUsdt
+		} else {
+			bail!("Unsupported input token for the witnessed solana vault swap.");
+		}
+	} else {
+		SolAsset::Sol
+	};
+
+	let deposit = VaultDepositFacts {
+		input_asset: from_asset,
+		deposit_amount: amount,
+		deposit_address: None,
+		channel_id: None,
+		tx_id: (vault_swap_account, creation_slot),
+		deposit_details: cf_chains::sol::VaultSwapOrDepositChannelId::VaultSwapAccount((
+			vault_swap_account,
+			creation_slot,
+		)),
+	};
+	let decode_swap = move || -> Result<_, anyhow::Error> {
+		let (
+			deposit_metadata,
+			VaultSwapParametersV1 {
+				refund_params,
+				dca_params,
+				boost_fee,
+				broker_fee,
+				affiliate_fees,
+			},
+		) = match ccm_parameters {
+			None => {
+				let (vault_swap_parameters, ()) = decode_cf_parameters(&cf_parameters[..])?;
+				(None, vault_swap_parameters)
+			},
+			Some(ccm_parameters) => {
+				let (vault_swap_parameters, ccm_additional_data) =
+					decode_cf_parameters(&cf_parameters[..])?;
+
+				(
+					Some(CcmDepositMetadata {
+						source_chain: cf_primitives::ForeignChain::Solana,
+						source_address: Some(ForeignChainAddress::Sol(sender.into())),
+						channel_metadata: CcmChannelMetadata {
+							message: ccm_parameters.message.to_vec().try_into().map_err(|_| {
+								anyhow!("Failed to deposit CCM: `message` too long.")
+							})?,
+							gas_budget: ccm_parameters.gas_amount.into(),
+							ccm_additional_data,
+						},
+					}),
+					vault_swap_parameters,
+				)
+			},
+		};
+		Ok(VaultSwapData {
+			destination_address: EncodedAddress::from_chain_bytes(
+				dst_chain.try_into().map_err(|e| {
+					anyhow!("Error while parsing destination chain for solana vault swap:{}.", e)
+				})?,
+				dst_address.to_vec(),
+			)
+			.map_err(|e| {
+				anyhow!("Failed to decode the destination address for solana vault swap:{}.", e)
+			})?,
+			output_asset: dst_token.try_into().map_err(|e| {
+				anyhow!("Error while decoding destination token for solana vault swap: {}.", e)
+			})?,
+			deposit_metadata,
+			broker_fee: Some(broker_fee),
+			affiliate_fees: affiliate_fees
+				.into_iter()
+				.map(|entry| cf_primitives::Beneficiary {
+					account: entry.affiliate,
+					bps: entry.fee.into(),
+				})
+				.collect_vec()
+				.try_into()
+				.map_err(|_| {
+					anyhow!("runtime supports at least as many affiliates as we allow in cf_parameters encoding")
+				})?,
+			refund_params,
+			dca_params,
+			boost_fee: boost_fee.into(),
+		})
+	};
+	match decode_swap() {
+		Ok(swap) => Ok(SolanaVaultSwapDetails::Swap { deposit, swap }),
+		Err(error) => {
+			warn!("Unable to decode swap details for account `{vault_swap_account}`: {error:#}");
+			Ok(SolanaVaultSwapDetails::Failed { deposit, broker_id: None })
+		},
+	}
 }
 
 async fn get_changed_program_swap_accounts(
@@ -392,6 +405,111 @@ mod tests {
 	use std::str::FromStr;
 
 	use super::*;
+
+	fn swap_event(ccm: bool) -> SwapEvent {
+		use cf_chains::{
+			cf_parameters::{CfParametersV1, VersionedCfParameters},
+			ChannelRefundParameters,
+		};
+		use codec::Encode;
+		let parameters = VaultSwapParametersV1 {
+			refund_params: ChannelRefundParameters {
+				retry_duration: 5,
+				refund_address: SolAddress::from([3; 32]),
+				min_price: Default::default(),
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
+			},
+			dca_params: None,
+			boost_fee: 0,
+			broker_fee: cf_primitives::Beneficiary {
+				account: cf_primitives::AccountId::new([9; 32]),
+				bps: 0,
+			},
+			affiliate_fees: Default::default(),
+		};
+		let cf_parameters = if ccm {
+			VersionedCfParameters::V1(CfParametersV1 {
+				ccm_additional_data: cf_chains::CcmAdditionalData::default(),
+				vault_swap_parameters: parameters,
+			})
+			.encode()
+		} else {
+			VersionedCfParameters::V1(CfParametersV1 {
+				ccm_additional_data: (),
+				vault_swap_parameters: parameters,
+			})
+			.encode()
+		};
+		SwapEvent {
+			creation_slot: 42,
+			sender: SolAddress::from([4; 32]).into(),
+			dst_chain: cf_primitives::ForeignChain::Ethereum as u32,
+			dst_address: vec![1; 20],
+			dst_token: cf_primitives::Asset::Eth as u32,
+			amount: 1000,
+			src_token: None,
+			ccm_parameters: ccm.then(|| {
+				sol_prim::program_instructions::swap_endpoints::types::CcmParams {
+					message: vec![1, 2],
+					gas_amount: 1000,
+				}
+			}),
+			cf_parameters,
+		}
+	}
+
+	#[test]
+	fn known_assets_keep_their_facts_when_swap_decoding_fails() {
+		let account = SolAddress::from([7; 32]);
+		let usdc = SolAddress::from([1; 32]);
+		let usdt = SolAddress::from([2; 32]);
+		for (mint, asset) in [
+			(None, SolAsset::Sol),
+			(Some(usdc.into()), SolAsset::SolUsdc),
+			(Some(usdt.into()), SolAsset::SolUsdt),
+		] {
+			for ccm in [false, true] {
+				let mut event = swap_event(ccm);
+				event.src_token = mint;
+				let valid = derive_vault_swap_details(account, event.clone(), usdc, usdt).unwrap();
+				assert!(matches!(valid, SolanaVaultSwapDetails::Swap { .. }));
+				for failure in 0..5 {
+					let mut malformed = event.clone();
+					match failure {
+						0 => malformed.cf_parameters = vec![255],
+						1 => malformed.dst_chain = u32::MAX,
+						2 => malformed.dst_token = u32::MAX,
+						3 => malformed.dst_address = vec![],
+						_ => {
+							malformed.cf_parameters.pop();
+						},
+					}
+					let failed = derive_vault_swap_details(account, malformed, usdc, usdt).unwrap();
+					assert!(matches!(
+						failed,
+						SolanaVaultSwapDetails::Failed { broker_id: None, .. }
+					));
+					assert_eq!(failed.deposit(), valid.deposit());
+					assert_eq!(failed.deposit().input_asset, asset);
+					assert_eq!(failed.deposit().tx_id, (account, 42));
+				}
+			}
+		}
+	}
+
+	#[test]
+	fn unknown_source_mints_do_not_produce_failed_witnesses() {
+		let mut event = swap_event(false);
+		event.src_token = Some(SolAddress::from([8; 32]).into());
+		assert!(derive_vault_swap_details(
+			SolAddress::from([7; 32]),
+			event,
+			SolAddress::from([1; 32]),
+			SolAddress::from([2; 32])
+		)
+		.is_err());
+	}
 
 	#[tokio::test]
 	#[ignore]

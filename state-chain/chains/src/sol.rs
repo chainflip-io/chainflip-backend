@@ -45,6 +45,11 @@ use sp_runtime::traits::Member;
 
 use super::{Chain, ChainCrypto};
 
+/// Whether a witnessed vault deposit contains native SOL and should be fetched immediately.
+pub trait FromSolOrNot {
+	fn sol_or_not(s: &Self) -> bool;
+}
+
 pub mod api;
 pub mod benchmarking;
 pub mod instruction_builder;
@@ -140,8 +145,6 @@ impl Chain for Solana {
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 15;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000_000u64;
-	const BURN_ADDRESS: Self::ChainAccount =
-		const_address("1nc1nerator11111111111111111111111111111111");
 	const IS_EVM_CHAIN: bool = false;
 
 	type ChainCrypto = SolanaCrypto;

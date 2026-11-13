@@ -9251,6 +9251,7 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-swapping",
  "parity-scale-codec",
+ "proptest",
  "scale-info",
  "serde",
  "sp-core",

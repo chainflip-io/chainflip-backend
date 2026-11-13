@@ -3695,6 +3695,10 @@ impl<T: Config> BrokerRecoveryApi for Pallet<T> {
 			)
 		})
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark(broker: &Self::AccountId, recovery_account: &Self::AccountId) {
+		BrokerRecoveryAccount::<T>::insert(broker, recovery_account);
+	}
 }
 
 /// Removes the recovery account link when the broker account is reaped. Deregistering as a broker

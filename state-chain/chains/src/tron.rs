@@ -73,7 +73,6 @@ impl Chain for Tron {
 	const GAS_ASSET: Self::ChainAsset = assets::tron::Asset::Trx;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000u128;
-	const BURN_ADDRESS: Self::ChainAccount = Address::zero();
 	const IS_EVM_CHAIN: bool = true;
 
 	type ChainCrypto = EvmCrypto;

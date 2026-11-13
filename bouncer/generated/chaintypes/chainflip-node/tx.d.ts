@@ -4612,6 +4612,29 @@ export interface ChainTx<
     >;
 
     /**
+     * Routes the remaining liability of queued vault deposits to their brokers' current
+     * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+     * broker.
+     *
+     * Each deposit is recovered independently: one that fails stays queued and doesn't
+     * affect the others.
+     *
+     * @param {Array<[FixedBytes<32>, AccountId32Like]>} recoveries
+     **/
+    recoverFailedVaultDeposits: GenericTxCall<
+      (recoveries: Array<[FixedBytes<32>, AccountId32Like]>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'EthereumIngressEgress';
+          palletCall: {
+            name: 'RecoverFailedVaultDeposits';
+            params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -4783,6 +4806,29 @@ export interface ChainTx<
     >;
 
     /**
+     * Routes the remaining liability of queued vault deposits to their brokers' current
+     * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+     * broker.
+     *
+     * Each deposit is recovered independently: one that fails stays queued and doesn't
+     * affect the others.
+     *
+     * @param {Array<[FixedBytes<32>, AccountId32Like]>} recoveries
+     **/
+    recoverFailedVaultDeposits: GenericTxCall<
+      (recoveries: Array<[FixedBytes<32>, AccountId32Like]>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'PolkadotIngressEgress';
+          palletCall: {
+            name: 'RecoverFailedVaultDeposits';
+            params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -4945,6 +4991,29 @@ export interface ChainTx<
           palletCall: {
             name: 'MarkDepositChannelForRejection';
             params: { depositAddress: CfChainsBtcScriptPubkey };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Routes the remaining liability of queued vault deposits to their brokers' current
+     * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+     * broker.
+     *
+     * Each deposit is recovered independently: one that fails stays queued and doesn't
+     * affect the others.
+     *
+     * @param {Array<[FixedBytes<32>, AccountId32Like]>} recoveries
+     **/
+    recoverFailedVaultDeposits: GenericTxCall<
+      (recoveries: Array<[FixedBytes<32>, AccountId32Like]>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BitcoinIngressEgress';
+          palletCall: {
+            name: 'RecoverFailedVaultDeposits';
+            params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
           };
         },
         ChainKnownTypes
@@ -5769,6 +5838,29 @@ export interface ChainTx<
     >;
 
     /**
+     * Routes the remaining liability of queued vault deposits to their brokers' current
+     * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+     * broker.
+     *
+     * Each deposit is recovered independently: one that fails stays queued and doesn't
+     * affect the others.
+     *
+     * @param {Array<[FixedBytes<32>, AccountId32Like]>} recoveries
+     **/
+    recoverFailedVaultDeposits: GenericTxCall<
+      (recoveries: Array<[FixedBytes<32>, AccountId32Like]>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'ArbitrumIngressEgress';
+          palletCall: {
+            name: 'RecoverFailedVaultDeposits';
+            params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -6403,6 +6495,29 @@ export interface ChainTx<
           palletCall: {
             name: 'MarkDepositChannelForRejection';
             params: { depositAddress: SolPrimAddress };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Routes the remaining liability of queued vault deposits to their brokers' current
+     * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+     * broker.
+     *
+     * Each deposit is recovered independently: one that fails stays queued and doesn't
+     * affect the others.
+     *
+     * @param {Array<[FixedBytes<32>, AccountId32Like]>} recoveries
+     **/
+    recoverFailedVaultDeposits: GenericTxCall<
+      (recoveries: Array<[FixedBytes<32>, AccountId32Like]>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'SolanaIngressEgress';
+          palletCall: {
+            name: 'RecoverFailedVaultDeposits';
+            params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
           };
         },
         ChainKnownTypes
@@ -7361,6 +7476,29 @@ export interface ChainTx<
           palletCall: {
             name: 'MarkDepositChannelForRejection';
             params: { depositAddress: CfChainsDotPolkadotAccountId };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Routes the remaining liability of queued vault deposits to their brokers' current
+     * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+     * broker.
+     *
+     * Each deposit is recovered independently: one that fails stays queued and doesn't
+     * affect the others.
+     *
+     * @param {Array<[FixedBytes<32>, AccountId32Like]>} recoveries
+     **/
+    recoverFailedVaultDeposits: GenericTxCall<
+      (recoveries: Array<[FixedBytes<32>, AccountId32Like]>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AssethubIngressEgress';
+          palletCall: {
+            name: 'RecoverFailedVaultDeposits';
+            params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
           };
         },
         ChainKnownTypes
@@ -9575,6 +9713,29 @@ export interface ChainTx<
     >;
 
     /**
+     * Routes the remaining liability of queued vault deposits to their brokers' current
+     * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+     * broker.
+     *
+     * Each deposit is recovered independently: one that fails stays queued and doesn't
+     * affect the others.
+     *
+     * @param {Array<[FixedBytes<32>, AccountId32Like]>} recoveries
+     **/
+    recoverFailedVaultDeposits: GenericTxCall<
+      (recoveries: Array<[FixedBytes<32>, AccountId32Like]>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'TronIngressEgress';
+          palletCall: {
+            name: 'RecoverFailedVaultDeposits';
+            params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -10396,6 +10557,29 @@ export interface ChainTx<
           palletCall: {
             name: 'MarkDepositChannelForRejection';
             params: { depositAddress: H160 };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Routes the remaining liability of queued vault deposits to their brokers' current
+     * recovery LPs. A deposit already attributed to a broker can only be recovered to that
+     * broker.
+     *
+     * Each deposit is recovered independently: one that fails stays queued and doesn't
+     * affect the others.
+     *
+     * @param {Array<[FixedBytes<32>, AccountId32Like]>} recoveries
+     **/
+    recoverFailedVaultDeposits: GenericTxCall<
+      (recoveries: Array<[FixedBytes<32>, AccountId32Like]>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'BscIngressEgress';
+          palletCall: {
+            name: 'RecoverFailedVaultDeposits';
+            params: { recoveries: Array<[FixedBytes<32>, AccountId32Like]> };
           };
         },
         ChainKnownTypes

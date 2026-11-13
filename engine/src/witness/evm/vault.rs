@@ -29,38 +29,31 @@ use cf_chains::{
 };
 use cf_primitives::{AssetAmount, ForeignChain};
 use ethers::prelude::*;
-use pallet_cf_ingress_egress::{TransferFailedWitness, VaultDepositWitness};
+use pallet_cf_ingress_egress::{
+	TransferFailedWitness, VaultDepositFacts, VaultDepositWitness, VaultSwapData,
+};
 use state_chain_runtime::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
 pub fn decode_cf_parameters<RefundAddress, CcmData>(
 	cf_parameters: &[u8],
-	block_query: impl Debug,
 ) -> Result<(VaultSwapParametersV1<RefundAddress>, CcmData)>
 where
 	RefundAddress: Decode,
 	CcmData: Default + Decode,
 {
-	cf_chains::cf_parameters::decode_cf_parameters(cf_parameters)
-		.inspect_err(|_| {
-			tracing::warn!(
-				"Failed to decode cf_parameters: {cf_parameters:?} at block {block_query:?}"
-			)
-		})
-		.map_err(|e| anyhow!(e))
+	cf_chains::cf_parameters::decode_cf_parameters(cf_parameters).map_err(|e| {
+		anyhow!("Failed to decode cf_parameters 0x{}: {e}", hex::encode(cf_parameters))
+	})
 }
 
-macro_rules! vault_deposit_witness {
-	($source_asset: expr, $deposit_amount: expr, $dest_asset: expr, $dest_address: expr, $metadata: expr, $tx_id: expr, $params: expr) => {
-		VaultDepositWitness {
-			input_asset: $source_asset,
+macro_rules! vault_swap_data {
+	($dest_asset: expr, $dest_address: expr, $metadata: expr, $params: expr) => {
+		pallet_cf_ingress_egress::VaultSwapData {
 			output_asset: $dest_asset,
-			deposit_amount: $deposit_amount,
 			destination_address: $dest_address,
 			deposit_metadata: $metadata,
-			tx_id: $tx_id,
-			deposit_details: DepositDetails { tx_hashes: Some(vec![$tx_id]) },
 			broker_fee: Some($params.broker_fee),
 			affiliate_fees: $params.affiliate_fees
 				.into_iter()
@@ -71,13 +64,11 @@ macro_rules! vault_deposit_witness {
 			boost_fee: $params.boost_fee.into(),
 			dca_params: $params.dca_params,
 			refund_params: $params.refund_params,
-			channel_id: None,
-			deposit_address: None,
 		}
 	}
 }
 
-pub(crate) use vault_deposit_witness;
+pub(crate) use vault_swap_data;
 
 fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
 	from: Primitive,
@@ -109,6 +100,8 @@ pub fn handle_vault_events<
 ) -> Result<Vec<EvmVaultContractEvent<T, I>>> {
 	let mut result = Vec::new();
 
+	// Identical vault deposits in one transaction intentionally share a witness and collapse
+	// during election deduplication. Deposits with different witnessed fields remain distinct.
 	for event in events {
 		match handle_vault_event::<T, I>(
 			supported_assets,
@@ -119,12 +112,101 @@ pub fn handle_vault_events<
 			Ok(Some(mapped)) => result.push(mapped),
 			Ok(None) => {},
 			Err(e) => {
-				tracing::warn!("Ignoring vault contract event at {block_query:?}: {e:#}");
+				tracing::warn!(tx_hash = ?event.tx_hash, "Ignoring vault contract event at {block_query:?}: {e:#}");
 			},
 		}
 	}
 
 	Ok(result)
+}
+
+/// The user-supplied part of a vault swap event, which may be malformed.
+struct SwapRequest {
+	dst_chain: u32,
+	dst_address: Bytes,
+	dst_token: u32,
+	cf_parameters: Bytes,
+	/// Sender, message and gas amount of a cross-chain message.
+	ccm: Option<(H160, Bytes, U256)>,
+}
+
+fn decode_vault_swap<
+	T: pallet_cf_ingress_egress::Config<
+		I,
+		TargetChain: EvmChain,
+		AccountId = cf_primitives::AccountId,
+	>,
+	I: 'static,
+>(
+	SwapRequest { dst_chain, dst_address, dst_token, cf_parameters, ccm }: SwapRequest,
+) -> Result<VaultSwapData<T, I>> {
+	let output_asset = try_into_primitive(dst_token)?;
+	let destination_address =
+		try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?;
+	Ok(match ccm {
+		None => {
+			let (vault_swap_parameters, ()) = decode_cf_parameters(&cf_parameters[..])?;
+			vault_swap_data!(output_asset, destination_address, None, vault_swap_parameters)
+		},
+		Some((sender, message, gas_amount)) => {
+			let (vault_swap_parameters, ccm_additional_data) =
+				decode_cf_parameters(&cf_parameters[..])?;
+			vault_swap_data!(
+				output_asset,
+				destination_address,
+				Some(CcmDepositMetadata {
+					source_chain: <T::TargetChain as Get<ForeignChain>>::get(),
+					source_address: Some(T::TargetChain::chain_account_to_foreign_chain_address(
+						sender
+					)),
+					channel_metadata: CcmChannelMetadata {
+						message: message
+							.to_vec()
+							.try_into()
+							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
+						gas_budget: try_into_primitive(gas_amount)?,
+						ccm_additional_data,
+					},
+				}),
+				vault_swap_parameters
+			)
+		},
+	})
+}
+
+/// A malformed `swap` produces a `Failed` witness, since the deposit itself is verified.
+/// Errors in the deposit facts (unknown token, amount overflow) mean the event is ignored.
+fn vault_deposit<
+	T: pallet_cf_ingress_egress::Config<
+		I,
+		TargetChain: EvmChain,
+		AccountId = cf_primitives::AccountId,
+	>,
+	I: 'static,
+>(
+	input_asset: <T::TargetChain as Chain>::ChainAsset,
+	amount: U256,
+	tx_hash: H256,
+	block_query: &impl Debug,
+	swap: SwapRequest,
+) -> Result<EvmVaultContractEvent<T, I>> {
+	let deposit = VaultDepositFacts {
+		input_asset,
+		deposit_amount: try_into_primitive(amount)
+			.map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
+		tx_id: tx_hash,
+		deposit_details: DepositDetails { tx_hashes: Some(vec![tx_hash]) },
+		channel_id: None,
+		deposit_address: None,
+	};
+	let witness = match decode_vault_swap::<T, I>(swap) {
+		Ok(swap) => VaultDepositWitness::Swap { deposit, swap },
+		Err(e) => {
+			tracing::warn!(?tx_hash, "Failed to decode vault swap at {block_query:?}: {e:#}");
+			VaultDepositWitness::Failed { deposit, broker_id: None }
+		},
+	};
+	Ok(EvmVaultContractEvent::VaultDeposit(Box::new(witness)))
 }
 
 fn handle_vault_event<
@@ -148,20 +230,13 @@ fn handle_vault_event<
 			amount,
 			sender: _,
 			cf_parameters,
-		}) => {
-			let (vault_swap_parameters, ()) =
-				decode_cf_parameters(&cf_parameters[..], block_query)?;
-
-			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
-				<T::TargetChain as Chain>::GAS_ASSET,
-				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-				None,
-				tx_hash,
-				vault_swap_parameters
-			)))
-		},
+		}) => vault_deposit::<T, I>(
+			<T::TargetChain as Chain>::GAS_ASSET,
+			amount,
+			tx_hash,
+			block_query,
+			SwapRequest { dst_chain, dst_address, dst_token, cf_parameters, ccm: None },
+		)?,
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
 			dst_chain,
 			dst_address,
@@ -171,22 +246,17 @@ fn handle_vault_event<
 			sender: _,
 			cf_parameters,
 		}) => {
-			let (vault_swap_parameters, ()) =
-				decode_cf_parameters(&cf_parameters[..], block_query)?;
-
 			let asset = supported_assets
 				.get(&src_token)
 				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
 
-			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
+			vault_deposit::<T, I>(
 				*asset,
-				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-				None,
+				amount,
 				tx_hash,
-				vault_swap_parameters
-			)))
+				block_query,
+				SwapRequest { dst_chain, dst_address, dst_token, cf_parameters, ccm: None },
+			)?
 		},
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
 			dst_chain,
@@ -197,33 +267,19 @@ fn handle_vault_event<
 			message,
 			gas_amount,
 			cf_parameters,
-		}) => {
-			let (vault_swap_parameters, ccm_additional_data) =
-				decode_cf_parameters(&cf_parameters[..], block_query)?;
-
-			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
-				<T::TargetChain as Chain>::GAS_ASSET,
-				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-				Some(CcmDepositMetadata {
-					source_chain: <T::TargetChain as Get<ForeignChain>>::get(),
-					source_address: Some(T::TargetChain::chain_account_to_foreign_chain_address(
-						sender
-					)),
-					channel_metadata: CcmChannelMetadata {
-						message: message
-							.to_vec()
-							.try_into()
-							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
-						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_additional_data,
-					},
-				}),
-				tx_hash,
-				vault_swap_parameters
-			)))
-		},
+		}) => vault_deposit::<T, I>(
+			<T::TargetChain as Chain>::GAS_ASSET,
+			amount,
+			tx_hash,
+			block_query,
+			SwapRequest {
+				dst_chain,
+				dst_address,
+				dst_token,
+				cf_parameters,
+				ccm: Some((sender, message, gas_amount)),
+			},
+		)?,
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
 			dst_address,
@@ -235,35 +291,23 @@ fn handle_vault_event<
 			gas_amount,
 			cf_parameters,
 		}) => {
-			let (vault_swap_parameters, ccm_additional_data) =
-				decode_cf_parameters(&cf_parameters[..], block_query)?;
-
 			let asset = supported_assets
 				.get(&src_token)
 				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
 
-			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
+			vault_deposit::<T, I>(
 				*asset,
-				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-				Some(CcmDepositMetadata {
-					source_chain: <T::TargetChain as Get<ForeignChain>>::get(),
-					source_address: Some(T::TargetChain::chain_account_to_foreign_chain_address(
-						sender
-					)),
-					channel_metadata: CcmChannelMetadata {
-						message: message
-							.to_vec()
-							.try_into()
-							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
-						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_additional_data,
-					},
-				}),
+				amount,
 				tx_hash,
-				vault_swap_parameters
-			)))
+				block_query,
+				SwapRequest {
+					dst_chain,
+					dst_address,
+					dst_token,
+					cf_parameters,
+					ccm: Some((sender, message, gas_amount)),
+				},
+			)?
 		},
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
 			recipient,
@@ -304,7 +348,7 @@ mod tests {
 	}
 
 	#[test]
-	fn bad_vault_event_is_skipped_gracefully() {
+	fn malformed_swap_is_witnessed_alongside_other_events() {
 		let supported_assets: HashMap<H160, <cf_chains::Ethereum as Chain>::ChainAsset> =
 			HashMap::new();
 
@@ -330,10 +374,222 @@ mod tests {
 		);
 
 		let events = result.expect("should not fail even with a bad event");
-		assert_eq!(events.len(), 1, "only the valid event should be included");
+		assert_eq!(events.len(), 2);
 		assert!(
-			matches!(events[0], EvmVaultContractEvent::TransferFailed(_)),
+			matches!(&events[0], EvmVaultContractEvent::VaultDeposit(witness) if matches!(**witness, VaultDepositWitness::Failed { broker_id: None, .. }))
+		);
+		assert!(
+			matches!(events[1], EvmVaultContractEvent::TransferFailed(_)),
 			"the valid event should be a TransferFailed"
 		);
+	}
+	fn swap_events(parameters: Vec<u8>, ccm_parameters: Vec<u8>) -> Vec<VaultEvents> {
+		vec![
+			VaultEvents::SwapNativeFilter(SwapNativeFilter {
+				dst_chain: ForeignChain::Ethereum as u32,
+				dst_address: vec![1; 20].into(),
+				dst_token: cf_primitives::Asset::Eth as u32,
+				amount: 100.into(),
+				sender: H160::zero(),
+				cf_parameters: parameters.clone().into(),
+			}),
+			VaultEvents::SwapTokenFilter(SwapTokenFilter {
+				dst_chain: ForeignChain::Ethereum as u32,
+				dst_address: vec![1; 20].into(),
+				dst_token: cf_primitives::Asset::Eth as u32,
+				src_token: H160::repeat_byte(2),
+				amount: 100.into(),
+				sender: H160::zero(),
+				cf_parameters: parameters.into(),
+			}),
+			VaultEvents::XcallNativeFilter(XcallNativeFilter {
+				dst_chain: ForeignChain::Ethereum as u32,
+				dst_address: vec![1; 20].into(),
+				dst_token: cf_primitives::Asset::Eth as u32,
+				amount: 100.into(),
+				sender: H160::zero(),
+				cf_parameters: ccm_parameters.clone().into(),
+				message: vec![1, 2].into(),
+				gas_amount: 1000.into(),
+			}),
+			VaultEvents::XcallTokenFilter(XcallTokenFilter {
+				dst_chain: ForeignChain::Ethereum as u32,
+				dst_address: vec![1; 20].into(),
+				dst_token: cf_primitives::Asset::Eth as u32,
+				src_token: H160::repeat_byte(2),
+				amount: 100.into(),
+				sender: H160::zero(),
+				cf_parameters: ccm_parameters.into(),
+				message: vec![1, 2].into(),
+				gas_amount: 1000.into(),
+			}),
+		]
+	}
+
+	fn assert_failed_events<T, I>(token: <T::TargetChain as Chain>::ChainAsset)
+	where
+		T: pallet_cf_ingress_egress::Config<
+			I,
+			TargetChain: EvmChain,
+			AccountId = cf_primitives::AccountId,
+		>,
+		I: 'static,
+	{
+		let tx_hash = H256::repeat_byte(7);
+		let events = swap_events(vec![255], vec![255])
+			.into_iter()
+			.map(|event_parameters| Event { tx_hash, log_index: 0.into(), event_parameters })
+			.collect();
+		let mapped = handle_vault_events::<T, I>(
+			&HashMap::from([(H160::repeat_byte(2), token)]),
+			events,
+			&42,
+		)
+		.unwrap();
+		assert_eq!(mapped.len(), 4);
+		for (index, event) in mapped.into_iter().enumerate() {
+			let EvmVaultContractEvent::VaultDeposit(witness) = event else {
+				panic!("expected vault deposit")
+			};
+			let VaultDepositWitness::Failed { deposit, broker_id } = *witness else {
+				panic!("expected failed witness")
+			};
+			assert_eq!(broker_id, None);
+			assert_eq!(deposit.deposit_amount, 100);
+			assert_eq!(deposit.tx_id, tx_hash);
+			assert_eq!(deposit.deposit_details, DepositDetails { tx_hashes: Some(vec![tx_hash]) });
+			assert_eq!(
+				deposit.input_asset,
+				if index % 2 == 0 { T::TargetChain::GAS_ASSET } else { token }
+			);
+		}
+	}
+
+	#[test]
+	fn malformed_payloads_preserve_facts_on_every_evm_chain() {
+		assert_failed_events::<Runtime, EthereumInstance>(cf_chains::assets::eth::Asset::Usdc);
+		assert_failed_events::<Runtime, state_chain_runtime::ArbitrumInstance>(
+			cf_chains::assets::arb::Asset::ArbUsdc,
+		);
+		assert_failed_events::<Runtime, state_chain_runtime::BscInstance>(
+			cf_chains::assets::bsc::Asset::BscUsdt,
+		);
+	}
+
+	fn parameters<C: codec::Encode>(ccm_additional_data: C) -> Vec<u8> {
+		use cf_chains::{
+			cf_parameters::{CfParametersV1, VersionedCfParameters},
+			ChannelRefundParameters,
+		};
+		codec::Encode::encode(&VersionedCfParameters::V1(CfParametersV1 {
+			ccm_additional_data,
+			vault_swap_parameters: VaultSwapParametersV1 {
+				refund_params: ChannelRefundParameters {
+					retry_duration: 5,
+					refund_address: H160::repeat_byte(3),
+					min_price: Default::default(),
+					refund_ccm_metadata: None,
+					max_oracle_price_slippage: None,
+				},
+				dca_params: None,
+				boost_fee: 0,
+				broker_fee: cf_primitives::Beneficiary {
+					account: cf_primitives::AccountId::new([9; 32]),
+					bps: 0,
+				},
+				affiliate_fees: Default::default(),
+			},
+		}))
+	}
+
+	#[test]
+	fn valid_payloads_still_produce_swaps() {
+		let events =
+			swap_events(parameters(()), parameters(cf_chains::CcmAdditionalData::default()))
+				.into_iter()
+				.map(make_event)
+				.collect();
+		let mapped = handle_vault_events::<Runtime, EthereumInstance>(
+			&HashMap::from([(H160::repeat_byte(2), cf_chains::assets::eth::Asset::Usdc)]),
+			events,
+			&42,
+		)
+		.unwrap();
+		assert_eq!(mapped.len(), 4);
+		assert!(mapped.iter().all(|event|matches!(event,EvmVaultContractEvent::VaultDeposit(witness) if matches!(**witness,VaultDepositWitness::Swap{..}))));
+	}
+
+	#[test]
+	fn unknown_tokens_and_overflowing_amounts_are_not_witnessed() {
+		let mut events = swap_events(vec![255], vec![255]);
+		for event in &mut events {
+			match event {
+				VaultEvents::SwapNativeFilter(event) => event.amount = U256::MAX,
+				VaultEvents::XcallNativeFilter(event) => event.amount = U256::MAX,
+				_ => {},
+			}
+		}
+		assert!(handle_vault_events::<Runtime, EthereumInstance>(
+			&HashMap::new(),
+			events.into_iter().map(make_event).collect(),
+			&42
+		)
+		.unwrap()
+		.is_empty());
+	}
+
+	#[test]
+	fn invalid_output_fields_and_ccm_produce_failed_witnesses() {
+		let mut events =
+			swap_events(parameters(()), parameters(cf_chains::CcmAdditionalData::default()));
+		for event in &mut events {
+			match event {
+				VaultEvents::SwapNativeFilter(event) => event.dst_chain = u32::MAX,
+				VaultEvents::SwapTokenFilter(event) => event.dst_token = u32::MAX,
+				VaultEvents::XcallNativeFilter(event) => event.message = vec![0; 20000].into(),
+				VaultEvents::XcallTokenFilter(event) => event.gas_amount = U256::MAX,
+				_ => {},
+			}
+		}
+		let mapped = handle_vault_events::<Runtime, EthereumInstance>(
+			&HashMap::from([(H160::repeat_byte(2), cf_chains::assets::eth::Asset::Usdc)]),
+			events.into_iter().map(make_event).collect(),
+			&42,
+		)
+		.unwrap();
+		assert_eq!(mapped.len(), 4);
+		assert!(mapped.iter().all(|event|matches!(event,EvmVaultContractEvent::VaultDeposit(witness) if matches!(**witness,VaultDepositWitness::Failed{broker_id:None,..}))));
+	}
+	#[test]
+	fn failed_witness_identity_ignores_log_position_and_preserves_distinct_amounts() {
+		let event = swap_events(vec![255], vec![255]).remove(0);
+		let mut changed_amount = event.clone();
+		if let VaultEvents::SwapNativeFilter(event) = &mut changed_amount {
+			event.amount = 101.into();
+		}
+		let events = vec![
+			Event {
+				tx_hash: H256::repeat_byte(7),
+				log_index: 0.into(),
+				event_parameters: event.clone(),
+			},
+			Event { tx_hash: H256::repeat_byte(7), log_index: 10.into(), event_parameters: event },
+			Event {
+				tx_hash: H256::repeat_byte(7),
+				log_index: 11.into(),
+				event_parameters: changed_amount,
+			},
+		];
+		let witnesses =
+			handle_vault_events::<Runtime, EthereumInstance>(&HashMap::new(), events, &42)
+				.unwrap()
+				.into_iter()
+				.map(|event| match event {
+					EvmVaultContractEvent::VaultDeposit(witness) => *witness,
+					_ => panic!("expected deposit"),
+				})
+				.collect_vec();
+		assert_eq!(witnesses[0], witnesses[1]);
+		assert_ne!(witnesses[0], witnesses[2]);
 	}
 }

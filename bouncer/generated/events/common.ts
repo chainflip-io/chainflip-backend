@@ -976,6 +976,13 @@ export const palletCfEthereumIngressEgressDepositAction = z.discriminatedUnion('
     amount: numberOrHex,
   }),
   z.object({ __kind: z.literal('Unrefundable') }),
+  z.object({
+    __kind: z.literal('BrokerRecovery'),
+    brokerId: accountId,
+    recoveryAccount: accountId,
+    outcome: cfTraitsFailedDepositRecoveryOutcome,
+  }),
+  z.object({ __kind: z.literal('Queued'), queueId: hexString }),
 ]);
 
 export const cfChainsDepositOriginType = simpleEnum(['DepositChannel', 'Vault']);
@@ -1038,6 +1045,15 @@ export const palletCfEthereumIngressEgressDepositWitnessEthereum = z.object({
   depositDetails: cfChainsEvmDepositDetails,
 });
 
+export const palletCfEthereumIngressEgressVaultDepositFactsEthereum = z.object({
+  inputAsset: cfPrimitivesChainsAssetsEthAsset,
+  depositAddress: hexString.nullish(),
+  channelId: numberOrHex.nullish(),
+  depositAmount: numberOrHex,
+  depositDetails: cfChainsEvmDepositDetails,
+  txId: hexString,
+});
+
 export const cfEthereumChainCcmDepositMetadata = z.object({
   channelMetadata: cfChainsCcmChannelMetadataCcmAdditionalData,
   sourceChain: cfPrimitivesChainsForeignChain,
@@ -1057,22 +1073,32 @@ export const cfChainsRefundParametersChannelRefundParametersH160 = z.object({
   maxOraclePriceSlippage: z.number().nullish(),
 });
 
-export const palletCfEthereumIngressEgressVaultDepositWitnessEthereum = z.object({
-  inputAsset: cfPrimitivesChainsAssetsEthAsset,
-  depositAddress: hexString.nullish(),
-  channelId: numberOrHex.nullish(),
-  depositAmount: numberOrHex,
-  depositDetails: cfChainsEvmDepositDetails,
+export const palletCfEthereumIngressEgressVaultSwapDataEthereum = z.object({
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfEthereumChainCcmDepositMetadata.nullish(),
-  txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
   refundParams: cfChainsRefundParametersChannelRefundParametersH160,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
+
+export const palletCfEthereumIngressEgressVaultDepositWitnessEthereum = z.discriminatedUnion(
+  '__kind',
+  [
+    z.object({
+      __kind: z.literal('SwapEthereum'),
+      deposit: palletCfEthereumIngressEgressVaultDepositFactsEthereum,
+      swap: palletCfEthereumIngressEgressVaultSwapDataEthereum,
+    }),
+    z.object({
+      __kind: z.literal('FailedEthereum'),
+      deposit: palletCfEthereumIngressEgressVaultDepositFactsEthereum,
+      brokerId: accountId.nullish(),
+    }),
+  ],
+);
 
 export const palletCfEthereumIngressEgressDepositFailedDetailsEthereum = z.discriminatedUnion(
   '__kind',
@@ -1149,6 +1175,29 @@ export const palletCfEthereumIngressEgressPalletConfigUpdateEthereum = z.discrim
   ],
 );
 
+export const palletCfEthereumIngressEgressFailedVaultDepositsFailedVaultDepositInfoEthereum =
+  z.object({
+    facts: palletCfEthereumIngressEgressVaultDepositFactsEthereum,
+    blockHeight: numberOrHex,
+    recordedAt: z.number(),
+    brokerId: accountId.nullish(),
+    ingressFee: numberOrHex,
+    remainingAmount: numberOrHex,
+  });
+
+export const palletCfEthereumIngressEgressFailedVaultDepositsFailedVaultDepositCause =
+  z.discriminatedUnion('__kind', [
+    z.object({ __kind: z.literal('UnknownBroker') }),
+    z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
+    z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
+  ]);
+
+export const palletCfEthereumIngressEgressFailedVaultDepositsFailedVaultDepositEthereum = z.object({
+  deposit: palletCfEthereumIngressEgressFailedVaultDepositsFailedVaultDepositInfoEthereum,
+  cause: palletCfEthereumIngressEgressFailedVaultDepositsFailedVaultDepositCause,
+});
+
 export const cfPrimitivesChainsAssetsDotAsset = simpleEnum(['Dot']);
 
 export const palletCfPolkadotIngressEgressRefundReason = simpleEnum([
@@ -1177,6 +1226,13 @@ export const palletCfPolkadotIngressEgressDepositAction = z.discriminatedUnion('
     amount: numberOrHex,
   }),
   z.object({ __kind: z.literal('Unrefundable') }),
+  z.object({
+    __kind: z.literal('BrokerRecovery'),
+    brokerId: accountId,
+    recoveryAccount: accountId,
+    outcome: cfTraitsFailedDepositRecoveryOutcome,
+  }),
+  z.object({ __kind: z.literal('Queued'), queueId: hexString }),
 ]);
 
 export const palletCfPolkadotIngressEgressDepositFailedReason = z.discriminatedUnion('__kind', [
@@ -1194,6 +1250,15 @@ export const palletCfPolkadotIngressEgressDepositWitnessPolkadot = z.object({
   depositDetails: z.number(),
 });
 
+export const palletCfPolkadotIngressEgressVaultDepositFactsPolkadot = z.object({
+  inputAsset: cfPrimitivesChainsAssetsDotAsset,
+  depositAddress: hexString.nullish(),
+  channelId: numberOrHex.nullish(),
+  depositAmount: numberOrHex,
+  depositDetails: z.number(),
+  txId: cfPrimitivesTxId,
+});
+
 export const cfPolkadotChainCcmDepositMetadata = z.object({
   channelMetadata: cfChainsCcmChannelMetadataCcmAdditionalData,
   sourceChain: cfPrimitivesChainsForeignChain,
@@ -1208,22 +1273,32 @@ export const cfChainsRefundParametersChannelRefundParametersPolkadotAccountId = 
   maxOraclePriceSlippage: z.number().nullish(),
 });
 
-export const palletCfPolkadotIngressEgressVaultDepositWitnessPolkadot = z.object({
-  inputAsset: cfPrimitivesChainsAssetsDotAsset,
-  depositAddress: hexString.nullish(),
-  channelId: numberOrHex.nullish(),
-  depositAmount: numberOrHex,
-  depositDetails: z.number(),
+export const palletCfPolkadotIngressEgressVaultSwapDataPolkadot = z.object({
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfPolkadotChainCcmDepositMetadata.nullish(),
-  txId: cfPrimitivesTxId,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
   refundParams: cfChainsRefundParametersChannelRefundParametersPolkadotAccountId,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
+
+export const palletCfPolkadotIngressEgressVaultDepositWitnessPolkadot = z.discriminatedUnion(
+  '__kind',
+  [
+    z.object({
+      __kind: z.literal('SwapPolkadot'),
+      deposit: palletCfPolkadotIngressEgressVaultDepositFactsPolkadot,
+      swap: palletCfPolkadotIngressEgressVaultSwapDataPolkadot,
+    }),
+    z.object({
+      __kind: z.literal('FailedPolkadot'),
+      deposit: palletCfPolkadotIngressEgressVaultDepositFactsPolkadot,
+      brokerId: accountId.nullish(),
+    }),
+  ],
+);
 
 export const palletCfPolkadotIngressEgressDepositFailedDetailsPolkadot = z.discriminatedUnion(
   '__kind',
@@ -1278,6 +1353,29 @@ export const palletCfPolkadotIngressEgressPalletConfigUpdatePolkadot = z.discrim
   ],
 );
 
+export const palletCfPolkadotIngressEgressFailedVaultDepositsFailedVaultDepositInfoPolkadot =
+  z.object({
+    facts: palletCfPolkadotIngressEgressVaultDepositFactsPolkadot,
+    blockHeight: z.number(),
+    recordedAt: z.number(),
+    brokerId: accountId.nullish(),
+    ingressFee: numberOrHex,
+    remainingAmount: numberOrHex,
+  });
+
+export const palletCfPolkadotIngressEgressFailedVaultDepositsFailedVaultDepositCause =
+  z.discriminatedUnion('__kind', [
+    z.object({ __kind: z.literal('UnknownBroker') }),
+    z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
+    z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
+  ]);
+
+export const palletCfPolkadotIngressEgressFailedVaultDepositsFailedVaultDepositPolkadot = z.object({
+  deposit: palletCfPolkadotIngressEgressFailedVaultDepositsFailedVaultDepositInfoPolkadot,
+  cause: palletCfPolkadotIngressEgressFailedVaultDepositsFailedVaultDepositCause,
+});
+
 export const cfPrimitivesChainsAssetsBtcAsset = simpleEnum(['Btc']);
 
 export const palletCfBitcoinIngressEgressRefundReason = simpleEnum([
@@ -1306,6 +1404,13 @@ export const palletCfBitcoinIngressEgressDepositAction = z.discriminatedUnion('_
     amount: numberOrHex,
   }),
   z.object({ __kind: z.literal('Unrefundable') }),
+  z.object({
+    __kind: z.literal('BrokerRecovery'),
+    brokerId: accountId,
+    recoveryAccount: accountId,
+    outcome: cfTraitsFailedDepositRecoveryOutcome,
+  }),
+  z.object({ __kind: z.literal('Queued'), queueId: hexString }),
 ]);
 
 export const palletCfBitcoinIngressEgressDepositFailedReason = z.discriminatedUnion('__kind', [
@@ -1323,6 +1428,15 @@ export const palletCfBitcoinIngressEgressDepositWitnessBitcoin = z.object({
   depositDetails: cfChainsBtcUtxo,
 });
 
+export const palletCfBitcoinIngressEgressVaultDepositFactsBitcoin = z.object({
+  inputAsset: cfPrimitivesChainsAssetsBtcAsset,
+  depositAddress: cfChainsBtcScriptPubkey.nullish(),
+  channelId: numberOrHex.nullish(),
+  depositAmount: numberOrHex,
+  depositDetails: cfChainsBtcUtxo,
+  txId: hexString,
+});
+
 export const cfBitcoinChainCcmDepositMetadata = z.object({
   channelMetadata: cfChainsCcmChannelMetadataCcmAdditionalData,
   sourceChain: cfPrimitivesChainsForeignChain,
@@ -1337,22 +1451,32 @@ export const cfChainsRefundParametersChannelRefundParametersScriptPubkey = z.obj
   maxOraclePriceSlippage: z.number().nullish(),
 });
 
-export const palletCfBitcoinIngressEgressVaultDepositWitnessBitcoin = z.object({
-  inputAsset: cfPrimitivesChainsAssetsBtcAsset,
-  depositAddress: cfChainsBtcScriptPubkey.nullish(),
-  channelId: numberOrHex.nullish(),
-  depositAmount: numberOrHex,
-  depositDetails: cfChainsBtcUtxo,
+export const palletCfBitcoinIngressEgressVaultSwapDataBitcoin = z.object({
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfBitcoinChainCcmDepositMetadata.nullish(),
-  txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
   refundParams: cfChainsRefundParametersChannelRefundParametersScriptPubkey,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
+
+export const palletCfBitcoinIngressEgressVaultDepositWitnessBitcoin = z.discriminatedUnion(
+  '__kind',
+  [
+    z.object({
+      __kind: z.literal('SwapBitcoin'),
+      deposit: palletCfBitcoinIngressEgressVaultDepositFactsBitcoin,
+      swap: palletCfBitcoinIngressEgressVaultSwapDataBitcoin,
+    }),
+    z.object({
+      __kind: z.literal('FailedBitcoin'),
+      deposit: palletCfBitcoinIngressEgressVaultDepositFactsBitcoin,
+      brokerId: accountId.nullish(),
+    }),
+  ],
+);
 
 export const palletCfBitcoinIngressEgressDepositFailedDetailsBitcoin = z.discriminatedUnion(
   '__kind',
@@ -1406,6 +1530,29 @@ export const palletCfBitcoinIngressEgressPalletConfigUpdateBitcoin = z.discrimin
     z.object({ __kind: z.literal('SetChannelCleanupRetryBitcoin'), retryBlocks: numberOrHex }),
   ],
 );
+
+export const palletCfBitcoinIngressEgressFailedVaultDepositsFailedVaultDepositInfoBitcoin =
+  z.object({
+    facts: palletCfBitcoinIngressEgressVaultDepositFactsBitcoin,
+    blockHeight: numberOrHex,
+    recordedAt: z.number(),
+    brokerId: accountId.nullish(),
+    ingressFee: numberOrHex,
+    remainingAmount: numberOrHex,
+  });
+
+export const palletCfBitcoinIngressEgressFailedVaultDepositsFailedVaultDepositCause =
+  z.discriminatedUnion('__kind', [
+    z.object({ __kind: z.literal('UnknownBroker') }),
+    z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
+    z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
+  ]);
+
+export const palletCfBitcoinIngressEgressFailedVaultDepositsFailedVaultDepositBitcoin = z.object({
+  deposit: palletCfBitcoinIngressEgressFailedVaultDepositsFailedVaultDepositInfoBitcoin,
+  cause: palletCfBitcoinIngressEgressFailedVaultDepositsFailedVaultDepositCause,
+});
 
 export const cfAmmCommonPoolPairsMap = z.object({ base: numberOrHex, quote: numberOrHex });
 
@@ -1493,6 +1640,13 @@ export const palletCfArbitrumIngressEgressDepositAction = z.discriminatedUnion('
     amount: numberOrHex,
   }),
   z.object({ __kind: z.literal('Unrefundable') }),
+  z.object({
+    __kind: z.literal('BrokerRecovery'),
+    brokerId: accountId,
+    recoveryAccount: accountId,
+    outcome: cfTraitsFailedDepositRecoveryOutcome,
+  }),
+  z.object({ __kind: z.literal('Queued'), queueId: hexString }),
 ]);
 
 export const palletCfArbitrumIngressEgressDepositFailedReason = z.discriminatedUnion('__kind', [
@@ -1510,28 +1664,47 @@ export const palletCfArbitrumIngressEgressDepositWitnessArbitrum = z.object({
   depositDetails: cfChainsEvmDepositDetails,
 });
 
+export const palletCfArbitrumIngressEgressVaultDepositFactsArbitrum = z.object({
+  inputAsset: cfPrimitivesChainsAssetsArbAsset,
+  depositAddress: hexString.nullish(),
+  channelId: numberOrHex.nullish(),
+  depositAmount: numberOrHex,
+  depositDetails: cfChainsEvmDepositDetails,
+  txId: hexString,
+});
+
 export const cfArbitrumChainCcmDepositMetadata = z.object({
   channelMetadata: cfChainsCcmChannelMetadataCcmAdditionalData,
   sourceChain: cfPrimitivesChainsForeignChain,
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const palletCfArbitrumIngressEgressVaultDepositWitnessArbitrum = z.object({
-  inputAsset: cfPrimitivesChainsAssetsArbAsset,
-  depositAddress: hexString.nullish(),
-  channelId: numberOrHex.nullish(),
-  depositAmount: numberOrHex,
-  depositDetails: cfChainsEvmDepositDetails,
+export const palletCfArbitrumIngressEgressVaultSwapDataArbitrum = z.object({
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfArbitrumChainCcmDepositMetadata.nullish(),
-  txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
   refundParams: cfChainsRefundParametersChannelRefundParametersH160,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
+
+export const palletCfArbitrumIngressEgressVaultDepositWitnessArbitrum = z.discriminatedUnion(
+  '__kind',
+  [
+    z.object({
+      __kind: z.literal('SwapArbitrum'),
+      deposit: palletCfArbitrumIngressEgressVaultDepositFactsArbitrum,
+      swap: palletCfArbitrumIngressEgressVaultSwapDataArbitrum,
+    }),
+    z.object({
+      __kind: z.literal('FailedArbitrum'),
+      deposit: palletCfArbitrumIngressEgressVaultDepositFactsArbitrum,
+      brokerId: accountId.nullish(),
+    }),
+  ],
+);
 
 export const palletCfArbitrumIngressEgressDepositFailedDetailsArbitrum = z.discriminatedUnion(
   '__kind',
@@ -1585,6 +1758,29 @@ export const palletCfArbitrumIngressEgressPalletConfigUpdateArbitrum = z.discrim
     z.object({ __kind: z.literal('SetChannelCleanupRetryArbitrum'), retryBlocks: numberOrHex }),
   ],
 );
+
+export const palletCfArbitrumIngressEgressFailedVaultDepositsFailedVaultDepositInfoArbitrum =
+  z.object({
+    facts: palletCfArbitrumIngressEgressVaultDepositFactsArbitrum,
+    blockHeight: numberOrHex,
+    recordedAt: z.number(),
+    brokerId: accountId.nullish(),
+    ingressFee: numberOrHex,
+    remainingAmount: numberOrHex,
+  });
+
+export const palletCfArbitrumIngressEgressFailedVaultDepositsFailedVaultDepositCause =
+  z.discriminatedUnion('__kind', [
+    z.object({ __kind: z.literal('UnknownBroker') }),
+    z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
+    z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
+  ]);
+
+export const palletCfArbitrumIngressEgressFailedVaultDepositsFailedVaultDepositArbitrum = z.object({
+  deposit: palletCfArbitrumIngressEgressFailedVaultDepositsFailedVaultDepositInfoArbitrum,
+  cause: palletCfArbitrumIngressEgressFailedVaultDepositsFailedVaultDepositCause,
+});
 
 export const solPrimMessageHeader = z.object({
   numRequiredSignatures: z.number(),
@@ -1662,6 +1858,13 @@ export const palletCfSolanaIngressEgressDepositAction = z.discriminatedUnion('__
     amount: numberOrHex,
   }),
   z.object({ __kind: z.literal('Unrefundable') }),
+  z.object({
+    __kind: z.literal('BrokerRecovery'),
+    brokerId: accountId,
+    recoveryAccount: accountId,
+    outcome: cfTraitsFailedDepositRecoveryOutcome,
+  }),
+  z.object({ __kind: z.literal('Queued'), queueId: hexString }),
 ]);
 
 export const palletCfSolanaIngressEgressDepositFailedReason = z.discriminatedUnion('__kind', [
@@ -1679,6 +1882,15 @@ export const palletCfSolanaIngressEgressDepositWitnessSolana = z.object({
   depositDetails: cfChainsSolVaultSwapOrDepositChannelId,
 });
 
+export const palletCfSolanaIngressEgressVaultDepositFactsSolana = z.object({
+  inputAsset: cfPrimitivesChainsAssetsSolAsset,
+  depositAddress: hexString.nullish(),
+  channelId: numberOrHex.nullish(),
+  depositAmount: numberOrHex,
+  depositDetails: cfChainsSolVaultSwapOrDepositChannelId,
+  txId: z.tuple([hexString, numberOrHex]),
+});
+
 export const cfSolanaChainCcmDepositMetadata = z.object({
   channelMetadata: cfChainsCcmChannelMetadataCcmAdditionalData,
   sourceChain: cfPrimitivesChainsForeignChain,
@@ -1693,22 +1905,29 @@ export const cfChainsRefundParametersChannelRefundParametersAddress = z.object({
   maxOraclePriceSlippage: z.number().nullish(),
 });
 
-export const palletCfSolanaIngressEgressVaultDepositWitnessSolana = z.object({
-  inputAsset: cfPrimitivesChainsAssetsSolAsset,
-  depositAddress: hexString.nullish(),
-  channelId: numberOrHex.nullish(),
-  depositAmount: numberOrHex,
-  depositDetails: cfChainsSolVaultSwapOrDepositChannelId,
+export const palletCfSolanaIngressEgressVaultSwapDataSolana = z.object({
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfSolanaChainCcmDepositMetadata.nullish(),
-  txId: z.tuple([hexString, numberOrHex]),
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
   refundParams: cfChainsRefundParametersChannelRefundParametersAddress,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
+
+export const palletCfSolanaIngressEgressVaultDepositWitnessSolana = z.discriminatedUnion('__kind', [
+  z.object({
+    __kind: z.literal('SwapSolana'),
+    deposit: palletCfSolanaIngressEgressVaultDepositFactsSolana,
+    swap: palletCfSolanaIngressEgressVaultSwapDataSolana,
+  }),
+  z.object({
+    __kind: z.literal('FailedSolana'),
+    deposit: palletCfSolanaIngressEgressVaultDepositFactsSolana,
+    brokerId: accountId.nullish(),
+  }),
+]);
 
 export const palletCfSolanaIngressEgressDepositFailedDetailsSolana = z.discriminatedUnion(
   '__kind',
@@ -1759,6 +1978,28 @@ export const palletCfSolanaIngressEgressPalletConfigUpdateSolana = z.discriminat
   z.object({ __kind: z.literal('SetRejectionDelaySolana'), delayBlocks: z.number() }),
   z.object({ __kind: z.literal('SetChannelCleanupRetrySolana'), retryBlocks: numberOrHex }),
 ]);
+
+export const palletCfSolanaIngressEgressFailedVaultDepositsFailedVaultDepositInfoSolana = z.object({
+  facts: palletCfSolanaIngressEgressVaultDepositFactsSolana,
+  blockHeight: numberOrHex,
+  recordedAt: z.number(),
+  brokerId: accountId.nullish(),
+  ingressFee: numberOrHex,
+  remainingAmount: numberOrHex,
+});
+
+export const palletCfSolanaIngressEgressFailedVaultDepositsFailedVaultDepositCause =
+  z.discriminatedUnion('__kind', [
+    z.object({ __kind: z.literal('UnknownBroker') }),
+    z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
+    z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
+  ]);
+
+export const palletCfSolanaIngressEgressFailedVaultDepositsFailedVaultDepositSolana = z.object({
+  deposit: palletCfSolanaIngressEgressFailedVaultDepositsFailedVaultDepositInfoSolana,
+  cause: palletCfSolanaIngressEgressFailedVaultDepositsFailedVaultDepositCause,
+});
 
 export const palletCfElectionsElectoralSystemsCompositeTuple7ImplsCompositeElectionIdentifierExtra =
   z.discriminatedUnion('__kind', [
@@ -1839,6 +2080,13 @@ export const palletCfAssethubIngressEgressDepositAction = z.discriminatedUnion('
     amount: numberOrHex,
   }),
   z.object({ __kind: z.literal('Unrefundable') }),
+  z.object({
+    __kind: z.literal('BrokerRecovery'),
+    brokerId: accountId,
+    recoveryAccount: accountId,
+    outcome: cfTraitsFailedDepositRecoveryOutcome,
+  }),
+  z.object({ __kind: z.literal('Queued'), queueId: hexString }),
 ]);
 
 export const palletCfAssethubIngressEgressDepositFailedReason = z.discriminatedUnion('__kind', [
@@ -1856,28 +2104,47 @@ export const palletCfAssethubIngressEgressDepositWitnessAssethub = z.object({
   depositDetails: cfPrimitivesTxId,
 });
 
+export const palletCfAssethubIngressEgressVaultDepositFactsAssethub = z.object({
+  inputAsset: cfPrimitivesChainsAssetsHubAsset,
+  depositAddress: hexString.nullish(),
+  channelId: numberOrHex.nullish(),
+  depositAmount: numberOrHex,
+  depositDetails: cfPrimitivesTxId,
+  txId: cfPrimitivesTxId,
+});
+
 export const cfAssethubChainCcmDepositMetadata = z.object({
   channelMetadata: cfChainsCcmChannelMetadataCcmAdditionalData,
   sourceChain: cfPrimitivesChainsForeignChain,
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const palletCfAssethubIngressEgressVaultDepositWitnessAssethub = z.object({
-  inputAsset: cfPrimitivesChainsAssetsHubAsset,
-  depositAddress: hexString.nullish(),
-  channelId: numberOrHex.nullish(),
-  depositAmount: numberOrHex,
-  depositDetails: cfPrimitivesTxId,
+export const palletCfAssethubIngressEgressVaultSwapDataAssethub = z.object({
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfAssethubChainCcmDepositMetadata.nullish(),
-  txId: cfPrimitivesTxId,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
   refundParams: cfChainsRefundParametersChannelRefundParametersPolkadotAccountId,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
+
+export const palletCfAssethubIngressEgressVaultDepositWitnessAssethub = z.discriminatedUnion(
+  '__kind',
+  [
+    z.object({
+      __kind: z.literal('SwapAssethub'),
+      deposit: palletCfAssethubIngressEgressVaultDepositFactsAssethub,
+      swap: palletCfAssethubIngressEgressVaultSwapDataAssethub,
+    }),
+    z.object({
+      __kind: z.literal('FailedAssethub'),
+      deposit: palletCfAssethubIngressEgressVaultDepositFactsAssethub,
+      brokerId: accountId.nullish(),
+    }),
+  ],
+);
 
 export const palletCfAssethubIngressEgressDepositFailedDetailsAssethub = z.discriminatedUnion(
   '__kind',
@@ -1931,6 +2198,29 @@ export const palletCfAssethubIngressEgressPalletConfigUpdateAssethub = z.discrim
     z.object({ __kind: z.literal('SetChannelCleanupRetryAssethub'), retryBlocks: z.number() }),
   ],
 );
+
+export const palletCfAssethubIngressEgressFailedVaultDepositsFailedVaultDepositInfoAssethub =
+  z.object({
+    facts: palletCfAssethubIngressEgressVaultDepositFactsAssethub,
+    blockHeight: z.number(),
+    recordedAt: z.number(),
+    brokerId: accountId.nullish(),
+    ingressFee: numberOrHex,
+    remainingAmount: numberOrHex,
+  });
+
+export const palletCfAssethubIngressEgressFailedVaultDepositsFailedVaultDepositCause =
+  z.discriminatedUnion('__kind', [
+    z.object({ __kind: z.literal('UnknownBroker') }),
+    z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
+    z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
+  ]);
+
+export const palletCfAssethubIngressEgressFailedVaultDepositsFailedVaultDepositAssethub = z.object({
+  deposit: palletCfAssethubIngressEgressFailedVaultDepositsFailedVaultDepositInfoAssethub,
+  cause: palletCfAssethubIngressEgressFailedVaultDepositsFailedVaultDepositCause,
+});
 
 export const palletCfTradingStrategyTradingStrategy = z.discriminatedUnion('__kind', [
   z.object({
@@ -2183,6 +2473,13 @@ export const palletCfTronIngressEgressDepositAction = z.discriminatedUnion('__ki
     amount: numberOrHex,
   }),
   z.object({ __kind: z.literal('Unrefundable') }),
+  z.object({
+    __kind: z.literal('BrokerRecovery'),
+    brokerId: accountId,
+    recoveryAccount: accountId,
+    outcome: cfTraitsFailedDepositRecoveryOutcome,
+  }),
+  z.object({ __kind: z.literal('Queued'), queueId: hexString }),
 ]);
 
 export const palletCfTronIngressEgressDepositFailedReason = z.discriminatedUnion('__kind', [
@@ -2200,28 +2497,44 @@ export const palletCfTronIngressEgressDepositWitnessTron = z.object({
   depositDetails: cfChainsEvmDepositDetails,
 });
 
+export const palletCfTronIngressEgressVaultDepositFactsTron = z.object({
+  inputAsset: cfPrimitivesChainsAssetsTronAsset,
+  depositAddress: hexString.nullish(),
+  channelId: numberOrHex.nullish(),
+  depositAmount: numberOrHex,
+  depositDetails: cfChainsEvmDepositDetails,
+  txId: hexString,
+});
+
 export const cfTronChainCcmDepositMetadata = z.object({
   channelMetadata: cfChainsCcmChannelMetadataCcmAdditionalData,
   sourceChain: cfPrimitivesChainsForeignChain,
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const palletCfTronIngressEgressVaultDepositWitnessTron = z.object({
-  inputAsset: cfPrimitivesChainsAssetsTronAsset,
-  depositAddress: hexString.nullish(),
-  channelId: numberOrHex.nullish(),
-  depositAmount: numberOrHex,
-  depositDetails: cfChainsEvmDepositDetails,
+export const palletCfTronIngressEgressVaultSwapDataTron = z.object({
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfTronChainCcmDepositMetadata.nullish(),
-  txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
   refundParams: cfChainsRefundParametersChannelRefundParametersH160,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
+
+export const palletCfTronIngressEgressVaultDepositWitnessTron = z.discriminatedUnion('__kind', [
+  z.object({
+    __kind: z.literal('SwapTron'),
+    deposit: palletCfTronIngressEgressVaultDepositFactsTron,
+    swap: palletCfTronIngressEgressVaultSwapDataTron,
+  }),
+  z.object({
+    __kind: z.literal('FailedTron'),
+    deposit: palletCfTronIngressEgressVaultDepositFactsTron,
+    brokerId: accountId.nullish(),
+  }),
+]);
 
 export const palletCfTronIngressEgressDepositFailedDetailsTron = z.discriminatedUnion('__kind', [
   z.object({
@@ -2270,6 +2583,28 @@ export const palletCfTronIngressEgressPalletConfigUpdateTron = z.discriminatedUn
   z.object({ __kind: z.literal('SetChannelCleanupRetryTron'), retryBlocks: numberOrHex }),
 ]);
 
+export const palletCfTronIngressEgressFailedVaultDepositsFailedVaultDepositInfoTron = z.object({
+  facts: palletCfTronIngressEgressVaultDepositFactsTron,
+  blockHeight: numberOrHex,
+  recordedAt: z.number(),
+  brokerId: accountId.nullish(),
+  ingressFee: numberOrHex,
+  remainingAmount: numberOrHex,
+});
+
+export const palletCfTronIngressEgressFailedVaultDepositsFailedVaultDepositCause =
+  z.discriminatedUnion('__kind', [
+    z.object({ __kind: z.literal('UnknownBroker') }),
+    z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
+    z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
+  ]);
+
+export const palletCfTronIngressEgressFailedVaultDepositsFailedVaultDepositTron = z.object({
+  deposit: palletCfTronIngressEgressFailedVaultDepositsFailedVaultDepositInfoTron,
+  cause: palletCfTronIngressEgressFailedVaultDepositsFailedVaultDepositCause,
+});
+
 export const palletCfElectionsElectoralSystemsCompositeTuple5ImplsCompositeElectionIdentifierExtra =
   simpleEnum(['A', 'B', 'C', 'D', 'EE']);
 
@@ -2313,6 +2648,13 @@ export const palletCfBscIngressEgressDepositAction = z.discriminatedUnion('__kin
     amount: numberOrHex,
   }),
   z.object({ __kind: z.literal('Unrefundable') }),
+  z.object({
+    __kind: z.literal('BrokerRecovery'),
+    brokerId: accountId,
+    recoveryAccount: accountId,
+    outcome: cfTraitsFailedDepositRecoveryOutcome,
+  }),
+  z.object({ __kind: z.literal('Queued'), queueId: hexString }),
 ]);
 
 export const palletCfBscIngressEgressDepositFailedReason = z.discriminatedUnion('__kind', [
@@ -2330,28 +2672,44 @@ export const palletCfBscIngressEgressDepositWitnessBsc = z.object({
   depositDetails: cfChainsEvmDepositDetails,
 });
 
+export const palletCfBscIngressEgressVaultDepositFactsBsc = z.object({
+  inputAsset: cfPrimitivesChainsAssetsBscAsset,
+  depositAddress: hexString.nullish(),
+  channelId: numberOrHex.nullish(),
+  depositAmount: numberOrHex,
+  depositDetails: cfChainsEvmDepositDetails,
+  txId: hexString,
+});
+
 export const cfBscChainCcmDepositMetadata = z.object({
   channelMetadata: cfChainsCcmChannelMetadataCcmAdditionalData,
   sourceChain: cfPrimitivesChainsForeignChain,
   sourceAddress: cfChainsAddressForeignChainAddress.nullish(),
 });
 
-export const palletCfBscIngressEgressVaultDepositWitnessBsc = z.object({
-  inputAsset: cfPrimitivesChainsAssetsBscAsset,
-  depositAddress: hexString.nullish(),
-  channelId: numberOrHex.nullish(),
-  depositAmount: numberOrHex,
-  depositDetails: cfChainsEvmDepositDetails,
+export const palletCfBscIngressEgressVaultSwapDataBsc = z.object({
   outputAsset: cfPrimitivesChainsAssetsAnyAsset,
   destinationAddress: cfChainsAddressEncodedAddress,
   depositMetadata: cfBscChainCcmDepositMetadata.nullish(),
-  txId: hexString,
   brokerFee: cfPrimitivesBeneficiaryAccountId32.nullish(),
   affiliateFees: z.array(cfPrimitivesBeneficiaryAffiliateShortId),
   refundParams: cfChainsRefundParametersChannelRefundParametersH160,
   dcaParams: cfPrimitivesDcaParameters.nullish(),
   boostFee: z.number(),
 });
+
+export const palletCfBscIngressEgressVaultDepositWitnessBsc = z.discriminatedUnion('__kind', [
+  z.object({
+    __kind: z.literal('SwapBsc'),
+    deposit: palletCfBscIngressEgressVaultDepositFactsBsc,
+    swap: palletCfBscIngressEgressVaultSwapDataBsc,
+  }),
+  z.object({
+    __kind: z.literal('FailedBsc'),
+    deposit: palletCfBscIngressEgressVaultDepositFactsBsc,
+    brokerId: accountId.nullish(),
+  }),
+]);
 
 export const palletCfBscIngressEgressDepositFailedDetailsBsc = z.discriminatedUnion('__kind', [
   z.object({
@@ -2399,6 +2757,28 @@ export const palletCfBscIngressEgressPalletConfigUpdateBsc = z.discriminatedUnio
   z.object({ __kind: z.literal('SetRejectionDelayBsc'), delayBlocks: z.number() }),
   z.object({ __kind: z.literal('SetChannelCleanupRetryBsc'), retryBlocks: numberOrHex }),
 ]);
+
+export const palletCfBscIngressEgressFailedVaultDepositsFailedVaultDepositInfoBsc = z.object({
+  facts: palletCfBscIngressEgressVaultDepositFactsBsc,
+  blockHeight: numberOrHex,
+  recordedAt: z.number(),
+  brokerId: accountId.nullish(),
+  ingressFee: numberOrHex,
+  remainingAmount: numberOrHex,
+});
+
+export const palletCfBscIngressEgressFailedVaultDepositsFailedVaultDepositCause =
+  z.discriminatedUnion('__kind', [
+    z.object({ __kind: z.literal('UnknownBroker') }),
+    z.object({ __kind: z.literal('RecoveryFailed'), value: spRuntimeDispatchError }),
+    z.object({ __kind: z.literal('Unrefundable') }),
+    z.object({ __kind: z.literal('TransactionRejected') }),
+  ]);
+
+export const palletCfBscIngressEgressFailedVaultDepositsFailedVaultDepositBsc = z.object({
+  deposit: palletCfBscIngressEgressFailedVaultDepositsFailedVaultDepositInfoBsc,
+  cause: palletCfBscIngressEgressFailedVaultDepositsFailedVaultDepositCause,
+});
 
 export const cfChainsWitnessPeriodBlockWitnessRangeBsc = z.object({ root: numberOrHex });
 

@@ -92,16 +92,22 @@ import type {
   CfPrimitivesPrewitnessedDepositId,
   PalletCfIngressEgressRefundFailureReason,
   PalletCfIngressEgressPalletConfigUpdateEthereum,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositEthereum,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoEthereum,
   CfPrimitivesChainsAssetsDotAsset,
   PalletCfIngressEgressDepositFailedDetailsPolkadot,
   CfTraitsScheduledEgressDetailsPolkadot,
   CfPrimitivesTxId,
   PalletCfIngressEgressPalletConfigUpdatePolkadot,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositPolkadot,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoPolkadot,
   CfPrimitivesChainsAssetsBtcAsset,
   PalletCfIngressEgressDepositAction002,
   PalletCfIngressEgressDepositFailedDetailsBitcoin,
   CfTraitsScheduledEgressDetailsBitcoin,
   PalletCfIngressEgressPalletConfigUpdateBitcoin,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBitcoin,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBitcoin,
   CfAmmMathPrice,
   CfTraitsLiquidityIncreaseOrDecreaseRangeOrderChange,
   CfAmmCommonPoolPairsMap,
@@ -114,6 +120,8 @@ import type {
   PalletCfIngressEgressDepositFailedDetailsArbitrum,
   CfTraitsScheduledEgressDetailsArbitrum,
   PalletCfIngressEgressPalletConfigUpdateArbitrum,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositArbitrum,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoArbitrum,
   SolPrimTransactionVersionedMessage,
   CfChainsSolSolanaTransactionData,
   SolPrimSignature,
@@ -123,6 +131,8 @@ import type {
   PalletCfIngressEgressDepositFailedDetailsSolana,
   CfTraitsScheduledEgressDetailsSolana,
   PalletCfIngressEgressPalletConfigUpdateSolana,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositSolana,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoSolana,
   PalletCfElectionsElectionIdentifier004,
   CfChainsChainStateSolana,
   PalletCfAssetBalancesPalletConfigUpdate,
@@ -132,6 +142,8 @@ import type {
   PalletCfIngressEgressDepositFailedDetailsAssethub,
   CfTraitsScheduledEgressDetailsAssethub,
   PalletCfIngressEgressPalletConfigUpdateAssethub,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositAssethub,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoAssethub,
   PalletCfTradingStrategyTradingStrategy,
   PalletCfTradingStrategyPalletConfigUpdate,
   PalletCfLendingPoolsPalletConfigUpdate,
@@ -156,6 +168,8 @@ import type {
   PalletCfIngressEgressDepositFailedDetailsTron,
   CfTraitsScheduledEgressDetailsTron,
   PalletCfIngressEgressPalletConfigUpdateTron,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositTron,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoTron,
   PalletCfElectionsElectionIdentifier005,
   StateChainRuntimeChainflipWitnessingTronElectionsTronElectoralEvents,
   CfChainsChainStateBsc,
@@ -163,6 +177,8 @@ import type {
   PalletCfIngressEgressDepositFailedDetailsBsc,
   CfTraitsScheduledEgressDetailsBsc,
   PalletCfIngressEgressPalletConfigUpdateBsc,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBsc,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBsc,
   StateChainRuntimeChainflipWitnessingBscElectionsBscElectoralEvents,
   StateChainRuntimeChainflipWitnessingAssethubElectionsAssethubElectoralEvents,
 } from './types.js';
@@ -3028,6 +3044,34 @@ export interface ChainEvents extends GenericChainEvents {
       'ChannelRejectionRequestReceived',
       { accountId: AccountId32; depositAddress: H160 }
     >;
+    FailedDepositQueued: GenericPalletEvent<
+      'EthereumIngressEgress',
+      'FailedDepositQueued',
+      {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositEthereum;
+      }
+    >;
+    FailedDepositRecovered: GenericPalletEvent<
+      'EthereumIngressEgress',
+      'FailedDepositRecovered',
+      {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoEthereum;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'EthereumIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
+    >;
 
     /**
      * Generic pallet event
@@ -3238,6 +3282,34 @@ export interface ChainEvents extends GenericChainEvents {
       'ChannelRejectionRequestReceived',
       { accountId: AccountId32; depositAddress: CfChainsDotPolkadotAccountId }
     >;
+    FailedDepositQueued: GenericPalletEvent<
+      'PolkadotIngressEgress',
+      'FailedDepositQueued',
+      {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositPolkadot;
+      }
+    >;
+    FailedDepositRecovered: GenericPalletEvent<
+      'PolkadotIngressEgress',
+      'FailedDepositRecovered',
+      {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoPolkadot;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'PolkadotIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
+    >;
 
     /**
      * Generic pallet event
@@ -3447,6 +3519,34 @@ export interface ChainEvents extends GenericChainEvents {
       'BitcoinIngressEgress',
       'ChannelRejectionRequestReceived',
       { accountId: AccountId32; depositAddress: CfChainsBtcScriptPubkey }
+    >;
+    FailedDepositQueued: GenericPalletEvent<
+      'BitcoinIngressEgress',
+      'FailedDepositQueued',
+      {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBitcoin;
+      }
+    >;
+    FailedDepositRecovered: GenericPalletEvent<
+      'BitcoinIngressEgress',
+      'FailedDepositRecovered',
+      {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBitcoin;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'BitcoinIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
     >;
 
     /**
@@ -3967,6 +4067,34 @@ export interface ChainEvents extends GenericChainEvents {
       'ArbitrumIngressEgress',
       'ChannelRejectionRequestReceived',
       { accountId: AccountId32; depositAddress: H160 }
+    >;
+    FailedDepositQueued: GenericPalletEvent<
+      'ArbitrumIngressEgress',
+      'FailedDepositQueued',
+      {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositArbitrum;
+      }
+    >;
+    FailedDepositRecovered: GenericPalletEvent<
+      'ArbitrumIngressEgress',
+      'FailedDepositRecovered',
+      {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoArbitrum;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'ArbitrumIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
     >;
 
     /**
@@ -4569,6 +4697,34 @@ export interface ChainEvents extends GenericChainEvents {
       'ChannelRejectionRequestReceived',
       { accountId: AccountId32; depositAddress: SolPrimAddress }
     >;
+    FailedDepositQueued: GenericPalletEvent<
+      'SolanaIngressEgress',
+      'FailedDepositQueued',
+      {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositSolana;
+      }
+    >;
+    FailedDepositRecovered: GenericPalletEvent<
+      'SolanaIngressEgress',
+      'FailedDepositRecovered',
+      {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoSolana;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'SolanaIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
+    >;
 
     /**
      * Generic pallet event
@@ -5144,6 +5300,34 @@ export interface ChainEvents extends GenericChainEvents {
       'AssethubIngressEgress',
       'ChannelRejectionRequestReceived',
       { accountId: AccountId32; depositAddress: CfChainsDotPolkadotAccountId }
+    >;
+    FailedDepositQueued: GenericPalletEvent<
+      'AssethubIngressEgress',
+      'FailedDepositQueued',
+      {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositAssethub;
+      }
+    >;
+    FailedDepositRecovered: GenericPalletEvent<
+      'AssethubIngressEgress',
+      'FailedDepositRecovered',
+      {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoAssethub;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'AssethubIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
     >;
 
     /**
@@ -5907,6 +6091,34 @@ export interface ChainEvents extends GenericChainEvents {
       'ChannelRejectionRequestReceived',
       { accountId: AccountId32; depositAddress: H160 }
     >;
+    FailedDepositQueued: GenericPalletEvent<
+      'TronIngressEgress',
+      'FailedDepositQueued',
+      {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositTron;
+      }
+    >;
+    FailedDepositRecovered: GenericPalletEvent<
+      'TronIngressEgress',
+      'FailedDepositRecovered',
+      {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoTron;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'TronIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
+    >;
 
     /**
      * Generic pallet event
@@ -6343,6 +6555,34 @@ export interface ChainEvents extends GenericChainEvents {
       'BscIngressEgress',
       'ChannelRejectionRequestReceived',
       { accountId: AccountId32; depositAddress: H160 }
+    >;
+    FailedDepositQueued: GenericPalletEvent<
+      'BscIngressEgress',
+      'FailedDepositQueued',
+      {
+        queueId: FixedBytes<32>;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBsc;
+      }
+    >;
+    FailedDepositRecovered: GenericPalletEvent<
+      'BscIngressEgress',
+      'FailedDepositRecovered',
+      {
+        queueId?: FixedBytes<32> | undefined;
+        deposit: PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositInfoBsc;
+        brokerId: AccountId32;
+        recoveryAccount: AccountId32;
+        outcome: CfTraitsFailedDepositRecoveryOutcome;
+      }
+    >;
+
+    /**
+     * A queued deposit could not be recovered. It stays queued and can be retried.
+     **/
+    FailedDepositRecoveryFailed: GenericPalletEvent<
+      'BscIngressEgress',
+      'FailedDepositRecoveryFailed',
+      { queueId: FixedBytes<32>; brokerId: AccountId32; error: DispatchError }
     >;
 
     /**

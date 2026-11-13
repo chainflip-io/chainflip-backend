@@ -215,27 +215,34 @@ fn vault_swap_deposit_witness(
 	broker: AccountId,
 	deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 ) -> VaultDepositWitness<Runtime, SolanaInstance> {
-	VaultDepositWitness {
-		input_asset: SolAsset::Sol,
-		output_asset: Asset::SolUsdc,
-		deposit_amount: 1_000_000_000_000u64,
-		destination_address: EncodedAddress::Sol([1u8; 32]),
-		deposit_metadata,
-		tx_id: Default::default(),
-		deposit_details: VaultSwapOrDepositChannelId::VaultSwapAccount((SolAddress([2u8; 32]), 0)),
-		broker_fee: Some(Beneficiary { account: broker, bps: 100u16 }),
-		affiliate_fees: Default::default(),
-		refund_params: ChannelRefundParametersForChain::<Solana> {
-			retry_duration: REFUND_PARAMS.retry_duration,
-			refund_address: FALLBACK_ADDRESS,
-			min_price: REFUND_PARAMS.min_price,
-			refund_ccm_metadata: None,
-			max_oracle_price_slippage: None,
+	VaultDepositWitness::Swap {
+		deposit: pallet_cf_ingress_egress::VaultDepositFacts {
+			input_asset: SolAsset::Sol,
+			deposit_amount: 1_000_000_000_000u64,
+			tx_id: Default::default(),
+			deposit_details: VaultSwapOrDepositChannelId::VaultSwapAccount((
+				SolAddress([2u8; 32]),
+				0,
+			)),
+			deposit_address: Some(SolAddress([2u8; 32])),
+			channel_id: Some(0),
 		},
-		dca_params: None,
-		boost_fee: 0,
-		deposit_address: Some(SolAddress([2u8; 32])),
-		channel_id: Some(0),
+		swap: pallet_cf_ingress_egress::VaultSwapData {
+			output_asset: Asset::SolUsdc,
+			destination_address: EncodedAddress::Sol([1u8; 32]),
+			deposit_metadata,
+			broker_fee: Some(Beneficiary { account: broker, bps: 100u16 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParametersForChain::<Solana> {
+				retry_duration: REFUND_PARAMS.retry_duration,
+				refund_address: FALLBACK_ADDRESS,
+				min_price: REFUND_PARAMS.min_price,
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
+			},
+			dca_params: None,
+			boost_fee: 0,
+		},
 	}
 }
 

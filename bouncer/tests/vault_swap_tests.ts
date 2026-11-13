@@ -19,7 +19,9 @@ import {
   newChainflipIO,
   WithBrokerAccount,
 } from 'shared/utils/chainflip_io';
-import { bitcoinIngressEgressDepositFinalisedEvent } from 'generated/events/bitcoinIngressEgress/depositFinalised';
+import { getChainflipApi } from 'shared/utils/substrate';
+import { bitcoinIngressEgressFailedDepositRecoveredEvent } from 'generated/events/bitcoinIngressEgress/failedDepositRecovered';
+import { swappingRecoveryAccountLinkedEvent } from 'generated/events/swapping/recoveryAccountLinked';
 
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
@@ -191,10 +193,39 @@ async function testFeeCollection<A = []>(
   return Promise.resolve([brokerAccount, affiliateId, refundAddress]);
 }
 
+async function linkRecoveryAccount<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
+  recoveryAccount: string,
+) {
+  await using chainflip = await getChainflipApi();
+  const broker = cf.requirements.account.keypair.address;
+
+  // The link can only be set once, so it is already in place when the test is re-run.
+  if (await chainflip.query.swapping.brokerRecoveryAccount(broker)) {
+    return;
+  }
+
+  await cf.submitExtrinsic({
+    extrinsic: (api) => api.tx.swapping.linkRecoveryAccount(recoveryAccount),
+    expectedEvent: swappingRecoveryAccountLinkedEvent.refine((event) => event.broker === broker),
+  });
+}
+
 async function testInvalidBtcVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
-  const cf = parentCf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
+  // Dedicated accounts, since a broker's recovery account is permanent and receives all of that
+  // broker's failed deposits.
+  const brokerUri = '//BROKER_INVALID_BTC_VAULT_SWAP';
+  const broker = await setupAccount(parentCf, brokerUri, AccountRole.Broker);
+  const recoveryAccount = await setupAccount(
+    parentCf,
+    '//LP_INVALID_BTC_VAULT_SWAP_RECOVERY',
+    AccountRole.LiquidityProvider,
+  );
+  const cf = parentCf.with({ account: fullAccountFromUri(brokerUri, 'Broker') });
 
   cf.info('Starting invalid BTC vault swap test...');
+
+  await linkRecoveryAccount(cf, recoveryAccount.address);
 
   const inputAsset = Assets.Btc;
   const destAsset = Assets.Usdc;
@@ -210,15 +241,19 @@ async function testInvalidBtcVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
     Number(10),
   );
 
-  cf.debug(`BTC vault swap txid is ${txId}, awaiting deposit finalised event...`);
+  cf.debug(`BTC vault swap txid is ${txId}, awaiting failed deposit recovery...`);
 
-  await cf.stepUntilEvent(
-    bitcoinIngressEgressDepositFinalisedEvent.refine(
-      (event) => event.action.__kind === 'Unrefundable',
+  // The private channel identifies the broker even though the payload is malformed. The recovery
+  // account has no BTC refund address, so the deposit is credited to it.
+  const recovered = await cf.stepUntilEvent(
+    bitcoinIngressEgressFailedDepositRecoveredEvent.refine(
+      (event) => event.brokerId === broker.address,
     ),
   );
+  assert.strictEqual(recovered.recoveryAccount, recoveryAccount.address);
+  assert.strictEqual(recovered.outcome.__kind, 'Credited');
 
-  cf.info('Invalid BTC vault swap ingressed ✅.');
+  cf.info('Invalid BTC vault swap recovered to the broker recovery account ✅.');
 }
 
 async function testFeeCollectionWithdrawal<A = []>(

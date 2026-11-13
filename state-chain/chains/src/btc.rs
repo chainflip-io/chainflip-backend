@@ -265,7 +265,6 @@ impl Chain for Bitcoin {
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 100_000_000u64;
-	const BURN_ADDRESS: Self::ChainAccount = ScriptPubkey::Taproot([0; 32]);
 	const IS_EVM_CHAIN: bool = false;
 
 	type ChainCrypto = BitcoinCrypto;
@@ -632,8 +631,8 @@ const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
 pub const MAX_BTC_ADDRESS_LENGTH: u32 = 90;
 
 /// A Bitcoin output script (scriptPubKey), which is how Bitcoin accounts are represented in the
-/// State Chain: deposit channels, egress destinations, refund addresses and [Bitcoin::BURN_ADDRESS]
-/// are all values of this type. Only output types that have a standard address encoding are
+/// State Chain: deposit channels, egress destinations and refund addresses are all values of this
+/// type. Only output types that have a standard address encoding are
 /// representable, and [Self::to_address] / [Self::try_from_address] convert to and from that
 /// encoding.
 ///

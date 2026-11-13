@@ -41,6 +41,10 @@ impl BrokerRecoveryApi for MockBrokerRecoveryApi {
 	fn recovery_account(broker: &Self::AccountId) -> Option<Self::AccountId> {
 		Self::get_storage(RECOVERY_ACCOUNTS, broker)
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark(broker: &Self::AccountId, recovery_account: &Self::AccountId) {
+		Self::link(*broker, *recovery_account);
+	}
 }
 
 /// Credits the recovery account of any broker linked in [MockBrokerRecoveryApi], and records each

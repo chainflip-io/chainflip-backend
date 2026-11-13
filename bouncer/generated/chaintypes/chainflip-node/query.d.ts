@@ -120,6 +120,7 @@ import type {
   PalletCfIngressEgressDepositWitnessEthereum,
   PalletCfIngressEgressVaultDepositWitnessEthereum,
   PalletCfIngressEgressBroadcastAction,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositEthereum,
   PalletCfIngressEgressDepositChannelDetailsPolkadot,
   PalletCfIngressEgressFetchOrTransferPolkadot,
   PalletCfIngressEgressCrossChainMessagePolkadot,
@@ -130,6 +131,7 @@ import type {
   PalletCfIngressEgressDepositWitnessPolkadot,
   PalletCfIngressEgressVaultDepositWitnessPolkadot,
   PalletCfIngressEgressBroadcastActionPolkadotAccountId,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositPolkadot,
   PalletCfIngressEgressDepositChannelDetailsBitcoin,
   CfChainsBtcScriptPubkey,
   PalletCfIngressEgressFetchOrTransferBitcoin,
@@ -141,6 +143,7 @@ import type {
   PalletCfIngressEgressDepositWitnessBitcoin,
   PalletCfIngressEgressVaultDepositWitnessBitcoin,
   PalletCfIngressEgressBroadcastActionScriptPubkey,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBitcoin,
   PalletCfPoolsPool,
   PalletCfPoolsLimitOrderUpdate,
   CfeEventsCfeEvent,
@@ -154,6 +157,7 @@ import type {
   PalletCfIngressEgressTransactionRejectionDetailsArbitrum,
   PalletCfIngressEgressDepositWitnessArbitrum,
   PalletCfIngressEgressVaultDepositWitnessArbitrum,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositArbitrum,
   PalletCfVaultsVaultActivationStatus004,
   PalletCfThresholdSignatureCeremonyContextSolanaCrypto,
   PalletCfThresholdSignatureRequestInstructionSolanaCrypto,
@@ -171,6 +175,7 @@ import type {
   PalletCfIngressEgressDepositWitnessSolana,
   PalletCfIngressEgressVaultDepositWitnessSolana,
   PalletCfIngressEgressBroadcastActionAddress,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositSolana,
   PalletCfElectionsReferenceDetails,
   PalletCfElectionsSharedDataHash,
   PalletCfElectionsUniqueMonotonicIdentifier,
@@ -205,6 +210,7 @@ import type {
   PalletCfIngressEgressTransactionRejectionDetailsAssethub,
   PalletCfIngressEgressDepositWitnessAssethub,
   PalletCfIngressEgressVaultDepositWitnessAssethub,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositAssethub,
   PalletCfTradingStrategyTradingStrategy,
   PalletCfLendingPoolsCorePoolId,
   PalletCfLendingPoolsCoreLendingPool,
@@ -284,6 +290,7 @@ import type {
   PalletCfIngressEgressTransactionRejectionDetailsTron,
   PalletCfIngressEgressDepositWitnessTron,
   PalletCfIngressEgressVaultDepositWitnessTron,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositTron,
   PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedData,
   PalletCfElectionsBitmapComponentsElectionBitmapComponentsTron,
   PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeVoteProperties,
@@ -308,6 +315,7 @@ import type {
   PalletCfIngressEgressTransactionRejectionDetailsBsc,
   PalletCfIngressEgressDepositWitnessBsc,
   PalletCfIngressEgressVaultDepositWitnessBsc,
+  PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBsc,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
   PalletCfElectionsBitmapComponentsElectionBitmapComponentsBsc,
   PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeIndividualComponentBscTrackedData,
@@ -3633,6 +3641,20 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * Outstanding deposits keyed by the hash of their full witness. Distinct deposits in one
+     * transaction remain separate; successful recovery removes the entry.
+     *
+     * @param {FixedBytes<32>} arg
+     * @param {Callback<PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositEthereum | undefined> =} callback
+     **/
+    failedVaultDeposits: GenericStorageQuery<
+      (
+        arg: FixedBytes<32>,
+      ) => PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositEthereum | undefined,
+      FixedBytes<32>
+    >;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
@@ -3946,6 +3968,20 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * Outstanding deposits keyed by the hash of their full witness. Distinct deposits in one
+     * transaction remain separate; successful recovery removes the entry.
+     *
+     * @param {FixedBytes<32>} arg
+     * @param {Callback<PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositPolkadot | undefined> =} callback
+     **/
+    failedVaultDeposits: GenericStorageQuery<
+      (
+        arg: FixedBytes<32>,
+      ) => PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositPolkadot | undefined,
+      FixedBytes<32>
+    >;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
@@ -4251,6 +4287,20 @@ export interface ChainStorage extends GenericChainStorage {
     preallocatedChannels: GenericStorageQuery<
       (arg: AccountId32Like) => Array<CfChainsDepositChannelDepositChannelBitcoin>,
       AccountId32
+    >;
+
+    /**
+     * Outstanding deposits keyed by the hash of their full witness. Distinct deposits in one
+     * transaction remain separate; successful recovery removes the entry.
+     *
+     * @param {FixedBytes<32>} arg
+     * @param {Callback<PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBitcoin | undefined> =} callback
+     **/
+    failedVaultDeposits: GenericStorageQuery<
+      (
+        arg: FixedBytes<32>,
+      ) => PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBitcoin | undefined,
+      FixedBytes<32>
     >;
 
     /**
@@ -4881,6 +4931,20 @@ export interface ChainStorage extends GenericChainStorage {
     preallocatedChannels: GenericStorageQuery<
       (arg: AccountId32Like) => Array<CfChainsDepositChannelDepositChannelArbitrum>,
       AccountId32
+    >;
+
+    /**
+     * Outstanding deposits keyed by the hash of their full witness. Distinct deposits in one
+     * transaction remain separate; successful recovery removes the entry.
+     *
+     * @param {FixedBytes<32>} arg
+     * @param {Callback<PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositArbitrum | undefined> =} callback
+     **/
+    failedVaultDeposits: GenericStorageQuery<
+      (
+        arg: FixedBytes<32>,
+      ) => PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositArbitrum | undefined,
+      FixedBytes<32>
     >;
 
     /**
@@ -5559,6 +5623,20 @@ export interface ChainStorage extends GenericChainStorage {
     preallocatedChannels: GenericStorageQuery<
       (arg: AccountId32Like) => Array<CfChainsDepositChannelDepositChannelSolana>,
       AccountId32
+    >;
+
+    /**
+     * Outstanding deposits keyed by the hash of their full witness. Distinct deposits in one
+     * transaction remain separate; successful recovery removes the entry.
+     *
+     * @param {FixedBytes<32>} arg
+     * @param {Callback<PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositSolana | undefined> =} callback
+     **/
+    failedVaultDeposits: GenericStorageQuery<
+      (
+        arg: FixedBytes<32>,
+      ) => PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositSolana | undefined,
+      FixedBytes<32>
     >;
 
     /**
@@ -6489,6 +6567,20 @@ export interface ChainStorage extends GenericChainStorage {
     preallocatedChannels: GenericStorageQuery<
       (arg: AccountId32Like) => Array<CfChainsDepositChannelDepositChannelAssethub>,
       AccountId32
+    >;
+
+    /**
+     * Outstanding deposits keyed by the hash of their full witness. Distinct deposits in one
+     * transaction remain separate; successful recovery removes the entry.
+     *
+     * @param {FixedBytes<32>} arg
+     * @param {Callback<PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositAssethub | undefined> =} callback
+     **/
+    failedVaultDeposits: GenericStorageQuery<
+      (
+        arg: FixedBytes<32>,
+      ) => PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositAssethub | undefined,
+      FixedBytes<32>
     >;
 
     /**
@@ -8160,6 +8252,20 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
+     * Outstanding deposits keyed by the hash of their full witness. Distinct deposits in one
+     * transaction remain separate; successful recovery removes the entry.
+     *
+     * @param {FixedBytes<32>} arg
+     * @param {Callback<PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositTron | undefined> =} callback
+     **/
+    failedVaultDeposits: GenericStorageQuery<
+      (
+        arg: FixedBytes<32>,
+      ) => PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositTron | undefined,
+      FixedBytes<32>
+    >;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
@@ -8914,6 +9020,20 @@ export interface ChainStorage extends GenericChainStorage {
     preallocatedChannels: GenericStorageQuery<
       (arg: AccountId32Like) => Array<CfChainsDepositChannelDepositChannelBsc>,
       AccountId32
+    >;
+
+    /**
+     * Outstanding deposits keyed by the hash of their full witness. Distinct deposits in one
+     * transaction remain separate; successful recovery removes the entry.
+     *
+     * @param {FixedBytes<32>} arg
+     * @param {Callback<PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBsc | undefined> =} callback
+     **/
+    failedVaultDeposits: GenericStorageQuery<
+      (
+        arg: FixedBytes<32>,
+      ) => PalletCfIngressEgressFailedVaultDepositsFailedVaultDepositBsc | undefined,
+      FixedBytes<32>
     >;
 
     /**

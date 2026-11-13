@@ -1636,6 +1636,12 @@ export interface ChainErrors extends GenericChainErrors {
      * The supplied configuration parameters are not valid.
      **/
     InvalidConfigurationParameters: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
+
+    /**
+     * The failed vault deposit is attributed to a different broker.
+     **/
+    BrokerMismatch: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -1740,6 +1746,12 @@ export interface ChainErrors extends GenericChainErrors {
      * The supplied configuration parameters are not valid.
      **/
     InvalidConfigurationParameters: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
+
+    /**
+     * The failed vault deposit is attributed to a different broker.
+     **/
+    BrokerMismatch: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -1844,6 +1856,12 @@ export interface ChainErrors extends GenericChainErrors {
      * The supplied configuration parameters are not valid.
      **/
     InvalidConfigurationParameters: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
+
+    /**
+     * The failed vault deposit is attributed to a different broker.
+     **/
+    BrokerMismatch: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -2149,6 +2167,12 @@ export interface ChainErrors extends GenericChainErrors {
      * The supplied configuration parameters are not valid.
      **/
     InvalidConfigurationParameters: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
+
+    /**
+     * The failed vault deposit is attributed to a different broker.
+     **/
+    BrokerMismatch: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -2377,6 +2401,12 @@ export interface ChainErrors extends GenericChainErrors {
      * The supplied configuration parameters are not valid.
      **/
     InvalidConfigurationParameters: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
+
+    /**
+     * The failed vault deposit is attributed to a different broker.
+     **/
+    BrokerMismatch: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -2657,6 +2687,12 @@ export interface ChainErrors extends GenericChainErrors {
      * The supplied configuration parameters are not valid.
      **/
     InvalidConfigurationParameters: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
+
+    /**
+     * The failed vault deposit is attributed to a different broker.
+     **/
+    BrokerMismatch: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -3108,6 +3144,12 @@ export interface ChainErrors extends GenericChainErrors {
      * The supplied configuration parameters are not valid.
      **/
     InvalidConfigurationParameters: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
+
+    /**
+     * The failed vault deposit is attributed to a different broker.
+     **/
+    BrokerMismatch: GenericPalletError;
 
     /**
      * Generic pallet error
@@ -3305,6 +3347,12 @@ export interface ChainErrors extends GenericChainErrors {
      * The supplied configuration parameters are not valid.
      **/
     InvalidConfigurationParameters: GenericPalletError;
+    UnknownFailedVaultDeposit: GenericPalletError;
+
+    /**
+     * The failed vault deposit is attributed to a different broker.
+     **/
+    BrokerMismatch: GenericPalletError;
 
     /**
      * Generic pallet error

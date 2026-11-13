@@ -187,27 +187,31 @@ mod benchmarks {
 		};
 		let call = Call::<T, I>::vault_swap_request {
 			block_height: 0u32.into(),
-			deposit: Box::new(VaultDepositWitness {
-				input_asset: BenchmarkValue::benchmark_value(),
-				output_asset: Asset::Eth,
-				deposit_amount: 1_000u32.into(),
-				destination_address: BenchmarkValue::benchmark_value(),
-				deposit_metadata: Some(deposit_metadata),
-				tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
-				deposit_details: BenchmarkValue::benchmark_value(),
-				broker_fee: None,
-				affiliate_fees: Default::default(),
-				refund_params: ChannelRefundParametersForChain::<T::TargetChain> {
-					retry_duration: Default::default(),
-					refund_address: BenchmarkValue::benchmark_value(),
-					min_price: Default::default(),
-					refund_ccm_metadata: Default::default(),
-					max_oracle_price_slippage: Default::default(),
+			deposit: Box::new(VaultDepositWitness::Swap {
+				deposit: crate::VaultDepositFacts {
+					input_asset: BenchmarkValue::benchmark_value(),
+					deposit_amount: 1_000u32.into(),
+					tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
+					deposit_details: BenchmarkValue::benchmark_value(),
+					channel_id: None,
+					deposit_address: None,
 				},
-				dca_params: None,
-				boost_fee: 0,
-				channel_id: None,
-				deposit_address: None,
+				swap: crate::VaultSwapData {
+					output_asset: Asset::Eth,
+					destination_address: BenchmarkValue::benchmark_value(),
+					deposit_metadata: Some(deposit_metadata),
+					broker_fee: None,
+					affiliate_fees: Default::default(),
+					refund_params: ChannelRefundParametersForChain::<T::TargetChain> {
+						retry_duration: Default::default(),
+						refund_address: BenchmarkValue::benchmark_value(),
+						min_price: Default::default(),
+						refund_ccm_metadata: Default::default(),
+						max_oracle_price_slippage: Default::default(),
+					},
+					dca_params: None,
+					boost_fee: 0,
+				},
 			}),
 		};
 
@@ -215,6 +219,96 @@ mod benchmarks {
 		{
 			assert_ok!(call.dispatch_bypass_filter(origin));
 		}
+	}
+
+	fn failed_vault_witness<T: Config<I>, I: 'static>() -> VaultDepositWitness<T, I> {
+		VaultDepositWitness::Failed {
+			deposit: VaultDepositFacts {
+				input_asset: BenchmarkValue::benchmark_value(),
+				deposit_amount: TargetChainAmount::<T, I>::try_from(1_000_000_000_000_000_000u128)
+					.unwrap(),
+				deposit_address: Some(BenchmarkValue::benchmark_value()),
+				channel_id: Some(u64::MAX),
+				deposit_details: BenchmarkValue::benchmark_value(),
+				tx_id: BenchmarkValue::benchmark_value(),
+			},
+			broker_id: Some(account("recovery_broker", 0, 0)),
+		}
+	}
+
+	fn setup_recovery<T: Config<I>, I: 'static>(egress: bool) -> T::AccountId {
+		let broker = account("recovery_broker", 0, 0);
+		let recovery_account = account("recovery_lp", 0, 0);
+		for who in [&broker, &recovery_account] {
+			frame_system::Pallet::<T>::inc_providers(who);
+		}
+		assert_ok!(T::AccountRoleRegistry::register_as_broker(&broker));
+		assert_ok!(T::AccountRoleRegistry::register_as_liquidity_provider(&recovery_account));
+		T::BrokerRecoveryApi::setup_benchmark(&broker, &recovery_account);
+		if egress {
+			T::RefundAddressRegistry::register_liquidity_refund_address(
+				&recovery_account,
+				TargetChainAccount::<T, I>::benchmark_value().into_foreign_chain_address(),
+			);
+		}
+		recovery_account
+	}
+
+	#[benchmark]
+	fn failed_vault_deposit_queued() {
+		let witness = failed_vault_witness::<T, I>();
+		#[block]
+		{
+			Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+		}
+		assert_eq!(FailedVaultDeposits::<T, I>::iter_keys().count(), 1);
+	}
+
+	#[benchmark]
+	fn failed_vault_deposit_credit() {
+		let recovery_account = setup_recovery::<T, I>(false);
+		let witness = failed_vault_witness::<T, I>();
+		let asset = witness.deposit().input_asset;
+		#[block]
+		{
+			Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+		}
+		assert!(T::Balance::get_balance(&recovery_account, asset.into()) > 0);
+		assert!(FailedVaultDeposits::<T, I>::iter_keys().next().is_none());
+	}
+
+	#[benchmark]
+	fn failed_vault_deposit_egress() {
+		setup_recovery::<T, I>(true);
+		let witness = failed_vault_witness::<T, I>();
+		#[block]
+		{
+			Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+		}
+		assert!(ScheduledEgressFetchOrTransfer::<T, I>::get()
+			.iter()
+			.any(|request| matches!(request, FetchOrTransfer::Transfer { .. })));
+	}
+
+	#[benchmark]
+	fn recover_failed_vault_deposits(n: Linear<1, MAX_FAILED_VAULT_DEPOSIT_RECOVERIES>) {
+		// Queued before the recovery account is linked.
+		let recoveries = (0..n)
+			.map(|i| {
+				let mut witness = failed_vault_witness::<T, I>();
+				witness.deposit_mut().channel_id = Some(i.into());
+				let broker_id = witness.broker_id().unwrap().clone();
+				let queue_id = Pallet::<T, I>::failed_vault_deposit_id(&witness);
+				Pallet::<T, I>::process_vault_swap_request_full_witness_inner(0u32.into(), witness);
+				(queue_id, broker_id)
+			})
+			.collect::<Vec<_>>();
+		assert_eq!(FailedVaultDeposits::<T, I>::iter_keys().count(), n as usize);
+		setup_recovery::<T, I>(true);
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, recoveries.try_into().unwrap());
+		assert!(FailedVaultDeposits::<T, I>::iter_keys().next().is_none());
 	}
 
 	#[benchmark]
@@ -293,5 +387,57 @@ mod benchmarks {
 		new_test_ext().execute_with(|| {
 			_mark_transaction_for_rejection::<Test, Instance1>(true);
 		});
+	}
+	#[cfg(test)]
+	mod tests {
+		use super::*;
+		use crate::mocks::{new_test_ext, Test};
+		use frame_support::instances::{Instance1, Instance2};
+
+		#[test]
+		fn recovery_benchmarks() {
+			for benchmark in [
+				Pallet::<Test, Instance1>::test_benchmark_failed_vault_deposit_queued,
+				Pallet::<Test, Instance1>::test_benchmark_failed_vault_deposit_credit,
+				Pallet::<Test, Instance1>::test_benchmark_failed_vault_deposit_egress,
+				Pallet::<Test, Instance1>::test_benchmark_recover_failed_vault_deposits,
+				Pallet::<Test, Instance2>::test_benchmark_failed_vault_deposit_queued,
+				Pallet::<Test, Instance2>::test_benchmark_failed_vault_deposit_credit,
+				Pallet::<Test, Instance2>::test_benchmark_failed_vault_deposit_egress,
+				Pallet::<Test, Instance2>::test_benchmark_recover_failed_vault_deposits,
+			] {
+				new_test_ext().execute_with(|| {
+					assert_ok!(benchmark());
+				});
+			}
+		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> BenchmarkValue for VaultDepositWitness<T, I>
+where
+	Beneficiary<T::AccountId>: BenchmarkValue,
+{
+	fn benchmark_value() -> Self {
+		Self::Swap {
+			deposit: VaultDepositFacts {
+				input_asset: BenchmarkValue::benchmark_value(),
+				deposit_address: None,
+				channel_id: None,
+				deposit_amount: BenchmarkValue::benchmark_value(),
+				deposit_details: BenchmarkValue::benchmark_value(),
+				tx_id: BenchmarkValue::benchmark_value(),
+			},
+			swap: VaultSwapData {
+				output_asset: BenchmarkValue::benchmark_value(),
+				destination_address: BenchmarkValue::benchmark_value(),
+				deposit_metadata: Some(BenchmarkValue::benchmark_value()),
+				broker_fee: Some(BenchmarkValue::benchmark_value()),
+				affiliate_fees: BenchmarkValue::benchmark_value(),
+				refund_params: BenchmarkValue::benchmark_value(),
+				dca_params: Some(BenchmarkValue::benchmark_value()),
+				boost_fee: BenchmarkValue::benchmark_value(),
+			},
+		}
 	}
 }

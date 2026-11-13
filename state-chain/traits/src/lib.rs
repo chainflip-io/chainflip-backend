@@ -1428,6 +1428,9 @@ pub trait BrokerRecoveryApi {
 
 	/// The broker's recovery account, if it has linked one that still has the LP role.
 	fn recovery_account(broker: &Self::AccountId) -> Option<Self::AccountId>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark(_broker: &Self::AccountId, _recovery_account: &Self::AccountId) {}
 }
 
 /// Opaque reference to a failed deposit, e.g. its transaction id or hash.
