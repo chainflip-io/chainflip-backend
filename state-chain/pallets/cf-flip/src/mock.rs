@@ -69,6 +69,19 @@ impl pallet_cf_flip::Config for Test {
 	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type RuntimeHoldReason = ();
 	type CallIndexer = ();
+	type OnFeeRewardsActivationScheduled = MockOnFeeRewardsActivationScheduled;
+}
+
+thread_local! {
+	pub static ACTIVATION_SCHEDULED_CALLS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+pub struct MockOnFeeRewardsActivationScheduled;
+
+impl cf_traits::OnFeeRewardsActivationScheduled for MockOnFeeRewardsActivationScheduled {
+	fn on_fee_rewards_activation_scheduled() {
+		ACTIVATION_SCHEDULED_CALLS.with(|calls| calls.set(calls.get() + 1));
+	}
 }
 
 parameter_types! {

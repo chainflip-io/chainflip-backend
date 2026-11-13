@@ -1164,6 +1164,8 @@ pub mod pallet {
 		AccountBonded,
 		/// Delegators can't register as brokers.
 		AccountIsDelegating,
+		/// The FLIP to send to the gateway is too small relative to the egress fee.
+		FlipToGatewayAmountBelowThreshold,
 	}
 
 	#[pallet::genesis_config]
@@ -3264,7 +3266,7 @@ pub mod pallet {
 				.and_then(
 					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
 						if egress_amount < FLIP_TO_GATEWAY_MULTIPLE * fee_withheld {
-							Err(DispatchError::Other("flip to gateway multiple below threshold"))
+							Err(Error::<T>::FlipToGatewayAmountBelowThreshold.into())
 						} else {
 							Ok(result)
 						}

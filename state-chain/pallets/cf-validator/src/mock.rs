@@ -24,6 +24,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
+		lp_role_required_for_delegation::MockLpRoleRequiredForDelegation,
 		minimum_funding::MockMinimumFundingProvider, qualify_node::QualifyAll,
 		reputation_resetter::MockReputationResetter, rewards_distribution::MockRewardsDistribution,
 		waived_fees::WaivedFeesMock,
@@ -86,6 +87,7 @@ impl pallet_cf_flip::Config for Test {
 	// pallet_session::Config::Currency.
 	type RuntimeHoldReason = pallet_session::HoldReason;
 	type CallIndexer = ();
+	type OnFeeRewardsActivationScheduled = ();
 }
 
 impl pallet_session::Config for Test {
@@ -236,6 +238,7 @@ impl Config for Test {
 	type MinimumFunding = MockMinimumFundingProvider;
 	type CfePeerRegistration = MockCfeInterface;
 	type GrandpaDelegation = MockGrandpaDelegation;
+	type LpRoleRequiredForDelegation = MockLpRoleRequiredForDelegation;
 }
 
 /// Session pallet requires a set of validators at genesis.

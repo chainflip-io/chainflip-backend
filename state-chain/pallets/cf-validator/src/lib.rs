@@ -45,8 +45,8 @@ use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AccountRoleRegistry,
 	AsyncResult, AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip,
 	DelegationInfo, DeregistrationHooks, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	FundingInfo, HistoricalEpoch, KeyRotator, MissedAuthorshipSlots, QualifyNode, RedemptionCheck,
-	ReputationResetter, SetSafeMode, VanityName,
+	FundingInfo, HistoricalEpoch, KeyRotator, LpRoleRequiredForDelegation, MissedAuthorshipSlots,
+	QualifyNode, RedemptionCheck, ReputationResetter, SetSafeMode, VanityName,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -238,6 +238,8 @@ pub mod pallet {
 
 		/// GRANDPA vote delegation manager.
 		type GrandpaDelegation: GrandpaVoteDelegation;
+
+		type LpRoleRequiredForDelegation: LpRoleRequiredForDelegation;
 	}
 
 	/// Percentage of epoch we allow redemptions.
@@ -383,8 +385,13 @@ pub mod pallet {
 	/// delegator is not allowed to delegate if it's in the list of exceptions and vis versa for
 	/// deny.
 	#[pallet::storage]
-	pub type Exceptions<T: Config> =
-		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
+	pub type Exceptions<T: Config> = StorageMap<
+		_,
+		Identity,
+		T::AccountId,
+		BoundedBTreeSet<T::AccountId, ConstU32<MAX_EXCEPTIONS_PER_OPERATOR>>,
+		ValueQuery,
+	>;
 
 	/// Maps operators to a list of their managed validators.
 	#[pallet::storage]
@@ -575,6 +582,12 @@ pub mod pallet {
 		GrandpaDelegationActive,
 		/// Delegator funds cannot be transferred between accounts.
 		DelegatorTransferRestricted,
+		/// Only accounts registered as a Liquidity Provider can delegate.
+		NotLiquidityProvider,
+		/// The account cannot deregister as a Liquidity Provider while actively delegating.
+		StillDelegating,
+		/// The operator's list of delegation exceptions is full.
+		TooManyExceptions,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1122,16 +1135,19 @@ pub mod pallet {
 			if let Some(current_settings) = OperatorSettingsLookup::<T>::get(&operator) {
 				match (current_settings.delegation_acceptance, settings.delegation_acceptance) {
 					(DelegationAcceptance::Allow, DelegationAcceptance::Deny) => {
-						Exceptions::<T>::mutate(&operator, |allowed| {
+						Exceptions::<T>::try_mutate(&operator, |allowed| {
 							allowed.clear();
 							// Any existing delegators need be added to the allowed list.
 							for (delegator, (assigned_operator, _)) in DelegationChoice::<T>::iter()
 							{
 								if assigned_operator == operator {
-									allowed.insert(delegator.clone());
+									allowed
+										.try_insert(delegator)
+										.map_err(|_| Error::<T>::TooManyExceptions)?;
 								}
 							}
-						});
+							Ok::<_, Error<T>>(())
+						})?;
 					},
 					(DelegationAcceptance::Deny, DelegationAcceptance::Allow) => {
 						Exceptions::<T>::remove(&operator);
@@ -1199,9 +1215,10 @@ pub mod pallet {
 						Error::<T>::AccountDoesNotExist
 					);
 
-					Exceptions::<T>::mutate(&operator, |blocked| {
-						blocked.insert(delegator.clone());
-					});
+					Exceptions::<T>::try_mutate(&operator, |blocked| {
+						blocked.try_insert(delegator.clone())
+					})
+					.map_err(|_| Error::<T>::TooManyExceptions)?;
 				},
 			}
 
@@ -1232,9 +1249,10 @@ pub mod pallet {
 						frame_system::Pallet::<T>::account_exists(&delegator),
 						Error::<T>::AccountDoesNotExist
 					);
-					Exceptions::<T>::mutate(&operator, |allowed| {
-						allowed.insert(delegator.clone());
-					});
+					Exceptions::<T>::try_mutate(&operator, |allowed| {
+						allowed.try_insert(delegator.clone())
+					})
+					.map_err(|_| Error::<T>::TooManyExceptions)?;
 				},
 				DelegationAcceptance::Allow => {
 					// If the operator is set to allow, exceptions are the delegators that are
@@ -1326,7 +1344,20 @@ pub mod pallet {
 		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			ensure!(Self::is_delegation_eligible(&delegator), Error::<T>::DelegationNotAllowed);
+			// Once required, delegation is only available to Liquidity Providers. Accounts that
+			// haven't yet registered a role (e.g. freshly-funded accounts delegating via the SC
+			// Utils EVM contract) are implicitly registered as Liquidity Providers on first
+			// delegation.
+			if T::LpRoleRequiredForDelegation::is_required() {
+				match T::AccountRoleRegistry::account_role(&delegator) {
+					AccountRole::Unregistered =>
+						T::AccountRoleRegistry::register_as_liquidity_provider(&delegator)?,
+					AccountRole::LiquidityProvider => {},
+					_ => return Err(Error::<T>::NotLiquidityProvider.into()),
+				}
+			} else {
+				ensure!(Self::is_delegation_eligible(&delegator), Error::<T>::DelegationNotAllowed);
+			}
 
 			ensure!(
 				T::AccountRoleRegistry::has_account_role(&operator, AccountRole::Operator),
@@ -2239,13 +2270,37 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Only accounts without Validator, Operator or Broker roles can be sourced from
-	/// `DelegationChoice`. Brokers are excluded because the private channel bond would overwrite
-	/// the delegation bond.
 	pub(crate) fn is_delegation_eligible(account_id: &T::AccountId) -> bool {
-		!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Validator) &&
-			!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator) &&
-			!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Broker)
+		if T::LpRoleRequiredForDelegation::is_required() {
+			T::AccountRoleRegistry::has_account_role(account_id, AccountRole::LiquidityProvider)
+		} else {
+			!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Validator) &&
+				!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator) &&
+				!T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Broker)
+		}
+	}
+
+	/// Gives the Liquidity Provider role to every Unregistered delegator, so that existing
+	/// delegations stay eligible once the role is required. Delegators with any other role are
+	/// left as they are and become ineligible.
+	pub fn assign_lp_role_to_delegators() {
+		for delegator in DelegationChoice::<T>::iter_keys() {
+			match T::AccountRoleRegistry::account_role(&delegator) {
+				AccountRole::Unregistered =>
+					if T::AccountRoleRegistry::register_as_liquidity_provider(&delegator).is_err() {
+						cf_runtime_utilities::log_or_panic!(
+							"Failed to register delegator {:?} as a Liquidity Provider",
+							delegator
+						);
+					},
+				AccountRole::LiquidityProvider => {},
+				other => log::warn!(
+					"Delegator {:?} has role {:?} and will no longer be eligible to delegate",
+					delegator,
+					other
+				),
+			}
+		}
 	}
 
 	/// Builds the delegation snapshots for the next epoch.
@@ -2533,14 +2588,6 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> DelegationInfo for Pallet<T> {
-	type AccountId = T::AccountId;
-
-	fn is_delegating(account_id: &Self::AccountId) -> bool {
-		DelegationChoice::<T>::contains_key(account_id)
-	}
-}
-
 impl<T: Config> RedemptionCheck for Pallet<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type Amount = T::Amount;
@@ -2610,6 +2657,27 @@ impl<T: Config> DeregistrationHooks for ValidatorDeregistrationCheck<T> {
 				Error::<T>::OperatorStillActive,
 			);
 		}
+
+		Ok(())
+	}
+}
+
+impl<T: Config> DelegationInfo for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn is_delegating(account_id: &Self::AccountId) -> bool {
+		DelegationChoice::<T>::contains_key(account_id)
+	}
+}
+
+pub struct DelegatorDeregistrationCheck<T>(PhantomData<T>);
+
+impl<T: Config> DeregistrationHooks for DelegatorDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		ensure!(!DelegationChoice::<T>::contains_key(account_id), Error::<T>::StillDelegating);
 
 		Ok(())
 	}

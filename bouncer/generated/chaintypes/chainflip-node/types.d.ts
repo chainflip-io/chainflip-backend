@@ -18324,7 +18324,19 @@ export type PalletCfValidatorError =
   /**
    * Delegator funds cannot be transferred between accounts.
    **/
-  | 'DelegatorTransferRestricted';
+  | 'DelegatorTransferRestricted'
+  /**
+   * Only accounts registered as a Liquidity Provider can delegate.
+   **/
+  | 'NotLiquidityProvider'
+  /**
+   * The account cannot deregister as a Liquidity Provider while actively delegating.
+   **/
+  | 'StillDelegating'
+  /**
+   * The operator's list of delegation exceptions is full.
+   **/
+  | 'TooManyExceptions';
 
 export type SpStakingOffenceOffenceSeverity = Perbill;
 
@@ -19221,7 +19233,11 @@ export type PalletCfSwappingError =
   /**
    * Delegators can't register as brokers.
    **/
-  | 'AccountIsDelegating';
+  | 'AccountIsDelegating'
+  /**
+   * The FLIP to send to the gateway is too small relative to the egress fee.
+   **/
+  | 'FlipToGatewayAmountBelowThreshold';
 
 export type PalletCfLpDeltaStats = { limitOrdersSwapUsdVolume: FixedU128 };
 
