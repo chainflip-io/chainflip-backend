@@ -611,17 +611,19 @@ pub mod tests {
 
 		prop_oneof![
 			Just(None),
-			(0..STATIC_SAFETY_BUFFER_FOR_TESTS)
+			(0..=STATIC_SAFETY_BUFFER_FOR_TESTS)
 				.prop_flat_map(move |x| arbitrary_with::<ChainProgress<T::Chain>, _, _>((
 					(safe_block_height.saturating_forward(x), 10),
 					Default::default()
 				)))
 				.prop_map(move |mut progress| {
-					if let Some(first_header) = progress.headers.first() {
-						progress.removed = Some(
-							first_header.block_height..=seen_heights_below.saturating_backward(1),
-						);
-					}
+					let removal_start = progress
+						.headers
+						.first()
+						.map_or(safe_block_height, |header| header.block_height);
+
+					progress.removed = (removal_start < seen_heights_below)
+						.then(|| removal_start..=seen_heights_below.saturating_backward(1));
 
 					Some(progress)
 				})

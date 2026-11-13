@@ -157,8 +157,25 @@ defx! {
 		//--- optimistic elections ---
 		// resolving optimistic elections doesn't affect seen_heights_below
 		optimistic_elections_dont_affect_seen_heights_below:
-			this.optimistic_block_cache.keys().all(|height| height >= &this.seen_heights_below)
+			this.optimistic_block_cache.keys().all(|height| height >= &this.seen_heights_below),
 
+		// All ongoing optimistic elections are at or above seen_heights_below, in other words,
+		// an election is optimistic if and only if it is at or above seen_heights_below.
+		optimistic_elections_at_or_above_seen_heights_below:
+			this.ongoing.iter().all(|(height, election)|
+				(*election == BWElectionType::Optimistic)
+				==
+				(height >= &this.seen_heights_below)
+			),
+
+		// If there are optimistic elections, none are queued
+		optimistic_elections_only_exist_if_queues_are_empty:
+			if this.ongoing.iter().any(|(_, election)| *election == BWElectionType::Optimistic) {
+				this.queued_safe_elections.get_all_heights().is_empty()
+				&& this.queued_hash_elections.is_empty()
+			} else {
+				true
+			}
 	}
 }
 
@@ -495,6 +512,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 		use proptest::{
 			collection::{btree_map, btree_set, vec},
 			prelude::Just,
+			prop_oneof,
 		};
 
 		let chain_block_number = || {
@@ -503,29 +521,54 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 			})
 		};
 
+		let non_optimistic_election = || {
+			prop_oneof![
+				any::<ChainBlockHashOf<T::Chain>>().prop_map(BWElectionType::ByHash),
+				Just(BWElectionType::SafeBlockHeight),
+				any::<T::ElectionProperties>().prop_map(BWElectionType::Governance),
+			]
+		};
+
+		let safety_buffer = STATIC_SAFETY_BUFFER_FOR_TESTS;
+
 		prop_do!(
-			let safety_buffer in Just(STATIC_SAFETY_BUFFER_FOR_TESTS);
-			let ongoing_below in chain_block_number();
-			let highest_seen_delta in 1..1000usize;
-			let highest_ongoign_delta in 0..1000usize;
-			let heights in btree_set(chain_block_number(), 0..40);
-			let currently_highest = heights.iter().max().cloned().unwrap_or(Default::default());
-			let seen_heights_below = currently_highest.saturating_forward(highest_seen_delta);
-			let highest_ever_ongoing = currently_highest.saturating_forward(highest_ongoign_delta);
+			let (ongoing_below, highest_seen_delta, highest_ongoing_delta, heights, optimistic_deltas) in (
+				chain_block_number(),
+				1..1000usize,
+				0..1000usize,
+				btree_set(chain_block_number(), 0..40),
+				vec(0..1000usize, 0..10),
+			);
+			let highest_normal_height = heights.iter().max().cloned().unwrap_or(Default::default());
+			let seen_heights_below = highest_normal_height.saturating_forward(highest_seen_delta);
 			let safe_elections_below = max(ongoing_below, seen_heights_below.saturating_backward(safety_buffer));
 			let ongoing = heights.iter().filter(|h| **h < ongoing_below).cloned().collect::<BTreeSet<_>>();
 			let safe = heights.iter().filter(|h| (ongoing_below..safe_elections_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
 			let hash = heights.iter().filter(|h| (safe_elections_below..seen_heights_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
 
+			let optimistic_election_heights = if safe.is_empty() && hash.is_empty() {
+				optimistic_deltas.iter().map(|delta| seen_heights_below.saturating_forward(*delta)).collect()
+			} else {
+				BTreeSet::new()
+			};
+			let highest_optimistic_height = optimistic_election_heights.iter().max().cloned().unwrap_or(Default::default());
+
+			let highest_ever_ongoing = std::cmp::max(highest_normal_height, highest_optimistic_height)
+				.saturating_forward(highest_ongoing_delta);
+
 			Self {
 				safety_buffer: Just(safety_buffer as u32),
 				seen_heights_below: Just(seen_heights_below),
 				highest_ever_ongoing_election: Just(highest_ever_ongoing),
-				ongoing: vec(any::<BWElectionType<T>>(), ongoing.len()..=ongoing.len())
-					.prop_map(move |types|
+				ongoing: vec(non_optimistic_election(), ongoing.len()..=ongoing.len())
+					.prop_map(move |non_optimistic_elections|
 						ongoing.clone()
 							.into_iter()
-							.zip(types.into_iter())
+							.zip(non_optimistic_elections.into_iter())
+							.chain(optimistic_election_heights
+								.iter()
+								.map(|height| (*height, BWElectionType::Optimistic))
+							)
 							.collect::<BTreeMap<_,_>>()
 					),
 				queued_safe_elections: Just(
@@ -546,7 +589,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 						any::<OptimisticBlock<T>>(),
 						0..10
 					).prop_map(move |mut blocks| {
-						blocks.retain(|height, _| height.saturating_forward(safety_buffer) > seen_heights_below);
+						blocks.retain(|height, _| height >= &seen_heights_below);
 						blocks
 					}),
 				debug_events: Just(Default::default()),
