@@ -337,16 +337,25 @@ pub enum EmergencyPreset {
 	#[codec(index = 0)]
 	DisableDepositChannelCreation(ForeignChain),
 	/// Stops new loans and additions to existing loans in this asset. Boost still borrows from
-	/// the lending pool.
+	/// the lending pool; see `DisableBoost`.
 	#[codec(index = 1)]
 	DisableNewLoans(Asset),
 	/// Stops LP withdrawals, LP-to-LP transfers and transfers of FLIP to the on-chain balance.
-	/// Broker withdrawals keep working.
+	/// Broker withdrawals are covered by `DisableBrokerWithdrawals`.
 	#[codec(index = 2)]
 	DisableLpWithdrawals,
 	/// Stops LP internal swaps.
 	#[codec(index = 3)]
 	DisableInternalSwaps,
+	/// Stops boosting deposits on this chain. Deposits are credited at full confirmation instead.
+	#[codec(index = 4)]
+	DisableBoost(ForeignChain),
+	/// Stops broker and affiliate fee withdrawals.
+	#[codec(index = 5)]
+	DisableBrokerWithdrawals,
+	/// Stops new FLIP redemption requests. Redemptions already requested are unaffected.
+	#[codec(index = 6)]
+	DisableRedemptions,
 }
 
 impl EmergencyPreset {
@@ -358,12 +367,21 @@ impl EmergencyPreset {
 			Self::DisableDepositChannelCreation(_) |
 			Self::DisableNewLoans(_) |
 			Self::DisableLpWithdrawals |
-			Self::DisableInternalSwaps => (),
+			Self::DisableInternalSwaps |
+			Self::DisableBoost(_) |
+			Self::DisableBrokerWithdrawals |
+			Self::DisableRedemptions => (),
 		};
 		ForeignChain::iter()
 			.map(Self::DisableDepositChannelCreation)
 			.chain(Asset::all().map(Self::DisableNewLoans))
-			.chain([Self::DisableLpWithdrawals, Self::DisableInternalSwaps])
+			.chain(ForeignChain::iter().map(Self::DisableBoost))
+			.chain([
+				Self::DisableLpWithdrawals,
+				Self::DisableInternalSwaps,
+				Self::DisableBrokerWithdrawals,
+				Self::DisableRedemptions,
+			])
 	}
 }
 

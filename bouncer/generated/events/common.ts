@@ -590,6 +590,9 @@ export const cfTraitsSafeModeEmergencyPreset = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('DisableNewLoans'), value: cfPrimitivesChainsAssetsAnyAsset }),
   z.object({ __kind: z.literal('DisableLpWithdrawals') }),
   z.object({ __kind: z.literal('DisableInternalSwaps') }),
+  z.object({ __kind: z.literal('DisableBoost'), value: cfPrimitivesChainsForeignChain }),
+  z.object({ __kind: z.literal('DisableBrokerWithdrawals') }),
+  z.object({ __kind: z.literal('DisableRedemptions') }),
 ]);
 
 export const palletCfTokenholderGovernanceProposal = z.discriminatedUnion('__kind', [
