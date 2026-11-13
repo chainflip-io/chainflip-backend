@@ -20,6 +20,7 @@ use crate::{
 	settings::{NodeContainer, TronEndpoints},
 	tron::{
 		cached_rpc::{TronRetryRpcApiWithResult, MAX_RETRY_FOR_WITH_RESULT},
+		raw_data::validate_raw_data,
 		rpc::TronSigningRpcApi,
 		rpc_client_api::TransactionResultStatus,
 	},
@@ -451,7 +452,7 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 						// Build the actual transaction with triggerSmartContract (includes fee_limit).
 						// This is needed because the raw_hex_data from the triggerConstantContract does
 						// not contain all the data for the valid transaction (e.g. energy limit).
-						let transaction =
+						let unsigned_transaction =
 							client
 								.trigger_contract(
 									signer_address,
@@ -463,7 +464,7 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 								.await
 								.context("Failed to build the unsigned transaction")?.transaction;
 
-						match transaction.status() {
+						match unsigned_transaction.status() {
 							TransactionResultStatus::Failure => {
 								return Err(anyhow::anyhow!(
 									"Transaction result failed, not broadcasting"
@@ -473,7 +474,7 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 							TransactionResultStatus::Success | TransactionResultStatus::Unknown => {},
 						}
 
-						let returned_fee_limit = transaction.raw_data.fee_limit
+						let returned_fee_limit = unsigned_transaction.raw_data.fee_limit
 							.ok_or_else(|| anyhow!("Transaction raw_data is missing fee_limit"))?;
 						if returned_fee_limit != fee_limit {
 							return Err(anyhow!(
@@ -483,19 +484,31 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 							));
 						}
 
-						// Decode the raw_data_hex to bytes and sign
-						let raw_data_bytes = hex::decode(&transaction.raw_data_hex)
+						let raw_data_bytes = hex::decode(&unsigned_transaction.raw_data_hex)
 							.map_err(|e| anyhow!("Failed to decode raw_data_hex: {}", e))?;
+
+						// The endpoint chose these bytes, so check that they say what the State
+						// Chain asked for before the broadcaster key authorises them.
+						validate_raw_data(&raw_data_bytes, &transaction, signer_address, fee_limit)
+							.context("Refusing to sign the transaction built by the RPC endpoint")?;
+
+						// Derived rather than taken from the response: the txID is the hash of the
+						// bytes we signed.
+						let tx_id = H256(sp_core::hashing::sha2_256(&raw_data_bytes));
+
 						let signature = client.sign_raw_bytes(raw_data_bytes).context("Failed to sign the transaction")?;
 
-						// Broadcast the signed transaction
-						let raw_data_json = serde_json::to_value(&transaction.raw_data)
+						// `raw_data` is forwarded as returned. The node rebuilds the transaction
+						// from it and verifies our signature, which covers `raw_data_hex`, so a
+						// `raw_data` that disagrees with the bytes we validated is rejected rather
+						// than broadcast.
+						let raw_data_json = serde_json::to_value(&unsigned_transaction.raw_data)
 							.context("Failed to serialize raw_data")?;
 						let response = client
 							.broadcast_transaction(
-								transaction.tx_id,
+								tx_id,
 								raw_data_json,
-								transaction.raw_data_hex,
+								unsigned_transaction.raw_data_hex,
 								vec![signature],
 							)
 							.await
@@ -517,7 +530,7 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 							));
 						}
 
-						Ok(transaction.tx_id)
+						Ok(tx_id)
 					})
 				}),
 				MAX_BROADCAST_RETRIES,
