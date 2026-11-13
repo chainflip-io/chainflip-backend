@@ -100,6 +100,8 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0441: pin-utils is unmaintained. Transitive dependency of `hyper` and of `wasm-timer` (substrate's `sc-network` and `sc-telemetry`); not a security issue.
 # - RUSTSEC-2026-0487, RUSTSEC-2026-0489, RUSTSEC-2026-0490: hickory-proto panics in the zone-file text parser. Only fixed in 0.26.2; our 0.24.4 (libp2p) and 0.25.2 (litep2p) are pinned by substrate. The parser is behind hickory's `text-parsing` feature, which nothing enables, so it isn't compiled.
 # - RUSTSEC-2026-0491: hickory-proto pre-allocates DNS message sections from the header's record counts (~18 MB per crafted packet, freed when decoding fails). Same pinned versions as above. Only reachable through DNS lookups of `/dns` multiaddrs (needs spoofed resolver responses), or libp2p mDNS on the local network when the opt-in libp2p backend is used; litep2p's mDNS uses `simple-dns`. Transient memory use, no panic. Low risk.
+# - RUSTSEC-2026-0504, RUSTSEC-2026-0505, RUSTSEC-2026-0511, RUSTSEC-2026-0512, RUSTSEC-2026-0514, RUSTSEC-2026-0530, RUSTSEC-2026-0531, RUSTSEC-2026-0532: hickory-proto/hickory-resolver DNSSEC validation flaws. Same pinned versions as above, fixed only in hickory-net 0.26.2. Validation needs hickory's `dnssec-*` features, which nothing enables, so it isn't compiled.
+# - RUSTSEC-2026-0525: libp2p-quic remote panic when a peer certificate expires during the handshake. Fixed in 0.13.1; 0.11.1 is locked through libp2p 0.54's optional `quic` feature, which nothing enables, so it isn't compiled.
 
 #
 cf-audit = '''
@@ -180,6 +182,15 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0489
 	--ignore RUSTSEC-2026-0490
 	--ignore RUSTSEC-2026-0491
+	--ignore RUSTSEC-2026-0504
+	--ignore RUSTSEC-2026-0505
+	--ignore RUSTSEC-2026-0511
+	--ignore RUSTSEC-2026-0512
+	--ignore RUSTSEC-2026-0514
+	--ignore RUSTSEC-2026-0525
+	--ignore RUSTSEC-2026-0530
+	--ignore RUSTSEC-2026-0531
+	--ignore RUSTSEC-2026-0532
 '''
 
 [build]
