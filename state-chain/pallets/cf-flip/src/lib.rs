@@ -54,6 +54,7 @@ use frame_support::{
 		DispatchError, Permill,
 	},
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
+	weights::WeightMeter,
 };
 use frame_system::pallet_prelude::*;
 use on_charge_transaction::CallIndexFor;
@@ -94,6 +95,21 @@ impl<T: Config> MaxEncodedLen for OpaqueCallIndex<T> {
 		// 32 bytes for the account
 		32 + CallIndexFor::<T>::max_encoded_len()
 	}
+}
+
+/// An ended epoch's rewards that are being paid out over several blocks.
+#[derive(
+	Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
+pub struct RewardDistributionProgress<Balance, Cursor> {
+	pub epoch_index: EpochIndex,
+	/// The amount split between the epoch's payees, fixed when the epoch ends so that fees
+	/// accruing in the meantime are left for the next epoch.
+	pub total: Balance,
+	/// The part of `total` that has not been paid out yet.
+	pub undistributed: Balance,
+	/// Where to resume, or `None` if nobody has been paid yet.
+	pub resume_from: Option<Cursor>,
 }
 
 #[frame_support::pallet]
@@ -190,6 +206,17 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FlipToDistribute<T: Config> = StorageValue<_, i128, ValueQuery>;
 
+	/// The rewards of the last ended epoch, paid out in `on_idle`.
+	#[pallet::storage]
+	pub type PendingRewardDistribution<T: Config> = StorageValue<
+		_,
+		RewardDistributionProgress<
+			T::Balance,
+			<T::RewardsDistribution as RewardsDistribution>::Cursor,
+		>,
+		OptionQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -239,6 +266,15 @@ pub mod pallet {
 			// `on_finalize`) so it's inspectable.
 			let _ = CallCounter::<T>::clear(u32::MAX, None);
 			T::WeightInfo::on_initialize()
+		}
+
+		fn on_idle(_current_block: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let mut meter = WeightMeter::with_limit(remaining_weight);
+			Self::continue_reward_distribution(
+				&mut meter,
+				T::WeightInfo::continue_reward_distribution,
+			);
+			meter.consumed()
 		}
 	}
 
@@ -538,6 +574,8 @@ impl<T: Config> Pallet<T> {
 			.offset(Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount));
 	}
 
+	/// Bridges in the pending off-chain rewards and fixes the amount to pay out to `epoch_index`'s
+	/// payees, which happens in `on_idle`. Returns the amount bridged in.
 	pub fn trigger_flip_reward_distribution(epoch_index: EpochIndex) -> T::Balance {
 		// Bridge in any pending offchain rewards and deposit them into the distribution reserve so
 		// that everything is distributed from a single source.
@@ -554,15 +592,66 @@ impl<T: Config> Pallet<T> {
 			Zero::zero()
 		};
 
-		let mut flip_distributed_map = BTreeMap::new();
-		T::RewardsDistribution::distribute_all(
+		if let Some(unfinished) = PendingRewardDistribution::<T>::get() {
+			cf_runtime_utilities::log_or_panic!(
+				"Reward distribution for epoch {} did not finish before epoch {} ended; its remaining {:?} goes to that epoch's payees instead.",
+				unfinished.epoch_index,
+				epoch_index,
+				unfinished.undistributed
+			);
+		}
+		let total = Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID);
+		PendingRewardDistribution::<T>::put(RewardDistributionProgress {
 			epoch_index,
-			Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID),
+			total,
+			undistributed: total,
+			resume_from: None,
+		});
+
+		offchain_flip_bridged
+	}
+
+	/// Pays out as much of the pending reward distribution as `meter` allows, with `weight` as
+	/// described in [RewardsDistribution::distribute].
+	pub(crate) fn continue_reward_distribution(
+		meter: &mut WeightMeter,
+		weight: impl Fn(u32, u32) -> Weight,
+	) {
+		if meter.try_consume(T::DbWeight::get().reads(1)).is_err() {
+			return;
+		}
+		let Some(RewardDistributionProgress {
+			epoch_index,
+			total,
+			mut undistributed,
+			resume_from: previous_cursor,
+		}) = PendingRewardDistribution::<T>::get()
+		else {
+			return;
+		};
+		// The fixed cost includes reading the epoch's payees, so it is charged before `distribute`.
+		if meter.try_consume(weight(0, 0)).is_err() {
+			return;
+		}
+
+		let mut flip_distributed_map = BTreeMap::new();
+		let resume_from = T::RewardsDistribution::distribute(
+			epoch_index,
+			total,
+			previous_cursor.clone(),
+			meter,
+			weight,
 			|account, amount| {
-				// Skip zero-value settlements: `distribute_all` calls this for every reward-pool
+				// Skip zero-value settlements: `distribute` calls this for every reward-pool
 				// participant, including ones with nothing due; avoid the wasted withdrawal/event
 				// noise here rather than baking that policy into the shared distribution logic.
 				if amount.is_zero() {
+					return;
+				}
+				// Accounts reaped since the epoch ended forfeit their share to the next epoch,
+				// since crediting them would recreate their balance without an account to own
+				// it.
+				if !frame_system::Pallet::<T>::account_exists(account) {
 					return;
 				}
 				Pallet::<T>::settle(
@@ -570,6 +659,7 @@ impl<T: Config> Pallet<T> {
 					Pallet::<T>::withdraw_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
 						.into(),
 				);
+				undistributed.saturating_reduce(amount);
 				flip_distributed_map
 					.entry(account.clone())
 					.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
@@ -577,19 +667,35 @@ impl<T: Config> Pallet<T> {
 			},
 		);
 
-		Self::deposit_event(Event::FlipDistributed {
-			amounts: flip_distributed_map.into_iter().collect(),
-		});
-		offchain_flip_bridged
+		if !flip_distributed_map.is_empty() {
+			Self::deposit_event(Event::FlipDistributed {
+				amounts: flip_distributed_map.into_iter().collect(),
+			});
+		}
+		match resume_from {
+			None => PendingRewardDistribution::<T>::kill(),
+			Some(cursor) if Some(&cursor) != previous_cursor.as_ref() =>
+				PendingRewardDistribution::<T>::put(RewardDistributionProgress {
+					epoch_index,
+					total,
+					undistributed,
+					resume_from: Some(cursor),
+				}),
+			Some(_) => {},
+		}
 	}
 
 	/// Fee rewards pending distribution to authorities: the balance of the on-chain distribution
-	/// reserve plus any off-chain accumulated fees.
+	/// reserve plus any off-chain accumulated fees, less what is still owed for an ended epoch.
 	pub fn pending_rewards() -> u128 {
+		let owed_for_ended_epoch = PendingRewardDistribution::<T>::get()
+			.map(|distribution| distribution.undistributed.into())
+			.unwrap_or_default();
 		FlipToDistribute::<T>::get()
 			.try_into()
 			.unwrap_or(0u128)
 			.saturating_add(Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID).into())
+			.saturating_sub(owed_for_ended_epoch)
 	}
 
 	/// Deposits `amount` into the reserve to be distributed to authorities as fee rewards.

@@ -25,10 +25,10 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Witnesser as EpochTransitionHandler>::on_expired_epoch(expired);
 	}
 	fn on_epoch_ending(ending: EpochIndex) {
-		let flip_distributed = Flip::trigger_flip_reward_distribution(ending);
+		let flip_bridged_in = Flip::trigger_flip_reward_distribution(ending);
 		let egress_fee_consumed = Swapping::maybe_trigger_flip_to_gateway_egress(
 			Environment::state_chain_gateway_address(),
-			flip_distributed,
+			flip_bridged_in,
 		);
 		Flip::add_to_offchain_flip_to_be_distributed(
 			i128::try_from(egress_fee_consumed).unwrap_or(i128::MAX).saturating_neg(),
@@ -37,5 +37,40 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 
 	fn on_new_epoch(_new: EpochIndex) {
 		AssetBalances::trigger_reconciliation();
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::{configs::BlockWeights, Runtime};
+	use frame_support::dispatch::DispatchClass;
+	use pallet_cf_flip::WeightInfo;
+
+	/// Payees of one operator's delegation pool that a reward distribution step must be able to
+	/// make progress on. Anyone can delegate for the 6 FLIP minimum funding.
+	const MIN_GROUP_PAYEES: u32 = 1_000_000;
+
+	// A step settles a pool's payees only after computing all of their cuts, so a pool too large
+	// for the idle weight would stop the distribution.
+	#[test]
+	fn a_large_delegation_pool_fits_in_a_busy_block() {
+		let weight = <Runtime as pallet_cf_flip::Config>::WeightInfo::continue_reward_distribution(
+			1,
+			MIN_GROUP_PAYEES,
+		)
+		.saturating_add(<Runtime as frame_system::Config>::DbWeight::get().reads(2));
+		let block_weights = BlockWeights::get();
+		let idle_weight = block_weights.max_block.saturating_sub(
+			block_weights
+				.get(DispatchClass::Normal)
+				.max_total
+				.unwrap_or(block_weights.max_block),
+		);
+		assert!(
+			weight.all_lte(idle_weight),
+			"Settling one payee of a pool of {MIN_GROUP_PAYEES} ({weight:?}) no longer fits in the \
+			 weight left by a full block ({idle_weight:?}). Reduce the per-payee cost of computing \
+			 a pool's cuts."
+		);
 	}
 }

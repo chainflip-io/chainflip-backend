@@ -50,6 +50,7 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn on_initialize() -> Weight;
 	fn update_pallet_config() -> Weight;
+	fn continue_reward_distribution(p: u32, n: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_flip using the Substrate node and recommended hardware.
@@ -76,6 +77,39 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(6_775_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	/// Storage: `Flip::PendingRewardDistribution` (r:1 w:1)
+	/// Proof: `Flip::PendingRewardDistribution` (`max_values`: Some(1), `max_size`: Some(75), added: 570, mode: `MaxEncodedLen`)
+	/// Storage: `Validator::HistoricalAuthorities` (r:1 w:0)
+	/// Proof: `Validator::HistoricalAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::HistoricalBonds` (r:1 w:0)
+	/// Proof: `Validator::HistoricalBonds` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationSnapshots` (r:2 w:0)
+	/// Proof: `Validator::DelegationSnapshots` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::Reserve` (r:1 w:1)
+	/// Proof: `Flip::Reserve` (`max_values`: None, `max_size`: Some(36), added: 2511, mode: `MaxEncodedLen`)
+	/// Storage: `Flip::Account` (r:1000 w:1000)
+	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
+	/// Storage: `Flip::OffchainFunds` (r:1 w:1)
+	/// Proof: `Flip::OffchainFunds` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
+	/// The range of component `p` is `[1, 1000]`.
+	/// The range of component `n` is `[1000, 20000]`.
+	fn continue_reward_distribution(p: u32, n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1962 + n * (48 ±0)`
+		//  Estimated: `7756 + n * (48 ±0) + p * (2555 ±0)`
+		// Minimum execution time: 2_325_000_000 picoseconds.
+		Weight::from_parts(61_966_243, 7756)
+			// Standard Error: 36_954
+			.saturating_add(Weight::from_parts(5_476_067, 0).saturating_mul(p.into()))
+			// Standard Error: 1_943
+			.saturating_add(Weight::from_parts(122_226, 0).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().reads(7_u64))
+			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(p.into())))
+			.saturating_add(T::DbWeight::get().writes(3_u64))
+			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(p.into())))
+			.saturating_add(Weight::from_parts(0, 48).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(0, 2555).saturating_mul(p.into()))
+	}
 }
 
 // For backwards compatibility and tests
@@ -100,5 +134,38 @@ impl WeightInfo for () {
 		// Minimum execution time: 6_491_000 picoseconds.
 		Weight::from_parts(6_775_000, 0)
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+	/// Storage: `Flip::PendingRewardDistribution` (r:1 w:1)
+	/// Proof: `Flip::PendingRewardDistribution` (`max_values`: Some(1), `max_size`: Some(75), added: 570, mode: `MaxEncodedLen`)
+	/// Storage: `Validator::HistoricalAuthorities` (r:1 w:0)
+	/// Proof: `Validator::HistoricalAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::HistoricalBonds` (r:1 w:0)
+	/// Proof: `Validator::HistoricalBonds` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::DelegationSnapshots` (r:2 w:0)
+	/// Proof: `Validator::DelegationSnapshots` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::Reserve` (r:1 w:1)
+	/// Proof: `Flip::Reserve` (`max_values`: None, `max_size`: Some(36), added: 2511, mode: `MaxEncodedLen`)
+	/// Storage: `Flip::Account` (r:1000 w:1000)
+	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
+	/// Storage: `Flip::OffchainFunds` (r:1 w:1)
+	/// Proof: `Flip::OffchainFunds` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
+	/// The range of component `p` is `[1, 1000]`.
+	/// The range of component `n` is `[1000, 20000]`.
+	fn continue_reward_distribution(p: u32, n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1962 + n * (48 ±0)`
+		//  Estimated: `7756 + n * (48 ±0) + p * (2555 ±0)`
+		// Minimum execution time: 2_325_000_000 picoseconds.
+		Weight::from_parts(61_966_243, 7756)
+			// Standard Error: 36_954
+			.saturating_add(Weight::from_parts(5_476_067, 0).saturating_mul(p.into()))
+			// Standard Error: 1_943
+			.saturating_add(Weight::from_parts(122_226, 0).saturating_mul(n.into()))
+			.saturating_add(ParityDbWeight::get().reads(7_u64))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(p.into())))
+			.saturating_add(ParityDbWeight::get().writes(3_u64))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(p.into())))
+			.saturating_add(Weight::from_parts(0, 48).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(0, 2555).saturating_mul(p.into()))
 	}
 }

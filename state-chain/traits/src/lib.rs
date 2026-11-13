@@ -70,6 +70,7 @@ use frame_support::{
 		Percent,
 	},
 	traits::{ConstU32, EnsureOrigin, Get, IsType, UnfilteredDispatchable},
+	weights::{Weight, WeightMeter},
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
@@ -362,14 +363,32 @@ pub trait AccountInfo {
 pub trait RewardsDistribution {
 	type Balance;
 	type AccountId;
+	/// Where a partial distribution stopped.
+	type Cursor: Parameter + MaxEncodedLen;
 
 	/// Splits `total_amount` evenly across `epoch_index`'s complete set of reward recipients
-	/// (e.g. that epoch's full authority set), as determined by the implementation.
-	fn distribute_all(
+	/// (e.g. that epoch's full authority set), as determined by the implementation, settling as
+	/// many of them as `meter` allows.
+	///
+	/// Recipients are settled in groups that are each read from storage in one go.
+	/// `weight(p, n)` is the cost of settling `p` recipients of a group of `n`, including the
+	/// fixed cost of a distribution step, which the caller charges before calling this.
+	///
+	/// Starts from `resume_from`, or from the first recipient if `None`. Returns where to resume,
+	/// or `None` once every recipient has been settled.
+	fn distribute(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
+		resume_from: Option<Self::Cursor>,
+		meter: &mut WeightMeter,
+		weight: impl Fn(u32, u32) -> Weight,
 		settle: impl FnMut(&Self::AccountId, Self::Balance),
-	);
+	) -> Option<Self::Cursor>;
+
+	/// Registers `payee_count` reward recipients for `epoch_index`, arranged to make
+	/// [Self::distribute] as expensive as possible.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark_payees(epoch_index: EpochIndex, payee_count: u32);
 }
 
 /// A representation of the current network state for this heartbeat interval.

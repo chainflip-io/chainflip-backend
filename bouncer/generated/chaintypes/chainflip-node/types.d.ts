@@ -17932,6 +17932,17 @@ export type PalletCfFlipFlipAccount = { balance: bigint; bond: bigint };
 
 export type PalletCfFlipOpaqueCallIndex = Bytes;
 
+export type PalletCfFlipRewardDistributionProgress = {
+  epochIndex: number;
+  total: bigint;
+  undistributed: bigint;
+  resumeFrom?: PalletCfValidatorDelegationDistributionCursor | undefined;
+};
+
+export type PalletCfValidatorDelegationDistributionCursor =
+  | { type: 'Snapshots'; value?: [AccountId32, number] | undefined }
+  | { type: 'IndependentAuthorities'; value: number };
+
 /**
  * The `Error` enum of this pallet.
  **/
