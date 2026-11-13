@@ -919,11 +919,12 @@ pub trait DeregistrationHooks {
 	type AccountId;
 	type Error: Into<DispatchError>;
 
-	/// Checks for deregistration eligibility
+	/// Rejects the deregistration if the account still holds state that would be lost or
+	/// orphaned. Runs before the role is removed, regardless of which role is being deregistered.
 	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error>;
 
-	/// Called on successful deregistration to possibly cleanup other state associated to the
-	/// deregistered account
+	/// Cleans up state associated with the account once the role has been removed. Must not fail:
+	/// `check` is the place to reject a deregistration.
 	fn on_deregistered(_account_id: &Self::AccountId, _account_role: AccountRole) {}
 }
 
