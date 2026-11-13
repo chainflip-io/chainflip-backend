@@ -13,6 +13,7 @@ workspace = true
 log = { workspace = true }
 hex-literal = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true }
 
 cf-proc-macros = { workspace = true }
 cf-runtime-macros = { workspace = true, optional = true }
@@ -31,6 +32,7 @@ frame-system = { workspace = true }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"frame-support/std",
 	"frame-system/std",
 	"sp-std/std",

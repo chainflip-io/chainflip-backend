@@ -96,7 +96,7 @@ mod benchmarks {
 	fn set_council() {
 		install_council::<T>(max_size_council::<T>(0).0);
 		let (new_council, _) = max_size_council::<T>(1);
-		let call = Call::<T>::set_council { new_council: new_council.clone() };
+		let call = Call::<T>::set_council { new_council: new_council.clone().into() };
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
 		#[block]
@@ -176,7 +176,7 @@ mod benchmarks {
 		NextGovKeyCallHashNonce::<T>::put(next_nonce);
 
 		let set_council_call: <T as Config>::RuntimeCall = Call::<T>::set_council {
-			new_council: Council::Individual { id: account::<T::AccountId>("voter", 0, 0) },
+			new_council: Council::Individual { id: account::<T::AccountId>("voter", 0, 0) }.into(),
 		}
 		.into();
 
@@ -205,9 +205,10 @@ mod benchmarks {
 	fn dispatch_whitelisted_call() {
 		let (council, caller) = max_size_council::<T>(0);
 		install_council::<T>(council);
-		let call: <T as Config>::RuntimeCall =
-			Call::<T>::set_council { new_council: Council::Individual { id: caller.clone() } }
-				.into();
+		let call: <T as Config>::RuntimeCall = Call::<T>::set_council {
+			new_council: Council::Individual { id: caller.clone() }.into(),
+		}
+		.into();
 		Pallet::<T>::push_proposal(Box::new(call.clone()), ExecutionMode::Manual);
 		PreAuthorisedGovCalls::<T>::insert(1, call.encode());
 

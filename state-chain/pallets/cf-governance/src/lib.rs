@@ -22,8 +22,9 @@
 pub mod council;
 pub mod migrations;
 
-pub use council::{Council, InvalidCouncil};
+pub use council::{Council, InvalidCouncil, MAX_DEPTH};
 
+use cf_runtime_utilities::DepthLimited;
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
@@ -402,9 +403,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_council())]
 		pub fn set_council(
 			origin: OriginFor<T>,
-			new_council: Council<T::AccountId>,
+			new_council: DepthLimited<Council<T::AccountId>, MAX_DEPTH>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
+			let DepthLimited(new_council) = new_council;
 			new_council.validate().map_err(Error::<T>::InvalidCouncil)?;
 
 			for proposal_id in ActiveProposals::<T>::take() {
