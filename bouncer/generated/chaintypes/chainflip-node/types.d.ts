@@ -3030,7 +3030,8 @@ export type CfTraitsSafeModeEmergencyPreset =
   | { type: 'DisableInternalSwaps' }
   | { type: 'DisableBoost'; value: CfPrimitivesChainsForeignChain }
   | { type: 'DisableBrokerWithdrawals' }
-  | { type: 'DisableRedemptions' };
+  | { type: 'DisableRedemptions' }
+  | { type: 'DisableIngressWitnessing'; value: CfPrimitivesChainsForeignChain };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
