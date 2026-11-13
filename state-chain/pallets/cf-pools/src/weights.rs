@@ -54,7 +54,6 @@ pub trait WeightInfo {
 	fn update_limit_order() -> Weight;
 	fn set_limit_order() -> Weight;
 	fn set_pool_fees() -> Weight;
-	fn set_maximum_price_impact(n: u32, ) -> Weight;
 	fn cancel_orders_batch(n: u32, ) -> Weight;
 }
 
@@ -166,19 +165,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(31_176_000, 5018)
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
-	/// Storage: `LiquidityPools::MaximumPriceImpact` (r:0 w:6)
-	/// Proof: `LiquidityPools::MaximumPriceImpact` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 6]`.
-	fn set_maximum_price_impact(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 8_310_000 picoseconds.
-		Weight::from_parts(5_189_723, 0)
-			// Standard Error: 16_338
-			.saturating_add(Weight::from_parts(3_611_551, 0).saturating_mul(n.into()))
-			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -310,19 +296,6 @@ impl WeightInfo for () {
 		Weight::from_parts(31_176_000, 5018)
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
-	/// Storage: `LiquidityPools::MaximumPriceImpact` (r:0 w:6)
-	/// Proof: `LiquidityPools::MaximumPriceImpact` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 6]`.
-	fn set_maximum_price_impact(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 8_310_000 picoseconds.
-		Weight::from_parts(5_189_723, 0)
-			// Standard Error: 16_338
-			.saturating_add(Weight::from_parts(3_611_551, 0).saturating_mul(n.into()))
-			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(n.into())))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
