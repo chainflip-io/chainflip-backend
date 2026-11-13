@@ -1519,6 +1519,7 @@ dependencies = [
  "sp-arithmetic",
  "sp-core",
  "sp-std",
+ "utilities",
 ]
 
 [[package]]
@@ -9111,6 +9112,7 @@ dependencies = [
  "cf-amm-math",
  "cf-chains",
  "cf-primitives",
+ "cf-proc-macros",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
