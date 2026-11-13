@@ -356,6 +356,11 @@ pub enum EmergencyPreset {
 	/// Stops new FLIP redemption requests. Redemptions already requested are unaffected.
 	#[codec(index = 6)]
 	DisableRedemptions,
+	/// Pauses witnessing of deposits to channels and vault swaps on this chain. They are credited
+	/// once witnessing is switched back on; deposits already prewitnessed still complete. Solana's
+	/// witnessing doesn't honour this yet (PRO-3360).
+	#[codec(index = 7)]
+	DisableIngressWitnessing(ForeignChain),
 }
 
 impl EmergencyPreset {
@@ -370,12 +375,14 @@ impl EmergencyPreset {
 			Self::DisableInternalSwaps |
 			Self::DisableBoost(_) |
 			Self::DisableBrokerWithdrawals |
-			Self::DisableRedemptions => (),
+			Self::DisableRedemptions |
+			Self::DisableIngressWitnessing(_) => (),
 		};
 		ForeignChain::iter()
 			.map(Self::DisableDepositChannelCreation)
 			.chain(Asset::all().map(Self::DisableNewLoans))
 			.chain(ForeignChain::iter().map(Self::DisableBoost))
+			.chain(ForeignChain::iter().map(Self::DisableIngressWitnessing))
 			.chain([
 				Self::DisableLpWithdrawals,
 				Self::DisableInternalSwaps,

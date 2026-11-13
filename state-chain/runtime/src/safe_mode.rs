@@ -254,6 +254,10 @@ fn apply_emergency_presets(safe_mode: &mut RuntimeSafeMode, presets: &BTreeSet<E
 			EmergencyPreset::DisableBrokerWithdrawals =>
 				safe_mode.swapping.withdrawals_enabled = false,
 			EmergencyPreset::DisableRedemptions => safe_mode.funding.redeem_enabled = false,
+			EmergencyPreset::DisableIngressWitnessing(chain) => {
+				*deposit_channel_witnessing_enabled(safe_mode, chain) = false;
+				*vault_deposit_witnessing_enabled(safe_mode, chain) = false;
+			},
 		}
 	}
 }
@@ -283,6 +287,20 @@ fn deposit_channel_creation_enabled(
 
 fn boost_deposits_enabled(safe_mode: &mut RuntimeSafeMode, chain: ForeignChain) -> &mut bool {
 	ingress_egress_flag!(safe_mode, chain, boost_deposits_enabled)
+}
+
+fn deposit_channel_witnessing_enabled(
+	safe_mode: &mut RuntimeSafeMode,
+	chain: ForeignChain,
+) -> &mut bool {
+	ingress_egress_flag!(safe_mode, chain, deposit_channel_witnessing_enabled)
+}
+
+fn vault_deposit_witnessing_enabled(
+	safe_mode: &mut RuntimeSafeMode,
+	chain: ForeignChain,
+) -> &mut bool {
+	ingress_egress_flag!(safe_mode, chain, vault_deposit_witnessing_enabled)
 }
 
 #[cfg(test)]
@@ -316,6 +334,9 @@ mod emergency_preset_tests {
 			EmergencyPreset::DisableBoost(chain) => !*boost_deposits_enabled(&mut safe_mode, chain),
 			EmergencyPreset::DisableBrokerWithdrawals => !safe_mode.swapping.withdrawals_enabled,
 			EmergencyPreset::DisableRedemptions => !safe_mode.funding.redeem_enabled,
+			EmergencyPreset::DisableIngressWitnessing(chain) =>
+				!*deposit_channel_witnessing_enabled(&mut safe_mode, chain) &&
+					!*vault_deposit_witnessing_enabled(&mut safe_mode, chain),
 		}
 	}
 
@@ -329,6 +350,8 @@ mod emergency_preset_tests {
 		for chain in ForeignChain::iter() {
 			*deposit_channel_creation_enabled(&mut safe_mode, chain) = true;
 			*boost_deposits_enabled(&mut safe_mode, chain) = true;
+			*deposit_channel_witnessing_enabled(&mut safe_mode, chain) = true;
+			*vault_deposit_witnessing_enabled(&mut safe_mode, chain) = true;
 		}
 		safe_mode.lending_pools.borrowing = SafeModeSet::Green;
 		safe_mode.liquidity_provider.withdrawal_enabled = true;
@@ -349,7 +372,7 @@ mod emergency_preset_tests {
 
 		// Reads the flags the way the chain's own ingress-egress pallet does, independently of
 		// `ingress_egress_flag!`.
-		fn flags<C: Chain + Get<ForeignChain>>() -> (ForeignChain, (bool, bool))
+		fn flags<C: Chain + Get<ForeignChain>>() -> (ForeignChain, [bool; 4])
 		where
 			Runtime: pallet_cf_ingress_egress::Config<ChainInstanceFor<C>>,
 		{
@@ -357,7 +380,12 @@ mod emergency_preset_tests {
 				<Runtime as pallet_cf_ingress_egress::Config<ChainInstanceFor<C>>>::SafeMode::get();
 			(
 				C::get(),
-				(safe_mode.deposit_channel_creation_enabled, safe_mode.boost_deposits_enabled),
+				[
+					safe_mode.deposit_channel_creation_enabled,
+					safe_mode.boost_deposits_enabled,
+					safe_mode.deposit_channel_witnessing_enabled,
+					safe_mode.vault_deposit_witnessing_enabled,
+				],
 			)
 		}
 		let flags_per_chain = || {
@@ -377,8 +405,12 @@ mod emergency_preset_tests {
 			assert_eq!(flags_per_chain().len(), ForeignChain::iter().count());
 			for chain in ForeignChain::iter() {
 				for (preset, expected_flags) in [
-					(EmergencyPreset::DisableDepositChannelCreation(chain), (false, true)),
-					(EmergencyPreset::DisableBoost(chain), (true, false)),
+					(
+						EmergencyPreset::DisableDepositChannelCreation(chain),
+						[false, true, true, true],
+					),
+					(EmergencyPreset::DisableBoost(chain), [true, false, true, true]),
+					(EmergencyPreset::DisableIngressWitnessing(chain), [true, true, false, false]),
 				] {
 					pallet_cf_environment::RuntimeSafeMode::<Runtime>::put(applied(
 						&RuntimeSafeMode::code_green(),
@@ -386,7 +418,7 @@ mod emergency_preset_tests {
 					));
 					for (pallet_chain, flags) in flags_per_chain() {
 						let expected =
-							if pallet_chain == chain { expected_flags } else { (true, true) };
+							if pallet_chain == chain { expected_flags } else { [true; 4] };
 						assert_eq!(flags, expected, "{preset:?}, {pallet_chain:?}");
 					}
 				}
@@ -397,6 +429,8 @@ mod emergency_preset_tests {
 	fn safe_mode_strategy() -> impl Strategy<Value = RuntimeSafeMode> {
 		(
 			any::<bool>(),
+			vec(any::<bool>(), ForeignChain::iter().count()),
+			vec(any::<bool>(), ForeignChain::iter().count()),
 			vec(any::<bool>(), ForeignChain::iter().count()),
 			vec(any::<bool>(), ForeignChain::iter().count()),
 			any::<bool>(),
@@ -411,6 +445,8 @@ mod emergency_preset_tests {
 					red,
 					channels,
 					boost,
+					channel_witnessing,
+					vault_witnessing,
 					withdrawals,
 					internal_swaps,
 					broker_withdrawals,
@@ -428,6 +464,12 @@ mod emergency_preset_tests {
 					}
 					for (chain, enabled) in ForeignChain::iter().zip(boost) {
 						*boost_deposits_enabled(&mut safe_mode, chain) = enabled;
+					}
+					for (chain, enabled) in ForeignChain::iter().zip(channel_witnessing) {
+						*deposit_channel_witnessing_enabled(&mut safe_mode, chain) = enabled;
+					}
+					for (chain, enabled) in ForeignChain::iter().zip(vault_witnessing) {
+						*vault_deposit_witnessing_enabled(&mut safe_mode, chain) = enabled;
 					}
 					safe_mode.liquidity_provider.withdrawal_enabled = withdrawals;
 					safe_mode.liquidity_provider.internal_swaps_enabled = internal_swaps;
