@@ -60,7 +60,7 @@ impl frame_system::Config for Test {
 impl_mock_chainflip!(
 	Test,
 	AccountRoleRegistry = MockAccountRoleRegistryWithHooks<
-		crate::BrokerDeregistrationHooks<Test>,
+		(crate::BrokerDeregistrationHooks<Test>, crate::PendingSwapDeregistrationHooks<Test>),
 	>
 );
 impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }

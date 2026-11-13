@@ -65,7 +65,7 @@ impl frame_system::Config for Test {
 impl_mock_chainflip!(
 	Test,
 	AccountRoleRegistry = cf_traits::mocks::account_role_registry::MockAccountRoleRegistryWithHooks<
-		crate::ValidatorDeregistrationHooks<Test>,
+		(crate::ValidatorDeregistrationHooks<Test>, crate::DelegatorDeregistrationHooks<Test>),
 	>
 );
 
