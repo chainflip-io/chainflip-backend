@@ -25,7 +25,7 @@ use crate::{
 
 use anyhow::{ensure, Result};
 use cf_chains::{evm::DepositDetails, Chain, DepositChannel, Tron};
-use ethers::types::{H160, H256};
+use sp_core::{H160, H256};
 use std::collections::{HashMap, HashSet};
 
 /// Query block balance information from the Tron blockchain and calculate the
@@ -187,8 +187,8 @@ mod tests {
 		witness::tron::tron_deposits::trx_ingress_transactions,
 	};
 	use cf_utilities::{redact_endpoint_secret::SecretUrl, task_scope};
-	use ethers::types::{H160, H256};
 	use futures_util::FutureExt;
+	use sp_core::{H160, H256};
 	use std::collections::HashSet;
 
 	#[ignore = "requires access to external RPC"]
@@ -209,7 +209,7 @@ mod tests {
 						},
 						backup: None,
 					},
-					ethers::types::U256::from(3448148188u64), // Nile testnet chain ID (0xcd8690dc)
+					sp_core::U256::from(3448148188u64), // Nile testnet chain ID (0xcd8690dc)
 					"tron_rpc",
 					"Tron",
 				)
@@ -268,7 +268,7 @@ mod tests {
 						},
 						backup: None,
 					},
-					ethers::types::U256::from(728126428u64), // Mainnet chain ID (0x2b6653dc)
+					sp_core::U256::from(728126428u64), // Mainnet chain ID (0x2b6653dc)
 					"tron_rpc",
 					"Tron",
 				)

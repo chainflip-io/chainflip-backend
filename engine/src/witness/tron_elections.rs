@@ -19,7 +19,10 @@ use crate::{
 		vote_submitter::VoteSubmitter,
 		voter_api::{CompositeVoter, VoterApi},
 	},
-	evm::event::{Event, EvmEventSource},
+	evm::{
+		conversions::IntoSpCore,
+		event::{Event, EvmEventSource},
+	},
 	tron::{
 		cached_rpc::{TronCachingClient, TronRetryRpcApiWithResult},
 		rpc::{TronRpcClient, TronRpcSigningClient},
@@ -35,13 +38,12 @@ use crate::{
 		evm::{
 			erc20_deposits::usdt::UsdtEvents,
 			key_manager::{
-				AggKeySetByGovKeyFilter, GovernanceActionFilter, KeyManagerEvents,
-				SignatureAcceptedFilter,
+				AggKeySetByGovKey, GovernanceAction, KeyManagerEvents, SignatureAccepted,
 			},
 		},
 		tron::{
 			tron_deposits::witness_deposit_channels, vault_swaps_witnessing::witness_vault_swaps,
-			TransferNativeFailedFilter, TransferNativeSkippedFilter, TransferTokenFailedFilter,
+			TransferNativeFailed, TransferNativeSkipped, TransferTokenFailed,
 			TronDepositChannelWitnessingConfig, TronVaultEvents, VaultDepositWitnessingConfig,
 		},
 	},
@@ -130,20 +132,20 @@ impl WitnessClient<TronChain> for TronVoter {
 	type BlockQuery = EvmSingleBlockQuery;
 
 	async fn best_block_number(&self) -> Result<u64> {
-		Ok(self.client.get_block_number().await?.low_u64())
+		self.client.get_block_number().await
 	}
 
 	async fn best_block_header(&self) -> Result<Header<TronChain>> {
 		let best_number = self.client.get_block_number().await?;
-		self.block_header_by_height(best_number.low_u64()).await
+		self.block_header_by_height(best_number).await
 	}
 
 	async fn block_header_by_height(&self, height: u64) -> Result<Header<TronChain>> {
-		let block = self.client.block(height.into()).await?;
+		let block = self.client.block(height).await?;
 		Ok(Header {
-			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
-			hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
-			parent_hash: block.parent_hash,
+			block_height: block.header.number,
+			hash: block.header.hash.into_sp_core(),
+			parent_hash: block.header.parent_hash.into_sp_core(),
 		})
 	}
 
@@ -152,20 +154,19 @@ impl WitnessClient<TronChain> for TronVoter {
 		hash: ChainBlockHashOf<TronChain>,
 		_height: ChainBlockNumberOf<TronChain>,
 	) -> Result<EvmSingleBlockQuery> {
-		EvmSingleBlockQuery::try_from_native_block(self.client.block_by_hash(hash).await?)
+		Ok(EvmSingleBlockQuery::from_native_block(self.client.block_by_hash(hash).await?))
 	}
 
 	async fn block_query_from_height(&self, height: u64) -> Result<EvmSingleBlockQuery> {
-		EvmSingleBlockQuery::try_from_native_block(self.client.block(height.into()).await?)
+		Ok(EvmSingleBlockQuery::from_native_block(self.client.block(height).await?))
 	}
 
 	async fn block_query_and_hash_from_height(
 		&self,
 		height: u64,
 	) -> Result<(EvmSingleBlockQuery, ChainBlockHashOf<TronChain>)> {
-		let block = self.client.block(height.into()).await?;
-		let hash = block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?;
-		let query = EvmSingleBlockQuery::try_from_native_block(block)?;
+		let query = EvmSingleBlockQuery::from_native_block(self.client.block(height).await?);
+		let hash = query.block_hash;
 		Ok((query, hash))
 	}
 }
@@ -240,40 +241,42 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmVaultContractEvent<Runtime, Tro
 
 		for event in events {
 			match event.event_parameters {
-				TronVaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
+				TronVaultEvents::TransferNativeFailed(TransferNativeFailed {
 					recipient,
 					amount,
 				}) => {
 					result.push(EvmVaultContractEvent::TransferFailed(TransferFailedWitness {
 						asset: <Tron as Chain>::GAS_ASSET,
-						amount: amount.as_u128(),
-						destination_address: recipient,
+						amount: amount.into_sp_core().as_u128(),
+						destination_address: recipient.into_sp_core(),
 					}));
 				},
-				TronVaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
+				TronVaultEvents::TransferTokenFailed(TransferTokenFailed {
 					recipient,
 					amount,
 					token,
 					reason: _,
 				}) => {
+					let token = token.into_sp_core();
 					if let Some((&asset, _)) =
 						config.supported_assets.iter().find(|(_, es)| es.contract_address == token)
 					{
 						result.push(EvmVaultContractEvent::TransferFailed(TransferFailedWitness {
 							asset,
-							amount: amount.as_u128(),
-							destination_address: recipient,
+							amount: amount.into_sp_core().as_u128(),
+							destination_address: recipient.into_sp_core(),
 						}));
 					} else {
 						tracing::warn!("Unknown token {token:?} in Tron TransferTokenFailed event");
 					}
 				},
-				TronVaultEvents::TransferNativeSkippedFilter(TransferNativeSkippedFilter {
+				TronVaultEvents::TransferNativeSkipped(TransferNativeSkipped {
 					recipient,
 					amount,
 				}) => {
 					tracing::warn!(
-						"TransferNativeSkipped: recipient={recipient:?}, amount={amount} in block {:?}",
+						"TransferNativeSkipped: recipient={:?}, amount={amount} in block {:?}",
+						recipient.into_sp_core(),
 						query.block_hash
 					);
 				},
@@ -342,16 +345,16 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmKeyManagerEvent<Runtime, TronIn
 		for event in events {
 			let tx_hash = event.tx_hash;
 			let km_event = match event.event_parameters {
-				KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
-					new_agg_key,
+				KeyManagerEvents::AggKeySetByGovKey(AggKeySetByGovKey {
+					newAggKey: new_agg_key,
 					..
 				}) => Some(EvmKeyManagerEvent::AggKeySetByGovKey(VaultKeyRotatedExternally {
 					new_public_key: AggKey::from_pubkey_compressed(new_agg_key.serialize()),
 					block_number: block_height,
 					tx_id: tx_hash,
 				})),
-				KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter {
-					sig_data,
+				KeyManagerEvents::SignatureAccepted(SignatureAccepted {
+					sigData: sig_data,
 					..
 				}) => {
 					let tx_receipt = self
@@ -372,10 +375,10 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmKeyManagerEvent<Runtime, TronIn
 							format!("Failed to get transaction by id for tx {tx_hash:x}")
 						})?;
 
-					let signer_id = tx_receipt.from;
+					let signer_id = tx_receipt.from.into_sp_core();
 					// See the EVM key manager witnessing: a contract-creation transaction has no
 					// `to`. Failing here would fail the vote for the whole block range.
-					let contract = tx_receipt.to.unwrap_or_default();
+					let contract = tx_receipt.to.unwrap_or_default().into_sp_core();
 					let fee_limit = tron_tx.raw_data.fee_limit.and_then(|fee| fee.try_into().ok());
 
 					let tx_fee = parse_tron_tx_fee(&tx_info);
@@ -383,8 +386,8 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmKeyManagerEvent<Runtime, TronIn
 
 					Some(EvmKeyManagerEvent::SignatureAccepted(TransactionConfirmation {
 						tx_out_id: SchnorrVerificationComponents {
-							s: sig_data.sig.to_big_endian(),
-							k_times_g_address: sig_data.k_times_g_address.into(),
+							s: sig_data.sig.to_be_bytes::<32>(),
+							k_times_g_address: sig_data.kTimesGAddress.into(),
 						},
 						signer_id,
 						tx_fee,
@@ -392,9 +395,8 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmKeyManagerEvent<Runtime, TronIn
 						transaction_ref: tx_hash,
 					}))
 				},
-				KeyManagerEvents::GovernanceActionFilter(GovernanceActionFilter {
-					message: call_hash,
-				}) => Some(EvmKeyManagerEvent::SetWhitelistedCallHash(call_hash)),
+				KeyManagerEvents::GovernanceAction(GovernanceAction { message: call_hash }) =>
+					Some(EvmKeyManagerEvent::SetWhitelistedCallHash(call_hash.0)),
 				_ => None,
 			};
 			if let Some(km_event) = km_event {
@@ -422,8 +424,8 @@ impl VoterApi<TronLiveness> for TronLivenessVoter {
 		_settings: <TronLiveness as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <TronLiveness as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<TronLiveness>>> {
-		let block = self.client.block(properties.into()).await?;
-		Ok(Some(block.hash.ok_or_else(|| anyhow::anyhow!("No block hash for liveness block"))?))
+		let block = self.client.block(properties).await?;
+		Ok(Some(block.header.hash.into_sp_core()))
 	}
 }
 

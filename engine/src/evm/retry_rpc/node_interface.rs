@@ -14,7 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use ethers::prelude::*;
+use alloy_primitives::Bytes;
+use sp_core::{H160, U256};
 
 use crate::evm::rpc::{node_interface::NodeInterfaceRpcApi, EvmRpcApi};
 

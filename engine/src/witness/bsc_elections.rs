@@ -21,6 +21,7 @@ use crate::{
 	},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
+		conversions::IntoSpCore,
 		event::EvmEventSource,
 		rpc::EvmRpcSigningClient,
 	},
@@ -98,16 +99,19 @@ impl VoterApi<BscFeeTracking> for BscFeeVoter {
 		let fee_history = self
 			.client
 			.fee_history(
-				fee_history_window.into(),
-				best_block_number.low_u64().into(),
+				fee_history_window,
+				best_block_number.into(),
 				vec![priority_fee_percentile as f64],
 			)
 			.await?;
 
 		Ok(Some(BscTrackedData {
-			priority_fee: context!(fee_history.reward.into_iter().flatten().min())?
-				.try_into()
-				.expect("Priority fee should fit u128"),
+			priority_fee: context!(fee_history
+				.reward
+				.unwrap_or_default()
+				.into_iter()
+				.flatten()
+				.min())?,
 		}))
 	}
 }
@@ -126,8 +130,8 @@ impl VoterApi<BscLiveness> for BscLivenessVoter {
 		_settings: <BscLiveness as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BscLiveness as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BscLiveness>>, anyhow::Error> {
-		let block = self.client.block(properties.into()).await?;
-		Ok(Some(block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?))
+		let block = self.client.block(properties).await?;
+		Ok(Some(block.header.hash.into_sp_core()))
 	}
 }
 

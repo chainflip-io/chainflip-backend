@@ -55,7 +55,7 @@ use cf_utilities::{
 	rpc::NumberOrHex,
 };
 use core::ops::Range;
-use ethereum_eip712::build_eip712_data::to_ethers_typed_data;
+use ethereum_eip712::build_eip712_data::{to_json_typed_data, JsonTypedData};
 use itertools::Itertools;
 use jsonrpsee::{
 	core::async_trait,
@@ -130,8 +130,7 @@ pub mod pool_client;
 #[cfg(test)]
 mod tests;
 
-type RpcEncodedNonNativeCall =
-	EncodedNonNativeCallGeneric<ethers_core::types::transaction::eip712::TypedData>;
+type RpcEncodedNonNativeCall = EncodedNonNativeCallGeneric<JsonTypedData>;
 
 mod chainflip_transparency {
 	use super::*;
@@ -3614,7 +3613,7 @@ where
 					})?;
 				let serialized_call = match encoded_call {
 					EncodedNonNativeCall::Eip712(typed_data) => RpcEncodedNonNativeCall::Eip712(
-						to_ethers_typed_data(typed_data).map_err(|e| {
+						to_json_typed_data(typed_data).map_err(|e| {
 							CfApiError::ErrorObject(ErrorObject::owned(
 								ErrorCode::InternalError.code(),
 								e,

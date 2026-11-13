@@ -21,9 +21,17 @@ use cf_chains::assets::tron::Asset;
 use std::collections::HashMap;
 
 use crate::{evm::event::EvmEventSource, witness::evm::erc20_deposits::Erc20Events};
-use ethers::{prelude::abigen, types::H160};
+use sp_core::H160;
 
-abigen!(TronVault, "$CF_TRON_CONTRACT_ABI_ROOT/IVault.json");
+alloy_sol_types::sol!(
+	#[sol(all_derives)]
+	TronVault,
+	concat!(env!("CF_TRON_CONTRACT_ABI_ROOT"), "/IVault.json")
+);
+
+pub use TronVault::{
+	TransferNativeFailed, TransferNativeSkipped, TransferTokenFailed, TronVaultEvents,
+};
 
 // ----- deposit channel querying -----
 

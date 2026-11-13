@@ -15,6 +15,15 @@ path = "src/lib.rs"
 workspace = true
 
 [dependencies]
+alloy-consensus = { workspace = true, features = ["std"] }
+alloy-eips = { workspace = true, features = ["std", "serde"] }
+alloy-network = { workspace = true }
+alloy-primitives = { workspace = true, features = ["std", "serde"] }
+alloy-rpc-types-eth = { workspace = true, features = ["std", "serde"] }
+alloy-serde = { workspace = true, features = ["std"] }
+alloy-signer = { workspace = true }
+alloy-signer-local = { workspace = true }
+alloy-sol-types = { workspace = true, features = ["std", "json"] }
 anyhow = { workspace = true }
 async-broadcast = { workspace = true }
 async-trait = { workspace = true }
@@ -31,7 +40,6 @@ hex = { workspace = true, default-features = true }
 http = { workspace = true }
 itertools = { workspace = true, default-features = true }
 jsonrpsee = { workspace = true, features = ["full"] }
-ethers = { workspace = true, features = ["rustls"] }
 lazy_static = { workspace = true }
 num-traits = { workspace = true }
 secp256k1 = { workspace = true, features = ["hashes"] }
@@ -46,12 +54,11 @@ thiserror = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 url = { workspace = true }
-web3 = { workspace = true, features = ["ws-tls-tokio"] }
 zeroize = { workspace = true }
 ed25519-dalek = { workspace = true }
 pin-project = { workspace = true }
 rand = { workspace = true, default-features = true, features = ["alloc"] }
-reqwest = { workspace = true, features = ["rustls-tls"] }
+reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 tracing = { workspace = true }
 derive-where = { workspace = true }
 
