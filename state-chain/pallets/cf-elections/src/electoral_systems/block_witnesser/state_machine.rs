@@ -213,7 +213,6 @@ pub struct BlockWitnesserSettings {
 	/// This value determines:
 	///  - the point at which ByHash elections turn into BySafeHeight elections
 	///  - expiry of blockdata in the BlockProcessor
-	///  - expiry of left-over optimistic blocks in the cache
 	///
 	/// The ElectionTracker was written with the invariant in mind that the value
 	/// `seen_heights_below - safety_buffer` is monotonically increasing. There *might* be an

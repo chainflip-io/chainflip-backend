@@ -241,9 +241,8 @@ impl<T: BWTypes> ElectionTracker<T> {
 		});
 
 		// clean up the optimistic block cache
-		self.optimistic_block_cache.retain(|height, _| {
-			height.saturating_forward(self.safety_buffer as usize) > self.seen_heights_below
-		});
+		self.optimistic_block_cache
+			.retain(|height, _| *height >= self.seen_heights_below);
 	}
 
 	/// If an election is done we remove it from the ongoing list.
