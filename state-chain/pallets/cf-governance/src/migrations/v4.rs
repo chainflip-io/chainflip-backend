@@ -19,6 +19,8 @@ use frame_support::{pallet_prelude::Weight, traits::UncheckedOnRuntimeUpgrade};
 use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
+use crate::council::MAX_MEMBERS;
+#[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
 use frame_support::{ensure, pallet_prelude::DispatchError};
@@ -50,19 +52,20 @@ pub struct Migration<T>(PhantomData<T>);
 
 impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
-		match Members::<T>::translate::<old::GovernanceCouncil<T::AccountId>, _>(|old| {
-			old.map(|old::GovernanceCouncil { members, threshold }| {
-				log::info!(
-					"Migrating flat governance council {:?} with threshold {} to a nested council",
-					members,
-					threshold,
-				);
-				Council::simple_group(u8::try_from(threshold).unwrap_or(u8::MAX), members)
-			})
-		}) {
-			Ok(Some(_)) => {},
-			Ok(None) => log::error!("No governance council to migrate"),
-			Err(_) => log::error!("Failed to migrate the governance council"),
+		// `get` also returns `None` if the stored council fails to decode.
+		let Some(old::GovernanceCouncil { members, threshold }) = old::Members::<T>::get() else {
+			log::error!("No decodable governance council to migrate");
+			return Weight::zero()
+		};
+		log::info!(
+			"Migrating flat governance council {:?} with threshold {} to a nested council",
+			members,
+			threshold,
+		);
+		match Council::simple_group(u8::try_from(threshold).unwrap_or(u8::MAX), members) {
+			Ok(council) => Members::<T>::put(council),
+			// Leaves the old council in place, for a follow-up migration to recover.
+			Err(error) => log::error!("Failed to migrate the governance council: {error:?}"),
 		}
 
 		Weight::zero()
@@ -71,9 +74,13 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		// `get` also returns `None` if the stored council fails to decode.
-		Ok(old::Members::<T>::get()
-			.ok_or(DispatchError::Other("No decodable governance council to migrate"))?
-			.encode())
+		let council = old::Members::<T>::get()
+			.ok_or(DispatchError::Other("No decodable governance council to migrate"))?;
+		ensure!(
+			council.members.len() <= MAX_MEMBERS,
+			DispatchError::Other("The governance council has too many members to migrate")
+		);
+		Ok(council.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -83,7 +90,9 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				.map_err(|_| DispatchError::Other("Failed to decode the old governance council"))?;
 		let council = Members::<T>::get();
 		ensure!(
-			council == Council::simple_group(u8::try_from(threshold).unwrap_or(u8::MAX), members),
+			Ok(&council) ==
+				Council::simple_group(u8::try_from(threshold).unwrap_or(u8::MAX), members)
+					.as_ref(),
 			DispatchError::Other("Migrated council does not match the old one")
 		);
 		council
@@ -109,7 +118,7 @@ mod tests {
 
 			Migration::<Test>::on_runtime_upgrade();
 
-			assert_eq!(Members::<Test>::get(), Council::simple_group(2, [ALICE, BOB, CHARLES]));
+			assert_eq!(Ok(Members::<Test>::get()), Council::simple_group(2, [ALICE, BOB, CHARLES]));
 		});
 	}
 

@@ -44,10 +44,13 @@ fn max_size_council<T: Config>(seed: u32) -> (Council<T::AccountId>, T::AccountI
 						Council::simple_group(
 							1,
 							(0..group_size).map(|i| voter(group * group_size + i)),
-						),
+						)
+						.unwrap(),
 					)
 				})
-				.collect(),
+				.collect::<Vec<_>>()
+				.try_into()
+				.unwrap(),
 		},
 		voter(MAX_MEMBERS as u32 - 1),
 	)

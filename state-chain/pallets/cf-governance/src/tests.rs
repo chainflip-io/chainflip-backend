@@ -25,7 +25,7 @@ use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
 use codec::{Decode, Encode};
 use frame_support::{assert_err, assert_noop, assert_ok};
-use sp_runtime::{BuildStorage, Percent};
+use sp_runtime::{bounded_vec, BuildStorage, Percent};
 use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
@@ -35,7 +35,7 @@ const DUMMY_WASM_BLOB: Vec<u8> = vec![];
 
 fn mock_extrinsic() -> Box<RuntimeCall> {
 	Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::set_council {
-		new_council: Council::simple_group(2, [EVE, PETER, MAX]).into(),
+		new_council: Council::simple_group(2, [EVE, PETER, MAX]).unwrap().into(),
 	}))
 }
 
@@ -46,7 +46,10 @@ fn genesis_config() {
 		assert!(genesis_members.contains(&ALICE));
 		assert!(genesis_members.contains(&BOB));
 		assert!(genesis_members.contains(&CHARLES));
-		assert_eq!(Members::<Test>::get(), Council::simple_group(2, [ALICE, BOB, CHARLES]));
+		assert_eq!(
+			Members::<Test>::get(),
+			Council::simple_group(2, [ALICE, BOB, CHARLES]).unwrap()
+		);
 		let expiry_span = ExpiryTime::<Test>::get();
 		assert_eq!(expiry_span, 50);
 	});
@@ -396,28 +399,28 @@ fn replacing_governance_members() {
 		assert_noop!(
 			Governance::set_council(
 				RuntimeOrigin::signed(ALICE),
-				Council::simple_group(2, [EVE, PETER, MAX]).into(),
+				Council::simple_group(2, [EVE, PETER, MAX]).unwrap().into(),
 			),
 			sp_runtime::traits::BadOrigin
 		);
 		assert_noop!(
 			Governance::set_council(
 				crate::RawOrigin::GovernanceApproval.into(),
-				Council::simple_group(4, [EVE, PETER, MAX]).into(),
+				Council::simple_group(4, [EVE, PETER, MAX]).unwrap().into(),
 			),
 			Error::<Test>::InvalidCouncil(InvalidCouncil::ThresholdUnreachable)
 		);
 		assert_noop!(
 			Governance::set_council(
 				crate::RawOrigin::GovernanceApproval.into(),
-				Council::SimpleGroup { threshold: 1, members: vec![] }.into(),
+				Council::SimpleGroup { threshold: 1, members: Default::default() }.into(),
 			),
 			Error::<Test>::InvalidCouncil(InvalidCouncil::EmptyGroup)
 		);
 
 		assert_ok!(Governance::set_council(
 			crate::RawOrigin::GovernanceApproval.into(),
-			Council::simple_group(2, [EVE, PETER, MAX]).into(),
+			Council::simple_group(2, [EVE, PETER, MAX]).unwrap().into(),
 		));
 
 		assert_eq!(Members::<Test>::get().members(), BTreeSet::from_iter([EVE, PETER, MAX]));
@@ -430,7 +433,7 @@ fn replacing_governance_members() {
 
 		assert_ok!(Governance::set_council(
 			crate::RawOrigin::GovernanceApproval.into(),
-			Council::simple_group(2, [ALICE, EVE, PETER]).into(),
+			Council::simple_group(2, [ALICE, EVE, PETER]).unwrap().into(),
 		));
 		assert_eq!(Members::<Test>::get().members(), BTreeSet::from_iter([ALICE, EVE, PETER]));
 		assert_eq!(System::sufficients(&ALICE), 1);
@@ -489,7 +492,7 @@ fn nested_members_are_sufficient() {
 
 		assert_ok!(Governance::set_council(
 			crate::RawOrigin::GovernanceApproval.into(),
-			Council::simple_group(1, [ALICE, 101]).into(),
+			Council::simple_group(1, [ALICE, 101]).unwrap().into(),
 		));
 		assert_eq!(System::sufficients(&ALICE), 1);
 		assert_eq!(System::sufficients(&101), 1);
@@ -503,10 +506,12 @@ fn set_council_calls_decode_up_to_max_depth() {
 	let call = |council: Council<u64>| {
 		RuntimeCall::Governance(crate::Call::set_council { new_council: council.into() })
 	};
-	let deepest =
-		Council::SimpleGroup { threshold: 1, members: vec![Council::simple_group(1, [ALICE])] };
+	let deepest = Council::SimpleGroup {
+		threshold: 1,
+		members: bounded_vec![Council::simple_group(1, [ALICE]).unwrap()],
+	};
 	let valid = call(deepest.clone());
 	assert_eq!(RuntimeCall::decode(&mut &valid.encode()[..]), Ok(valid));
-	let too_deep = call(Council::SimpleGroup { threshold: 1, members: vec![deepest] });
+	let too_deep = call(Council::SimpleGroup { threshold: 1, members: bounded_vec![deepest] });
 	assert!(RuntimeCall::decode(&mut &too_deep.encode()[..]).is_err());
 }

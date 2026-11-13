@@ -453,12 +453,12 @@ pub mod pallet {
 			let council = if self.members.is_empty() {
 				Council::default()
 			} else {
-				let council = Council::simple_group(
+				Council::simple_group(
 					u8::try_from(self.members.len().div_ceil(2)).unwrap_or(u8::MAX),
 					self.members.iter().cloned(),
-				);
-				council.validate().expect("The genesis council must be valid");
-				council
+				)
+				.and_then(|council| council.validate().map(|()| council))
+				.expect("The genesis council must be valid")
 			};
 			for member in &self.members {
 				<frame_system::Pallet<T>>::inc_sufficients(member);

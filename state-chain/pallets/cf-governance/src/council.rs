@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
-use frame_support::{ensure, PalletError};
+use frame_support::{ensure, traits::ConstU32, BoundedVec, PalletError};
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
@@ -26,6 +26,9 @@ pub type VoteWeight = u32;
 pub const MAX_DEPTH: u32 = 2;
 /// Bounds the cost of re-evaluating the quorum on every approval.
 pub const MAX_MEMBERS: usize = 64;
+
+/// A group's direct members. A valid council can't have more of them than it has individuals.
+pub type GroupMembers<T> = BoundedVec<T, ConstU32<{ MAX_MEMBERS as u32 }>>;
 
 /// A (possibly nested) body whose members' approvals decide whether a proposal passes.
 ///
@@ -39,8 +42,8 @@ pub const MAX_MEMBERS: usize = 64;
 #[codec(decode_with_mem_tracking_bound(AccountId: DecodeWithMemTracking))]
 #[scale_info(bounds(AccountId: TypeInfo + 'static))]
 pub enum Council<AccountId> {
-	WeightedGroup { threshold: VoteWeight, members: Vec<(VoteWeight, Council<AccountId>)> },
-	SimpleGroup { threshold: u8, members: Vec<Council<AccountId>> },
+	WeightedGroup { threshold: VoteWeight, members: GroupMembers<(VoteWeight, Council<AccountId>)> },
+	SimpleGroup { threshold: u8, members: GroupMembers<Council<AccountId>> },
 	Individual { id: AccountId },
 }
 
@@ -48,7 +51,7 @@ pub enum Council<AccountId> {
 /// only an empty genesis config can set it.
 impl<AccountId> Default for Council<AccountId> {
 	fn default() -> Self {
-		Self::SimpleGroup { threshold: 1, members: Vec::new() }
+		Self::SimpleGroup { threshold: 1, members: Default::default() }
 	}
 }
 
@@ -75,11 +78,19 @@ pub enum InvalidCouncil {
 }
 
 impl<AccountId: Ord + Clone> Council<AccountId> {
-	pub fn simple_group(threshold: u8, members: impl IntoIterator<Item = AccountId>) -> Self {
-		Self::SimpleGroup {
+	pub fn simple_group(
+		threshold: u8,
+		members: impl IntoIterator<Item = AccountId>,
+	) -> Result<Self, InvalidCouncil> {
+		Ok(Self::SimpleGroup {
 			threshold,
-			members: members.into_iter().map(|id| Self::Individual { id }).collect(),
-		}
+			members: members
+				.into_iter()
+				.map(|id| Self::Individual { id })
+				.collect::<Vec<_>>()
+				.try_into()
+				.map_err(|_| InvalidCouncil::TooManyMembers)?,
+		})
 	}
 
 	pub fn quorum_reached(&self, approvals: &BTreeSet<AccountId>) -> bool {
@@ -166,13 +177,18 @@ pub(crate) mod tests {
 	};
 	use cf_runtime_utilities::DepthLimited;
 	use proptest::{prelude::*, proptest};
+	use sp_runtime::bounded_vec;
+
+	pub fn simple_group(threshold: u8, ids: impl IntoIterator<Item = u64>) -> Council<u64> {
+		Council::simple_group(threshold, ids).unwrap()
+	}
 
 	pub fn nested_council() -> Council<u64> {
 		WeightedGroup {
 			threshold: 50,
-			members: vec![
-				(30, Council::simple_group(3, 101..=107)),
-				(20, Council::simple_group(2, 201..=204)),
+			members: bounded_vec![
+				(30, simple_group(3, 101..=107)),
+				(20, simple_group(2, 201..=204)),
 				(20, Individual { id: 301 }),
 				(15, Individual { id: 302 }),
 				(15, Individual { id: 303 }),
@@ -186,7 +202,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn simple_group_counts_members() {
-		let council = Council::simple_group(2, [1, 2, 3]);
+		let council = simple_group(2, [1, 2, 3]);
 		assert!(!council.quorum_reached(&approvals([1])));
 		assert!(council.quorum_reached(&approvals([1, 3])));
 	}
@@ -218,47 +234,59 @@ pub(crate) mod tests {
 	fn validation_rejects_invalid_councils() {
 		let deep = SimpleGroup {
 			threshold: 1,
-			members: vec![SimpleGroup {
+			members: bounded_vec![SimpleGroup {
 				threshold: 1,
-				members: vec![Council::simple_group(1, [1])],
+				members: bounded_vec![simple_group(1, [1])],
 			}],
 		};
 		for (council, error) in [
 			(deep, TooDeep),
-			(Council::simple_group(1, 0..=MAX_MEMBERS as u64), TooManyMembers),
-			(SimpleGroup { threshold: 1, members: vec![] }, EmptyGroup),
-			(WeightedGroup { threshold: 1, members: vec![] }, EmptyGroup),
-			(Council::simple_group(0, [1]), ZeroThreshold),
 			(
-				WeightedGroup { threshold: 0, members: vec![(1, Individual { id: 1 })] },
+				WeightedGroup {
+					threshold: 1,
+					members: bounded_vec![
+						(1, simple_group(1, 0..33)),
+						(1, simple_group(1, 33..=MAX_MEMBERS as u64)),
+					],
+				},
+				TooManyMembers,
+			),
+			(SimpleGroup { threshold: 1, members: bounded_vec![] }, EmptyGroup),
+			(WeightedGroup { threshold: 1, members: bounded_vec![] }, EmptyGroup),
+			(simple_group(0, [1]), ZeroThreshold),
+			(
+				WeightedGroup { threshold: 0, members: bounded_vec![(1, Individual { id: 1 })] },
 				ZeroThreshold,
 			),
-			(Council::simple_group(3, [1, 2]), ThresholdUnreachable),
+			(simple_group(3, [1, 2]), ThresholdUnreachable),
 			(
 				WeightedGroup {
 					threshold: 11,
-					members: vec![(5, Individual { id: 1 }), (5, Individual { id: 2 })],
+					members: bounded_vec![(5, Individual { id: 1 }), (5, Individual { id: 2 })],
 				},
 				ThresholdUnreachable,
 			),
 			(
 				WeightedGroup {
 					threshold: 1,
-					members: vec![(0, Individual { id: 1 }), (1, Individual { id: 2 })],
+					members: bounded_vec![(0, Individual { id: 1 }), (1, Individual { id: 2 })],
 				},
 				ZeroWeight,
 			),
 			(
 				WeightedGroup {
 					threshold: 1,
-					members: vec![(u32::MAX, Individual { id: 1 }), (1, Individual { id: 2 })],
+					members: bounded_vec![
+						(u32::MAX, Individual { id: 1 }),
+						(1, Individual { id: 2 })
+					],
 				},
 				WeightOverflow,
 			),
 			(
 				SimpleGroup {
 					threshold: 1,
-					members: vec![Individual { id: 1 }, Council::simple_group(1, [1])],
+					members: bounded_vec![Individual { id: 1 }, simple_group(1, [1])],
 				},
 				DuplicateMember,
 			),
@@ -270,11 +298,22 @@ pub(crate) mod tests {
 	#[test]
 	fn validation_accepts_edge_cases() {
 		assert_eq!(Individual { id: 1u64 }.validate(), Ok(()));
-		assert_eq!(Council::simple_group(1, 0..MAX_MEMBERS as u64).validate(), Ok(()));
+		assert_eq!(simple_group(1, 0..MAX_MEMBERS as u64).validate(), Ok(()));
+		assert_eq!(simple_group(MAX_MEMBERS as u8, 0..MAX_MEMBERS as u64).validate(), Ok(()));
+	}
+
+	#[test]
+	fn groups_are_capped_at_max_members() {
+		assert_eq!(Council::simple_group(1, 0..=MAX_MEMBERS as u64), Err(TooManyMembers));
+		// Encoded as a `SimpleGroup`, which can't be built with this many members.
+		let group = |len: u64| {
+			(1u8, 1u8, (0..len).map(|id| Individual { id }).collect::<Vec<Council<u64>>>()).encode()
+		};
 		assert_eq!(
-			Council::simple_group(MAX_MEMBERS as u8, 0..MAX_MEMBERS as u64).validate(),
-			Ok(())
+			Limited::decode(&mut &group(MAX_MEMBERS as u64)[..]),
+			Ok(simple_group(1, 0..MAX_MEMBERS as u64).into())
 		);
+		assert!(Limited::decode(&mut &group(MAX_MEMBERS as u64 + 1)[..]).is_err());
 	}
 
 	#[test]
@@ -310,13 +349,20 @@ pub(crate) mod tests {
 	fn arb_council() -> impl Strategy<Value = Council<u64>> {
 		(0u64..24).prop_map(|id| Individual { id }).prop_recursive(3, 64, 6, |inner| {
 			prop_oneof![
-				(0u8..8, prop::collection::vec(inner.clone(), 0..7))
-					.prop_map(|(threshold, members)| SimpleGroup { threshold, members }),
+				(0u8..8, prop::collection::vec(inner.clone(), 0..7)).prop_map(
+					|(threshold, members)| SimpleGroup {
+						threshold,
+						members: members.try_into().unwrap(),
+					}
+				),
 				(
 					prop_oneof![0u32..40, Just(u32::MAX)],
 					prop::collection::vec((prop_oneof![0u32..10, Just(u32::MAX)], inner), 0..7),
 				)
-					.prop_map(|(threshold, members)| WeightedGroup { threshold, members }),
+					.prop_map(|(threshold, members)| WeightedGroup {
+						threshold,
+						members: members.try_into().unwrap(),
+					}),
 			]
 		})
 	}
@@ -328,7 +374,10 @@ pub(crate) mod tests {
 			SimpleGroup { threshold, members } if !members.is_empty() => {
 				let members: Vec<_> =
 					members.into_iter().map(|member| normalise(member, next_id)).collect();
-				SimpleGroup { threshold: 1 + threshold % members.len() as u8, members }
+				SimpleGroup {
+					threshold: 1 + threshold % members.len() as u8,
+					members: members.try_into().unwrap(),
+				}
 			},
 			WeightedGroup { threshold, members } if !members.is_empty() => {
 				let members: Vec<_> = members
@@ -336,7 +385,10 @@ pub(crate) mod tests {
 					.map(|(weight, member)| (weight.clamp(1, 10), normalise(member, next_id)))
 					.collect();
 				let total: u32 = members.iter().map(|(weight, _)| weight).sum();
-				WeightedGroup { threshold: 1 + threshold % total, members }
+				WeightedGroup {
+					threshold: 1 + threshold % total,
+					members: members.try_into().unwrap(),
+				}
 			},
 			_ => {
 				*next_id += 1;
@@ -350,10 +402,18 @@ pub(crate) mod tests {
 			.prop_map(|id| Individual { id })
 			.prop_recursive(2, 64, 6, |inner| {
 				prop_oneof![
-					(0u8..8, prop::collection::vec(inner.clone(), 0..7))
-						.prop_map(|(threshold, members)| SimpleGroup { threshold, members }),
-					(0u32..40, prop::collection::vec((0u32..10, inner), 0..7))
-						.prop_map(|(threshold, members)| WeightedGroup { threshold, members }),
+					(0u8..8, prop::collection::vec(inner.clone(), 0..7)).prop_map(
+						|(threshold, members)| SimpleGroup {
+							threshold,
+							members: members.try_into().unwrap(),
+						}
+					),
+					(0u32..40, prop::collection::vec((0u32..10, inner), 0..7)).prop_map(
+						|(threshold, members)| WeightedGroup {
+							threshold,
+							members: members.try_into().unwrap(),
+						}
+					),
 				]
 			})
 			.prop_map(|council| normalise(council, &mut 0))
@@ -389,7 +449,7 @@ pub(crate) mod tests {
 			// The wrappers are otherwise valid and the depth check fails before any member is
 			// visited, so `TooDeep` is the only possible error.
 			let too_deep = (depth(&council)..=MAX_DEPTH)
-				.fold(council, |inner, _| SimpleGroup { threshold: 1, members: vec![inner] });
+				.fold(council, |inner, _| SimpleGroup { threshold: 1, members: bounded_vec![inner] });
 			prop_assert_eq!(depth(&too_deep), MAX_DEPTH + 1);
 			prop_assert_eq!(too_deep.validate(), Err(TooDeep));
 			prop_assert!(Limited::decode(&mut &too_deep.encode()[..]).is_err());
