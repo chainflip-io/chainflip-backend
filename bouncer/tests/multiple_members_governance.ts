@@ -6,12 +6,40 @@ import { signSendAndWait } from 'shared/utils/dedot';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { governanceExecutedEvent } from 'generated/events/governance/executed';
+import type { PalletCfGovernanceCouncil } from 'generated/chaintypes/chainflip-node';
+import { AccountId32 } from 'dedot/codecs';
+
+// The governance members are a tree of groups, so collect the individuals at its leaves.
+function flattenMembers(council: PalletCfGovernanceCouncil): string[] {
+  switch (council.type) {
+    case 'Individual':
+      return [council.value.id.address(2112)];
+    case 'SimpleGroup':
+      return council.value.members.flatMap(flattenMembers);
+    case 'WeightedGroup':
+      return council.value.members.flatMap(([, member]) => flattenMembers(member));
+    default:
+      throw new Error(`unknown council node: ${JSON.stringify(council)}`);
+  }
+}
+
+function simpleGroup(members: string[], threshold: number): PalletCfGovernanceCouncil {
+  return {
+    type: 'SimpleGroup',
+    value: {
+      threshold,
+      members: members.map((address) => ({
+        type: 'Individual',
+        value: { id: new AccountId32(address) },
+      })),
+    },
+  };
+}
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
 
-  const { members } = await chainflip.query.governance.members();
-  return members.map((member) => member.address(2112));
+  return flattenMembers(await chainflip.query.governance.members());
 }
 
 const alice = createStateChainKeypair('//Alice');
@@ -30,7 +58,7 @@ async function addAliceToGovernance<A = []>(cf: ChainflipIO<A>, initMembers: str
   const newThreshold = newMembers.length;
 
   await cf.submitGovernance({
-    extrinsic: (api) => api.tx.governance.newMembershipSet(newMembers, newThreshold),
+    extrinsic: (api) => api.tx.governance.setCouncil(simpleGroup(newMembers, newThreshold)),
   });
 
   cf.debug('Added Alice to governance!');
@@ -51,7 +79,7 @@ async function submitWithMultipleGovernanceMembers<A = []>(cf: ChainflipIO<A>) {
   // Killing 2 birds with 1 stone: testing governance execution with multiple
   // members *and* restoring governance to its original state
   const proposalId = await submitGovernanceExtrinsic(
-    (chainflip) => chainflip.tx.governance.newMembershipSet([snowWhite.address], 1),
+    (chainflip) => chainflip.tx.governance.setCouncil(simpleGroup([snowWhite.address], 1)),
     cf.logger,
   );
 

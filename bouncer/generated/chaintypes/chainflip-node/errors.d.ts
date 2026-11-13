@@ -718,7 +718,7 @@ export interface ChainErrors extends GenericChainErrors {
     NotEnoughAuthoritiesCfesAtTargetVersion: GenericPalletError;
 
     /**
-     * The provided council is invalid: either empty or threshold > members.len()
+     * The council can never reach quorum, or exceeds the size limits.
      **/
     InvalidCouncil: GenericPalletError;
 

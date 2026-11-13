@@ -34,7 +34,9 @@ pub mod __reexports {
 	pub use sp_tracing;
 }
 
+mod depth_limited;
 mod helper_functions;
+pub use depth_limited::DepthLimited;
 pub use helper_functions::*;
 
 pub mod migration_template;
