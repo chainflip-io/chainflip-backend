@@ -1349,6 +1349,32 @@ impl cf_traits::ChainflipNetworkInfo for ChainflipNetworkProvider {
 	}
 }
 
+/// Delegation requires the Liquidity Provider role from the moment governance schedules FLIP 2.1,
+/// rather than from the activation epoch, so that it can be switched on independently of the
+/// runtime upgrade that ships it.
+pub struct LpDelegationRequirement;
+
+impl cf_traits::LpRoleRequiredForDelegation for LpDelegationRequirement {
+	fn is_required() -> bool {
+		Flip::is_flip_2_1_scheduled()
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn require() {
+		if !Self::is_required() {
+			pallet_cf_flip::FeeRewardsActivationEpoch::<Runtime>::set(
+				<Validator as cf_traits::EpochInfo>::epoch_index().saturating_add(1),
+			);
+		}
+	}
+}
+
+impl cf_traits::OnFeeRewardsActivationScheduled for LpDelegationRequirement {
+	fn on_fee_rewards_activation_scheduled() {
+		Validator::assign_lp_role_to_delegators();
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

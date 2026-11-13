@@ -16,20 +16,8 @@
 
 use crate::{Pallet, STORAGE_VERSION_U16};
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::migrations::VersionedMigration;
 
-mod assign_lp_role_to_delegators;
-
-pub type PalletMigration<T> = (
-	VersionedMigration<
-		10,
-		11,
-		assign_lp_role_to_delegators::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,
-);
+pub type PalletMigration<T> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,);
 
 #[cfg(test)]
 const _: u16 =

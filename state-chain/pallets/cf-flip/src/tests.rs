@@ -706,6 +706,33 @@ fn update_pallet_config() {
 	});
 }
 
+#[test]
+fn scheduling_fee_rewards_activation_triggers_hook() {
+	new_test_ext().execute_with(|| {
+		let set_activation_epoch = |epoch| {
+			assert_ok!(Flip::update_pallet_config(
+				RuntimeOrigin::root(),
+				vec![PalletConfigUpdate::SetFeeRewardsActivationEpoch(epoch)]
+					.try_into()
+					.unwrap(),
+			));
+		};
+		let hook_calls = || ACTIVATION_SCHEDULED_CALLS.with(|calls| calls.get());
+
+		assert!(!Flip::is_flip_2_1_scheduled());
+
+		set_activation_epoch(5);
+		assert!(Flip::is_flip_2_1_scheduled());
+		assert!(!Flip::is_flip_2_1_activated());
+		assert_eq!(hook_calls(), 1);
+
+		// Unscheduling doesn't trigger the hook.
+		set_activation_epoch(EpochIndex::MAX);
+		assert!(!Flip::is_flip_2_1_scheduled());
+		assert_eq!(hook_calls(), 1);
+	});
+}
+
 #[cfg(test)]
 mod transfer {
 	use super::*;

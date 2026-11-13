@@ -24,7 +24,8 @@ use pallet_session::Config as SessionConfig;
 
 use cf_primitives::{AccountRole, AssetAmount};
 use cf_traits::{
-	AccountRoleRegistry, FundAccount, FundingSource, KeyRotationStatusOuter, SafeMode, SetSafeMode,
+	AccountRoleRegistry, FundAccount, FundingSource, KeyRotationStatusOuter,
+	LpRoleRequiredForDelegation, SafeMode, SetSafeMode,
 };
 use cf_utilities::assert_matches;
 use frame_benchmarking::v2::*;
@@ -631,6 +632,8 @@ mod benchmarks {
 			OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow }
 		));
 		fill_exceptions::<T>(&operator);
+		// Worst case: the delegator is implicitly registered as a Liquidity Provider.
+		T::LpRoleRequiredForDelegation::require();
 
 		#[extrinsic_call]
 		delegate(RawOrigin::Signed(delegator.clone()), operator.clone(), DelegationAmount::Max);
