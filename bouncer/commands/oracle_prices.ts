@@ -79,8 +79,7 @@ async function main() {
 
   // Fetch all (base_and_quote_asset = None); filter by base asset client-side if one was given.
   const all = (await jsonRpc(globalLogger, 'cf_oracle_prices', [null], httpEndpoint)) as unknown as
-    | RawOraclePrice[]
-    | null;
+    RawOraclePrice[] | null;
   const baseFilter = argv._[0] !== undefined ? String(argv._[0]).toLowerCase() : undefined;
   const rows = (all ?? [])
     .filter((r) => !baseFilter || r.base_asset.toLowerCase() === baseFilter)

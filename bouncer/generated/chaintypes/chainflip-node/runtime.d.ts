@@ -1193,8 +1193,7 @@ export interface RuntimeApis extends GenericRuntimeApis {
         ccmData: StateChainRuntimeRuntimeApisCustomApiTypesCcmData | undefined,
         excludeFees: Array<StateChainRuntimeRuntimeApisCustomApiTypesFeeTypes>,
         additionalLimitOrders?:
-          | Array<StateChainRuntimeRuntimeApisCustomApiTypesSimulateSwapAdditionalOrder>
-          | undefined,
+          Array<StateChainRuntimeRuntimeApisCustomApiTypesSimulateSwapAdditionalOrder> | undefined,
         isInternal?: boolean | undefined,
       ) => Promise<
         Result<
