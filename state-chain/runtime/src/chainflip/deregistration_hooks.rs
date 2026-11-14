@@ -14,44 +14,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{AccountId, Runtime};
-use cf_primitives::AccountRole;
-use cf_traits::{DeregistrationHooks, RefundAddressRegistry, WithdrawalAddressRestriction};
-use frame_support::sp_runtime::DispatchError;
+use crate::Runtime;
 use pallet_cf_flip::Bonder;
 
 /// Checks run regardless of the role being deregistered: state is keyed by account, and an
 /// account can hold state from a previous role (e.g. a delegation bond after `undelegate`), so
 /// gating checks by the current role lets that state leak into the next one.
-pub struct RuntimeDeregistrationHooks;
-
-impl DeregistrationHooks for RuntimeDeregistrationHooks {
-	type AccountId = AccountId;
-	type Error = DispatchError;
-
-	fn check(account_id: &Self::AccountId) -> Result<(), DispatchError> {
-		Bonder::<Runtime>::check(account_id)?;
-		pallet_cf_validator::ValidatorDeregistrationCheck::<Runtime>::check(account_id)?;
-		pallet_cf_validator::DelegatorDeregistrationCheck::<Runtime>::check(account_id)?;
-		pallet_cf_swapping::BrokerDeregistrationCheck::<Runtime>::check(account_id)?;
-		pallet_cf_asset_balances::WithdrawalWhitelistDeregistrationCheck::<Runtime>::check(
-			account_id,
-		)?;
-		pallet_cf_asset_balances::FreeBalancesDeregistrationCheck::<Runtime>::check(account_id)?;
-		pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck::<Runtime>::check(
-			account_id,
-		)?;
-		pallet_cf_pools::OpenOrdersDeregistrationCheck::<Runtime>::check(account_id)?;
-		pallet_cf_lending_pools::PoolsDeregistrationCheck::<Runtime>::check(account_id)?;
-		// Last: iterates over all pending swap requests.
-		pallet_cf_swapping::PendingSwapDeregistrationCheck::<Runtime>::check(account_id)?;
-		Ok(())
-	}
-
-	fn on_deregistered(account_id: &Self::AccountId, _account_role: AccountRole) {
-		pallet_cf_asset_balances::Pallet::<Runtime>::clear_refund_addresses(account_id);
-		<pallet_cf_asset_balances::Pallet<Runtime> as WithdrawalAddressRestriction>::clear_pending_withdrawal_changes(
-			account_id,
-		);
-	}
-}
+pub type RuntimeDeregistrationHooks = (
+	Bonder<Runtime>,
+	pallet_cf_validator::ValidatorDeregistrationHooks<Runtime>,
+	pallet_cf_validator::DelegatorDeregistrationHooks<Runtime>,
+	pallet_cf_swapping::BrokerDeregistrationHooks<Runtime>,
+	pallet_cf_asset_balances::WithdrawalWhitelistDeregistrationHooks<Runtime>,
+	pallet_cf_asset_balances::RefundAddressDeregistrationHooks<Runtime>,
+	pallet_cf_asset_balances::FreeBalancesDeregistrationHooks<Runtime>,
+	pallet_cf_trading_strategy::TradingStrategyDeregistrationHooks<Runtime>,
+	pallet_cf_pools::OpenOrdersDeregistrationHooks<Runtime>,
+	pallet_cf_lending_pools::PoolsDeregistrationHooks<Runtime>,
+	// Last: iterates over all pending swap requests.
+	pallet_cf_swapping::PendingSwapDeregistrationHooks<Runtime>,
+);

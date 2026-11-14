@@ -75,12 +75,13 @@ pub mod withdrawal_address_restriction;
 #[macro_export]
 macro_rules! impl_mock_chainflip {
 	($runtime:ty) => {
+		use $crate::mocks::account_role_registry::MockAccountRoleRegistry;
+		$crate::impl_mock_chainflip!($runtime, AccountRoleRegistry = MockAccountRoleRegistry);
+	};
+	($runtime:ty, AccountRoleRegistry = $account_role_registry:ty) => {
 		use $crate::{
 			impl_mock_epoch_info,
-			mocks::{
-				account_role_registry::MockAccountRoleRegistry,
-				ensure_origin_mock::FailOnNoneOrigin, funding_info::MockFundingInfo,
-			},
+			mocks::{ensure_origin_mock::FailOnNoneOrigin, funding_info::MockFundingInfo},
 			Chainflip,
 		};
 
@@ -101,7 +102,7 @@ macro_rules! impl_mock_chainflip {
 			type EnsureGovernance =
 				frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 			type EpochInfo = MockEpochInfo;
-			type AccountRoleRegistry = MockAccountRoleRegistry;
+			type AccountRoleRegistry = $account_role_registry;
 			type FundingInfo = MockFundingInfo<Self>;
 		}
 	};

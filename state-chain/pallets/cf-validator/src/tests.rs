@@ -1390,7 +1390,7 @@ fn validator_registration_and_deregistration() {
 		// Deregistration is blocked while the validator is a bidder.
 		add_bids(vec![Bid { bidder_id: ALICE, amount: 100 }]);
 		assert!(matches!(
-			ValidatorDeregistrationCheck::<Test>::check(&ALICE),
+			ValidatorDeregistrationHooks::<Test>::check(&ALICE),
 			Err(Error::<Test>::StillBidding)
 		));
 
@@ -1408,6 +1408,47 @@ fn validator_registration_and_deregistration() {
 }
 
 #[test]
+fn deregistration_via_role_registry_runs_checks_and_cleanup() {
+	type Registry = <Test as Chainflip>::AccountRoleRegistry;
+	new_test_ext().execute_with(|| {
+		const OPERATOR: u64 = 1001;
+		const VALIDATOR: u64 = 2001;
+
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OPERATOR),
+			OPERATOR_SETTINGS,
+			vanity()
+		));
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(VALIDATOR)));
+		assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OPERATOR), VALIDATOR));
+		assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(VALIDATOR), OPERATOR));
+		ValidatorMaxBid::<Test>::insert(VALIDATOR, 100);
+
+		add_bids(vec![Bid { bidder_id: VALIDATOR, amount: 100 }]);
+		assert_noop!(
+			<Registry as AccountRoleRegistry<Test>>::deregister_as_validator(&VALIDATOR),
+			Error::<Test>::StillBidding
+		);
+		remove_bids(vec![VALIDATOR]);
+
+		assert_ok!(<Registry as AccountRoleRegistry<Test>>::deregister_as_validator(&VALIDATOR));
+		assert_eq!(OperatorChoice::<Test>::get(VALIDATOR), None);
+		assert!(!ManagedValidators::<Test>::get(OPERATOR).contains(&VALIDATOR));
+		assert_eq!(ValidatorMaxBid::<Test>::get(VALIDATOR), None);
+
+		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+		assert_noop!(
+			<Registry as AccountRoleRegistry<Test>>::deregister_as_operator(&OPERATOR),
+			Error::<Test>::RotationInProgress
+		);
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+
+		assert_ok!(<Registry as AccountRoleRegistry<Test>>::deregister_as_operator(&OPERATOR));
+		assert_eq!(OperatorSettingsLookup::<Test>::get(OPERATOR), None);
+	});
+}
+
+#[test]
 fn validator_deregistration_after_expired_epoch() {
 	new_test_ext().execute_with(|| {
 		const RETIRING_VALIDATOR: u64 = GENESIS_AUTHORITIES[0];
@@ -1417,14 +1458,14 @@ fn validator_deregistration_after_expired_epoch() {
 		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
 
 		assert!(matches!(
-			ValidatorDeregistrationCheck::<Test>::check(&RETIRING_VALIDATOR),
+			ValidatorDeregistrationHooks::<Test>::check(&RETIRING_VALIDATOR),
 			Err(Error::<Test>::StillBidding)
 		));
 
 		assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(RETIRING_VALIDATOR)));
 
 		assert!(matches!(
-			ValidatorDeregistrationCheck::<Test>::check(&RETIRING_VALIDATOR),
+			ValidatorDeregistrationHooks::<Test>::check(&RETIRING_VALIDATOR),
 			Err(Error::<Test>::StillKeyHolder)
 		));
 
@@ -2380,7 +2421,7 @@ mod operator {
 
 			// Should fail - operator has unexpired delegation snapshots
 			assert!(matches!(
-				ValidatorDeregistrationCheck::<Test>::check(&ALICE),
+				ValidatorDeregistrationHooks::<Test>::check(&ALICE),
 				Err(Error::<Test>::OperatorStillActive)
 			));
 
@@ -2815,7 +2856,7 @@ mod delegation {
 			));
 			MockFlip::credit_funds(&ALICE, 1_000);
 
-			assert_ok!(DelegatorDeregistrationCheck::<Test>::check(&ALICE));
+			assert_ok!(DelegatorDeregistrationHooks::<Test>::check(&ALICE));
 
 			assert_ok!(ValidatorPallet::delegate(
 				OriginTrait::signed(ALICE),
@@ -2824,7 +2865,7 @@ mod delegation {
 			));
 
 			assert_matches!(
-				DelegatorDeregistrationCheck::<Test>::check(&ALICE),
+				DelegatorDeregistrationHooks::<Test>::check(&ALICE),
 				Err(Error::<Test>::StillDelegating)
 			);
 
@@ -2833,7 +2874,7 @@ mod delegation {
 				DelegationAmount::Max
 			));
 
-			assert_ok!(DelegatorDeregistrationCheck::<Test>::check(&ALICE));
+			assert_ok!(DelegatorDeregistrationHooks::<Test>::check(&ALICE));
 		});
 	}
 

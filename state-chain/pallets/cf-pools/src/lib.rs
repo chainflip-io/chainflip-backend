@@ -2625,9 +2625,9 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub struct OpenOrdersDeregistrationCheck<T>(sp_std::marker::PhantomData<T>);
+pub struct OpenOrdersDeregistrationHooks<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> DeregistrationHooks for OpenOrdersDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for OpenOrdersDeregistrationHooks<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

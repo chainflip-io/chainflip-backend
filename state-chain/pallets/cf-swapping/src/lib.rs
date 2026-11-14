@@ -1434,27 +1434,7 @@ pub mod pallet {
 		pub fn deregister_as_broker(who: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
-			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
-			T::WithdrawalRestriction::clear_pending_withdrawal_changes(&account_id);
-
-			for affiliate_account_id in AffiliateAccountDetails::<T>::iter_key_prefix(&account_id) {
-				frame_system::Provider::<T>::killed(&affiliate_account_id).unwrap_or_else(|e| {
-					// This shouldn't happen, and not much we can do if it does except fix it on a
-					// subsequent release. Consequences are minor.
-					log::error!(
-						"Unexpected reference count error while reaping the affiliate {:?}: {:?}.",
-						affiliate_account_id,
-						e
-					);
-				})
-			}
-
-			// Clear the affiliate account details and affiliate id mapping.
-			// With this the broker has no longer access to the affiliate's account.
-			let _ = AffiliateAccountDetails::<T>::clear_prefix(&account_id, u32::MAX, None);
-			let _ = AffiliateIdMapping::<T>::clear_prefix(&account_id, u32::MAX, None);
-
-			Ok(())
+			T::AccountRoleRegistry::deregister_as_broker(&account_id)
 		}
 
 		/// Request a swap deposit address.
@@ -3554,9 +3534,9 @@ pub mod pallet {
 	}
 }
 
-pub struct BrokerDeregistrationCheck<T>(PhantomData<T>);
+pub struct BrokerDeregistrationHooks<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationHooks for BrokerDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for BrokerDeregistrationHooks<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
@@ -3574,11 +3554,33 @@ impl<T: Config> DeregistrationHooks for BrokerDeregistrationCheck<T> {
 
 		Ok(())
 	}
+
+	fn on_deregistered(account_id: &Self::AccountId, account_role: AccountRole) {
+		if account_role != AccountRole::Broker {
+			return;
+		}
+
+		for affiliate_account_id in AffiliateAccountDetails::<T>::iter_key_prefix(account_id) {
+			frame_system::Provider::<T>::killed(&affiliate_account_id).unwrap_or_else(|e| {
+				// This shouldn't happen, and not much we can do if it does except fix it on a
+				// subsequent release. Consequences are minor.
+				log::error!(
+					"Unexpected reference count error while reaping the affiliate {:?}: {:?}.",
+					affiliate_account_id,
+					e
+				);
+			})
+		}
+
+		// With this the broker no longer has access to the affiliate's account.
+		let _ = AffiliateAccountDetails::<T>::clear_prefix(account_id, u32::MAX, None);
+		let _ = AffiliateIdMapping::<T>::clear_prefix(account_id, u32::MAX, None);
+	}
 }
 
-pub struct PendingSwapDeregistrationCheck<T>(PhantomData<T>);
+pub struct PendingSwapDeregistrationHooks<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationHooks for PendingSwapDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for PendingSwapDeregistrationHooks<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 

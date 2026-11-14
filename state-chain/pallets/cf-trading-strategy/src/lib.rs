@@ -1205,9 +1205,9 @@ fn average_tick(tick_1: Tick, tick_2: Tick, round_up: bool) -> Tick {
 	}
 }
 
-pub struct TradingStrategyDeregistrationCheck<T>(PhantomData<T>);
+pub struct TradingStrategyDeregistrationHooks<T>(PhantomData<T>);
 
-impl<T: Config> DeregistrationHooks for TradingStrategyDeregistrationCheck<T> {
+impl<T: Config> DeregistrationHooks for TradingStrategyDeregistrationHooks<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 	fn check(account_id: &T::AccountId) -> Result<(), Self::Error> {

@@ -62,7 +62,12 @@ impl frame_system::Config for Test {
 	type Block = Block;
 }
 
-impl_mock_chainflip!(Test);
+impl_mock_chainflip!(
+	Test,
+	AccountRoleRegistry = cf_traits::mocks::account_role_registry::MockAccountRoleRegistryWithHooks<
+		(crate::ValidatorDeregistrationHooks<Test>, crate::DelegatorDeregistrationHooks<Test>),
+	>
+);
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {

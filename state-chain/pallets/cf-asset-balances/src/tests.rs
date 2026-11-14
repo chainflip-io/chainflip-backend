@@ -406,7 +406,7 @@ fn can_reconciliate_multiple_chains_at_once() {
 }
 
 pub mod balance_api {
-	use crate::{DeleteAccount, FreeBalancesDeregistrationCheck};
+	use crate::{DeleteAccount, FreeBalancesDeregistrationHooks};
 	use cf_traits::DeregistrationHooks;
 
 	use super::*;
@@ -505,7 +505,7 @@ pub mod balance_api {
 			FreeBalances::<Test>::insert(&account, ForeignChain::Ethereum.gas_asset(), 100);
 
 			assert!(matches!(
-				FreeBalancesDeregistrationCheck::<Test>::check(&account),
+				FreeBalancesDeregistrationHooks::<Test>::check(&account),
 				Err(crate::Error::<Test>::FundsRemaining)
 			));
 		});
@@ -515,7 +515,7 @@ pub mod balance_api {
 	fn deregistration_check_passes_without_funds() {
 		new_test_ext().execute_with(|| {
 			let account = AccountId::from([10; 32]);
-			assert_ok!(FreeBalancesDeregistrationCheck::<Test>::check(&account));
+			assert_ok!(FreeBalancesDeregistrationHooks::<Test>::check(&account));
 		});
 	}
 }
@@ -524,7 +524,7 @@ mod withdrawal_whitelist {
 	use super::*;
 	use crate::{
 		Error, MaxPendingWhitelistUpdates, MaxWhitelistTimelock, PendingChanges, WhitelistChange,
-		WithdrawalWhitelistDeregistrationCheck,
+		WithdrawalWhitelistDeregistrationHooks,
 	};
 	use cf_chains::{
 		address::{AddressConverter, EncodedAddress},
@@ -627,12 +627,12 @@ mod withdrawal_whitelist {
 	fn deregistration_requires_whitelist_to_be_disabled() {
 		new_test_ext().execute_with(|| {
 			let who = account(1);
-			assert_ok!(WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who));
+			assert_ok!(WithdrawalWhitelistDeregistrationHooks::<Test>::check(&who));
 
 			// Even an empty whitelist is active while its timelock is set.
 			set_timelock(&who, 1000);
 			assert!(matches!(
-				WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who),
+				WithdrawalWhitelistDeregistrationHooks::<Test>::check(&who),
 				Err(Error::<Test>::WithdrawalWhitelistNotCleared)
 			));
 
@@ -644,13 +644,13 @@ mod withdrawal_whitelist {
 			remove(&who, ETH_ADDR_1);
 			set_timelock(&who, 0);
 			assert!(matches!(
-				WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who),
+				WithdrawalWhitelistDeregistrationHooks::<Test>::check(&who),
 				Err(Error::<Test>::WithdrawalWhitelistNotCleared)
 			));
 
 			advance_clock(1001);
 			apply_pending();
-			assert_ok!(WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who));
+			assert_ok!(WithdrawalWhitelistDeregistrationHooks::<Test>::check(&who));
 		});
 	}
 
@@ -667,15 +667,18 @@ mod withdrawal_whitelist {
 
 			advance_clock(501);
 			apply_pending();
-			assert_ok!(WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who));
+			assert_ok!(WithdrawalWhitelistDeregistrationHooks::<Test>::check(&who));
 			assert!(!PendingChanges::<Test>::get().is_empty());
 
-			Pallet::<Test>::clear_pending_withdrawal_changes(&who);
+			WithdrawalWhitelistDeregistrationHooks::<Test>::on_deregistered(
+				&who,
+				cf_primitives::AccountRole::LiquidityProvider,
+			);
 			assert!(PendingChanges::<Test>::get().is_empty());
 
 			advance_clock(500);
 			apply_pending();
-			assert_ok!(WithdrawalWhitelistDeregistrationCheck::<Test>::check(&who));
+			assert_ok!(WithdrawalWhitelistDeregistrationHooks::<Test>::check(&who));
 			assert!(Pallet::<Test>::get_refund_address(&who, ForeignChain::Ethereum).is_none());
 		});
 	}
