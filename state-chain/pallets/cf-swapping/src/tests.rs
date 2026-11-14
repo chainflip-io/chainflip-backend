@@ -47,6 +47,7 @@ use cf_traits::{
 		balance_api::MockBalance,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		fee_payment::MockFeePayment,
+		flip_move_to_gateway::MockMoveFlipToGateway,
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		pool_price_api::MockPoolPriceApi,
@@ -2212,7 +2213,7 @@ mod credit_flip_and_transfer {
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
 				assert_eq!(MockFeePayment::<Test>::get_offchain_flip_to_be_distributed(), 0);
-				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
+				assert_eq!(MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(), 0);
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
 			.then_execute_with(|_| {
@@ -2239,7 +2240,7 @@ mod credit_flip_and_transfer {
 				);
 				// The deficit path never funds the account, so no earmark originates here - the
 				// account's initial funding was already earmarked when the deposit was credited.
-				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
+				assert_eq!(MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(), 0);
 			});
 	}
 }
@@ -2258,7 +2259,7 @@ mod flip_to_gateway {
 		const AMOUNT: AssetAmount = 1_000;
 
 		new_test_ext().execute_with(|| {
-			FlipToBeSentToGateway::<Test>::put(PREVIOUSLY_PENDING);
+			MockMoveFlipToGateway::set_flip_to_be_sent_to_gateway(PREVIOUSLY_PENDING);
 			MockEgressHandler::<AnyChain>::return_failure(true);
 
 			assert_eq!(Swapping::maybe_trigger_flip_to_gateway_egress(H160::zero(), AMOUNT), 0);
@@ -2269,7 +2270,10 @@ mod flip_to_gateway {
 					reason: DispatchError::Other(_),
 				})
 			);
-			assert_eq!(FlipToBeSentToGateway::<Test>::get(), PREVIOUSLY_PENDING + AMOUNT);
+			assert_eq!(
+				MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(),
+				PREVIOUSLY_PENDING + AMOUNT
+			);
 			assert!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().is_empty());
 		});
 	}
@@ -2292,7 +2296,10 @@ mod flip_to_gateway {
 				RuntimeEvent::Swapping(Event::FlipTransferToGatewaySkipped { reason })
 					if *reason == Error::<Test>::FlipToGatewayAmountBelowThreshold.into()
 			);
-			assert_eq!(FlipToBeSentToGateway::<Test>::get(), LARGEST_SKIPPED_AMOUNT);
+			assert_eq!(
+				MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(),
+				LARGEST_SKIPPED_AMOUNT
+			);
 			assert!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().is_empty());
 
 			// The skipped amount carries over, tipping the next attempt over the threshold.
@@ -2303,7 +2310,7 @@ mod flip_to_gateway {
 				RuntimeEvent::Swapping(Event::SentFlipToGateway { amount, .. })
 					if *amount == LARGEST_SKIPPED_AMOUNT + 1 - FEE
 			);
-			assert_eq!(FlipToBeSentToGateway::<Test>::get(), FEE);
+			assert_eq!(MockMoveFlipToGateway::peek_flip_to_be_sent_to_gateway(), FEE);
 			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
 		});
 	}

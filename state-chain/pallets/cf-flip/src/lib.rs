@@ -34,10 +34,10 @@ use scale_info::TypeInfo;
 use sp_runtime::traits::Saturating;
 pub use weights::WeightInfo;
 
-use cf_primitives::EpochIndex;
+use cf_primitives::{AssetAmount, EpochIndex};
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationHooks, FeePayment, FundingInfo, RewardsDistribution,
-	Slashing,
+	AccountInfo, Bonding, DeregistrationHooks, FeePayment, FundingInfo, MoveFlipToGateway,
+	RewardsDistribution, Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
@@ -189,6 +189,10 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type FlipToDistribute<T: Config> = StorageValue<_, i128, ValueQuery>;
+
+	/// Flip held in the Vault that is earmarked for transfer to the State Chain Gateway.
+	#[pallet::storage]
+	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub fn deposit_event)]
@@ -595,6 +599,16 @@ impl<T: Config> Pallet<T> {
 	/// Deposits `amount` into the reserve to be distributed to authorities as fee rewards.
 	fn burn_or_deposit_to_reserve(amount: T::Balance) -> Deficit<T> {
 		Self::deposit_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
+	}
+}
+
+impl<T: Config> MoveFlipToGateway for Pallet<T> {
+	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount) {
+		FlipToBeSentToGateway::<T>::mutate(|total| total.saturating_accrue(amount));
+	}
+
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
+		FlipToBeSentToGateway::<T>::take()
 	}
 }
 

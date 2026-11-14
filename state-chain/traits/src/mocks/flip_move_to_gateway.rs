@@ -27,8 +27,8 @@ impl MockPallet for MockMoveFlipToGateway {
 const FLIP_TO_BE_SENT_TO_GATEWAY: &[u8] = b"FLIP_TO_BE_SENT_TO_GATEWAY";
 
 impl MockMoveFlipToGateway {
-	pub fn set_flip_to_be_sent_to_gateway(flip_to_burn: AssetAmount) {
-		Self::put_value(FLIP_TO_BE_SENT_TO_GATEWAY, flip_to_burn);
+	pub fn set_flip_to_be_sent_to_gateway(amount: AssetAmount) {
+		Self::put_value(FLIP_TO_BE_SENT_TO_GATEWAY, amount);
 	}
 
 	pub fn peek_flip_to_be_sent_to_gateway() -> AssetAmount {
@@ -38,6 +38,12 @@ impl MockMoveFlipToGateway {
 
 impl MoveFlipToGateway for MockMoveFlipToGateway {
 	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount) {
-		Self::set_flip_to_be_sent_to_gateway(Self::peek_flip_to_be_sent_to_gateway() + amount);
+		Self::set_flip_to_be_sent_to_gateway(
+			Self::peek_flip_to_be_sent_to_gateway().saturating_add(amount),
+		);
+	}
+
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
+		Self::take_value(FLIP_TO_BE_SENT_TO_GATEWAY).unwrap_or_default()
 	}
 }

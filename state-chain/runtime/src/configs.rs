@@ -240,6 +240,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
 	type FundAccount = Funding;
+	type MoveFlipToGateway = Flip;
 	type MinimumFunding = Funding;
 	type RuntimeCall = RuntimeCall;
 	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
@@ -794,7 +795,7 @@ impl pallet_cf_funding::Config for Runtime {
 	type RedemptionChecker = Validator;
 	type EthereumSCApi = crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>;
 	type SafeMode = RuntimeSafeMode;
-	type MoveFlipToGateway = Swapping;
+	type MoveFlipToGateway = Flip;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
 

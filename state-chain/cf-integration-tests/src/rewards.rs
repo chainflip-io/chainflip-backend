@@ -125,7 +125,7 @@ fn fee_rewards_accrue_and_are_distributed_at_epoch_transition() {
 					RuntimeEvent::Swapping(pallet_cf_swapping::Event::SentFlipToGateway {
 						amount,
 						..
-					}) if *amount + pallet_cf_swapping::FlipToBeSentToGateway::<Runtime>::get() == OFFCHAIN_FEE
+					}) if *amount + pallet_cf_flip::FlipToBeSentToGateway::<Runtime>::get() == OFFCHAIN_FEE
 				)),
 				"Expected the off-chain portion to be sent to the gateway",
 			);
@@ -133,7 +133,7 @@ fn fee_rewards_accrue_and_are_distributed_at_epoch_transition() {
 			// pending off-chain debit, so it's clawed back from the next distribution.
 			assert_eq!(
 				pallet_cf_flip::FlipToDistribute::<Runtime>::get(),
-				-(pallet_cf_swapping::FlipToBeSentToGateway::<Runtime>::get() as i128),
+				-(pallet_cf_flip::FlipToBeSentToGateway::<Runtime>::get() as i128),
 				"Expected FlipToDistribute to offset the residual gateway balance",
 			);
 
