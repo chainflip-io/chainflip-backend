@@ -17,6 +17,8 @@ A major/minor version bump (e.g. 2.1 -> 2.2) involves three coordinated changes:
 2. **Engine versioning** (old/new dylib references)
 3. **Runtime migrations** (clean up old VersionedMigrations, reset the release-specific migration tuple)
 
+Separately, the external [chainflip-mainnet-apis](https://github.com/chainflip-io/chainflip-mainnet-apis) repo gets a PR pointing its Docker image tags at the release being bumped *from* (step 10).
+
 Reference commits: `b4ae1f3e2b` (2.0->2.1), and the 2.1->2.2 bump done in this repo.
 
 ## Commit Strategy
@@ -25,6 +27,8 @@ Split into two commits:
 
 1. **Version bumps** - Cargo.toml versions, runtime `spec_version`, engine old/new versions, `Cargo.lock` (steps 1-3, 7)
 2. **Migration cleanup & CI cleanup** - Remove old VersionedMigrations, clean up pallet migrations, delete migration files, remove temporary CI workarounds (steps 4-6)
+
+The chainflip-mainnet-apis update (step 10) is a separate PR on that repo.
 
 ## Step-by-Step Process
 
@@ -223,6 +227,43 @@ try-runtime \
 ```
 
 **Expected result for a version bump:** Storage version mismatch errors are expected when testing against a snapshot that hasn't run the previous version's migrations yet (e.g. mainnet still on 2.0 when bumping from 2.1 to 2.2). The errors should correspond exactly to the pallets whose `VersionedMigration`s were cleaned up. If testing against a network that *has* run the previous migrations, the test should pass cleanly.
+
+### 10. Update chainflip-mainnet-apis
+
+[chainflip-io/chainflip-mainnet-apis](https://github.com/chainflip-io/chainflip-mainnet-apis) is the public docker-compose setup for running Broker/LP APIs against mainnet (Berghain). Its image tags must track the release live on mainnet, i.e. the **latest patch of the version being bumped from** (e.g. when bumping 2.3 -> 2.4, use the latest `2.3.x`), not the new version.
+
+Find the latest patch tag and the tag currently in the repo:
+
+```bash
+# Drafts are perseverance (testnet) builds; published releases are mainnet.
+gh release list -R chainflip-io/chainflip-backend --exclude-drafts --limit 10
+gh api repos/chainflip-io/chainflip-mainnet-apis/contents/docker-compose.yml \
+  --jq '.content' | base64 -d | grep 'image:'
+```
+
+Only proceed if that patch is released on mainnet (check `specVersion` as in step 9). If the repo already points at it, skip this step.
+
+Clone, bump every `berghain-<CURRENT>` tag, and open a PR:
+
+```bash
+WORKDIR=$(mktemp -d)
+gh repo clone chainflip-io/chainflip-mainnet-apis "$WORKDIR/mainnet-apis"
+cd "$WORKDIR/mainnet-apis"
+git checkout -b chore/upgrade-NEW_TAG
+grep -rln 'berghain-CURRENT_TAG' . --exclude-dir=.git | xargs sed -i '' 's/berghain-CURRENT_TAG/berghain-NEW_TAG/g'
+git diff   # review before committing
+git commit -am "chore: upgrade to NEW_TAG"
+git push -u origin chore/upgrade-NEW_TAG
+gh pr create -R chainflip-io/chainflip-mainnet-apis --base main \
+  --title "chore: upgrade to NEW_TAG" --body "Bump node and CLI images to berghain-NEW_TAG."
+```
+
+The tag appears in (reference: [PR #17](https://github.com/chainflip-io/chainflip-mainnet-apis/pull/17)):
+
+- `docker-compose.yml`: all `chainfliplabs/chainflip-node` services (`node`, `node-with-broker`, `node-with-lp`)
+- `README.md`: the `chainflip-cli` key-generation commands, the `node-with-lp` example, and the "Migrating to `berghain-X`" heading
+
+Afterwards, grep for any older `berghain-` tags the replace missed, and check whether the README or compose flags need changes for the new release (e.g. renamed/removed node CLI flags).
 
 ## Migration System Reference
 
