@@ -1726,6 +1726,28 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// The bond must cover both the keys the account still holds for unexpired epochs and its
+	/// delegation in the current epoch, since a validator can be demoted to delegator while it is
+	/// still a keyholder.
+	fn refresh_bond(account_id: &ValidatorIdOf<T>, current_delegator_bid: T::Amount) {
+		T::Bonder::update_bond(
+			account_id,
+			core::cmp::max(EpochHistory::<T>::active_bond(account_id), current_delegator_bid),
+		);
+	}
+
+	fn current_delegator_bid(account_id: &ValidatorIdOf<T>) -> T::Amount {
+		let epoch = CurrentEpoch::<T>::get();
+		// An account is either an authority or a delegator within an epoch, so most lookups can
+		// skip the snapshot scan.
+		if AuthorityIndex::<T>::contains_key(epoch, account_id) {
+			return Zero::zero();
+		}
+		DelegationSnapshots::<T>::iter_prefix_values(epoch)
+			.find_map(|snapshot| snapshot.delegators.get(account_id.into_ref()).copied())
+			.unwrap_or_default()
+	}
+
 	/// Makes the transition to the next epoch.
 	///
 	/// Among other things, updates the authority, historical and backup sets.
@@ -1839,7 +1861,7 @@ impl<T: Config> Pallet<T> {
 			if !new_delegator_bids.contains_key(&outgoing_delegator) &&
 				!new_authorities.contains(ValidatorIdOf::<T>::from_ref(&outgoing_delegator))
 			{
-				T::Bonder::update_bond(&outgoing_delegator.clone().into(), T::Amount::from(0_u128));
+				Self::refresh_bond(ValidatorIdOf::<T>::from_ref(&outgoing_delegator), Zero::zero());
 				Self::deposit_event(Event::UnDelegationFinalized {
 					delegator: outgoing_delegator.clone(),
 					epoch: new_epoch,
@@ -1857,7 +1879,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		for (delegator, bid) in new_delegator_bids {
-			T::Bonder::update_bond(&delegator.clone().into(), bid);
+			Self::refresh_bond(ValidatorIdOf::<T>::from_ref(&delegator), bid);
 		}
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
@@ -2356,15 +2378,16 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 			active_epochs.retain(|(x, _)| *x != epoch);
 			active_epochs.is_empty()
 		});
-		T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		if is_empty {
 			HistoricalActiveEpochs::<T>::remove(authority);
 		}
+		// The authority may have been demoted to delegator since the deactivated epoch.
+		Pallet::<T>::refresh_bond(authority, Pallet::<T>::current_delegator_bid(authority));
 	}
 
 	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex, bond: Self::Amount) {
 		HistoricalActiveEpochs::<T>::append(authority, (epoch, bond));
-		T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
+		Pallet::<T>::refresh_bond(authority, Pallet::<T>::current_delegator_bid(authority));
 	}
 
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount {
