@@ -20,7 +20,7 @@ use codec::DecodeWithMemTracking;
 use frame_support::traits::ConstBool;
 
 /// A Chain that can't be constructed.
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum NoneChain {}
 
 impl Chain for NoneChain {

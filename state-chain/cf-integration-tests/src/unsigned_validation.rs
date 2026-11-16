@@ -51,7 +51,7 @@ use cf_chains::sol::{
 	signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolSignature,
 };
 use cf_primitives::ChainflipNetwork;
-use cf_traits::Funding as FundingTrait;
+use cf_traits::{AccountInfo, Funding as FundingTrait};
 use cf_utilities::assert_ok;
 use codec::Encode;
 use frame_support::{
@@ -66,7 +66,7 @@ use pallet_cf_environment::{
 use sp_consensus_aura::SlotDuration;
 use state_chain_runtime::{
 	AccountId, AllPalletsWithSystem, Executive, Flip, PalletExecutionOrder, Runtime, RuntimeCall,
-	UncheckedExtrinsic,
+	RuntimeEvent, UncheckedExtrinsic,
 };
 
 /// Builds a valid Solana-signed `non_native_signed_call` for `signing_key`
@@ -211,6 +211,28 @@ fn non_native_exact_nonce_sequence_accepted_at_block_import() {
 
 		assert_eq!(apply(call_nonce_1), Ok(Ok(())));
 		assert_eq!(frame_system::Pallet::<Runtime>::account_nonce(&signer_account), 2);
+	});
+}
+
+#[test]
+fn non_native_signed_call_charges_fee() {
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let (call, signer_account) =
+			signed_sol_non_native_call(&SolSigningKey::new(), 0, remark_call());
+		provision_signer(&signer_account);
+		let balance_before = Flip::balance(&signer_account);
+
+		with_initialised_block(|| {
+			assert_eq!(apply(call), Ok(Ok(())));
+			assert!(System::events().iter().any(|record| matches!(
+				&record.event,
+				RuntimeEvent::TransactionPayment(
+					pallet_transaction_payment::Event::TransactionFeePaid { who, actual_fee, .. }
+				) if *who == signer_account && *actual_fee > 0
+			)));
+		});
+
+		assert!(Flip::balance(&signer_account) < balance_before);
 	});
 }
 

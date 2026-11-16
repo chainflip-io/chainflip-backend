@@ -399,7 +399,7 @@ mod benchmarks {
 				.next()
 				.unwrap()
 				.1
-				.total_owed_usd_value(&price_cache)
+				.total_owed_usd_value(&price_cache, &LendingConfig::<T>::get())
 				.unwrap() > 0
 		);
 	}
@@ -504,7 +504,7 @@ mod benchmarks {
 				.next()
 				.unwrap()
 				.1
-				.total_owed_usd_value(&price_cache)
+				.total_owed_usd_value(&price_cache, &LendingConfig::<T>::get())
 				.unwrap()
 		};
 
@@ -530,7 +530,7 @@ mod benchmarks {
 				.next()
 				.unwrap()
 				.1
-				.total_owed_usd_value(&price_cache)
+				.total_owed_usd_value(&price_cache, &LendingConfig::<T>::get())
 				.unwrap()
 		};
 
@@ -581,10 +581,11 @@ mod benchmarks {
 		let loan_account = LoanAccounts::<T>::get(borrower).unwrap();
 
 		let price_cache = get_prefilled_price_cache();
+		let config = LendingConfig::<T>::get();
 
 		#[block]
 		{
-			assert_ok!(loan_account.derive_ltv(&price_cache));
+			assert_ok!(loan_account.derive_ltv(&price_cache, &config));
 		}
 	}
 

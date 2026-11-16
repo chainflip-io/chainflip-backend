@@ -102,6 +102,10 @@ async fn run_cli() -> Result<()> {
 						let _ = api.broker_api().bind_fee_withdrawal_address(<str>::parse(&eth_address.address)?).await?;
 						println!("Broker account bound to fee withdrawal address: {}", eth_address.address);
 					},
+					BrokerSubcommands::LinkRecoveryAccount { recovery_account } => {
+						let tx_hash = api.broker_api().link_recovery_account(recovery_account.clone()).await?;
+						println!("Recovery account {recovery_account} linked. Tx hash: {tx_hash:#x}");
+					},
 				},
 				LiquidityProvider(subcommand) => match subcommand {
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress {

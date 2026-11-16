@@ -26,8 +26,10 @@ use crate::{
 		},
 	},
 };
+use alloy_network::{AnyRpcBlock, AnyRpcTransaction, AnyTransactionReceipt};
+use alloy_rpc_types_eth::Log;
 use cf_utilities::task_scope::Scope;
-use ethers::types::{Block, Log, TransactionReceipt, H160, H256, U256, U64};
+use sp_core::{H160, H256, U256};
 use tokio::sync::mpsc;
 
 pub const MAX_RETRY_FOR_WITH_RESULT: Attempt = 2;
@@ -49,15 +51,12 @@ pub trait TronRetryRpcApiWithResult: Clone {
 	// EVM-compatible JSON-RPC (via Tron's JSON-RPC endpoint)
 	async fn chain_id(&self) -> anyhow::Result<U256>;
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> anyhow::Result<Vec<Log>>;
-	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt>;
-	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>>;
-	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>>;
-	async fn block_with_txs(
-		&self,
-		block_number: U64,
-	) -> anyhow::Result<Block<ethers::types::Transaction>>;
-	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<ethers::types::Transaction>;
-	async fn get_block_number(&self) -> anyhow::Result<U64>;
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<AnyTransactionReceipt>;
+	async fn block(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock>;
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<AnyRpcBlock>;
+	async fn block_with_txs(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock>;
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<AnyRpcTransaction>;
+	async fn get_block_number(&self) -> anyhow::Result<u64>;
 }
 
 /// Wraps a [`TronRetryRpcClient`] and deduplicates in-flight requests with the same key,
@@ -70,12 +69,12 @@ pub struct TronCachingClient<Rpc: TronRpcApi> {
 	get_block_balances: CachingRequest<(BlockNumber, H256), BlockBalance, TronRetryRpcClient<Rpc>>,
 	chain_id: CachingRequest<(), U256, TronRetryRpcClient<Rpc>>,
 	get_logs: CachingRequest<(H256, H160), Vec<Log>, TronRetryRpcClient<Rpc>>,
-	transaction_receipt: CachingRequest<H256, TransactionReceipt, TronRetryRpcClient<Rpc>>,
-	block: CachingRequest<U64, Block<H256>, TronRetryRpcClient<Rpc>>,
-	block_by_hash: CachingRequest<H256, Block<H256>, TronRetryRpcClient<Rpc>>,
-	block_with_txs: CachingRequest<U64, Block<ethers::types::Transaction>, TronRetryRpcClient<Rpc>>,
-	get_transaction: CachingRequest<H256, ethers::types::Transaction, TronRetryRpcClient<Rpc>>,
-	get_block_number: CachingRequest<(), U64, TronRetryRpcClient<Rpc>>,
+	transaction_receipt: CachingRequest<H256, AnyTransactionReceipt, TronRetryRpcClient<Rpc>>,
+	block: CachingRequest<u64, AnyRpcBlock, TronRetryRpcClient<Rpc>>,
+	block_by_hash: CachingRequest<H256, AnyRpcBlock, TronRetryRpcClient<Rpc>>,
+	block_with_txs: CachingRequest<u64, AnyRpcBlock, TronRetryRpcClient<Rpc>>,
+	get_transaction: CachingRequest<H256, AnyRpcTransaction, TronRetryRpcClient<Rpc>>,
+	get_block_number: CachingRequest<(), u64, TronRetryRpcClient<Rpc>>,
 	pub cache_invalidation_senders: Vec<mpsc::Sender<()>>,
 }
 
@@ -105,28 +104,25 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronCachingClient<Rpc> {
 		>::new(scope, client.clone());
 		let (transaction_receipt, transaction_receipt_cache) = CachingRequest::<
 			H256,
-			TransactionReceipt,
+			AnyTransactionReceipt,
 			TronRetryRpcClient<Rpc>,
 		>::new(scope, client.clone());
 		let (block, block_cache) =
-			CachingRequest::<U64, Block<H256>, TronRetryRpcClient<Rpc>>::new(scope, client.clone());
+			CachingRequest::<u64, AnyRpcBlock, TronRetryRpcClient<Rpc>>::new(scope, client.clone());
 		let (block_by_hash, block_by_hash_cache) = CachingRequest::<
 			H256,
-			Block<H256>,
+			AnyRpcBlock,
 			TronRetryRpcClient<Rpc>,
 		>::new(scope, client.clone());
-		let (block_with_txs, block_with_txs_cache) = CachingRequest::<
-			U64,
-			Block<ethers::types::Transaction>,
-			TronRetryRpcClient<Rpc>,
-		>::new(scope, client.clone());
+		let (block_with_txs, block_with_txs_cache) =
+			CachingRequest::<u64, AnyRpcBlock, TronRetryRpcClient<Rpc>>::new(scope, client.clone());
 		let (get_transaction, get_transaction_cache) = CachingRequest::<
 			H256,
-			ethers::types::Transaction,
+			AnyRpcTransaction,
 			TronRetryRpcClient<Rpc>,
 		>::new(scope, client.clone());
 		let (get_block_number, get_block_number_cache) =
-			CachingRequest::<(), U64, TronRetryRpcClient<Rpc>>::new(scope, client.clone());
+			CachingRequest::<(), u64, TronRetryRpcClient<Rpc>>::new(scope, client.clone());
 
 		TronCachingClient {
 			retry_client: client,
@@ -217,7 +213,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronCachingClien
 			.await
 	}
 
-	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt> {
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<AnyTransactionReceipt> {
 		self.transaction_receipt
 			.get_or_fetch(
 				Box::pin(move |client| {
@@ -228,7 +224,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronCachingClien
 			.await
 	}
 
-	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>> {
+	async fn block(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		self.block
 			.get_or_fetch(
 				Box::pin(move |client| Box::pin(async move { client.block(block_number).await })),
@@ -237,7 +233,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronCachingClien
 			.await
 	}
 
-	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>> {
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<AnyRpcBlock> {
 		self.block_by_hash
 			.get_or_fetch(
 				Box::pin(move |client| {
@@ -248,10 +244,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronCachingClien
 			.await
 	}
 
-	async fn block_with_txs(
-		&self,
-		block_number: U64,
-	) -> anyhow::Result<Block<ethers::types::Transaction>> {
+	async fn block_with_txs(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		self.block_with_txs
 			.get_or_fetch(
 				Box::pin(move |client| {
@@ -262,7 +255,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronCachingClien
 			.await
 	}
 
-	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<ethers::types::Transaction> {
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<AnyRpcTransaction> {
 		self.get_transaction
 			.get_or_fetch(
 				Box::pin(move |client| {
@@ -273,7 +266,7 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronCachingClien
 			.await
 	}
 
-	async fn get_block_number(&self) -> anyhow::Result<U64> {
+	async fn get_block_number(&self) -> anyhow::Result<u64> {
 		self.get_block_number
 			.get_or_fetch(
 				Box::pin(move |client| Box::pin(async move { client.get_block_number().await })),

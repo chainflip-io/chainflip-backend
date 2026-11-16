@@ -106,8 +106,9 @@ use cf_primitives::{
 use cf_traits::{
 	AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey, Broadcaster,
 	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	FeeMultiplierProvider, FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider,
-	OnBroadcastReady, OnDeposit, OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
+	FailedDepositRecovery, FailedDepositRecoveryOutcome, FeeMultiplierProvider,
+	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
+	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode};
 pub use deregistration_hooks::RuntimeDeregistrationHooks;
@@ -160,8 +161,10 @@ impl cf_traits::WaivedFees for WaivedFees {
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 /// Arbitrum has smaller variability so we are willing to pay at most 1.5x the base fee.
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
-/// we use same multiplier as arb.
-const BSC_PRIORITY_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
+/// BSC's base fee is 0, so the fee per gas we send is the price actually paid, not headroom over
+/// a base fee. It therefore has to match the fee charged to users in
+/// `BscTrackedData::calculate_transaction_fee`, which uses the tracked priority fee as-is.
+const BSC_PRIORITY_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(1, 1);
 
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
@@ -211,9 +214,34 @@ impl_transaction_builder_for_evm_chain!(
 	BscTransactionBuilder,
 	BscApi<EvmEnvironment>,
 	BscChainTracking,
-	// we use priority fee multiplier in bsc's case since base fee is anyways always 0 in bsc
+	// BSC has no base fee, so this multiplier sets the price actually paid per gas.
 	BSC_PRIORITY_FEE_MULTIPLIER
 );
+
+#[cfg(test)]
+mod bsc_fee_tests {
+	use super::*;
+	use cf_chains::bsc::BscTrackedData;
+
+	#[test]
+	fn bsc_fee_paid_per_gas_matches_fee_charged() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			// Below, at and above the minimum fee per gas of 0.1 gwei.
+			for priority_fee in [0u128, 50_000_000, 100_000_000, 1_000_000_000] {
+				let tracked_data = BscTrackedData { priority_fee };
+				pallet_cf_chain_tracking::CurrentChainState::<Runtime, BscInstance>::put(
+					ChainState { block_height: 0, tracked_data },
+				);
+				let mut transaction = cf_chains::evm::Transaction::default();
+				BscTransactionBuilder::refresh_unsigned_data(&mut transaction);
+
+				let charged_per_gas = U256::from(tracked_data.calculate_transaction_fee(1));
+				assert_eq!(transaction.max_fee_per_gas, Some(charged_per_gas));
+				assert_eq!(transaction.max_priority_fee_per_gas, Some(charged_per_gas));
+			}
+		});
+	}
+}
 
 pub struct TronTransactionBuilder;
 impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilder {
@@ -984,6 +1012,54 @@ impl_egress_api_for_anychain!(
 	(Tron, TronIngressEgress)
 );
 
+/// Routes each failed deposit to the ingress-egress instance for its asset's chain.
+pub struct FailedDepositRecoveryRouter;
+
+impl FailedDepositRecovery for FailedDepositRecoveryRouter {
+	type AccountId = AccountId;
+
+	fn route_failed_deposit(
+		broker: &AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<(AccountId, FailedDepositRecoveryOutcome), DispatchError> {
+		match ForeignChain::from(asset) {
+			ForeignChain::Ethereum =>
+				EthereumIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Polkadot =>
+				Err(pallet_cf_ingress_egress::Error::<Runtime, PolkadotInstance>::ChainDeprecated
+					.into()),
+			ForeignChain::Bitcoin =>
+				BitcoinIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Arbitrum =>
+				ArbitrumIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Solana =>
+				SolanaIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Assethub =>
+				AssethubIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Tron => TronIngressEgress::route_failed_deposit(broker, asset, amount),
+			ForeignChain::Bsc => BscIngressEgress::route_failed_deposit(broker, asset, amount),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark(broker: &AccountId) {
+		use cf_traits::RefundAddressRegistry;
+
+		let recovery_account = AccountId::new([0xfe; 32]);
+		for account in [broker, &recovery_account] {
+			frame_system::Pallet::<Runtime>::inc_providers(account);
+		}
+		AccountRoles::register_as_broker(broker).unwrap();
+		AccountRoles::register_as_liquidity_provider(&recovery_account).unwrap();
+		<crate::AssetBalances as RefundAddressRegistry>::register_liquidity_refund_address(
+			&recovery_account,
+			ForeignChainAddress::Eth(Default::default()),
+		);
+		pallet_cf_swapping::BrokerRecoveryAccount::<Runtime>::insert(broker, recovery_account);
+	}
+}
+
 pub struct DepositHandler;
 impl OnDeposit<Ethereum> for DepositHandler {}
 impl OnDeposit<Polkadot> for DepositHandler {}
@@ -1041,17 +1117,14 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
 					.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
 			for (i, output) in outputs.iter().enumerate() {
-				if [
-					ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
-					ScriptPubkey::Taproot(btc_key.current),
-				]
-				.contains(&output.script_pubkey)
-				{
-					Environment::add_bitcoin_change_utxo(
-						output.amount,
-						UtxoId { tx_id, vout: i as u32 },
-						batch_transfer.change_utxo_key,
-					);
+				if let ScriptPubkey::Taproot(pubkey_x) = &output.script_pubkey {
+					if *pubkey_x == btc_key.current || Some(*pubkey_x) == btc_key.previous {
+						Environment::add_bitcoin_change_utxo(
+							output.amount,
+							UtxoId { tx_id, vout: i as u32 },
+							*pubkey_x,
+						);
+					}
 				}
 			}
 		}

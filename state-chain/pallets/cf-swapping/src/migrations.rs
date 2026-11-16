@@ -20,12 +20,20 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 mod remove_flip_to_burn;
+mod remove_maximum_swap_amount;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
 		17,
 		18,
 		remove_flip_to_burn::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		18,
+		19,
+		remove_maximum_swap_amount::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,

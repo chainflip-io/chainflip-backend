@@ -3,7 +3,7 @@ import {
   accountId,
   cfChainsAddressEncodedAddress,
   cfChainsCcmChannelMetadataDecodedCcmAdditionalData,
-  cfChainsRefundParametersChannelRefundParameters,
+  cfChainsRefundParametersChannelRefundParametersEncodedAddress,
   cfPrimitivesBeneficiaryAccountId32,
   cfPrimitivesChainsAssetsAnyAsset,
   cfPrimitivesDcaParameters,
@@ -24,7 +24,7 @@ export const swappingSwapDepositAddressReady = z.object({
   boostFee: z.number(),
   channelOpeningFee: numberOrHex,
   affiliateFees: z.array(cfPrimitivesBeneficiaryAccountId32),
-  refundParameters: cfChainsRefundParametersChannelRefundParameters,
+  refundParameters: cfChainsRefundParametersChannelRefundParametersEncodedAddress,
   dcaParameters: cfPrimitivesDcaParameters.nullish(),
 });
 

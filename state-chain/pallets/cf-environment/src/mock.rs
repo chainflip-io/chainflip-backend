@@ -39,7 +39,7 @@ use cf_primitives::{
 use cf_traits::{
 	elections::{ElectionInstance, ElectionInstancesVoting, VoterContext},
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::key_provider::MockKeyProvider,
+	mocks::{failed_deposit_recovery::MockFailedDepositRecovery, key_provider::MockKeyProvider},
 	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{
@@ -418,6 +418,7 @@ impl pallet_cf_environment::Config for Test {
 	type SolanaBroadcaster = MockSolanaBroadcaster;
 	type TransactionPayments = MockPayment<Self>;
 	type GetTransactionPayments = ();
+	type FailedDepositRecovery = MockFailedDepositRecovery;
 	type WeightInfo = ();
 	type ElectionInstances = MockElectionInstances<Self>;
 }
@@ -520,6 +521,7 @@ pub mod benchmarks_mock {
 		type SolanaBroadcaster = MockSolanaBroadcaster;
 		type TransactionPayments = MockPayment<Self>;
 		type GetTransactionPayments = ();
+		type FailedDepositRecovery = MockFailedDepositRecovery;
 		type WeightInfo = ();
 		type ElectionInstances = MockElectionInstances<Self>;
 	}

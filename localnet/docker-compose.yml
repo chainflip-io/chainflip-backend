@@ -238,6 +238,7 @@ services:
     restart: unless-stopped
     environment:
       - JAVA_OPTS=-Xms4g -Xmx6g # Give the VM more heap size to not run into CPU TIMEOUT problems
+      - JAVA_TOOL_OPTIONS=-Dlogback.configurationFile=/tron/config/logback.xml
     ports:
       - "8090:8090" # TRON HTTP API (wallet)
       - "8091:8091" # TRON HTTP API (solidity)
@@ -273,6 +274,8 @@ services:
     restart: unless-stopped
     depends_on:
       - tron
+    environment:
+      - JAVA_TOOL_OPTIONS=-Dlogback.configurationFile=/tron/config/logback.xml
     volumes:
       - "./init/tron:/tron/config"
       - "/tmp/chainflip/data/tron-peer-data:/tron/output-directory"

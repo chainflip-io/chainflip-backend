@@ -126,6 +126,16 @@ where
 	}
 }
 
+impl<Runtime, Ctx> AsMut<sp_state_machine::TestExternalities<Runtime::Hashing>>
+	for TestExternalities<Runtime, Ctx>
+where
+	Runtime: HasAllPallets + frame_system::Config,
+{
+	fn as_mut(&mut self) -> &mut sp_state_machine::TestExternalities<Runtime::Hashing> {
+		&mut self.ext.0
+	}
+}
+
 impl<Runtime> TestExternalities<Runtime>
 where
 	Runtime: HasAllPallets + frame_system::Config,

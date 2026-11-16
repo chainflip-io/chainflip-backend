@@ -137,6 +137,7 @@ fn test_broker_serialization() {
 				ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 			),
 			bound_fee_withdrawal_address: Some(H160([0x04; 20])),
+			recovery_account: Some(AccountId32::new([3; 32])),
 		},
 	};
 	insta::assert_snapshot!(serde_json::to_string_pretty(&wrapper).unwrap());
