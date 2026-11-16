@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::evm::event::Event;
+use crate::evm::{conversions::IntoSpCore, event::Event};
 use anyhow::{anyhow, Result};
 use codec::Decode;
 use itertools::Itertools;
@@ -28,11 +28,17 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, Chain,
 };
 use cf_primitives::{AssetAmount, ForeignChain};
-use ethers::prelude::*;
 use pallet_cf_ingress_egress::{TransferFailedWitness, VaultDepositWitness};
+use sp_core::H160;
 use state_chain_runtime::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
 
-abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
+alloy_sol_types::sol!(
+	#[sol(all_derives)]
+	Vault,
+	concat!(env!("CF_ETH_CONTRACT_ABI_ROOT"), "/", env!("CF_ETH_CONTRACT_ABI_TAG"), "/IVault.json")
+);
+
+pub use Vault::VaultEvents;
 
 pub fn decode_cf_parameters<RefundAddress, CcmData>(
 	cf_parameters: &[u8],
@@ -141,13 +147,13 @@ fn handle_vault_event<
 	block_query: &impl Debug,
 ) -> Result<Option<EvmVaultContractEvent<T, I>>> {
 	Ok(Some(match event {
-		VaultEvents::SwapNativeFilter(SwapNativeFilter {
-			dst_chain,
-			dst_address,
-			dst_token,
+		VaultEvents::SwapNative(Vault::SwapNative {
+			dstChain: dst_chain,
+			dstAddress: dst_address,
+			dstToken: dst_token,
 			amount,
 			sender: _,
-			cf_parameters,
+			cfParameters: cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ()) =
 				decode_cf_parameters(&cf_parameters[..], block_query)?;
@@ -162,18 +168,19 @@ fn handle_vault_event<
 				vault_swap_parameters
 			)))
 		},
-		VaultEvents::SwapTokenFilter(SwapTokenFilter {
-			dst_chain,
-			dst_address,
-			dst_token,
-			src_token,
+		VaultEvents::SwapToken(Vault::SwapToken {
+			dstChain: dst_chain,
+			dstAddress: dst_address,
+			dstToken: dst_token,
+			srcToken: src_token,
 			amount,
 			sender: _,
-			cf_parameters,
+			cfParameters: cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ()) =
 				decode_cf_parameters(&cf_parameters[..], block_query)?;
 
+			let src_token = src_token.into_sp_core();
 			let asset = supported_assets
 				.get(&src_token)
 				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
@@ -188,15 +195,15 @@ fn handle_vault_event<
 				vault_swap_parameters
 			)))
 		},
-		VaultEvents::XcallNativeFilter(XcallNativeFilter {
-			dst_chain,
-			dst_address,
-			dst_token,
+		VaultEvents::XCallNative(Vault::XCallNative {
+			dstChain: dst_chain,
+			dstAddress: dst_address,
+			dstToken: dst_token,
 			amount,
 			sender,
 			message,
-			gas_amount,
-			cf_parameters,
+			gasAmount: gas_amount,
+			cfParameters: cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ccm_additional_data) =
 				decode_cf_parameters(&cf_parameters[..], block_query)?;
@@ -209,7 +216,7 @@ fn handle_vault_event<
 				Some(CcmDepositMetadata {
 					source_chain: <T::TargetChain as Get<ForeignChain>>::get(),
 					source_address: Some(T::TargetChain::chain_account_to_foreign_chain_address(
-						sender
+						sender.into_sp_core()
 					)),
 					channel_metadata: CcmChannelMetadata {
 						message: message
@@ -224,20 +231,21 @@ fn handle_vault_event<
 				vault_swap_parameters
 			)))
 		},
-		VaultEvents::XcallTokenFilter(XcallTokenFilter {
-			dst_chain,
-			dst_address,
-			dst_token,
-			src_token,
+		VaultEvents::XCallToken(Vault::XCallToken {
+			dstChain: dst_chain,
+			dstAddress: dst_address,
+			dstToken: dst_token,
+			srcToken: src_token,
 			amount,
 			sender,
 			message,
-			gas_amount,
-			cf_parameters,
+			gasAmount: gas_amount,
+			cfParameters: cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ccm_additional_data) =
 				decode_cf_parameters(&cf_parameters[..], block_query)?;
 
+			let src_token = src_token.into_sp_core();
 			let asset = supported_assets
 				.get(&src_token)
 				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
@@ -250,7 +258,7 @@ fn handle_vault_event<
 				Some(CcmDepositMetadata {
 					source_chain: <T::TargetChain as Get<ForeignChain>>::get(),
 					source_address: Some(T::TargetChain::chain_account_to_foreign_chain_address(
-						sender
+						sender.into_sp_core()
 					)),
 					channel_metadata: CcmChannelMetadata {
 						message: message
@@ -265,20 +273,19 @@ fn handle_vault_event<
 				vault_swap_parameters
 			)))
 		},
-		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
-			recipient,
-			amount,
-		}) => EvmVaultContractEvent::TransferFailed(TransferFailedWitness {
-			asset: <T::TargetChain as Chain>::GAS_ASSET,
-			amount: try_into_primitive::<_, AssetAmount>(amount)?,
-			destination_address: recipient,
-		}),
-		VaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
+		VaultEvents::TransferNativeFailed(Vault::TransferNativeFailed { recipient, amount }) =>
+			EvmVaultContractEvent::TransferFailed(TransferFailedWitness {
+				asset: <T::TargetChain as Chain>::GAS_ASSET,
+				amount: try_into_primitive::<_, AssetAmount>(amount)?,
+				destination_address: recipient.into_sp_core(),
+			}),
+		VaultEvents::TransferTokenFailed(Vault::TransferTokenFailed {
 			recipient,
 			amount,
 			token,
 			reason: _,
 		}) => {
+			let token = token.into_sp_core();
 			let asset = supported_assets
 				.get(&token)
 				.ok_or_else(|| anyhow!("Asset {token:?} not found"))?;
@@ -286,7 +293,7 @@ fn handle_vault_event<
 			EvmVaultContractEvent::TransferFailed(TransferFailedWitness {
 				asset: *asset,
 				amount: try_into_primitive(amount)?,
-				destination_address: recipient,
+				destination_address: recipient.into_sp_core(),
 			})
 		},
 		_ => return Ok(None),
@@ -298,6 +305,8 @@ mod tests {
 	use state_chain_runtime::{EthereumInstance, Runtime};
 
 	use super::*;
+	use crate::evm::conversions::IntoAlloy;
+	use sp_core::U256;
 
 	fn make_event(event_parameters: VaultEvents) -> Event<VaultEvents> {
 		Event { tx_hash: H256::default(), log_index: U256::zero(), event_parameters }
@@ -308,19 +317,19 @@ mod tests {
 		let supported_assets: HashMap<H160, <cf_chains::Ethereum as Chain>::ChainAsset> =
 			HashMap::new();
 
-		let bad_event = make_event(VaultEvents::SwapNativeFilter(SwapNativeFilter {
-			dst_chain: 1u32,
-			dst_address: ethers::types::Bytes::from(vec![0u8; 20]),
-			dst_token: 1u32,
-			amount: U256::from(100),
-			sender: H160::default(),
-			cf_parameters: ethers::types::Bytes::from(vec![0xFFu8; 4]), // garbage
+		let bad_event = make_event(VaultEvents::SwapNative(Vault::SwapNative {
+			dstChain: 1u32,
+			dstAddress: vec![0u8; 20].into(),
+			dstToken: 1u32,
+			amount: U256::from(100).into_alloy(),
+			sender: H160::default().into_alloy(),
+			cfParameters: vec![0xFFu8; 4].into(), // garbage
 		}));
 
 		let good_event =
-			make_event(VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
-				recipient: H160::from([1u8; 20]),
-				amount: U256::from(100),
+			make_event(VaultEvents::TransferNativeFailed(Vault::TransferNativeFailed {
+				recipient: H160::from([1u8; 20]).into_alloy(),
+				amount: U256::from(100).into_alloy(),
 			}));
 
 		let result = handle_vault_events::<Runtime, EthereumInstance>(

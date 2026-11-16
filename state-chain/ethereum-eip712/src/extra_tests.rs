@@ -14,13 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-	build_eip712_data::{build_eip712_typed_data, to_ethers_typed_data},
+	build_eip712_data::{build_eip712_typed_data, to_json_typed_data},
 	eip712::{Eip712, TypedData},
 	*,
 };
 
 use core::marker::PhantomData;
-use ethers_core::types::{H256, U128, U256};
+use ethabi::ethereum_types::{H256, U128, U256};
 use scale_info::prelude::string::String;
 use serde::Deserialize;
 use std::{
@@ -235,10 +235,10 @@ fn hash_with_ts_lib(
 	library: &str,
 	js_runtime: &JsRuntime,
 ) -> HasherResponse {
-	let ethers_typed_data =
-		to_ethers_typed_data(typed_data.clone()).expect("Failed to convert to ethers typed data");
-	let typed_data_json =
-		serde_json::to_string(&ethers_typed_data).expect("Failed to serialize typed data to JSON");
+	let typed_data_json = serde_json::to_string(
+		&to_json_typed_data(typed_data.clone()).expect("Failed to convert to JSON typed data"),
+	)
+	.expect("Failed to serialize typed data to JSON");
 
 	let mut child = match js_runtime {
 		JsRuntime::CompiledBinary(path) => Command::new(path)

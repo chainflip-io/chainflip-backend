@@ -50,16 +50,17 @@ frame-system = { workspace = true, default-features = true }
 sc-rpc-api = { workspace = true, default-features = true }
 sc-transaction-pool-api = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
+sp-crypto-hashing = { workspace = true, default-features = true }
 sp-rpc = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-version = { workspace = true, default-features = true }
 substrate-frame-rpc-system = { workspace = true }
 
 # Used only with feature client-mocks
-mockall = { workspace = true, features = ["nightly"], optional = true }
+mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
-mockall = { workspace = true, features = ["nightly"] }
+mockall = { workspace = true }
 pallet-cf-witnesser = { workspace = true, default-features = true }
 
 [features]

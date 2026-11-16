@@ -156,4 +156,10 @@ pub trait BrokerRpcApi {
 	) -> RpcResult<AccountCreationDepositAddress>;
 	#[method(name = "bind_fee_withdrawal_address", aliases = ["broker_bindFeeWithdrawalAddress"])]
 	async fn bind_fee_withdrawal_address(&self, address: EthereumAddress) -> RpcResult<H256>;
+	/// Links the LP account that receives the broker's failed deposits. Can only be set once.
+	#[method(name = "link_recovery_account", aliases = ["broker_linkRecoveryAccount"])]
+	async fn link_recovery_account(&self, recovery_account: AccountId32) -> RpcResult<H256>;
+	/// The LP account linked to receive the broker's failed deposits, if any.
+	#[method(name = "recovery_account", aliases = ["broker_recoveryAccount"])]
+	async fn recovery_account(&self) -> RpcResult<Option<AccountId32>>;
 }

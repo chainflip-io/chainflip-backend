@@ -17,13 +17,12 @@
 use super::*;
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use ethabi::Token;
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'allBatch'
 /// function.
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub struct AllBatch {
 	/// The list of all inbound deposits that are to be fetched that need to deploy new deposit
 	/// contracts.

@@ -1159,6 +1159,55 @@ mod oracle_swaps {
 	}
 
 	#[test]
+	fn oracle_slippage_compounds_opposite_sign_legs() {
+		// 1 BTC is sold for $50k (-50% vs the $100k oracle), then the $50k buys 18.75 ETH
+		// (+50% vs the 12.5 ETH oracle). Summing the legs gives 0%, but the route only returns
+		// 0.5 * 1.5 = 75% of the oracle value, i.e. -25%.
+		const INPUT_AMOUNT: AssetAmount = 100_000_000;
+		const STABLE_AMOUNT: AssetAmount = 50_000_000_000;
+		const OUTPUT_AMOUNT: AssetAmount = 18_750_000_000_000_000_000;
+
+		let swap_state = |max_oracle_price_slippage| SwapState::<Test> {
+			swap: Swap::new(
+				0.into(),
+				0.into(),
+				Asset::Btc,
+				Asset::Eth,
+				INPUT_AMOUNT,
+				Some(SwapRefundParameters {
+					refund_block: 10,
+					price_limits: PriceLimits {
+						min_price: Price::zero(),
+						max_oracle_price_slippage,
+					},
+				}),
+				Default::default(),
+			),
+			network_fee_taken: Some(0),
+			broker_fee_taken: Some(0),
+			stable_amount: Some(STABLE_AMOUNT),
+			final_output: Some(OUTPUT_AMOUNT),
+			oracle_delta: None,
+			oracle_delta_ex_fees: None,
+		};
+
+		new_test_ext().execute_with(|| {
+			MockPriceFeedApi::set_price(Asset::Btc, Some(Price::from_usd(Asset::Btc, 100_000)));
+			MockPriceFeedApi::set_price(Asset::Eth, Some(Price::from_usd(Asset::Eth, 4_000)));
+			MockPriceFeedApi::set_price(Asset::Usdc, Some(Price::from_usd(Asset::Usdc, 1)));
+
+			assert_err!(
+				Pallet::<Test>::check_swap_price_violation(&swap_state(Some(100))),
+				SwapFailureReason::OraclePriceSlippageExceeded,
+			);
+			assert_eq!(
+				Pallet::<Test>::check_swap_price_violation(&swap_state(Some(2_500))),
+				Ok(Some(SignedBasisPoints(-2_500))),
+			);
+		});
+	}
+
+	#[test]
 	fn will_use_default_oracle_price_protection() {
 		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		const INPUT_ASSET: Asset = Asset::Eth;

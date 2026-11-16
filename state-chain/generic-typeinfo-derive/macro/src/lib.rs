@@ -66,7 +66,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-	Data, DataEnum, DataStruct, DeriveInput, Expr, Fields, Ident, ImplGenerics, TypeGenerics,
+	Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Field, Fields, Ident, ImplGenerics,
+	LitInt, TypeGenerics,
 };
 
 #[proc_macro_derive(
@@ -92,7 +93,7 @@ pub fn derive(item: TokenStream) -> TokenStream {
 fn derive_fields(d: Fields, name_for_expansion: Expr) -> TokenStream2 {
 	match d {
 		syn::Fields::Named(fields_named) => {
-			let fields: Vec<TokenStream2> = fields_named.named.iter().map(|field| {
+			let fields: Vec<TokenStream2> = encoded_fields(fields_named.named.iter()).map(|field| {
 				let ty = field.clone().ty;
 				let typename = match field.attrs.iter().find(|attr| attr.path().is_ident("replace_typename_with")){
 					Some(attr) => attr.parse_args::<Ident>().expect("replace_typename_with requires an argument").to_string(),
@@ -112,15 +113,13 @@ fn derive_fields(d: Fields, name_for_expansion: Expr) -> TokenStream2 {
 			quote!(scale_info::build::Fields::named() #( #fields )* )
 		},
 		syn::Fields::Unnamed(fields_unnamed) => {
-			let fields: Vec<TokenStream2> = fields_unnamed
-				.unnamed
-				.iter()
+			let fields: Vec<TokenStream2> = encoded_fields(fields_unnamed.unnamed.iter())
 				.map(|field| {
 					let ty = field.clone().ty;
 					let typename = clean_type_string(&quote!(#ty).to_string());
 					if field.attrs.iter().any(|attr| attr.path().is_ident("skip_name_expansion")){
 						quote!(.field(|f|
-							f.ty::<#ty>().type_name(::core::stringify!(#typename))
+							f.ty::<#ty>().type_name(#typename)
 						))
 					} else {
 						quote!(.field(|f| {
@@ -161,11 +160,26 @@ fn derive_enum(
 	ty_generics: TypeGenerics,
 	name_for_expansion: Expr,
 ) -> TokenStream2 {
+	let mut indices = Vec::new();
 	let variants: Vec<_> = d
 		.variants
 		.into_iter()
+		// Skipped variants aren't encodable, and don't count towards the position of later ones.
+		.filter(|variant| !has_codec_key(&variant.attrs, "skip"))
 		.enumerate()
-		.map(|(index, variant)| {
+		.map(|(position, variant)| {
+			// Must match the index used by the `Encode`/`Decode` derives, otherwise the metadata
+			// disagrees with the actual encoding.
+			let index_expr = match (codec_index(&variant.attrs), &variant.discriminant) {
+				(Some(explicit), _) => quote!(#explicit),
+				(None, Some((_, discriminant))) => quote!((#discriminant)),
+				(None, None) => {
+					let position = position as u8;
+					quote!(#position)
+				},
+			};
+			indices.push((variant.ident.to_string(), index_expr.clone()));
+			let index = quote!(#index_expr as u8);
 			let name = variant.ident;
 			let fields = derive_fields(variant.fields, name_for_expansion.clone());
 			let typename = match variant.attrs.iter().find(|attr| attr.path().is_ident("replace_typename_with")){
@@ -174,25 +188,111 @@ fn derive_enum(
 			};
 			if variant.attrs.iter().any(|attr| attr.path().is_ident("skip_name_expansion")){
 				quote!(.variant(#typename, |v|{
-					v.index(#index as u8)
+					v.index(#index)
 					.fields(#fields)}))
 			} else {
 				quote!(.variant(scale_info::prelude::format!("{}{}", #typename, #name_for_expansion).leak() as &'static str, |v|{
-					v.index(#index as u8)
+					v.index(#index)
 					.fields(#fields)}))
 			}
 		})
 		.collect();
-	quote!(impl #impl_generics TypeInfo for #ident #ty_generics {
-		type Identity = Self;
-		fn type_info() -> scale_info::Type {
-			let full_pathname = scale_info::prelude::format!("{}{}", ::core::stringify!(#ident), #name_for_expansion).leak();
-			scale_info::Type::builder()
-			.path(scale_info::Path::new(full_pathname, ::core::module_path!()))
-			.variant(
-				scale_info::build::Variants::new() #( #variants )* )
+	let index_checks = index_checks(&ident, indices);
+	quote!(
+		#index_checks
+		impl #impl_generics TypeInfo for #ident #ty_generics {
+			type Identity = Self;
+			fn type_info() -> scale_info::Type {
+				let full_pathname = scale_info::prelude::format!("{}{}", ::core::stringify!(#ident), #name_for_expansion).leak();
+				scale_info::Type::builder()
+				.path(scale_info::Path::new(full_pathname, ::core::module_path!()))
+				.variant(
+					scale_info::build::Variants::new() #( #variants )* )
+			}
 		}
+	)
+}
+
+/// Compile-time checks that every variant index fits in a `u8` and is unique, mirroring the
+/// `Encode`/`Decode` derives. These have to be const assertions because discriminants can be
+/// arbitrary const expressions.
+fn index_checks(ident: &Ident, indices: Vec<(String, TokenStream2)>) -> TokenStream2 {
+	let range_checks = indices.iter().enumerate().map(|(i, (name, _))| {
+		let msg = format!("Variant `{ident}::{name}` has an index outside the range 0..=255.");
+		quote!(::core::assert!(
+			::core::matches!(__GENERIC_TYPEINFO_INDICES[#i], 0..=255),
+			#msg
+		);)
+	});
+	let duplicate_checks = indices.iter().enumerate().flat_map(|(i, (a, _))| {
+		indices.iter().enumerate().skip(i + 1).map(move |(j, (b, _))| {
+			let msg = format!("Variants `{ident}::{a}` and `{ident}::{b}` have the same index.");
+			quote!(::core::assert!(
+				__GENERIC_TYPEINFO_INDICES[#i] != __GENERIC_TYPEINFO_INDICES[#j],
+				#msg
+			);)
+		})
+	});
+	let len = indices.len();
+	let indices = indices.iter().map(|(_, index)| quote!(#index as i128));
+	quote!(
+		#[automatically_derived]
+		const _: () = {
+			// Wide enough that no discriminant type is truncated before the range check.
+			const __GENERIC_TYPEINFO_INDICES: [i128; #len] = [#( #indices ),*];
+			#( #range_checks )*
+			#( #duplicate_checks )*
+		};
+	)
+}
+
+/// The value of a `#[codec(index = N)]` attribute, if present.
+fn codec_index(attrs: &[Attribute]) -> Option<u8> {
+	let mut index = None;
+	for attr in attrs.iter().filter(|attr| attr.path().is_ident("codec")) {
+		attr.parse_nested_meta(|meta| {
+			if meta.path.is_ident("index") {
+				index = Some(meta.value()?.parse::<LitInt>()?.base10_parse::<u8>()?);
+			} else if meta.input.peek(syn::Token![=]) {
+				// Skip the values of other codec attributes.
+				meta.value()?.parse::<Expr>()?;
+			}
+			Ok(())
+		})
+		.expect("Failed to parse codec attribute");
+	}
+	index
+}
+
+/// The fields that are actually encoded. Attributes that change a field's encoded type are rejected
+/// rather than silently producing metadata that disagrees with the encoding.
+fn encoded_fields<'a>(fields: impl Iterator<Item = &'a Field>) -> impl Iterator<Item = &'a Field> {
+	fields.filter(|field| {
+		for unsupported in ["compact", "encoded_as"] {
+			if has_codec_key(&field.attrs, unsupported) {
+				panic!("#[codec({unsupported})] is not supported by #[derive(GenericTypeInfo)]");
+			}
+		}
+		!has_codec_key(&field.attrs, "skip")
 	})
+}
+
+/// Whether a `#[codec(key)]` or `#[codec(key = ...)]` attribute is present.
+fn has_codec_key(attrs: &[Attribute], key: &str) -> bool {
+	let mut found = false;
+	for attr in attrs.iter().filter(|attr| attr.path().is_ident("codec")) {
+		attr.parse_nested_meta(|meta| {
+			if meta.path.is_ident(key) {
+				found = true;
+			}
+			if meta.input.peek(syn::Token![=]) {
+				meta.value()?.parse::<Expr>()?;
+			}
+			Ok(())
+		})
+		.expect("Failed to parse codec attribute");
+	}
+	found
 }
 
 // This is taken directly from the Substrate TypeInfo library

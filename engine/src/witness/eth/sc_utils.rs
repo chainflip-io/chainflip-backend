@@ -13,9 +13,20 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use ethers::prelude::abigen;
+alloy_sol_types::sol!(
+	#[sol(all_derives)]
+	ScUtils,
+	concat!(
+		env!("CF_ETH_CONTRACT_ABI_ROOT"),
+		"/",
+		env!("CF_ETH_CONTRACT_ABI_TAG"),
+		"/IScUtils.json"
+	)
+);
 
-abigen!(ScUtils, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IScUtils.json");
+pub use ScUtils::{
+	CallSc, DepositAndScCall, DepositToScGatewayAndScCall, DepositToVaultAndScCall, ScUtilsEvents,
+};
 
 #[cfg(test)]
 mod tests {

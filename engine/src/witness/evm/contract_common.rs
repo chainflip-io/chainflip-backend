@@ -26,6 +26,7 @@ use pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes;
 use std::collections::{HashMap, HashSet};
 
 use super::vault::VaultEvents;
+use crate::evm::conversions::IntoSpCore;
 use anyhow::{ensure, Result};
 use sp_core::{H160, H256};
 
@@ -114,8 +115,8 @@ pub async fn witness_deposit_channels_generic<
 				events
 					.into_iter()
 					.filter_map(|event| match event.event_parameters {
-						VaultEvents::FetchedNativeFilter(inner_event)
-							if eth_addresses.contains(&inner_event.sender) =>
+						VaultEvents::FetchedNative(inner_event)
+							if eth_addresses.contains(&inner_event.sender.into_sp_core()) =>
 							Some((inner_event, event.tx_hash)),
 						_ => None,
 					})

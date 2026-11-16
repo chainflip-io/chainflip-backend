@@ -17,7 +17,6 @@ import type {
   AccountId32Like,
   FixedBytes,
   Percent,
-  FixedU128,
   Result,
 } from 'dedot/codecs';
 import type {
@@ -36,6 +35,7 @@ import type {
   PalletCfEnvironmentSubmitRuntimeCallSignatureData,
   StateChainRuntimeChainflipElectionsAllElectionInstancesVotes,
   PalletCfEnvironmentPalletConfigUpdate,
+  PalletCfEnvironmentFailedDepositRecoveryRequest,
   PalletCfFlipPalletConfigUpdate,
   PalletCfFundingRedemptionAmount,
   PalletCfFundingEthereumDepositAndSCCall,
@@ -54,6 +54,7 @@ import type {
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
   CfChainsChainState,
+  PalletCfChainTrackingPalletConfigUpdate,
   CfChainsChainStatePolkadot,
   CfChainsChainStateBitcoin,
   CfChainsEvmAggKey,
@@ -154,7 +155,7 @@ import type {
   PalletCfElectionsInitialState004,
   StateChainRuntimeChainflipWitnessingEthereumElectionsElectionTypes,
   PalletCfElectionsVoteStorageAuthorityVote004,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
   PalletCfElectionsInitialState005,
   CfChainsWitnessPeriodBlockWitnessRange,
   StateChainRuntimeChainflipWitnessingArbitrumElectionsElectionTypes,
@@ -178,12 +179,12 @@ import type {
   PalletCfIngressEgressPalletConfigUpdateBsc,
   PalletCfIngressEgressVaultDepositWitnessBsc,
   PalletCfElectionsVoteStorageAuthorityVote008,
-  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+  PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
   PalletCfElectionsInitialState007,
   CfChainsWitnessPeriodBlockWitnessRangeBsc,
   StateChainRuntimeChainflipWitnessingBscElectionsElectionTypes,
   PalletCfElectionsVoteStorageAuthorityVote006,
-  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+  PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
   PalletCfElectionsInitialState008,
   CfChainsWitnessPeriodBlockWitnessRangeAssethub,
   StateChainRuntimeChainflipWitnessingAssethubElectionsElectionTypes,
@@ -824,6 +825,36 @@ export interface ChainTx<
     >;
 
     /**
+     * Pays out failed deposits to the recovery accounts of the brokers they are attributed
+     * to: an egress to the recovery account's refund address if it has one and the amount
+     * covers the egress fee, otherwise a credit to its free balance.
+     *
+     * Each deposit is recovered independently. One that fails, e.g. because its broker has
+     * no recovery account, doesn't affect the others, and can be retried.
+     *
+     * Recoveries are not recorded, so Governance must not resubmit a deposit that has been
+     * recovered. The batch is rejected if it contains the same deposit twice.
+     *
+     * Requires Governance.
+     *
+     * @param {Array<PalletCfEnvironmentFailedDepositRecoveryRequest>} requests
+     **/
+    recoverFailedDeposits: GenericTxCall<
+      (
+        requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest>,
+      ) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Environment';
+          palletCall: {
+            name: 'RecoverFailedDeposits';
+            params: { requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -1007,7 +1038,7 @@ export interface ChainTx<
      * - If the source account has a bound redeem address, the destination account must also
      * have the same bound redeem address.
      * - If the source account is currently bidding, the destination account must also be
-     * bidding.
+     * bidding. Bidding accounts cannot rebalance at all while a rotation is in progress.
      * - If the funds to be transferred are associated with a restricted address, the
      * restrictions will be transferred to the destination account.
      *
@@ -1038,7 +1069,7 @@ export interface ChainTx<
 
     /**
      * Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
-     * process the deposit since those two are independant actions.
+     * process the deposit since those two are independent actions.
      *
      * @param {PalletCfFundingEthereumDepositAndSCCall} depositAndCall
      * @param {H160} caller
@@ -1782,14 +1813,16 @@ export interface ChainTx<
   session: {
     /**
      * Sets the session key(s) of the function caller to `keys`.
+     *
      * Allows an account to set its session key prior to becoming a validator.
      * This doesn't take effect until the next session.
      *
-     * The dispatch origin of this function must be signed.
-     *
-     * ## Complexity
-     * - `O(1)`. Actual cost depends on the number of length of `T::Keys::key_ids()` which is
-     * fixed.
+     * - `origin`: The dispatch origin of this function must be signed.
+     * - `keys`: The new session keys to set. These are the public keys of all sessions keys
+     * setup in the runtime.
+     * - `proof`: The proof that `origin` has access to the private keys of `keys`. See
+     * [`impl_opaque_keys`](sp_runtime::impl_opaque_keys) for more information about the
+     * proof format.
      *
      * @param {StateChainRuntimeOpaqueSessionKeys} keys
      * @param {BytesLike} proof
@@ -1819,10 +1852,6 @@ export interface ChainTx<
      * convertible to a validator ID using the chain's typical addressing system (this usually
      * means being a controller account) or directly convertible into a validator ID (which
      * usually means being a stash account).
-     *
-     * ## Complexity
-     * - `O(1)` in number of key types. Actual cost depends on the number of length of
-     * `T::Keys::key_ids()` which is fixed.
      *
      **/
     purgeKeys: GenericTxCall<
@@ -2293,19 +2322,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'EthereumChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -2340,19 +2369,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'PolkadotChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -2387,19 +2416,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'BitcoinChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -4166,6 +4195,26 @@ export interface ChainTx<
     >;
 
     /**
+     * Links the LP account that receives the broker's failed deposits.
+     *
+     * The link can only be set once.
+     *
+     * @param {AccountId32Like} recoveryAccount
+     **/
+    linkRecoveryAccount: GenericTxCall<
+      (recoveryAccount: AccountId32Like) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Swapping';
+          palletCall: {
+            name: 'LinkRecoveryAccount';
+            params: { recoveryAccount: AccountId32Like };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;
@@ -5249,19 +5298,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'ArbitrumChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -6729,19 +6778,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'SolanaChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -6844,19 +6893,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'AssethubChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -8728,18 +8777,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'ArbitrumElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersArbitrum;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteArbitrum;
             };
           };
         },
@@ -9060,19 +9109,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'TronChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -9888,19 +9937,19 @@ export interface ChainTx<
     >;
 
     /**
-     * Update the fee multiplier with the provided value
+     * Apply a list of configuration updates to the pallet.
      *
      * Requires Governance.
      *
-     * @param {FixedU128} newFeeMultiplier
+     * @param {Array<PalletCfChainTrackingPalletConfigUpdate>} updates
      **/
-    updateFeeMultiplier: GenericTxCall<
-      (newFeeMultiplier: FixedU128) => ChainSubmittableExtrinsic<
+    updatePalletConfig: GenericTxCall<
+      (updates: Array<PalletCfChainTrackingPalletConfigUpdate>) => ChainSubmittableExtrinsic<
         {
           pallet: 'BscChainTracking';
           palletCall: {
-            name: 'UpdateFeeMultiplier';
-            params: { newFeeMultiplier: FixedU128 };
+            name: 'UpdatePalletConfig';
+            params: { updates: Array<PalletCfChainTrackingPalletConfigUpdate> };
           };
         },
         ChainKnownTypes
@@ -10392,18 +10441,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'BscElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataNonemptyContinuousHeadersBsc;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc;
             };
           };
         },
@@ -10735,18 +10784,18 @@ export interface ChainTx<
 
     /**
      *
-     * @param {PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub} sharedData
+     * @param {PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub} sharedData
      **/
     provideSharedData: GenericTxCall<
       (
-        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub,
+        sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub,
       ) => ChainSubmittableExtrinsic<
         {
           pallet: 'AssethubElections';
           palletCall: {
             name: 'ProvideSharedData';
             params: {
-              sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataNonemptyContinuousHeadersAssethub;
+              sharedData: PalletCfElectionsVoteStorageCompositeTuple5ImplsCompositeSharedDataBhwVoteAssethub;
             };
           };
         },

@@ -59,7 +59,7 @@ use whitelist::*;
 pub const STORAGE_VERSION_U16: u16 = 3;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub enum ExternalOwner {
 	Vault,
 	AggKey,
@@ -603,35 +603,35 @@ impl<T: Config> Pallet<T> {
 		}
 
 		for chain in ForeignChain::iter() {
-			WithheldAssets::<T>::mutate(chain.gas_asset(), |total_withheld| {
-				let mut owed_assets =
-					Liabilities::<T>::take(chain.gas_asset()).into_iter().collect::<Vec<_>>();
-				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
+			let mut available_withheld = WithheldAssets::<T>::take(chain.gas_asset());
+			let mut owed_assets =
+				Liabilities::<T>::take(chain.gas_asset()).into_iter().collect::<Vec<_>>();
+			owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
 
-				for (destination, amount) in owed_assets.iter_mut() {
-					debug_assert!(*amount > 0);
-					let _ = Self::reconcile(chain, destination, amount, total_withheld);
-					if *total_withheld == 0 {
-						break;
-					}
+			for (destination, amount) in owed_assets.iter_mut() {
+				debug_assert!(*amount > 0);
+				let _ = Self::reconcile(chain, destination, amount, &mut available_withheld);
+				if available_withheld == 0 {
+					break;
 				}
+			}
 
-				owed_assets.retain(|(_, amount)| *amount > 0);
-				if !owed_assets.is_empty() {
-					Self::deposit_event(Event::VaultDeficitDetected {
-						chain,
-						amount_owed: owed_assets
-							.iter()
-							.map(|(_, amount)| amount)
-							.sum::<AssetAmount>(),
-						available: *total_withheld,
-					});
-					Liabilities::<T>::insert(
-						chain.gas_asset(),
-						owed_assets.into_iter().collect::<BTreeMap<_, _>>(),
-					);
-				}
+			WithheldAssets::<T>::mutate(chain.gas_asset(), |withheld| {
+				withheld.saturating_accrue(available_withheld)
 			});
+
+			owed_assets.retain(|(_, amount)| *amount > 0);
+			if !owed_assets.is_empty() {
+				Self::deposit_event(Event::VaultDeficitDetected {
+					chain,
+					amount_owed: owed_assets.iter().map(|(_, amount)| amount).sum::<AssetAmount>(),
+					available: available_withheld,
+				});
+				Liabilities::<T>::insert(
+					chain.gas_asset(),
+					owed_assets.into_iter().collect::<BTreeMap<_, _>>(),
+				);
+			}
 		}
 	}
 
@@ -868,7 +868,7 @@ impl<T: Config> RefundAddressRegistry for Pallet<T> {
 	Clone,
 	PartialEq,
 	Eq,
-	RuntimeDebug,
+	Debug,
 	Serialize,
 	Deserialize,
 )]

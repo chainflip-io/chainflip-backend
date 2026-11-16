@@ -598,9 +598,6 @@ async fn should_report_on_invalid_zkp_in_coeff_comm() {
 // `validate_commitments` with the malicious party attributed - it must NOT
 // finalise an internally-inconsistent key (over-long) or panic on an
 // out-of-bounds index (too-short / empty).
-//
-// See `frost-security-review.md` finding #1: the per-ceremony element-count
-// check removed by PR #3248 was replaced only by a global byte-size cap.
 async fn keygen_with_wrong_commitment_length_is_attributed(coeff_count: usize) {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 

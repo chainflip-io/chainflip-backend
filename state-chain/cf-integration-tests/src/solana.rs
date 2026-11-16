@@ -43,7 +43,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AuthorityCount, Beneficiary, ForeignChain, SwapRequestId, FLIPPERINOS_PER_FLIP,
 };
-use cf_test_utilities::{assert_events_match, assert_has_matching_event};
+use cf_test_utilities::{assert_events_match, assert_has_matching_event, assert_no_matching_event};
 use cf_traits::EgressApi;
 use cf_utilities::{assert_matches, bs58_array};
 use codec::Encode;
@@ -1000,6 +1000,29 @@ fn solana_resigning() {
 		});
 }
 
+/// Votes on the most recently created election, which must be an egress witnessing election.
+fn vote_for_latest_egress_election(transaction_successful: bool) {
+	let election_id = SolanaElections::with_election_identifiers(|election_identifiers| {
+		Ok(election_identifiers.last().cloned().unwrap())
+	})
+	.unwrap();
+
+	let vote: SolanaElectionVote = BTreeMap::from_iter([(
+		election_id,
+		AuthorityVote::Vote(CompositeVote::D(TransactionSuccessDetails {
+			tx_fee: 1_000,
+			transaction_successful,
+		})),
+	)])
+	.try_into()
+	.unwrap();
+
+	for v in Validator::current_authorities() {
+		assert_ok!(SolanaElections::stop_ignoring_my_votes(RuntimeOrigin::signed(v.clone())));
+		assert_ok!(SolanaElections::vote(RuntimeOrigin::signed(v), Box::new(vote.clone())));
+	}
+}
+
 #[test]
 fn solana_ccm_execution_error_can_trigger_fallback() {
 	const EPOCH_BLOCKS: u32 = 100;
@@ -1059,31 +1082,8 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			assert_eq!(pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().len(), 1);
 			let ccm_broadcast_id = pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().into_iter().next().unwrap();
 
-			// Get the election identifier of the Solana egress.
-			let election_id = SolanaElections::with_election_identifiers(
-				|election_identifiers| {
-					Ok(election_identifiers.last().cloned().unwrap())
-				},
-			).unwrap();
-
-			// Submit vote to witness: transaction success, but execution failure
-			let vote: SolanaElectionVote = BTreeMap::from_iter([(election_id,
-				AuthorityVote::Vote(CompositeVote::D(TransactionSuccessDetails {
-					tx_fee: 1_000,
-					transaction_successful: false,
-				}))
-			)]).try_into().unwrap();
-
-			for v in Validator::current_authorities() {
-				assert_ok!(SolanaElections::stop_ignoring_my_votes(
-					RuntimeOrigin::signed(v.clone()),
-				));
-
-				assert_ok!(SolanaElections::vote(
-					RuntimeOrigin::signed(v),
-					Box::new(vote.clone())
-				));
-			}
+			// Witness: transaction included, but execution failure
+			vote_for_latest_egress_election(false);
 
 			// Egress queue should be empty
 			assert_eq!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::decode_len(), Some(0));
@@ -1105,6 +1105,72 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			assert!(!pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::contains_key(ccm_broadcast_id));
 			assert!(!pallet_cf_broadcast::TransactionOutIdToBroadcastId::<Runtime, SolanaInstance>::iter_values().any(|(broadcast_id, _)|broadcast_id == ccm_broadcast_id));
 			assert!(!pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::contains_key(ccm_broadcast_id));
+		});
+}
+
+#[test]
+fn solana_transfer_execution_error_aborts_broadcast() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			setup_sol_environments();
+
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_ok!(RuntimeCall::SolanaVault(
+				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
+			)
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+			testnet.move_to_the_next_epoch();
+
+			assert_ok!(SolanaIngressEgress::schedule_egress(
+				SolAsset::Sol,
+				1_000_000_000,
+				SolAddress([0xcf; 32]),
+				None,
+			));
+			testnet.set_auto_witness_broadcasts(false);
+			testnet.move_forward_blocks(5);
+
+			let broadcast_id =
+				pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get()
+					.into_iter()
+					.next()
+					.expect("transfer broadcast should be pending");
+
+			vote_for_latest_egress_election(false);
+			SolanaElections::on_finalize(System::block_number() + 1);
+
+			assert!(!pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get()
+				.contains(&broadcast_id));
+			assert!(pallet_cf_broadcast::AbortedBroadcasts::<Runtime, SolanaInstance>::get()
+				.contains(&broadcast_id));
+			// Kept for manual recovery.
+			assert!(pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::contains_key(
+				broadcast_id
+			));
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::SolanaBroadcaster(pallet_cf_broadcast::Event::BroadcastAborted {
+					broadcast_id: id,
+				}) if *id == broadcast_id
+			);
+			// The fee was still paid.
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::SolanaBroadcaster(
+					pallet_cf_broadcast::Event::TransactionFeeDeficitRecorded { .. }
+				)
+			);
+			assert_no_matching_event!(
+				Runtime,
+				RuntimeEvent::SolanaBroadcaster(
+					pallet_cf_broadcast::Event::BroadcastSuccess { .. }
+				)
+			);
 		});
 }
 

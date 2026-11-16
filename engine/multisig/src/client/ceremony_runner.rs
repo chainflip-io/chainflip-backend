@@ -40,15 +40,20 @@ use crate::{
 	},
 	ChainSigning,
 };
-use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
+use state_chain_runtime::AccountId;
 
 use super::{
 	ceremony_manager::{CeremonyOutcome, CeremonyTrait, DynStage, PreparedRequest},
 	common::PreProcessStageDataCheck,
 };
 
-const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 const INCORRECT_NUMBER_ELEMENTS: &str = "incorrect_number_of_elements";
+
+/// Stands in for a deadline too far away to represent, so that an oversized stage timeout (which
+/// comes from governance) never fires instead of panicking. Mirrors `tokio::time::sleep`.
+fn far_future() -> tokio::time::Instant {
+	tokio::time::Instant::now() + Duration::from_secs(86400 * 365 * 30)
+}
 
 type OptionalCeremonyReturn<C> = Option<
 	Result<
@@ -69,6 +74,8 @@ where
 	delayed_messages: BTreeMap<AccountId, Ceremony::Data>,
 	/// This will fire on stage timeout
 	timeout_handle: Pin<Box<tokio::time::Sleep>>,
+	/// Added to the deadline on entering each stage. Set by the ceremony request.
+	stage_timeout: Duration,
 	outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 	_phantom: std::marker::PhantomData<Chain>,
 	metrics: CeremonyMetrics,
@@ -111,9 +118,9 @@ where
 				}
 				request = &mut request_receiver => {
 
-					let PreparedRequest { initial_stage } = request.expect("Ceremony request channel was dropped unexpectedly");
+					let request = request.expect("Ceremony request channel was dropped unexpectedly");
 					ceremony_start = Some(Instant::now());
-					if let Some(result) = runner.on_ceremony_request(initial_stage).instrument(span.clone()).await {
+					if let Some(result) = runner.on_ceremony_request(request).instrument(span.clone()).await {
 						break result;
 					}
 
@@ -147,7 +154,8 @@ where
 			stage: None,
 			delayed_messages: Default::default(),
 			// Unauthorised ceremonies cannot timeout, so just set the timeout to 0 for now.
-			timeout_handle: Box::pin(tokio::time::sleep(tokio::time::Duration::ZERO)),
+			timeout_handle: Box::pin(tokio::time::sleep(Duration::ZERO)),
+			stage_timeout: Duration::ZERO,
 			outcome_sender,
 			_phantom: Default::default(),
 			metrics: CeremonyMetrics::new(Chain::NAME, Ceremony::CEREMONY_TYPE),
@@ -158,7 +166,7 @@ where
 	/// initializing the ceremony into an authorised stage 1 state.
 	pub async fn on_ceremony_request(
 		&mut self,
-		mut initial_stage: DynStage<Ceremony>,
+		PreparedRequest { mut initial_stage, stage_timeout }: PreparedRequest<Ceremony>,
 	) -> OptionalCeremonyReturn<Ceremony> {
 		let single_party_result = initial_stage.init(&mut self.metrics);
 
@@ -166,11 +174,12 @@ where
 		// so it should never get called twice.
 		// Therefore we can assume the inner is not initialized yet.
 		assert!(self.stage.replace(initial_stage).is_none());
+		self.stage_timeout = stage_timeout;
 
 		// Unlike other state transitions, we don't take into account
 		// any time left in the prior stage when receiving a ceremony request because
 		// we don't want other parties to be able to control when our stages time out.
-		self.timeout_handle = Box::pin(tokio::time::sleep(MAX_STAGE_DURATION));
+		self.timeout_handle = Box::pin(tokio::time::sleep(stage_timeout));
 
 		if let ProcessMessageResult::Ready = single_party_result {
 			self.finalize_current_stage().await
@@ -209,7 +218,11 @@ where
 					// attacks possible.
 					{
 						let current_deadline = self.timeout_handle.as_ref().deadline();
-						self.timeout_handle.as_mut().reset(current_deadline + MAX_STAGE_DURATION);
+						self.timeout_handle.as_mut().reset(
+							current_deadline
+								.checked_add(self.stage_timeout)
+								.unwrap_or_else(far_future),
+						);
 					}
 
 					if let ProcessMessageResult::Ready = single_party_result {

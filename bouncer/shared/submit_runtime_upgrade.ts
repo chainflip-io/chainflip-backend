@@ -1,14 +1,20 @@
 import { promises as fs } from 'fs';
+import { z } from 'zod';
+import { defineEvent } from '@chainflip/processor/event';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { decodeDispatchError, sleep } from 'shared/utils';
 import type { CfPrimitivesSemVer } from 'generated/chaintypes/chainflip-node';
 import { tryRuntimeUpgrade } from 'shared/try_runtime_upgrade';
 import { getChainflipApi, clearChainflipClientCache } from 'shared/utils/substrate';
 import { throwError } from 'shared/utils/logger';
-import { systemCodeUpdatedEvent } from 'generated/events/system/codeUpdated';
+import { systemCodeUpdated } from 'generated/events/system/codeUpdated';
 import { governanceFailedExecutionEvent } from 'generated/events/governance/failedExecution';
 import { reputationPenaltyUpdatedEvent } from 'generated/events/reputation/penaltyUpdated';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
+
+// `CodeUpdated` is emitted by the runtime being replaced, and runtimes built on polkadot-sdk
+// stable2509 or earlier emit it without the code hash.
+const codeUpdatedEvent = defineEvent('System.CodeUpdated', z.union([systemCodeUpdated, z.null()]));
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
   // Return the raw WASM bytes. The dedot codec length-prefixes the `code: Bytes` argument itself
@@ -65,7 +71,7 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
 
   cf.info('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
   const resultEvent = await cf.stepUntilOneEventOf({
-    codeUpdated: systemCodeUpdatedEvent,
+    codeUpdated: codeUpdatedEvent,
     failedExecution: governanceFailedExecutionEvent,
   });
 
