@@ -336,7 +336,7 @@ fn full_redemption_deregisters_liquidity_provider() {
 		));
 		assert_eq!(
 			pallet_cf_account_roles::AccountRoles::<Runtime>::get(&LP),
-			Some(AccountRole::Unregistered)
+			Some(AccountRole::AccountClosing)
 		);
 		// Refund addresses outlive deregistration and are only cleaned up once the account is
 		// reaped.

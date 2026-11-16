@@ -343,7 +343,8 @@ pub trait OperatorApi:
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 			AccountRole::LiquidityProvider =>
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-			AccountRole::Unregistered => bail!("Cannot register account role {:?}", role),
+			AccountRole::Unregistered | AccountRole::AccountClosing =>
+				bail!("Cannot register account role {:?}", role),
 			AccountRole::Operator => bail!("Operator registration not supported via CLI."),
 		};
 

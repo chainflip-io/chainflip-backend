@@ -295,6 +295,7 @@ pub enum RpcAccountInfo {
 		#[serde(flatten)]
 		info: OperatorInfo<NumberOrHex>,
 	},
+	AccountClosing {},
 }
 
 impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper {
@@ -2286,6 +2287,8 @@ where
 									RpcAccountInfo::Operator {
 										info: operator_info.map_amounts(NumberOrHex::from),
 									},
+								RuntimeApiAccountInfo::AccountClosing =>
+									RpcAccountInfo::AccountClosing {},
 							};
 
 							Ok(RpcAccountInfoWrapper { common_items, role_specific })
@@ -2581,6 +2584,7 @@ where
 								.cf_operator_info(hash, &account_id)?
 								.map_amounts(NumberOrHex::from),
 						},
+						AccountRole::AccountClosing => RpcAccountInfo::AccountClosing {},
 					},
 				})
 			}

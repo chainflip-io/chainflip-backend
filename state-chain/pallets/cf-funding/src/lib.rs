@@ -254,7 +254,7 @@ impl<T: Config> Redemption<T> {
 		}
 
 		match T::AccountRoleRegistry::account_role(&self.account_id) {
-			AccountRole::Unregistered => {},
+			AccountRole::Unregistered | AccountRole::AccountClosing => {},
 			AccountRole::LiquidityProvider =>
 				T::AccountRoleRegistry::deregister_as_liquidity_provider(&self.account_id)?,
 			_ => return Err(Error::<T>::AccountMustBeUnregistered.into()),

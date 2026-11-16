@@ -338,6 +338,10 @@ pub enum AccountRole {
 	/// Operators are responsible for managing delegated stake and validators signed up to their
 	/// account.
 	Operator,
+	/// Terminal state: the account can no longer take a role and is only waiting for its funds
+	/// to be redeemed, after which it is reaped. Deregistration checks have already passed on the
+	/// way in, so they don't apply here.
+	AccountClosing,
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

@@ -31,16 +31,19 @@ const ACCOUNT_ROLES: &[u8] = b"AccountRoles";
 const VANITY_NAMES: &[u8] = b"VanityNames";
 pub const ALREADY_REGISTERED_ERROR: DispatchError =
 	DispatchError::Other("Account already registered");
+pub const ALREADY_DEREGISTERED_ERROR: DispatchError =
+	DispatchError::Other("Account already deregistered");
 
 impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 	fn register_account_role(
 		account_id: &<T as frame_system::Config>::AccountId,
 		role: AccountRole,
 	) -> DispatchResult {
-		if <Self as MockPalletStorage>::get_storage::<_, AccountRole>(ACCOUNT_ROLES, account_id)
-			.is_some()
+		match <Self as MockPalletStorage>::get_storage::<_, AccountRole>(ACCOUNT_ROLES, account_id)
 		{
-			return Err(ALREADY_REGISTERED_ERROR)
+			Some(AccountRole::AccountClosing) => return Err(ALREADY_DEREGISTERED_ERROR),
+			Some(_) => return Err(ALREADY_REGISTERED_ERROR),
+			None => {},
 		}
 		<Self as MockPalletStorage>::put_storage(ACCOUNT_ROLES, account_id, role);
 		Ok(())
@@ -50,12 +53,17 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 		account_id: &<T as Config>::AccountId,
 		role: AccountRole,
 	) -> DispatchResult {
-		match <Self as MockPalletStorage>::take_storage::<_, AccountRole>(ACCOUNT_ROLES, account_id)
-		{
-			Some(r) if r == role => Ok(()),
-			Some(_) => Err("Account role mismatch".into()),
-			_ => Err("Account not registered".into()),
+		match <Self as AccountRoleRegistry<T>>::account_role(account_id) {
+			AccountRole::AccountClosing => return Err(ALREADY_DEREGISTERED_ERROR),
+			r if r != role => return Err("Account role mismatch".into()),
+			_ => {},
 		}
+		<Self as MockPalletStorage>::put_storage(
+			ACCOUNT_ROLES,
+			account_id,
+			AccountRole::AccountClosing,
+		);
+		Ok(())
 	}
 
 	fn set_vanity_name(who: &<T as Config>::AccountId, name: VanityName) -> DispatchResult {
@@ -109,6 +117,10 @@ impl<T: Config, H: DeregistrationHooks<AccountId = T::AccountId>> AccountRoleReg
 	}
 
 	fn deregister_account_role(account_id: &T::AccountId, role: AccountRole) -> DispatchResult {
+		if !<MockAccountRoleRegistry as AccountRoleRegistry<T>>::has_account_role(account_id, role)
+		{
+			return Err("Account role mismatch".into())
+		}
 		H::check(account_id).map_err(Into::into)?;
 		<MockAccountRoleRegistry as AccountRoleRegistry<T>>::deregister_account_role(
 			account_id, role,

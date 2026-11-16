@@ -1908,7 +1908,10 @@ fn full_redemption_deregisters_liquidity_provider() {
 			ETH_DUMMY_ADDR,
 			Default::default()
 		));
-		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(&ALICE));
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
+			&ALICE,
+			AccountRole::AccountClosing
+		));
 
 		assert_ok!(Funding::redeemed(
 			ALICE,
@@ -2280,8 +2283,9 @@ pub mod rebalancing {
 				RedemptionAmount::Max
 			));
 
-			assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(
-				&ALICE
+			assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
+				&ALICE,
+				AccountRole::AccountClosing
 			));
 			assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 			assert_eq!(Flip::total_balance_of(&BOB), AMOUNT + MIN_FUNDING);
