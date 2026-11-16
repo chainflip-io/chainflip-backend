@@ -77,11 +77,11 @@ impl TryFrom<EthPriceFeedData> for PriceData {
 	type Error = anyhow::Error;
 	fn try_from(value: EthPriceFeedData) -> anyhow::Result<Self> {
 		let EthPriceFeedData {
-			round_id: _,
+			roundId: _,
 			answer,
-			started_at: _,
-			updated_at,
-			answered_in_round: _,
+			startedAt: _,
+			updatedAt: updated_at,
+			answeredInRound: _,
 			decimals,
 			description,
 		} = value;

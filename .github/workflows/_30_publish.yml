@@ -102,8 +102,9 @@ jobs:
         env:
           CODENAME: ${{ steps.vars.outputs.codename }}
         run: |
+          set -o pipefail
           export AWS_SDK_LOAD_CONFIG=1
-          gpg --no-default-keyring --keyring trustedkeys.gpg --keyserver keyserver.ubuntu.com --recv-keys "${GPG_KEY_ID}"
+          gpg --export "${GPG_KEY_ID}" | gpg --no-default-keyring --keyring trustedkeys.gpg --import
           aptly repo create -distribution="${CODENAME}" local
           aptly repo add local packages/*.deb
           aptly repo search local

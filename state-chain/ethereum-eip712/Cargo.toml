@@ -22,10 +22,9 @@ tiny-keccak = { version = "2.0.2", features = [
     "keccak",
 ], default-features = false }
 unicode-xid = { version = "0.2", features = ["no_std"] }
-ethers-core = { workspace = true, optional = true }
 
 [dev-dependencies]
-ethers-core = { workspace = true }
+alloy-dyn-abi = { workspace = true, features = ["eip712", "std"] }
 proptest = { workspace = true, features = ["std"] }
 proptest-derive = { workspace = true }
 cf-utilities = { workspace = true, default-features = true, features = [
@@ -41,6 +40,5 @@ std = [
     "scale-info/std",
     "serde_json/std",
     "sp-std/std",
-    "ethers-core",
 ]
 runtime-benchmarks = []

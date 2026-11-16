@@ -20,9 +20,9 @@ pub mod evm_deposits;
 pub mod key_manager;
 pub mod vault;
 
+use alloy_network::{AnyRpcTransaction, AnyTransactionReceipt};
 use anyhow::Result;
 use derive_where::derive_where;
-use ethers::types::{Transaction, TransactionReceipt};
 use itertools::Itertools;
 use sp_runtime::AccountId32;
 use state_chain_runtime::chainflip::witnessing::pallet_hooks::{
@@ -86,8 +86,8 @@ pub trait EvmAddressStateClient<Chain: ChainTypes>:
 
 #[async_trait::async_trait]
 pub trait EvmTransactionClient {
-	async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt>;
-	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction>;
+	async fn transaction_receipt(&self, tx_hash: H256) -> Result<AnyTransactionReceipt>;
+	async fn get_transaction(&self, tx_hash: H256) -> Result<AnyRpcTransaction>;
 }
 
 #[derive_where(Clone; )]
@@ -107,12 +107,11 @@ impl<CT: ChainTypes + EvmWitnessingConfig, BlockQuery> EvmVoter<CT, BlockQuery> 
 	// for this chain's witnessing. Specifically, whether we witnesss finalized blocks or the best
 	// unfinalized block.
 	pub async fn highest_witnessable_block_number(&self) -> Result<u64> {
-		Ok(if CT::WITNESS_FINALIZED_BLOCKS {
-			self.client.get_finalized_block_number().await?
+		if CT::WITNESS_FINALIZED_BLOCKS {
+			self.client.get_finalized_block_number().await
 		} else {
-			self.client.get_block_number().await?
+			self.client.get_block_number().await
 		}
-		.low_u64())
 	}
 }
 
@@ -120,11 +119,11 @@ impl<CT: ChainTypes + EvmWitnessingConfig, BlockQuery> EvmVoter<CT, BlockQuery> 
 impl<CT: ChainTypes + Sync + Send, BlockQuery: Sync + Send> EvmTransactionClient
 	for EvmVoter<CT, BlockQuery>
 {
-	async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
+	async fn transaction_receipt(&self, tx_hash: H256) -> Result<AnyTransactionReceipt> {
 		self.client.transaction_receipt(tx_hash).await
 	}
 
-	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction> {
+	async fn get_transaction(&self, tx_hash: H256) -> Result<AnyRpcTransaction> {
 		self.client.get_transaction(tx_hash).await
 	}
 }

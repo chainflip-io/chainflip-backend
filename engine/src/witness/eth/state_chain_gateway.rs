@@ -13,9 +13,17 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use ethers::prelude::abigen;
-
-abigen!(
+alloy_sol_types::sol!(
+	#[sol(all_derives)]
 	StateChainGateway,
-	"$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IStateChainGateway.json"
+	concat!(
+		env!("CF_ETH_CONTRACT_ABI_ROOT"),
+		"/",
+		env!("CF_ETH_CONTRACT_ABI_TAG"),
+		"/IStateChainGateway.json"
+	)
 );
+
+pub use StateChainGateway::{
+	Funded, RedemptionExecuted, RedemptionExpired, StateChainGatewayEvents,
+};

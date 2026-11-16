@@ -416,8 +416,7 @@ pub fn validate_commitments<C: CryptoScheme>(
 			// over-long -> raise the polynomial degree, finalising an
 			// internally-inconsistent aggregate key; too-short/empty -> cause
 			// an out-of-bounds index panic on honest nodes. This must run
-			// before any `c.commitments.0[0]` access below. (Re-imposes the
-			// per-ceremony bound dropped by PR #3248; see frost-security-review.md.)
+			// before any `c.commitments.0[0]` access below.
 			if c.commitments.0.len() != expected_coeff_count {
 				warn!(
 					from_id = validator_mapping.get_id(*idx).to_string(),

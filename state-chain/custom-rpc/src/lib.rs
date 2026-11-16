@@ -55,7 +55,7 @@ use cf_utilities::{
 	rpc::NumberOrHex,
 };
 use core::ops::Range;
-use ethereum_eip712::build_eip712_data::to_ethers_typed_data;
+use ethereum_eip712::build_eip712_data::{to_json_typed_data, JsonTypedData};
 use itertools::Itertools;
 use jsonrpsee::{
 	core::async_trait,
@@ -97,16 +97,15 @@ use state_chain_runtime::{
 		custom_api::CustomRuntimeApi,
 		elections_api::ElectoralRuntimeApi,
 		types::{
-			before_version_21, AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts,
-			DelegationSnapshot, DispatchErrorWithMessage, EncodedNonNativeCall,
-			EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators,
-			FeeTypes, IngressEvents, LendingPosition, LiquidityProviderBoostPoolInfo,
-			LiquidityProviderInfo, NetworkFees, NonceOrAccount, OpenedDepositChannels,
-			OperatorInfo, RewardDistributionEstimate, RpcAccountInfoCommonItems, RpcLendingConfig,
-			RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty, ShouldSweep,
-			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-			VaultSwapDetails,
+			AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts, DelegationSnapshot,
+			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
+			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, IngressEvents,
+			LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
+			NonceOrAccount, OpenedDepositChannels, OperatorInfo, RewardDistributionEstimate,
+			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo,
+			RuntimeApiPenalty, ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
+			VaultAddresses, VaultSwapDetails,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -131,8 +130,7 @@ pub mod pool_client;
 #[cfg(test)]
 mod tests;
 
-type RpcEncodedNonNativeCall =
-	EncodedNonNativeCallGeneric<ethers_core::types::transaction::eip712::TypedData>;
+type RpcEncodedNonNativeCall = EncodedNonNativeCallGeneric<JsonTypedData>;
 
 mod chainflip_transparency {
 	use super::*;
@@ -1812,6 +1810,7 @@ where
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
+		cf_suspensions() -> RpcSuspensions,
 	}
 
 	fn cf_penalties(
@@ -1819,15 +1818,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(Offence, RpcPenalty)>> {
 		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, api_version| {
-				if api_version < 21 {
-					#[expect(deprecated)]
-					api.cf_penalties_before_version_21(hash)
-						.map(before_version_21::into_current_offences)
-				} else {
-					api.cf_penalties(hash)
-				}
-			})
+			.with_runtime_api(at, |api, hash| api.cf_penalties(hash))
 			.map(|penalties| {
 				penalties
 					.into_iter()
@@ -1841,18 +1832,6 @@ where
 					)
 					.collect()
 			})
-	}
-
-	fn cf_suspensions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcSuspensions> {
-		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
-			if api_version < 21 {
-				#[expect(deprecated)]
-				api.cf_suspensions_before_version_21(hash)
-					.map(before_version_21::into_current_offences)
-			} else {
-				api.cf_suspensions(hash)
-			}
-		})
 	}
 
 	pass_through_and_flatten! {
@@ -3147,7 +3126,9 @@ where
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
-		Ok(Asset::all().collect())
+		// The node may be ahead of the runtime and know about assets that aren't live yet.
+		self.rpc_backend
+			.with_runtime_api(None, |api, hash| api.cf_supported_assets(hash))
 	}
 
 	fn cf_boost_pool_details(
@@ -3632,7 +3613,7 @@ where
 					})?;
 				let serialized_call = match encoded_call {
 					EncodedNonNativeCall::Eip712(typed_data) => RpcEncodedNonNativeCall::Eip712(
-						to_ethers_typed_data(typed_data).map_err(|e| {
+						to_json_typed_data(typed_data).map_err(|e| {
 							CfApiError::ErrorObject(ErrorObject::owned(
 								ErrorCode::InternalError.code(),
 								e,
