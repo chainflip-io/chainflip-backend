@@ -806,7 +806,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			address: EthereumAddress,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_signed_not_closing(origin)?;
 			ensure!(
 				!BoundRedeemAddress::<T>::contains_key(&account_id),
 				Error::<T>::AccountAlreadyBound
@@ -836,7 +836,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			executor_address: EthereumAddress,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_signed_not_closing(origin)?;
 			ensure!(
 				!BoundExecutorAddress::<T>::contains_key(&account_id),
 				Error::<T>::ExecutorAddressAlreadyBound,
@@ -871,6 +871,7 @@ pub mod pallet {
 			redemption_address: Option<EthereumAddress>,
 			amount: RedemptionAmount<FlipBalance<T>>,
 		) -> DispatchResult {
+			// Not `ensure_signed_not_closing`: closing accounts may move their funds out this way.
 			let source_account_id = ensure_signed(origin)?;
 			ensure!(
 				frame_system::Pallet::<T>::account_exists(&recipient_account_id),

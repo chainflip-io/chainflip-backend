@@ -103,6 +103,19 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 			Err(_) => Err(frame_support::sp_runtime::traits::BadOrigin),
 		}
 	}
+
+	fn ensure_signed_not_closing(
+		origin: <T as frame_system::Config>::RuntimeOrigin,
+	) -> Result<<T as frame_system::Config>::AccountId, DispatchError> {
+		let account_id = ensure_signed(origin)?;
+		if <Self as AccountRoleRegistry<T>>::has_account_role(
+			&account_id,
+			AccountRole::AccountClosing,
+		) {
+			return Err(ALREADY_DEREGISTERED_ERROR)
+		}
+		Ok(account_id)
+	}
 }
 
 /// Like [MockAccountRoleRegistry], but runs the given [DeregistrationHooks] on deregistration, in
@@ -146,5 +159,9 @@ impl<T: Config, H: DeregistrationHooks<AccountId = T::AccountId>> AccountRoleReg
 		role: AccountRole,
 	) -> Result<T::AccountId, frame_support::sp_runtime::traits::BadOrigin> {
 		<MockAccountRoleRegistry as AccountRoleRegistry<T>>::ensure_account_role(origin, role)
+	}
+
+	fn ensure_signed_not_closing(origin: T::RuntimeOrigin) -> Result<T::AccountId, DispatchError> {
+		<MockAccountRoleRegistry as AccountRoleRegistry<T>>::ensure_signed_not_closing(origin)
 	}
 }

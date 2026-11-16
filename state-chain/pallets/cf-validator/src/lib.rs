@@ -1074,7 +1074,7 @@ pub mod pallet {
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::ValidatorWeightInfo::remove_validator())]
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_signed_not_closing(origin)?;
 			let operator =
 				OperatorChoice::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
@@ -1271,7 +1271,7 @@ pub mod pallet {
 			operator: T::AccountId,
 			increase: DelegationAmount<T::Amount>,
 		) -> DispatchResult {
-			let delegator = ensure_signed(origin)?;
+			let delegator = T::AccountRoleRegistry::ensure_signed_not_closing(origin)?;
 
 			// Delegation is only available to Liquidity Providers. Accounts that haven't yet
 			// registered a role (e.g. freshly-funded accounts delegating via the SC Utils EVM
@@ -1364,7 +1364,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			decrease: DelegationAmount<T::Amount>,
 		) -> DispatchResult {
-			let delegator = ensure_signed(origin)?;
+			let delegator = T::AccountRoleRegistry::ensure_signed_not_closing(origin)?;
 
 			let (current_operator, current_max_bid) =
 				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;

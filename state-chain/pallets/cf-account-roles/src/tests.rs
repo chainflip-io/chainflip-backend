@@ -369,6 +369,50 @@ fn closing_accounts_do_not_pass_role_origin_checks() {
 }
 
 #[test]
+fn ensure_signed_not_closing_rejects_only_closing_accounts() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		<Provider<Test> as HandleLifetime<u64>>::created(&BOB).unwrap();
+		AccountRolesPallet::register_as_broker(&BOB).unwrap();
+
+		assert_noop!(
+			<Pallet<Test> as AccountRoleRegistry<_>>::ensure_signed_not_closing(
+				OriginFor::<Test>::none()
+			),
+			sp_runtime::traits::BadOrigin
+		);
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::ensure_signed_not_closing(
+			OriginFor::<Test>::signed(ALICE)
+		));
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::ensure_signed_not_closing(
+			OriginFor::<Test>::signed(BOB)
+		));
+
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(
+			&ALICE,
+			AccountRole::Unregistered
+		));
+		assert_noop!(
+			<Pallet<Test> as AccountRoleRegistry<_>>::ensure_signed_not_closing(
+				OriginFor::<Test>::signed(ALICE)
+			),
+			Error::<Test>::AccountAlreadyDeregistered
+		);
+		assert_noop!(
+			AccountRolesPallet::set_vanity_name(
+				OriginFor::<Test>::signed(ALICE),
+				"Alice".as_bytes().to_vec().try_into().unwrap()
+			),
+			Error::<Test>::AccountAlreadyDeregistered
+		);
+		assert_noop!(
+			AccountRolesPallet::spawn_sub_account(OriginFor::<Test>::signed(ALICE), 0, 100),
+			Error::<Test>::AccountAlreadyDeregistered
+		);
+	});
+}
+
+#[test]
 fn spawn_sub_account() {
 	new_test_ext().execute_with(|| {
 		const SUB_ACCOUNT_INDEX: u8 = 0;

@@ -185,7 +185,8 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_vanity_name())]
 		pub fn set_vanity_name(origin: OriginFor<T>, name: VanityName) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id =
+				<Pallet<T> as AccountRoleRegistry<T>>::ensure_signed_not_closing(origin)?;
 			<Pallet<T> as AccountRoleRegistry<T>>::set_vanity_name(&account_id, name.clone())?;
 			Ok(())
 		}
@@ -207,7 +208,8 @@ pub mod pallet {
 			sub_account_index: SubAccountIndex,
 			initial_amount: T::Amount,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id =
+				<Pallet<T> as AccountRoleRegistry<T>>::ensure_signed_not_closing(origin)?;
 			let sub_account_id =
 				T::SpawnAccount::spawn_sub_account(&account_id, sub_account_index, initial_amount)?;
 			Self::deposit_event(Event::SubAccountCreated {
@@ -231,6 +233,8 @@ pub mod pallet {
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
+			// Not `ensure_signed_not_closing`: a closing account must be able to empty its
+			// sub-accounts.
 			let account_id = ensure_signed(origin.clone())?;
 			let sub_account_id =
 				T::SpawnAccount::derive_sub_account_id(&account_id, sub_account_index)?;
@@ -344,6 +348,17 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::Broker => ensure_broker::<T>(origin),
 			AccountRole::Operator => ensure_operator::<T>(origin),
 		}
+	}
+
+	fn ensure_signed_not_closing(
+		origin: T::RuntimeOrigin,
+	) -> Result<T::AccountId, frame_support::sp_runtime::DispatchError> {
+		let account_id = ensure_signed(origin)?;
+		ensure!(
+			!Self::has_account_role(&account_id, AccountRole::AccountClosing),
+			Error::<T>::AccountAlreadyDeregistered
+		);
+		Ok(account_id)
 	}
 }
 

@@ -2339,6 +2339,44 @@ pub mod rebalancing {
 	}
 
 	#[test]
+	fn closing_account_can_only_move_funds_out() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+
+			assert_ok!(setup_test(
+				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None), AccountSetup::new(BOB)],
+				vec![]
+			));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_account_role(
+					&ALICE,
+					AccountRole::Unregistered
+				)
+			);
+
+			assert_noop!(
+				Funding::bind_redeem_address(OriginTrait::signed(ALICE), ETH_DUMMY_ADDR),
+				cf_traits::mocks::account_role_registry::ALREADY_DEREGISTERED_ERROR
+			);
+			assert_noop!(
+				Funding::bind_executor_address(OriginTrait::signed(ALICE), ETH_DUMMY_ADDR),
+				cf_traits::mocks::account_role_registry::ALREADY_DEREGISTERED_ERROR
+			);
+
+			// Rebalancing is allowed, so a retiring validator can move its stake to another one
+			// it owns.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				None,
+				RedemptionAmount::Max
+			));
+			assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
+			assert_eq!(Flip::total_balance_of(&BOB), AMOUNT + MIN_FUNDING);
+		});
+	}
+
+	#[test]
 	fn rebalance_restricted_funds() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
