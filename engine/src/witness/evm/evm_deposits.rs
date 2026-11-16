@@ -14,11 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::vault::FetchedNativeFilter;
-use crate::evm::rpc::address_checker::*;
+use super::vault::Vault::FetchedNative;
+use crate::evm::{conversions::IntoSpCore, rpc::address_checker::*};
 use anyhow::ensure;
 use cf_chains::evm::H256;
-use ethers::types::{H160, U256};
+use sp_core::{H160, U256};
 
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap};
@@ -37,11 +37,11 @@ use std::collections::{BTreeMap, HashMap};
 /// end-to-end flow of funds (not for witnessing).
 pub fn eth_ingresses_at_block(
 	undeployed_address_states: HashMap<H160, (AddressState, AddressState)>,
-	native_events: Vec<(FetchedNativeFilter, H256)>,
+	native_events: Vec<(FetchedNative, H256)>,
 ) -> Result<Vec<(H160, U256, Option<Vec<H256>>)>, anyhow::Error> {
 	let fetched_native_totals: BTreeMap<_, _> = native_events
 		.into_iter()
-		.into_group_map_by(|(event, _tx_hash)| event.sender)
+		.into_group_map_by(|(event, _tx_hash)| event.sender.into_sp_core())
 		.into_iter()
 		.map(|(sender, events)| {
 			// collect the tx_hashes here too.
@@ -51,7 +51,7 @@ pub fn eth_ingresses_at_block(
 					(U256::from(0), Vec::new()),
 					|(total_fetched, mut tx_hashes), (event, tx_hash)| {
 						tx_hashes.push(tx_hash);
-						(total_fetched.saturating_add(event.amount), tx_hashes)
+						(total_fetched.saturating_add(event.amount.into_sp_core()), tx_hashes)
 					},
 				),
 			)
@@ -96,7 +96,11 @@ pub fn eth_ingresses_at_block(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use ethers::prelude::U256;
+	use crate::evm::conversions::IntoAlloy;
+
+	fn fetched_native(sender: H160, amount: U256) -> FetchedNative {
+		FetchedNative { sender: sender.into_alloy(), amount: amount.into_alloy() }
+	}
 
 	#[test]
 	fn block_empty_lists() {
@@ -122,16 +126,13 @@ mod tests {
 		// some random event should not be ignored, with the new logic if we pass an event to
 		// eth_ingresses_at_block it will always be witnessed, we filter events against the
 		// provided deposit channel beofre calling eth_ingresses_at_block
-		let native_events = vec![(
-			FetchedNativeFilter { sender: H160::random(), amount: U256::from(300) },
-			H256::random(),
-		)];
+		let native_events = vec![(fetched_native(H160::random(), U256::from(300)), H256::random())];
 
 		let ingresses = eth_ingresses_at_block(addresses, native_events.clone()).unwrap();
 
 		assert!(ingresses.contains(&(address, U256::from(100), None)));
 		assert!(ingresses.contains(&(
-			native_events[0].0.sender,
+			native_events[0].0.sender.into_sp_core(),
 			U256::from(300),
 			Some(vec![native_events[0].1])
 		)));
@@ -160,18 +161,9 @@ mod tests {
 
 		// There were two events were emitted in the same Ethereum block
 		let native_events = vec![
-			(
-				FetchedNativeFilter { sender: addresses[0].0, amount: before_contract_deployed },
-				H256::random(),
-			),
-			(
-				FetchedNativeFilter { sender: addresses[0].0, amount: U256::from(123) },
-				H256::random(),
-			),
-			(
-				FetchedNativeFilter { sender: addresses[1].0, amount: U256::from(212) },
-				H256::random(),
-			),
+			(fetched_native(addresses[0].0, before_contract_deployed), H256::random()),
+			(fetched_native(addresses[0].0, U256::from(123)), H256::random()),
+			(fetched_native(addresses[1].0, U256::from(212)), H256::random()),
 		];
 
 		let ingresses =
@@ -209,9 +201,9 @@ mod tests {
 
 		// There were two events were emitted in the same Ethereum block
 		let native_events = vec![
-			(FetchedNativeFilter { sender: addresses[0].0, amount: U256::from(200) }, tx_hashes[0]),
-			(FetchedNativeFilter { sender: addresses[0].0, amount: U256::from(123) }, tx_hashes[1]),
-			(FetchedNativeFilter { sender: addresses[1].0, amount: U256::from(212) }, tx_hashes[2]),
+			(fetched_native(addresses[0].0, U256::from(200)), tx_hashes[0]),
+			(fetched_native(addresses[0].0, U256::from(123)), tx_hashes[1]),
+			(fetched_native(addresses[1].0, U256::from(212)), tx_hashes[2]),
 		];
 
 		let ingresses =

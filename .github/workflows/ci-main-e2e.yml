@@ -1,0 +1,97 @@
+# End-to-end checks are too slow and flaky to gate the merge queue, so they run on main after merge.
+# Runs queue rather than cancel, and GitHub keeps only the newest pending run, so a burst of merges
+# is tested once at its tip.
+name: Main E2E
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "release"
+  build-benchmarks:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "benchmarks"
+      upload-name: "chainflip-backend-bin-benchmarks"
+      binary-subdir: release
+  # Used to test upgrades to this version from the latest release
+  build-try-runtime:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "try-runtime"
+      upload-name: "chainflip-backend-bin-try-runtime"
+      binary-subdir: release
+
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+    with:
+      full-bouncer: true
+  test-benchmarks:
+    needs: [build-benchmarks]
+    uses: ./.github/workflows/_41_test_benchmarks.yml
+    secrets:
+      CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+      CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
+  upgrade-check:
+    needs: [build-try-runtime]
+    uses: ./.github/workflows/upgrade-test.yml
+    secrets: inherit
+
+  notify-discord-on-failure:
+    needs: [post-check, test-benchmarks, upgrade-check]
+    if: failure()
+    runs-on: namespace-profile-default-light
+    steps:
+      # Only alert on a pass -> fail transition, to avoid repeats while a failure is outstanding.
+      # Superseded runs are cancelled, so skip past them to the last run that reached a verdict.
+      - name: Check previous run 🔎
+        id: previous
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          page=1
+          conclusion=
+          while :; do
+            runs=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/ci-main-e2e.yml/runs?branch=main&event=push&status=completed&per_page=100&page=$page")
+            conclusion=$(jq -r '[.workflow_runs[] | select(.conclusion == "success" or .conclusion == "failure")][0].conclusion // empty' <<< "$runs")
+            if [ -n "$conclusion" ] || [ "$(jq '.workflow_runs | length' <<< "$runs")" -lt 100 ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+      - name: Notify on failed check 📢
+        if: steps.previous.outputs.conclusion != 'failure'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+          # Discord @Protocol role.
+          PROTOCOL_ROLE_ID: "960793434170458112"
+        run: |
+          jq -n --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --arg sha "${GITHUB_SHA::10}" --arg role "$PROTOCOL_ROLE_ID" '{
+            username: "Main E2E",
+            content: ("<@&" + $role + "> 🧪 The end-to-end checks (full bouncer, upgrade test, benchmarks) are failing on `main` at `" + $sha + "`.\n🔗 Link to job: <" + $url + ">"),
+            allowed_mentions: { roles: [$role] }
+          }' | curl -fsSL -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"

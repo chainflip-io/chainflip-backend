@@ -19,12 +19,13 @@ use crate::sol::{
 	retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
 	rpc_client_api::{
 		RpcTransactionConfig, TransactionConfirmationStatus, TransactionStatus,
-		UiTransactionEncoding,
+		UiTransactionEncoding, UiTransactionStatusMeta,
 	},
 };
 use anyhow::Result;
 use cf_chains::sol::{SolSignature, LAMPORTS_PER_SIGNATURE};
 use itertools::Itertools;
+use serde_json::Value;
 
 pub async fn get_finalized_fee_and_success_status(
 	sol_client: &SolRetryRpcClient,
@@ -40,6 +41,7 @@ pub async fn get_finalized_fee_and_success_status(
 	{
 		Some(TransactionStatus {
 			confirmation_status: Some(TransactionConfirmationStatus::Finalized),
+			err,
 			..
 		}) => {
 			let transaction_meta = sol_client
@@ -60,14 +62,7 @@ pub async fn get_finalized_fee_and_success_status(
 				.transaction
 				.meta;
 
-			Ok(match transaction_meta {
-				Some(meta) => Some((meta.fee, meta.err.is_none())),
-				// This shouldn't happen. We want to avoid Erroring.
-				// Therefore we return default value (5000, true) so we don't submit
-				// transaction_succeeded and retry again later. Also avoids potentially getting
-				// stuck not witness something because no meta is returned.
-				None => Some((LAMPORTS_PER_SIGNATURE, true)),
-			})
+			Ok(fee_and_success_status(signature, err, transaction_meta.as_ref()))
 		},
 		Some(TransactionStatus { confirmation_status: other_status, .. }) => {
 			tracing::debug!(
@@ -86,6 +81,37 @@ pub async fn get_finalized_fee_and_success_status(
 	}
 }
 
+/// Success is taken from the finalized signature status, which is always available once the
+/// signature is finalized, whereas the transaction meta can be missing (eg. if the RPC node has not
+/// caught up or has pruned it). The meta is only needed for the exact fee, and to cross-check the
+/// status.
+fn fee_and_success_status(
+	signature: SolSignature,
+	status_err: &Option<Value>,
+	transaction_meta: Option<&UiTransactionStatusMeta>,
+) -> Option<(u64, bool)> {
+	match transaction_meta {
+		Some(meta) if meta.err.is_none() != status_err.is_none() => {
+			// Both are derived from the same ledger data, so this is an RPC inconsistency. Abstain
+			// rather than guess.
+			tracing::warn!(
+				"Signature status error ({status_err:?}) and transaction meta error ({:?}) disagree for Solana transaction {signature:?}.",
+				meta.err
+			);
+			None
+		},
+		Some(meta) => Some((meta.fee, status_err.is_none())),
+		None => {
+			// Abstaining here could stall the election indefinitely if the meta is never served,
+			// so vote with the minimum fee instead.
+			tracing::warn!(
+				"No transaction meta for finalized Solana transaction {signature:?}, assuming the minimum fee."
+			);
+			Some((LAMPORTS_PER_SIGNATURE, status_err.is_none()))
+		},
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::{
@@ -99,6 +125,71 @@ mod tests {
 	use std::str::FromStr;
 
 	use super::*;
+
+	const PRIORITY_FEE_TX: u64 = 15_000;
+
+	fn meta(fee: u64, err: Option<Value>) -> UiTransactionStatusMeta {
+		serde_json::from_value(serde_json::json!({
+			"err": err,
+			"status": { "Ok": null },
+			"fee": fee,
+			"preBalances": [],
+			"postBalances": [],
+		}))
+		.unwrap()
+	}
+
+	fn instruction_error() -> Option<Value> {
+		Some(serde_json::json!({ "InstructionError": [0, { "Custom": 1 }] }))
+	}
+
+	#[test]
+	fn meta_present_takes_fee_from_meta() {
+		assert_eq!(
+			fee_and_success_status(Default::default(), &None, Some(&meta(PRIORITY_FEE_TX, None))),
+			Some((PRIORITY_FEE_TX, true))
+		);
+		assert_eq!(
+			fee_and_success_status(
+				Default::default(),
+				&instruction_error(),
+				Some(&meta(PRIORITY_FEE_TX, instruction_error()))
+			),
+			Some((PRIORITY_FEE_TX, false))
+		);
+	}
+
+	#[test]
+	fn meta_missing_takes_success_from_status() {
+		assert_eq!(
+			fee_and_success_status(Default::default(), &None, None),
+			Some((LAMPORTS_PER_SIGNATURE, true))
+		);
+		assert_eq!(
+			fee_and_success_status(Default::default(), &instruction_error(), None),
+			Some((LAMPORTS_PER_SIGNATURE, false))
+		);
+	}
+
+	#[test]
+	fn abstains_when_status_and_meta_disagree() {
+		assert_eq!(
+			fee_and_success_status(
+				Default::default(),
+				&None,
+				Some(&meta(PRIORITY_FEE_TX, instruction_error()))
+			),
+			None
+		);
+		assert_eq!(
+			fee_and_success_status(
+				Default::default(),
+				&instruction_error(),
+				Some(&meta(PRIORITY_FEE_TX, None))
+			),
+			None
+		);
+	}
 
 	#[tokio::test]
 	#[ignore]

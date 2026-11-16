@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-	evm::{event::Event, retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult},
+	evm::{
+		conversions::IntoSpCore, event::Event,
+		retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
+	},
 	witness::{
 		common::{
 			block_height_witnesser::witness_headers, block_witnesser::GenericBwVoter,
@@ -29,9 +32,11 @@ use crate::{
 		},
 	},
 };
+use alloy_primitives::Bytes;
 use cf_chains::{
 	arb::ArbitrumTrackedData,
 	assets,
+	evm::EvmWitnessingConfig,
 	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange, SaturatingStep},
 	Arbitrum, ChainWitnessConfig,
 };
@@ -41,7 +46,6 @@ use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
-use ethers::types::Bytes;
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::{
@@ -96,8 +100,8 @@ trait EvmBlockRangeChainType<C: ChainWitnessConfig> =
 	ChainTypes<ChainBlockNumber = BlockWitnessRange<C>, ChainBlockHash = H256> + Sync + Send;
 
 #[async_trait::async_trait]
-impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chain>
-	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConfig>
+	WitnessClient<Chain> for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	type BlockQuery = EvmBlockRangeQuery<W>;
 
@@ -109,19 +113,17 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chai
 
 	async fn block_header_by_height(&self, height: BlockWitnessRange<W>) -> Result<Header<Chain>> {
 		let range = height.into_range_inclusive();
-		let (block_start, block_end) = futures::try_join!(
-			self.client.block((*range.start()).into()),
-			self.client.block((*range.end()).into())
-		)?;
+		let (block_start, block_end) =
+			futures::try_join!(self.client.block(*range.start()), self.client.block(*range.end()))?;
 		Ok(Header {
 			block_height: height,
-			hash: block_end.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
-			parent_hash: block_start.parent_hash,
+			hash: block_end.header.hash.into_sp_core(),
+			parent_hash: block_start.header.parent_hash.into_sp_core(),
 		})
 	}
 
 	async fn best_block_number(&self) -> Result<BlockWitnessRange<W>> {
-		let best_block = self.client.get_block_number().await?.low_u64();
+		let best_block = self.highest_witnessable_block_number().await?;
 		let range = block_witness_range(W::WITNESS_PERIOD, best_block);
 		let block_witness_range =
 			BlockWitnessRange::try_new(block_witness_root(W::WITNESS_PERIOD, best_block))
@@ -183,8 +185,8 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chai
 }
 
 #[async_trait::async_trait]
-impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmEventClient<Chain>
-	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConfig>
+	EvmEventClient<Chain> for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	async fn events_from_block_query<Data: std::fmt::Debug>(
 		&self,
@@ -213,8 +215,8 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmEventClient<Cha
 }
 
 #[async_trait::async_trait]
-impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmAddressStateClient<Chain>
-	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+impl<Chain: EvmBlockRangeChainType<W> + EvmWitnessingConfig, W: RangeWitnessConfig>
+	EvmAddressStateClient<Chain> for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	async fn address_states(
 		&self,
@@ -295,8 +297,8 @@ impl VoterApi<ArbitrumLiveness> for ArbitrumLivenessVoter {
 		_settings: <ArbitrumLiveness as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <ArbitrumLiveness as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<ArbitrumLiveness>>, anyhow::Error> {
-		let block = self.client.block(properties.into()).await?;
-		Ok(Some(block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?))
+		let block = self.client.block(properties).await?;
+		Ok(Some(block.header.hash.into_sp_core()))
 	}
 }
 

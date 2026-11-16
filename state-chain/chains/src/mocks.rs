@@ -26,16 +26,7 @@ use sp_core::ConstBool;
 use sp_std::marker::PhantomData;
 
 #[derive(
-	Copy,
-	Clone,
-	RuntimeDebug,
-	Default,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
+	Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
 )]
 pub struct MockEthereum;
 
@@ -201,7 +192,7 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 #[derive(
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	Default,
 	PartialEq,
 	Eq,
@@ -303,16 +294,7 @@ impl IntoTransactionInIdForAnyChain<MockEthereumChainCrypto> for [u8; 4] {
 pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
 
 #[derive(
-	Copy,
-	Clone,
-	RuntimeDebug,
-	Default,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
+	Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
 )]
 pub struct MockEthereumChainCrypto;
 impl ChainCrypto for MockEthereumChainCrypto {

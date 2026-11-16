@@ -18,11 +18,11 @@ use core::marker::PhantomData;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-	mock::*, AttemptCount, AuthorityCount, CeremonyContext, CeremonyId, CurrentEpochIndex, Error,
-	Event, KeyHandoverResolutionPendingSince, KeyRotationStatus, KeygenFailureVoters,
-	KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSlashAmount,
+	mock::*, AttemptCount, AuthorityCount, CeremonyContext, CeremonyId, CeremonyStageTimeouts,
+	CurrentEpochIndex, Error, Event, KeyHandoverResolutionPendingSince, KeyRotationStatus,
+	KeygenFailureVoters, KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenSlashAmount,
 	KeygenSuccessVoters, PalletConfigUpdate, PalletOffence, PendingKeyRotation, RequestContext,
-	RequestId, ThresholdSignatureResponseTimeout,
+	RequestId, StageTimeouts,
 };
 
 use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto};
@@ -112,6 +112,7 @@ impl MockCfe {
 			key,
 			signatories,
 			payload,
+			stage_timeout_secs: _,
 		}) = event
 		{
 			match &self.behaviour {
@@ -347,7 +348,7 @@ fn fail_path_with_timeout() {
 			// Callback has *not* executed but is scheduled for a retry after the timeout has
 			// elapsed.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				EvmThresholdSigner::threshold_signature_response_timeout();
+				threshold_signature_response_timeout();
 
 			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(EvmThresholdSigner::ceremony_retry_queues(retry_block).len(), 1);
@@ -363,7 +364,7 @@ fn fail_path_with_timeout() {
 			assert!(EvmThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
 			// Another timeout should have been added for the new ceremony.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				EvmThresholdSigner::threshold_signature_response_timeout();
+				threshold_signature_response_timeout();
 			assert!(!EvmThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
 
 			// Participant 1 was reported for not responding.
@@ -403,7 +404,7 @@ fn fail_path_due_to_report_signature_failed() {
 			run_cfes_on_sc_events(&cfes[..]);
 			let next_block_retry = frame_system::Pallet::<Test>::current_block_number() + 1;
 			let timeout_block_for_next_retry =
-				next_block_retry + EvmThresholdSigner::threshold_signature_response_timeout();
+				next_block_retry + threshold_signature_response_timeout();
 
 			assert_eq!(EvmThresholdSigner::ceremony_retry_queues(next_block_retry).len(), 1);
 
@@ -445,8 +446,7 @@ fn fail_path_due_to_report_signature_failed() {
 
 			assert_eq!(
 				EvmThresholdSigner::ceremony_retry_queues(
-					timeout_block_for_next_retry +
-						EvmThresholdSigner::threshold_signature_response_timeout()
+					timeout_block_for_next_retry + threshold_signature_response_timeout()
 				)
 				.len(),
 				1
@@ -486,7 +486,7 @@ fn test_retries() {
 
 			// Retry should re-use the same key.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				ThresholdSignatureResponseTimeout::<Test, _>::get();
+				threshold_signature_response_timeout();
 			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
 
 			let retry_ceremony_id = current_ceremony_id();
@@ -525,7 +525,7 @@ fn test_retries_for_immutable_key() {
 
 			// Retry should re-use the original key.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				ThresholdSignatureResponseTimeout::<Test, _>::get();
+				threshold_signature_response_timeout();
 			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
 
 			let retry_ceremony_id = current_ceremony_id();
@@ -570,7 +570,7 @@ mod unsigned_validation {
 			let ceremony_id = current_ceremony_id();
 
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				EvmThresholdSigner::threshold_signature_response_timeout();
+				threshold_signature_response_timeout();
 
 			// Process retries.
 			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
@@ -783,6 +783,10 @@ fn keygen_request_emitted() {
 	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 	new_test_ext().execute_with(|| {
+		StageTimeouts::<Test, Instance1>::put(CeremonyStageTimeouts {
+			signing_secs: 7,
+			keygen_secs: 40,
+		});
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index();
 		<EvmThresholdSigner as KeyRotator>::keygen(btree_candidates.clone(), rotation_epoch);
 		// Confirm we have a new key rotation process running
@@ -794,6 +798,7 @@ fn keygen_request_emitted() {
 				ceremony_id: current_ceremony_id(),
 				participants: btree_candidates.clone(),
 				epoch_index: rotation_epoch,
+				stage_timeout_secs: 40,
 			})
 		);
 		assert_eq!(
@@ -840,7 +845,8 @@ fn keygen_handover_request_emitted() {
 				key_to_share: EvmThresholdSigner::active_epoch_key().unwrap().key,
 				sharing_participants: authorities.clone(),
 				receiving_participants: candidates.clone(),
-				new_key: Default::default()
+				new_key: Default::default(),
+				stage_timeout_secs: CeremonyStageTimeouts::DEFAULT.keygen_secs,
 			})
 		);
 		assert_eq!(
@@ -1022,7 +1028,7 @@ fn keygen_verification_failure() {
 
 			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 				frame_system::Pallet::<Test>::current_block_number() +
-					EvmThresholdSigner::threshold_signature_response_timeout(),
+					threshold_signature_response_timeout(),
 			);
 
 			println!("{:?}", System::events());
@@ -1499,16 +1505,14 @@ where
 		Err(BTreeSet::from_iter([CHARLIE]))
 	));
 
-	// > 25 blocks later we should resolve an error.
+	// Once the keygen response timeout has elapsed we should resolve an error.
 	assert!(PendingSince::exists());
 	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 	assert!(PendingSince::exists());
-	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
-		MOCK_KEYGEN_RESPONSE_TIMEOUT,
-	);
+	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(keygen_response_timeout());
 	assert!(PendingSince::exists());
 	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
-		MOCK_KEYGEN_RESPONSE_TIMEOUT + 1,
+		keygen_response_timeout() + 1,
 	);
 	assert!(!PendingSince::exists());
 
@@ -1729,7 +1733,7 @@ mod key_rotation {
 
 			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 				frame_system::Pallet::<Test>::current_block_number() +
-					EvmThresholdSigner::threshold_signature_response_timeout(),
+					threshold_signature_response_timeout(),
 			);
 
 			assert_last_events!(
@@ -1960,28 +1964,18 @@ fn can_recover_from_abort_key_rotation_after_key_handover_failed() {
 #[test]
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
-		const NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT: u32 = 100;
-		const NEW_KEYGEN_RESPONSE_TIMEOUT: u32 = 101;
 		const NEW_KEYGEN_SLASH_AMOUNT: FlipBalance = 102;
+		const NEW_STAGE_TIMEOUTS: CeremonyStageTimeouts =
+			CeremonyStageTimeouts { signing_secs: 15, keygen_secs: 45 };
 
 		// Check that the default values are different from the new ones
-		assert_ne!(
-			ThresholdSignatureResponseTimeout::<Test, Instance1>::get(),
-			BlockNumberFor::<Test>::from(NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT)
-		);
-		assert_ne!(
-			KeygenResponseTimeout::<Test, Instance1>::get(),
-			BlockNumberFor::<Test>::from(NEW_KEYGEN_RESPONSE_TIMEOUT)
-		);
 		assert_ne!(KeygenSlashAmount::<Test, Instance1>::get(), NEW_KEYGEN_SLASH_AMOUNT);
+		assert_ne!(StageTimeouts::<Test, Instance1>::get(), NEW_STAGE_TIMEOUTS);
 
 		// Update all config items
 		let updates = vec![
-			PalletConfigUpdate::ThresholdSignatureResponseTimeout {
-				new_timeout: NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT,
-			},
-			PalletConfigUpdate::KeygenResponseTimeout { new_timeout: NEW_KEYGEN_RESPONSE_TIMEOUT },
 			PalletConfigUpdate::KeygenSlashAmount { amount_to_slash: NEW_KEYGEN_SLASH_AMOUNT },
+			PalletConfigUpdate::CeremonyStageTimeouts { timeouts: NEW_STAGE_TIMEOUTS },
 		];
 		for update in updates.clone() {
 			assert_ok!(EvmThresholdSigner::update_pallet_config(
@@ -1995,15 +1989,8 @@ fn can_update_all_config_items() {
 		}
 
 		// Check that the new values were set
-		assert_eq!(
-			ThresholdSignatureResponseTimeout::<Test, Instance1>::get(),
-			BlockNumberFor::<Test>::from(NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT)
-		);
-		assert_eq!(
-			KeygenResponseTimeout::<Test, Instance1>::get(),
-			BlockNumberFor::<Test>::from(NEW_KEYGEN_RESPONSE_TIMEOUT)
-		);
 		assert_eq!(KeygenSlashAmount::<Test, Instance1>::get(), NEW_KEYGEN_SLASH_AMOUNT);
+		assert_eq!(StageTimeouts::<Test, Instance1>::get(), NEW_STAGE_TIMEOUTS);
 
 		// Make sure that only governance can update the config
 		for update in updates {
@@ -2013,6 +2000,28 @@ fn can_update_all_config_items() {
 			);
 		}
 	});
+}
+
+#[test]
+fn signature_request_carries_signing_stage_timeout() {
+	new_test_ext()
+		.with_authorities([1, 2, 3])
+		.with_nominees([1, 2])
+		.execute_with(|| {
+			StageTimeouts::<Test, Instance1>::put(CeremonyStageTimeouts {
+				signing_secs: 7,
+				keygen_secs: 40,
+			});
+			<EvmThresholdSigner as ThresholdSigner<_>>::request_signature(*b"OHAI");
+
+			assert_matches!(
+				&MockCfeInterface::take_events::<ValidatorId>()[..],
+				[MockCfeEvent::EvmThresholdSignatureRequest(ThresholdSignatureRequest {
+					stage_timeout_secs: 7,
+					..
+				})]
+			);
+		});
 }
 
 mod historical_signing {
@@ -2112,7 +2121,7 @@ mod historical_signing {
 				);
 
 				let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-					EvmThresholdSigner::threshold_signature_response_timeout();
+					threshold_signature_response_timeout();
 
 				System::set_block_number(retry_block);
 				<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(retry_block);
@@ -2135,7 +2144,7 @@ mod historical_signing {
 				);
 
 				let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-					EvmThresholdSigner::threshold_signature_response_timeout();
+					threshold_signature_response_timeout();
 
 				System::set_block_number(retry_block);
 				<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(retry_block);

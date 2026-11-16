@@ -38,12 +38,12 @@ use cf_chains::{
 };
 use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
-use ethers::types::{H256, U256};
 use futures::future;
 use itertools::Itertools;
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::{H256, U256};
 use state_chain_runtime::{Runtime, TronInstance};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -353,8 +353,8 @@ mod tests {
 	};
 	use cf_chains::{cf_parameters::VaultSwapParameters, ChannelRefundParameters};
 	use cf_utilities::{redact_endpoint_secret::SecretUrl, task_scope};
-	use ethers::types::H160;
 	use futures_util::FutureExt;
+	use sp_core::H160;
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
@@ -374,7 +374,7 @@ mod tests {
 						},
 						backup: None,
 					},
-					ethers::types::U256::from(728126428u64), // Mainnet chain ID (0x2b6653dc)
+					U256::from(728126428u64), // Mainnet chain ID (0x2b6653dc)
 					"tron_rpc",
 					"Tron",
 				)
@@ -459,7 +459,7 @@ mod tests {
 						},
 						backup: None,
 					},
-					ethers::types::U256::from(3448148188u64), // Nile testnet chain ID (0xcd8690dc)
+					U256::from(3448148188u64), // Nile testnet chain ID (0xcd8690dc)
 					"tron_rpc",
 					"Tron",
 				)

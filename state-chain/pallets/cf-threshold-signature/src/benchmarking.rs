@@ -131,11 +131,9 @@ mod benchmarks {
 
 	#[benchmark]
 	fn update_pallet_config() {
-		let old_timeout = 5u32;
-		ThresholdSignatureResponseTimeout::<T, I>::put(BlockNumberFor::<T>::from(old_timeout));
-		let new_timeout = old_timeout + 1u32;
+		let amount_to_slash = 1_000u128;
 		let call = Call::<T, I>::update_pallet_config {
-			update: PalletConfigUpdate::ThresholdSignatureResponseTimeout { new_timeout },
+			update: PalletConfigUpdate::KeygenSlashAmount { amount_to_slash },
 		};
 
 		#[block]
@@ -145,10 +143,7 @@ mod benchmarks {
 			));
 		}
 
-		assert_eq!(
-			ThresholdSignatureResponseTimeout::<T, I>::get(),
-			BlockNumberFor::<T>::from(new_timeout)
-		);
+		assert_eq!(KeygenSlashAmount::<T, I>::get(), amount_to_slash);
 	}
 
 	#[benchmark]
@@ -237,11 +232,11 @@ mod benchmarks {
 			));
 		}
 
+		let retry_block = BlockNumberFor::<T>::from(
+			StageTimeouts::<T, I>::get().signing_response_timeout_blocks(),
+		);
 		assert_eq!(
-			CeremonyRetryQueues::<T, I>::decode_len(
-				ThresholdSignatureResponseTimeout::<T, I>::get()
-			)
-			.unwrap_or_default(),
+			CeremonyRetryQueues::<T, I>::decode_len(retry_block).unwrap_or_default(),
 			r as usize,
 		);
 
@@ -252,14 +247,11 @@ mod benchmarks {
 
 		#[block]
 		{
-			Pallet::<T, I>::on_initialize(ThresholdSignatureResponseTimeout::<T, I>::get());
+			Pallet::<T, I>::on_initialize(retry_block);
 		}
 
 		assert_eq!(
-			CeremonyRetryQueues::<T, I>::decode_len(
-				ThresholdSignatureResponseTimeout::<T, I>::get()
-			)
-			.unwrap_or_default(),
+			CeremonyRetryQueues::<T, I>::decode_len(retry_block).unwrap_or_default(),
 			0_usize,
 		);
 	}

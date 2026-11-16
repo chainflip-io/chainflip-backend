@@ -27,7 +27,7 @@ pub use ethabi::{encode, Address, Hash, Token, Uint, Word};
 use evm::tokenizable::Tokenizable;
 use frame_support::sp_runtime::{
 	traits::{Hash as _, Keccak256},
-	AccountId32, RuntimeDebug,
+	AccountId32,
 };
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
@@ -48,6 +48,12 @@ pub trait EvmChain = Chain<
 	TransactionMetadata = EvmTransactionMetadata,
 	TransactionRef = H256,
 >;
+
+/// Engine-side witnessing parameters for EVM chains.
+pub trait EvmWitnessingConfig {
+	/// Whether to witness up to the chain's finalized head rather than the latest block.
+	const WITNESS_FINALIZED_BLOCKS: bool;
+}
 
 #[derive(
 	Clone,
@@ -121,7 +127,7 @@ impl ChainCrypto for EvmCrypto {
 	}
 }
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AggKeyVerificationError {
 	/// The provided signature (aka. `s`) is not a valid private key.
 	InvalidSignature,
@@ -160,7 +166,7 @@ impl Display for AggKeyVerificationError {
 	MaxEncodedLen,
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	PartialOrd,
@@ -212,7 +218,7 @@ impl Default for ParityBit {
 	MaxEncodedLen,
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	PartialOrd,
@@ -405,7 +411,7 @@ impl Tokenizable for AggKey {
 	TypeInfo,
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Serialize,
@@ -432,7 +438,7 @@ pub struct SchnorrVerificationComponents {
 	DecodeWithMemTracking,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	Default,
 	PartialEq,
 	Eq,
@@ -456,7 +462,7 @@ pub struct Transaction {
 	DecodeWithMemTracking,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	Default,
 	PartialEq,
 	Eq,
@@ -572,16 +578,8 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 
 	/// Undeployed Addresses should not be recycled.
 	/// Other address types *can* be recycled.
-	fn maybe_recycle(self) -> Option<Self> {
-		match self {
-			Self::Undeployed => None,
-			// When recycling, preserve the deployment block number
-			Self::Deployed { at_block_height: block_number } =>
-				Some(Self::Deployed { at_block_height: block_number }),
-			// Pending channels shouldn't normally be recycled, but if they are,
-			// use 0 as value for the deployment block
-			Self::Pending => Some(Self::Deployed { at_block_height: 0 }),
-		}
+	fn maybe_recycle(&self) -> bool {
+		!matches!(self, Self::Undeployed)
 	}
 }
 
@@ -596,7 +594,7 @@ pub enum EvmFetchId {
 }
 
 /// Errors that can occur when verifying an EVM transaction.
-#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Debug, PartialEq, Eq)]
 pub enum TransactionVerificationError {
 	/// The transaction's chain id is invalid.
 	InvalidChainId,
@@ -613,9 +611,7 @@ pub enum TransactionVerificationError {
 }
 
 /// Parameters that are checked as part of EVM transaction verification.
-#[derive(
-	Encode, Decode, DecodeWithMemTracking, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq,
-)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CheckedTransactionParameter {
 	ChainId,
 	GasLimit,

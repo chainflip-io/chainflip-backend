@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(23)]
+	#[api_version(26)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -109,17 +109,13 @@ decl_runtime_apis!(
 		fn cf_validator_info(account_id: &AccountId32) -> validator_info_before_v7::ValidatorInfo;
 		#[changed_in(19)]
 		fn cf_validator_info(account_id: &AccountId32) -> before_version_19::ValidatorInfo;
-		#[changed_in(22)]
-		fn cf_validator_info(account_id: &AccountId32) -> before_version_22::ValidatorInfo;
+		#[changed_in(23)]
+		fn cf_validator_info(account_id: &AccountId32) -> before_version_23::ValidatorInfo;
 		fn cf_validator_info(account_id: &AccountId32) -> ValidatorInfo;
 		#[changed_in(7)]
 		fn cf_operator_info();
 		fn cf_operator_info(account_id: &AccountId32) -> OperatorInfo<FlipBalance>;
-		#[changed_in(21)]
-		fn cf_penalties() -> Vec<(before_version_21::Offence, RuntimeApiPenalty)>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
-		#[changed_in(21)]
-		fn cf_suspensions() -> Vec<(before_version_21::Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		#[changed_in(5)]
@@ -191,6 +187,7 @@ decl_runtime_apis!(
 			liquidity: Liquidity,
 		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 
+		#[deprecated(note = "The maximum swap amount no longer exists; this always returns None.")]
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount;
@@ -228,6 +225,10 @@ decl_runtime_apis!(
 			account_id: AccountId32,
 		) -> before_version_15::BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
+		#[changed_in(24)]
+		fn cf_broker_recovery_account();
+		/// The stored recovery account link, even if the account no longer has the LP role.
+		fn cf_broker_recovery_account(broker: AccountId32) -> Option<AccountId32>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		#[changed_in(16)]
 		fn cf_free_balances(account_id: AccountId32) -> before_version_16::AssetMap<AssetAmount>;
@@ -276,15 +277,15 @@ decl_runtime_apis!(
 		fn cf_safe_mode_statuses() -> types::before_version_17::RuntimeSafeMode;
 		#[changed_in(19)]
 		fn cf_safe_mode_statuses() -> types::before_version_19::RuntimeSafeMode;
-		#[changed_in(22)]
-		fn cf_safe_mode_statuses() -> types::before_version_22::RuntimeSafeMode;
+		#[changed_in(23)]
+		fn cf_safe_mode_statuses() -> types::before_version_23::RuntimeSafeMode;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
 		fn cf_swap_limits() -> SwapLimits;
 		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>>;
 		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount;
-		#[changed_in(23)]
+		#[changed_in(26)]
 		fn cf_minimum_order_amount();
 		/// Minimum amount of `asset` that a limit or range order may hold. `0` means no minimum
 		/// is enforced for that asset.
@@ -362,6 +363,10 @@ decl_runtime_apis!(
 		fn cf_vault_addresses() -> before_version_19::VaultAddresses;
 		fn cf_vault_addresses() -> VaultAddresses;
 		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
+		#[changed_in(22)]
+		fn cf_get_trading_strategies(
+			lp_id: Option<AccountId32>,
+		) -> Vec<before_version_22::TradingStrategyInfo<AssetAmount>>;
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
@@ -442,10 +447,10 @@ decl_runtime_apis!(
 		fn cf_all_account_infos(
 			roles: Option<Vec<AccountRole>>,
 		) -> Vec<before_version_19::RuntimeApiAccountInfoWrapper>;
-		#[changed_in(22)]
+		#[changed_in(23)]
 		fn cf_all_account_infos(
 			roles: Option<Vec<AccountRole>>,
-		) -> Vec<before_version_22::RuntimeApiAccountInfoWrapper>;
+		) -> Vec<before_version_23::RuntimeApiAccountInfoWrapper>;
 		fn cf_all_account_infos(
 			roles: Option<Vec<AccountRole>>,
 		) -> Vec<RuntimeApiAccountInfoWrapper>;
@@ -462,6 +467,7 @@ decl_runtime_apis!(
 		fn cf_ingress_delay(chain: ForeignChain) -> u32;
 		#[changed_in(8)]
 		fn cf_boost_delay();
+		#[deprecated(note = "Boost delay no longer exists; this always returns 0.")]
 		fn cf_boost_delay(chain: ForeignChain) -> u32;
 		#[changed_in(14)]
 		fn cf_boost_config();

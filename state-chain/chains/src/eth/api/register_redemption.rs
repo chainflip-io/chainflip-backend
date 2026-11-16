@@ -19,7 +19,6 @@ use super::*;
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use ethabi::{ParamType, Token};
 use evm::Address;
-use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_std::vec;
@@ -32,7 +31,7 @@ use sp_std::vec;
 	DecodeWithMemTracking,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Default,

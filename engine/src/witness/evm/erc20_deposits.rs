@@ -23,21 +23,24 @@ pub enum Erc20Events {
 }
 
 macro_rules! define_erc20 {
-	($mod_name:ident, $name:ident, $contract_events_type:ident, $abi_path:literal) => {
+	($mod_name:ident, $name:ident, $contract_events_type:ident, $($abi_path:tt)+) => {
 		pub mod $mod_name {
 			use super::Erc20Events;
-			use ethers::prelude::abigen;
+			use crate::evm::conversions::IntoSpCore;
 
-			abigen!($name, $abi_path);
+			alloy_sol_types::sol!(#[sol(all_derives)] $name, $($abi_path)+);
+
+			pub use $name::$contract_events_type;
 
 			impl From<$contract_events_type> for Erc20Events {
 				fn from(event: $contract_events_type) -> Self {
 					match event {
-						$contract_events_type::TransferFilter(TransferFilter {
-							to,
-							from,
-							value,
-						}) => Self::TransferFilter { to, from, value },
+						$contract_events_type::Transfer($name::Transfer { to, from, value }) =>
+							Self::TransferFilter {
+								to: to.into_sp_core(),
+								from: from.into_sp_core(),
+								value: value.into_sp_core(),
+							},
 						_ => Self::Other,
 					}
 				}
@@ -50,9 +53,9 @@ define_erc20!(
 	flip,
 	Flip,
 	FlipEvents,
-	"$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IFLIP.json"
+	concat!(env!("CF_ETH_CONTRACT_ABI_ROOT"), "/", env!("CF_ETH_CONTRACT_ABI_TAG"), "/IFLIP.json")
 );
-define_erc20!(usdc, Usdc, UsdcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDC.json");
-define_erc20!(usdt, Usdt, UsdtEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDT.json");
-define_erc20!(wbtc, Wbtc, WbtcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IWBTC.json");
-define_erc20!(cbbtc, Cbbtc, CbbtcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/ICBBTC.json");
+define_erc20!(usdc, Usdc, UsdcEvents, concat!(env!("CF_ETH_CONTRACT_ABI_ROOT"), "/IUSDC.json"));
+define_erc20!(usdt, Usdt, UsdtEvents, concat!(env!("CF_ETH_CONTRACT_ABI_ROOT"), "/IUSDT.json"));
+define_erc20!(wbtc, Wbtc, WbtcEvents, concat!(env!("CF_ETH_CONTRACT_ABI_ROOT"), "/IWBTC.json"));
+define_erc20!(cbbtc, Cbbtc, CbbtcEvents, concat!(env!("CF_ETH_CONTRACT_ABI_ROOT"), "/ICBBTC.json"));

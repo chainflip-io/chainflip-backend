@@ -17,7 +17,7 @@
 use crate::{
 	caching_request::CachingRequest,
 	dot::{
-		retry_rpc::{DotRetryRpcClient, DotRetrySigningRpcApi},
+		retry_rpc::{DotRetryRpcClient, DotRetrySigningRpcApi, SubmissionMode},
 		PolkadotHash, PolkadotHeader,
 	},
 };
@@ -142,8 +142,9 @@ impl DotRetrySigningRpcApi for DotCachingClient {
 	async fn submit_raw_encoded_extrinsic(
 		&self,
 		encoded_bytes: Vec<u8>,
+		mode: SubmissionMode,
 	) -> anyhow::Result<PolkadotHash> {
-		self.retry_client.submit_raw_encoded_extrinsic(encoded_bytes).await
+		self.retry_client.submit_raw_encoded_extrinsic(encoded_bytes, mode).await
 	}
 }
 

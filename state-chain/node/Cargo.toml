@@ -76,6 +76,7 @@ pallet-transaction-payment = { workspace = true, default-features = true }
 # These dependencies are used for the node template"s RPCs
 jsonrpsee = { workspace = true, features = ["full"] }
 sp-api = { workspace = true, default-features = true }
+sc-rpc = { workspace = true, default-features = true }
 sc-rpc-api = { workspace = true, default-features = true }
 sp-blockchain = { workspace = true, default-features = true }
 sp-block-builder = { workspace = true, default-features = true }
