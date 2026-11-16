@@ -1927,6 +1927,52 @@ fn full_redemption_deregisters_liquidity_provider() {
 }
 
 #[test]
+fn full_redemption_deregisters_unregistered_account() {
+	const FUNDING_AMOUNT: FlipBalance = 100;
+	const PARTIAL_AMOUNT: FlipBalance = 50;
+	new_test_ext().execute_with(|| {
+		Funding::fund_account(
+			ALICE,
+			FUNDING_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+
+		// A partial redemption leaves the account unregistered.
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			PARTIAL_AMOUNT.into(),
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(ALICE, PARTIAL_AMOUNT, TX_HASH));
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(&ALICE));
+
+		// Redeeming the remaining balance deregisters the account.
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
+			&ALICE,
+			AccountRole::AccountClosing
+		));
+
+		assert_ok!(Funding::redeemed(
+			ALICE,
+			FUNDING_AMOUNT - PARTIAL_AMOUNT - REDEMPTION_TAX,
+			TX_HASH
+		));
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			0,
+			"Account should have been reaped on final redemption."
+		);
+	});
+}
+
+#[test]
 fn full_redemption_requires_explicit_deregistration_of_other_roles() {
 	const FUNDING_AMOUNT: FlipBalance = 100;
 	new_test_ext().execute_with(|| {
