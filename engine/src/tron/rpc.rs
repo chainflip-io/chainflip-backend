@@ -14,15 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use alloy_eips::BlockNumberOrTag;
+use alloy_network::{AnyRpcBlock, AnyRpcTransaction, AnyTransactionReceipt};
+use alloy_rpc_types_eth::{FeeHistory, Filter, Log, TransactionRequest};
+use alloy_signer::SignerSync;
+use alloy_signer_local::PrivateKeySigner;
 use anyhow::anyhow;
-use ethers::{
-	signers::{LocalWallet, Signer},
-	types::{Block, Filter, Log, TransactionReceipt, H160, H256, U256, U64},
-};
 use futures_core::Future;
 use reqwest::Client;
 use serde_json::from_value;
-use sp_core::ecdsa::Signature;
+use sp_core::{ecdsa::Signature, H160, H256, U256};
 use std::{path::PathBuf, str::FromStr};
 
 use cf_utilities::{read_clean_and_decode_hex_str_file, redact_endpoint_secret::SecretUrl};
@@ -32,7 +33,10 @@ use super::rpc_client_api::{
 	TransactionExtention, TransactionInfo, TronAddress, TronBlockRpc,
 };
 use crate::{
-	evm::rpc::{EvmRpcApi, EvmRpcClient},
+	evm::{
+		conversions::{IntoAlloy, IntoSpCore},
+		rpc::{EvmRpcApi, EvmRpcClient},
+	},
 	rpc_utils,
 	tron::rpc_client_api::TriggerConstantContractResult,
 };
@@ -47,7 +51,7 @@ pub struct TronRpcClient {
 	// the getBlockBalance query
 	http_provider: Client,
 	http_endpoint: SecretUrl,
-	// Store the JSON-RPC endpoint for raw calls that bypass ethers deserialization
+	// Store the JSON-RPC endpoint for raw calls that bypass the standard deserialization
 	json_rpc_endpoint: SecretUrl,
 	// Reuse the EVM RPC client for JSON-RPC, it's EVM-compatible
 	evm_rpc_client: EvmRpcClient,
@@ -83,14 +87,16 @@ impl TronRpcClient {
 				.get_block_number()
 				.await
 				.context("Failed to get block number during startup check")?
-				.saturating_sub(20.into());
+				.saturating_sub(20);
 			let block = client
 				.block(block_number)
 				.await
 				.context("Failed to get block during startup check")?;
-			let block_hash = block.hash.context("Block has no hash during startup check")?;
 			client
-				.get_block_balances(i64::try_from(block_number.low_u64())?, block_hash)
+				.get_block_balances(
+					i64::try_from(block_number)?,
+					block.header.hash.into_sp_core(),
+				)
 				.await
 				.context("HTTP API node does not support getBlockBalance — ensure the node has the historical balance query feature enabled")?;
 
@@ -98,7 +104,7 @@ impl TronRpcClient {
 		})
 	}
 
-	/// Make a raw JSON-RPC call bypassing ethers provider and its deserialization.
+	/// Make a raw JSON-RPC call, bypassing the standard deserialization.
 	async fn call_json_rpc(
 		&self,
 		method: &str,
@@ -137,7 +143,7 @@ impl TronRpcClient {
 
 #[derive(Clone)]
 pub struct TronRpcSigningClient<RpcClient> {
-	wallet: LocalWallet,
+	signer: PrivateKeySigner,
 	rpc_client: RpcClient,
 }
 
@@ -152,21 +158,21 @@ impl TronRpcSigningClient<TronRpcClient> {
 		let rpc_client_fut =
 			TronRpcClient::new(http_endpoint, json_rpc_endpoint, expected_chain_id, chain_name)?;
 
-		let wallet = read_clean_and_decode_hex_str_file(
+		let signer = read_clean_and_decode_hex_str_file(
 			&private_key_file,
 			format!("{chain_name} Private Key").as_str(),
-			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
+			|key| PrivateKeySigner::from_str(key).map_err(anyhow::Error::new),
 		)?;
 
 		tracing::info!(
 			"Loaded {chain_name} signing key with address {}",
-			TronAddress::from_evm_address(wallet.address())
+			TronAddress::from_evm_address(signer.address().into_sp_core())
 		);
 
 		Ok(async move {
 			let rpc_client = rpc_client_fut.await?;
 
-			Ok(Self { wallet: wallet.with_chain_id(expected_chain_id), rpc_client })
+			Ok(Self { signer, rpc_client })
 		})
 	}
 }
@@ -215,10 +221,7 @@ pub trait TronRpcApi: Send + Sync + Clone + 'static {
 // Implement EvmRpcApi for TronRpcClient to delegate JSON-RPC calls to the underlying EVM client.
 #[async_trait::async_trait]
 impl EvmRpcApi for TronRpcClient {
-	async fn estimate_gas(
-		&self,
-		req: &ethers::types::Eip1559TransactionRequest,
-	) -> anyhow::Result<U256> {
+	async fn estimate_gas(&self, req: &TransactionRequest) -> anyhow::Result<U256> {
 		self.evm_rpc_client.estimate_gas(req).await
 	}
 
@@ -230,61 +233,58 @@ impl EvmRpcApi for TronRpcClient {
 		self.evm_rpc_client.chain_id().await
 	}
 
-	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt> {
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<AnyTransactionReceipt> {
 		self.evm_rpc_client.transaction_receipt(tx_hash).await
 	}
 
-	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>> {
+	async fn block(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		let result = self
 			.call_json_rpc(
 				"eth_getBlockByNumber",
 				serde_json::json!([format!("0x{:x}", block_number), false]),
 			)
 			.await?;
-		let tron_block: TronBlockRpc<H256> =
+		let tron_block: TronBlockRpc =
 			from_value(result).map_err(|err| anyhow!("Failed to parse TronBlockRpc: {}", err))?;
-		Ok(tron_block.into_ethers_block())
+		tron_block.into_alloy_block()
 	}
 
-	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>> {
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<AnyRpcBlock> {
 		let result = self
 			.call_json_rpc(
 				"eth_getBlockByHash",
 				serde_json::json!([format!("{:?}", block_hash), false]),
 			)
 			.await?;
-		let tron_block: TronBlockRpc<H256> =
+		let tron_block: TronBlockRpc =
 			from_value(result).map_err(|err| anyhow!("Failed to parse TronBlockRpc: {}", err))?;
-		Ok(tron_block.into_ethers_block())
+		tron_block.into_alloy_block()
 	}
 
-	async fn block_with_txs(
-		&self,
-		block_number: U64,
-	) -> anyhow::Result<Block<ethers::types::Transaction>> {
+	async fn block_with_txs(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		self.evm_rpc_client.block_with_txs(block_number).await
 	}
 
 	async fn fee_history(
 		&self,
-		block_count: U256,
-		newest_block: ethers::types::BlockNumber,
+		block_count: u64,
+		newest_block: BlockNumberOrTag,
 		reward_percentiles: &[f64],
-	) -> anyhow::Result<ethers::types::FeeHistory> {
+	) -> anyhow::Result<FeeHistory> {
 		self.evm_rpc_client
 			.fee_history(block_count, newest_block, reward_percentiles)
 			.await
 	}
 
-	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<ethers::types::Transaction> {
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<AnyRpcTransaction> {
 		self.evm_rpc_client.get_transaction(tx_hash).await
 	}
 
-	async fn get_block_number(&self) -> anyhow::Result<U64> {
+	async fn get_block_number(&self) -> anyhow::Result<u64> {
 		self.evm_rpc_client.get_block_number().await
 	}
 
-	async fn get_finalized_block_number(&self) -> anyhow::Result<U64> {
+	async fn get_finalized_block_number(&self) -> anyhow::Result<u64> {
 		self.evm_rpc_client.get_finalized_block_number().await
 	}
 }
@@ -478,17 +478,11 @@ pub trait TronSigningRpcApi: TronRpcApi {
 
 #[async_trait::async_trait]
 impl<RpcClient: EvmRpcApi> EvmRpcApi for TronRpcSigningClient<RpcClient> {
-	async fn estimate_gas(
-		&self,
-		req: &ethers::types::Eip1559TransactionRequest,
-	) -> anyhow::Result<U256> {
+	async fn estimate_gas(&self, req: &TransactionRequest) -> anyhow::Result<U256> {
 		self.rpc_client.estimate_gas(req).await
 	}
 
-	async fn get_logs(
-		&self,
-		filter: ethers::types::Filter,
-	) -> anyhow::Result<Vec<ethers::types::Log>> {
+	async fn get_logs(&self, filter: Filter) -> anyhow::Result<Vec<Log>> {
 		self.rpc_client.get_logs(filter).await
 	}
 
@@ -496,55 +490,40 @@ impl<RpcClient: EvmRpcApi> EvmRpcApi for TronRpcSigningClient<RpcClient> {
 		self.rpc_client.chain_id().await
 	}
 
-	async fn transaction_receipt(
-		&self,
-		tx_hash: ethers::types::H256,
-	) -> anyhow::Result<ethers::types::TransactionReceipt> {
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<AnyTransactionReceipt> {
 		self.rpc_client.transaction_receipt(tx_hash).await
 	}
 
-	async fn block(
-		&self,
-		block_number: ethers::types::U64,
-	) -> anyhow::Result<ethers::types::Block<ethers::types::H256>> {
+	async fn block(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		self.rpc_client.block(block_number).await
 	}
 
-	async fn block_by_hash(
-		&self,
-		block_hash: ethers::types::H256,
-	) -> anyhow::Result<ethers::types::Block<ethers::types::H256>> {
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<AnyRpcBlock> {
 		self.rpc_client.block_by_hash(block_hash).await
 	}
 
-	async fn block_with_txs(
-		&self,
-		block_number: ethers::types::U64,
-	) -> anyhow::Result<ethers::types::Block<ethers::types::Transaction>> {
+	async fn block_with_txs(&self, block_number: u64) -> anyhow::Result<AnyRpcBlock> {
 		self.rpc_client.block_with_txs(block_number).await
 	}
 
 	async fn fee_history(
 		&self,
-		block_count: U256,
-		newest_block: ethers::types::BlockNumber,
+		block_count: u64,
+		newest_block: BlockNumberOrTag,
 		reward_percentiles: &[f64],
-	) -> anyhow::Result<ethers::types::FeeHistory> {
+	) -> anyhow::Result<FeeHistory> {
 		self.rpc_client.fee_history(block_count, newest_block, reward_percentiles).await
 	}
 
-	async fn get_transaction(
-		&self,
-		tx_hash: ethers::types::H256,
-	) -> anyhow::Result<ethers::types::Transaction> {
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<AnyRpcTransaction> {
 		self.rpc_client.get_transaction(tx_hash).await
 	}
 
-	async fn get_block_number(&self) -> anyhow::Result<ethers::types::U64> {
+	async fn get_block_number(&self) -> anyhow::Result<u64> {
 		self.rpc_client.get_block_number().await
 	}
 
-	async fn get_finalized_block_number(&self) -> anyhow::Result<ethers::types::U64> {
+	async fn get_finalized_block_number(&self) -> anyhow::Result<u64> {
 		self.rpc_client.get_finalized_block_number().await
 	}
 }
@@ -552,27 +531,24 @@ impl<RpcClient: EvmRpcApi> EvmRpcApi for TronRpcSigningClient<RpcClient> {
 #[async_trait::async_trait]
 impl<RpcClient: TronRpcApi> TronSigningRpcApi for TronRpcSigningClient<RpcClient> {
 	fn address(&self) -> H160 {
-		self.wallet.address()
+		self.signer.address().into_sp_core()
 	}
 
 	fn sign_raw_bytes(&self, bytes: Vec<u8>) -> anyhow::Result<Signature> {
-		// Hash the raw data with SHA256 (TRON uses SHA256, not Keccak256)
-		let hash = sp_crypto_hashing::sha2_256(&bytes);
-
-		// Sign the hash using the wallet
-		let signature = self
-			.wallet
-			.sign_hash(H256::from(hash))
-			.context("Failed to sign message for {self.chain_name}")?;
-
-		// TRON uses recoverable signatures (65 bytes: r(32) + s(32) + v(1))
-		let mut sig_bytes = [0u8; 65];
-		sig_bytes[0..32].copy_from_slice(&signature.r.to_big_endian());
-		sig_bytes[32..64].copy_from_slice(&signature.s.to_big_endian());
-		sig_bytes[64] = signature.v as u8;
-
-		Ok(Signature::from(sig_bytes))
+		sign_raw_bytes(&self.signer, &bytes)
 	}
+}
+
+fn sign_raw_bytes(signer: &PrivateKeySigner, bytes: &[u8]) -> anyhow::Result<Signature> {
+	// Hash the raw data with SHA256 (TRON uses SHA256, not Keccak256)
+	let hash = sp_crypto_hashing::sha2_256(bytes);
+
+	let signature = signer
+		.sign_hash_sync(&H256::from(hash).into_alloy())
+		.context("Failed to sign Tron message")?;
+
+	// TRON uses recoverable signatures: r(32) + s(32) + v(1), with v = 27 + y-parity.
+	Ok(Signature::from(signature.as_bytes()))
 }
 
 #[async_trait::async_trait]
@@ -658,6 +634,19 @@ impl<RpcClient: TronRpcApi> TronRpcApi for TronRpcSigningClient<RpcClient> {
 mod tests {
 	use super::*;
 	use crate::tron::rpc_client_api::{TransactionResultStatus, TronAddress};
+
+	#[test]
+	fn raw_bytes_signature_is_unchanged() {
+		// Expected value was produced with ethers.js for the same key and message.
+		let signer = PrivateKeySigner::from_str(
+			"4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318",
+		)
+		.unwrap();
+		assert_eq!(
+			hex::encode(sign_raw_bytes(&signer, b"chainflip tron vector").unwrap().0),
+			"b1166107c5ff1860b163a148ff1c4c7d6aa93c632ef8b858cde8255fa29f514f4ececa6e47c32af54824a92e0eb9e13512cf89ea6de201b553aeb1dfa7a9b9631c"
+		);
+	}
 
 	#[ignore = "requires local private tron node"]
 	#[tokio::test]
@@ -981,13 +970,13 @@ mod tests {
 
 		// Get the block via JSON-RPC to obtain its hash
 		let block = tron_rpc_client.block(block_number).await.unwrap();
-		let block_hash = block.hash.expect("Block should have a hash");
+		let block_hash = block.header.hash.into_sp_core();
 		println!("Block hash: {:?}", block_hash);
 		println!("Block hash: {:x}", block_hash);
 
 		// Query block balances using the HTTP API
 		let balance = tron_rpc_client
-			.get_block_balances(block_number.low_u64() as i64, block_hash)
+			.get_block_balances(block_number as i64, block_hash)
 			.await
 			.unwrap();
 		println!("Block balance: {:?}", balance);

@@ -26,7 +26,7 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::hub::Asset as HubAsset, PolkadotBlockNumber};
 use cf_utilities::task_scope::Scope;
-use core::time::Duration;
+use core::{future::Future, time::Duration};
 use subxt::{backend::legacy::rpc_methods::Bytes, events::Events, PolkadotConfig};
 
 use crate::retrier::{RequestLog, RetrierClient};
@@ -46,6 +46,15 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
 const MAX_RETRY_FOR_WITH_RESULT: Attempt = 2;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubmissionMode {
+	/// Retry failed submissions, with backoff.
+	Retry,
+	/// For submissions that shouldn't hold up the caller: a rejection from the node is returned
+	/// immediately, without retrying or backing off.
+	BestEffort,
+}
 
 impl DotRetryRpcClient {
 	pub fn new(
@@ -87,6 +96,44 @@ impl DotRetryRpcClient {
 	}
 }
 
+// Generic over the client so that the modes can be tested without a live node.
+async fn submit_with_mode<Client, Submit, SubmitFuture>(
+	retrier: &RetrierClient<Client>,
+	encoded_bytes: Vec<u8>,
+	mode: SubmissionMode,
+	submit: Submit,
+) -> Result<PolkadotHash>
+where
+	Client: Clone + Send + Sync + 'static,
+	Submit: Fn(Client, Vec<u8>) -> SubmitFuture + Send + Sync + 'static,
+	SubmitFuture: Future<Output = Result<PolkadotHash>> + Send + 'static,
+{
+	retrier
+		.request_with_limit(
+			RequestLog::new(
+				"submit_raw_encoded_extrinsic".to_string(),
+				Some(format!("0x{}", hex::encode(&encoded_bytes[..]))),
+			),
+			Box::pin(move |client| {
+				let submission = submit(client, encoded_bytes.clone());
+				Box::pin(async move {
+					let result = submission.await;
+					match mode {
+						SubmissionMode::Retry => result.map(Ok),
+						// Return the rejection as a value: the retrier backs off on any error
+						// before checking the retry limit, even with a limit of 1.
+						SubmissionMode::BestEffort => Ok(result),
+					}
+				})
+			}),
+			match mode {
+				SubmissionMode::Retry => MAX_BROADCAST_RETRIES,
+				SubmissionMode::BestEffort => 1,
+			},
+		)
+		.await?
+}
+
 #[async_trait::async_trait]
 pub trait DotRetryRpcApi: Clone {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
@@ -119,6 +166,7 @@ pub trait DotRetrySigningRpcApi {
 	async fn submit_raw_encoded_extrinsic(
 		&self,
 		encoded_bytes: Vec<u8>,
+		mode: SubmissionMode,
 	) -> anyhow::Result<PolkadotHash>;
 }
 
@@ -237,22 +285,17 @@ impl DotRetrySigningRpcApi for DotRetryRpcClient {
 	async fn submit_raw_encoded_extrinsic(
 		&self,
 		encoded_bytes: Vec<u8>,
+		mode: SubmissionMode,
 	) -> anyhow::Result<PolkadotHash> {
-		self.rpc_retry_client
-			.request_with_limit(
-				RequestLog::new(
-					"submit_raw_encoded_extrinsic".to_string(),
-					Some(format!("0x{}", hex::encode(&encoded_bytes[..]))),
-				),
-				Box::pin(move |client| {
-					let encoded_bytes = encoded_bytes.clone();
-					Box::pin(async move {
-						client.http_client().await.submit_raw_encoded_extrinsic(encoded_bytes).await
-					})
-				}),
-				MAX_BROADCAST_RETRIES,
-			)
-			.await
+		submit_with_mode(
+			&self.rpc_retry_client,
+			encoded_bytes,
+			mode,
+			|client, encoded_bytes| async move {
+				client.http_client().await.submit_raw_encoded_extrinsic(encoded_bytes).await
+			},
+		)
+		.await
 	}
 }
 
@@ -463,6 +506,7 @@ pub mod mocks {
 				async fn submit_raw_encoded_extrinsic(
 					&self,
 					encoded_bytes: Vec<u8>,
+					mode: SubmissionMode,
 				) -> anyhow::Result<PolkadotHash>;
 			}
 	}
@@ -513,15 +557,110 @@ pub mod mocks {
 
 #[cfg(test)]
 mod tests {
+	use std::{
+		sync::{
+			atomic::{AtomicU32, Ordering},
+			Arc,
+		},
+		time::Duration,
+	};
+
+	use anyhow::{anyhow, Result};
 	use futures_util::FutureExt;
 
-	use cf_utilities::task_scope::task_scope;
+	use cf_utilities::task_scope::{task_scope, Scope};
 
+	use super::{submit_with_mode, PolkadotHash, MAX_BROADCAST_RETRIES};
 	use crate::{
-		dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient, DotRetrySigningRpcApi},
-		retrier::NoRetryLimit,
+		dot::retry_rpc::{
+			DotRetryRpcApi, DotRetryRpcClient, DotRetrySigningRpcApi, SubmissionMode,
+		},
+		retrier::{NoRetryLimit, RetrierClient, MAX_RPC_RETRY_DELAY},
 		settings::{HttpEndpoint, NodeContainer},
 	};
+
+	const REJECTION: &str = "Transaction is temporarily banned";
+
+	// Runs a submission that the node always rejects, returning its result and how many times it
+	// was attempted.
+	async fn submit_rejected(
+		scope: &Scope<'_, anyhow::Error>,
+		mode: SubmissionMode,
+		initial_request_timeout: Duration,
+		time_limit: Duration,
+	) -> (Result<PolkadotHash>, u32) {
+		let retrier = RetrierClient::new(
+			scope,
+			"test",
+			async move {},
+			None,
+			initial_request_timeout,
+			MAX_RPC_RETRY_DELAY,
+			100,
+		);
+		let attempts = Arc::new(AtomicU32::new(0));
+		let result = {
+			let attempts = attempts.clone();
+			tokio::time::timeout(
+				time_limit,
+				submit_with_mode(&retrier, vec![], mode, move |_client, _encoded_bytes| {
+					attempts.fetch_add(1, Ordering::SeqCst);
+					async { Err(anyhow!(REJECTION)) }
+				}),
+			)
+			.await
+			.expect("Submission should finish within the time limit")
+		};
+		(result, attempts.load(Ordering::SeqCst))
+	}
+
+	#[tokio::test]
+	async fn best_effort_returns_rejection_without_backoff() {
+		task_scope(|scope| {
+			async move {
+				// The backoff scales with the request timeout, so any backoff would take
+				// several seconds and exceed the time limit.
+				let (result, attempts) = submit_rejected(
+					scope,
+					SubmissionMode::BestEffort,
+					Duration::from_secs(10),
+					Duration::from_secs(1),
+				)
+				.await;
+
+				assert_eq!(result.unwrap_err().to_string(), REJECTION);
+				assert_eq!(attempts, 1);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn retry_retries_rejection_up_to_the_limit() {
+		task_scope(|scope| {
+			async move {
+				let (result, attempts) = submit_rejected(
+					scope,
+					SubmissionMode::Retry,
+					Duration::from_millis(100),
+					Duration::from_secs(10),
+				)
+				.await;
+
+				assert!(result.unwrap_err().to_string().contains(REJECTION));
+				assert_eq!(attempts, MAX_BROADCAST_RETRIES);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
 
 	#[tokio::test]
 	#[ignore = "Requires network connection and will last forever with failing extrinsic submission"]
@@ -551,7 +690,10 @@ mod tests {
 				println!("Runtime version: {:?}", runtime_version);
 
 				let hash = dot_retry_rpc_client
-					.submit_raw_encoded_extrinsic(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+					.submit_raw_encoded_extrinsic(
+						vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+						SubmissionMode::Retry,
+					)
 					.await
 					.unwrap();
 				println!("Extrinsic hash: {}", hash);

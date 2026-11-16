@@ -44,8 +44,10 @@ use std::{
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::{
-	btc::rpc::BtcRpcApi, dot::retry_rpc::DotRetrySigningRpcApi,
-	evm::retry_rpc::EvmRetrySigningRpcApi, sol::retry_rpc::SolRetryRpcApi,
+	btc::rpc::BtcRpcApi,
+	dot::retry_rpc::{DotRetrySigningRpcApi, SubmissionMode},
+	evm::retry_rpc::EvmRetrySigningRpcApi,
+	sol::retry_rpc::SolRetryRpcApi,
 	tron::retry_rpc::TronRetrySigningRpcApi,
 };
 use cf_utilities::task_scope::{task_scope, Scope};
@@ -672,18 +674,20 @@ where
                                                         if let Some(awaiting_broadcast_data) = state_chain_client
                                                             .storage_map_entry::<pallet_cf_broadcast::AwaitingBroadcast<Runtime, AssethubInstance>>(current_block.hash, &awaiting_broadcast_id)
                                                             .await? {
-                                                                match hub_rpc.submit_raw_encoded_extrinsic(awaiting_broadcast_data.transaction_payload.encoded_extrinsic).await {
+                                                                match hub_rpc.submit_raw_encoded_extrinsic(awaiting_broadcast_data.transaction_payload.encoded_extrinsic, SubmissionMode::BestEffort).await {
                                                                     Ok(tx_hash) => info!("Assethub PendingBroadcast {awaiting_broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
                                                                     Err(error) => {
                                                                         // Just log: this backfill is best-effort (the tx is usually
-                                                                        // already in the pool) and not our broadcast to report on.
+                                                                        // already in the pool, or was rejected with 1012 because it's
+                                                                        // finalized but not yet witnessed) and not our broadcast to
+                                                                        // report on.
                                                                         warn!("Error on Assethub PendingBroadcast {awaiting_broadcast_id:?}: {error:?}");
                                                                     }
                                                                 }
                                                             }
                                                     }
 
-                                                match hub_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
+                                                match hub_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic, SubmissionMode::Retry).await {
                                                     Ok(tx_hash) => info!("Assethub TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
                                                         error!("Error on Assethub TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
