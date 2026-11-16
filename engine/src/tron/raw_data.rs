@@ -228,7 +228,7 @@ pub fn validate_raw_data(
 mod tests {
 	use super::*;
 	use cf_utilities::{assert_err, assert_ok};
-	use ethers::types::H160;
+	use sp_core::H160;
 
 	const OWNER: H160 = H160([0x11; 20]);
 	const CONTRACT: H160 = H160([0x22; 20]);

@@ -495,7 +495,7 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 
 						// Derived rather than taken from the response: the txID is the hash of the
 						// bytes we signed.
-						let tx_id = H256(sp_core::hashing::sha2_256(&raw_data_bytes));
+						let tx_id = H256(sp_crypto_hashing::sha2_256(&raw_data_bytes));
 
 						let signature = client.sign_raw_bytes(raw_data_bytes).context("Failed to sign the transaction")?;
 
