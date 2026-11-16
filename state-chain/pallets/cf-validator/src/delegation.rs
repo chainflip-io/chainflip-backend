@@ -18,7 +18,7 @@ use crate::{
 	ValidatorToOperator,
 };
 use cf_primitives::{EpochIndex, ONE_AS_BASIS_POINTS};
-use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
+use cf_traits::{DistributionStep, EpochInfo, RewardsDistribution, Slashing};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
@@ -27,8 +27,7 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, Zero},
 		Rounding, Saturating,
 	},
-	traits::{Get, IsType},
-	weights::{Weight, WeightMeter},
+	traits::IsType,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
@@ -402,16 +401,15 @@ impl<T: Config> DelegatedRewardsDistribution<T> {
 	pub(crate) fn distribute_all(
 		epoch_index: EpochIndex,
 		total_amount: T::Amount,
-		settle: impl FnMut(&T::AccountId, T::Amount),
+		mut settle: impl FnMut(&T::AccountId, T::Amount),
 	) {
-		let resume_from = <Self as RewardsDistribution>::distribute(
-			epoch_index,
-			total_amount,
-			None,
-			&mut WeightMeter::new(),
-			|_, _| Weight::zero(),
-			settle,
-		);
+		let resume_from =
+			<Self as RewardsDistribution>::distribute(epoch_index, total_amount, None, |step| {
+				if let DistributionStep::Pay { account, amount, .. } = step {
+					settle(account, amount);
+				}
+				true
+			});
 		assert!(resume_from.is_none());
 	}
 }
@@ -428,9 +426,7 @@ where
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
 		resume_from: Option<Self::Cursor>,
-		meter: &mut WeightMeter,
-		weight: impl Fn(u32, u32) -> Weight,
-		mut settle: impl FnMut(&T::AccountId, T::Amount),
+		mut step: impl FnMut(DistributionStep<'_, T::AccountId, T::Amount>) -> bool,
 	) -> Option<Self::Cursor> {
 		let authorities: Vec<T::AccountId> = HistoricalAuthorities::<T>::get(epoch_index)
 			.into_iter()
@@ -456,11 +452,6 @@ where
 			return None;
 		}
 		let per_authority_amount = total_amount / (authorities.len() as u32).into();
-		let read_weight = T::DbWeight::get().reads(1);
-		// All of a group's cuts are computed even when only some of them are settled.
-		let group_weight = |payee_count: u32| weight(0, payee_count).saturating_sub(weight(0, 0));
-		let payee_weight =
-			|payee_count: u32| weight(1, payee_count).saturating_sub(weight(0, payee_count));
 		// Each payee's account and bid; their size gives a snapshot's payee count before decoding.
 		let payee_encoded_len = T::AccountId::max_encoded_len() + T::Amount::max_encoded_len();
 
@@ -479,8 +470,8 @@ where
 				for (operator, next_payee) in
 					resumed.into_iter().chain(remaining.map(|operator| (operator, 0)))
 				{
-					// Snapshots can be large, so they are only decoded once their cost is charged.
-					if meter.try_consume(read_weight).is_err() {
+					// Snapshots can be large, so they are only decoded once their cost is approved.
+					if !step(DistributionStep::ReadGroup) {
 						return Some(DistributionCursor::Snapshots(Some((operator, next_payee))));
 					}
 					let Some(encoded) = frame_support::storage::unhashed::get_raw(
@@ -491,7 +482,8 @@ where
 					let payee_count =
 						(1 + encoded.len().checked_div(payee_encoded_len).unwrap_or_default())
 							as u32;
-					if meter.try_consume(group_weight(payee_count)).is_err() {
+					// All of a group's cuts are computed even when only some of them are settled.
+					if !step(DistributionStep::LoadGroup { payees: payee_count }) {
 						return Some(DistributionCursor::Snapshots(Some((operator, next_payee))));
 					}
 					let Ok(snapshot) =
@@ -529,13 +521,13 @@ where
 					for (index, (account, amount)) in
 						snapshot.distribute(total, bond).enumerate().skip(next_payee as usize)
 					{
-						if meter.try_consume(payee_weight(payee_count)).is_err() {
+						if !step(DistributionStep::Pay { account, amount, group_size: payee_count })
+						{
 							return Some(DistributionCursor::Snapshots(Some((
 								operator.clone(),
 								index as u32,
 							))));
 						}
-						settle(account, amount);
 					}
 				}
 				0
@@ -545,16 +537,19 @@ where
 
 		// Authorities with an operator were settled with their operator's snapshot.
 		for (index, authority) in authorities.iter().enumerate().skip(next_authority as usize) {
-			if meter.try_consume(read_weight).is_err() {
+			if !step(DistributionStep::ReadGroup) {
 				return Some(DistributionCursor::IndependentAuthorities(index as u32));
 			}
 			if ValidatorToOperator::<T>::contains_key(epoch_index, authority) {
 				continue;
 			}
-			if meter.try_consume(payee_weight(1)).is_err() {
+			if !step(DistributionStep::Pay {
+				account: authority,
+				amount: per_authority_amount,
+				group_size: 1,
+			}) {
 				return Some(DistributionCursor::IndependentAuthorities(index as u32));
 			}
-			settle(authority, per_authority_amount);
 		}
 		None
 	}

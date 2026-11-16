@@ -36,8 +36,8 @@ pub use weights::WeightInfo;
 
 use cf_primitives::EpochIndex;
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationHooks, FeePayment, FundingInfo, RewardsDistribution,
-	Slashing,
+	AccountInfo, Bonding, DeregistrationHooks, DistributionStep, FeePayment, FundingInfo,
+	RewardsDistribution, Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
@@ -639,31 +639,39 @@ impl<T: Config> Pallet<T> {
 			epoch_index,
 			total,
 			previous_cursor.clone(),
-			meter,
-			weight,
-			|account, amount| {
-				// Skip zero-value settlements: `distribute` calls this for every reward-pool
-				// participant, including ones with nothing due; avoid the wasted withdrawal/event
-				// noise here rather than baking that policy into the shared distribution logic.
-				if amount.is_zero() {
-					return;
-				}
-				// Accounts reaped since the epoch ended forfeit their share to the next epoch,
-				// since crediting them would recreate their balance without an account to own
-				// it.
-				if !frame_system::Pallet::<T>::account_exists(account) {
-					return;
-				}
-				Pallet::<T>::settle(
-					account,
-					Pallet::<T>::withdraw_reserves(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID, amount)
+			|step| match step {
+				DistributionStep::ReadGroup =>
+					meter.try_consume(T::DbWeight::get().reads(1)).is_ok(),
+				DistributionStep::LoadGroup { payees } =>
+					meter.try_consume(weight(0, payees).saturating_sub(weight(0, 0))).is_ok(),
+				DistributionStep::Pay { account, amount, group_size } => {
+					if meter
+						.try_consume(weight(1, group_size).saturating_sub(weight(0, group_size)))
+						.is_err()
+					{
+						return false;
+					}
+					// Accounts reaped since the epoch ended forfeit their share to the next epoch,
+					// since crediting them would recreate their balance without an account to own
+					// it.
+					if amount.is_zero() || !frame_system::Pallet::<T>::account_exists(account) {
+						return true;
+					}
+					Pallet::<T>::settle(
+						account,
+						Pallet::<T>::withdraw_reserves(
+							ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
+							amount,
+						)
 						.into(),
-				);
-				undistributed.saturating_reduce(amount);
-				flip_distributed_map
-					.entry(account.clone())
-					.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
-					.or_insert(amount);
+					);
+					undistributed.saturating_reduce(amount);
+					flip_distributed_map
+						.entry(account.clone())
+						.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
+						.or_insert(amount);
+					true
+				},
 			},
 		);
 

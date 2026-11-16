@@ -15,9 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{MockPallet, MockPalletStorage};
-use crate::{Chainflip, RewardsDistribution};
+use crate::{Chainflip, DistributionStep, RewardsDistribution};
 use cf_primitives::EpochIndex;
-use frame_support::weights::{Weight, WeightMeter};
 
 pub struct MockRewardsDistribution<T>(core::marker::PhantomData<T>);
 
@@ -34,9 +33,7 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
 		resume_from: Option<u32>,
-		meter: &mut WeightMeter,
-		weight: impl Fn(u32, u32) -> Weight,
-		mut settle: impl FnMut(&Self::AccountId, Self::Balance),
+		mut step: impl FnMut(DistributionStep<'_, Self::AccountId, Self::Balance>) -> bool,
 	) -> Option<u32> {
 		let beneficiaries: sp_std::vec::Vec<Self::AccountId> =
 			<Self as MockPalletStorage>::get_storage(b"BENEFICIARIES", epoch_index)
@@ -46,15 +43,16 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 		}
 		let count = beneficiaries.len() as u32;
 		let start = resume_from.unwrap_or_default();
-		if meter.try_consume(weight(0, count).saturating_sub(weight(0, 0))).is_err() {
+		if !step(DistributionStep::LoadGroup { payees: count }) {
 			return Some(start);
 		}
 		let per_beneficiary_amount = total_amount / count.into();
 		for (settled, beneficiary) in (0..).zip(beneficiaries.iter().skip(start as usize)) {
-			if meter
-				.try_consume(weight(settled + 1, count).saturating_sub(weight(settled, count)))
-				.is_err()
-			{
+			if !step(DistributionStep::Pay {
+				account: beneficiary,
+				amount: per_beneficiary_amount,
+				group_size: count,
+			}) {
 				return Some(start + settled);
 			}
 			<Self as MockPalletStorage>::mutate_storage(
@@ -65,7 +63,6 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 					*balance = Some(current_balance + per_beneficiary_amount);
 				},
 			);
-			settle(beneficiary, per_beneficiary_amount);
 		}
 		None
 	}

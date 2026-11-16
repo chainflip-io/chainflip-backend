@@ -4196,13 +4196,10 @@ fn distribute_all_matches_looped_distribute() {
 #[test]
 fn distribution_in_chunks_matches_distribute_all() {
 	use crate::delegation::DelegatedRewardsDistribution;
-	use cf_traits::RewardsDistribution;
-	use frame_support::weights::{Weight, WeightMeter};
+	use cf_traits::{DistributionStep, RewardsDistribution};
 
 	const EPOCH: u32 = 10;
 	const TOTAL: u128 = 1_000_003;
-	// Dwarfs the storage reads charged on top, so a budget of `n` units settles `n` payees.
-	const UNIT: u64 = 1_000_000_000_000;
 
 	new_test_ext().execute_with(|| {
 		crate::HistoricalBonds::<Test>::insert(EPOCH, 1_000_000u128);
@@ -4233,17 +4230,20 @@ fn distribution_in_chunks_matches_distribute_all() {
 			let mut cursor = None;
 			let mut steps = 0;
 			loop {
-				let mut meter = WeightMeter::with_limit(Weight::from_parts(
-					payees_per_step * UNIT + UNIT / 2,
-					u64::MAX,
-				));
+				let mut payments_left = payees_per_step;
 				cursor = DelegatedRewardsDistribution::<Test>::distribute(
 					EPOCH,
 					TOTAL,
 					cursor,
-					&mut meter,
-					|payees, _| Weight::from_parts(u64::from(payees) * UNIT, 0),
-					|account, amount| settled.push((*account, amount)),
+					|step| match step {
+						DistributionStep::Pay { .. } if payments_left == 0 => false,
+						DistributionStep::Pay { account, amount, .. } => {
+							payments_left -= 1;
+							settled.push((*account, amount));
+							true
+						},
+						_ => true,
+					},
 				);
 				steps += 1;
 				if cursor.is_none() {
@@ -4251,7 +4251,7 @@ fn distribution_in_chunks_matches_distribute_all() {
 				}
 			}
 			assert_eq!(settled, expected, "{payees_per_step} payees per step");
-			// Only settling a payee is costly, so no step is spent on reads alone.
+			// Only payments are limited, so no step is spent on reads alone.
 			assert_eq!(
 				steps,
 				(expected.len() as u64).div_ceil(payees_per_step),

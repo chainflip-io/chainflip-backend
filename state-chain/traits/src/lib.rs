@@ -70,7 +70,6 @@ use frame_support::{
 		Percent,
 	},
 	traits::{ConstU32, EnsureOrigin, Get, IsType, UnfilteredDispatchable},
-	weights::{Weight, WeightMeter},
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
@@ -359,6 +358,17 @@ pub trait AccountInfo {
 	fn liquid_funds(account_id: &Self::AccountId) -> Self::Amount;
 }
 
+/// A unit of work [RewardsDistribution::distribute] needs approval for before doing it.
+#[derive(Debug, PartialEq, Eq)]
+pub enum DistributionStep<'a, AccountId, Balance> {
+	/// Reading the next group of recipients from storage.
+	ReadGroup,
+	/// Computing the cuts of a group of `payees` recipients.
+	LoadGroup { payees: u32 },
+	/// Paying `amount` to `account`, one recipient of a group of `group_size`.
+	Pay { account: &'a AccountId, amount: Balance, group_size: u32 },
+}
+
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	type Balance;
@@ -367,22 +377,17 @@ pub trait RewardsDistribution {
 	type Cursor: Parameter + MaxEncodedLen;
 
 	/// Splits `total_amount` evenly across `epoch_index`'s complete set of reward recipients
-	/// (e.g. that epoch's full authority set), as determined by the implementation, settling as
-	/// many of them as `meter` allows.
+	/// (e.g. that epoch's full authority set), as determined by the implementation.
 	///
-	/// Recipients are settled in groups that are each read from storage in one go.
-	/// `weight(p, n)` is the cost of settling `p` recipients of a group of `n`, including the
-	/// fixed cost of a distribution step, which the caller charges before calling this.
-	///
-	/// Starts from `resume_from`, or from the first recipient if `None`. Returns where to resume,
-	/// or `None` once every recipient has been settled.
+	/// Each step is passed to `step`, which carries it out (for [DistributionStep::Pay], by
+	/// paying the recipient) and returns `true`, or returns `false` to pause the distribution
+	/// before it. Starts from `resume_from`, or from the first recipient if `None`. Returns where
+	/// to resume, or `None` once every recipient has been paid.
 	fn distribute(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
 		resume_from: Option<Self::Cursor>,
-		meter: &mut WeightMeter,
-		weight: impl Fn(u32, u32) -> Weight,
-		settle: impl FnMut(&Self::AccountId, Self::Balance),
+		step: impl FnMut(DistributionStep<'_, Self::AccountId, Self::Balance>) -> bool,
 	) -> Option<Self::Cursor>;
 
 	/// Registers `payee_count` reward recipients for `epoch_index`, arranged to make
