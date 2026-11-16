@@ -214,6 +214,7 @@ create_runner() {
     "RUNNER_LABEL=$runner_label" \
     "RUNNER_NAME=$runner_name" \
     "RUNNER_REGISTRATION_TOKEN=$registration_token" \
+    "INSTALL_LOCALNET_DEPS=${INSTALL_LOCALNET_DEPS:-false}" \
     "SOLANA_VERSION=${SOLANA_VERSION:-}" \
     "LOCALNET_COMPOSE_URL=${LOCALNET_COMPOSE_URL:-}" \
     "LOCALNET_NODE_COUNT=${LOCALNET_NODE_COUNT:-}" \

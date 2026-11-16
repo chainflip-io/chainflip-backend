@@ -48,6 +48,7 @@ jobs:
           CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
           CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
           LOG_POSTFIX: ${{ inputs.log-postfix }}
+          INSTALL_LOCALNET_DEPS: "true"
           LOCALNET_COMPOSE_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/localnet/docker-compose.yml
           LOCALNET_NODE_COUNT: "${{ inputs.node-count }}-node"
         run: |
