@@ -34,6 +34,7 @@ mod response_status;
 use cf_chains::{instances::PalletInstanceAlias, ChainCrypto};
 use cf_primitives::{
 	AuthorityCount, CeremonyId, EpochIndex, FlipBalance, ThresholdSignatureRequestId as RequestId,
+	SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::{log_or_panic, EnumVariant};
 use cf_traits::{
@@ -46,13 +47,10 @@ use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
-	sp_runtime::{
-		traits::{BlockNumberProvider, Saturating},
-		RuntimeDebug,
-	},
+	sp_runtime::traits::{BlockNumberProvider, Saturating},
 	traits::{DefensiveOption, EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable},
 	weights::Weight,
-	RuntimeDebugNoBound,
+	DebugNoBound,
 };
 use response_status::ResponseStatus;
 use scale_info::TypeInfo;
@@ -92,15 +90,10 @@ pub type KeyHandoverResponseStatus<T, I> =
 	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
 )]
 pub enum PalletConfigUpdate {
-	/// Set the maximum duration (in blocks) of a threshold signing ceremony before it is timed out
-	/// and retried.
-	ThresholdSignatureResponseTimeout { new_timeout: u32 },
-	/// Set the maximum duration (in blocks) we wait for all validators to respond during a keygen
-	/// ceremony. After this duration all validators who haven't responded yet are assumed to have
-	/// failed.
-	KeygenResponseTimeout { new_timeout: u32 },
 	/// Set the amount of FLIP (in Flipperinos) that is slashed for an agreed reported party.
 	KeygenSlashAmount { amount_to_slash: FlipBalance },
+	/// Set the multisig ceremony stage timeouts. See [`CeremonyStageTimeouts`].
+	CeremonyStageTimeouts { timeouts: CeremonyStageTimeouts },
 }
 
 #[derive(
@@ -121,7 +114,7 @@ pub enum PalletOffence {
 	FailedKeyHandover,
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum RequestType<Key, Participants> {
 	/// Uses the provided key and selects new participants from the provided epoch.
 	/// This signing request will be retried until success.
@@ -142,9 +135,7 @@ pub enum RequestType<Key, Participants> {
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
-#[derive(
-	Clone, Copy, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ThresholdCeremonyType<Participants> {
 	Standard,
 	KeygenVerification,
@@ -157,15 +148,7 @@ pub enum ThresholdCeremonyType<Participants> {
 }
 
 #[derive(
-	Clone,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	GenericTypeInfo,
-	PartialEq,
-	Eq,
-	Default,
-	RuntimeDebug,
+	Clone, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo, PartialEq, Eq, Default, Debug,
 )]
 #[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
@@ -174,9 +157,7 @@ pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
 }
 
 /// The current status of a key rotation.
-#[derive(
-	PartialEq, Eq, Clone, Encode, Decode, GenericTypeInfo, EnumVariant, RuntimeDebugNoBound,
-)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, GenericTypeInfo, EnumVariant, DebugNoBound)]
 #[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
@@ -234,17 +215,68 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	},
 }
 
-pub const STORAGE_VERSION_U16: u16 = 7;
+pub const STORAGE_VERSION_U16: u16 = 8;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
-const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
-const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT: u32 = 90;
+const EXPECTED_FINALITY_DELAY_BLOCKS: u32 = 4;
+/// The transaction with the ceremony outcome needs some time to propagate to other nodes.
+const NETWORK_DELAY_SECONDS: u32 = 6;
+/// Buffer for final key computation.
+const KEY_DERIVATION_DELAY_SECONDS: u32 = 30;
+const TIMEOUT_BUFFER_SECONDS: u32 =
+	EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) + NETWORK_DELAY_SECONDS;
 
-struct GetFromU32<C: Get<u32>>(PhantomData<C>);
+const NUM_SIGNING_STAGES: u32 = 4;
+/// Key handover has one more stage than keygen.
+const NUM_KEYGEN_STAGES: u32 = 10;
 
-impl<C: Get<u32>, B: From<u32>> Get<B> for GetFromU32<C> {
-	fn get() -> B {
-		C::get().into()
+/// How long each stage of a multisig ceremony may last. Engines add the stage timeout to a
+/// cumulative deadline on entering each stage, so unused time carries over to later stages.
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+pub struct CeremonyStageTimeouts {
+	pub signing_secs: u32,
+	/// Also used for key handover.
+	pub keygen_secs: u32,
+}
+
+impl CeremonyStageTimeouts {
+	/// Signing is ~3x the honest message arrival tail measured on mainnet. Keygen broadcast stages
+	/// carry ~0.5MB per peer at max authority count, so they need much longer.
+	pub const DEFAULT: Self = Self { signing_secs: 10, keygen_secs: 30 };
+
+	/// The number of blocks to wait for a threshold signature ceremony to complete before
+	/// retrying it.
+	pub const fn signing_response_timeout_blocks(&self) -> u32 {
+		self.signing_secs
+			.saturating_mul(NUM_SIGNING_STAGES)
+			.saturating_add(TIMEOUT_BUFFER_SECONDS)
+			.div_ceil(SECONDS_PER_BLOCK as u32)
+	}
+
+	/// The number of blocks to wait for all validators to respond to a keygen or key handover
+	/// ceremony. After this, validators who haven't responded are assumed to have failed.
+	pub const fn keygen_response_timeout_blocks(&self) -> u32 {
+		self.keygen_secs
+			.saturating_mul(NUM_KEYGEN_STAGES)
+			.saturating_add(TIMEOUT_BUFFER_SECONDS + KEY_DERIVATION_DELAY_SECONDS)
+			.div_ceil(SECONDS_PER_BLOCK as u32)
+	}
+}
+
+impl Default for CeremonyStageTimeouts {
+	fn default() -> Self {
+		Self::DEFAULT
 	}
 }
 
@@ -300,6 +332,8 @@ macro_rules! handle_key_ceremony_report {
 }
 
 #[frame_support::pallet]
+// The `#[pallet::validate_unsigned]` deprecation warning expands to a unit `let` binding.
+#[expect(clippy::let_unit_value)]
 pub mod pallet {
 	use super::*;
 	use cf_chains::instances::PalletInstanceAlias;
@@ -316,7 +350,7 @@ pub mod pallet {
 	use frame_system::ensure_none;
 	/// Context for tracking the progress of a threshold signature ceremony.
 	#[derive(
-		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
+		Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
 	)]
 	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
@@ -341,7 +375,7 @@ pub mod pallet {
 	}
 
 	#[derive(
-		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
+		Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
 	)]
 	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
@@ -357,7 +391,7 @@ pub mod pallet {
 	}
 
 	#[derive(
-		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
+		Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
 	)]
 	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
@@ -532,16 +566,6 @@ pub mod pallet {
 	pub type RequestRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<RequestId>, ValueQuery>;
 
-	/// Maximum duration of a threshold signing ceremony before it is timed out and retried
-	#[pallet::storage]
-	#[pallet::getter(fn threshold_signature_response_timeout)]
-	pub(super) type ThresholdSignatureResponseTimeout<T: Config<I>, I: 'static = ()> = StorageValue<
-		_,
-		BlockNumberFor<T>,
-		ValueQuery,
-		GetFromU32<ConstU32<THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT>>,
-	>;
-
 	/// The epoch whose authorities control the current key.
 	#[pallet::storage]
 	#[pallet::getter(fn current_key_epoch)]
@@ -595,18 +619,15 @@ pub mod pallet {
 	pub(super) type KeyHandoverResolutionPendingSince<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
-	#[pallet::storage]
-	pub(super) type KeygenResponseTimeout<T: Config<I>, I: 'static = ()> = StorageValue<
-		_,
-		BlockNumberFor<T>,
-		ValueQuery,
-		GetFromU32<ConstU32<KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT>>,
-	>;
-
 	/// The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
 	/// (2/3 must agree the node was an offender) on keygen failure.
 	#[pallet::storage]
 	pub(super) type KeygenSlashAmount<T, I = ()> = StorageValue<_, FlipBalance, ValueQuery>;
+
+	/// Stage timeouts that engines apply to the ceremonies this pallet requests. They travel in
+	/// each request so that all participants use the same values.
+	#[pallet::storage]
+	pub type StageTimeouts<T, I = ()> = StorageValue<_, CeremonyStageTimeouts, ValueQuery>;
 
 	/// Counter for generating unique ceremony ids.
 	#[pallet::storage]
@@ -617,32 +638,19 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub key: Option<AggKeyFor<T, I>>,
-		pub threshold_signature_response_timeout: BlockNumberFor<T>,
-		pub keygen_response_timeout: BlockNumberFor<T>,
 		pub amount_to_slash: FlipBalance,
 		pub _instance: PhantomData<I>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self {
-				key: None,
-				threshold_signature_response_timeout: THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT
-					.into(),
-				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
-				amount_to_slash: 0u128,
-				_instance: PhantomData,
-			}
+			Self { key: None, amount_to_slash: 0u128, _instance: PhantomData }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
-			ThresholdSignatureResponseTimeout::<T, I>::put(
-				self.threshold_signature_response_timeout,
-			);
-			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 			if let Some(key) = self.key {
 				Pallet::<T, I>::set_key_for_epoch(cf_primitives::GENESIS_EPOCH, key);
 			} else {
@@ -1037,7 +1045,7 @@ pub mod pallet {
 		Eq,
 		Copy,
 		Clone,
-		RuntimeDebug,
+		Debug,
 		Encode,
 		Decode,
 		DecodeWithMemTracking,
@@ -1274,18 +1282,11 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			match update {
-				PalletConfigUpdate::ThresholdSignatureResponseTimeout { new_timeout } => {
-					ThresholdSignatureResponseTimeout::<T, I>::put(BlockNumberFor::<T>::from(
-						new_timeout,
-					));
-				},
-
-				PalletConfigUpdate::KeygenResponseTimeout { new_timeout } => {
-					KeygenResponseTimeout::<T, I>::put(BlockNumberFor::<T>::from(new_timeout));
-				},
-
 				PalletConfigUpdate::KeygenSlashAmount { amount_to_slash } => {
 					KeygenSlashAmount::<T, I>::put(amount_to_slash);
+				},
+				PalletConfigUpdate::CeremonyStageTimeouts { timeouts } => {
+					StageTimeouts::<T, I>::put(timeouts);
 				},
 			}
 
@@ -1395,9 +1396,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						remaining_respondents: participants.clone(),
 					}
 				});
+				let stage_timeouts = StageTimeouts::<T, I>::get();
 				Self::schedule_ceremony_retry(
 					ceremony_id,
-					ThresholdSignatureResponseTimeout::<T, I>::get(),
+					stage_timeouts.signing_response_timeout_blocks().into(),
 				);
 				log::trace!(
 					target: "threshold-signing",
@@ -1412,6 +1414,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					key,
 					signatories: participants.clone(),
 					payload: payload.clone(),
+					stage_timeout_secs: stage_timeouts.signing_secs,
 				});
 
 				Event::<T, I>::ThresholdSignatureRequest {
@@ -1463,7 +1466,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if remaining_candidate_count == 0 {
 			log::debug!("All candidates have reported, resolving outcome...");
 		} else if current_block.saturating_sub(PendingSince::get()) >=
-			KeygenResponseTimeout::<T, I>::get()
+			StageTimeouts::<T, I>::get().keygen_response_timeout_blocks().into()
 		{
 			log::debug!("Keygen response timeout has elapsed, attempting to resolve outcome...");
 			Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(ceremony_id));

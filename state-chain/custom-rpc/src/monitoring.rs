@@ -28,7 +28,7 @@ use state_chain_runtime::{
 	runtime_apis::{
 		monitoring_api::MonitoringRuntimeApi,
 		types::{
-			before_version_21, ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState,
+			ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState,
 			ExternalChainsBlockHeight, FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo,
 			MonitoringDataV2, OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies,
 			RedemptionsInfo, SolanaNonces,
@@ -231,63 +231,23 @@ where
 {
 	pass_through! {
 		cf_authorities() -> AuthoritiesInfo,
-		cf_external_chains_block_height() -> ExternalChainsBlockHeight,
 		cf_btc_utxos() -> BtcUtxos,
 		cf_dot_aggkey() -> PolkadotAccountId,
 		cf_epoch_state() -> RpcEpochState [map: Into::into],
 		cf_redemptions() -> RedemptionsInfo,
-		cf_pending_broadcasts_count() -> PendingBroadcasts,
 		cf_pending_tss_ceremonies_count() -> PendingTssCeremonies,
 		cf_pending_swaps_count() -> u32,
-		cf_open_deposit_channels_count() -> OpenDepositChannels,
 		cf_build_version() -> LastRuntimeUpgradeInfo,
-		cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds,
 		cf_sol_nonces() -> SolanaNonces,
 		cf_sol_aggkey() -> SolAddress,
 		cf_sol_onchain_key() -> SolAddress,
-	}
-
-	fn cf_suspended_validators(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(Offence, u32)>> {
-		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
-			if api_version < 5 {
-				#[expect(deprecated)]
-				api.cf_suspended_validators_before_version_5(hash)
-					.map(before_version_21::into_current_offences)
-			} else {
-				api.cf_suspended_validators(hash)
-			}
-		})
-	}
-
-	fn cf_monitoring_data(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcMonitoringData> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, api_version| {
-				if api_version < 3 {
-					#[expect(deprecated)]
-					api.cf_monitoring_data_before_version_3(hash).map(MonitoringDataV2::from)
-				} else if api_version < 5 {
-					#[expect(deprecated)]
-					api.cf_monitoring_data_before_version_5(hash).map(MonitoringDataV2::from)
-				} else {
-					api.cf_monitoring_data(hash)
-				}
-			})
-			.map(Into::into)
-	}
-
-	fn cf_fee_imbalance(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcFeeImbalance> {
-		self.rpc_backend
-			.with_runtime_api::<_, _>(at, |api, hash| api.cf_fee_imbalance(hash))
-			.map(|imbalance| imbalance.map(|i| (*i).into()))
+		cf_suspended_validators() -> Vec<(Offence, u32)>,
+		cf_monitoring_data() -> RpcMonitoringData [map: Into::into],
+		cf_external_chains_block_height() -> ExternalChainsBlockHeight,
+		cf_pending_broadcasts_count() -> PendingBroadcasts,
+		cf_open_deposit_channels_count() -> OpenDepositChannels,
+		cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds,
+		cf_fee_imbalance() -> RpcFeeImbalance [map: |imbalance| imbalance.map(|i| (*i).into())],
 	}
 
 	fn cf_accounts_info(
@@ -295,16 +255,9 @@ where
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>> {
-		let accounts_info =
-			self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
-				if api_version < 4 {
-					#[expect(deprecated)]
-					api.cf_accounts_info_before_version_4(hash, accounts)
-						.map(|accounts| accounts.into_iter().map(Into::into).collect())
-				} else {
-					api.cf_accounts_info(hash, accounts)
-				}
-			})?;
+		let accounts_info = self
+			.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_accounts_info(hash, accounts))?;
 		Ok(accounts_info
 			.into_iter()
 			.map(|account_info| RpcAccountInfoV2 {
@@ -320,7 +273,6 @@ where
 				is_online: account_info.is_online,
 				is_bidding: account_info.is_bidding,
 				bound_redeem_address: account_info.bound_redeem_address,
-				apy_bp: account_info.apy_bp,
 				restricted_balances: account_info.restricted_balances,
 				estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 			})

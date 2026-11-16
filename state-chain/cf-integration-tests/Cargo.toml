@@ -58,7 +58,6 @@ pallet-authorship = { workspace = true, default-features = true }
 pallet-cf-account-roles = { workspace = true, default-features = true }
 pallet-cf-broadcast = { workspace = true, default-features = true }
 pallet-cf-chain-tracking = { workspace = true, default-features = true }
-pallet-cf-emissions = { workspace = true, default-features = true }
 pallet-cf-environment = { workspace = true, default-features = true }
 pallet-cf-flip = { workspace = true, default-features = true }
 pallet-cf-funding = { workspace = true, default-features = true }
@@ -101,6 +100,7 @@ sp-consensus-aura = { workspace = true, default-features = true }
 
 sp-core = { workspace = true, default-features = true }
 sp-inherents = { workspace = true, default-features = true }
+sp-keystore = { workspace = true, default-features = true }
 sp-offchain = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-session = { workspace = true, default-features = true }

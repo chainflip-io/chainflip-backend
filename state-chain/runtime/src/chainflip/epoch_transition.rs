@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{AssetBalances, Emissions, Environment, Flip, Swapping, Witnesser};
+use crate::{AssetBalances, Environment, Flip, Swapping, Witnesser};
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochTransitionHandler, FeePayment};
 
@@ -25,28 +25,17 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Witnesser as EpochTransitionHandler>::on_expired_epoch(expired);
 	}
 	fn on_epoch_ending(ending: EpochIndex) {
-		if Flip::is_flip_2_1_activated() {
-			let flip_distributed = Flip::trigger_flip_reward_distribution(ending);
-			let egress_fee_consumed = Swapping::maybe_trigger_flip_to_gateway_egress(
-				Environment::state_chain_gateway_address(),
-				flip_distributed,
-			);
-			Flip::add_to_offchain_flip_to_be_distributed(
-				i128::try_from(egress_fee_consumed).unwrap_or(i128::MAX).saturating_neg(),
-			);
-		}
+		let flip_distributed = Flip::trigger_flip_reward_distribution(ending);
+		let egress_fee_consumed = Swapping::maybe_trigger_flip_to_gateway_egress(
+			Environment::state_chain_gateway_address(),
+			flip_distributed,
+		);
+		Flip::add_to_offchain_flip_to_be_distributed(
+			i128::try_from(egress_fee_consumed).unwrap_or(i128::MAX).saturating_neg(),
+		);
 	}
 
-	fn on_new_epoch(new: EpochIndex) {
+	fn on_new_epoch(_new: EpochIndex) {
 		AssetBalances::trigger_reconciliation();
-
-		// One-off supply sync on activation: settles the outstanding burn so that fee
-		// accumulation starts from a clean slate.
-		if new == pallet_cf_flip::FeeRewardsActivationEpoch::<crate::Runtime>::get() {
-			Emissions::burn_and_broadcast_supply_update(
-				frame_system::Pallet::<crate::Runtime>::block_number(),
-				true,
-			);
-		}
 	}
 }

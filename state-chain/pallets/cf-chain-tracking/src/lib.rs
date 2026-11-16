@@ -30,7 +30,7 @@ use cf_chains::{Chain, ChainState, FeeEstimationApi};
 use cf_primitives::IngressOrEgress;
 use cf_traits::{AdjustedFeeEstimationApi, Chainflip, FeeMultiplierProvider, GetBlockHeight};
 use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
-use frame_system::pallet_prelude::*;
+use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
 pub use pallet::*;
 use sp_runtime::FixedU128;
 use sp_std::marker::PhantomData;
@@ -43,6 +43,15 @@ impl Get<FixedU128> for GetOne {
 	fn get() -> FixedU128 {
 		FixedU128::from_u32(1)
 	}
+}
+
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
+pub enum PalletConfigUpdate {
+	/// The multiplier applied to this chain's ingress/egress fee estimates.
+	/// See [`FeeMultiplier`].
+	FeeMultiplier { multiplier: FixedU128 },
 }
 
 pub const STORAGE_VERSION_U16: u16 = 4;
@@ -89,8 +98,8 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The tracked state of this chain has been updated.
 		ChainStateUpdated { new_chain_state: ChainState<T::TargetChain> },
-		/// The fee multiplier for this chain has been updated.
-		FeeMultiplierUpdated { new_fee_multiplier: FixedU128 },
+		/// A pallet config item has been updated.
+		PalletConfigUpdated { update: PalletConfigUpdate },
 	}
 
 	#[pallet::error]
@@ -148,19 +157,25 @@ pub mod pallet {
 			Self::inner_update_chain_state(new_chain_state)
 		}
 
-		/// Update the fee multiplier with the provided value
+		/// Apply a list of configuration updates to the pallet.
 		///
 		/// Requires Governance.
-		#[pallet::call_index(1)]
-		#[pallet::weight(T::DbWeight::get().writes(1))]
-		pub fn update_fee_multiplier(
+		#[pallet::call_index(2)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			new_fee_multiplier: FixedU128,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			FeeMultiplier::<T, I>::put(new_fee_multiplier);
-			Self::deposit_event(Event::<T, I>::FeeMultiplierUpdated { new_fee_multiplier });
+			for update in updates {
+				match update {
+					PalletConfigUpdate::FeeMultiplier { multiplier } =>
+						FeeMultiplier::<T, I>::put(multiplier),
+				}
+
+				Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
+			}
 
 			Ok(())
 		}

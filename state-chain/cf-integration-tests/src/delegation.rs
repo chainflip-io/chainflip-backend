@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use chainflip_node::chain_spec::devnet::{HEARTBEAT_BLOCK_INTERVAL, YEAR};
+use chainflip_node::chain_spec::devnet::HEARTBEAT_BLOCK_INTERVAL;
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{
@@ -25,13 +25,13 @@ use crate::{
 	AccountId, AuthorityCount, RuntimeOrigin,
 };
 
-use cf_primitives::{AccountRole, AssetAmount, FlipBalance};
-use cf_traits::{AccountInfo, EpochInfo, FundAccount, FundingSource};
-use frame_support::assert_ok;
+use cf_primitives::{AccountRole, FlipBalance};
+use cf_traits::{AccountInfo, AccountRoleRegistry, EpochInfo, FundAccount, FundingSource};
+use frame_support::{assert_noop, assert_ok};
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
-use sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, PerU16, Permill};
+use sp_runtime::{traits::Zero, PerU16};
 use state_chain_runtime::{
-	chainflip::calculate_account_apy, Balance, Emissions, Flip, Funding, Runtime, RuntimeEvent,
+	AccountRoles, Balance, Flip, Funding, LiquidityProvider, Runtime, RuntimeEvent, Swapping,
 	System, Validator,
 };
 
@@ -102,6 +102,7 @@ pub(crate) fn setup_delegation(
 fn block_author_rewards_are_distributed_among_delegators() {
 	const EPOCH_DURATION_BLOCKS: u32 = 200;
 	const MAX_AUTHORITIES: AuthorityCount = 3;
+	const REWARD: u128 = 25_000_000_000_000_000_000_000; //25000 flip
 	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
 	super::genesis::with_test_defaults()
 		.epoch_duration(EPOCH_DURATION_BLOCKS)
@@ -160,11 +161,8 @@ fn block_author_rewards_are_distributed_among_delegators() {
 			let total_delegators_pre_balance: FlipBalance =
 				delegators.keys().map(Flip::balance).sum();
 
-			// Move forward through all authorities to ensure the reward is distributed once.
-			testnet.move_forward_blocks(
-				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_len()
-					.expect("at least one authority") as u32,
-			);
+			pallet_cf_flip::Reserve::<Runtime>::insert(*b"FEES", REWARD * MAX_AUTHORITIES as u128);
+			testnet.move_to_the_next_epoch();
 
 			let validator_post_balance = Flip::balance(&managed_validator);
 			let validator_cut = validator_post_balance - validator_pre_balance;
@@ -176,12 +174,8 @@ fn block_author_rewards_are_distributed_among_delegators() {
 				delegators.keys().map(Flip::balance).sum();
 			let delegators_cut = total_delegators_post_balance - total_delegators_pre_balance;
 
-			let block_reward =
-				pallet_cf_emissions::Pallet::<Runtime>::current_authority_emission_per_block();
+			let epsilon = REWARD / 10_000; // allow 0.01% error due to rounding
 
-			let epsilon = block_reward / 10_000; // allow 0.01% error due to rounding
-
-			assert!(block_reward > 0u128);
 			assert!(validator_cut > 0u128);
 			assert!(delegators_cut > 0u128);
 			assert!(operator_cut > 0u128);
@@ -189,7 +183,7 @@ fn block_author_rewards_are_distributed_among_delegators() {
 
 			// Verify that rewards are distributed according to portion of bond..
 			assert_eq!(
-				PerU16::from_rational(validator_cut, block_reward,),
+				PerU16::from_rational(validator_cut, REWARD,),
 				PerU16::from_rational(
 					validator_pre_balance,
 					pallet_cf_validator::Bond::<Runtime>::get(),
@@ -295,51 +289,134 @@ fn slashings_are_distributed_among_delegators() {
 }
 
 #[test]
-fn can_calculate_account_apy_for_validator_with_delegation() {
-	const EPOCH_BLOCKS: u32 = 1_000;
-	const MAX_AUTHORITIES: u32 = 10;
-	const NUM_BACKUPS: u32 = 20;
-
-	// Validator balance is lower than that of other nodes to make sure that it
-	// will be sharing rewards with the delegator.
-	const VALIDATOR_BALANCE: AssetAmount = GENESIS_BALANCE / 5;
-
-	let validator: AccountId = AccountId::from([0xaa; 32]);
-
+fn delegator_stays_bonded_until_rotation_after_undelegating() {
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
-		.with_additional_accounts(&[(validator.clone(), AccountRole::Validator, VALIDATOR_BALANCE)])
+		.with_additional_accounts(&[(
+			managed_validator.clone(),
+			AccountRole::Validator,
+			GENESIS_BALANCE / 5,
+		)])
 		.build()
 		.execute_with(|| {
-			let (mut network, _, _) =
-				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
-			let operator = AccountId::from([0xe1; 32]);
 			let delegator = AccountId::from([0xA0; 32]);
+			setup_delegation(
+				&mut testnet,
+				managed_validator,
+				AccountId::from([0xe1; 32]),
+				2000,
+				BTreeMap::from_iter([(delegator.clone(), 2 * GENESIS_BALANCE)]),
+			);
+			let bond = Flip::bond(&delegator);
+			assert!(!bond.is_zero());
 
-			crate::delegation::setup_delegation(
-				&mut network,
-				validator.clone(),
-				operator.clone(),
-				2500, // 25% operator fee
-				BTreeMap::from_iter([(delegator, GENESIS_BALANCE * 2)]),
+			// Undelegating removes the delegation choice, but the account stays in the current
+			// epoch's snapshot, so it must keep both its bond and its role.
+			assert_ok!(Validator::undelegate(
+				RuntimeOrigin::signed(delegator.clone()),
+				pallet_cf_validator::DelegationAmount::Max,
+			));
+			assert_eq!(Flip::bond(&delegator), bond);
+			assert_eq!(
+				<AccountRoles as AccountRoleRegistry<Runtime>>::account_role(&delegator),
+				AccountRole::LiquidityProvider
+			);
+			assert_noop!(
+				LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(delegator.clone())),
+				pallet_cf_flip::Error::<Runtime>::AccountBonded
 			);
 
-			let validator_apy = calculate_account_apy(&validator).unwrap();
+			testnet.move_to_the_next_epoch();
 
-			let expected_apy_basis_point = {
-				let total_reward = Emissions::current_authority_emission_per_block() * YEAR as u128 /
-					MAX_AUTHORITIES as u128;
-				let validator_reward =
-					Permill::from_rational(VALIDATOR_BALANCE, GENESIS_BALANCE * 2) * total_reward;
-				let validator_balance = Flip::balance(&validator);
+			assert!(Flip::bond(&delegator).is_zero());
+			assert_ok!(LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(
+				delegator.clone()
+			)));
+		});
+}
 
-				FixedU64::from_rational(validator_reward, validator_balance)
-					.checked_mul_int(10_000u32)
-					.unwrap()
-			};
+#[test]
+fn pending_delegator_cannot_become_broker_during_rotation() {
+	const MAX_AUTHORITIES: AuthorityCount = 3;
+	let managed_validator: AccountId = AccountId::from([0xcf; 32]);
+	super::genesis::with_test_defaults()
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[(
+			managed_validator.clone(),
+			AccountRole::Validator,
+			GENESIS_BALANCE / 5,
+		)])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
-			assert_eq!(validator_apy, expected_apy_basis_point);
+			let operator = AccountId::from([0xe1; 32]);
+			setup_delegation(
+				&mut testnet,
+				managed_validator,
+				operator.clone(),
+				2000,
+				BTreeMap::from_iter([(AccountId::from([0xA0; 32]), 2 * GENESIS_BALANCE)]),
+			);
+
+			let late_delegator = AccountId::from([0xA1; 32]);
+			Funding::fund_account(
+				late_delegator.clone(),
+				GENESIS_BALANCE,
+				FundingSource::EthTransaction {
+					tx_hash: Default::default(),
+					funder: Default::default(),
+				},
+			);
+			assert_ok!(Validator::delegate(
+				RuntimeOrigin::signed(late_delegator.clone()),
+				operator.clone(),
+				pallet_cf_validator::DelegationAmount::Max
+			));
+
+			// Start the rotation: the auction puts the delegator in the pending snapshot, but its
+			// bond is only applied once the new epoch starts.
+			testnet.move_to_the_end_of_epoch();
+			testnet.move_forward_blocks(1);
+			assert_ne!(
+				pallet_cf_validator::CurrentRotationPhase::<Runtime>::get(),
+				pallet_cf_validator::RotationPhase::Idle
+			);
+			assert!(pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
+				Validator::epoch_index() + 1,
+				&operator
+			)
+			.unwrap()
+			.delegators
+			.contains_key(&late_delegator));
+			assert!(Flip::bond(&late_delegator).is_zero());
+
+			// Becoming a broker now would let it open a private channel, whose close sheds the
+			// delegation bond applied in the meantime. Delegators are LPs, and can't undelegate or
+			// deregister during the rotation.
+			assert_noop!(
+				Validator::undelegate(
+					RuntimeOrigin::signed(late_delegator.clone()),
+					pallet_cf_validator::DelegationAmount::Max,
+				),
+				pallet_cf_validator::Error::<Runtime>::RotationInProgress
+			);
+			assert_noop!(
+				LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(
+					late_delegator.clone()
+				)),
+				pallet_cf_validator::Error::<Runtime>::StillDelegating
+			);
+			assert_noop!(
+				Swapping::register_as_broker(RuntimeOrigin::signed(late_delegator.clone())),
+				pallet_cf_account_roles::Error::<Runtime>::AccountRoleAlreadyRegistered
+			);
+
+			testnet.move_to_the_next_epoch();
+			assert!(!Flip::bond(&late_delegator).is_zero());
 		});
 }

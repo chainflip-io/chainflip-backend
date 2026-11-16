@@ -60,71 +60,93 @@ fn basic_usage() {
 	const DECIMALS: u128 = 10u128.pow(6);
 	const AMOUNT: AssetAmount = 10_000 * DECIMALS;
 
-	super::genesis::with_test_defaults()
-		.with_additional_accounts(&[(
-			DORIS,
-			AccountRole::LiquidityProvider,
-			5 * FLIPPERINOS_PER_FLIP,
-		),
-		(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),])
-		.build()
-		.execute_with(|| {
-			new_pool(BASE_ASSET, 0, Price::at_tick_zero());
-			turn_off_thresholds();
+	// Single-tick orders and orders spread over a tick range.
+	for strategy in [
+		TradingStrategy::InventoryBased {
+			min_buy_tick: -1,
+			max_buy_tick: -1,
+			min_sell_tick: 1,
+			max_sell_tick: 1,
+			base_asset: BASE_ASSET,
+		},
+		TradingStrategy::InventoryBased {
+			min_buy_tick: -10,
+			max_buy_tick: 2,
+			min_sell_tick: 2,
+			max_sell_tick: 10,
+			base_asset: BASE_ASSET,
+		},
+	] {
+		super::genesis::with_test_defaults()
+			.with_additional_accounts(&[
+				(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+				(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			])
+			.build()
+			.execute_with(|| {
+				new_pool(BASE_ASSET, 0, Price::at_tick_zero());
+				turn_off_thresholds();
 
-			// Start trading strategy
-			register_refund_addresses(&DORIS);
-			credit_account(&DORIS, BASE_ASSET, AMOUNT);
-			const STRATEGY: TradingStrategy =
-				TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: BASE_ASSET };
-			assert_ok!(TradingStrategyPallet::deploy_strategy(
-				RuntimeOrigin::signed(DORIS),
-				STRATEGY.clone(),
-				BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
-			));
+				// Start trading strategy
+				register_refund_addresses(&DORIS);
+				credit_account(&DORIS, BASE_ASSET, AMOUNT);
+				assert_ok!(TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(DORIS),
+					strategy.clone(),
+					BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
+				));
 
-			// Get the strategy ID from the emitted event
-			let strategy_id = assert_events_match!(
-				Runtime,
-				RuntimeEvent::TradingStrategy(
-					pallet_cf_trading_strategy::Event::StrategyDeployed{account_id: DORIS, strategy_id, strategy: STRATEGY}) => strategy_id
-			);
+				// Get the strategy ID from the emitted event
+				let (strategy_id, deployed_strategy) = assert_events_match!(
+					Runtime,
+					RuntimeEvent::TradingStrategy(
+						pallet_cf_trading_strategy::Event::StrategyDeployed {
+							account_id: DORIS,
+							strategy_id,
+							strategy: deployed_strategy,
+						}
+					) => (strategy_id, deployed_strategy)
+				);
+				assert_eq!(deployed_strategy, strategy);
 
-			// Add additional funds
-			credit_account(&DORIS, BASE_ASSET, AMOUNT);
-			assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
-				RuntimeOrigin::signed(DORIS),
-				strategy_id.clone(),
-				BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
-			));
+				// Add additional funds
+				credit_account(&DORIS, BASE_ASSET, AMOUNT);
+				assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
+					RuntimeOrigin::signed(DORIS),
+					strategy_id.clone(),
+					BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
+				));
 
-			// Make sure all of our funds are in the strategy
-			let balances = AssetBalances::free_balances(&DORIS);
-			assert_eq!(balances[BASE_ASSET], 0);
-			assert_eq!(balances[QUOTE_ASSET], 0);
+				// Make sure all of our funds are in the strategy
+				let balances = AssetBalances::free_balances(&DORIS);
+				assert_eq!(balances[BASE_ASSET], 0);
+				assert_eq!(balances[QUOTE_ASSET], 0);
 
-			// Do a swap
-			// NOTE: This will also run the on_idle logic needed to create the limit orders
-			let (_egress_id, swap_input_amount, _swap_output_amount) = do_eth_swap(
-				QUOTE_ASSET.try_into().unwrap(),
-				BASE_ASSET.try_into().unwrap(),
-				&ZION,
-				AMOUNT,
-			);
+				// Do a swap
+				// NOTE: This will also run the on_idle logic needed to create the limit orders
+				let (_egress_id, swap_input_amount, _swap_output_amount) = do_eth_swap(
+					QUOTE_ASSET.try_into().unwrap(),
+					BASE_ASSET.try_into().unwrap(),
+					&ZION,
+					AMOUNT,
+				);
 
-			// Stop the strategy
-			assert_ok!(TradingStrategyPallet::close_strategy(RuntimeOrigin::signed(DORIS), strategy_id));
+				// Stop the strategy
+				assert_ok!(TradingStrategyPallet::close_strategy(
+					RuntimeOrigin::signed(DORIS),
+					strategy_id
+				));
 
-			// Check our balances
-			let balances = AssetBalances::free_balances(&DORIS);
-			assert!(
-				balances[BASE_ASSET] > AMOUNT * 2 - swap_input_amount,
-				"Should see increase due to tick"
-			);
-			const ROUNDING_ERROR: AssetAmount = 2;
-			assert_eq!(balances[QUOTE_ASSET], swap_input_amount - ROUNDING_ERROR);
-
-	});
+				// Check our balances
+				let balances = AssetBalances::free_balances(&DORIS);
+				assert!(
+					balances[BASE_ASSET] > AMOUNT * 2 - swap_input_amount,
+					"Should see increase due to tick"
+				);
+				const ROUNDING_ERROR: AssetAmount = 2;
+				assert_eq!(balances[QUOTE_ASSET], swap_input_amount - ROUNDING_ERROR);
+			});
+	}
 }
 
 #[test]
@@ -145,8 +167,13 @@ fn can_close_strategy_with_fully_executed_orders() {
 			// Start trading strategy
 			register_refund_addresses(&DORIS);
 			credit_account(&DORIS, BASE_ASSET, AMOUNT * 4);
-			const STRATEGY: TradingStrategy =
-				TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: BASE_ASSET };
+			const STRATEGY: TradingStrategy = TradingStrategy::InventoryBased {
+				min_buy_tick: -1,
+				max_buy_tick: -1,
+				min_sell_tick: 1,
+				max_sell_tick: 1,
+				base_asset: BASE_ASSET,
+			};
 			assert_ok!(TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(DORIS),
 				STRATEGY.clone(),
@@ -194,75 +221,6 @@ fn can_close_strategy_with_fully_executed_orders() {
 		});
 }
 
-#[test]
-fn inventory_based_strategy_basic_usage() {
-	const DECIMALS: u128 = 10u128.pow(6);
-	const AMOUNT: AssetAmount = 10_000 * DECIMALS;
-
-	super::genesis::with_test_defaults()
-        .with_additional_accounts(&[(
-            DORIS,
-            AccountRole::LiquidityProvider,
-            5 * FLIPPERINOS_PER_FLIP,
-        ),
-        (ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),])
-        .build()
-        .execute_with(|| {
-            new_pool(BASE_ASSET, 0, Price::at_tick_zero());
-            turn_off_thresholds();
-
-            // Start trading strategy
-            register_refund_addresses(&DORIS);
-            credit_account(&DORIS, BASE_ASSET, AMOUNT);
-            const STRATEGY: TradingStrategy =
-                TradingStrategy::InventoryBased { base_asset: BASE_ASSET, min_buy_tick: -10, max_buy_tick:  2, min_sell_tick: 2, max_sell_tick: 10};
-            assert_ok!(TradingStrategyPallet::deploy_strategy(
-                RuntimeOrigin::signed(DORIS),
-                STRATEGY.clone(),
-                BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
-            ));
-
-            // Get the strategy ID from the emitted event
-            let strategy_id = assert_events_match!(
-                Runtime,
-                RuntimeEvent::TradingStrategy(
-                    pallet_cf_trading_strategy::Event::StrategyDeployed{account_id: DORIS, strategy_id, strategy: STRATEGY}) => strategy_id
-            );
-
-            // Add additional funds
-            credit_account(&DORIS, BASE_ASSET, AMOUNT);
-            assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
-                RuntimeOrigin::signed(DORIS),
-                strategy_id.clone(),
-                BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
-            ));
-
-            // Make sure all of our funds are in the strategy
-            let balances = AssetBalances::free_balances(&DORIS);
-            assert_eq!(balances[BASE_ASSET], 0);
-            assert_eq!(balances[QUOTE_ASSET], 0);
-
-            // Do a swap
-            // NOTE: This will also run the on_idle logic needed to create the limit orders
-            let (_egress_id, swap_input_amount, _swap_output_amount) = do_eth_swap(
-                QUOTE_ASSET.try_into().unwrap(),
-                BASE_ASSET.try_into().unwrap(),
-                &ZION,
-                AMOUNT,
-            );
-
-            // Stop the strategy
-            assert_ok!(TradingStrategyPallet::close_strategy(RuntimeOrigin::signed(DORIS), strategy_id));
-            // Check our balances
-            let balances = AssetBalances::free_balances(&DORIS);
-            assert!(
-                balances[BASE_ASSET] > AMOUNT * 2 - swap_input_amount,
-                "Should see increase due to tick",
-            );
-            const ROUNDING_ERROR: AssetAmount = 2;
-            assert_eq!(balances[QUOTE_ASSET], swap_input_amount - ROUNDING_ERROR);
-        });
-}
 #[test]
 fn oracle_strategy_basic_usage() {
 	const DECIMALS: u128 = 10u128.pow(6);

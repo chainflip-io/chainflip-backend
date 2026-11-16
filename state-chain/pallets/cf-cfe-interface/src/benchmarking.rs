@@ -29,6 +29,7 @@ mod benchmarks {
 			ceremony_id: 0,
 			epoch_index: 0,
 			participants: Default::default(),
+			stage_timeout_secs: 0,
 		});
 
 		CfeEvents::<T>::append(event.clone());

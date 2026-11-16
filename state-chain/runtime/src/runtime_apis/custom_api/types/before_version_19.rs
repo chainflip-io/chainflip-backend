@@ -15,11 +15,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use cf_chains::instances::{
-	ArbitrumInstance, AssethubInstance, BitcoinCryptoInstance, BitcoinInstance, EthereumInstance,
-	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaCryptoInstance, SolanaInstance,
+use cf_chains::{
+	btc::MAX_BTC_ADDRESS_LENGTH,
+	instances::{
+		ArbitrumInstance, AssethubInstance, BitcoinCryptoInstance, BitcoinInstance,
+		EthereumInstance, EvmInstance, PolkadotCryptoInstance, PolkadotInstance,
+		SolanaCryptoInstance, SolanaInstance,
+	},
 };
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
+use frame_support::traits::ConstU32;
 use pallet_cf_lending_pools::LendingPoolConfiguration;
 
 #[derive(
@@ -28,7 +33,7 @@ use pallet_cf_lending_pools::LendingPoolConfiguration;
 pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),
-	Btc(Vec<u8>),
+	Btc(BoundedVec<u8, ConstU32<MAX_BTC_ADDRESS_LENGTH>>),
 	Arb([u8; 20]),
 	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
 	Hub([u8; 32]),
@@ -259,7 +264,6 @@ impl From<ValidatorInfo> for super::ValidatorInfo {
 			is_online: old.is_online,
 			is_bidding: old.is_bidding,
 			bound_redeem_address: old.bound_redeem_address,
-			apy_bp: old.apy_bp,
 			restricted_balances: old.restricted_balances,
 			estimated_redeemable_balance: old.estimated_redeemable_balance,
 			operator: old.operator,
@@ -284,7 +288,7 @@ impl From<super::ValidatorInfo> for ValidatorInfo {
 			is_online: current.is_online,
 			is_bidding: current.is_bidding,
 			bound_redeem_address: current.bound_redeem_address,
-			apy_bp: current.apy_bp,
+			apy_bp: None,
 			restricted_balances: current.restricted_balances,
 			estimated_redeemable_balance: current.estimated_redeemable_balance,
 			operator: current.operator,
@@ -348,7 +352,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	Clone,
 	PartialEq,
 	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
+	Debug,
 )]
 pub struct WitnesserCallPermission {
 	pub governance: bool,
@@ -423,9 +427,7 @@ impl From<WitnesserCallPermission> for crate::safe_mode::WitnesserCallPermission
 }
 
 // The liquidity provider safe mode before `flip_to_on_chain_balance_enabled` was added.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct LiquidityProviderSafeMode {
 	pub deposit_enabled: bool,
 	pub withdrawal_enabled: bool,
@@ -450,18 +452,9 @@ impl From<LiquidityProviderSafeMode> for pallet_cf_lp::PalletSafeMode {
 	}
 }
 
-#[derive(
-	Encode,
-	Decode,
-	TypeInfo,
-	Default,
-	Clone,
-	PartialEq,
-	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
-)]
+#[derive(Encode, Decode, TypeInfo, Default, Clone, PartialEq, Eq, Debug)]
 pub struct RuntimeSafeMode {
-	pub emissions: pallet_cf_emissions::PalletSafeMode,
+	pub emissions: super::before_version_23::EmissionsSafeMode,
 	pub funding: pallet_cf_funding::PalletSafeMode,
 	pub swapping: pallet_cf_swapping::PalletSafeMode,
 	pub liquidity_provider: LiquidityProviderSafeMode,
@@ -514,7 +507,6 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 				pallet_cf_witnesser::PalletSafeMode::CodeAmber(old_perms.into()),
 		};
 		Self {
-			emissions: old.emissions,
 			funding: old.funding,
 			swapping: old.swapping,
 			liquidity_provider: old.liquidity_provider.into(),

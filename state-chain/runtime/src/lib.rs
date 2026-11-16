@@ -45,8 +45,6 @@ use sp_runtime::generic;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_std::prelude::*;
-#[cfg(feature = "std")]
-use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 // Make the WASM binary available.
@@ -107,12 +105,6 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	system_version: 1,
 };
 
-/// The version information used to identify this runtime when compiled natively.
-#[cfg(feature = "std")]
-pub fn native_version() -> NativeVersion {
-	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
-}
-
 #[frame_support::runtime]
 mod runtime {
 	#[runtime::runtime]
@@ -127,8 +119,6 @@ mod runtime {
 	pub type Environment = pallet_cf_environment;
 	#[runtime::pallet_index(3)]
 	pub type Flip = pallet_cf_flip;
-	#[runtime::pallet_index(4)]
-	pub type Emissions = pallet_cf_emissions;
 
 	// AccountRoles after funding; since account creation comes first.
 	#[runtime::pallet_index(5)]
@@ -343,7 +333,6 @@ pub type PalletExecutionOrder = (
 	CfeInterface,
 	Environment,
 	Flip,
-	Emissions,
 	Funding,
 	AccountRoles,
 	TransactionPayment,
@@ -442,10 +431,10 @@ pub type AllMigrations = (
 /// replace with a dummy migration.
 pub type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
+	pallet_cf_flip::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
 	pallet_cf_validator::migrations::PalletMigration<Runtime>,
-	pallet_cf_emissions::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
@@ -540,7 +529,10 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-pub type MigrationsForV2_4 = ();
+pub type MigrationsForV2_4 = (
+	migrations::remove_emissions_storage::RemoveEmissionsStorage,
+	migrations::safe_mode::SafeModeMigration,
+);
 
 #[cfg(test)]
 mod test {
@@ -554,6 +546,17 @@ mod test {
 			core::mem::size_of::<AccountId>() <= 32,
 			r"Our use of blake2_256 to derive account ids requires that account ids are no larger than 32 bytes"
 		);
+	}
+
+	#[test]
+	fn failed_calls_are_not_re_signed_on_non_evm_chains() {
+		use pallet_cf_ingress_egress::Config;
+		const {
+			assert!(!<Runtime as Config<PolkadotInstance>>::RE_SIGN_FAILED_CALLS);
+			assert!(!<Runtime as Config<BitcoinInstance>>::RE_SIGN_FAILED_CALLS);
+			assert!(!<Runtime as Config<SolanaInstance>>::RE_SIGN_FAILED_CALLS);
+			assert!(!<Runtime as Config<AssethubInstance>>::RE_SIGN_FAILED_CALLS);
+		}
 	}
 
 	// Introduced from polkadot

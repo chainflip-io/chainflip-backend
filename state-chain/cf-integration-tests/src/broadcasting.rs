@@ -16,16 +16,67 @@
 
 use super::*;
 use cf_chains::{
-	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo},
+	btc::{
+		api::{batch_transfer::BatchTransfer, BitcoinApi},
+		deposit_address::DepositAddress,
+		AggKey, BitcoinOutput, ScriptPubkey, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+	},
 	eth::api::EthereumApi,
-	AllBatch, ApiCall, Bitcoin, ForeignChain, TransferAssetParams, UpdateFlipSupply,
+	AllBatch, ApiCall, Bitcoin, ForeignChain, RegisterRedemption, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::btc, AuthorityCount, BroadcastId};
-use cf_traits::{Broadcaster, EpochInfo};
+use cf_traits::{Broadcaster, EpochInfo, OnBroadcastReady};
 use pallet_cf_broadcast::{AwaitingBroadcast, DelayedBroadcastRetryQueue, PendingBroadcasts};
+use pallet_cf_environment::BitcoinAvailableUtxos;
+use pallet_cf_threshold_signature::{CurrentKeyEpoch, Keys};
 use state_chain_runtime::{
+	chainflip::{BroadcastReadyProvider, EvmEnvironment},
 	BitcoinBroadcaster, BitcoinInstance, BitcoinThresholdSigner, Environment, Runtime, Validator,
 };
+
+#[test]
+fn bitcoin_broadcast_ready_preserves_output_keys() {
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let previous = [1; 32];
+		let current = [2; 32];
+		let agg_key = AggKey { previous: Some(previous), current };
+		CurrentKeyEpoch::<Runtime, BitcoinInstance>::put(1);
+		Keys::<Runtime, BitcoinInstance>::insert(1, agg_key);
+
+		let batch = BatchTransfer::new_unsigned(
+			&agg_key,
+			current,
+			vec![],
+			vec![
+				BitcoinOutput { amount: 10_000, script_pubkey: ScriptPubkey::Taproot(current) },
+				BitcoinOutput { amount: 20_000, script_pubkey: ScriptPubkey::P2PKH([3; 20]) },
+				BitcoinOutput { amount: 30_000, script_pubkey: ScriptPubkey::Taproot(previous) },
+				BitcoinOutput { amount: 40_000, script_pubkey: ScriptPubkey::Taproot([4; 32]) },
+			],
+		);
+		let tx_id = batch.bitcoin_transaction.txid();
+
+		<BroadcastReadyProvider as OnBroadcastReady<Bitcoin>>::on_broadcast_ready(
+			&BitcoinApi::BatchTransfer(batch),
+		);
+
+		assert_eq!(
+			BitcoinAvailableUtxos::<Runtime>::get(),
+			vec![
+				Utxo {
+					id: UtxoId { tx_id, vout: 0 },
+					amount: 10_000,
+					deposit_address: DepositAddress::new(current, CHANGE_ADDRESS_SALT),
+				},
+				Utxo {
+					id: UtxoId { tx_id, vout: 2 },
+					amount: 30_000,
+					deposit_address: DepositAddress::new(previous, CHANGE_ADDRESS_SALT),
+				},
+			],
+		);
+	});
+}
 
 #[test]
 fn bitcoin_broadcast_delay_works() {
@@ -70,7 +121,11 @@ fn bitcoin_broadcast_delay_works() {
 				);
 			assert!(PendingBroadcasts::<Runtime, BitcoinInstance>::get().contains(&broadcast_id));
 			// Finish threshold signing.
-			testnet.move_forward_blocks(11);
+			testnet.move_forward_blocks(
+				pallet_cf_threshold_signature::CeremonyStageTimeouts::DEFAULT
+					.signing_response_timeout_blocks() +
+					1,
+			);
 			assert!(AwaitingBroadcast::<Runtime, BitcoinInstance>::contains_key(broadcast_id));
 
 			let delay_sequence = [
@@ -135,17 +190,19 @@ fn bitcoin_broadcast_delay_works() {
 #[test]
 fn refresh_replay_protection() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
-		let mut api_call = <<Runtime as pallet_cf_emissions::Config>::ApiCall as UpdateFlipSupply<_>>::new_unsigned(1_000_000, 1);
+		let mut api_call = <EthereumApi<EvmEnvironment> as RegisterRedemption>::new_unsigned(
+			&[0u8; 32], 1_000_000, &[0u8; 20], 0, None,
+		);
 
 		let old_replay_protection = match &api_call {
-			EthereumApi::UpdateFlipSupply(call) => call.replay_protection(),
-			_ => unreachable!("Expected EthereumApi::UpdateFlipSupply"),
+			EthereumApi::RegisterRedemption(call) => call.replay_protection(),
+			_ => unreachable!("Expected EthereumApi::RegisterRedemption"),
 		};
 
 		api_call.refresh_replay_protection();
 		let new_replay_protection = match &api_call {
-			EthereumApi::UpdateFlipSupply(call) => call.replay_protection(),
-			_ => unreachable!("Expected EthereumApi::UpdateFlipSupply"),
+			EthereumApi::RegisterRedemption(call) => call.replay_protection(),
+			_ => unreachable!("Expected EthereumApi::RegisterRedemption"),
 		};
 
 		assert_ne!(old_replay_protection, new_replay_protection);

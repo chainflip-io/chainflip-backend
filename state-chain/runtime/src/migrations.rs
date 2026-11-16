@@ -17,4 +17,5 @@
 //! Chainflip runtime storage migrations.
 
 pub mod housekeeping;
+pub mod remove_emissions_storage;
 pub mod safe_mode;

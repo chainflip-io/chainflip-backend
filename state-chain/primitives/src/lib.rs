@@ -31,7 +31,7 @@
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	BoundedVec, MultiSignature, Percent, RuntimeDebug,
+	BoundedVec, MultiSignature, Percent,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -52,7 +52,7 @@ macro_rules! define_wrapper_type {
 		#[derive(
 			Clone,
 			Copy,
-			frame_support::sp_runtime::RuntimeDebug,
+			Debug,
 			PartialEq,
 			Eq,
 			codec::Encode,
@@ -311,7 +311,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
-	RuntimeDebug,
+	Debug,
 	Copy,
 	Default,
 	PartialOrd,
@@ -541,7 +541,7 @@ impl From<AffiliateAndFee> for Beneficiary<AffiliateShortId> {
 
 #[derive(
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Encode,

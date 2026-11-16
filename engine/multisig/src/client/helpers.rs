@@ -56,7 +56,7 @@ use crate::{
 };
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 use signing::{LocalSig3, SigningCommitment};
-use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
+use state_chain_runtime::AccountId;
 
 type StrategyFailureReason<Strategy> =
 	<<Strategy as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason;
@@ -79,9 +79,13 @@ pub const INITIAL_LATEST_CEREMONY_ID: CeremonyId = 0;
 pub const DEFAULT_KEYGEN_CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
 pub const DEFAULT_SIGNING_CEREMONY_ID: CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID + 1;
 
-/// Time it takes to cause a ceremony timeout (2 stages) with a small delay to allow for processing
+pub const SIGNING_STAGE_TIMEOUT: Duration = Duration::from_secs(10);
+pub const KEYGEN_STAGE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Time it takes to cause a signing ceremony timeout (2 stages) with a small delay to allow for
+/// processing
 pub const CEREMONY_TIMEOUT_DURATION: Duration =
-	Duration::from_millis((((MAX_STAGE_DURATION_SECONDS * 2) as u64) * 1000) + 50);
+	Duration::from_millis(2 * SIGNING_STAGE_TIMEOUT.as_millis() as u64 + 50);
 
 /// Run the given function on all crypto schemes, printing a message with the scheme name if it
 /// fails. The function must be generic over the CryptoScheme. eg: my_test<C: CryptoScheme>().
@@ -293,12 +297,13 @@ impl<Chain: ChainSigning> Node<SigningCeremony<Chain::CryptoScheme>, Chain> {
 			payloads.into_iter().map(|p| (p.keygen_result_info, p.payload)).collect(),
 			&self.outgoing_p2p_message_sender,
 			rng,
+			SIGNING_STAGE_TIMEOUT,
 		)
 		.expect("invalid request");
 
 		if let Some(outcome) = self
 			.ceremony_runner
-			.on_ceremony_request(request.initial_stage)
+			.on_ceremony_request(request)
 			.instrument(debug_span!("Node", account_id = self.own_account_id.to_string()))
 			.await
 		{
@@ -322,12 +327,13 @@ impl<Chain: ChainSigning> Node<KeygenCeremony<Chain::CryptoScheme>, Chain> {
 			&self.outgoing_p2p_message_sender,
 			resharing_context,
 			rng,
+			KEYGEN_STAGE_TIMEOUT,
 		)
 		.expect("invalid request");
 
 		if let Some(outcome) = self
 			.ceremony_runner
-			.on_ceremony_request(request.initial_stage)
+			.on_ceremony_request(request)
 			.instrument(debug_span!("Node", account_id = self.own_account_id.to_string()))
 			.await
 		{
@@ -344,12 +350,13 @@ impl<Chain: ChainSigning> Node<KeygenCeremony<Chain::CryptoScheme>, Chain> {
 			participants,
 			&self.outgoing_p2p_message_sender,
 			rng,
+			KEYGEN_STAGE_TIMEOUT,
 		)
 		.expect("invalid request");
 
 		if let Some(outcome) = self
 			.ceremony_runner
-			.on_ceremony_request(request.initial_stage)
+			.on_ceremony_request(request)
 			.instrument(debug_span!("Node", account_id = self.own_account_id.to_string()))
 			.await
 		{

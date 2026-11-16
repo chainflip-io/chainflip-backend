@@ -22,7 +22,6 @@ New or removed pallets:
   BscElections: added
   BscIngressEgress: added
   BscVault: added
-  Emissions: added
   Environment: added
   EthereumBroadcaster: added
   EthereumChainTracking: added

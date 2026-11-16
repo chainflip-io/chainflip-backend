@@ -177,7 +177,7 @@ impl<E> RejectCall<Bsc> for BscApi<E>
 where
 	E: EvmEnvironmentProvider<Bsc> + ReplayProtectionProvider<Bsc>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_deposit_details: <Bsc as Chain>::DepositDetails,
 		asset: <Bsc as Chain>::ChainAsset,
 		fetch: FetchForRejection<Bsc>,

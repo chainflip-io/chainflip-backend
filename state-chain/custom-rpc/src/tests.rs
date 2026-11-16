@@ -534,11 +534,11 @@ fn test_vault_addresses_custom_rpc() {
 	let val: VaultAddresses = VaultAddresses {
 		ethereum: EncodedAddress::Eth([0; 20]),
 		arbitrum: EncodedAddress::Arb([1; 20]),
-		bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
+		bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Default::default()))],
 		sol_swap_endpoint_program_data_account: EncodedAddress::Sol([2; 32]),
 		usdc_token_mint_pubkey: EncodedAddress::Sol([3; 32]),
 		sol_vault_program: EncodedAddress::Sol([4; 32]),
-		bitcoin_vault: Some(EncodedAddress::Btc([5; 32].into())),
+		bitcoin_vault: Some(EncodedAddress::Btc([5; 32].to_vec().try_into().unwrap())),
 		solana_sol_vault: Some(EncodedAddress::Sol([6; 32])),
 		solana_usdc_token_vault_ata: EncodedAddress::Sol([7; 32]),
 		solana_vault_swap_account: Some(EncodedAddress::Sol([8; 32])),
@@ -570,7 +570,13 @@ fn test_trading_strategies_custom_rpc() {
 	let val = TradingStrategyInfoHexAmounts {
 		lp_id: ID_1,
 		strategy_id: ID_2,
-		strategy: TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: Asset::Usdt },
+		strategy: TradingStrategy::InventoryBased {
+			min_buy_tick: -2,
+			max_buy_tick: -1,
+			min_sell_tick: 1,
+			max_sell_tick: 2,
+			base_asset: Asset::Usdt,
+		},
 		balance: vec![(Asset::Usdc, 500u128.into()), (Asset::Usdt, 1_000u128.into())],
 	};
 	insta::assert_json_snapshot!(val);

@@ -99,6 +99,15 @@ impl<AccountId: Encode + Decode + Ord + Clone> WithdrawalAddressRestriction
 		}
 	}
 
+	fn has_whitelist(owner: &Self::AccountId) -> bool {
+		Self::allowed(owner).is_some()
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_worst_case_whitelist(owner: &Self::AccountId, allowed: ForeignChainAddress) {
+		Self::restrict_to(owner, sp_std::vec![AccountOrAddress::ExternalAddress(allowed)]);
+	}
+
 	fn bind_broker_withdrawal_address(
 		owner: &Self::AccountId,
 		address: EthereumAddress,

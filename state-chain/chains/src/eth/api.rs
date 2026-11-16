@@ -166,20 +166,6 @@ where
 	}
 }
 
-impl<E> UpdateFlipSupply<EvmCrypto> for EthereumApi<E>
-where
-	E: StateChainGatewayAddressProvider
-		+ EvmEnvironmentProvider<Ethereum>
-		+ ReplayProtectionProvider<Ethereum>,
-{
-	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
-		Self::UpdateFlipSupply(EvmTransactionBuilder::new_unsigned(
-			E::replay_protection(E::state_chain_gateway_address()),
-			update_flip_supply::UpdateFlipSupply::new(new_total_supply, block_number),
-		))
-	}
-}
-
 impl<E> ConsolidateCall<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
@@ -268,7 +254,7 @@ impl<E> RejectCall<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_deposit_details: <Ethereum as Chain>::DepositDetails,
 		asset: <Ethereum as Chain>::ChainAsset,
 		fetch: FetchForRejection<Ethereum>,

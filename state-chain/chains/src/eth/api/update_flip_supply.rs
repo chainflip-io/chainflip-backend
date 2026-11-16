@@ -16,7 +16,6 @@
 
 use super::*;
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
-use frame_support::pallet_prelude::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_std::{vec, vec::Vec};
@@ -27,7 +26,7 @@ use sp_std::{vec, vec::Vec};
 	DecodeWithMemTracking,
 	TypeInfo,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	Default,

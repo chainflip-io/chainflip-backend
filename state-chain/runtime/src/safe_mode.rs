@@ -25,7 +25,6 @@ use scale_info::TypeInfo;
 impl_runtime_safe_mode! {
 	RuntimeSafeMode,
 	pallet_cf_environment::RuntimeSafeMode<Runtime>,
-	emissions: pallet_cf_emissions::PalletSafeMode,
 	funding: pallet_cf_funding::PalletSafeMode,
 	swapping: pallet_cf_swapping::PalletSafeMode,
 	liquidity_provider: pallet_cf_lp::PalletSafeMode,
@@ -79,7 +78,7 @@ impl_runtime_safe_mode! {
 	Clone,
 	PartialEq,
 	Eq,
-	frame_support::pallet_prelude::RuntimeDebug,
+	Debug,
 )]
 pub struct WitnesserCallPermission {
 	// Non-instantiable pallets

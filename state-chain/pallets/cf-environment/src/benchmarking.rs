@@ -252,7 +252,7 @@ mod benchmarks {
             sig_type: submit_runtime_call::SolEncodingType::Domain,
         };
 
-		pallet_cf_flip::Pallet::<T>::mint_to_account(
+		pallet_cf_flip::Pallet::<T>::credit_to_account(
 			&signature_data.signer_account().unwrap(),
 			(10 * FLIPPERINOS_PER_FLIP).into(),
 		);
@@ -263,6 +263,29 @@ mod benchmarks {
 			ChainflipExtrinsic { call, transaction_metadata },
 			signature_data,
 		);
+	}
+
+	#[benchmark]
+	fn recover_failed_deposits(n: Linear<1, MAX_FAILED_DEPOSIT_RECOVERIES>) {
+		let broker: T::AccountId = account("broker", 0, 0);
+		T::FailedDepositRecovery::setup_benchmark(&broker);
+		let requests = (0..n)
+			.map(|i| FailedDepositRecoveryRequest {
+				broker: broker.clone(),
+				asset: Asset::Eth,
+				amount: 1_000_000_000_000_000_000,
+				reference: i.encode().try_into().unwrap(),
+			})
+			.collect::<Vec<_>>()
+			.try_into()
+			.unwrap();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let call = Call::<T>::recover_failed_deposits { requests };
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
 	}
 
 	#[benchmark]

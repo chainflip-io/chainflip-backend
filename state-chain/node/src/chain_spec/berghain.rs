@@ -46,8 +46,8 @@ pub const BITCOIN_EXPIRY_BLOCKS: u32 = 24 * 60 / 10;
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14;
 pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
-pub const SOLANA_EXPIRY_BLOCKS: u32 = 24 * 3600 * 10 / 4;
-pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 / 12;
+pub const SOLANA_EXPIRY_BLOCKS: u32 = (24 * 3600 * 1000 / MILLISECONDS_PER_BLOCK_SOLANA) as u32;
+pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 * 1000 / MILLISECONDS_PER_BLOCK_ASSETHUB;
 pub const TRON_EXPIRY_BLOCKS: u32 = 24 * 3600 / 3;
 pub const BSC_EXPIRY_BLOCKS: u32 = 24 * 3600 * 1000 / 450; // 450ms block time
 
@@ -441,11 +441,6 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 	vec![]
 }
 
-// Set to zero initially, will be updated by governance to 7% / 1% annual.
-pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 0;
-
-pub const SUPPLY_UPDATE_INTERVAL: u32 = 30 * 24 * HOURS;
-
 pub const MIN_FUNDING: FlipBalance = 6 * FLIPPERINOS_PER_FLIP;
 pub const GENESIS_AUTHORITY_FUNDING: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;
 pub const REDEMPTION_TAX: FlipBalance = 5 * FLIPPERINOS_PER_FLIP;
@@ -462,3 +457,4 @@ pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
 pub const TRON_SAFETY_MARGIN: u64 = 19;
+pub const BSC_SAFETY_MARGIN: u64 = 2;

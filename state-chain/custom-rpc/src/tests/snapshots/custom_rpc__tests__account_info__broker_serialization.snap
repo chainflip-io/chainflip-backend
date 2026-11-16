@@ -103,5 +103,6 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     }
   ],
   "btc_vault_deposit_address": "tb1pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsn60vlk",
-  "bound_fee_withdrawal_address": "0x0404040404040404040404040404040404040404"
+  "bound_fee_withdrawal_address": "0x0404040404040404040404040404040404040404",
+  "recovery_account": "5C8etthaGJi5SkQeEDSaK32ABBjkhwDeK9ksQCTLEGM3EH14"
 }

@@ -28,7 +28,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::{RuntimeDebug, U256};
+use sp_core::U256;
 use sp_std::{vec, vec::Vec};
 
 use super::{tokenizable::Tokenizable, EvmFetchId};
@@ -94,7 +94,7 @@ impl Tokenizable for EvmReplayProtection {
 	TypeInfo,
 	Copy,
 	Clone,
-	RuntimeDebug,
+	Debug,
 	PartialEq,
 	Eq,
 	MaxEncodedLen,
@@ -227,15 +227,7 @@ pub trait EvmCall {
 }
 
 #[derive(
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Clone,
-	RuntimeDebug,
-	PartialEq,
-	Eq,
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Clone, Debug, PartialEq, Eq,
 )]
 pub struct EvmTransactionBuilder<C> {
 	pub signer_and_sig_data: Option<(AggKey, SigData)>,

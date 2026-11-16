@@ -23,7 +23,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DepositApi, EgressApi,
-	FeePayment, FundAccount, FundingSource, GetMinimumFunding, LpStatsApi, PoolApi,
+	FundAccount, FundingSource, GetMinimumFunding, LpStatsApi, PoolApi, RedeemAddressBinding,
 	RefundAddressRegistry, ScheduledEgressDetails, SwapRequestHandler,
 	WithdrawalAddressRestriction,
 };
@@ -261,6 +261,11 @@ pub mod pallet {
 
 		/// The minimum amount of Flip that may be credited to an on-chain balance.
 		type MinimumFunding: GetMinimumFunding;
+
+		/// The redeem address the on-chain balance is bound to.
+		type RedeemAddressBinding: RedeemAddressBinding<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	#[pallet::error]
@@ -298,10 +303,11 @@ pub mod pallet {
 		InternalSwapsDisabled,
 		/// Transfers to the on-chain balance are disabled due to safe mode.
 		FlipTransferToOnChainBalanceDisabled,
-		/// Transfers to the on-chain balance are only available once Flip 2.1 is active.
-		FlipTransferToOnChainBalanceUnavailable,
 		/// The transferred amount is below the minimum funding amount.
 		BelowMinimumFunding,
+		/// An account with a withdrawal whitelist must bind a whitelisted redeem address before
+		/// moving Flip to its on-chain balance.
+		RedeemAddressNotBound,
 	}
 
 	#[pallet::event]
@@ -598,6 +604,10 @@ pub mod pallet {
 		///
 		/// The transfer is one-way: on-chain funds can only be recovered by redeeming them to an
 		/// external address.
+		///
+		/// Redemptions don't consult the withdrawal whitelist, so an account with a whitelist must
+		/// first bind its redeem address (see the funding pallet) to a destination the whitelist
+		/// allows.
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::transfer_flip_to_on_chain_balance())]
 		pub fn transfer_flip_to_on_chain_balance(
@@ -608,20 +618,27 @@ pub mod pallet {
 				T::SafeMode::get().flip_to_on_chain_balance_enabled,
 				Error::<T>::FlipTransferToOnChainBalanceDisabled
 			);
+			// Funds on the on-chain balance can be redeemed, so the transfer is also a way out of
+			// the free balance.
+			ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			// The on-chain balance is backed by Flip in the State Chain Gateway, whereas the free
-			// balance is backed by Flip in the Vault. Earmarked Flip is only egressed from the
-			// Vault to the Gateway at the end of an epoch, and only while Flip 2.1 is active.
-			ensure!(
-				T::FeePayment::is_flip_2_1_activated(),
-				Error::<T>::FlipTransferToOnChainBalanceUnavailable
-			);
 
 			ensure!(
 				amount >= T::MinimumFunding::get_min_funding_amount(),
 				Error::<T>::BelowMinimumFunding
 			);
+
+			// An account with a withdrawal whitelist must have a bound redeem address that the
+			// whitelist allows: redemptions don't check the whitelist, but they do respect the
+			// binding.
+			if T::WithdrawalRestriction::has_whitelist(&account_id) {
+				let redeem_address = T::RedeemAddressBinding::bound_redeem_address(&account_id)
+					.ok_or(Error::<T>::RedeemAddressNotBound)?;
+				T::WithdrawalRestriction::ensure_withdrawal_allowed_to(
+					&account_id,
+					AccountOrAddress::ExternalAddress(&ForeignChainAddress::Eth(redeem_address)),
+				)?;
+			}
 
 			T::BalanceApi::try_debit_account(&account_id, Asset::Flip, amount)
 				.map_err(|_| Error::<T>::InsufficientBalance)?;
