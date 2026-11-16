@@ -72,8 +72,8 @@ impl InterestRateConfiguration {
 )]
 pub struct LendingPoolConfiguration {
 	pub origination_fee: Permill,
-	/// Portion of the amount of principal asset obtained via liquidation that's
-	/// paid as a fee (instead of reducing the loan's principal)
+	/// Fee charged on the debt repaid via liquidation, taken from the liquidated amount on top
+	/// of the repayment (repaying `x` of debt consumes `x * (1 + liquidation_fee)`).
 	pub liquidation_fee: Permill,
 	/// Determines how interest rate is calculated based on the utilization rate.
 	pub interest_rate_curve: InterestRateConfiguration,

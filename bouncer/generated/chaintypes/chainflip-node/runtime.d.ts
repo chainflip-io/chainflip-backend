@@ -9,15 +9,15 @@ import type {
   UncheckedExtrinsicLike,
   UncheckedExtrinsic,
   H256,
-  Bytes,
   BytesLike,
+  Bytes,
   AccountId32Like,
   AccountId32,
   H160,
   FixedBytes,
 } from 'dedot/codecs';
 import type {
-  SpRuntimeBlock,
+  SpRuntimeBlockLazyBlock,
   SpRuntimeExtrinsicInclusionMode,
   SpCoreOpaqueMetadata,
   SpRuntimeTransactionValidityTransactionValidityError,
@@ -27,6 +27,7 @@ import type {
   SpRuntimeTransactionValidityTransactionSource,
   SpConsensusSlotsSlotDuration,
   SpConsensusAuraSr25519AppSr25519Public,
+  SpSessionRuntimeApiOpaqueGeneratedSessionKeys,
   SpCoreCryptoKeyTypeId,
   SpConsensusGrandpaAppPublic,
   SpConsensusGrandpaEquivocationProof,
@@ -145,9 +146,9 @@ export interface RuntimeApis extends GenericRuntimeApis {
      * Execute the given block.
      *
      * @callname: Core_execute_block
-     * @param {SpRuntimeBlock} block
+     * @param {SpRuntimeBlockLazyBlock} block
      **/
-    executeBlock: GenericRuntimeApiMethod<(block: SpRuntimeBlock) => Promise<[]>>;
+    executeBlock: GenericRuntimeApiMethod<(block: SpRuntimeBlockLazyBlock) => Promise<[]>>;
 
     /**
      * Initialize a block with the given header and return the runtime executive mode.
@@ -244,12 +245,12 @@ export interface RuntimeApis extends GenericRuntimeApis {
      * Check that the inherents are valid. The inherent data will vary from chain to chain.
      *
      * @callname: BlockBuilder_check_inherents
-     * @param {SpRuntimeBlock} block
+     * @param {SpRuntimeBlockLazyBlock} block
      * @param {SpInherentsInherentData} data
      **/
     checkInherents: GenericRuntimeApiMethod<
       (
-        block: SpRuntimeBlock,
+        block: SpRuntimeBlockLazyBlock,
         data: SpInherentsInherentData,
       ) => Promise<SpInherentsCheckInherentsResult>
     >;
@@ -355,9 +356,15 @@ export interface RuntimeApis extends GenericRuntimeApis {
      * Returns the concatenated SCALE encoded public keys.
      *
      * @callname: SessionKeys_generate_session_keys
+     * @param {BytesLike} owner
      * @param {BytesLike | undefined} seed
      **/
-    generateSessionKeys: GenericRuntimeApiMethod<(seed?: BytesLike | undefined) => Promise<Bytes>>;
+    generateSessionKeys: GenericRuntimeApiMethod<
+      (
+        owner: BytesLike,
+        seed?: BytesLike | undefined,
+      ) => Promise<SpSessionRuntimeApiOpaqueGeneratedSessionKeys>
+    >;
 
     /**
      * Decode the given public session keys.
@@ -1341,6 +1348,8 @@ export interface RuntimeApis extends GenericRuntimeApis {
      *
      * @callname: CustomRuntimeApi_cf_max_swap_amount
      * @param {CfPrimitivesChainsAssetsAnyAsset} asset
+     *
+     * @deprecated The maximum swap amount no longer exists; this always returns None.
      **/
     cfMaxSwapAmount: GenericRuntimeApiMethod<
       (asset: CfPrimitivesChainsAssetsAnyAsset) => Promise<bigint | undefined>
@@ -1397,6 +1406,16 @@ export interface RuntimeApis extends GenericRuntimeApis {
      **/
     cfBrokerInfo: GenericRuntimeApiMethod<
       (accountId: AccountId32Like) => Promise<StateChainRuntimeRuntimeApisCustomApiTypesBrokerInfo>
+    >;
+
+    /**
+     * The stored recovery account link, even if the account no longer has the LP role.
+     *
+     * @callname: CustomRuntimeApi_cf_broker_recovery_account
+     * @param {AccountId32Like} broker
+     **/
+    cfBrokerRecoveryAccount: GenericRuntimeApiMethod<
+      (broker: AccountId32Like) => Promise<AccountId32 | undefined>
     >;
 
     /**
@@ -1919,6 +1938,8 @@ export interface RuntimeApis extends GenericRuntimeApis {
      *
      * @callname: CustomRuntimeApi_cf_boost_delay
      * @param {CfPrimitivesChainsForeignChain} chain
+     *
+     * @deprecated Boost delay no longer exists; this always returns 0.
      **/
     cfBoostDelay: GenericRuntimeApiMethod<
       (chain: CfPrimitivesChainsForeignChain) => Promise<number>

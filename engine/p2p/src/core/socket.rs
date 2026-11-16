@@ -52,7 +52,7 @@ const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
 /// *complete* message arrives, and a peer's PONG queues behind whatever message it is
 /// still sending us, so on a slow path a single large message (a ~500 KB keygen
 /// verification broadcast) can keep it running for its whole transfer. 120 s is
-/// 4 x MAX_STAGE_DURATION: a keygen message still transferring after that could no
+/// 4 x the default keygen stage timeout: a keygen message still transferring after that could no
 /// longer arrive in time to be used, so the heartbeat never cuts one that would have
 /// been. Reaping dead connections needs no tighter bound.
 pub(crate) const INCOMING_CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(120);

@@ -151,9 +151,9 @@ Rough durations on a healthy 1-node localnet:
 | Run                                   | Wall time  |
 | ------------------------------------- | ---------- |
 | Single test (e.g. `LpApi`)            | 1–5 min    |
-| `AllSwaps` describe block             | ~10 min    |
-| `ConcurrentTests` (default "bouncer") | ~15–20 min |
-| `./fast_bouncer.sh`                   | ~25 min    |
+| `AllSwaps` describe block             | ~5 min     |
+| `ConcurrentTests` (default "bouncer") | ~5–10 min  |
+| `./fast_bouncer.sh`                   | ~10-15 min |
 | `./full_bouncer.sh 1-node`            | 40 min+    |
 
 Anything `AllSwaps` or larger: **always run in the background** and tee to a log file. Foreground tool calls cap at 10 minutes, and even within that the lack of streamed output makes debugging painful.
@@ -182,28 +182,36 @@ You'll get something like:
 
 ```
  Test Files  1 failed | 2 skipped (3)
-      Tests  1 failed | 659 passed | 677 skipped (1337)
-   Duration  1096.58s
- FAIL  tests/fast_bouncer.test.ts > ConcurrentTests > AllSwaps > Swap 318: Sol to SolUsdt (CCM VaultSwap)
+      Tests  1 failed | 88 passed | 118 skipped (207)
+   Duration  331.66s
+ FAIL  tests/fast_bouncer.test.ts > ConcurrentTests > AllSwaps > Swap 5: Sol to TrxUsdt (CCM VaultSwap)
 ```
 
 That's enough to report the result without re-reading the full log. To re-run a single failed `AllSwaps` case, use `./commands/run_test.ts <swap_number> <seed>` — grab the seed from the `AllSwaps generated with seed …` line in the same run's log, since the swap number only maps to that swap for that seed (see "A single test" above).
 
-## 5. Regenerating event schemas
+## 5. Regenerating event schemas and chaintypes
 
-`bouncer/generated/events/` contains zod schemas auto-generated from the runtime metadata. **Schemas are regenerated automatically on every localnet boot** — `localnet/common.sh`'s `build-localnet` invokes `generate_event_schemas.ts` after starting the LP API. `build_and_run.sh`, `recreate.sh`, and `manage.sh build-localnet` all produce fresh schemas.
+Two directories are auto-generated from the runtime metadata:
 
-Run the generator manually only if:
+- `bouncer/generated/events/`: zod event schemas (`generate_event_schemas.ts`)
+- `bouncer/generated/chaintypes/`: dedot chain types for calls, storage and runtime APIs (`generate_chaintypes.ts`)
 
-- You changed a pallet event and want fresh schemas without recreating the localnet, or
-- You suspect committed schemas are stale relative to a running localnet.
+**Both are regenerated automatically on every localnet boot** by `localnet/common.sh`'s `build-localnet`. `build_and_run.sh`, `recreate.sh` and `manage.sh build-localnet` all produce fresh types.
+
+CI's `check-generated-bouncer-dependencies` fails if either directory is out of date. **Any PR that changes runtime events, storage, calls, types or runtime APIs must commit the regenerated output.** Regenerate manually if:
+
+- You changed the runtime and want fresh types without recreating the localnet, or
+- You suspect the committed types are stale.
 
 ```bash
-cd bouncer
-./commands/generate_event_schemas.ts   # requires a running localnet
+# No localnet needed: boots a throwaway dev node (~10s), regenerates both, stops the node.
+cargo build -p chainflip-node && ./localnet/generate_bouncer_types.sh
+
+# Against an already-running localnet
+cd bouncer && ./commands/generate_event_schemas.ts && ./commands/generate_chaintypes.ts
 ```
 
-The generator deletes `bouncer/generated/events/` and rewrites it. After regeneration, run `pnpm prettier:write` and commit the diff alongside your pallet changes. Tests importing schemas that no longer exist (e.g. event renamed) need to be updated.
+The generators delete and rewrite their output directories, and they already format it with prettier, so the output matches what CI checks. Don't format it differently. Commit the diff alongside your runtime changes. Tests importing schemas that no longer exist (e.g. a renamed event) need to be updated.
 
 ## 6. Debugging a failure
 
@@ -302,16 +310,16 @@ pnpm eslint:check          # Lint (use eslint:fix for auto-fix)
 
 `bouncer/commands/` holds standalone CLI scripts — run them directly from `bouncer/` (e.g. `./commands/<name>.ts`). Each one has a header comment documenting its arguments. The ones this skill leans on:
 
-| Command                          | Purpose                                                     | Section   |
-| -------------------------------- | ----------------------------------------------------------- | --------- |
-| `check_localnet_state.ts`        | Report localnet `State` (DOWN/STALE/UNREADY/READY)          | §1        |
-| `run_test.ts`                    | Run a single test by name, file, or swap number (+seed)     | §4        |
-| `generate_event_schemas.ts`      | Regenerate the zod event schemas from runtime metadata      | §5        |
-| `perform_swap.ts`                | Run one real end-to-end swap                                | see below |
-| `query_storage.ts`               | Read any state chain storage value                          | §9        |
-| `governance.ts config`           | Change a pallet config item via governance                  | §10       |
-| `governance.ts safe-mode`        | Set the runtime safe mode (per-pallet flags) via governance | §11       |
-| `oracle_prices.ts`               | Fetch the state chain's oracle prices, decoded to USD       | §12       |
+| Command                     | Purpose                                                     | Section   |
+| --------------------------- | ----------------------------------------------------------- | --------- |
+| `check_localnet_state.ts`   | Report localnet `State` (DOWN/STALE/UNREADY/READY)          | §1        |
+| `run_test.ts`               | Run a single test by name, file, or swap number (+seed)     | §4        |
+| `generate_event_schemas.ts` | Regenerate the zod event schemas from runtime metadata      | §5        |
+| `perform_swap.ts`           | Run one real end-to-end swap                                | see below |
+| `query_storage.ts`          | Read any state chain storage value                          | §9        |
+| `governance.ts config`      | Change a pallet config item via governance                  | §10       |
+| `governance.ts safe-mode`   | Set the runtime safe mode (per-pallet flags) via governance | §11       |
+| `oracle_prices.ts`          | Fetch the state chain's oracle prices, decoded to USD       | §12       |
 
 ### `perform_swap.ts` — a one-off test swap
 

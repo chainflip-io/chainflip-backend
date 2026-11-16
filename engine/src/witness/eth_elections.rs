@@ -21,6 +21,7 @@ use crate::{
 	},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
+		conversions::IntoSpCore,
 		event::{Event, EvmEventSource},
 		rpc::{address_checker::AddressState, EvmRpcSigningClient},
 	},
@@ -32,12 +33,11 @@ use crate::{
 		},
 		eth::{
 			sc_utils::{
-				CallScFilter, DepositAndScCallFilter, DepositToScGatewayAndScCallFilter,
-				DepositToVaultAndScCallFilter, ScUtilsEvents,
+				CallSc, DepositAndScCall, DepositToScGatewayAndScCall, DepositToVaultAndScCall,
+				ScUtilsEvents,
 			},
 			state_chain_gateway::{
-				FundedFilter, RedemptionExecutedFilter, RedemptionExpiredFilter,
-				StateChainGatewayEvents,
+				Funded, RedemptionExecuted, RedemptionExpired, StateChainGatewayEvents,
 			},
 		},
 		evm::{
@@ -53,7 +53,13 @@ use crate::{
 		},
 	},
 };
-use cf_chains::{assets, eth::EthereumTrackedData, evm::ToAccountId32};
+use alloy_network::AnyRpcBlock;
+use alloy_primitives::{Bloom, BloomInput};
+use cf_chains::{
+	assets,
+	eth::EthereumTrackedData,
+	evm::{EvmWitnessingConfig, ToAccountId32},
+};
 use cf_primitives::chains::assets::eth::Asset as EthAsset;
 use cf_utilities::{
 	context,
@@ -63,10 +69,6 @@ use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
-use ethers::{
-	abi::ethereum_types::BloomInput,
-	types::{Block, Bloom},
-};
 use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
@@ -75,7 +77,7 @@ use pallet_cf_elections::{
 	},
 	ElectoralSystemTypes, VoteOf,
 };
-use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
+use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall, ScCallBytes};
 use sp_core::{H160, H256};
 use state_chain_runtime::{
 	chainflip::witnessing::ethereum_elections::{
@@ -101,13 +103,13 @@ pub struct EvmSingleBlockQuery {
 }
 
 impl EvmSingleBlockQuery {
-	pub(crate) fn try_from_native_block(block: Block<H256>) -> Result<Self> {
-		Ok(EvmSingleBlockQuery {
-			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
-			block_hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
-			parent_hash: block.parent_hash,
-			bloom: block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)),
-		})
+	pub(crate) fn from_native_block(block: AnyRpcBlock) -> Self {
+		EvmSingleBlockQuery {
+			block_height: block.header.number,
+			block_hash: block.header.hash.into_sp_core(),
+			parent_hash: block.header.parent_hash.into_sp_core(),
+			bloom: block.header.logs_bloom,
+		}
 	}
 }
 
@@ -117,7 +119,7 @@ impl EvmBlockQuery for EvmSingleBlockQuery {
 	}
 }
 trait EvmSingleBlockChainTypes =
-	ChainTypes<ChainBlockNumber = u64, ChainBlockHash = H256> + Sync + Send;
+	ChainTypes<ChainBlockNumber = u64, ChainBlockHash = H256> + EvmWitnessingConfig + Sync + Send;
 
 #[async_trait::async_trait]
 impl<Chain: EvmSingleBlockChainTypes> WitnessClient<Chain>
@@ -126,20 +128,20 @@ impl<Chain: EvmSingleBlockChainTypes> WitnessClient<Chain>
 	type BlockQuery = EvmSingleBlockQuery;
 
 	async fn best_block_number(&self) -> Result<u64> {
-		Ok(self.client.get_block_number().await?.low_u64())
+		self.highest_witnessable_block_number().await
 	}
 
 	async fn best_block_header(&self) -> Result<Header<Chain>> {
-		let best_number = self.client.get_block_number().await?;
-		Ok(self.block_header_by_height(best_number.low_u64()).await?)
+		self.block_header_by_height(self.highest_witnessable_block_number().await?)
+			.await
 	}
 
 	async fn block_header_by_height(&self, height: u64) -> Result<Header<Chain>> {
-		let block = self.client.block(height.into()).await?;
+		let block = self.client.block(height).await?;
 		Ok(Header {
-			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
-			hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
-			parent_hash: block.parent_hash,
+			block_height: block.header.number,
+			hash: block.header.hash.into_sp_core(),
+			parent_hash: block.header.parent_hash.into_sp_core(),
 		})
 	}
 
@@ -148,23 +150,22 @@ impl<Chain: EvmSingleBlockChainTypes> WitnessClient<Chain>
 		hash: ChainBlockHashOf<Chain>,
 		_height: ChainBlockNumberOf<Chain>,
 	) -> Result<EvmSingleBlockQuery> {
-		EvmSingleBlockQuery::try_from_native_block(self.client.block_by_hash(hash).await?)
+		Ok(EvmSingleBlockQuery::from_native_block(self.client.block_by_hash(hash).await?))
 	}
 
 	async fn block_query_from_height(
 		&self,
 		height: Chain::ChainBlockNumber,
 	) -> Result<Self::BlockQuery> {
-		EvmSingleBlockQuery::try_from_native_block(self.client.block(height.into()).await?)
+		Ok(EvmSingleBlockQuery::from_native_block(self.client.block(height).await?))
 	}
 
 	async fn block_query_and_hash_from_height(
 		&self,
 		height: Chain::ChainBlockNumber,
 	) -> Result<(Self::BlockQuery, ChainBlockHashOf<EthereumChain>)> {
-		let header = self.client.block(height.into()).await?;
-		let hash = header.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?;
-		let query = EvmSingleBlockQuery::try_from_native_block(header)?;
+		let query = EvmSingleBlockQuery::from_native_block(self.client.block(height).await?);
+		let hash = query.block_hash;
 		Ok((query, hash))
 	}
 }
@@ -182,7 +183,7 @@ impl<Chain: EvmSingleBlockChainTypes> EvmEventClient<Chain>
 		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
 
 		// if we have logs for this block, fetch them.
-		let logs = if query.bloom.contains_bloom(&contract_bloom) {
+		let logs = if query.bloom.contains(&contract_bloom) {
 			self.client.get_logs(query.block_hash, *contract_address).await?
 		} else {
 			// we know there won't be interesting logs, so don't fetch for events
@@ -271,36 +272,32 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScGatewayEvent>>
 		let mut result: Vec<ScGatewayEvent> = Vec::new();
 		for event in events {
 			match event.event_parameters {
-				StateChainGatewayEvents::FundedFilter(FundedFilter {
-					node_id: account_id,
-					amount,
-					funder,
-				}) => {
+				StateChainGatewayEvents::Funded(Funded { nodeID: account_id, amount, funder }) => {
 					result.push(ScGatewayEvent::Funded {
-						account_id: account_id.into(),
+						account_id: account_id.0.into(),
 						amount: amount.try_into().expect("Funded amount should fit in u128"),
-						funder,
+						funder: funder.into_sp_core(),
 						tx_hash: event.tx_hash.into(),
 					});
 				},
-				StateChainGatewayEvents::RedemptionExecutedFilter(RedemptionExecutedFilter {
-					node_id: account_id,
+				StateChainGatewayEvents::RedemptionExecuted(RedemptionExecuted {
+					nodeID: account_id,
 					amount,
 				}) => {
 					result.push(ScGatewayEvent::RedemptionExecuted {
-						account_id: account_id.into(),
+						account_id: account_id.0.into(),
 						redeemed_amount: amount
 							.try_into()
 							.expect("Redemption amount should fit in u128"),
 						tx_hash: event.tx_hash.into(),
 					});
 				},
-				StateChainGatewayEvents::RedemptionExpiredFilter(RedemptionExpiredFilter {
-					node_id: account_id,
+				StateChainGatewayEvents::RedemptionExpired(RedemptionExpired {
+					nodeID: account_id,
 					amount: _,
 				}) => {
 					result.push(ScGatewayEvent::RedemptionExpired {
-						account_id: account_id.into(),
+						account_id: account_id.0.into(),
 						block_number: query.block_height,
 						tx_hash: event.tx_hash.into(),
 					});
@@ -314,6 +311,19 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScGatewayEvent>>
 }
 
 // --- sc utils witnessing ---
+/// The runtime rejects calls longer than `MAX_SC_CALL_LENGTH`. A longer call is dropped, but the
+/// deposit is still witnessed so the funds are credited. Every engine must apply the same rule for
+/// the votes to agree.
+fn bounded_sc_call(sc_call: &[u8]) -> ScCallBytes {
+	sc_call.to_vec().try_into().unwrap_or_else(|_| {
+		tracing::warn!(
+			"Dropping SC Utils call of {} bytes, which exceeds the limit.",
+			sc_call.len()
+		);
+		Default::default()
+	})
+}
+
 #[derive(Clone)]
 pub struct EthereumScUtilsWitnessingConfig {
 	sc_utils: EvmEventSource<ScUtilsEvents>,
@@ -341,23 +351,22 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 			// `sender` would always be the Vault and we'd therefore need the sc_call to contain
 			// additional data to be able to attribute the call to the correct SC account.
 			match event.event_parameters {
-				ScUtilsEvents::DepositToScGatewayAndScCallFilter(
-					DepositToScGatewayAndScCallFilter {
-						sender, // eth_address to attribute the FLIP to
-						signer, // `tx.origin` or zero address
-						amount, // FLIP amount deposited
-						sc_call,
-					},
-				) => {
+				ScUtilsEvents::DepositToScGatewayAndScCall(DepositToScGatewayAndScCall {
+					sender, // eth_address to attribute the FLIP to
+					signer, // `tx.origin` or zero address
+					amount, // FLIP amount deposited
+					scCall: sc_call,
+				}) => {
 					if signer.is_zero() {
 						continue;
 					}
+					let sender = sender.into_sp_core();
 					result.push(ScUtilsCall {
 					deposit_and_call: EthereumDepositAndSCCall {
 						deposit: EthereumDeposit::FlipToSCGateway {
 							amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 						},
-						call: sc_call.to_vec(),
+						call: bounded_sc_call(&sc_call),
 					},
 					caller: sender,
 					// use 0 padded ethereum address as account_id which the flip funds
@@ -366,24 +375,25 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 					eth_tx_hash: event.tx_hash.to_fixed_bytes(),
 					});
 				},
-				ScUtilsEvents::DepositToVaultAndScCallFilter(DepositToVaultAndScCallFilter {
+				ScUtilsEvents::DepositToVaultAndScCall(DepositToVaultAndScCall {
 					sender,
 					signer,
 					amount,
 					token,
-					sc_call,
+					scCall: sc_call,
 				}) => {
 					if signer.is_zero() {
 						continue;
 					}
-					if let Some(asset) = config.supported_assets.get(&token) {
+					let sender = sender.into_sp_core();
+					if let Some(asset) = config.supported_assets.get(&token.into_sp_core()) {
 						result.push(ScUtilsCall {
 							deposit_and_call: EthereumDepositAndSCCall {
 								deposit: EthereumDeposit::Vault {
 									asset: *asset,
 									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 								},
-								call: sc_call.to_vec(),
+								call: bounded_sc_call(&sc_call),
 							},
 							caller: sender,
 							// use 0 padded ethereum address as account_id which the
@@ -396,26 +406,27 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 					}
 				},
 
-				ScUtilsEvents::DepositAndScCallFilter(DepositAndScCallFilter {
+				ScUtilsEvents::DepositAndScCall(DepositAndScCall {
 					sender,
 					signer,
 					amount,
 					token,
 					to,
-					sc_call,
+					scCall: sc_call,
 				}) => {
 					if signer.is_zero() {
 						continue;
 					}
-					if let Some(asset) = config.supported_assets.get(&token) {
+					let sender = sender.into_sp_core();
+					if let Some(asset) = config.supported_assets.get(&token.into_sp_core()) {
 						result.push(ScUtilsCall {
 							deposit_and_call: EthereumDepositAndSCCall {
 								deposit: EthereumDeposit::Transfer {
 									asset: *asset,
 									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
-									destination: to,
+									destination: to.into_sp_core(),
 								},
-								call: sc_call.to_vec(),
+								call: bounded_sc_call(&sc_call),
 							},
 							caller: sender,
 							// use 0 padded ethereum address as account_id which the
@@ -428,18 +439,20 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 					}
 				},
 
-				ScUtilsEvents::CallScFilter(CallScFilter { sender, signer: _, sc_call }) => result
-					.push(ScUtilsCall {
+				ScUtilsEvents::CallSc(CallSc { sender, signer: _, scCall: sc_call }) => {
+					let sender = sender.into_sp_core();
+					result.push(ScUtilsCall {
 						deposit_and_call: EthereumDepositAndSCCall {
 							deposit: EthereumDeposit::NoDeposit,
-							call: sc_call.to_vec(),
+							call: bounded_sc_call(&sc_call),
 						},
 						caller: sender,
 						// use 0 padded ethereum address as account_id which the
 						// flip funds are associated with on SC
 						caller_account_id: sender.into_account_id_32(),
 						eth_tx_hash: event.tx_hash.to_fixed_bytes(),
-					}),
+					})
+				},
 			}
 		}
 
@@ -465,19 +478,20 @@ impl VoterApi<EthereumFeeTracking> for EthereumFeeVoter {
 		let fee_history = self
 			.client
 			.fee_history(
-				fee_history_window.into(),
-				best_block_number.low_u64().into(),
+				fee_history_window,
+				best_block_number.into(),
 				vec![priority_fee_percentile as f64],
 			)
 			.await?;
 
 		Ok(Some(EthereumTrackedData {
-			base_fee: (*context!(fee_history.base_fee_per_gas.last())?)
-				.try_into()
-				.expect("Base fee should fit u128"),
-			priority_fee: context!(fee_history.reward.into_iter().flatten().min())?
-				.try_into()
-				.expect("Priority fee should fit u128"),
+			base_fee: *context!(fee_history.base_fee_per_gas.last())?,
+			priority_fee: context!(fee_history
+				.reward
+				.unwrap_or_default()
+				.into_iter()
+				.flatten()
+				.min())?,
 		}))
 	}
 }
@@ -494,8 +508,8 @@ impl VoterApi<EthereumLiveness> for EthereumLivenessVoter {
 		_settings: <EthereumLiveness as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <EthereumLiveness as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<EthereumLiveness>>, anyhow::Error> {
-		let block = self.client.block(properties.into()).await?;
-		Ok(Some(block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?))
+		let block = self.client.block(properties).await?;
+		Ok(Some(block.header.hash.into_sp_core()))
 	}
 }
 

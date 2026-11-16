@@ -18,7 +18,7 @@ use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::{
 		primitives::NonemptyContinuousHeaders, ChainTypes, HeightWitnesserProperties,
 	},
-	ElectoralSystemTypes,
+	ElectoralSystemTypes, VoteOf,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
 
@@ -30,9 +30,10 @@ pub async fn witness_headers<ES, Client, Chain>(
 	safety_buffer: u32,
 	max_submit_headers: u32,
 	tag: &'static str,
-) -> anyhow::Result<Option<NonemptyContinuousHeaders<Chain>>>
+) -> anyhow::Result<Option<VoteOf<ES>>>
 where
 	ES: ElectoralSystemTypes<ElectionProperties = HeightWitnesserProperties<Chain>>,
+	VoteOf<ES>: TryFrom<NonemptyContinuousHeaders<Chain>>,
 	Client: WitnessClient<Chain>,
 	Chain: ChainTypes,
 {
@@ -60,13 +61,14 @@ where
 
 	// Compute the highest block height we want to fetch a header for,
 	// since for performance reasons we're bounding the number of headers
-	// submitted in one vote. We're submitting at most `max_submit_headers` headers.
+	// submitted in one vote. We fetch at most `max_submit_headers + 1` headers, plus the best
+	// block header if it's within range, which the runtime's vote bound allows for.
 	let highest_submitted_height = std::cmp::min(
 		best_block_header.block_height,
 		witness_from_index.saturating_forward(max_submit_headers as usize + 1),
 	);
 
-	// request headers for at most `max_submit_headers` heights, in parallel
+	// request headers for at most `max_submit_headers + 1` heights, in parallel
 	let requests = (witness_from_index..highest_submitted_height)
 		.map(|index| async move { client.block_header_by_height(index).await })
 		.collect::<Vec<_>>();
@@ -82,8 +84,10 @@ where
 	}
 
 	let headers_len = headers.len();
-	NonemptyContinuousHeaders::try_new(headers)
-        .inspect(|_| tracing::debug!("{tag:?}: Submitting vote for (witness_from={witness_from_index:?}) with {headers_len:?} headers"))
-        .map(Some)
-        .map_err(|err| anyhow::format_err!("{tag:?}: {err:?}"))
+	let vote = NonemptyContinuousHeaders::try_new(headers)
+		.map_err(|err| anyhow::format_err!("{tag:?}: {err:?}"))?
+		.try_into()
+		.map_err(|_| anyhow::format_err!("{tag:?}: {headers_len} headers exceed the vote bound"))?;
+	tracing::debug!("{tag:?}: Submitting vote for (witness_from={witness_from_index:?}) with {headers_len:?} headers");
+	Ok(Some(vote))
 }

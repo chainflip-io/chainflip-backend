@@ -25,6 +25,7 @@ use std::{
 	fmt::{Debug, Display},
 	marker::PhantomData,
 	sync::Arc,
+	time::Duration,
 };
 use tokio::sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender};
 use tracing::{debug, info_span, trace, warn, Instrument};
@@ -145,6 +146,8 @@ pub type DynStage<C> = Box<dyn CeremonyStage<C> + Send + Sync>;
 // A ceremony request that has passed initial checks and setup its initial stage
 pub struct PreparedRequest<C: CeremonyTrait> {
 	pub initial_stage: DynStage<C>,
+	/// Added to the ceremony's cumulative deadline on entering each stage.
+	pub stage_timeout: Duration,
 }
 
 // Checks if all keys have the same parameters (including validator indices mapping), which
@@ -167,6 +170,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	signing_info: Vec<(KeygenResultInfo<Crypto>, Crypto::SigningPayload)>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
+	stage_timeout: Duration,
 ) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningFailureReason> {
 	// Sanity check: all keys must have the same parameters
 	if !are_key_parameters_same(signing_info.iter().map(|(info, _)| info)) {
@@ -225,7 +229,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 		Box::new(BroadcastStage::new(processor, common))
 	};
 
-	Ok(PreparedRequest { initial_stage })
+	Ok(PreparedRequest { initial_stage, stage_timeout })
 }
 
 pub fn prepare_key_handover_request<Crypto: CryptoScheme>(
@@ -235,6 +239,7 @@ pub fn prepare_key_handover_request<Crypto: CryptoScheme>(
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	resharing_context: ResharingContext<Crypto>,
 	rng: Rng,
+	stage_timeout: Duration,
 ) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
 	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
 
@@ -267,7 +272,7 @@ pub fn prepare_key_handover_request<Crypto: CryptoScheme>(
 		Box::new(BroadcastStage::new(processor, common))
 	};
 
-	Ok(PreparedRequest { initial_stage })
+	Ok(PreparedRequest { initial_stage, stage_timeout })
 }
 
 // Initial checks and setup before sending the request to the `CeremonyRunner`
@@ -277,6 +282,7 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 	participants: BTreeSet<AccountId>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
+	stage_timeout: Duration,
 ) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
 	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
 
@@ -311,7 +317,7 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 		Box::new(BroadcastStage::new(processor, common))
 	};
 
-	Ok(PreparedRequest { initial_stage })
+	Ok(PreparedRequest { initial_stage, stage_timeout })
 }
 
 fn map_ceremony_parties(
@@ -375,6 +381,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 						request.ceremony_id,
 						details.participants,
 						details.rng,
+						details.stage_timeout,
 						details.result_sender,
 						resharing_context,
 						scope,
@@ -384,6 +391,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 						request.ceremony_id,
 						details.participants,
 						details.rng,
+						details.stage_timeout,
 						details.result_sender,
 						scope,
 					)
@@ -403,6 +411,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 					details.participants,
 					details.signing_info,
 					details.rng,
+					details.stage_timeout,
 					details.result_sender,
 					scope,
 				);
@@ -485,6 +494,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
 		rng: Rng,
+		stage_timeout: Duration,
 		result_sender: CeremonyResultSender<KeygenCeremony<Chain::CryptoScheme>>,
 		resharing_context: ResharingContext<Chain::CryptoScheme>,
 		scope: &Scope<'_, anyhow::Error>,
@@ -507,6 +517,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				&self.outgoing_p2p_message_sender,
 				resharing_context,
 				rng,
+				stage_timeout,
 			) {
 				Ok(request) => request,
 				Err(failed_outcome) => {
@@ -540,6 +551,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
 		rng: Rng,
+		stage_timeout: Duration,
 		result_sender: CeremonyResultSender<KeygenCeremony<Chain::CryptoScheme>>,
 		scope: &Scope<'_, anyhow::Error>,
 	) {
@@ -558,6 +570,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				participants,
 				&self.outgoing_p2p_message_sender,
 				rng,
+				stage_timeout,
 			) {
 				Ok(request) => request,
 				Err(failed_outcome) => {
@@ -595,6 +608,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			<Chain::CryptoScheme as CryptoScheme>::SigningPayload,
 		)>,
 		rng: Rng,
+		stage_timeout: Duration,
 		result_sender: CeremonyResultSender<SigningCeremony<Chain::CryptoScheme>>,
 		scope: &Scope<'_, anyhow::Error>,
 	) {
@@ -613,6 +627,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			signing_info,
 			&self.outgoing_p2p_message_sender,
 			rng,
+			stage_timeout,
 		) {
 			Ok(request) => request,
 			Err(failed_outcome) => {

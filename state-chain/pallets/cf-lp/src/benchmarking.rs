@@ -19,7 +19,10 @@
 use super::*;
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_primitives::{AccountRole, Asset, FLIPPERINOS_PER_FLIP};
-use cf_traits::{AccountRoleRegistry, FeePayment, GetMinimumFunding, RefundAddressRegistry};
+use cf_traits::{
+	AccountRoleRegistry, FeePayment, GetMinimumFunding, RedeemAddressBinding,
+	RefundAddressRegistry, WithdrawalAddressRestriction,
+};
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::OnNewAccount};
 use frame_system::RawOrigin;
@@ -151,6 +154,15 @@ mod benchmarks {
 
 		let amount = T::MinimumFunding::get_min_funding_amount();
 		T::BalanceApi::credit_account(&caller, Asset::Flip, amount);
+
+		// Worst case: a restricted account, so the bound redeem address is checked against a
+		// full whitelist.
+		let redeem_address = [0x01; 20].into();
+		T::RedeemAddressBinding::bind_redeem_address(&caller, redeem_address);
+		T::WithdrawalRestriction::set_worst_case_whitelist(
+			&caller,
+			ForeignChainAddress::Eth(redeem_address),
+		);
 
 		#[extrinsic_call]
 		transfer_flip_to_on_chain_balance(RawOrigin::Signed(caller.clone()), amount);

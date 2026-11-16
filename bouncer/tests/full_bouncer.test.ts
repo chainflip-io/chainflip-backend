@@ -9,13 +9,15 @@ import { testMinimumDeposit } from 'tests/minimum_deposit';
 import { testSwapAfterDisconnection } from 'tests/swap_after_temp_disconnecting_chains';
 import { checkNoWitnessingTaskRestarts } from 'shared/check_witnessing_task_restarts';
 
-// Tests that are run by the ci-main-merge after the concurrent tests
+// Tests that are run by ci-main-e2e after the concurrent tests
 describe('SerialTests2', () => {
   serialTest('RotatesThroughBtcSwap', testRotatesThroughBtcSwap, 360);
   serialTest('BtcUtxoConsolidation', testBtcUtxoConsolidation, 200);
   serialTest('RotationBarrier', testRotationBarrier, 320);
   serialTest('MinimumDeposit', testMinimumDeposit, 150);
-  serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
+  // Waiting for `finalized` on localnet adds ~12s per broadcast round trip; lower back to 120 once
+  // localnet runs Alpenglow (PRO-3336).
+  serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 180);
   serialTest('FlipRewardDistribution', testFlipRewardDistribution, 900);
 
   if (process.env.LOCALNET) {

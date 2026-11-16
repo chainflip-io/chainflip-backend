@@ -35,10 +35,11 @@ mod tests;
 
 use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, AccountRole, AssetAmount};
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	FundAccount, Funding, FundingSource, GetMinimumFunding, MoveFlipToGateway, RedemptionCheck,
-	SpawnAccount,
+	FundAccount, Funding, FundingSource, GetMinimumFunding, MoveFlipToGateway,
+	RedeemAddressBinding, RedemptionCheck, SpawnAccount,
 };
 use cf_utilities::derive_common_traits;
 use codec::{Decode, DecodeWithMemTracking, Encode};
@@ -54,11 +55,12 @@ use frame_support::{
 		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OriginTrait, StorageVersion,
 		UnfilteredDispatchable, UnixTime,
 	},
+	transactional,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_runtime::DispatchError;
+use sp_runtime::{traits::ConstU32, BoundedVec, DispatchError};
 use sp_std::{
 	cmp::{max, min},
 	collections::btree_map::BTreeMap,
@@ -858,7 +860,7 @@ pub mod pallet {
 		///   - If the source account has a bound redeem address, the destination account must also
 		///     have the same bound redeem address.
 		///   - If the source account is currently bidding, the destination account must also be
-		///     bidding.
+		///     bidding. Bidding accounts cannot rebalance at all while a rotation is in progress.
 		///   - If the funds to be transferred are associated with a restricted address, the
 		///     restrictions will be transferred to the destination account.
 		#[pallet::call_index(11)]
@@ -920,7 +922,7 @@ pub mod pallet {
 		}
 
 		/// Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
-		/// process the deposit since those two are independant actions.
+		/// process the deposit since those two are independent actions.
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::execute_sc_call().saturating_add(
 			T::EthereumSCApi::decode(&mut &deposit_and_call.call[..])
@@ -999,7 +1001,7 @@ pub mod pallet {
 				Err(_) => {
 					Self::deposit_event(Event::SCCallCannotBeDecoded {
 						caller: caller_account_id,
-						sc_call_bytes: deposit_and_call.call,
+						sc_call_bytes: deposit_and_call.call.into_inner(),
 						eth_tx_hash,
 					});
 				},
@@ -1059,7 +1061,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn kill_account_if_zero_balance(account_id: &T::AccountId) {
-		if T::Flip::balance(account_id).is_zero() {
+		// An account with a pending redemption is kept alive: if the redemption expires, the
+		// funds return to it, and they must still be subject to its bound redeem address.
+		if T::Flip::balance(account_id).is_zero() &&
+			!PendingRedemptions::<T>::contains_key(account_id)
+		{
 			frame_system::Provider::<T>::killed(account_id).unwrap_or_else(|e| {
 				log::error!(
 					"Unexpected reference count error while reaping the account {:?}: {:?}.",
@@ -1080,6 +1086,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	#[transactional]
 	pub fn redemption_expired(
 		account_id: AccountId<T>,
 		tx_hash: EthTransactionHash,
@@ -1087,8 +1094,9 @@ impl<T: Config> Pallet<T> {
 		let pending_redemption =
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
 
-		T::Flip::revert_redemption(&account_id)
-			.expect("Pending Redemption should exist since the corresponding redemption existed");
+		T::Flip::revert_redemption(&account_id).inspect_err(|e| {
+			log_or_panic!("Pending redemption for {account_id:?} has no reserve: {e:?}");
+		})?;
 
 		// If the address is still restricted, we update the restricted balances again.
 		if RestrictedAddresses::<T>::contains_key(pending_redemption.redeem_address) {
@@ -1104,6 +1112,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	#[transactional]
 	pub fn redeemed(
 		account_id: AccountId<T>,
 		redeemed_amount: FlipBalance<T>,
@@ -1112,8 +1121,10 @@ impl<T: Config> Pallet<T> {
 		let _ =
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
 
-		T::Flip::finalize_redemption(&account_id)
-			.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
+		// Called from an on_finalize hook, so this must not panic.
+		T::Flip::finalize_redemption(&account_id).inspect_err(|e| {
+			log_or_panic!("Pending redemption for {account_id:?} has no reserve: {e:?}");
+		})?;
 
 		Self::kill_account_if_zero_balance(&account_id);
 
@@ -1237,17 +1248,38 @@ impl<T: Config> FundAccount for Pallet<T> {
 	}
 }
 
+impl<T: Config> RedeemAddressBinding for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn bound_redeem_address(account_id: &Self::AccountId) -> Option<EthereumAddress> {
+		BoundRedeemAddress::<T>::get(account_id)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn bind_redeem_address(account_id: &Self::AccountId, address: EthereumAddress) {
+		BoundRedeemAddress::<T>::insert(account_id, address);
+	}
+}
+
 impl<T: Config> GetMinimumFunding for Pallet<T> {
 	fn get_min_funding_amount() -> cf_primitives::AssetAmount {
 		MinimumFunding::<T>::get().into()
 	}
 }
 
+/// The maximum length of an encoded call submitted through the SC Utils contract. The runtime
+/// checks in a test that every supported call fits.
+pub const MAX_SC_CALL_LENGTH: u32 = 100;
+
+/// Bounded so that a single Ethereum transaction can't push arbitrarily large payloads through
+/// witnessing, which copies them once per authority.
+pub type ScCallBytes = BoundedVec<u8, ConstU32<MAX_SC_CALL_LENGTH>>;
+
 derive_common_traits! {
 	#[derive(PartialOrd, Ord, TypeInfo)]
 	pub struct EthereumDepositAndSCCall {
 		pub deposit: EthereumDeposit,
-		pub call: Vec<u8>,
+		pub call: ScCallBytes,
 	}
 }
 

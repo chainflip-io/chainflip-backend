@@ -24,7 +24,7 @@ import { lendingTest } from 'tests/lending';
 import { testGovernanceDepositWitnessing } from 'tests/governance_deposit_witnessing';
 import { testRpcCalls } from 'tests/rpc_tests';
 
-// Tests that will run in parallel by both the ci-development and the ci-main-merge
+// Tests that will run in parallel by both ci-development and ci-main-e2e
 describe('ConcurrentTests', () => {
   // Specify the number of nodes via setting the env var.
   // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"

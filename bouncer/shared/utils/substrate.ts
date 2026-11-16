@@ -10,6 +10,7 @@ import { AsyncQueue } from 'shared/utils/async_queue';
 import { appendFileSync } from 'node:fs';
 import { EventRecord, Header } from '@polkadot/types/interfaces';
 import { hexToU8a } from '@polkadot/util';
+import { resolveHttpEndpoint } from 'shared/utils/networks';
 
 // Set the STATE_CHAIN_EVENT_LOG_FILE env var to log all state chain events to a file. Used for debugging.
 export const stateChainEventLogFile = process.env.STATE_CHAIN_EVENT_LOG_FILE; // ?? '/tmp/chainflip/state_chain_events.log';
@@ -267,7 +268,9 @@ const makeCachedDedotClientFactory = (endpoint: string) => {
 export const { getClient: getChainflipApi, clearCache: clearChainflipClientCache } =
   makeCachedDedotClientFactory(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
 
-export const CHAINFLIP_HTTP_ENDPOINT = process.env.CF_NODE_HTTP_ENDPOINT ?? 'http://127.0.0.1:9944';
+// The node serves HTTP and WS on the same RPC port, so CF_NODE_ENDPOINT alone is enough to point
+// HTTP callers at a remote network.
+export const CHAINFLIP_HTTP_ENDPOINT = resolveHttpEndpoint({});
 
 export const { cachedDisposableFactory: getPolkadotApi } = getCachedSubstrateApi(
   process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9947',
@@ -905,5 +908,19 @@ async function fetchSlotDuration(endpoint: string): Promise<number> {
   return Number(view.getBigUint64(0, true));
 }
 
-/** Block time of the state chain in milliseconds, fetched from AuraApi_slot_duration. */
-export const chainflipBlockTimeMs: number = await fetchSlotDuration(CHAINFLIP_HTTP_ENDPOINT);
+let slotDuration: Promise<number> | undefined;
+
+/**
+ * Block time of the state chain in milliseconds, from AuraApi_slot_duration, fetched once per
+ * process. Lazy rather than a module-scope constant: resolving it at import time would make every
+ * transitive importer require a reachable node, breaking read-only commands that select their own
+ * endpoint.
+ */
+export function chainflipBlockTimeMs(): Promise<number> {
+  // Don't cache a failure: a transient blip shouldn't poison every later call.
+  slotDuration ??= fetchSlotDuration(CHAINFLIP_HTTP_ENDPOINT).catch((e) => {
+    slotDuration = undefined;
+    throw e;
+  });
+  return slotDuration;
+}

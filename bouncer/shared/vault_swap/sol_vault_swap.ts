@@ -157,7 +157,7 @@ export async function executeSolVaultSwap<A extends WithBrokerAccount>(
 
   cf.trace('Sending Solana vault swap transaction');
   const txHash = await sendAndConfirmTransaction(connection, transaction, [whaleKeypair], {
-    commitment: 'confirmed',
+    commitment: 'finalized',
   });
 
   const transactionData = await connection.getTransaction(txHash, {
