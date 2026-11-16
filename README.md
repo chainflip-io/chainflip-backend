@@ -5,6 +5,8 @@
 
 [Chainflip](https://chainflip.io/) is a decentralized protocol for cross-chain crypto-currency swaps.
 
+Chainflip is live on mainnet for Bitcoin, Ethereum, Solana, Arbitrum, BNB Smart Chain (BSC, Chain ID 56), Tron and Polkadot Assethub. Contract addresses: [Mainnet Addresses](https://docs.chainflip.io/protocol/supported-chains-assets/mainnet-addresses).
+
 For an in-depth introduction to Chainflip, the [official docs](https://docs.chainflip.io/) are the best place to start.
 
 If you are interested in contributing to the codebase or in digging into the nitty gritty details of the protocol, you have come to the right place. Please read on.
