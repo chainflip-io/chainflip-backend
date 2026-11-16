@@ -127,6 +127,7 @@ classify_calls! {
 			#[cfg(feature = "runtime-benchmarks")]
 			benchmark_realistic_call,
 			update_pallet_config,
+			recover_failed_deposits,
 		],
 	},
 	Funding(pallet_cf_funding) {
@@ -208,6 +209,7 @@ classify_calls! {
 			affiliate_withdrawal_request,
 			set_vault_swap_minimum_broker_fee,
 			bind_broker_fee_withdrawal_address,
+			link_recovery_account,
 			update_pallet_config,
 		],
 	},

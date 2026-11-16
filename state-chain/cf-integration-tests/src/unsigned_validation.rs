@@ -221,7 +221,7 @@ fn non_native_exact_nonce_sequence_accepted_at_block_import() {
 fn non_native_signed_call_charges_fee() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
 		let (call, signer_account) =
-			signed_sol_non_native_call(&SolSigningKey::new(), 0, remark_call());
+			signed_sol_non_native_call(&SolSigningKey::new(), 0, vanity_name_call(b"fee"));
 		provision_signer(&signer_account);
 		let balance_before = Flip::balance(&signer_account);
 
