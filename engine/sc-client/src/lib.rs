@@ -929,29 +929,13 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 									&subxt::dynamic::tx(
 										"Validator",
 										"cfe_version",
-										subxt::ext::scale_value::Composite::named([(
-											"new_version",
-											subxt::dynamic::Value::named_composite([
-												(
-													"major",
-													subxt::dynamic::Value::u128(
-														CFE_VERSION.major.into(),
-													),
-												),
-												(
-													"minor",
-													subxt::dynamic::Value::u128(
-														CFE_VERSION.minor.into(),
-													),
-												),
-												(
-													"patch",
-													subxt::dynamic::Value::u128(
-														CFE_VERSION.patch.into(),
-													),
-												),
-											]),
-										)]),
+										subxt::dynamic::value!({
+											new_version: {
+												major: CFE_VERSION.major,
+												minor: CFE_VERSION.minor,
+												patch: CFE_VERSION.patch,
+											}
+										}),
 									),
 									&subxt_signer,
 									DefaultExtrinsicParamsBuilder::new()
