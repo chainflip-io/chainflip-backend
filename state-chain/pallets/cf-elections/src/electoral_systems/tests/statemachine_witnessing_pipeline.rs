@@ -135,11 +135,8 @@ impl AbstractVoter<BW> for FlatChainProgression<String> {
 }
 
 #[cfg(test)]
-fn run_simulation(blocks: ForkedFilledChain) {
+fn run_simulation(blocks: ForkedFilledChain, safety_margin: u32, safety_buffer: u32) {
 	let mut chains = blocks_into_chain_progression(&blocks.blocks);
-
-	const SAFETY_MARGIN: u32 = 8;
-	const SAFETY_BUFFER: u32 = 16;
 
 	// get final chain so we can check that we emitted the correct events:
 	let final_chain = chains.get_final_chain();
@@ -153,8 +150,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		block_height_update: MockHook::default(),
 		on_reorg: MockHook::default(),
 	};
-	let bhw_settings: BlockHeightWitnesserSettings =
-		BlockHeightWitnesserSettings { safety_buffer: SAFETY_BUFFER };
+	let bhw_settings: BlockHeightWitnesserSettings = BlockHeightWitnesserSettings { safety_buffer };
 	let block_processor: BlockProcessor<Types> = BlockProcessor {
 		blocks_data: Default::default(),
 		processed_events: Default::default(),
@@ -171,8 +167,8 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	};
 	let bw_settings = BlockWitnesserSettings {
 		max_ongoing_elections: 4,
-		safety_margin: SAFETY_MARGIN,
-		safety_buffer: SAFETY_BUFFER,
+		safety_margin,
+		safety_buffer,
 		max_optimistic_elections: 1,
 	};
 
@@ -363,7 +359,7 @@ pub fn test_all() {
 	});
 	runner
 		.run(&generate_blocks_with_tail(), |blocks| {
-			run_simulation(blocks);
+			run_simulation(blocks, 8, 16);
 			Ok(())
 		})
 		.unwrap();
@@ -404,7 +400,7 @@ fn test_delayed_election_result_after_reorg_is_handled() {
 		}));
 	}
 
-	run_simulation(ForkedFilledChain { blocks });
+	run_simulation(ForkedFilledChain { blocks }, 8, 16);
 }
 
 /// A fork is reorged away and replaced by a shorter chain.
@@ -470,5 +466,70 @@ fn test_reorg_into_shorter_chain() {
 		}));
 	}
 
-	run_simulation(ForkedFilledChain { blocks });
+	run_simulation(ForkedFilledChain { blocks }, 8, 16);
+}
+
+/// The expiry of reorg data is based on seen_heights_below, which should be entirely controlled by
+/// the BHWs state. This means that optimistic elections should not have an influence on this value.
+/// This test showcases a situation where a stall in the BHW, and the BW continuing to run
+/// optimistic elections causes a double witness.
+/// See PRO-3358.
+#[test]
+fn test_bhw_stalls_after_reorg_while_bw_progresses_optimistically() {
+	let mut blocks = vec![
+		ForkedBlock::Block(FilledBlock {
+			block_id: 0,
+			data: vec![],
+			// Let both witnesses finish the parent before exposing the fork.
+			data_delays: vec![0; 4],
+			resolution_delay: 0,
+		}),
+		ForkedBlock::Fork(vec![ForkedBlock::Block(FilledBlock {
+			block_id: 1,
+			data: vec!["a".into()],
+			data_delays: vec![0, 0],
+			resolution_delay: 0,
+		})]),
+		ForkedBlock::Block(FilledBlock {
+			block_id: 2,
+			data: vec!["a".into()],
+			// BHW only learns the replacement hash after it resumes.
+			data_delays: vec![],
+			resolution_delay: 0,
+		}),
+		ForkedBlock::Block(FilledBlock {
+			block_id: 3,
+			data: vec![],
+			// BHW sees the mismatching parent hash, then only block 0 when it
+			// requeries: it forwards removed = [21], with no added headers.
+			// Keep BW on block 0 until that notification has been delivered.
+			// The final pair stalls BHW but lets BW resolve height 22 optimistically.
+			data_delays: vec![0, 3, 3, 3, 3, 0],
+			resolution_delay: 0,
+		}),
+	];
+
+	// Together with block 3, these are nine blocks after the replacement.
+	for block_id in 4..=11 {
+		blocks.push(ForkedBlock::Block(FilledBlock {
+			block_id,
+			data: vec![],
+			// Snapshot indices match block IDs, including the fork. BHW sees
+			// only block 0 (below its requested height); BW sees the current tip.
+			data_delays: vec![block_id as usize, 0],
+			resolution_delay: 0,
+		}));
+	}
+
+	// Restore BHW consensus and allow the replacement deposit to be witnessed.
+	for block_id in 12..=36 {
+		blocks.push(ForkedBlock::Block(FilledBlock {
+			block_id,
+			data: vec![],
+			data_delays: vec![0; 5],
+			resolution_delay: 0,
+		}));
+	}
+
+	run_simulation(ForkedFilledChain { blocks }, 1, 8);
 }
