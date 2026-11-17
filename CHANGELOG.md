@@ -2,7 +2,7 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [2.3.8] - 2026-11-11
+## [2.3.8] - 2026-11-17
 
 ### Features
 
@@ -15,6 +15,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Run every deregistration check regardless of the account's role ([#7070](https://github.com/chainflip-io/chainflip-backend/issues/7070))
 - Bound each operator's list of delegation exceptions to 1,000 entries ([#7083](https://github.com/chainflip-io/chainflip-backend/issues/7083))
 - Bump rust-zmq to fix the libzmq assertion that aborts engines ([#7117](https://github.com/chainflip-io/chainflip-backend/issues/7117))
+- Only advance block witnessing on new headers, not on resolved optimistic elections, so that a stalled header witness after a reorg can't expire events before their replacement blocks are processed ([#7129](https://github.com/chainflip-io/chainflip-backend/issues/7129))
 
 ### Testing
 
