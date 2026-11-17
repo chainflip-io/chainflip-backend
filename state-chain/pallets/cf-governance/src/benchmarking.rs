@@ -68,7 +68,7 @@ fn install_council<T: Config>(council: Council<T::AccountId>) {
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
+	use sp_std::{collections::btree_set::BTreeSet, vec};
 
 	#[benchmark]
 	fn propose_governance_extrinsic() {
@@ -217,6 +217,17 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		dispatch_whitelisted_call(RawOrigin::Signed(caller.clone()), 1);
+	}
+
+	#[benchmark]
+	fn apply_emergency_presets() {
+		let (council, caller) = max_size_council::<T>(0);
+		install_council::<T>(council);
+		let presets: EmergencyPresets =
+			EmergencyPreset::all().collect::<BTreeSet<_>>().try_into().unwrap();
+
+		#[extrinsic_call]
+		apply_emergency_presets(RawOrigin::Signed(caller), presets);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

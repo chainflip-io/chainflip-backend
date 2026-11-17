@@ -2887,7 +2887,14 @@ export type PalletCfGovernanceCall =
    *
    * Expires all active proposals, since they were approved under the old council.
    **/
-  | { name: 'SetCouncil'; params: { newCouncil: PalletCfGovernanceCouncil } };
+  | { name: 'SetCouncil'; params: { newCouncil: PalletCfGovernanceCouncil } }
+  /**
+   * Lets any single governance member switch off parts of the protocol without a vote.
+   *
+   * Presets can only switch settings off. Switching them back on needs a governance vote.
+   * Applying a preset that is already in force is a no-op.
+   **/
+  | { name: 'ApplyEmergencyPresets'; params: { presets: Array<CfTraitsSafeModeEmergencyPreset> } };
 
 export type PalletCfGovernanceCallLike =
   /**
@@ -2942,7 +2949,14 @@ export type PalletCfGovernanceCallLike =
    *
    * Expires all active proposals, since they were approved under the old council.
    **/
-  | { name: 'SetCouncil'; params: { newCouncil: PalletCfGovernanceCouncil } };
+  | { name: 'SetCouncil'; params: { newCouncil: PalletCfGovernanceCouncil } }
+  /**
+   * Lets any single governance member switch off parts of the protocol without a vote.
+   *
+   * Presets can only switch settings off. Switching them back on needs a governance vote.
+   * Applying a preset that is already in force is a no-op.
+   **/
+  | { name: 'ApplyEmergencyPresets'; params: { presets: Array<CfTraitsSafeModeEmergencyPreset> } };
 
 export type PalletCfGovernanceExecutionMode = 'Automatic' | 'Manual';
 
@@ -2953,6 +2967,53 @@ export type PalletCfGovernanceCouncil =
       type: 'WeightedGroup';
       value: { threshold: number; members: Array<[number, PalletCfGovernanceCouncil]> };
     };
+
+/**
+ * Safe-mode changes that any single governance member can apply without a vote.
+ *
+ * Rule for adding a preset: a member can apply any combination of presets on top of any state
+ * governance has approved. So every combination must be safe on top of any approved state, and a
+ * preset may only switch settings off.
+ *
+ * Codec indices are fixed: never renumber or reuse them.
+ **/
+export type CfTraitsSafeModeEmergencyPreset =
+  /**
+   * Stops new deposit channels on this chain. Open channels and vault swaps keep working.
+   **/
+  | { type: 'DisableDepositChannelCreation'; value: CfPrimitivesChainsForeignChain }
+  /**
+   * Stops new loans and additions to existing loans in this asset. Boost still borrows from
+   * the lending pool; see `DisableBoost`.
+   **/
+  | { type: 'DisableNewLoans'; value: CfPrimitivesChainsAssetsAnyAsset }
+  /**
+   * Stops LP withdrawals, LP-to-LP transfers and transfers of FLIP to the on-chain balance.
+   * Broker withdrawals are covered by `DisableBrokerWithdrawals`.
+   **/
+  | { type: 'DisableLpWithdrawals' }
+  /**
+   * Stops LP internal swaps.
+   **/
+  | { type: 'DisableInternalSwaps' }
+  /**
+   * Stops boosting deposits on this chain. Deposits are credited at full confirmation instead.
+   **/
+  | { type: 'DisableBoost'; value: CfPrimitivesChainsForeignChain }
+  /**
+   * Stops broker and affiliate fee withdrawals.
+   **/
+  | { type: 'DisableBrokerWithdrawals' }
+  /**
+   * Stops new FLIP redemption requests. Redemptions already requested are unaffected.
+   **/
+  | { type: 'DisableRedemptions' }
+  /**
+   * Pauses witnessing of deposits to channels and vault swaps on this chain. They are credited
+   * once witnessing is switched back on; deposits already prewitnessed still complete. Solana's
+   * witnessing doesn't honour this yet (PRO-3360).
+   **/
+  | { type: 'DisableIngressWitnessing'; value: CfPrimitivesChainsForeignChain };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -13797,7 +13858,14 @@ export type PalletCfGovernanceEvent =
    * The council was replaced. Carries the flattened members rather than the
    * council itself: the event schema generator can't express a recursive type (PRO-3155).
    **/
-  | { name: 'NewCouncil'; data: { members: Array<AccountId32> } };
+  | { name: 'NewCouncil'; data: { members: Array<AccountId32> } }
+  /**
+   * A governance member applied emergency safe-mode presets.
+   **/
+  | {
+      name: 'EmergencyPresetsApplied';
+      data: { member: AccountId32; presets: Array<CfTraitsSafeModeEmergencyPreset> };
+    };
 
 /**
  * The `Event` enum of this pallet
@@ -18367,7 +18435,11 @@ export type PalletCfGovernanceError =
   /**
    * The council can never reach quorum, or exceeds the size limits.
    **/
-  | { name: 'InvalidCouncil'; data: PalletCfGovernanceCouncilInvalidCouncil };
+  | { name: 'InvalidCouncil'; data: PalletCfGovernanceCouncilInvalidCouncil }
+  /**
+   * At least one emergency preset must be given.
+   **/
+  | 'NoEmergencyPresets';
 
 export type PalletCfGovernanceCouncilInvalidCouncil =
   | 'TooDeep'

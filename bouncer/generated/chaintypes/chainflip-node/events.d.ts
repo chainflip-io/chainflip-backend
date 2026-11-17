@@ -40,6 +40,7 @@ import type {
   PalletCfValidatorDelegationChange,
   CfPrimitivesWitnessingTaskName,
   SpConsensusGrandpaAppPublic,
+  CfTraitsSafeModeEmergencyPreset,
   PalletCfTokenholderGovernanceProposal,
   CfPrimitivesChainsForeignChain,
   StateChainRuntimeChainflipOffencesOffence,
@@ -1067,6 +1068,15 @@ export interface ChainEvents extends GenericChainEvents {
      * council itself: the event schema generator can't express a recursive type (PRO-3155).
      **/
     NewCouncil: GenericPalletEvent<'Governance', 'NewCouncil', { members: Array<AccountId32> }>;
+
+    /**
+     * A governance member applied emergency safe-mode presets.
+     **/
+    EmergencyPresetsApplied: GenericPalletEvent<
+      'Governance',
+      'EmergencyPresetsApplied',
+      { member: AccountId32; presets: Array<CfTraitsSafeModeEmergencyPreset> }
+    >;
 
     /**
      * Generic pallet event

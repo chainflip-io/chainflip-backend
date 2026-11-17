@@ -51,6 +51,7 @@ import type {
   StateChainRuntimeChainflipKeyOwnerProofCurrentSessionProof,
   PalletCfGovernanceExecutionMode,
   PalletCfGovernanceCouncil,
+  CfTraitsSafeModeEmergencyPreset,
   PalletCfTokenholderGovernanceProposal,
   StateChainRuntimeChainflipOffencesOffence,
   PalletCfReputationPenalty,
@@ -2142,6 +2143,27 @@ export interface ChainTx<
           palletCall: {
             name: 'SetCouncil';
             params: { newCouncil: PalletCfGovernanceCouncil };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Lets any single governance member switch off parts of the protocol without a vote.
+     *
+     * Presets can only switch settings off. Switching them back on needs a governance vote.
+     * Applying a preset that is already in force is a no-op.
+     *
+     * @param {Array<CfTraitsSafeModeEmergencyPreset>} presets
+     **/
+    applyEmergencyPresets: GenericTxCall<
+      (presets: Array<CfTraitsSafeModeEmergencyPreset>) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Governance';
+          palletCall: {
+            name: 'ApplyEmergencyPresets';
+            params: { presets: Array<CfTraitsSafeModeEmergencyPreset> };
           };
         },
         ChainKnownTypes

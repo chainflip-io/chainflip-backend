@@ -153,6 +153,12 @@ register_checks! {
 			};
 			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);
 		},
+		rules_hook_called_n_times_for_safety_margin_age(pre, post, n: usize) {
+			let count = |state: &ElectoralSystemState<StatemachineElectoralSystem<Types>>| {
+				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(age, _data, safety_margin)| age.contains(safety_margin)).count()
+			};
+			assert_eq!(count(post) - count(pre), n, "rules should have reached the safety margin age {} times in this `on_finalize`!", n);
+		},
 		block_processor_contains_block_data_for_heights(_pre, post, heights: Vec<u64>) {
 			let heights_on_record: BTreeSet<_> = post.unsynchronised_state.block_processor.blocks_data.keys().collect();
 			let expected_heights: BTreeSet<_> = heights.iter().collect();
@@ -1052,6 +1058,70 @@ fn optimistic_election_result_saved_and_used_or_discarded_correctly() {
 					15,
 					BWElectionType::Optimistic,
 				)]),
+			],
+		);
+}
+
+// Safe mode only stops elections for new heights. A block that was already prewitnessed keeps
+// ageing as headers arrive and still reaches the safety margin, where it is fully witnessed.
+#[test]
+fn prewitnessed_block_is_fully_witnessed_during_safe_mode() {
+	const FIRST_HEADER: [Header<Types>; 1] = [Header { block_height: 1, hash: 1, parent_hash: 0 }];
+	const LATER_HEADERS: [Header<Types>; 3] = [
+		Header { block_height: 2, hash: 2, parent_hash: 1 },
+		Header { block_height: 3, hash: 3, parent_hash: 2 },
+		Header { block_height: 4, hash: 4, parent_hash: 3 },
+	];
+	const TX_RECEIVED: u8 = 42;
+
+	TestSetup::<SimpleBlockWitnesser>::default()
+		.with_unsynchronised_state(BlockWitnesserState {
+			elections: ElectionTracker { highest_ever_ongoing_election: 1, ..Default::default() },
+			safemode_enabled: MockHook::new(ConstantHook::new(SafeModeStatus::Enabled)),
+			..Default::default()
+		})
+		.with_unsynchronised_settings(BlockWitnesserSettings {
+			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
+			max_optimistic_elections: 0,
+			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
+		})
+		.build()
+		.test_on_finalize(
+			&vec![Some(ChainProgress { headers: FIRST_HEADER.into(), removed: None })],
+			|_| {},
+			vec![Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1)],
+		)
+		.expect_consensus(
+			generate_votes(
+				(0..20).collect(),
+				Default::default(),
+				Default::default(),
+				vec![TX_RECEIVED],
+				None,
+			),
+			Some((vec![TX_RECEIVED], None)),
+		)
+		.test_on_finalize(
+			&vec![None],
+			|_| {},
+			vec![
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(0),
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![(
+					1,
+					vec![TX_RECEIVED],
+				)]),
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_safety_margin_age(0),
+			],
+		)
+		.test_on_finalize(
+			&vec![Some(ChainProgress { headers: LATER_HEADERS.into(), removed: None })],
+			|_| {},
+			vec![
+				// No elections start for the new heights while safe mode is on...
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(0),
+				// ...but block 1 still reaches the safety margin.
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_safety_margin_age(1),
 			],
 		);
 }
