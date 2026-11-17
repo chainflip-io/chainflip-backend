@@ -57,9 +57,21 @@ async function addAliceToGovernance<A = []>(cf: ChainflipIO<A>, initMembers: str
 
   const newThreshold = newMembers.length;
 
-  await cf.submitGovernance({
-    extrinsic: (api) => api.tx.governance.setCouncil(simpleGroup(newMembers, newThreshold)),
-  });
+  const proposalId = await submitGovernanceExtrinsic(
+    (chainflip) => chainflip.tx.governance.setCouncil(simpleGroup(newMembers, newThreshold)),
+    cf.logger,
+  );
+
+  // An incoming member has to approve their own inclusion before the proposal can execute.
+  await using chainflip = await getChainflipApi();
+  await signSendAndWait(
+    chainflip,
+    chainflip.tx.governance.approve(proposalId),
+    alice,
+    alice.address,
+  );
+
+  await cf.stepUntilEvent(governanceExecutedEvent.refine((id) => id === proposalId));
 
   cf.debug('Added Alice to governance!');
 }
