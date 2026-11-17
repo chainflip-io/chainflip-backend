@@ -310,6 +310,17 @@ export interface ChainErrors extends GenericChainErrors {
     SubAccountIdDerivationFailed: GenericPalletError;
 
     /**
+     * The role is not assignable: it is an account lifecycle state, not one that can be
+     * registered or deregistered.
+     **/
+    RoleNotAssignable: GenericPalletError;
+
+    /**
+     * The account has been deregistered and can no longer take a role.
+     **/
+    AccountAlreadyDeregistered: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;

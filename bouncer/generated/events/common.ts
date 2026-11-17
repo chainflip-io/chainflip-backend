@@ -501,6 +501,7 @@ export const cfPrimitivesAccountRole = simpleEnum([
   'LiquidityProvider',
   'Broker',
   'Operator',
+  'AccountClosing',
 ]);
 
 export const palletCfValidatorRotationState = z.object({
