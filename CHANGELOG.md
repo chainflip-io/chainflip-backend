@@ -8,6 +8,7 @@ All notable changes included in each Chainflip release will be documented in thi
 
 - Require the Liquidity Provider role to delegate once governance schedules FLIP 2.1: from then on, `delegate` registers unregistered accounts as Liquidity Providers, and existing delegators are given the role when the activation epoch is set. Liquidity Providers can't deregister while delegating ([#6738](https://github.com/chainflip-io/chainflip-backend/issues/6738))
 - Keep the Liquidity Provider role after undelegating ([#7053](https://github.com/chainflip-io/chainflip-backend/issues/7053))
+- Let any governance member apply emergency safe-mode presets that only switch features off, without waiting for a vote ([#7092](https://github.com/chainflip-io/chainflip-backend/issues/7092))
 
 ### Fixes
 
