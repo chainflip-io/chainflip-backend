@@ -1,9 +1,8 @@
 import {
   newAssetAddress,
   decodeDotAddressForContract,
-  amountToFineAmount,
   amountToFineAmountBigInt,
-  isWithinOnePercent,
+  fineAmountToAmount,
   chainFromAsset,
   decodeSolAddress,
   assetDecimals,
@@ -17,9 +16,9 @@ import {
 import { send } from 'shared/send';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { liquidityProviderLiquidityDepositAddressReadyEvent } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
-import { assetBalancesAccountCreditedEvent } from 'generated/events/assetBalances/accountCredited';
 import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 import { liquidityProviderLiquidityRefundAddressRegisteredEvent } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
+import { ingressEgressDepositFinalisedEvent } from 'generated/events/generic/ingressEgress/depositFinalised';
 
 export async function registerLiquidityRefundAddressForChain<A extends WithLpAccount>(
   cf: ChainflipIO<A>,
@@ -94,23 +93,21 @@ export async function depositLiquidity<A extends WithLpAccount>(
     `sending liquidity ${amount} ${ccy}.`,
   );
 
-  await cf.stepUntilEvent(
-    assetBalancesAccountCreditedEvent.refine((event) => {
-      if (event.asset === ccy && event.accountId === lp.address) {
-        if (
-          isWithinOnePercent(event.amountCredited, amountToFineAmountBigInt(String(amount), ccy))
-        ) {
-          return true;
-        }
-        cf.info(
-          `Received amount ${event.amountCredited} ${ccy} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))} for asset ${ccy}.`,
-        );
-        return false;
-      }
-      return false;
-    }),
+  const depositFinalisedEvent = await cf.stepUntilEvent(
+    ingressEgressDepositFinalisedEvent[chainFromAsset(ccy)].refine(
+      (event) =>
+        event.channelId === depositAddressReadyEvent.channelId &&
+        event.asset === ccy &&
+        event.amount === amountToFineAmountBigInt(String(amount), ccy) &&
+        event.action.__kind === 'LiquidityProvision' &&
+        event.action.lpAccount === lp.address,
+    ),
   );
 
-  cf.info(`Liquidity deposited to ${ingressAddress} (${givenAmount} ${ccy})`);
-  return txHash;
+  const amountCredited = depositFinalisedEvent.amount - depositFinalisedEvent.ingressFee;
+  const creditedAmount = fineAmountToAmount(amountCredited.toString(), assetDecimals(ccy));
+  cf.info(
+    `Liquidity deposited to ${ingressAddress} (input amount: ${amount} ${ccy}, credited amount: ${creditedAmount} ${ccy})`,
+  );
+  return { txHash, amountCredited };
 }

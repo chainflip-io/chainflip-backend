@@ -20,7 +20,7 @@ use cf_runtime_utilities::log_or_panic;
 use cf_utilities::{impls, macros::*};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{Get, H160};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::vec::Vec;
 
 use pallet_cf_elections::{
 	electoral_system::ElectoralReadAccess,
@@ -66,9 +66,9 @@ pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAsse
 		any::Asset::Flip => None,
 		any::Asset::Usdc => Some(UsdcUsd),
 		any::Asset::Usdt => Some(UsdtUsd),
-		any::Asset::Wbtc => None,
-		any::Asset::Cbbtc => None,
-		any::Asset::Dot => None,
+		any::Asset::Wbtc => Some(WbtcUsd),
+		any::Asset::Cbbtc => Some(CbbtcUsd),
+		any::Asset::Dot => Some(DotUsd),
 		any::Asset::Btc => Some(BtcUsd),
 		any::Asset::ArbEth => Some(EthUsd),
 		any::Asset::ArbUsdc => Some(UsdcUsd),
@@ -76,12 +76,12 @@ pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAsse
 		any::Asset::Sol => Some(SolUsd),
 		any::Asset::SolUsdc => Some(UsdcUsd),
 		any::Asset::SolUsdt => Some(UsdtUsd),
-		any::Asset::HubDot => None,
+		any::Asset::HubDot => Some(DotUsd),
 		any::Asset::HubUsdt => Some(UsdtUsd),
 		any::Asset::HubUsdc => Some(UsdcUsd),
-		any::Asset::Trx => None,
+		any::Asset::Trx => Some(TrxUsd),
 		any::Asset::TrxUsdt => Some(UsdtUsd),
-		any::Asset::Bnb => None,
+		any::Asset::Bnb => Some(BnbUsd),
 		any::Asset::BscUsdt => None,
 	}
 }
@@ -114,30 +114,34 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Opti
 
 derive_common_traits! {
 	#[derive(TypeInfo)]
-	pub struct ChainlinkOraclePriceSettings<C: Container = VectorContainer> {
+	pub struct ChainlinkOraclePriceSettings<
+		Ca: Container = VectorContainer,
+		Ce: Container = VectorContainer,
+		Cb: Container = VectorContainer,
+	> {
 		pub arb_address_checker: H160,
-		pub arb_oracle_feeds: C::Of<H160>,
+		pub arb_oracle_feeds: Ca::Of<H160>,
 		pub eth_address_checker: H160,
-		pub eth_oracle_feeds: C::Of<H160>
+		pub eth_oracle_feeds: Ce::Of<H160>,
+		pub bsc_address_checker: H160,
+		pub bsc_oracle_feeds: Cb::Of<H160>
 	}
 }
 
-impl<F: Container> ChainlinkOraclePriceSettings<F> {
-	pub fn convert<G: Container>(
+impl<Ca: Container, Ce: Container, Cb: Container> ChainlinkOraclePriceSettings<Ca, Ce, Cb> {
+	pub fn convert<Na: Container, Ne: Container, Nb: Container>(
 		self,
-		t: impl Transformation<F, G>,
-	) -> ChainlinkOraclePriceSettings<G> {
-		let ChainlinkOraclePriceSettings {
-			arb_address_checker,
-			arb_oracle_feeds,
-			eth_address_checker,
-			eth_oracle_feeds,
-		} = self;
+		ta: impl Transformation<Ca, Na>,
+		te: impl Transformation<Ce, Ne>,
+		tb: impl Transformation<Cb, Nb>,
+	) -> ChainlinkOraclePriceSettings<Na, Ne, Nb> {
 		ChainlinkOraclePriceSettings {
-			arb_address_checker,
-			arb_oracle_feeds: t.at(arb_oracle_feeds),
-			eth_address_checker,
-			eth_oracle_feeds: t.at(eth_oracle_feeds),
+			arb_address_checker: self.arb_address_checker,
+			arb_oracle_feeds: ta.at(self.arb_oracle_feeds),
+			eth_address_checker: self.eth_address_checker,
+			eth_oracle_feeds: te.at(self.eth_oracle_feeds),
+			bsc_address_checker: self.bsc_address_checker,
+			bsc_oracle_feeds: tb.at(self.bsc_oracle_feeds),
 		}
 	}
 }
@@ -284,28 +288,12 @@ pub type GenericElectoralSystemRunner = CompositeRunner<
 pub fn initial_state(
 	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings,
 ) -> InitialStateOf<Runtime, ()> {
-	// The prices for usdc and usdt are considered up-to-date
-	// if they have been updated at least once every 25 hours.
-	let up_to_date_timeout_overrides: BTreeMap<_, _> = [
-		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 60 * 25)),
-		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 60 * 25)),
-	]
-	.into();
-
-	// There is an additionaly 5 minute window during which we
-	// ask the engines to submit any latest price information that
-	// they have. Once this is over, the price is marked as stale.
-	let maybe_stale_timeout_overrides: BTreeMap<_, _> = [
-		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 5)),
-		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 5)),
-	]
-	.into();
-
 	InitialState {
 		unsynchronised_state: (OraclePriceTracker {
 			chain_states: ExternalChainStates {
 				arbitrum: ExternalChainState { price: Default::default() },
 				ethereum: ExternalChainState { price: Default::default() },
+				bsc: ExternalChainState { price: Default::default() },
 			},
 			get_time: Default::default(),
 			safe_mode_enabled: Default::default(),
@@ -317,15 +305,80 @@ pub fn initial_state(
 				up_to_date_timeout: Seconds(60),
 				maybe_stale_timeout: Seconds(30),
 				minimal_price_deviation: BasisPoints(10),
-				up_to_date_timeout_overrides: up_to_date_timeout_overrides.clone(),
-				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
+				up_to_date_timeout_overrides: [
+					(ChainlinkAssetpair::BtcUsd, Seconds(1800 + 60)),
+					(ChainlinkAssetpair::EthUsd, Seconds(1800 + 60)),
+					(ChainlinkAssetpair::UsdtUsd, Seconds(260 + 60)),
+					(ChainlinkAssetpair::UsdcUsd, Seconds(260 + 60)),
+					(ChainlinkAssetpair::SolUsd, Seconds(86400 + 60)),
+					(ChainlinkAssetpair::BnbUsd, Seconds(86400 + 60)),
+					(ChainlinkAssetpair::WbtcUsd, Seconds(86400 + 60)),
+					(ChainlinkAssetpair::DotUsd, Seconds(86400 + 60)),
+				]
+				.into(),
+				maybe_stale_timeout_overrides: [
+					(ChainlinkAssetpair::BtcUsd, Seconds(60)),
+					(ChainlinkAssetpair::EthUsd, Seconds(60)),
+					(ChainlinkAssetpair::UsdtUsd, Seconds(60)),
+					(ChainlinkAssetpair::UsdcUsd, Seconds(60)),
+					(ChainlinkAssetpair::SolUsd, Seconds(60)),
+					(ChainlinkAssetpair::BnbUsd, Seconds(60)),
+					(ChainlinkAssetpair::WbtcUsd, Seconds(60)),
+					(ChainlinkAssetpair::DotUsd, Seconds(60)),
+				]
+				.into(),
 			},
 			ethereum: ExternalChainSettings {
 				up_to_date_timeout: Seconds(60),
 				maybe_stale_timeout: Seconds(30),
 				minimal_price_deviation: BasisPoints(10),
-				up_to_date_timeout_overrides: up_to_date_timeout_overrides.clone(),
-				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
+				up_to_date_timeout_overrides: [
+					(ChainlinkAssetpair::BtcUsd, Seconds(3600 + 60)),
+					(ChainlinkAssetpair::EthUsd, Seconds(3600 + 60)),
+					(ChainlinkAssetpair::UsdtUsd, Seconds(86400 + 60)),
+					(ChainlinkAssetpair::UsdcUsd, Seconds(82800 + 60)),
+					(ChainlinkAssetpair::SolUsd, Seconds(86400 + 60)),
+					(ChainlinkAssetpair::CbbtcUsd, Seconds(86400 + 60)),
+					(ChainlinkAssetpair::BnbUsd, Seconds(86400 + 60)),
+				]
+				.into(),
+				maybe_stale_timeout_overrides: [
+					(ChainlinkAssetpair::BtcUsd, Seconds(60)),
+					(ChainlinkAssetpair::EthUsd, Seconds(60)),
+					(ChainlinkAssetpair::UsdtUsd, Seconds(60)),
+					(ChainlinkAssetpair::UsdcUsd, Seconds(60)),
+					(ChainlinkAssetpair::SolUsd, Seconds(60)),
+					(ChainlinkAssetpair::CbbtcUsd, Seconds(60)),
+					(ChainlinkAssetpair::BnbUsd, Seconds(60)),
+				]
+				.into(),
+			},
+			bsc: ExternalChainSettings {
+				up_to_date_timeout: Seconds(60),
+				maybe_stale_timeout: Seconds(30),
+				minimal_price_deviation: BasisPoints(10),
+				up_to_date_timeout_overrides: [
+					(ChainlinkAssetpair::BtcUsd, Seconds(60 + 30)),
+					(ChainlinkAssetpair::EthUsd, Seconds(60 + 30)),
+					(ChainlinkAssetpair::UsdtUsd, Seconds(900 + 60)),
+					(ChainlinkAssetpair::UsdcUsd, Seconds(900 + 60)),
+					(ChainlinkAssetpair::SolUsd, Seconds(600 + 60)),
+					(ChainlinkAssetpair::TrxUsd, Seconds(600 + 60)),
+					(ChainlinkAssetpair::DotUsd, Seconds(600 + 60)),
+					(ChainlinkAssetpair::BnbUsd, Seconds(30 + 30)),
+				]
+				.into(),
+				maybe_stale_timeout_overrides: [
+					(ChainlinkAssetpair::BtcUsd, Seconds(30)),
+					(ChainlinkAssetpair::EthUsd, Seconds(30)),
+					(ChainlinkAssetpair::UsdtUsd, Seconds(60)),
+					(ChainlinkAssetpair::UsdcUsd, Seconds(60)),
+					(ChainlinkAssetpair::SolUsd, Seconds(60)),
+					(ChainlinkAssetpair::TrxUsd, Seconds(60)),
+					(ChainlinkAssetpair::DotUsd, Seconds(60)),
+					(ChainlinkAssetpair::BnbUsd, Seconds(30)),
+				]
+				.into(),
 			},
 		},),
 		settings: (chainlink_oracle_price_settings,),

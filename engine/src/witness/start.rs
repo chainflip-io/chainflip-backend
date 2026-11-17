@@ -120,6 +120,7 @@ where
 		scope,
 		arb_client,
 		eth_client,
+		bsc_client,
 		state_chain_client,
 		vote_submitter,
 	);

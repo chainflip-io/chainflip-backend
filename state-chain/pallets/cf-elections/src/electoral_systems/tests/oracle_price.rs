@@ -14,11 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use core::{
-	cmp::max,
-	iter::{self, repeat},
-	ops::RangeInclusive,
-};
+use core::{cmp::max, iter::repeat, ops::RangeInclusive};
 use std::collections::{BTreeMap, BTreeSet};
 
 use enum_iterator::all;
@@ -69,6 +65,13 @@ fn mock_settings() -> OraclePriceSettings<MockTypes> {
 			maybe_stale_timeout_overrides: Default::default(),
 		},
 		ethereum: ExternalChainSettings {
+			up_to_date_timeout: UP_TO_DATE_TIMEOUT,
+			maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
+			minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
+			up_to_date_timeout_overrides: Default::default(),
+			maybe_stale_timeout_overrides: Default::default(),
+		},
+		bsc: ExternalChainSettings {
 			up_to_date_timeout: UP_TO_DATE_TIMEOUT,
 			maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
 			minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
@@ -173,7 +176,12 @@ fn election_lifecycle() {
 	let election_for_chain_with_all_assets = |chain, status: Option<_>| {
 		Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 			chain,
-			status.map(|status| all::<ChainlinkAssetpair>().zip(repeat(status)).collect()),
+			status.map(|status| {
+				all::<ChainlinkAssetpair>()
+					.zip(repeat(MaybeStale))
+					.chain(default_prices.iter().map(|(asset, _)| (*asset, status)))
+					.collect()
+			}),
 		))
 	};
 	let current_prices_are = |prices: &BTreeMap<_, _>, staleness| {
@@ -192,14 +200,15 @@ fn election_lifecycle() {
 		.with_unsynchronised_settings(mock_settings())
 		.build()
 		.mutate_unsynchronized_state(|state| state.get_time.state.state = START_TIME)
-		// on startup all assets on both arbitrum and eth are in `MaybeStale` (we query for the
-		// latest data the engines have) state
+		// on startup all assets on all price sources are in `MaybeStale` (we query for the latest
+		// data the engines have) state
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(MaybeStale)),
 				election_for_chain_with_all_assets(Ethereum, Some(MaybeStale)),
+				election_for_chain_with_all_assets(Bsc, Some(MaybeStale)),
 			],
 		)
 		//  - For arbitrum: no consensus
@@ -219,6 +228,8 @@ fn election_lifecycle() {
 				),
 				Some(generate_asset_response(START_TIME, &prices1)),
 			),
+			// Data for the BSC election, no votes
+			(no_votes(20), None),
 		])
 		// since we got prices for the secondary chain (Ethereum), the elections are:
 		//  - Arbitrum: MaybeStale (since we didn't get Arbitrum prices yet)
@@ -229,6 +240,7 @@ fn election_lifecycle() {
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(MaybeStale)),
 				election_for_chain_with_all_assets(Ethereum, Some(UpToDate)),
+				election_for_chain_with_all_assets(Bsc, Some(MaybeStale)),
 				current_prices_are(&prices1, UpToDate),
 			],
 		)
@@ -250,6 +262,8 @@ fn election_lifecycle() {
 				),
 				Some(generate_asset_response(START_TIME + TIME_STEP * 2, &prices2)),
 			),
+			// Data for the BSC election, no votes
+			(no_votes(20), None),
 			// Data for the Ethereum election, no votes
 			(no_votes(20), None),
 		])
@@ -263,6 +277,7 @@ fn election_lifecycle() {
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
 				election_for_chain_with_all_assets(Ethereum, Some(UpToDate)),
+				election_for_chain_with_all_assets(Bsc, Some(MaybeStale)),
 				current_prices_are(&prices2, UpToDate),
 			],
 		)
@@ -279,6 +294,7 @@ fn election_lifecycle() {
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
 				election_for_chain_with_all_assets(Ethereum, Some(MaybeStale)),
+				election_for_chain_with_all_assets(Bsc, Some(MaybeStale)),
 				current_prices_are(&prices2, UpToDate),
 			],
 		)
@@ -295,6 +311,7 @@ fn election_lifecycle() {
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(MaybeStale)),
 				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
+				election_for_chain_with_all_assets(Bsc, Some(MaybeStale)),
 				current_prices_are(&prices2, MaybeStale),
 			],
 		)
@@ -310,6 +327,7 @@ fn election_lifecycle() {
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(Stale)),
 				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
+				election_for_chain_with_all_assets(Bsc, Some(MaybeStale)),
 				current_prices_are(&prices2, Stale),
 			],
 		)
@@ -320,6 +338,8 @@ fn election_lifecycle() {
 		// We get consensus:
 		// - Arbitrum: newest prices
 		.expect_consensus_multi(vec![
+			// Data for the BSC election, no votes
+			(no_votes(20), None),
 			// Data for the Ethereum election, no votes
 			(no_votes(20), None),
 			// Data for the Arbitrum election, all 20 voters vote for price3
@@ -343,6 +363,7 @@ fn election_lifecycle() {
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
 				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
+				election_for_chain_with_all_assets(Bsc, Some(MaybeStale)),
 				current_prices_are(&prices3, UpToDate),
 			],
 		);
@@ -381,8 +402,9 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 				Some(generate_asset_response(START_TIME, &prices4assets.clone().into())),
 			),
 			(no_votes(20), None),
+			(no_votes(20), None),
 		])
-		// this means that we're still querying on both ethereum and arbitrum
+		// this means that we're still querying all price sources
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
@@ -391,13 +413,17 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 					Arbitrum,
 					Some(
 						all::<ChainlinkAssetpair>()
-							.zip(repeat(UpToDate))
-							.chain(iter::once((EthUsd, MaybeStale)))
+							.zip(repeat(MaybeStale))
+							.chain(prices4assets.iter().map(|(asset, _)| (*asset, UpToDate)))
 							.collect(),
 					),
 				)),
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Ethereum,
+					Some(all::<ChainlinkAssetpair>().zip(repeat(MaybeStale)).collect()),
+				)),
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					Bsc,
 					Some(all::<ChainlinkAssetpair>().zip(repeat(MaybeStale)).collect()),
 				)),
 				Check::<OraclePriceES>::electoral_price_api_returns(
@@ -416,6 +442,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 		// get consensus on 2 assets on Arbitrum (Eth & Sol)
 		.expect_consensus_multi(vec![
 			(no_votes(20), None),
+			(no_votes(20), None),
 			(
 				generate_votes(
 					(0..20).collect(),
@@ -430,17 +457,31 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 				)),
 			),
 		])
-		// we're still querying Arb and Eth both
+		// we're still querying all price sources
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Arbitrum,
-					Some(all::<ChainlinkAssetpair>().zip(repeat(UpToDate)).collect()),
+					Some(
+						all::<ChainlinkAssetpair>()
+							.zip(repeat(MaybeStale))
+							.chain(
+								prices4assets
+									.iter()
+									.chain(prices2assets.iter())
+									.map(|(asset, _)| (*asset, UpToDate)),
+							)
+							.collect(),
+					),
 				)),
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Ethereum,
+					Some(all::<ChainlinkAssetpair>().zip(repeat(MaybeStale)).collect()),
+				)),
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					Bsc,
 					Some(all::<ChainlinkAssetpair>().zip(repeat(MaybeStale)).collect()),
 				)),
 				Check::<OraclePriceES>::electoral_price_api_returns(
@@ -460,7 +501,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 		})
 		// since we're now in total 5 timesteps (1min 15s) after we got the "prices4assets",
 		// they're all MaybeStale - except Sol and Eth that got updated more recently.
-		// this also means we have an election ongoing for all assets for ethereum
+		// this also means we have elections ongoing for all assets for every price source
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
@@ -476,6 +517,10 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 				)),
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Ethereum,
+					Some(all::<ChainlinkAssetpair>().zip(repeat(MaybeStale)).collect()),
+				)),
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					Bsc,
 					Some(all::<ChainlinkAssetpair>().zip(repeat(MaybeStale)).collect()),
 				)),
 				Check::<OraclePriceES>::electoral_price_api_returns(
