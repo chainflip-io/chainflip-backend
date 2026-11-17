@@ -61,7 +61,8 @@
     "typescript": "^5.9.3"
   },
   "engines": {
-    "pnpm": ">=9"
+    "pnpm": ">=10"
   },
-  "type": "module"
+  "type": "module",
+  "packageManager": "pnpm@10.34.9"
 }
