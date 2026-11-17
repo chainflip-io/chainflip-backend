@@ -3023,14 +3023,51 @@ export type PalletCfGovernanceCallLike =
 
 export type PalletCfGovernanceExecutionMode = 'Automatic' | 'Manual';
 
+/**
+ * Safe-mode changes that any single governance member can apply without a vote.
+ *
+ * Rule for adding a preset: a member can apply any combination of presets on top of any state
+ * governance has approved. So every combination must be safe on top of any approved state, and a
+ * preset may only switch settings off.
+ *
+ * Codec indices are fixed: never renumber or reuse them.
+ **/
 export type CfTraitsSafeModeEmergencyPreset =
+  /**
+   * Stops new deposit channels on this chain. Open channels and vault swaps keep working.
+   **/
   | { type: 'DisableDepositChannelCreation'; value: CfPrimitivesChainsForeignChain }
+  /**
+   * Stops new loans and additions to existing loans in this asset. Boost still borrows from
+   * the lending pool; see `DisableBoost`.
+   **/
   | { type: 'DisableNewLoans'; value: CfPrimitivesChainsAssetsAnyAsset }
+  /**
+   * Stops LP withdrawals, LP-to-LP transfers and transfers of FLIP to the on-chain balance.
+   * Broker withdrawals are covered by `DisableBrokerWithdrawals`.
+   **/
   | { type: 'DisableLpWithdrawals' }
+  /**
+   * Stops LP internal swaps.
+   **/
   | { type: 'DisableInternalSwaps' }
+  /**
+   * Stops boosting deposits on this chain. Deposits are credited at full confirmation instead.
+   **/
   | { type: 'DisableBoost'; value: CfPrimitivesChainsForeignChain }
+  /**
+   * Stops broker and affiliate fee withdrawals.
+   **/
   | { type: 'DisableBrokerWithdrawals' }
+  /**
+   * Stops new FLIP redemption requests. Redemptions already requested are unaffected.
+   **/
   | { type: 'DisableRedemptions' }
+  /**
+   * Pauses witnessing of deposits to channels and vault swaps on this chain. They are credited
+   * once witnessing is switched back on; deposits already prewitnessed still complete. Solana's
+   * witnessing doesn't honour this yet (PRO-3360).
+   **/
   | { type: 'DisableIngressWitnessing'; value: CfPrimitivesChainsForeignChain };
 
 /**
