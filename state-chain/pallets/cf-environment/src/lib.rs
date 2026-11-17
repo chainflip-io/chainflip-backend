@@ -1176,6 +1176,20 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Changes the stored safe mode in place, without any governance check. Emits
+	/// `RuntimeSafeModeUpdated` only if the safe mode changed.
+	pub fn mutate_safe_mode(f: impl FnOnce(&mut T::RuntimeSafeMode)) {
+		let old = RuntimeSafeMode::<T>::get();
+		let mut new = old.clone();
+		f(&mut new);
+		if new != old {
+			RuntimeSafeMode::<T>::put(new.clone());
+			Self::deposit_event(Event::<T>::RuntimeSafeModeUpdated {
+				safe_mode: SafeModeUpdate::CodeAmber(new),
+			});
+		}
+	}
+
 	pub fn update_current_release_version() {
 		CurrentReleaseVersion::<T>::set(T::CurrentReleaseVersion::get());
 	}

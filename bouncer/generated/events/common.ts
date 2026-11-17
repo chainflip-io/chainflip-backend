@@ -582,6 +582,23 @@ export const palletCfGovernanceGovernanceCouncil = z.object({
   threshold: z.number(),
 });
 
+export const cfTraitsSafeModeEmergencyPreset = z.discriminatedUnion('__kind', [
+  z.object({
+    __kind: z.literal('DisableDepositChannelCreation'),
+    value: cfPrimitivesChainsForeignChain,
+  }),
+  z.object({ __kind: z.literal('DisableNewLoans'), value: cfPrimitivesChainsAssetsAnyAsset }),
+  z.object({ __kind: z.literal('DisableLpWithdrawals') }),
+  z.object({ __kind: z.literal('DisableInternalSwaps') }),
+  z.object({ __kind: z.literal('DisableBoost'), value: cfPrimitivesChainsForeignChain }),
+  z.object({ __kind: z.literal('DisableBrokerWithdrawals') }),
+  z.object({ __kind: z.literal('DisableRedemptions') }),
+  z.object({
+    __kind: z.literal('DisableIngressWitnessing'),
+    value: cfPrimitivesChainsForeignChain,
+  }),
+]);
+
 export const palletCfTokenholderGovernanceProposal = z.discriminatedUnion('__kind', [
   z.object({
     __kind: z.literal('SetGovernanceKey'),
