@@ -332,6 +332,8 @@ impl<T: Ord + Serialize + strum::IntoEnumIterator> Serialize for SafeModeSet<T> 
 	Ord,
 	RuntimeDebug,
 )]
+// Governance tooling shows the variant docs to the member applying a preset.
+#[scale_info(capture_docs = "always")]
 pub enum EmergencyPreset {
 	/// Stops new deposit channels on this chain. Open channels and vault swaps keep working.
 	#[codec(index = 0)]
@@ -593,5 +595,16 @@ pub(crate) mod test {
 	#[test]
 	fn every_emergency_preset_fits_in_one_call() {
 		assert!(EmergencyPreset::all().count() <= MAX_EMERGENCY_PRESETS as usize);
+	}
+
+	#[test]
+	fn every_emergency_preset_is_documented_in_the_metadata() {
+		let scale_info::TypeDef::Variant(def) = <EmergencyPreset as TypeInfo>::type_info().type_def
+		else {
+			panic!("EmergencyPreset should be an enum")
+		};
+		for variant in def.variants {
+			assert!(!variant.docs.is_empty(), "{} has no docs", variant.name);
+		}
 	}
 }
