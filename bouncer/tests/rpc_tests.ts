@@ -1,6 +1,6 @@
 import { getChainflipApi } from 'shared/utils/substrate';
 import { createStateChainKeypair } from 'shared/utils';
-import { type AssetAndChain } from '@chainflip/utils/chainflip';
+import { internalAssetToRpcAsset, type AssetAndChain } from '@chainflip/utils/chainflip';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { AccountRole, setupAccount } from 'shared/setup_account';
@@ -58,44 +58,16 @@ type SupportedAssets = {
   randomAsset: () => AssetAndChain;
 };
 
-// Chains and assets introduced in the current release, and therefore unknown to the runtime
-// on the other side of an upgrade boundary: calling pool RPCs with them would fail there.
-// Set by the upgrade-test workflow; unset outside upgrade tests.
-// Formats: NEW_RELEASED_CHAINS="Bsc,Tron", NEW_RELEASED_ASSETS="Ethereum:CBBTC".
-function parseEnvList(envVar: string | undefined): string[] {
-  return (envVar ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-const newlyReleasedChains = parseEnvList(process.env.NEW_RELEASED_CHAINS);
-const newlyReleasedAssets = parseEnvList(process.env.NEW_RELEASED_ASSETS).map((pair) => {
-  const [chain, asset] = pair.split(':');
-  return { chain, asset };
-});
-
 async function getRuntimeSupportedAssets(): Promise<SupportedAssets> {
   await using chainflipApi = await getChainflipApi();
-  // Here we use cf_swapping_environment and parse the result instead of cf_supported_assets, because
-  // cf_supported_assets implementation doesn't work at upgrade boundaries
-  const env = (await chainflipApi.rpc.cf_swapping_environment()) as {
-    network_fees: { regular_network_fee: { rates: Record<string, Record<string, number>> } };
-  };
-  const rates = env.network_fees.regular_network_fee.rates;
-  const all = Object.entries(rates).flatMap(([chain, chainAssets]) =>
-    Object.keys(chainAssets).map((asset) => ({ chain, asset })),
-  );
-  const assets = all.filter(
-    (a) =>
-      !(a.chain === 'Ethereum' && a.asset === 'USDC') &&
-      a.chain !== 'Polkadot' &&
-      !newlyReleasedChains.includes(a.chain) &&
-      !newlyReleasedAssets.some((n) => n.chain === a.chain && n.asset === a.asset),
-  );
+  // Queried from the runtime rather than the node, so assets unknown to the running runtime
+  // (e.g. the old runtime in the upgrade test) are excluded.
+  const assets = (await chainflipApi.call.customRuntimeApi.cfSupportedAssets())
+    .filter((asset) => asset !== 'Usdc' && asset !== 'Dot')
+    .map((asset) => internalAssetToRpcAsset[asset]);
   return {
-    baseAsset: { chain: 'Ethereum', asset: 'USDC' },
-    randomAsset: () => assets[Math.floor(Math.random() * assets.length)] as AssetAndChain,
+    baseAsset: internalAssetToRpcAsset.Usdc,
+    randomAsset: () => assets[Math.floor(Math.random() * assets.length)],
   };
 }
 
