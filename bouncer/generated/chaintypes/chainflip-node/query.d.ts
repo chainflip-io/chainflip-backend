@@ -8967,8 +8967,7 @@ export interface ChainStorage extends GenericChainStorage {
       (
         arg: PalletCfElectionsSharedDataHash,
       ) =>
-        | PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc
-        | undefined,
+        PalletCfElectionsVoteStorageCompositeTuple6ImplsCompositeSharedDataBhwVoteBsc | undefined,
       PalletCfElectionsSharedDataHash
     >;
 

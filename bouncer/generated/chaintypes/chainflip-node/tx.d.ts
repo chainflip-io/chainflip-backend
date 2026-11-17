@@ -8195,8 +8195,7 @@ export interface ChainTx<
     updateSettings: GenericTxCall<
       (
         unsynchronisedSettings:
-          | PalletCfElectionsElectoralSystemsOraclePriceStateMachineOraclePriceSettings
-          | undefined,
+          PalletCfElectionsElectoralSystemsOraclePriceStateMachineOraclePriceSettings | undefined,
         settings:
           | StateChainRuntimeChainflipWitnessingGenericElectionsChainlinkOraclePriceSettings
           | undefined,

@@ -53,19 +53,17 @@ async function main() {
     `${projectRoot}/api/bin/chainflip-broker-api/Cargo.toml`,
   );
 
-  if (
-    !(
-      engineTomlVersion === runtimeTomlVersion &&
-      runtimeTomlVersion === nodeTomlVersion &&
-      nodeTomlVersion === cliTomlVersion &&
-      cliTomlVersion === lpApiTomlVersion &&
-      lpApiTomlVersion === brokerTomlVersion &&
-      apiLibTomlVersion === brokerTomlVersion &&
-      brokerTomlVersion === runnerTomlVersion &&
-      runnerTomlVersion === dylibTomlVersion &&
-      dylibTomlVersion === procMacrosVersion
-    )
-  ) {
+  if (!(
+    engineTomlVersion === runtimeTomlVersion &&
+    runtimeTomlVersion === nodeTomlVersion &&
+    nodeTomlVersion === cliTomlVersion &&
+    cliTomlVersion === lpApiTomlVersion &&
+    lpApiTomlVersion === brokerTomlVersion &&
+    apiLibTomlVersion === brokerTomlVersion &&
+    brokerTomlVersion === runnerTomlVersion &&
+    runnerTomlVersion === dylibTomlVersion &&
+    dylibTomlVersion === procMacrosVersion
+  )) {
     throw Error('All versions should be the same');
   } else if (compareSemVer(engineTomlVersion, releaseVersion) === 'greater') {
     logger.info(
