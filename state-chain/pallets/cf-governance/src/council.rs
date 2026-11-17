@@ -336,6 +336,7 @@ pub(crate) mod tests {
 		}
 	}
 
+	/// Unlike `members()`, keeps duplicates.
 	fn leaves(council: &Council<u64>) -> Vec<u64> {
 		match council {
 			Individual { id } => vec![*id],
@@ -440,8 +441,16 @@ pub(crate) mod tests {
 				prop_assert!(!council.quorum_reached(&BTreeSet::new()));
 				prop_assert!(depth(&council) <= MAX_DEPTH);
 				prop_assert!(council.members().len() <= MAX_MEMBERS);
-				prop_assert_eq!(leaves(&council).len(), council.members().len());
+				// Sorted but not deduplicated, so this also rules out duplicate accounts.
+				let mut sorted_leaves = leaves(&council);
+				sorted_leaves.sort();
+				prop_assert_eq!(sorted_leaves, council.members().into_iter().collect::<Vec<_>>());
 			}
+		}
+
+		#[test]
+		fn is_member_agrees_with_members(council in arb_council(), id in 0u64..32) {
+			prop_assert_eq!(council.is_member(&id), council.members().contains(&id));
 		}
 
 		/// Exactly one level too deep, so an off-by-one in the depth check is caught.
