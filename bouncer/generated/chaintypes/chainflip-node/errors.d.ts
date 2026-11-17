@@ -573,6 +573,21 @@ export interface ChainErrors extends GenericChainErrors {
     DelegatorTransferRestricted: GenericPalletError;
 
     /**
+     * Only accounts registered as a Liquidity Provider can delegate.
+     **/
+    NotLiquidityProvider: GenericPalletError;
+
+    /**
+     * The account cannot deregister as a Liquidity Provider while actively delegating.
+     **/
+    StillDelegating: GenericPalletError;
+
+    /**
+     * The operator's list of delegation exceptions is full.
+     **/
+    TooManyExceptions: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;
@@ -1440,6 +1455,11 @@ export interface ChainErrors extends GenericChainErrors {
      * Delegators can't register as brokers.
      **/
     AccountIsDelegating: GenericPalletError;
+
+    /**
+     * The FLIP to send to the gateway is too small relative to the egress fee.
+     **/
+    FlipToGatewayAmountBelowThreshold: GenericPalletError;
 
     /**
      * Generic pallet error

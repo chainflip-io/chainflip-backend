@@ -78,6 +78,7 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock<Self>;
 	type CallIndexer = ();
 	type RuntimeHoldReason = ();
+	type OnFeeRewardsActivationScheduled = ();
 }
 
 #[derive(

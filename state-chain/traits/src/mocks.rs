@@ -53,6 +53,7 @@ pub mod key_provider;
 pub mod key_rotator;
 pub mod lending_pools;
 pub mod liability_tracker;
+pub mod lp_role_required_for_delegation;
 pub mod lp_stats_api;
 pub mod minimum_funding;
 pub mod network_fee_api;

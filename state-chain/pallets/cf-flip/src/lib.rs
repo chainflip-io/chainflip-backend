@@ -36,7 +36,7 @@ pub use weights::WeightInfo;
 use cf_primitives::EpochIndex;
 use cf_traits::{
 	AccountInfo, Bonding, DeregistrationHooks, EpochInfo, FeePayment, FundingInfo, Issuance,
-	RewardsDistribution, Slashing,
+	OnFeeRewardsActivationScheduled, RewardsDistribution, Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
@@ -140,6 +140,8 @@ pub mod pallet {
 
 		/// Required in order to inject a HoldReason for impls in [substrate_impls]
 		type RuntimeHoldReason: Encode + TypeInfo + 'static;
+
+		type OnFeeRewardsActivationScheduled: OnFeeRewardsActivationScheduled;
 	}
 
 	#[pallet::pallet]
@@ -277,6 +279,10 @@ pub mod pallet {
 					},
 					PalletConfigUpdate::SetFeeRewardsActivationEpoch(epoch) => {
 						FeeRewardsActivationEpoch::<T>::set(epoch);
+						if Self::is_flip_2_1_scheduled() {
+							T::OnFeeRewardsActivationScheduled::on_fee_rewards_activation_scheduled(
+							);
+						}
 					},
 				};
 				Self::deposit_event(Event::PalletConfigUpdated { update });
@@ -616,6 +622,11 @@ impl<T: Config> Pallet<T> {
 	/// rather than burned.
 	pub fn is_flip_2_1_activated() -> bool {
 		T::EpochInfo::epoch_index() >= FeeRewardsActivationEpoch::<T>::get()
+	}
+
+	/// Whether governance has set an activation epoch, whether or not it has been reached.
+	pub fn is_flip_2_1_scheduled() -> bool {
+		FeeRewardsActivationEpoch::<T>::get() != EpochIndex::MAX
 	}
 
 	/// Burns `amount`, unless FLIP 2.1 is active, in which case `amount` is deposited into the
