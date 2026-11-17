@@ -14,6 +14,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Bond every managed validator at least the epoch bond ([#7106](https://github.com/chainflip-io/chainflip-backend/issues/7106))
 - Run every deregistration check regardless of the account's role ([#7070](https://github.com/chainflip-io/chainflip-backend/issues/7070))
 - Bound each operator's list of delegation exceptions to 1,000 entries ([#7083](https://github.com/chainflip-io/chainflip-backend/issues/7083))
+- Reject operator settings updates during the auction phase, so that delegators always see a fee change before the auction that uses it ([#7127](https://github.com/chainflip-io/chainflip-backend/issues/7127))
 - Bump rust-zmq to fix the libzmq assertion that aborts engines ([#7117](https://github.com/chainflip-io/chainflip-backend/issues/7117))
 - Only advance block witnessing on new headers, not on resolved optimistic elections, so that a stalled header witness after a reorg can't expire events before their replacement blocks are processed ([#7129](https://github.com/chainflip-io/chainflip-backend/issues/7129))
 
