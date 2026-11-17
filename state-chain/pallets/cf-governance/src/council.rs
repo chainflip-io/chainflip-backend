@@ -42,9 +42,10 @@ pub type GroupMembers<T> = BoundedVec<T, ConstU32<{ MAX_MEMBERS as u32 }>>;
 #[codec(decode_with_mem_tracking_bound(AccountId: DecodeWithMemTracking))]
 #[scale_info(bounds(AccountId: TypeInfo + 'static))]
 pub enum Council<AccountId> {
-	WeightedGroup { threshold: VoteWeight, members: GroupMembers<(VoteWeight, Council<AccountId>)> },
-	SimpleGroup { threshold: u8, members: GroupMembers<Council<AccountId>> },
+	// First, so that clients deriving a default value from the first variant terminate.
 	Individual { id: AccountId },
+	SimpleGroup { threshold: u8, members: GroupMembers<Council<AccountId>> },
+	WeightedGroup { threshold: VoteWeight, members: GroupMembers<(VoteWeight, Council<AccountId>)> },
 }
 
 /// Disables governance: with no members, quorum can never be reached. `validate` rejects it, so
