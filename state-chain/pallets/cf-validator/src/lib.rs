@@ -2268,6 +2268,8 @@ impl<T: Config> Pallet<T> {
 	/// Bidders in `excluded` are handled as follows:
 	/// - managed validators become delegators
 	/// - independent validators are dropped entirely.
+	///
+	/// Excess managed validators also contribute as delegators.
 	#[expect(clippy::type_complexity)]
 	pub fn build_delegation_snapshots<Q: QualifyNode<ValidatorIdOf<T>>>(
 		excluded: &BTreeSet<ValidatorIdOf<T>>,
@@ -2320,6 +2322,10 @@ impl<T: Config> Pallet<T> {
 					snapshot.delegators.insert(delegator.clone(), bid);
 				}
 			}
+		}
+
+		for snapshot in snapshots.values_mut() {
+			snapshot.enforce_validator_limit();
 		}
 
 		(snapshots, independent_bidders)
