@@ -2152,6 +2152,9 @@ export interface ChainTx<
     /**
      * Lets any single governance member switch off parts of the protocol without a vote.
      *
+     * A member is any individual in the council, however deeply nested and whatever their
+     * weight: no group has to reach quorum.
+     *
      * Presets can only switch settings off. Switching them back on needs a governance vote.
      * Applying a preset that is already in force is a no-op.
      *
