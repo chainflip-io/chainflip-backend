@@ -15,14 +15,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	mock::*, ActiveProposals, Error, Event, ExecutionMode, ExecutionPipeline, ExpiryTime, Members,
-	PreAuthorisedGovCalls, ProposalIdCounter,
+	council::{tests::nested_council, MAX_MEMBERS},
+	mock::*,
+	ActiveProposals, Council, Error, Event, ExecutionMode, ExecutionPipeline, ExpiryTime,
+	InvalidCouncil, Members, PreAuthorisedGovCalls, ProposalIdCounter,
 };
 use cf_primitives::SemVer;
 use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
+use codec::{Decode, Encode};
 use frame_support::{assert_err, assert_noop, assert_ok};
-use sp_runtime::Percent;
+use sp_runtime::{bounded_vec, BuildStorage, Percent};
 use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
@@ -31,22 +34,38 @@ use crate as pallet_cf_governance;
 const DUMMY_WASM_BLOB: Vec<u8> = vec![];
 
 fn mock_extrinsic() -> Box<RuntimeCall> {
-	Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::new_membership_set {
-		new_members: BTreeSet::from_iter([EVE, PETER, MAX]),
-		new_threshold: 2,
+	Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::set_council {
+		new_council: Council::simple_group(2, [EVE, PETER, MAX]).unwrap().into(),
 	}))
 }
 
 #[test]
 fn genesis_config() {
 	new_test_ext().execute_with(|| {
-		let genesis_members = Members::<Test>::get().members;
+		let genesis_members = Members::<Test>::get().members();
 		assert!(genesis_members.contains(&ALICE));
 		assert!(genesis_members.contains(&BOB));
 		assert!(genesis_members.contains(&CHARLES));
+		assert_eq!(
+			Members::<Test>::get(),
+			Council::simple_group(2, [ALICE, BOB, CHARLES]).unwrap()
+		);
 		let expiry_span = ExpiryTime::<Test>::get();
 		assert_eq!(expiry_span, 50);
 	});
+}
+
+#[test]
+#[should_panic(expected = "TooManyMembers")]
+fn genesis_rejects_invalid_council() {
+	let _ = RuntimeGenesisConfig {
+		system: Default::default(),
+		governance: GovernanceConfig {
+			members: (0..=MAX_MEMBERS as u64).collect(),
+			expiry_span: 50,
+		},
+	}
+	.build_storage();
 }
 
 #[test]
@@ -101,7 +120,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 				crate::mock::RuntimeEvent::Governance(Event::Executed(1)),
 			);
 			// Check the new governance set
-			let genesis_members = Members::<Test>::get().members;
+			let genesis_members = Members::<Test>::get().members();
 			assert!(genesis_members.contains(&EVE));
 			assert!(genesis_members.contains(&PETER));
 			// Check if the storage was cleaned up
@@ -368,7 +387,7 @@ fn whitelisted_gov_call() {
 #[test]
 fn replacing_governance_members() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Members::<Test>::get().members, BTreeSet::from_iter([ALICE, BOB, CHARLES]));
+		assert_eq!(Members::<Test>::get().members(), BTreeSet::from_iter([ALICE, BOB, CHARLES]));
 		assert_eq!(System::sufficients(&ALICE), 1);
 		assert_eq!(System::sufficients(&BOB), 1);
 		assert_eq!(System::sufficients(&CHARLES), 1);
@@ -378,37 +397,33 @@ fn replacing_governance_members() {
 
 		// Make sure only governance can replace the members
 		assert_noop!(
-			Governance::new_membership_set(
+			Governance::set_council(
 				RuntimeOrigin::signed(ALICE),
-				BTreeSet::from_iter([EVE, PETER, MAX]),
-				2,
+				Council::simple_group(2, [EVE, PETER, MAX]).unwrap().into(),
 			),
 			sp_runtime::traits::BadOrigin
 		);
 		assert_noop!(
-			Governance::new_membership_set(
+			Governance::set_council(
 				crate::RawOrigin::GovernanceApproval.into(),
-				BTreeSet::from_iter([EVE, PETER, MAX]),
-				4,
+				Council::simple_group(4, [EVE, PETER, MAX]).unwrap().into(),
 			),
-			Error::<Test>::InvalidCouncil
+			Error::<Test>::InvalidCouncil(InvalidCouncil::ThresholdUnreachable)
 		);
 		assert_noop!(
-			Governance::new_membership_set(
+			Governance::set_council(
 				crate::RawOrigin::GovernanceApproval.into(),
-				Default::default(),
-				Default::default(),
+				Council::SimpleGroup { threshold: 1, members: Default::default() }.into(),
 			),
-			Error::<Test>::InvalidCouncil
+			Error::<Test>::InvalidCouncil(InvalidCouncil::EmptyGroup)
 		);
 
-		assert_ok!(Governance::new_membership_set(
+		assert_ok!(Governance::set_council(
 			crate::RawOrigin::GovernanceApproval.into(),
-			BTreeSet::from_iter([EVE, PETER, MAX]),
-			2,
+			Council::simple_group(2, [EVE, PETER, MAX]).unwrap().into(),
 		));
 
-		assert_eq!(Members::<Test>::get().members, BTreeSet::from_iter([EVE, PETER, MAX]));
+		assert_eq!(Members::<Test>::get().members(), BTreeSet::from_iter([EVE, PETER, MAX]));
 		assert_eq!(System::sufficients(&ALICE), 0);
 		assert_eq!(System::sufficients(&BOB), 0);
 		assert_eq!(System::sufficients(&CHARLES), 0);
@@ -416,12 +431,11 @@ fn replacing_governance_members() {
 		assert_eq!(System::sufficients(&PETER), 1);
 		assert_eq!(System::sufficients(&MAX), 1);
 
-		assert_ok!(Governance::new_membership_set(
+		assert_ok!(Governance::set_council(
 			crate::RawOrigin::GovernanceApproval.into(),
-			BTreeSet::from_iter([ALICE, EVE, PETER]),
-			2,
+			Council::simple_group(2, [ALICE, EVE, PETER]).unwrap().into(),
 		));
-		assert_eq!(Members::<Test>::get().members, BTreeSet::from_iter([ALICE, EVE, PETER]));
+		assert_eq!(Members::<Test>::get().members(), BTreeSet::from_iter([ALICE, EVE, PETER]));
 		assert_eq!(System::sufficients(&ALICE), 1);
 		assert_eq!(System::sufficients(&BOB), 0);
 		assert_eq!(System::sufficients(&CHARLES), 0);
@@ -429,4 +443,75 @@ fn replacing_governance_members() {
 		assert_eq!(System::sufficients(&PETER), 1);
 		assert_eq!(System::sufficients(&MAX), 0);
 	});
+}
+
+#[test]
+fn weighted_council_passes_proposal_across_groups() {
+	new_test_ext()
+		.execute_with(|| {
+			assert_ok!(Governance::set_council(
+				crate::RawOrigin::GovernanceApproval.into(),
+				nested_council().into(),
+			));
+			// Member 1 of group 1 proposes.
+			assert_ok!(Governance::propose_governance_extrinsic(
+				RuntimeOrigin::signed(101),
+				mock_extrinsic(),
+				ExecutionMode::Automatic,
+			));
+			// Individual 1 brings support to 20 of 50.
+			assert_ok!(Governance::approve(RuntimeOrigin::signed(301), 1));
+			// Group 1 is still short of its internal 3-of-7.
+			assert_ok!(Governance::approve(RuntimeOrigin::signed(102), 1));
+			assert!(ExecutionPipeline::<Test>::get().is_empty());
+			// Group 1 passes internally, adding its 30 to reach the threshold of 50.
+			assert_ok!(Governance::approve(RuntimeOrigin::signed(103), 1));
+			assert_eq!(ExecutionPipeline::<Test>::decode_len(), Some(1));
+		})
+		.then_execute_at_next_block(|_| {
+			assert_eq!(
+				last_event::<Test>(),
+				crate::mock::RuntimeEvent::Governance(Event::Executed(1)),
+			);
+		});
+}
+
+#[test]
+fn nested_members_are_sufficient() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Governance::set_council(
+			crate::RawOrigin::GovernanceApproval.into(),
+			nested_council().into(),
+		));
+		for member in nested_council().members() {
+			assert_eq!(System::sufficients(&member), 1);
+		}
+		for member in [ALICE, BOB, CHARLES] {
+			assert_eq!(System::sufficients(&member), 0);
+		}
+
+		assert_ok!(Governance::set_council(
+			crate::RawOrigin::GovernanceApproval.into(),
+			Council::simple_group(1, [ALICE, 101]).unwrap().into(),
+		));
+		assert_eq!(System::sufficients(&ALICE), 1);
+		assert_eq!(System::sufficients(&101), 1);
+		assert_eq!(System::sufficients(&102), 0);
+		assert_eq!(System::sufficients(&301), 0);
+	});
+}
+
+#[test]
+fn set_council_calls_decode_up_to_max_depth() {
+	let call = |council: Council<u64>| {
+		RuntimeCall::Governance(crate::Call::set_council { new_council: council.into() })
+	};
+	let deepest = Council::SimpleGroup {
+		threshold: 1,
+		members: bounded_vec![Council::simple_group(1, [ALICE]).unwrap()],
+	};
+	let valid = call(deepest.clone());
+	assert_eq!(RuntimeCall::decode(&mut &valid.encode()[..]), Ok(valid));
+	let too_deep = call(Council::SimpleGroup { threshold: 1, members: bounded_vec![deepest] });
+	assert!(RuntimeCall::decode(&mut &too_deep.encode()[..]).is_err());
 }
