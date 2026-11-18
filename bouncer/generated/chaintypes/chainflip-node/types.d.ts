@@ -2968,12 +2968,12 @@ export type PalletCfGovernanceCallLike =
 export type PalletCfGovernanceExecutionMode = 'Automatic' | 'Manual';
 
 export type PalletCfGovernanceCouncil =
+  | { type: 'Individual'; value: { id: AccountId32 } }
+  | { type: 'SimpleGroup'; value: { threshold: number; members: Array<PalletCfGovernanceCouncil> } }
   | {
       type: 'WeightedGroup';
       value: { threshold: number; members: Array<[number, PalletCfGovernanceCouncil]> };
-    }
-  | { type: 'SimpleGroup'; value: { threshold: number; members: Array<PalletCfGovernanceCouncil> } }
-  | { type: 'Individual'; value: { id: AccountId32 } };
+    };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
