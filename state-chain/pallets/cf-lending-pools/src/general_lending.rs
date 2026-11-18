@@ -17,6 +17,7 @@ use cf_amm_math::Price;
 use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId, ONE_AS_BASIS_POINTS};
 use cf_traits::{
 	ExpiryBehaviour, LendingSwapType, NetworkFeeApi, PriceLimitsAndExpiry, RefundAddressRegistry,
+	SwapExecutionProgress,
 };
 use frame_support::{
 	fail,
@@ -114,6 +115,60 @@ impl InterestBreakdown {
 	}
 }
 
+/// Interest moved from a loan's pending interest into its principal, in the loan's asset.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct CollectedInterest {
+	pool: AssetAmount,
+	network: AssetAmount,
+	low_ltv_penalty: AssetAmount,
+	broker: AssetAmount,
+}
+
+impl CollectedInterest {
+	fn accrue(&mut self, other: CollectedInterest) {
+		self.pool.saturating_accrue(other.pool);
+		self.network.saturating_accrue(other.network);
+		self.low_ltv_penalty.saturating_accrue(other.low_ltv_penalty);
+		self.broker.saturating_accrue(other.broker);
+	}
+}
+
+/// What repaying a loan did outside the loan and its pool. The amounts are in the loan's asset.
+/// Recorded rather than paid out, so that repaying only changes the loan and pool it is given: the
+/// projection can then repay without paying anything out (see [GeneralLoan::pay_out_repayment]).
+/// Amounts the pool received are already in it and are recorded only to be reported.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Repayment {
+	/// Interest collected along the way, summed across collection rounds.
+	interest: CollectedInterest,
+	/// The pool's share of the liquidation fee, already added to the pool.
+	liquidation_pool_fee: AssetAmount,
+	/// The network's share of the liquidation fee, credited when paid out.
+	liquidation_network_fee: AssetAmount,
+	/// Debt repaid, including interest collected along the way.
+	repaid: AssetAmount,
+}
+
+/// What settling one liquidation swap did (see [settle_liquidation_swap]).
+struct SwapSettlement {
+	loan_id: LoanId,
+	/// `None` if the swap's loan no longer exists, in which case the whole output is excess.
+	repayment: Option<Repayment>,
+	/// Output left over after repaying the loan, returned to the borrower's supply position.
+	excess: (Asset, AssetAmount),
+	/// Input not yet swapped, returned to the borrower's supply position.
+	unswapped_input: (Asset, AssetAmount),
+}
+
+/// The result of settling an account's liquidation swaps (see [settle_liquidation_swaps]).
+struct LiquidationSettlement {
+	/// In swap request id order, in which the swaps were settled and are reported.
+	swaps: Vec<(SwapRequestId, SwapSettlement)>,
+	/// Loans the swaps repaid in full, to be settled once every swap has paid its liquidation
+	/// fee.
+	fully_repaid_loans: Vec<LoanId>,
+}
+
 #[derive(Clone, Copy, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 pub enum LiquidationCompletionReason {
 	/// Full liquidation (loans are fully repaid and/or all collateral has been swapped)
@@ -144,7 +199,8 @@ enum SurplusOrDeficit {
 /// repays that loan, and anything beyond its debt counts as collateral.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct ProjectedSettlement {
-	/// Debt (principal and pending interest) each loan's swaps would repay.
+	/// Debt (principal and pending interest) each loan would no longer owe: what its swaps repay,
+	/// plus any pending interest written off along with a fully repaid principal.
 	repaid: BTreeMap<LoanId, AssetAmount>,
 	/// Amounts that would go back to the borrower's supply positions: input not yet swapped,
 	/// plus any output left over after repaying the loan.
@@ -208,28 +264,6 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	/// Convenience method to get a loan and at the same time sanity check that the asset
-	/// matches the expected asset.
-	fn get_loan_and_check_asset(
-		&mut self,
-		loan_id: LoanId,
-		asset: Asset,
-	) -> Option<&mut GeneralLoan<T>> {
-		match self.loans.get_mut(&loan_id) {
-			Some(loan) if loan.asset == asset => Some(loan),
-			Some(loan) => {
-				log_or_panic!(
-					"Loan {} has asset {}, but expected ({})",
-					loan_id,
-					loan.asset,
-					asset
-				);
-				None
-			},
-			None => None,
-		}
-	}
-
 	/// Returns the account's collateral including any amounts that are in liquidation swaps.
 	pub fn get_total_collateral(&self) -> BTreeMap<Asset, AssetAmount> {
 		let mut collateral = get_collateral_in_supply_pools::<T>(&self.borrower_id);
@@ -260,102 +294,98 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	/// Supply funds after liquidation (either from unused input amount or from
-	/// excess output amount).
-	fn supply_from_liquidation(
-		&mut self,
-		asset: Asset,
-		amount: AssetAmount,
-		action_type: SupplyAddedActionType,
+	/// Pays out and reports what settling a liquidation swap did (see [settle_liquidation_swap]).
+	fn apply_swap_settlement(
+		&self,
+		swap_request_id: SwapRequestId,
+		SwapSettlement {
+			loan_id,
+			repayment,
+			excess: (excess_asset, excess),
+			unswapped_input: (input_asset, unswapped_input),
+		}: SwapSettlement,
 	) {
-		if amount > 0 {
-			Pallet::deposit_event(Event::<T>::LendingFundsAdded {
-				lender_id: self.borrower_id.clone(),
-				asset,
-				amount,
-				action_type,
-			});
+		if let (Some(repayment), Some(loan)) = (repayment, self.loans.get(&loan_id)) {
+			loan.pay_out_repayment(
+				repayment,
+				LoanRepaidActionType::Liquidation { swap_request_id },
+			);
+		}
 
-			Pallet::<T>::mutate_existing_pool(asset, |pool| {
-				pool.add_funds(&self.borrower_id, amount);
-			});
+		for (asset, amount, action_type) in [
+			(
+				excess_asset,
+				excess,
+				SupplyAddedActionType::SystemLiquidationExcessAmount { loan_id, swap_request_id },
+			),
+			(
+				input_asset,
+				unswapped_input,
+				SupplyAddedActionType::SystemLiquidationUnusedAmount { loan_id, swap_request_id },
+			),
+		] {
+			if amount > 0 {
+				Pallet::<T>::deposit_event(Event::LendingFundsAdded {
+					lender_id: self.borrower_id.clone(),
+					asset,
+					amount,
+					action_type,
+				});
+			}
 		}
 	}
 
-	/// Settles, on paper, every in-flight liquidation swap at its current progress, applying the
-	/// same rules as [GeneralLoan::repay_via_liquidation]. Each loan's swap outputs are combined
-	/// and settled against its debt at once: since the liquidation fee is linear in the debt
-	/// repaid, this gives the same result (up to rounding) as settling them one by one, in
-	/// whatever order the swaps complete or are aborted.
+	/// What [Self::abort_liquidation_swaps] would do to the account if it aborted the in-flight
+	/// liquidation swaps now.
 	fn project_liquidation_settlement(&self, config: &LendingConfiguration) -> ProjectedSettlement {
-		let mut projection = ProjectedSettlement::default();
-
 		let LiquidationStatus::Liquidating { liquidation_swaps, liquidation_type } =
 			&self.liquidation_status
 		else {
-			return projection;
+			return ProjectedSettlement::default();
 		};
 
-		let is_voluntary = *liquidation_type == LiquidationType::SoftVoluntary;
+		let swap_progress = liquidation_swap_progress(
+			liquidation_swaps,
+			T::SwapRequestHandler::inspect_swap_request,
+		);
+		let mut loans = self.loans.clone();
+		let mut pools = read_pools::<T>(liquidation_swap_assets(liquidation_swaps));
+		let settlement = settle_liquidation_swaps(
+			&self.borrower_id,
+			liquidation_swaps,
+			*liquidation_type == LiquidationType::SoftVoluntary,
+			swap_progress,
+			&mut loans,
+			&mut pools,
+			config,
+		);
 
-		let mut output_per_loan = BTreeMap::<LoanId, AssetAmount>::new();
+		let repaid = self
+			.loans
+			.iter()
+			.map(|(loan_id, loan)| {
+				// Settling a fully repaid loan writes off any interest still pending:
+				let owed_after = if settlement.fully_repaid_loans.contains(loan_id) {
+					0
+				} else {
+					loans.get(loan_id).map(GeneralLoan::total_owed).unwrap_or_default()
+				};
+				(*loan_id, loan.total_owed().saturating_sub(owed_after))
+			})
+			.filter(|(_, repaid)| *repaid > 0)
+			.collect();
 
-		for (swap_request_id, LiquidationSwap { loan_id, from_asset, to_asset }) in
-			liquidation_swaps
+		let mut returned_collateral = BTreeMap::<Asset, AssetAmount>::new();
+		for (asset, amount) in settlement
+			.swaps
+			.iter()
+			.flat_map(|(_, swap)| [swap.excess, swap.unswapped_input])
+			.filter(|(_, amount)| *amount > 0)
 		{
-			let Some(swap_progress) = T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
-			else {
-				log_or_panic!("Failed to inspect swap request: {swap_request_id}");
-				continue;
-			};
-
-			projection
-				.returned_collateral
-				.entry(*from_asset)
-				.or_default()
-				.saturating_accrue(swap_progress.remaining_input_amount);
-
-			let output = swap_progress.accumulated_output_amount;
-
-			if self.loans.get(loan_id).is_some_and(|loan| loan.asset == *to_asset) {
-				output_per_loan.entry(*loan_id).or_default().saturating_accrue(output);
-			} else if output > 0 {
-				// Settlement returns the output of a swap without a matching loan in full:
-				projection
-					.returned_collateral
-					.entry(*to_asset)
-					.or_default()
-					.saturating_accrue(output);
-			}
+			returned_collateral.entry(asset).or_default().saturating_accrue(amount);
 		}
 
-		for (loan_id, loan) in &self.loans {
-			let Some(output) = output_per_loan.get(loan_id).copied() else {
-				continue;
-			};
-
-			let owed = loan.total_owed();
-			let fee = if is_voluntary {
-				0
-			} else {
-				liquidation_fee_amount(config.liquidation_fee(loan.asset), output, owed)
-			};
-			let output_after_fee = output.saturating_sub(fee);
-			let repaid = core::cmp::min(output_after_fee, owed);
-
-			projection.repaid.insert(*loan_id, repaid);
-
-			let excess = output_after_fee.saturating_sub(repaid);
-			if excess > 0 {
-				projection
-					.returned_collateral
-					.entry(loan.asset)
-					.or_default()
-					.saturating_accrue(excess);
-			}
-		}
-
-		projection
+		ProjectedSettlement { repaid, returned_collateral }
 	}
 
 	/// Collateral the account would hold once in-flight liquidation swaps settle.
@@ -556,86 +586,48 @@ impl<T: Config> LoanAccount<T> {
 		Ok(())
 	}
 
-	/// Aborts all current liquidation swaps, repays any already swapped principal assets and
-	/// returns remaining collateral assets alongside the corresponding loan information.
+	/// Aborts every in-flight liquidation swap and settles it at its progress so far (see
+	/// [settle_liquidation_swaps]), then pays out the result and settles any fully repaid loans.
 	pub(super) fn abort_liquidation_swaps(
 		&mut self,
 		reason: LiquidationCompletionReason,
 		config: &LendingConfiguration,
 	) {
-		let (is_voluntary, liquidation_swaps) = match &mut self.liquidation_status {
-			LiquidationStatus::NoLiquidation => {
-				log_or_panic!("Attempting to abort liquidation swaps in no-liquidation state");
-				(false, Default::default())
-			},
-			LiquidationStatus::Liquidating { liquidation_swaps, liquidation_type } => {
-				let is_voluntary = *liquidation_type == LiquidationType::SoftVoluntary;
-
-				(is_voluntary, core::mem::take(liquidation_swaps))
-			},
+		let LiquidationStatus::Liquidating { liquidation_swaps, liquidation_type } =
+			core::mem::replace(&mut self.liquidation_status, LiquidationStatus::NoLiquidation)
+		else {
+			log_or_panic!("Attempting to abort liquidation swaps in no-liquidation state");
+			return;
 		};
-
-		self.liquidation_status = LiquidationStatus::NoLiquidation;
 
 		Pallet::<T>::deposit_event(Event::LiquidationCompleted {
 			borrower_id: self.borrower_id.clone(),
 			reason,
 		});
 
-		// It should be rare, but not impossible that a partial liquidation fully repays
-		// the loan. We delay settling them until the end of this function to make sure that
-		// all liquidations fees are correctly paid.
-		let mut fully_repaid_loans = vec![];
-
-		for (swap_request_id, LiquidationSwap { loan_id, from_asset, to_asset }) in
-			liquidation_swaps
-		{
-			if let Some(swap_progress) = T::SwapRequestHandler::abort_swap_request(swap_request_id)
-			{
-				let excess_amount = match self.get_loan_and_check_asset(loan_id, to_asset) {
-					Some(loan) => {
-						let excess_amount = loan.repay_via_liquidation(
-							swap_progress.accumulated_output_amount,
-							swap_request_id,
-							is_voluntary,
-							config,
-						);
-
-						if loan.owed_principal == 0 {
-							fully_repaid_loans.push(loan_id);
-						}
-
-						excess_amount
-					},
-					None => swap_progress.accumulated_output_amount,
-				};
-
-				// In case we have liquidated more than necessary the excess amount
-				// is added to the supply pool:
-				self.supply_from_liquidation(
-					to_asset,
-					excess_amount,
-					SupplyAddedActionType::SystemLiquidationExcessAmount {
-						loan_id,
-						swap_request_id,
-					},
-				);
-
-				// Any input funds not yet liquidated are returned to the
-				// supply pool:
-				self.supply_from_liquidation(
-					from_asset,
-					swap_progress.remaining_input_amount,
-					SupplyAddedActionType::SystemLiquidationUnusedAmount {
-						loan_id,
-						swap_request_id,
-					},
-				);
-			} else {
-				log_or_panic!("Failed to abort swap request: {swap_request_id}");
-			}
+		let swap_progress = liquidation_swap_progress(
+			&liquidation_swaps,
+			T::SwapRequestHandler::abort_swap_request,
+		);
+		let mut pools = read_pools::<T>(liquidation_swap_assets(&liquidation_swaps));
+		let LiquidationSettlement { swaps, fully_repaid_loans } = settle_liquidation_swaps(
+			&self.borrower_id,
+			&liquidation_swaps,
+			liquidation_type == LiquidationType::SoftVoluntary,
+			swap_progress,
+			&mut self.loans,
+			&mut pools,
+			config,
+		);
+		for (asset, pool) in pools {
+			GeneralLendingPools::<T>::insert(asset, pool);
 		}
 
+		for (swap_request_id, swap_settlement) in swaps {
+			self.apply_swap_settlement(swap_request_id, swap_settlement);
+		}
+
+		// Settled only once every swap has been paid out, since paying out needs the loan:
 		for loan_id in fully_repaid_loans {
 			self.settle_loan(loan_id, true /* via liquidation */);
 		}
@@ -1121,17 +1113,6 @@ impl<T: Config> GeneralLoan<T> {
 		price_cache.usd_value_of(self.asset, self.total_owed())
 	}
 
-	fn collect_pending_interest(&mut self) {
-		if self
-			.collect_pending_interest_if_above_threshold(None /* no threshold */)
-			.is_err()
-		{
-			log_or_panic!(
-				"Final interest charge should not fail since the price oracle is not required here"
-			);
-		}
-	}
-
 	pub(super) fn charge_low_ltv_penalty(&mut self, ltv: FixedU64, config: &LendingConfiguration) {
 		// Calculating interest in scaled amounts for better precision
 		let owed_principal = ScaledAmountHP::from_asset_amount(self.owed_principal);
@@ -1201,50 +1182,44 @@ impl<T: Config> GeneralLoan<T> {
 		}
 	}
 
-	/// Repays the loan after collecting any pending interest and deducting liquidation fee
-	/// from the provided amount. Returns any excess/unused funds.
-	fn repay_via_liquidation(
+	/// Repays the loan with a liquidation swap's output, after collecting any pending interest
+	/// and deducting the liquidation fee. Only changes the loan and `pool`, recording everything
+	/// else in `repayment`. Returns any excess funds.
+	fn repay_via_liquidation_in_pool(
 		&mut self,
+		pool: &mut LendingPool<T::AccountId>,
+		repayment: &mut Repayment,
 		provided_amount: AssetAmount,
-		swap_request_id: SwapRequestId,
 		is_voluntary: bool,
 		config: &LendingConfiguration,
 	) -> AssetAmount {
-		self.collect_pending_interest();
+		repayment
+			.interest
+			.accrue(self.take_pending_interest(pool, None /* no threshold */));
 
 		// Only charge liquidation fee if liquidation was not voluntary
-		let provided_amount_after_fees = if is_voluntary {
-			provided_amount
+		let liquidation_fee = if is_voluntary {
+			0
 		} else {
 			// Interest the pool could not collect yet is still debt this amount repays (see
-			// `repay_principal_and_pending_interest`), so it is part of the fee base:
-			let liquidation_fee = liquidation_fee_amount(
+			// `repay_principal_and_pending_interest_in_pool`), so it is part of the fee base:
+			liquidation_fee_amount(
 				config.liquidation_fee(self.asset),
 				provided_amount,
 				self.total_owed(),
-			);
-
-			if liquidation_fee > 0 {
-				let liquidation_fee_network =
-					config.network_fee_contributions.from_liquidation_fee * liquidation_fee;
-				Pallet::<T>::credit_fees_to_network(self.asset, liquidation_fee_network);
-
-				let liquidation_fee_pool = liquidation_fee.saturating_sub(liquidation_fee_network);
-				Pallet::<T>::credit_fees_to_pool(self.asset, liquidation_fee_pool);
-
-				Pallet::<T>::deposit_event(Event::LiquidationFeeTaken {
-					loan_id: self.id,
-					pool_fee: liquidation_fee_pool,
-					network_fee: liquidation_fee_network,
-				});
-			}
-
-			provided_amount.saturating_sub(liquidation_fee)
+			)
 		};
 
-		self.repay_principal_and_pending_interest(
-			provided_amount_after_fees,
-			LoanRepaidActionType::Liquidation { swap_request_id },
+		let network_fee = config.network_fee_contributions.from_liquidation_fee * liquidation_fee;
+		let pool_fee = liquidation_fee.saturating_sub(network_fee);
+		pool.receive_fees_in_pools_asset(pool_fee);
+		repayment.liquidation_pool_fee.saturating_accrue(pool_fee);
+		repayment.liquidation_network_fee.saturating_accrue(network_fee);
+
+		self.repay_principal_and_pending_interest_in_pool(
+			pool,
+			repayment,
+			provided_amount.saturating_sub(liquidation_fee),
 		)
 	}
 
@@ -1253,16 +1228,21 @@ impl<T: Config> GeneralLoan<T> {
 	/// NOT emit a `LoanRepaid` event — the caller is responsible for that (so several repayment
 	/// steps in one operation can be reported as a single event).
 	pub(super) fn repay_principal(&mut self, provided_amount: AssetAmount) -> AssetAmount {
-		// Making sure the user doesn't pay more than the total principal plus liquidation fee:
+		Pallet::<T>::mutate_existing_pool(self.asset, |pool| {
+			self.repay_principal_in_pool(pool, provided_amount)
+		})
+		.unwrap_or(provided_amount)
+	}
+
+	fn repay_principal_in_pool(
+		&mut self,
+		pool: &mut LendingPool<T::AccountId>,
+		provided_amount: AssetAmount,
+	) -> AssetAmount {
 		let repayment_amount = core::cmp::min(provided_amount, self.owed_principal);
 
-		if repayment_amount > 0 {
-			Pallet::<T>::mutate_existing_pool(self.asset, |pool| {
-				pool.receive_repayment(repayment_amount);
-			});
-
-			self.owed_principal.saturating_reduce(repayment_amount);
-		}
+		pool.receive_repayment(repayment_amount);
+		self.owed_principal.saturating_reduce(repayment_amount);
 
 		provided_amount.saturating_sub(repayment_amount)
 	}
@@ -1275,14 +1255,57 @@ impl<T: Config> GeneralLoan<T> {
 		provided_amount: AssetAmount,
 		action_type: LoanRepaidActionType,
 	) -> AssetAmount {
-		// First repayment ensures we have liquidity to collect interest
-		let excess = self.repay_principal(provided_amount);
-		// This "collects" interest by adding it to the owed principal
-		self.collect_pending_interest();
-		// Second repayment covers any outstanding interest
-		let excess = self.repay_principal(excess);
+		let mut repayment = Repayment::default();
+		let Some(excess) = Pallet::<T>::mutate_existing_pool(self.asset, |pool| {
+			self.repay_principal_and_pending_interest_in_pool(pool, &mut repayment, provided_amount)
+		}) else {
+			return provided_amount;
+		};
 
-		let repaid = provided_amount.saturating_sub(excess);
+		self.pay_out_repayment(repayment, action_type);
+
+		excess
+	}
+
+	/// Repays the principal and any uncollected interest with `provided_amount`, changing only the
+	/// loan and `pool` and recording the rest in `repayment`. Returns any excess funds.
+	fn repay_principal_and_pending_interest_in_pool(
+		&mut self,
+		pool: &mut LendingPool<T::AccountId>,
+		repayment: &mut Repayment,
+		provided_amount: AssetAmount,
+	) -> AssetAmount {
+		// First repayment ensures we have liquidity to collect interest
+		let excess = self.repay_principal_in_pool(pool, provided_amount);
+		// This "collects" interest by adding it to the owed principal
+		repayment
+			.interest
+			.accrue(self.take_pending_interest(pool, None /* no threshold */));
+		// Second repayment covers any outstanding interest
+		let excess = self.repay_principal_in_pool(pool, excess);
+
+		repayment.repaid.saturating_accrue(provided_amount.saturating_sub(excess));
+
+		excess
+	}
+
+	/// Pays out a [Repayment] (interest to the network and the broker, and the network's share of
+	/// the liquidation fee) and emits its events.
+	fn pay_out_repayment(&self, repayment: Repayment, action_type: LoanRepaidActionType) {
+		let Repayment { interest, liquidation_pool_fee, liquidation_network_fee, repaid } =
+			repayment;
+
+		self.pay_out_interest(interest);
+
+		if liquidation_pool_fee > 0 || liquidation_network_fee > 0 {
+			Pallet::<T>::credit_fees_to_network(self.asset, liquidation_network_fee);
+			Pallet::<T>::deposit_event(Event::LiquidationFeeTaken {
+				loan_id: self.id,
+				pool_fee: liquidation_pool_fee,
+				network_fee: liquidation_network_fee,
+			});
+		}
+
 		if repaid > 0 {
 			Pallet::<T>::deposit_event(Event::LoanRepaid {
 				loan_id: self.id,
@@ -1290,8 +1313,6 @@ impl<T: Config> GeneralLoan<T> {
 				action_type,
 			});
 		}
-
-		excess
 	}
 
 	#[transactional]
@@ -1299,11 +1320,28 @@ impl<T: Config> GeneralLoan<T> {
 		&mut self,
 		price_cache_and_threshold: Option<PriceCacheAndThreshold<T>>,
 	) -> DispatchResult {
-		let loan_asset = self.asset;
-
 		if self.pending_interest == Default::default() {
 			return Ok(());
 		}
+
+		if let Some(collected) = Pallet::<T>::mutate_existing_pool(self.asset, |pool| {
+			self.take_pending_interest(pool, price_cache_and_threshold)
+		}) {
+			self.pay_out_interest(collected);
+		}
+
+		Ok(())
+	}
+
+	/// Moves pending interest into the principal. The pool's share is owed to the pool, while
+	/// the rest is collected from the pool's available liquidity (to be paid out with
+	/// [Self::pay_out_interest]) and stays pending if the pool can't cover it.
+	fn take_pending_interest(
+		&mut self,
+		pool: &mut LendingPool<T::AccountId>,
+		price_cache_and_threshold: Option<PriceCacheAndThreshold<T>>,
+	) -> CollectedInterest {
+		let loan_asset = self.asset;
 
 		let charge_fee_if_exceeds_threshold = |pending: &mut ScaledAmountHP| {
 			if let Some(PriceCacheAndThreshold { threshold_usd, price_cache }) =
@@ -1350,65 +1388,57 @@ impl<T: Config> GeneralLoan<T> {
 
 		let pool_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.pool);
 		self.owed_principal.saturating_accrue(pool_interest);
+		pool.record_pool_fee(pool_interest);
 
-		let (network_interest_collected, low_ltv_penalty_collected, broker_interest_collected) =
-			Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
-				let network_collected = charge_and_collect_fee_from_available(
-					pool,
-					&mut self.pending_interest.network,
-					&mut self.owed_principal,
-				);
+		CollectedInterest {
+			pool: pool_interest,
+			network: charge_and_collect_fee_from_available(
+				pool,
+				&mut self.pending_interest.network,
+				&mut self.owed_principal,
+			),
+			low_ltv_penalty: charge_and_collect_fee_from_available(
+				pool,
+				&mut self.pending_interest.low_ltv_penalty,
+				&mut self.owed_principal,
+			),
+			broker: charge_and_collect_fee_from_available(
+				pool,
+				&mut self.pending_interest.broker,
+				&mut self.owed_principal,
+			),
+		}
+	}
 
-				let low_ltv_collected = charge_and_collect_fee_from_available(
-					pool,
-					&mut self.pending_interest.low_ltv_penalty,
-					&mut self.owed_principal,
-				);
+	/// Pays out interest taken by [Self::take_pending_interest] to the network and the broker.
+	fn pay_out_interest(&self, collected: CollectedInterest) {
+		if collected == CollectedInterest::default() {
+			return;
+		}
 
-				let broker_collected = charge_and_collect_fee_from_available(
-					pool,
-					&mut self.pending_interest.broker,
-					&mut self.owed_principal,
-				);
+		let CollectedInterest { pool, network, low_ltv_penalty, broker } = collected;
 
-				pool.record_pool_fee(pool_interest);
+		let network_total = network.saturating_add(low_ltv_penalty);
+		if network_total > 0 {
+			Pallet::<T>::credit_fees_to_network(self.asset, network_total);
+		}
 
-				let network_total = network_collected.saturating_add(low_ltv_collected);
-				if network_total > 0 {
-					Pallet::<T>::credit_fees_to_network(loan_asset, network_total);
-				}
-
-				(network_collected, low_ltv_collected, broker_collected)
-			})
-			.unwrap_or_default();
-
-		if broker_interest_collected > 0 {
+		if broker > 0 {
 			match &self.broker {
-				Some(broker) => T::Balance::credit_account(
-					&broker.account,
-					loan_asset,
-					broker_interest_collected,
-				),
+				Some(beneficiary) =>
+					T::Balance::credit_account(&beneficiary.account, self.asset, broker),
 				None =>
 					log_or_panic!("Broker interest collected without broker on loan {:?}", self.id),
 			}
 		}
 
-		if pool_interest != 0 ||
-			network_interest_collected != 0 ||
-			low_ltv_penalty_collected != 0 ||
-			broker_interest_collected != 0
-		{
-			Pallet::<T>::deposit_event(Event::InterestTaken {
-				loan_id: self.id,
-				pool_interest,
-				network_interest: network_interest_collected,
-				broker_interest: broker_interest_collected,
-				low_ltv_penalty: low_ltv_penalty_collected,
-			});
-		}
-
-		Ok(())
+		Pallet::<T>::deposit_event(Event::InterestTaken {
+			loan_id: self.id,
+			pool_interest: pool,
+			network_interest: network,
+			broker_interest: broker,
+			low_ltv_penalty,
+		});
 	}
 
 	/// Last method to be called on a loan. Checks outstanding debt and emits LoanSettled event.
@@ -1536,6 +1566,153 @@ fn compute_per_asset_liquidation_estimates(
 		})
 		.filter(|(_, amount)| *amount > 0)
 		.collect()
+}
+
+/// The progress of each of `liquidation_swaps`, from `get_progress`, which either inspects or
+/// aborts the swap. Swaps without progress are logged and left out.
+fn liquidation_swap_progress(
+	liquidation_swaps: &BTreeMap<SwapRequestId, LiquidationSwap>,
+	get_progress: impl Fn(SwapRequestId) -> Option<SwapExecutionProgress>,
+) -> BTreeMap<SwapRequestId, SwapExecutionProgress> {
+	liquidation_swaps
+		.keys()
+		.filter_map(|swap_request_id| {
+			let progress = get_progress(*swap_request_id);
+			if progress.is_none() {
+				log_or_panic!("Failed to get progress of swap request: {swap_request_id}");
+			}
+			progress.map(|progress| (*swap_request_id, progress))
+		})
+		.collect()
+}
+
+/// Every asset `liquidation_swaps` sell or buy. Settling the swaps changes these assets' pools,
+/// and how much interest it can collect depends on their available liquidity.
+fn liquidation_swap_assets(
+	liquidation_swaps: &BTreeMap<SwapRequestId, LiquidationSwap>,
+) -> impl Iterator<Item = Asset> + '_ {
+	liquidation_swaps.values().flat_map(|swap| [swap.from_asset, swap.to_asset])
+}
+
+/// Settles `liquidation_swaps` at their `swap_progress`, in swap request id order, on `loans` and
+/// `pools`: each swap's output repays its loan, and any excess output and unswapped input go back
+/// to the borrower's supply positions. Touches no storage, so the caller decides whether `loans`
+/// and `pools` are the account's own state (see [LoanAccount::abort_liquidation_swaps]) or copies
+/// used only to value the account as if the swaps were aborted now.
+fn settle_liquidation_swaps<T: Config>(
+	borrower_id: &T::AccountId,
+	liquidation_swaps: &BTreeMap<SwapRequestId, LiquidationSwap>,
+	is_voluntary: bool,
+	mut swap_progress: BTreeMap<SwapRequestId, SwapExecutionProgress>,
+	loans: &mut BTreeMap<LoanId, GeneralLoan<T>>,
+	pools: &mut BTreeMap<Asset, LendingPool<T::AccountId>>,
+	config: &LendingConfiguration,
+) -> LiquidationSettlement {
+	let mut settlement = LiquidationSettlement { swaps: vec![], fully_repaid_loans: vec![] };
+
+	for (swap_request_id, swap) in liquidation_swaps {
+		let Some(progress) = swap_progress.remove(swap_request_id) else {
+			continue;
+		};
+
+		let mut loan = loan_for_liquidation_swap(loans, swap);
+		let swap_settlement = settle_liquidation_swap(
+			borrower_id,
+			loan.as_deref_mut(),
+			pools,
+			swap,
+			progress,
+			is_voluntary,
+			config,
+		);
+		if swap_settlement.repayment.is_some() && loan.is_some_and(|loan| loan.owed_principal == 0)
+		{
+			settlement.fully_repaid_loans.push(swap.loan_id);
+		}
+		settlement.swaps.push((*swap_request_id, swap_settlement));
+	}
+
+	settlement
+}
+
+/// Settles one liquidation swap at `progress` on its `loan` and `pools`: its output repays the
+/// loan, and any excess output and unswapped input go back to the borrower's supply positions.
+/// Touches no storage; [LoanAccount::apply_swap_settlement] pays out and reports the result.
+fn settle_liquidation_swap<T: Config>(
+	borrower_id: &T::AccountId,
+	loan: Option<&mut GeneralLoan<T>>,
+	pools: &mut BTreeMap<Asset, LendingPool<T::AccountId>>,
+	LiquidationSwap { loan_id, from_asset, to_asset }: &LiquidationSwap,
+	progress: SwapExecutionProgress,
+	is_voluntary: bool,
+	config: &LendingConfiguration,
+) -> SwapSettlement {
+	let output = progress.accumulated_output_amount;
+	let (excess, repayment) = match (loan, pools.get_mut(to_asset)) {
+		(Some(loan), Some(pool)) => {
+			let mut repayment = Repayment::default();
+			let excess = loan.repay_via_liquidation_in_pool(
+				pool,
+				&mut repayment,
+				output,
+				is_voluntary,
+				config,
+			);
+			(excess, Some(repayment))
+		},
+		// The loan may no longer exist, e.g. if the borrower repaid it manually:
+		_ => (output, None),
+	};
+
+	// Interest collection by swaps settled later on the same pools depends on their available
+	// liquidity, which returning funds to the borrower's supply position changes:
+	for (asset, amount) in [(*to_asset, excess), (*from_asset, progress.remaining_input_amount)] {
+		if amount > 0 {
+			if let Some(pool) = pools.get_mut(&asset) {
+				pool.add_funds(borrower_id, amount);
+			}
+		}
+	}
+
+	SwapSettlement {
+		loan_id: *loan_id,
+		repayment,
+		excess: (*to_asset, excess),
+		unswapped_input: (*from_asset, progress.remaining_input_amount),
+	}
+}
+
+/// Reads the pools for `assets`, each of which must exist.
+fn read_pools<T: Config>(
+	assets: impl IntoIterator<Item = Asset>,
+) -> BTreeMap<Asset, LendingPool<T::AccountId>> {
+	let mut pools = BTreeMap::new();
+	for asset in assets {
+		if let sp_std::collections::btree_map::Entry::Vacant(entry) = pools.entry(asset) {
+			match GeneralLendingPools::<T>::get(asset) {
+				Some(pool) => {
+					entry.insert(pool);
+				},
+				None => log_or_panic!("Lending Pool must exist for asset {}", asset),
+			}
+		}
+	}
+	pools
+}
+
+/// The loan `swap`'s output repays, checking that the loan is in the asset the swap buys.
+fn loan_for_liquidation_swap<'a, T: Config>(
+	loans: &'a mut BTreeMap<LoanId, GeneralLoan<T>>,
+	LiquidationSwap { loan_id, to_asset, .. }: &LiquidationSwap,
+) -> Option<&'a mut GeneralLoan<T>> {
+	match loans.get_mut(loan_id) {
+		Some(loan) if loan.asset == *to_asset => Some(loan),
+		Some(loan) => {
+			log_or_panic!("Loan {} has asset {}, but expected ({})", loan_id, loan.asset, to_asset);
+			None
+		},
+		None => None,
+	}
 }
 
 /// Removes the loan account from storage once it is settled (see [LoanAccount::is_settled]).
@@ -2170,36 +2347,25 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 							},
 						};
 
-					let excess_amount = match loan_account
-						.get_loan_and_check_asset(loan_id, liquidation_swap.to_asset)
-					{
-						// NOTE: this might fully repaid the loan, but we don't want to settle
-						// the loan just yet as there may be more liquidation swaps to process for
-						// the loan.
-						Some(loan) => loan.repay_via_liquidation(
-							output_amount,
-							swap_request_id,
-							is_voluntary,
-							&config,
-						),
-						None => {
-							// In some cases it may be possible for the loan to no longer exist if
-							// e.g. the principal was fully covered by a prior liquidation swap or
-							// by user repaying it manually.
-							output_amount
+					// NOTE: this might fully repay the loan, but we don't want to settle the loan
+					// just yet as there may be more liquidation swaps to process for the loan.
+					let mut pools = read_pools::<T>([liquidation_swap.to_asset]);
+					let swap_settlement = settle_liquidation_swap(
+						&loan_account.borrower_id,
+						loan_for_liquidation_swap(&mut loan_account.loans, &liquidation_swap),
+						&mut pools,
+						&liquidation_swap,
+						SwapExecutionProgress {
+							remaining_input_amount: 0,
+							accumulated_output_amount: output_amount,
 						},
-					};
-
-					// Any amount left after repaying the loan is added to the borrower's
-					// collateral balance:
-					loan_account.supply_from_liquidation(
-						liquidation_swap.to_asset,
-						excess_amount,
-						SupplyAddedActionType::SystemLiquidationExcessAmount {
-							loan_id,
-							swap_request_id,
-						},
+						is_voluntary,
+						&config,
 					);
+					for (asset, pool) in pools {
+						GeneralLendingPools::<T>::insert(asset, pool);
+					}
+					loan_account.apply_swap_settlement(swap_request_id, swap_settlement);
 
 					let no_collateral_left = is_zero_collateral(
 						&get_collateral_in_supply_pools::<T>(&loan_account.borrower_id),
@@ -2235,13 +2401,6 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Pays fee to the pool in the pool's asset.
-	fn credit_fees_to_pool(loan_asset: Asset, fee_amount: AssetAmount) {
-		Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
-			pool.receive_fees_in_pools_asset(fee_amount);
-		});
-	}
-
 	pub fn credit_fees_to_network(fee_asset: Asset, fee_amount: AssetAmount) {
 		PendingNetworkFees::<T>::mutate(fee_asset, |pending_amount| {
 			pending_amount.saturating_accrue(fee_amount);

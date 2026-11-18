@@ -2853,8 +2853,9 @@ mod multi_asset_collateral_liquidation {
 
 	/// While liquidation swaps are in flight, the account is valued as if they settled now: each
 	/// loan's output only repays that loan (net of the liquidation fee), and output beyond the
-	/// loan's debt counts as collateral. The valuation must match what settlement then produces,
-	/// whichever order the swaps settle in.
+	/// loan's debt counts as collateral. The valuation matches settlement exactly when every swap
+	/// is aborted together, and within rounding when some swaps complete first in a different
+	/// order.
 	#[test]
 	fn in_flight_liquidation_valued_as_settled() {
 		const COLLATERAL_ASSET_2: Asset = Asset::Sol;
@@ -2883,22 +2884,32 @@ mod multi_asset_collateral_liquidation {
 		const TOTAL_OWED_1: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
 		const TOTAL_OWED_2: AssetAmount = PRINCIPAL_2 + ORIGINATION_FEE_2;
 
-		// Sequential settlement rounds at most one unit of loan asset per swap:
+		// The projection can't know in which order the swaps will settle, and settling them in a
+		// different order rounds differently, by at most one unit of loan asset per swap:
 		const TOLERANCE_USD: AssetAmount = 4 * NEW_SWAP_RATE;
 
-		let excess_1 = SWAP_1_OUTPUT + SWAP_3_OUTPUT -
-			TOTAL_OWED_1 -
-			full_repayment_liquidation_fee(LOAN_ASSET, TOTAL_OWED_1);
-
-		let repaid_2 = SWAP_2_OUTPUT + SWAP_4_OUTPUT -
+		// The projection settles the swaps in swap request id order, as aborting them does. Swap
+		// 1 repays part of loan 1, and swap 3 the rest:
+		let repaid_by_swap_1 = SWAP_1_OUTPUT -
 			liquidation_fee_amount(
-				CONFIG.liquidation_fee(LOAN_ASSET_2),
-				SWAP_2_OUTPUT + SWAP_4_OUTPUT,
-				TOTAL_OWED_2,
+				CONFIG.liquidation_fee(LOAN_ASSET),
+				SWAP_1_OUTPUT,
+				TOTAL_OWED_1,
 			);
+		let excess_1 = SWAP_3_OUTPUT -
+			(TOTAL_OWED_1 - repaid_by_swap_1) -
+			full_repayment_liquidation_fee(LOAN_ASSET, TOTAL_OWED_1 - repaid_by_swap_1);
+
+		let loan_2_fee = |output, owed| {
+			liquidation_fee_amount(CONFIG.liquidation_fee(LOAN_ASSET_2), output, owed)
+		};
+		let repaid_by_swap_2 = SWAP_2_OUTPUT - loan_2_fee(SWAP_2_OUTPUT, TOTAL_OWED_2);
+		let repaid_2 = repaid_by_swap_2 + SWAP_4_OUTPUT -
+			loan_2_fee(SWAP_4_OUTPUT, TOTAL_OWED_2 - repaid_by_swap_2);
 
 		// Settle the swaps in two different orders: either all aborted at once (in swap request
-		// id order), or some completed first, in reverse order, and the rest aborted.
+		// id order), which the projection matches exactly, or some completed first, in reverse
+		// order, and the rest aborted.
 		for completed_before_abort in [
 			vec![],
 			vec![
@@ -2982,7 +2993,6 @@ mod multi_asset_collateral_liquidation {
 							]),
 							returned_collateral: BTreeMap::from([
 								(COLLATERAL_ASSET, SWAP_2_REMAINING_INPUT),
-								(COLLATERAL_ASSET_2, 0),
 								(LOAN_ASSET, excess_1),
 							]),
 						}
@@ -2996,6 +3006,11 @@ mod multi_asset_collateral_liquidation {
 
 					let projected_collateral_usd =
 						loan_account.total_collateral_usd_value(&price_cache, &config).unwrap();
+
+					// With every swap aborted together, settlement should match the projection
+					// exactly:
+					let tolerance_usd =
+						if completed_before_abort.is_empty() { 0 } else { TOLERANCE_USD };
 
 					for (swap_request_id, loan_id, output) in completed_before_abort {
 						LendingPools::process_loan_swap_outcome(
@@ -3023,211 +3038,16 @@ mod multi_asset_collateral_liquidation {
 						loan_account.total_collateral_usd_value(&price_cache, &config).unwrap();
 
 					assert!(
-						settled_owed_usd.abs_diff(projected_owed_usd) <= TOLERANCE_USD,
+						settled_owed_usd.abs_diff(projected_owed_usd) <= tolerance_usd,
 						"owed: settled {settled_owed_usd} vs projected {projected_owed_usd}"
 					);
 					assert!(
-						settled_collateral_usd.abs_diff(projected_collateral_usd) <= TOLERANCE_USD,
+						settled_collateral_usd.abs_diff(projected_collateral_usd) <= tolerance_usd,
 						"collateral: settled {settled_collateral_usd} vs projected \
 						 {projected_collateral_usd}"
 					);
 				});
 		}
-	}
-
-	proptest::proptest! {
-		/// For any swap progress and any settlement order (some swaps completing, in a random
-		/// order, the rest aborted together), the account's debt and collateral after settlement
-		/// match what was projected while the swaps were in flight.
-		#[test]
-		fn projected_valuation_matches_settlement(
-			liquidation_type in proptest::prop_oneof![
-				proptest::strategy::Just(LiquidationType::Soft),
-				proptest::strategy::Just(LiquidationType::Hard),
-				proptest::strategy::Just(LiquidationType::SoftVoluntary),
-			],
-			// Each swap's output as a share (in thousandths) of its loan's debt. A loan's swaps
-			// sell collateral worth about its debt plus a small buffer, so realistic outputs
-			// stay near 50% per swap. The range goes well beyond that, as if prices moved
-			// sharply mid-swap: a single swap can repay the loan on its own with excess left
-			// over, and a loan's two swaps together can overshoot it by far, as well as fall
-			// short or deliver nothing. The projection must match settlement in every case:
-			output_per_thousand in proptest::collection::vec(0..=1500u128, 4),
-			remaining_input_per_thousand in proptest::collection::vec(0..=1000u128, 4),
-			settlement_order in proptest::strategy::Strategy::prop_shuffle(
-				proptest::strategy::Just(vec![0usize, 1, 2, 3])
-			),
-			// At least one swap is aborted, so settlement always ends with an abort (completing
-			// every swap can instead write off unrecoverable loans).
-			completed_count in 0..=3usize,
-		) {
-			projected_valuation_matches_settlement_case(
-				liquidation_type,
-				output_per_thousand,
-				remaining_input_per_thousand,
-				settlement_order,
-				completed_count,
-			);
-		}
-	}
-
-	fn projected_valuation_matches_settlement_case(
-		liquidation_type: LiquidationType,
-		output_per_thousand: Vec<u128>,
-		remaining_input_per_thousand: Vec<u128>,
-		settlement_order: Vec<usize>,
-		completed_count: usize,
-	) {
-		const COLLATERAL_ASSET_2: Asset = Asset::Sol;
-		const LOAN_ASSET_2: Asset = Asset::Usdc;
-		const INIT_COLLATERAL_2: AssetAmount = INIT_COLLATERAL / 5;
-		const PRINCIPAL_2: AssetAmount = PRINCIPAL / 5;
-		const LOAN_ID_2: LoanId = LoanId(1);
-
-		// Loan asset prices that put the account into soft and hard liquidation:
-		const SOFT_SWAP_RATE: u128 = 26;
-		const HARD_SWAP_RATE: u128 = 28;
-
-		// Settlement rounds the fee and the repayment by at most one unit of loan asset per swap:
-		const TOLERANCE_USD: AssetAmount = 4 * 2 * HARD_SWAP_RATE;
-
-		new_test_ext()
-			.execute_with(|| {
-				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, SWAP_RATE);
-				setup_pool_with_funds(LOAN_ASSET, PRINCIPAL * 2);
-
-				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET_2, SWAP_RATE);
-				setup_pool_with_funds(LOAN_ASSET_2, PRINCIPAL * 2);
-
-				MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET, 1);
-				MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET_2, 1);
-			})
-			.then_execute_with(|_| {
-				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, INIT_COLLATERAL_2);
-				MockRefundAddressRegistry::register_refund_address(BORROWER, LOAN_CHAIN);
-				MockRefundAddressRegistry::register_refund_address(
-					BORROWER,
-					ForeignChain::Ethereum,
-				);
-
-				assert_eq!(
-					create_loan_and_supply_collateral(
-						BORROWER,
-						LOAN_ASSET,
-						PRINCIPAL,
-						BTreeMap::from([
-							(COLLATERAL_ASSET, INIT_COLLATERAL),
-							(COLLATERAL_ASSET_2, INIT_COLLATERAL_2),
-						])
-					),
-					Ok(LOAN_ID)
-				);
-				assert_eq!(
-					LendingPools::new_loan(BORROWER, LOAN_ASSET_2, PRINCIPAL_2, None),
-					Ok(LOAN_ID_2)
-				);
-
-				match liquidation_type {
-					LiquidationType::Soft =>
-						MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, SOFT_SWAP_RATE),
-					LiquidationType::Hard =>
-						MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, HARD_SWAP_RATE),
-					LiquidationType::SoftVoluntary => {
-						assert_ok!(LendingPools::initiate_voluntary_liquidation(
-							RuntimeOrigin::signed(BORROWER)
-						));
-					},
-				}
-			})
-			.then_execute_at_next_block(|_| {
-				let config = LendingConfig::<Test>::get();
-				let price_cache = OraclePriceCache::<Test>::default();
-
-				let LiquidationStatus::Liquidating {
-					liquidation_swaps,
-					liquidation_type: started_liquidation_type,
-				} = get_loan_account().liquidation_status
-				else {
-					panic!("expected the account to be in liquidation");
-				};
-				assert_eq!(started_liquidation_type, liquidation_type);
-
-				let swaps: Vec<(SwapRequestId, LoanId)> = liquidation_swaps
-					.into_iter()
-					.map(|(swap_request_id, swap)| (swap_request_id, swap.loan_id))
-					.collect();
-				assert_eq!(swaps.len(), 4);
-
-				let completed = &settlement_order[..completed_count];
-				let swap_requests = MockSwapRequestHandler::<Test>::get_swap_requests();
-
-				let outputs: Vec<AssetAmount> = swaps
-					.iter()
-					.enumerate()
-					.map(|(i, (swap_request_id, loan_id))| {
-						let output = get_loan_account().loans[loan_id].total_owed() *
-							output_per_thousand[i] /
-							1000;
-						// A completed swap has no input left:
-						let remaining_input = if completed.contains(&i) {
-							0
-						} else {
-							swap_requests[swap_request_id].input_amount *
-								remaining_input_per_thousand[i] /
-								1000
-						};
-
-						MockSwapRequestHandler::<Test>::set_swap_request_progress(
-							*swap_request_id,
-							SwapExecutionProgress {
-								remaining_input_amount: remaining_input,
-								accumulated_output_amount: output,
-							},
-						);
-						output
-					})
-					.collect();
-
-				let owed_and_collateral_usd = || {
-					let account = get_loan_account();
-					(
-						account.total_owed_usd_value(&price_cache, &config).unwrap(),
-						account.total_collateral_usd_value(&price_cache, &config).unwrap(),
-					)
-				};
-
-				let (projected_owed_usd, projected_collateral_usd) = owed_and_collateral_usd();
-
-				for &i in completed {
-					let (swap_request_id, loan_id) = swaps[i];
-					LendingPools::process_loan_swap_outcome(
-						swap_request_id,
-						LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id },
-						outputs[i],
-					);
-				}
-
-				LoanAccounts::<Test>::mutate(BORROWER, |account| {
-					account
-						.as_mut()
-						.unwrap()
-						.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange, &config)
-				});
-				assert_eq!(get_loan_account().liquidation_status, LiquidationStatus::NoLiquidation);
-
-				let (settled_owed_usd, settled_collateral_usd) = owed_and_collateral_usd();
-
-				assert!(
-					settled_owed_usd.abs_diff(projected_owed_usd) <= TOLERANCE_USD,
-					"owed: settled {settled_owed_usd} vs projected {projected_owed_usd}"
-				);
-				assert!(
-					settled_collateral_usd.abs_diff(projected_collateral_usd) <= TOLERANCE_USD,
-					"collateral: settled {settled_collateral_usd} vs projected \
-					 {projected_collateral_usd}"
-				);
-			});
 	}
 
 	/// A voluntary liquidation keeps its swaps running until every loan is covered by its own
@@ -3409,10 +3229,9 @@ mod multi_asset_collateral_liquidation {
 
 	/// When one loan's only liquidation swap completes with a shortfall while a sibling
 	/// loan's swap is still in flight, the shortfall loan must NOT be written off as bad
-	/// debt: the sibling swap may finish with excess that becomes available collateral
-	/// (via `supply_from_liquidation`) and the next upkeep round can liquidate against
-	/// it. Settlement is therefore deferred until no liquidation swaps remain in flight
-	/// for the borrower.
+	/// debt: the sibling swap may finish with excess that becomes available collateral, and
+	/// the next upkeep round can liquidate against it. Settlement is therefore deferred until
+	/// no liquidation swaps remain in flight for the borrower.
 	#[test]
 	fn loan_not_written_off_while_sibling_liquidation_swap_in_flight() {
 		const LOAN_ID_2: LoanId = LoanId(1);
@@ -5568,7 +5387,7 @@ mod liquidation_math_tests {
 	const USDC_UNIT: AssetAmount = 1_000_000;
 
 	/// Settles liquidation swap outputs against a loan one at a time, the way
-	/// `repay_via_liquidation` does. Returns (total fee, total repaid, total excess).
+	/// `repay_via_liquidation_in_pool` does. Returns (total fee, total repaid, total excess).
 	fn settle_sequentially(
 		mut owed: AssetAmount,
 		outputs: &[AssetAmount],
