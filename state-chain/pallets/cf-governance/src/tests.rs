@@ -551,6 +551,26 @@ mod emergency_presets {
 	}
 
 	#[test]
+	fn nested_group_member_can_apply_presets() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Governance::set_council(
+				crate::RawOrigin::GovernanceApproval.into(),
+				nested_council().into(),
+			));
+			// One of seven in an inner group that itself can't reach the council's threshold.
+			const INNER_GROUP_MEMBER: u64 = 102;
+			let applied = presets([EmergencyPreset::DisableInternalSwaps]);
+
+			assert_ok!(Governance::apply_emergency_presets(
+				RuntimeOrigin::signed(INNER_GROUP_MEMBER),
+				applied.clone()
+			));
+
+			assert_eq!(MockEmergencySafeMode::applied_presets(), applied.into_inner());
+		});
+	}
+
+	#[test]
 	fn non_member_cannot_apply_presets() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
