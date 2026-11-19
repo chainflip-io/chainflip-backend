@@ -69,8 +69,9 @@ where
 {
 	// `None` means that the ceremony is not yet authorised (but may start delaying messages)
 	stage: Option<DynStage<Ceremony>>,
-	// Messages that arrived before the stage they are addressed to. Keyed by sender and stage, so
-	// limited to one message per party per stage.
+	// Messages that arrived before the stage they are addressed to. Keyed by stage as well as
+	// sender because a party can be more than one stage ahead of us (see `should_delay`), but
+	// still limited to one message per party per stage.
 	delayed_messages: BTreeMap<(AccountId, Ceremony::CeremonyStageName), Ceremony::Data>,
 	/// This will fire on stage timeout
 	timeout_handle: Pin<Box<tokio::time::Sleep>>,
@@ -311,7 +312,8 @@ where
 					return None
 				}
 
-				// The stage timed out without this message, so it is no longer needed.
+				// The stage was finalised without this message, either early (the missing messages
+				// could no longer change its outcome) or on timeout, so it is no longer needed.
 				let current_stage = stage.get_stage_name();
 				let message_stage = data.stage_name();
 				if message_stage < current_stage {

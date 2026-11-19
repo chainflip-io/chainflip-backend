@@ -486,6 +486,19 @@ where
 	>(
 		&mut self,
 	) -> StageMessages<NextStageData> {
+		self.gather_outgoing_messages_from(|_| true).await
+	}
+
+	/// Like `gather_outgoing_messages`, but only from the nodes selected by `senders`, for when
+	/// the other nodes are not expected to have sent anything yet.
+	#[track_caller]
+	pub async fn gather_outgoing_messages_from<
+		NextStageData: TryFrom<StrategyData<Self>, Error = Error> + Clone,
+		Error: Display,
+	>(
+		&mut self,
+		senders: impl Fn(&AccountId) -> bool,
+	) -> StageMessages<NextStageData> {
 		let self_ceremony_id = self.ceremony_id;
 		let message_to_next_stage_data = |message| {
 			let MultisigMessage { ceremony_id, data } = message;
@@ -518,7 +531,7 @@ where
 				.unwrap()
 		};
 
-		stream::iter(self.nodes.iter_mut())
+		stream::iter(self.nodes.iter_mut().filter(|(account_id, _)| senders(account_id)))
 			.then(|(account_id, node)| async move {
 				(account_id.clone(), {
 					// TODO Consider member functions on OutgoingMultisigStageMessages for

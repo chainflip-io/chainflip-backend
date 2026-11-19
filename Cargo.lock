@@ -8446,6 +8446,7 @@ dependencies = [
  "num-bigint",
  "num-derive",
  "num-traits",
+ "proptest",
  "rand 0.8.5",
  "rayon",
  "schnorrkel",
