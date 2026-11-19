@@ -1040,21 +1040,6 @@ impl<T: Config> DeregistrationHooks for WithdrawalWhitelistDeregistrationHooks<T
 	}
 }
 
-pub struct RefundAddressDeregistrationHooks<T: Config>(PhantomData<T>);
-
-impl<T: Config> DeregistrationHooks for RefundAddressDeregistrationHooks<T> {
-	type AccountId = T::AccountId;
-	type Error = Error<T>;
-
-	fn check(_account_id: &Self::AccountId) -> Result<(), Self::Error> {
-		Ok(())
-	}
-
-	fn on_deregistered(account_id: &Self::AccountId, _account_role: AccountRole) {
-		Pallet::<T>::clear_refund_addresses(account_id);
-	}
-}
-
 pub struct DeleteAccount<T: Config>(PhantomData<T>);
 
 impl<T: Config> OnKilledAccount<T::AccountId> for DeleteAccount<T> {

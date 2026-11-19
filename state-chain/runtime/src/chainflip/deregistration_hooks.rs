@@ -26,7 +26,6 @@ pub type RuntimeDeregistrationHooks = (
 	pallet_cf_validator::DelegatorDeregistrationHooks<Runtime>,
 	pallet_cf_swapping::BrokerDeregistrationHooks<Runtime>,
 	pallet_cf_asset_balances::WithdrawalWhitelistDeregistrationHooks<Runtime>,
-	pallet_cf_asset_balances::RefundAddressDeregistrationHooks<Runtime>,
 	pallet_cf_asset_balances::FreeBalancesDeregistrationHooks<Runtime>,
 	pallet_cf_trading_strategy::TradingStrategyDeregistrationHooks<Runtime>,
 	pallet_cf_pools::OpenOrdersDeregistrationHooks<Runtime>,

@@ -165,7 +165,7 @@ fn broker_deregistration_reaps_affiliates() {
 }
 
 #[test]
-fn lp_deregistration_clears_refund_addresses_and_pending_withdrawal_changes() {
+fn lp_deregistration_keeps_refund_addresses_and_clears_pending_withdrawal_changes() {
 	const LP: AccountId = AccountId::new([0x42; 32]);
 
 	genesis::with_test_defaults()
@@ -181,7 +181,8 @@ fn lp_deregistration_clears_refund_addresses_and_pending_withdrawal_changes() {
 
 			assert_ok!(LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(LP)));
 
-			assert!(AssetBalances::get_refund_address(&LP, ForeignChain::Ethereum).is_none());
+			// Kept until the account is killed, so funds credited while closing can be refunded.
+			assert!(AssetBalances::get_refund_address(&LP, ForeignChain::Ethereum).is_some());
 			assert!(!PendingChanges::<Runtime>::get()
 				.values()
 				.flatten()
