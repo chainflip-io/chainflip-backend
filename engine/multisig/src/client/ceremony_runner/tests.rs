@@ -310,6 +310,32 @@ async fn should_ignore_duplicate_delayed_message() {
 	assert_eq!(stage_1_state.delayed_messages.len(), 1);
 }
 
+/// A message for a stage we have already finalised is dropped without affecting the current stage.
+#[tokio::test]
+async fn should_ignore_message_for_finalised_stage() {
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let sender_account_id = ACCOUNT_IDS[1].clone();
+	// With only 2 participants, the sender's stage 1 message completes stage 1.
+	let participants = BTreeSet::from_iter([our_account_id.clone(), sender_account_id.clone()]);
+
+	let (mut ceremony_runner, _outgoing_p2p_receiver) =
+		gen_stage_1_signing_state(our_account_id, participants).await;
+
+	assert_eq!(
+		ceremony_runner
+			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1(1))
+			.await,
+		None
+	);
+	assert_eq!(
+		ceremony_runner.stage.as_ref().unwrap().get_stage_name(),
+		SigningStageName::VerifyCommitmentsBroadcast2
+	);
+
+	ensure_message_is_ignored(&mut ceremony_runner, sender_account_id, gen_signing_data_stage1(1))
+		.await;
+}
+
 #[tokio::test]
 async fn should_ignore_message_from_non_participating_account() {
 	let our_account_id = ACCOUNT_IDS[0].clone();

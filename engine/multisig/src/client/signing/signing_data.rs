@@ -218,6 +218,17 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 			},
 		}
 	}
+
+	fn stage_name(&self) -> SigningStageName {
+		match self {
+			SigningData::CommStage1(_) => SigningStageName::AwaitCommitments1,
+			SigningData::BroadcastVerificationStage2(_) =>
+				SigningStageName::VerifyCommitmentsBroadcast2,
+			SigningData::LocalSigStage3(_) => SigningStageName::LocalSigStage3,
+			SigningData::VerifyLocalSigsStage4(_) =>
+				SigningStageName::VerifyLocalSigsBroadcastStage4,
+		}
+	}
 }
 
 #[cfg(test)]
@@ -426,6 +437,24 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[test]
+	fn stage_name_matches_message() {
+		let mut rng = Rng::from_seed([0; 32]);
+		assert_eq!(gen_signing_data_stage1(1).stage_name(), SigningStageName::AwaitCommitments1);
+		assert_eq!(
+			gen_signing_data_stage2(1, 1).stage_name(),
+			SigningStageName::VerifyCommitmentsBroadcast2
+		);
+		assert_eq!(
+			SigningData::<Point>::LocalSigStage3(gen_dummy_local_sig(&mut rng, 1)).stage_name(),
+			SigningStageName::LocalSigStage3
+		);
+		assert_eq!(
+			gen_signing_data_stage4(1, 1).stage_name(),
+			SigningStageName::VerifyLocalSigsBroadcastStage4
+		);
 	}
 
 	#[test]
