@@ -36,6 +36,7 @@ import type {
   StateChainRuntimeChainflipElectionsAllElectionInstancesVotes,
   PalletCfEnvironmentPalletConfigUpdate,
   PalletCfEnvironmentFailedDepositRecoveryRequest,
+  CfPrimitivesP2pTransport,
   PalletCfFlipPalletConfigUpdate,
   PalletCfFundingRedemptionAmount,
   PalletCfFundingEthereumDepositAndSCCall,
@@ -849,6 +850,28 @@ export interface ChainTx<
           palletCall: {
             name: 'RecoverFailedDeposits';
             params: { requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest> };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
+     * Set the network-wide P2P transport. Engines read this at startup and restart when
+     * it changes, so the whole validator set converges on the chosen transport. The two
+     * transports are not wire-compatible, so changing it is a coordinated cutover.
+     *
+     * Can only be dispatched from the governance origin.
+     *
+     * @param {CfPrimitivesP2pTransport} transport
+     **/
+    updateP2pTransport: GenericTxCall<
+      (transport: CfPrimitivesP2pTransport) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Environment';
+          palletCall: {
+            name: 'UpdateP2pTransport';
+            params: { transport: CfPrimitivesP2pTransport };
           };
         },
         ChainKnownTypes

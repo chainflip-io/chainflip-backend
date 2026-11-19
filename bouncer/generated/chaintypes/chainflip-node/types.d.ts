@@ -495,7 +495,15 @@ export type PalletCfEnvironmentCall =
   | {
       name: 'RecoverFailedDeposits';
       params: { requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest> };
-    };
+    }
+  /**
+   * Set the network-wide P2P transport. Engines read this at startup and restart when
+   * it changes, so the whole validator set converges on the chosen transport. The two
+   * transports are not wire-compatible, so changing it is a coordinated cutover.
+   *
+   * Can only be dispatched from the governance origin.
+   **/
+  | { name: 'UpdateP2pTransport'; params: { transport: CfPrimitivesP2pTransport } };
 
 export type PalletCfEnvironmentCallLike =
   /**
@@ -635,7 +643,15 @@ export type PalletCfEnvironmentCallLike =
   | {
       name: 'RecoverFailedDeposits';
       params: { requests: Array<PalletCfEnvironmentFailedDepositRecoveryRequest> };
-    };
+    }
+  /**
+   * Set the network-wide P2P transport. Engines read this at startup and restart when
+   * it changes, so the whole validator set converges on the chosen transport. The two
+   * transports are not wire-compatible, so changing it is a coordinated cutover.
+   *
+   * Can only be dispatched from the governance origin.
+   **/
+  | { name: 'UpdateP2pTransport'; params: { transport: CfPrimitivesP2pTransport } };
 
 export type CfChainsDotPolkadotAccountId = FixedBytes<32>;
 
@@ -1923,6 +1939,8 @@ export type PalletCfEnvironmentFailedDepositRecoveryRequest = {
   amount: bigint;
   reference: Bytes;
 };
+
+export type CfPrimitivesP2pTransport = 'Zmq' | 'Quic';
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -13226,6 +13244,11 @@ export type PalletCfEnvironmentEvent =
    * The Safe Mode settings for the chain has been updated
    **/
   | { name: 'RuntimeSafeModeUpdated'; data: { safeMode: PalletCfEnvironmentSafeModeUpdate } }
+  /**
+   * The network-wide P2P transport selection has been updated. Engines must restart
+   * to apply the change.
+   **/
+  | { name: 'P2pTransportUpdated'; data: { transport: CfPrimitivesP2pTransport } }
   /**
    * Utxo consolidation parameters has been updated
    **/

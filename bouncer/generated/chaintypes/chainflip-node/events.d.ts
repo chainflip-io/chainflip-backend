@@ -16,6 +16,7 @@ import type {
   CfPrimitivesChainsAssetsArbAsset,
   CfChainsDotPolkadotAccountId,
   PalletCfEnvironmentSafeModeUpdate,
+  CfPrimitivesP2pTransport,
   CfChainsBtcUtxoSelectionConsolidationParameters,
   CfChainsBtcUtxo,
   SolPrimAddress,
@@ -297,6 +298,16 @@ export interface ChainEvents extends GenericChainEvents {
       'Environment',
       'RuntimeSafeModeUpdated',
       { safeMode: PalletCfEnvironmentSafeModeUpdate }
+    >;
+
+    /**
+     * The network-wide P2P transport selection has been updated. Engines must restart
+     * to apply the change.
+     **/
+    P2pTransportUpdated: GenericPalletEvent<
+      'Environment',
+      'P2pTransportUpdated',
+      { transport: CfPrimitivesP2pTransport }
     >;
 
     /**
