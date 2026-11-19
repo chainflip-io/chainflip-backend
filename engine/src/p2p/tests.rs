@@ -53,6 +53,9 @@ const CEREMONY_BASE_PORT: Port = 19100;
 /// And another range for the mid-ceremony switch test.
 const MID_CEREMONY_BASE_PORT: Port = 19200;
 
+const KEYGEN_STAGE_TIMEOUT: Duration = Duration::from_secs(30);
+const SIGNING_STAGE_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Create a P2P key and peer info for a test node.
 fn create_test_node_info(idx: usize, base_port: Port) -> (SigningKey, PeerInfo, AccountId) {
 	let signing_key = SigningKey::generate(&mut OsRng);
@@ -351,11 +354,10 @@ async fn signing_works_after_in_place_transport_switch() {
 	// --- Keygen over ZMQ ---
 	let public_keys = with_timeout(
 		"keygen",
-		join_all(
-			nodes
-				.iter()
-				.map(|n| n.client.initiate_keygen(1, GENESIS_EPOCH, participants.clone())),
-		),
+		join_all(nodes.iter().map(|n| {
+			n.client
+				.initiate_keygen(1, GENESIS_EPOCH, participants.clone(), KEYGEN_STAGE_TIMEOUT)
+		})),
 	)
 	.await
 	.into_iter()
@@ -431,11 +433,10 @@ async fn signing_fails_then_recovers_when_transport_switches_mid_ceremony() {
 	// Generate a key while everyone is still on ZMQ.
 	let public_keys = with_timeout(
 		"keygen",
-		join_all(
-			nodes
-				.iter()
-				.map(|n| n.client.initiate_keygen(1, GENESIS_EPOCH, all_signers.clone())),
-		),
+		join_all(nodes.iter().map(|n| {
+			n.client
+				.initiate_keygen(1, GENESIS_EPOCH, all_signers.clone(), KEYGEN_STAGE_TIMEOUT)
+		})),
 	)
 	.await
 	.into_iter()
@@ -460,6 +461,7 @@ async fn signing_fails_then_recovers_when_transport_switches_mid_ceremony() {
 				2,
 				all_signers.clone(),
 				vec![(key_id.clone(), payload.clone())],
+				SIGNING_STAGE_TIMEOUT,
 			)
 		})),
 	)
@@ -502,6 +504,7 @@ async fn run_signing(
 				ceremony_id,
 				signers.clone(),
 				vec![(key_id.clone(), payload.clone())],
+				SIGNING_STAGE_TIMEOUT,
 			)
 		})),
 	)
