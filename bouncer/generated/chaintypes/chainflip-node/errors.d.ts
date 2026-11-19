@@ -276,6 +276,12 @@ export interface ChainErrors extends GenericChainErrors {
     SubAccountIdDerivationFailed: GenericPalletError;
 
     /**
+     * The withdrawal would leave the account below the stake its role requires (e.g. the
+     * minimum validator stake). Deregister the account first to withdraw the rest.
+     **/
+    BelowRequiredStake: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;

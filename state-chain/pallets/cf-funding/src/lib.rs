@@ -61,12 +61,7 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_runtime::{traits::ConstU32, BoundedVec, DispatchError};
-use sp_std::{
-	cmp::{max, min},
-	collections::btree_map::BTreeMap,
-	fmt::Debug,
-	prelude::*,
-};
+use sp_std::{cmp::min, collections::btree_map::BTreeMap, fmt::Debug, prelude::*};
 
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub enum Pending {
@@ -205,8 +200,11 @@ impl<T: Config> Redemption<T> {
 				(Zero::zero(), total_restricted.saturating_sub(restricted_deficit))
 			};
 
-		// Available funds are total balance minus the larger of bond or remaining restricted funds
-		let liquid_balance = account_balance.saturating_sub(max(bond, remaining_restricted));
+		let required_stake = T::RedemptionChecker::required_stake(account_id);
+
+		// Available funds are total balance minus the largest amount that must stay in the account.
+		let liquid_balance =
+			account_balance.saturating_sub(bond.max(remaining_restricted).max(required_stake));
 
 		let applied_fee = match amount {
 			RedemptionAmount::Max if liquid_balance == account_balance => Zero::zero(),
@@ -227,6 +225,7 @@ impl<T: Config> Redemption<T> {
 		ensure!(debit_amount <= account_balance, Error::<T>::InsufficientBalance);
 		let remaining_balance = account_balance.saturating_sub(debit_amount);
 		ensure!(remaining_balance >= bond, Error::<T>::BondViolation);
+		ensure!(remaining_balance >= required_stake, Error::<T>::BelowRequiredStake);
 		ensure!(
 			remaining_balance >= remaining_restricted,
 			Error::<T>::InsufficientUnrestrictedFunds
@@ -651,6 +650,10 @@ pub mod pallet {
 
 		/// The sub-account ID derivation failed, should never happen.
 		SubAccountIdDerivationFailed,
+
+		/// The withdrawal would leave the account below the stake its role requires (e.g. the
+		/// minimum validator stake). Deregister the account first to withdraw the rest.
+		BelowRequiredStake,
 	}
 
 	#[pallet::call]

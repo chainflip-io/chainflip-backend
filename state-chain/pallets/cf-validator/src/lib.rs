@@ -2591,6 +2591,15 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 			Err(Error::<T>::StillBidding.into())
 		}
 	}
+
+	fn required_stake(validator_id: &Self::ValidatorId) -> Self::Amount {
+		if T::AccountRoleRegistry::has_account_role(validator_id.into_ref(), AccountRole::Validator)
+		{
+			MinimumValidatorStake::<T>::get()
+		} else {
+			Zero::zero()
+		}
+	}
 }
 
 pub struct ValidatorDeregistrationCheck<T>(PhantomData<T>);

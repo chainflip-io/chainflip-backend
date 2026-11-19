@@ -17982,7 +17982,12 @@ export type PalletCfFundingError =
   /**
    * The sub-account ID derivation failed, should never happen.
    **/
-  | 'SubAccountIdDerivationFailed';
+  | 'SubAccountIdDerivationFailed'
+  /**
+   * The withdrawal would leave the account below the stake its role requires (e.g. the
+   * minimum validator stake). Deregister the account first to withdraw the rest.
+   **/
+  | 'BelowRequiredStake';
 
 /**
  * The `Error` enum of this pallet.
