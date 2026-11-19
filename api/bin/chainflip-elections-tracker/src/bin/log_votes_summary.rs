@@ -1119,6 +1119,17 @@ fn format_assethub_vote_detail(
 	}
 }
 
+#[tokio::main(flavor = "multi_thread", worker_threads = 3)]
+async fn main() {
+	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("ws://localhost:9944".into());
+
+	loop {
+		observe_elections(rpc_url.clone()).await;
+		println!("Election observer stopped. Reconnecting in 3 seconds...");
+		tokio::time::sleep(Duration::from_secs(3)).await;
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1306,16 +1317,5 @@ mod tests {
 		assert_eq!(provided_data, expected_data);
 		assert_eq!(votes, BTreeMap::from([(election_id, BTreeMap::from([(partial.clone(), 1)]))]));
 		assert!(!format_bsc_vote_detail(&partial, &provided_data).contains("MissingSharedData"));
-	}
-}
-
-#[tokio::main(flavor = "multi_thread", worker_threads = 3)]
-async fn main() {
-	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("ws://localhost:9944".into());
-
-	loop {
-		observe_elections(rpc_url.clone()).await;
-		println!("Election observer stopped. Reconnecting in 3 seconds...");
-		tokio::time::sleep(Duration::from_secs(3)).await;
 	}
 }
