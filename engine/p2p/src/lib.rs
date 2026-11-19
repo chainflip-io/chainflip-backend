@@ -78,7 +78,6 @@ pub enum Transport {
 /// The transport runs until `shutdown` fires, at which point it tears down (stopping its
 /// background threads/tasks and releasing its socket) and returns. This lets the
 /// [`supervisor`] restart it on a different transport without restarting the engine.
-#[allow(clippy::too_many_arguments)]
 pub async fn start_transport(
 	transport: Transport,
 	p2p_key: P2PKey,

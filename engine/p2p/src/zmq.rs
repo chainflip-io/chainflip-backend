@@ -280,7 +280,6 @@ impl Drop for P2PContext {
 	}
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn start(
 	p2p_key: P2PKey,
 	port: Port,

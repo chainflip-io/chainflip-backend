@@ -173,7 +173,6 @@ where
 /// selection changes. The supervisor owns the muxer-facing channels for the whole process;
 /// each transport incarnation is handed a clone of the node identity and the current peer
 /// snapshot.
-#[allow(clippy::too_many_arguments)]
 pub async fn run_transport_supervisor(
 	initial_transport: Transport,
 	p2p_key: P2PKey,

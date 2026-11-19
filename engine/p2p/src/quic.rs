@@ -324,7 +324,6 @@ impl QuicContext {
 /// This function has the same interface as `core::start` for ZMQ transport. It runs until
 /// `shutdown` fires, then closes the endpoint and returns, releasing the UDP socket so a
 /// replacement transport can take over.
-#[allow(clippy::too_many_arguments)]
 pub async fn start(
 	p2p_key: P2PKey,
 	port: Port,
