@@ -664,6 +664,9 @@ impl<T: Config> Bonding for Bonder<T> {
 	}
 }
 
+/// This pallet's deregistration hooks, in run order.
+pub type PalletDeregistrationHooks<T> = Bonder<T>;
+
 impl<T: Config> DeregistrationHooks for Bonder<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;

@@ -2625,6 +2625,9 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+/// This pallet's deregistration hooks, in run order.
+pub type PalletDeregistrationHooks<T> = OpenOrdersDeregistrationHooks<T>;
+
 pub struct OpenOrdersDeregistrationHooks<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> DeregistrationHooks for OpenOrdersDeregistrationHooks<T> {

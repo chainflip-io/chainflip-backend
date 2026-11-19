@@ -2532,6 +2532,10 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 	}
 }
 
+/// This pallet's deregistration hooks, in run order.
+pub type PalletDeregistrationHooks<T> =
+	(ValidatorDeregistrationHooks<T>, DelegatorDeregistrationHooks<T>);
+
 /// Deregistration checks and cleanup for the Validator and Operator roles, so that these roles can
 /// be deregistered through [AccountRoleRegistry] without going through this pallet's extrinsics.
 pub struct ValidatorDeregistrationHooks<T>(PhantomData<T>);

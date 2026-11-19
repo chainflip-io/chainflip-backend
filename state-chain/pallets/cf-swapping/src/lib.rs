@@ -3534,6 +3534,11 @@ pub mod pallet {
 	}
 }
 
+/// This pallet's deregistration hooks, in run order.
+/// Pending swap check last: it iterates over all swap requests.
+pub type PalletDeregistrationHooks<T> =
+	(BrokerDeregistrationHooks<T>, PendingSwapDeregistrationHooks<T>);
+
 pub struct BrokerDeregistrationHooks<T>(PhantomData<T>);
 
 impl<T: Config> DeregistrationHooks for BrokerDeregistrationHooks<T> {

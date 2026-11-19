@@ -1004,6 +1004,10 @@ where
 	}
 }
 
+/// This pallet's deregistration hooks, in run order.
+pub type PalletDeregistrationHooks<T> =
+	(WithdrawalWhitelistDeregistrationHooks<T>, FreeBalancesDeregistrationHooks<T>);
+
 pub struct FreeBalancesDeregistrationHooks<T: Config>(PhantomData<T>);
 
 impl<T: Config> DeregistrationHooks for FreeBalancesDeregistrationHooks<T> {

@@ -1205,6 +1205,9 @@ fn average_tick(tick_1: Tick, tick_2: Tick, round_up: bool) -> Tick {
 	}
 }
 
+/// This pallet's deregistration hooks, in run order.
+pub type PalletDeregistrationHooks<T> = TradingStrategyDeregistrationHooks<T>;
+
 pub struct TradingStrategyDeregistrationHooks<T>(PhantomData<T>);
 
 impl<T: Config> DeregistrationHooks for TradingStrategyDeregistrationHooks<T> {

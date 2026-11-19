@@ -15,21 +15,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::Runtime;
-use pallet_cf_flip::Bonder;
 
 /// Checks run regardless of the role being deregistered: state is keyed by account, and an
 /// account can hold state from a previous role (e.g. a delegation bond after `undelegate`), so
 /// gating checks by the current role lets that state leak into the next one.
 pub type RuntimeDeregistrationHooks = (
-	Bonder<Runtime>,
-	pallet_cf_validator::ValidatorDeregistrationHooks<Runtime>,
-	pallet_cf_validator::DelegatorDeregistrationHooks<Runtime>,
-	pallet_cf_swapping::BrokerDeregistrationHooks<Runtime>,
-	pallet_cf_asset_balances::WithdrawalWhitelistDeregistrationHooks<Runtime>,
-	pallet_cf_asset_balances::FreeBalancesDeregistrationHooks<Runtime>,
-	pallet_cf_trading_strategy::TradingStrategyDeregistrationHooks<Runtime>,
-	pallet_cf_pools::OpenOrdersDeregistrationHooks<Runtime>,
-	pallet_cf_lending_pools::PoolsDeregistrationHooks<Runtime>,
-	// Last: iterates over all pending swap requests.
-	pallet_cf_swapping::PendingSwapDeregistrationHooks<Runtime>,
+	pallet_cf_flip::PalletDeregistrationHooks<Runtime>,
+	pallet_cf_validator::PalletDeregistrationHooks<Runtime>,
+	pallet_cf_asset_balances::PalletDeregistrationHooks<Runtime>,
+	pallet_cf_trading_strategy::PalletDeregistrationHooks<Runtime>,
+	pallet_cf_pools::PalletDeregistrationHooks<Runtime>,
+	pallet_cf_lending_pools::PalletDeregistrationHooks<Runtime>,
+	// Last: its pending swap check iterates over all swap requests.
+	pallet_cf_swapping::PalletDeregistrationHooks<Runtime>,
 );
