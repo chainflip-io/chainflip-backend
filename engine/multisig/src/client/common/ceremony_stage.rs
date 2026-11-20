@@ -128,4 +128,7 @@ pub trait PreProcessStageDataCheck<CeremonyStageName> {
 
 	/// Returns true if this message should be delayed for the given stage
 	fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool;
+
+	/// The stage this message is addressed to.
+	fn stage_name(&self) -> CeremonyStageName;
 }

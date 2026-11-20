@@ -66,6 +66,7 @@ ed25519-dalek = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
+proptest = { workspace = true, features = ["std"] }
 
 # Turn on the "test" feature flag for tests
 multisig = { workspace = true, features = ["test"] }

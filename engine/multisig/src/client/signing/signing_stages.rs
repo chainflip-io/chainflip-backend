@@ -30,7 +30,8 @@ use async_trait::async_trait;
 use cf_primitives::AuthorityCount;
 use client::common::{
 	broadcast::{
-		verify_broadcasts_non_blocking, BroadcastStage, BroadcastStageProcessor, DataToSend,
+		all_broadcasts_have_quorum, verify_broadcasts_non_blocking, BroadcastStage,
+		BroadcastStageProcessor, DataToSend,
 	},
 	CeremonyCommon, StageResult,
 };
@@ -152,6 +153,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let data = self.commitments.clone();
 
 		DataToSend::Broadcast(VerifyComm2 { data })
+	}
+
+	fn can_finalize_early(&self, messages: &BTreeMap<AuthorityCount, Self::Message>) -> bool {
+		all_broadcasts_have_quorum(messages, &self.common.all_idxs)
 	}
 
 	/// Verify that all values have been broadcast correctly during stage 1
@@ -358,6 +363,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let data = self.local_sigs.clone();
 
 		DataToSend::Broadcast(VerifyLocalSig4 { data })
+	}
+
+	fn can_finalize_early(&self, messages: &BTreeMap<AuthorityCount, Self::Message>) -> bool {
+		all_broadcasts_have_quorum(messages, &self.common.all_idxs)
 	}
 
 	/// Verify that signature shares have been broadcast correctly, and if so,

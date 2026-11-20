@@ -93,6 +93,60 @@ where
 	&received_idxs == expected_idxs
 }
 
+/// What a quorum of `reporters` claims party `idx` broadcast: `Some(Some(value))` if they agree on
+/// a value, `Some(None)` if they agree nothing was received, `None` if neither reaches the quorum.
+///
+/// Every reporter must cover exactly the participating parties
+/// (`check_verification_message_indexes`).
+fn quorum_on<'a, T>(
+	reporters: &[&'a BroadcastVerificationMessage<T>],
+	idx: AuthorityCount,
+	threshold: usize,
+) -> Option<Option<&'a T>>
+where
+	T: Clone + std::fmt::Debug + Ord,
+{
+	find_frequent_element(
+		reporters.iter().map(|message| message.data.get(&idx).and_then(Option::as_ref)),
+		threshold,
+	)
+}
+
+/// Whether `verify_broadcasts` would already succeed on the verification messages received so far,
+/// i.e. every party's value has a quorum.
+///
+/// Once this holds, the outcome no longer depends on the messages still missing: a value with more
+/// than `threshold` claims keeps them as more messages arrive, and since a quorum is over two
+/// thirds, no other value can reach one too. The stage can therefore be finalised without waiting
+/// for the remaining parties. This holds regardless of which subset of messages each node
+/// received: two quorums for different values would share more than a third of the reporters,
+/// which requires an honest reporter to have echoed both.
+pub fn all_broadcasts_have_quorum<T>(
+	verification_messages: &BTreeMap<AuthorityCount, BroadcastVerificationMessage<T>>,
+	participating_idxs: &BTreeSet<AuthorityCount>,
+) -> bool
+where
+	T: Clone + std::fmt::Debug + Ord,
+{
+	let threshold = threshold_for_broadcast_verification(participating_idxs.len());
+
+	// This runs on every message received, and the checks below are quadratic in the number of
+	// parties, so skip them until enough messages could form a quorum.
+	if verification_messages.len() <= threshold {
+		return false
+	}
+
+	let reporters: Vec<_> = verification_messages
+		.values()
+		.filter(|message| check_verification_message_indexes(message, participating_idxs))
+		.collect();
+
+	reporters.len() > threshold &&
+		participating_idxs
+			.iter()
+			.all(|idx| matches!(quorum_on(&reporters, *idx, threshold), Some(Some(_))))
+}
+
 /// How the claims about a single party's broadcast were distributed: the number of
 /// reporters that received nothing, and the size of each distinct claimed value's group.
 ///
@@ -245,11 +299,12 @@ where
 	// unlike `reported_parties` this is not attributable to anyone.
 	let mut unresolved = BTreeSet::new();
 
+	let reporters: Vec<_> = verification_messages.values().collect();
+
 	for idx in &participating_idxs {
-		let message_iter = verification_messages.values().map(|m| m.data[idx].clone());
-		match find_frequent_element(message_iter, threshold) {
+		match quorum_on(&reporters, *idx, threshold) {
 			Some(Some(data)) => {
-				agreed_on_values.insert(*idx, data);
+				agreed_on_values.insert(*idx, data.clone());
 			},
 			Some(None) => {
 				reported_parties.insert(*idx);
@@ -555,6 +610,136 @@ mod tests {
 
 		// Expect all to agree on the following values:
 		check_broadcast_verification(all_messages, Ok(vec![(1, 1), (2, 1), (3, 1), (4, 1)]));
+	}
+
+	#[test]
+	fn quorum_check_needs_more_than_threshold_reporters() {
+		// Unanimous, but 2 of 4 reporters is not enough.
+		let messages = received_only(to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+			(2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+		]));
+		let participants = BTreeSet::from([1, 2, 3, 4]);
+		assert!(!all_broadcasts_have_quorum(&messages, &participants));
+
+		let mut messages = messages;
+		messages.insert(
+			3,
+			BroadcastVerificationMessage {
+				data: BTreeMap::from([(1, Some(1)), (2, Some(1)), (3, Some(1)), (4, Some(1))]),
+			},
+		);
+		assert!(all_broadcasts_have_quorum(&messages, &participants));
+	}
+
+	#[test]
+	fn quorum_check_fails_on_quorum_for_non_receipt() {
+		// Reporter 4's message is still missing, and a quorum of the others agrees party 2 sent
+		// nothing: attributable, but not a success.
+		let messages = received_only(to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(1), None, Some(1), Some(1)])),
+			(2, Some(vec![Some(1), None, Some(1), Some(1)])),
+			(3, Some(vec![Some(1), None, Some(1), Some(1)])),
+		]));
+		assert!(!all_broadcasts_have_quorum(&messages, &BTreeSet::from([1, 2, 3, 4])));
+	}
+
+	#[test]
+	fn quorum_check_ignores_malformed_reporters() {
+		// Party 1 has only two matching claims among the well-formed reporters. Reporter 4 would
+		// supply the third, but it covers party 5 instead of party 4, so `verify_broadcasts`
+		// disregards it and so must the early check.
+		let mut messages = received_only(to_broadcast_verification_messages(vec![
+			(1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+			(2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+			(3, Some(vec![Some(2), Some(1), Some(1), Some(1)])),
+		]));
+		messages.insert(
+			4,
+			BroadcastVerificationMessage {
+				data: BTreeMap::from([(1, Some(1)), (2, Some(1)), (3, Some(1)), (5, Some(1))]),
+			},
+		);
+		assert!(!all_broadcasts_have_quorum(&messages, &BTreeSet::from([1, 2, 3, 4])));
+	}
+
+	mod quorum_check_properties {
+		use super::*;
+		use proptest::{collection::vec, prelude::*};
+
+		/// Up to 7 parties, each reporter claiming, per party, nothing or one of 3 values. A
+		/// small value range makes quorums (and near-quorums) common.
+		fn verification_messages(
+		) -> impl Strategy<Value = BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<i32>>>>
+		{
+			(1..=7_u32).prop_flat_map(|num_parties| {
+				vec(
+					(any::<bool>(), vec(proptest::option::of(0..3_i32), num_parties as usize)),
+					num_parties as usize,
+				)
+				.prop_map(|reports| {
+					reports
+						.into_iter()
+						.zip(1..)
+						.map(|((received, claims), reporter)| {
+							let message = BroadcastVerificationMessage {
+								data: claims
+									.into_iter()
+									.zip(1..)
+									.map(|(c, idx)| (idx, c))
+									.collect(),
+							};
+							(reporter, received.then_some(message))
+						})
+						.collect()
+				})
+			})
+		}
+
+		proptest! {
+			/// The early check succeeds exactly when the full verification would.
+			#[test]
+			fn agrees_with_verify_broadcasts(messages in verification_messages()) {
+				let participants: BTreeSet<_> = messages.keys().copied().collect();
+				let received = received_only(messages.clone());
+
+				prop_assert_eq!(
+					all_broadcasts_have_quorum(&received, &participants),
+					verify_broadcasts(messages, OWN_IDX).is_ok()
+				);
+			}
+
+			/// Once every value has a quorum, receiving the remaining messages cannot change
+			/// what is agreed. This is what makes finalising early safe.
+			#[test]
+			fn outcome_is_fixed_once_quorum_is_reached(messages in verification_messages()) {
+				let participants: BTreeSet<_> = messages.keys().copied().collect();
+				let all_received = || messages.iter().map(|(idx, m)| (*idx, m.clone()));
+
+				// Deliver the messages one by one, checking at each step.
+				let mut arrived = BTreeMap::new();
+				let mut agreed_early = None;
+				for (idx, message) in all_received().filter_map(|(idx, m)| m.map(|m| (idx, m))) {
+					arrived.insert(idx, message);
+					if all_broadcasts_have_quorum(&arrived, &participants) {
+						let partial = participants
+							.iter()
+							.map(|idx| (*idx, arrived.get(idx).cloned()))
+							.collect();
+						agreed_early = Some(verify_broadcasts(partial, OWN_IDX));
+						break;
+					}
+				}
+
+				if let Some(agreed_early) = agreed_early {
+					prop_assert!(agreed_early.is_ok());
+					prop_assert_eq!(
+						agreed_early,
+						verify_broadcasts(all_received().collect(), OWN_IDX)
+					);
+				}
+			}
+		}
 	}
 
 	/// Strip the `Option` wrapper the way `verify_broadcasts` does before the quorum loop.
