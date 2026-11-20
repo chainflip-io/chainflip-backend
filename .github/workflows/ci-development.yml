@@ -89,16 +89,6 @@ jobs:
             chainflip-backend-bin-suffix: -turbo
             log-postfix: "-turbo"
             continue-on-bouncer-error: true
-    post-check-old-rpcs:
-        needs: [build]
-        uses: ./.github/workflows/_40_post_check.yml
-        secrets: inherit
-        with:
-            full-bouncer: false
-            ngrok: true
-            broker-endpoint: "http://127.0.0.1:10997"
-            lp-endpoint: "http://127.0.0.1:10589"
-            log-postfix: "-post-check-old-rpcs"
     test-benchmarks:
         needs: [build-benchmarks]
         uses: ./.github/workflows/_41_test_benchmarks.yml

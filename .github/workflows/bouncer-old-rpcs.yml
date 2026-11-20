@@ -1,0 +1,27 @@
+# Runs the bouncer against the standalone broker and LP API services instead of the node's
+# built-in RPCs. Informational only, so it is triggered manually rather than gating PRs.
+name: Bouncer (old RPCs)
+
+on:
+  workflow_dispatch:
+    inputs:
+      full-bouncer:
+        description: "Run the full bouncer suite"
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "release"
+  post-check-old-rpcs:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+    with:
+      full-bouncer: ${{ inputs.full-bouncer }}
+      broker-endpoint: "http://127.0.0.1:10997"
+      lp-endpoint: "http://127.0.0.1:10589"
+      log-postfix: "-post-check-old-rpcs"
