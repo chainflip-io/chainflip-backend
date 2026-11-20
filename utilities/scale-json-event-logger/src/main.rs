@@ -20,7 +20,7 @@ use anyhow::Context;
 use cf_utilities::{dynamic_events::EventDecoder, scale_json::ext::JsonValue};
 use env_logger::Env;
 use std::str::FromStr;
-use subxt::{backend::BackendExt, ext::futures::TryStreamExt, utils::H256, SubstrateConfig};
+use subxt::{utils::H256, OnlineClientAtBlock, SubstrateConfig};
 
 const HELP: &str = r#"
 Usage: scale-json-event-logger <network> <latest|follow|0xhash> [path...]
@@ -39,8 +39,8 @@ path [optional]: JSON pointer paths to filter the decoded events.
 	If any path matches the decoded event, the full event is printed.
 	If none are provided, all decoded events are printed.
 
-	DISCLAIMER: This is not production-grade code. In particular, there is a known race condition
-	where the metadata might no stay in sync with event encodings across a runtime upgrade.
+	DISCLAIMER: This is not production-grade code. In particular, events in a runtime upgrade block
+	are decoded with the metadata of the new runtime, which might not match their encoding.
 "#;
 
 /// This valid across all Substrate chains using FRAME, ie. any chain that stores its events in
@@ -104,51 +104,31 @@ async fn main() -> anyhow::Result<()> {
 
 	match hash_opt {
 		HashOption::Latest => {
-			let hash = client.blocks().at_latest().await?.hash();
-			decode_events_at_hash(&client, hash, &filter).await?;
+			decode_events_at(&client.at_current_block().await?, &filter).await?;
 		},
 		HashOption::Hash(hash) => {
-			let metadata_at_hash = client.backend().metadata_at_version(15, hash).await?;
-			client.set_metadata(metadata_at_hash);
-			decode_events_at_hash(&client, hash, &filter).await?;
+			decode_events_at(&client.at_block(hash).await?, &filter).await?;
 		},
 		HashOption::Follow => {
-			// This updates the client metadata in a separate thread. Note that there is no
-			// synchronization between the metadata updates and the event decoding, so decoding
-			// might fail during/after a runtime upgrade.
-			let update_notifier = client.updater();
-			tokio::spawn(async move { update_notifier.perform_runtime_updates().await });
-			client
-				.blocks()
-				.subscribe_finalized()
-				.await?
-				.map_err(Into::into)
-				.try_for_each(|header| decode_events_at_hash(&client, header.hash(), &filter))
-				.await?;
+			let mut blocks = client.stream_blocks().await?;
+			while let Some(block) = blocks.next().await {
+				decode_events_at(&block?.at().await?, &filter).await?;
+			}
 		},
 	};
 
 	Ok(())
 }
 
-async fn decode_events_at_hash(
-	client: &subxt::OnlineClient<SubstrateConfig>,
-	hash: H256,
+async fn decode_events_at(
+	at_block: &OnlineClientAtBlock<SubstrateConfig>,
 	filter: &PathFilter,
 ) -> anyhow::Result<()> {
-	let events_data = client
-		.storage()
-		.at(hash)
-		.fetch_raw(EVENTS_STORAGE_KEY)
-		.await?
-		.expect("Events storage always returns a Vec.");
+	let events_data = at_block.storage().fetch_raw(EVENTS_STORAGE_KEY.to_vec()).await?;
 
-	// NOTE: It's possible that the metadata used here is incompatible with the events data,
-	// since the metadata updates in another thread.
-	let event_decoder = EventDecoder::new(
-		client.metadata().types().clone(),
-		client.metadata().outer_enums().error_enum_ty(),
-	);
+	let metadata = at_block.metadata_ref();
+	let event_decoder =
+		EventDecoder::new(metadata.types().clone(), metadata.outer_enums().error_enum_ty());
 
 	for event in event_decoder
 		.decode_events(events_data)?

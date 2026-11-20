@@ -15,33 +15,63 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_amm::math::Price;
-use subxt::{config::transaction_extensions, Config};
+use std::{
+	collections::HashMap,
+	sync::{Arc, RwLock},
+};
+use subxt::{
+	config::{substrate::BlakeTwo256, DefaultTransactionExtensions},
+	ArcMetadata, Config,
+};
 
-#[derive(Debug, Clone)]
-pub enum StateChainConfig {}
+/// Caches metadata per spec version so that working at a block doesn't re-download it.
+#[derive(Debug, Clone, Default)]
+pub struct StateChainConfig {
+	metadata_for_spec_version: Arc<RwLock<HashMap<u32, ArcMetadata>>>,
+	/// Set for offline decoding, where every block is treated as using the given metadata.
+	fixed_spec_and_transaction_version: Option<(u32, u32)>,
+}
+
+impl StateChainConfig {
+	/// Config for an [subxt::OfflineClient] that decodes everything with the given metadata.
+	pub fn with_fixed_metadata(metadata: ArcMetadata) -> Self {
+		const SPEC_VERSION: u32 = 0;
+		let config = Self {
+			fixed_spec_and_transaction_version: Some((SPEC_VERSION, 0)),
+			..Default::default()
+		};
+		config.set_metadata_for_spec_version(SPEC_VERSION, metadata);
+		config
+	}
+}
 
 impl Config for StateChainConfig {
 	// We cannot use our own Runtime's types for every associated type here, see comments below.
 	type AccountId = subxt::utils::AccountId32; // Requires EncodeAsType trait (which our AccountId doesn't)
 	type Address = subxt::utils::MultiAddress<Self::AccountId, ()>; // Must be convertible from Self::AccountId
-	type Signature = state_chain_runtime::Signature;
-	type Hasher = subxt::config::substrate::BlakeTwo256;
-	type Header = subxt::config::substrate::SubstrateHeader<u32, Self::Hasher>;
+	type Signature = subxt::utils::MultiSignature; // Requires EncodeAsType/DecodeAsType
+	type Hasher = BlakeTwo256;
+	type Header =
+		subxt::config::substrate::SubstrateHeader<<Self::Hasher as subxt::config::Hasher>::Hash>;
 	type AssetId = u32; // Not used - we don't use pallet-assets
-	type ExtrinsicParams = transaction_extensions::AnyOf<
-		Self,
-		(
-			transaction_extensions::VerifySignature<Self>,
-			transaction_extensions::CheckSpecVersion,
-			transaction_extensions::CheckTxVersion,
-			transaction_extensions::CheckNonce,
-			transaction_extensions::CheckGenesis<Self>,
-			transaction_extensions::CheckMortality<Self>,
-			transaction_extensions::ChargeAssetTxPayment<Self>,
-			transaction_extensions::ChargeTransactionPayment,
-			transaction_extensions::CheckMetadataHash,
-		),
-	>;
+	type TransactionExtensions = DefaultTransactionExtensions<Self>;
+
+	fn spec_and_transaction_version_for_block_number(
+		&self,
+		_block_number: u64,
+	) -> Option<(u32, u32)> {
+		self.fixed_spec_and_transaction_version
+	}
+
+	fn metadata_for_spec_version(&self, spec_version: u32) -> Option<ArcMetadata> {
+		self.metadata_for_spec_version.read().ok()?.get(&spec_version).cloned()
+	}
+
+	fn set_metadata_for_spec_version(&self, spec_version: u32, metadata: ArcMetadata) {
+		if let Ok(mut cache) = self.metadata_for_spec_version.write() {
+			cache.insert(spec_version, metadata);
+		}
+	}
 }
 
 // The subxt macro (defined in the build script), generates a strongly typed API from a WASM file.

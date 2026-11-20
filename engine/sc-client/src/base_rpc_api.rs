@@ -37,7 +37,7 @@ use super::RpcResult;
 use futures::{future::BoxFuture, Stream};
 use serde_json::value::RawValue;
 use std::{pin::Pin, sync::Arc};
-use subxt::{backend::rpc::RawRpcSubscription, ext::subxt_rpcs};
+use subxt::rpcs::{self as subxt_rpcs, client::RawRpcSubscription};
 
 use super::SUBSTRATE_BEHAVIOUR;
 
@@ -328,7 +328,7 @@ impl jsonrpsee::core::traits::ToRpcParams for Params {
 
 pub struct SubxtInterface<T>(pub T);
 
-impl<T: BaseRpcApi + Send + Sync + 'static> subxt::backend::rpc::RpcClientT
+impl<T: BaseRpcApi + Send + Sync + 'static> subxt_rpcs::client::RpcClientT
 	for SubxtInterface<Arc<T>>
 {
 	fn request_raw<'a>(
