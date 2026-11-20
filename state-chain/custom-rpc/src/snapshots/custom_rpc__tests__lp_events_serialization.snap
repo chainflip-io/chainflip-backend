@@ -14,5 +14,6 @@ expression: val
   "Event::PriceImpactLimitSet { asset_pair: AssetPair { assets: PoolPairsMap { base: Btc, quote: Usdc } }, limit: Some(50) } => 0x0805030132000000",
   "Event::OrderDeletionFailed { order: Range { base_asset: Btc, quote_asset: Usdc, id: 1234 } } => 0x09010503d204000000000000",
   "Event::PalletConfigUpdated { update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold { asset: Btc, amount: 100000 } } => 0x0a0005a0860100000000000000000000000000",
-  "Event::PalletConfigUpdated { update: PalletConfigUpdate::SetMinimumOrderAmount { asset: Btc, amount: 100000 } } => 0x0a0105a0860100000000000000000000000000"
+  "Event::PalletConfigUpdated { update: PalletConfigUpdate::SetMinimumOrderAmount { asset: Btc, amount: 100000 } } => 0x0a0105a0860100000000000000000000000000",
+  "Event::PalletConfigUpdated { update: PalletConfigUpdate::MaximumPriceImpact { asset: Btc, limit: Some(50) } } => 0x0a02050132000000"
 ]
