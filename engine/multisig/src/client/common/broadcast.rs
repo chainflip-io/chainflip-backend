@@ -22,7 +22,7 @@ use std::{
 
 use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::ceremony_stage::{
 	CeremonyCommon, CeremonyStage, ProcessMessageResult, SizeContextOf, StageResult,
@@ -33,7 +33,9 @@ use crate::{
 };
 use cf_utilities::metrics::CeremonyMetrics;
 
-pub use super::broadcast_verification::verify_broadcasts_non_blocking;
+pub use super::broadcast_verification::{
+	all_broadcasts_have_quorum, verify_broadcasts_non_blocking,
+};
 
 /// Used by individual stages to distinguish between
 /// a public message that should be broadcast to everyone
@@ -61,6 +63,17 @@ pub trait BroadcastStageProcessor<C: CeremonyTrait>: Display {
 
 	/// Init the stage, returning the data to broadcast
 	fn init(&mut self) -> DataToSend<Self::Message>;
+
+	/// Whether the messages collected so far already fix the outcome of `process`, so the stage
+	/// can be finalised without waiting for the remaining parties or the timeout. Called on every
+	/// message received.
+	///
+	/// Finalising early means the remaining parties' messages for this stage arrive after we have
+	/// moved on, and those parties can fall up to two stages behind. The ceremony's
+	/// `should_delay` must allow for that.
+	fn can_finalize_early(&self, _messages: &BTreeMap<AuthorityCount, Self::Message>) -> bool {
+		false
+	}
 
 	/// Determines how the data for this stage (of type `Self::Message`)
 	/// should be processed once it either received it from all other parties
@@ -224,6 +237,12 @@ where
 				entry.insert(m);
 
 				if self.messages.len() == self.common.all_idxs.len() {
+					ProcessMessageResult::Ready
+				} else if self.processor.can_finalize_early(&self.messages) {
+					debug!(
+						"Finalising stage {self} early with {} messages missing: they can no longer change its outcome",
+						self.common.all_idxs.len() - self.messages.len(),
+					);
 					ProcessMessageResult::Ready
 				} else {
 					ProcessMessageResult::NotReady

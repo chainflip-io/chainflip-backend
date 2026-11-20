@@ -368,6 +368,97 @@ async fn should_sign_with_different_keys() {
 		.is_ok());
 }
 
+/// A verification stage is finalised as soon as every value has a quorum, without waiting for the
+/// remaining echoes or the timeout. No test here forces a timeout on the nodes that move on.
+mod early_finalisation {
+
+	use super::*;
+	use std::collections::HashMap;
+
+	type SigningData = crate::client::signing::signing_data::SigningData<Point>;
+
+	#[tokio::test]
+	async fn commitments_stage() {
+		let (mut ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+		let [slow_node_id] = ceremony.select_account_ids();
+
+		let messages = ceremony.request().await;
+		let mut messages = ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
+
+		// Everyone moves on to stage 3 without the slow node's echo...
+		let slow_echoes = messages.remove(&slow_node_id).unwrap();
+		ceremony.distribute_messages(messages).await;
+		let messages = ceremony.gather_outgoing_messages::<LocalSig3, SigningData>().await;
+
+		// ...which, arriving afterwards, is ignored.
+		ceremony.distribute_messages(HashMap::from([(slow_node_id, slow_echoes)])).await;
+
+		let messages = ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
+		ceremony.distribute_messages(messages).await;
+		ceremony.complete();
+	}
+
+	#[tokio::test]
+	async fn local_signatures_stage() {
+		let (mut ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+		let [slow_node_id] = ceremony.select_account_ids();
+
+		let messages = ceremony.request().await;
+		let mut messages = run_stages!(ceremony, messages, VerifyComm2, LocalSig3, VerifyLocalSig4);
+
+		// The ceremony completes without the slow node's echo...
+		let slow_echoes = messages.remove(&slow_node_id).unwrap();
+		ceremony.distribute_messages(messages).await;
+		ceremony.complete();
+
+		// ...which, arriving afterwards, is ignored.
+		ceremony.distribute_messages(HashMap::from([(slow_node_id, slow_echoes)])).await;
+	}
+
+	/// The straggler scenario: one node misses a commitment and can only leave stage 1 on its
+	/// timeout. The others finalise stage 2 without its echo and wait for it in stage 3, while it
+	/// buffers their messages for stages 2 and 3. Once it times out, it catches up straight to
+	/// stage 4 and the ceremony completes after a single timeout.
+	#[tokio::test]
+	async fn straggler_catches_up_after_one_timeout() {
+		let (mut ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+		let [straggler_id, unheard_sender_id] = ceremony.select_account_ids();
+		let others = |id: &AccountId| *id != straggler_id;
+
+		let mut messages = ceremony.request().await;
+		messages.get_mut(&unheard_sender_id).unwrap().remove(&straggler_id);
+		ceremony.distribute_messages(messages).await;
+
+		// Stage 2, which the others finalise without the straggler's echo.
+		let messages =
+			ceremony.gather_outgoing_messages_from::<VerifyComm2, SigningData>(others).await;
+		ceremony.distribute_messages(messages).await;
+
+		// Stage 3, which the straggler, still in stage 1, must hold on to.
+		let messages =
+			ceremony.gather_outgoing_messages_from::<LocalSig3, SigningData>(others).await;
+		ceremony.distribute_messages(messages).await;
+
+		// The straggler's only timeout: it then runs through stages 2 and 3 on what it buffered.
+		ceremony.get_mut_node(&straggler_id).force_stage_timeout().await;
+
+		let is_straggler = |id: &AccountId| *id == straggler_id;
+		let late_echo = ceremony
+			.gather_outgoing_messages_from::<VerifyComm2, SigningData>(is_straggler)
+			.await;
+		ceremony.distribute_messages(late_echo).await;
+		let local_sig = ceremony
+			.gather_outgoing_messages_from::<LocalSig3, SigningData>(is_straggler)
+			.await;
+		ceremony.distribute_messages(local_sig).await;
+
+		// Everyone, the straggler included, is now in stage 4.
+		let messages = ceremony.gather_outgoing_messages::<VerifyLocalSig4, SigningData>().await;
+		ceremony.distribute_messages(messages).await;
+		ceremony.complete();
+	}
+}
+
 mod timeout {
 
 	use super::*;
@@ -453,48 +544,6 @@ mod timeout {
 	mod during_broadcast_verification_stage {
 
 		use super::*;
-
-		mod should_recover_if_agree_on_values {
-
-			use super::*;
-
-			// The following tests cover:
-			// If timeout during a broadcast verification stage, and we have enough data, we can
-			// recover
-
-			#[tokio::test]
-			async fn commitments_stage() {
-				let (mut ceremony, _) = new_signing_ceremony::<EthSigning>().await;
-
-				let [bad_node_id] = &ceremony.select_account_ids();
-
-				let messages = ceremony.request().await;
-				let messages = ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
-
-				let messages = ceremony
-					.run_stage_with_non_sender::<LocalSig3, _, _>(messages, bad_node_id)
-					.await;
-
-				let messages = ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
-				ceremony.distribute_messages(messages).await;
-				ceremony.complete();
-			}
-
-			#[tokio::test]
-			async fn local_signatures_stage() {
-				let (mut ceremony, _) = new_signing_ceremony::<EthSigning>().await;
-
-				let [bad_node_id] = &ceremony.select_account_ids();
-
-				let messages = ceremony.request().await;
-				let messages =
-					run_stages!(ceremony, messages, VerifyComm2, LocalSig3, VerifyLocalSig4);
-
-				ceremony.distribute_messages_with_non_sender(messages, bad_node_id).await;
-
-				ceremony.complete();
-			}
-		}
 
 		mod should_report_if_insufficient_messages {
 

@@ -36,7 +36,10 @@ pub use signing_detail::generate_schnorr_response;
 pub use signing_stages::AwaitCommitments1;
 
 #[cfg(test)]
-pub use signing_data::{gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage4};
+pub use signing_data::{
+	gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage3,
+	gen_signing_data_stage4,
+};
 
 pub use signing_detail::get_lagrange_coeff;
 
