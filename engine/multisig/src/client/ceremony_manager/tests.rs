@@ -126,6 +126,10 @@ fn send_signing_request<C: CryptoScheme>(
 	result_receiver
 }
 
+/// Buffer size for the incoming P2P channel in tests. Matches the production
+/// `FORWARDER_BUFFER_SIZE` in `multisig_adapter.rs`.
+const TEST_INCOMING_BUFFER_SIZE: usize = 4;
+
 fn spawn_ceremony_manager<Chain: ChainSigning>(
 	our_account_id: AccountId,
 	latest_ceremony_id: CeremonyId,
@@ -135,7 +139,7 @@ fn spawn_ceremony_manager<Chain: ChainSigning>(
 	mpsc::UnboundedReceiver<OutgoingMultisigStageMessages>,
 ) {
 	let (ceremony_request_sender, ceremony_request_receiver) = mpsc::unbounded_channel();
-	let (incoming_p2p_sender, incoming_p2p_receiver) = mpsc::channel(100);
+	let (incoming_p2p_sender, incoming_p2p_receiver) = mpsc::channel(TEST_INCOMING_BUFFER_SIZE);
 	let (outgoing_p2p_sender, outgoing_p2p_receiver) = mpsc::unbounded_channel();
 	let ceremony_manager =
 		CeremonyManager::<Chain>::new(our_account_id, outgoing_p2p_sender, latest_ceremony_id);
@@ -346,7 +350,8 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 			let our_account_id = ACCOUNT_IDS[0].clone();
 
 			// Create a ceremony manager but don't run it yet
-			let (_incoming_p2p_sender, incoming_p2p_receiver) = tokio::sync::mpsc::channel(100);
+			let (_incoming_p2p_sender, incoming_p2p_receiver) =
+				tokio::sync::mpsc::channel(TEST_INCOMING_BUFFER_SIZE);
 			let (ceremony_request_sender, ceremony_request_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 			let (outgoing_p2p_sender, _outgoing_p2p_receiver) =

@@ -14,14 +14,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{monitor::MonitorEvent, ConnectionState, P2PContext, PeerInfo, PeerUpdate};
-use crate::{
-	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
-	fair_channel::{fair_channel, FairReceiver},
-	OutgoingMultisigStageMessages, P2PKey,
+use super::{
+	monitor::MonitorEvent, ConnectionState, P2PContext, PeerInfo, PeerUpdate, ZmqPeerInfo,
+	ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD,
 };
-use cf_primitives::AccountId;
-use cf_utilities::Port;
+use crate::{message::AccountId, OutgoingMessage, P2PKey};
+use cf_utilities::{
+	testing::{expect_recv_with_timeout, recv_with_custom_timeout},
+	Port,
+};
 use sp_core::ed25519::Public;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
@@ -42,17 +43,12 @@ const MAX_CONNECTION_DELAY: Duration = Duration::from_millis(1000);
 
 struct Node {
 	account_id: AccountId,
-	msg_sender: UnboundedSender<OutgoingMultisigStageMessages>,
+	msg_sender: UnboundedSender<OutgoingMessage>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-	msg_receiver: FairReceiver<AccountId, Vec<u8>>,
-}
-
-/// Receive the next message from a node's incoming channel, or `None` on timeout.
-async fn recv_from_node(
-	receiver: &mut FairReceiver<AccountId, Vec<u8>>,
-	timeout: Duration,
-) -> Option<(AccountId, Vec<u8>)> {
-	tokio::time::timeout(timeout, receiver.recv()).await.ok().flatten()
+	msg_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+	// Keeps the transport running for the lifetime of the node; dropping it shuts the
+	// transport down.
+	_shutdown_sender: tokio::sync::oneshot::Sender<()>,
 }
 
 fn spawn_node(
@@ -64,12 +60,14 @@ fn spawn_node(
 	let account_id = AccountId::new([idx as u8 + 1; 32]);
 
 	let (incoming_message_sender, incoming_message_receiver) =
-		fair_channel(super::INCOMING_MESSAGE_PER_PEER_LIMIT);
+		tokio::sync::mpsc::unbounded_channel();
 
 	let (outgoing_message_sender, outgoing_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+	let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel();
 
 	tokio::spawn({
 		super::start(
@@ -80,6 +78,7 @@ fn spawn_node(
 			incoming_message_sender,
 			outgoing_message_receiver,
 			peer_update_receiver,
+			shutdown_receiver,
 		)
 		.instrument(info_span!("node", idx = idx))
 	});
@@ -89,6 +88,7 @@ fn spawn_node(
 		msg_sender: outgoing_message_sender,
 		peer_update_sender,
 		msg_receiver: incoming_message_receiver,
+		_shutdown_sender: shutdown_sender,
 	}
 }
 
@@ -148,26 +148,22 @@ async fn connect_two_nodes() {
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 	node1
 		.msg_sender
-		.send(OutgoingMultisigStageMessages::Private(vec![(
-			pi2.account_id.clone(),
-			b"test".to_vec(),
-		)]))
+		.send(OutgoingMessage::Private {
+			messages: vec![(pi2.account_id.clone(), b"test".to_vec())],
+		})
 		.unwrap();
 
-	recv_from_node(&mut node2.msg_receiver, MAX_CONNECTION_DELAY)
-		.await
-		.expect("timed out waiting for message");
+	let _ = expect_recv_with_timeout(&mut node2.msg_receiver).await;
 }
 
 async fn send_and_receive_message(from: &Node, to: &mut Node) -> Option<(AccountId, Vec<u8>)> {
 	from.msg_sender
-		.send(OutgoingMultisigStageMessages::Private(vec![(
-			to.account_id.clone(),
-			b"test".to_vec(),
-		)]))
+		.send(OutgoingMessage::Private {
+			messages: vec![(to.account_id.clone(), b"test".to_vec())],
+		})
 		.unwrap();
 
-	recv_from_node(&mut to.msg_receiver, MAX_CONNECTION_DELAY).await
+	recv_with_custom_timeout(&mut to.msg_receiver, MAX_CONNECTION_DELAY).await
 }
 
 #[tokio::test]
@@ -244,7 +240,7 @@ fn create_context(
 	our_account_id: AccountId,
 ) -> (P2PContext, UnboundedReceiver<MonitorEvent>, UnboundedReceiver<AccountId>) {
 	let (incoming_message_sender, _incoming_message_receiver) =
-		fair_channel(super::INCOMING_MESSAGE_PER_PEER_LIMIT);
+		tokio::sync::mpsc::unbounded_channel();
 
 	P2PContext::spawn(
 		P2PKey::new(create_keypair().as_bytes()).encryption_key,
@@ -265,7 +261,9 @@ fn connection_state<'a>(
 #[tokio::test]
 async fn reconnect_timer_keeps_reconnected_peer() {
 	let (mut context, _monitor_events, _reconnects) = create_context(AccountId::new([1; 32]));
-	let peer = create_node_info(AccountId::new([2; 32]), &create_keypair(), 8096);
+	let peer =
+		ZmqPeerInfo::try_from(create_node_info(AccountId::new([2; 32]), &create_keypair(), 8096))
+			.unwrap();
 	let peer_id = peer.account_id.clone();
 
 	context.add_or_update_peer(peer.clone());
@@ -289,7 +287,9 @@ async fn reconnect_timer_keeps_reconnected_peer() {
 #[tokio::test(start_paused = true)]
 async fn reconnect_timer_keeps_stale_peer() {
 	let (mut context, _monitor_events, _reconnects) = create_context(AccountId::new([1; 32]));
-	let peer = create_node_info(AccountId::new([2; 32]), &create_keypair(), 8097);
+	let peer =
+		ZmqPeerInfo::try_from(create_node_info(AccountId::new([2; 32]), &create_keypair(), 8097))
+			.unwrap();
 	let peer_id = peer.account_id.clone();
 
 	context.add_or_update_peer(peer);

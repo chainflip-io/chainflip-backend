@@ -22,7 +22,7 @@ use blake2::{
 };
 use tracing::{debug, warn};
 
-use super::{PeerInfo, X25519KeyPair};
+use super::{X25519KeyPair, ZmqPeerInfo};
 use crate::XPublicKey;
 
 /// Wait this long until attempting to reconnect
@@ -36,10 +36,9 @@ pub const RECONNECT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 /// theoretical maximum needed for multisig; 2MB is a conservative estimate.)
 pub(crate) const MAX_MESSAGE_SIZE: i64 = 2 * 1024 * 1024;
 
-/// Receive high-water mark for the incoming (ROUTER) socket. ZMQ buffers at most
-/// this many messages *per connected peer* before dropping further incoming
-/// messages from that peer. This bounds the memory ZMQ itself holds while our
-/// receive thread is busy (e.g. blocked on a full downstream queue).
+/// How many messages the ROUTER socket will buffer per peer at the ZMQ layer before
+/// dropping them. This bounds the kernel-side memory used by a flooding peer before
+/// messages even reach our listening thread.
 pub(crate) const INCOMING_MESSAGES_BUFFER_SIZE: i32 = 250;
 
 /// How often should ZMQ send heartbeat messages in order to detect
@@ -128,7 +127,7 @@ impl OutgoingSocket {
 		self.socket.monitor(monitor_endpoint, flags as i32).unwrap();
 	}
 
-	pub fn connect(self, peer: PeerInfo) -> ConnectedOutgoingSocket {
+	pub fn connect(self, peer: ZmqPeerInfo) -> ConnectedOutgoingSocket {
 		let socket = self.socket;
 		socket.set_curve_serverkey(peer.pubkey.as_bytes()).unwrap();
 
@@ -143,7 +142,7 @@ impl OutgoingSocket {
 
 pub struct ConnectedOutgoingSocket {
 	socket: zmq::Socket,
-	peer: PeerInfo,
+	peer: ZmqPeerInfo,
 	// NOTE: ZMQ sockets can technically connect to more than
 	// one endpoints, so we need to provide a specific endpoint
 	// when disconnecting (even though we only connect to one

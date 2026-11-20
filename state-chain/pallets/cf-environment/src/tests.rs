@@ -22,7 +22,7 @@ use crate::{
 		is_valid_signature, ChainflipExtrinsic, EthEncodingType, SolEncodingType,
 	},
 	BatchedCalls, BitcoinAvailableUtxos, BitcoinDiscardedUtxos, ConsolidationParameters, Event,
-	EvmAddress, RuntimeSafeMode, SafeModeUpdate, SignatureData, SolSignature,
+	EvmAddress, P2pTransportValue, RuntimeSafeMode, SafeModeUpdate, SignatureData, SolSignature,
 	SolanaAvailableNonceAccounts, SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
 use cf_chains::{
@@ -36,7 +36,7 @@ use cf_chains::{
 		SolAddress, SolHash,
 	},
 };
-use cf_primitives::ForeignChain;
+use cf_primitives::{ForeignChain, P2pTransport};
 use cf_traits::{elections::ElectionInstance, BalanceApi, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{assert_noop, assert_ok, sp_runtime::BoundedVec, traits::OriginTrait};
 use std::str::FromStr;
@@ -210,6 +210,27 @@ fn utxos_selected_for_consolidation_are_kept_if_change_cannot_cover_the_fee() {
 		let mut remaining = BitcoinAvailableUtxos::<Test>::get();
 		remaining.sort_by_key(|utxo| utxo.deposit_address.pubkey_x);
 		assert_eq!(remaining, utxos);
+	});
+}
+
+#[test]
+fn update_p2p_transport() {
+	new_test_ext().execute_with(|| {
+		// Defaults to ZMQ.
+		assert_eq!(P2pTransportValue::<Test>::get(), P2pTransport::Zmq);
+
+		assert_ok!(Environment::update_p2p_transport(OriginTrait::root(), P2pTransport::Quic));
+		assert_eq!(P2pTransportValue::<Test>::get(), P2pTransport::Quic);
+		System::assert_last_event(RuntimeEvent::Environment(Event::P2pTransportUpdated {
+			transport: P2pTransport::Quic,
+		}));
+
+		// Can be reverted.
+		assert_ok!(Environment::update_p2p_transport(OriginTrait::root(), P2pTransport::Zmq));
+		assert_eq!(P2pTransportValue::<Test>::get(), P2pTransport::Zmq);
+		System::assert_last_event(RuntimeEvent::Environment(Event::P2pTransportUpdated {
+			transport: P2pTransport::Zmq,
+		}));
 	});
 }
 

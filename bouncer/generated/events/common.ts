@@ -309,6 +309,8 @@ export const palletCfEnvironmentSafeModeUpdate = z.discriminatedUnion('__kind', 
   }),
 ]);
 
+export const cfPrimitivesP2pTransport = simpleEnum(['Zmq', 'Quic']);
+
 export const cfChainsBtcUtxoSelectionConsolidationParameters = z.object({
   consolidationThreshold: z.number(),
   consolidationSize: z.number(),

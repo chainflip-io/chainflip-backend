@@ -24,14 +24,15 @@
 //! The workaround is to "subscribe" to socket events and reconnect
 //! manually on receiving `HANDSHAKE_FAILED_AUTH` error.
 
-use cf_primitives::AccountId;
 use serde::{Deserialize, Serialize};
+
+use crate::message::AccountId;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tracing::{info, info_span, trace, warn};
 
 use super::socket::DO_NOT_LINGER;
 
-use super::{socket::OutgoingSocket, PeerInfo};
+use super::{socket::OutgoingSocket, ZmqPeerInfo};
 
 use cf_utilities::metrics::P2P_MONITOR_EVENT;
 /// Describes peer connection to start monitoring
@@ -61,7 +62,7 @@ pub enum MonitorEvent {
 }
 
 impl MonitorHandle {
-	pub fn start_monitoring_for(&mut self, socket_to_monitor: &OutgoingSocket, peer: &PeerInfo) {
+	pub fn start_monitoring_for(&mut self, socket_to_monitor: &OutgoingSocket, peer: &ZmqPeerInfo) {
 		use rand::RngCore;
 
 		// Generate a random id to prevent accidentally attempting
@@ -221,7 +222,9 @@ pub fn start_monitoring_thread(
 							zmq::SocketEvent::CONNECT_RETRIED => {
 								P2P_MONITOR_EVENT.inc(&["connect_retried"]);
 								let interval = u32::from_le_bytes(data);
-								trace!("Socket event: retried connecting to {account_id} after {interval}ms");
+								trace!(
+									"Socket event: retried connecting to {account_id} after {interval}ms"
+								);
 							},
 							zmq::SocketEvent::CONNECTED => {
 								trace!("Socket event: connected to {account_id}");

@@ -33,7 +33,6 @@ use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
 
 use auth::Authenticator;
-use cf_primitives::AccountId;
 use cf_utilities::{
 	make_periodic_tick,
 	metrics::{
@@ -42,21 +41,27 @@ use cf_utilities::{
 	Port,
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-
-use crate::fair_channel::{fair_channel, FairReceiver, FairSender};
+use tokio::sync::{
+	mpsc::{UnboundedReceiver, UnboundedSender},
+	oneshot,
+};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
-use x25519_dalek::StaticSecret;
 
-use crate::pk_to_string;
+use crate::{
+	ed25519_public_key_to_x25519_public_key,
+	fair_channel::{fair_channel, FairReceiver},
+	message::{AccountId, OutgoingMessage},
+	pk_to_string, P2PKey, X25519KeyPair, XPublicKey, INCOMING_MESSAGE_PER_PEER_LIMIT,
+};
+
+// Peer-identity types are shared across transports; ZMQ additionally derives the
+// x25519 (CURVE) key into its internal `ZmqPeerInfo`.
+pub use crate::peer::{PeerInfo, PeerUpdate};
 use monitor::MonitorEvent;
-
-use crate::{EdPublicKey, OutgoingMultisigStageMessages, P2PKey, XPublicKey};
 
 use socket::{
 	ConnectedOutgoingSocket, OutgoingSocket, CONNECTION_HEARTBEAT_INTERVAL,
-	INCOMING_CONNECTION_HEARTBEAT_TIMEOUT, INCOMING_MESSAGES_BUFFER_SIZE, MAX_MESSAGE_SIZE,
-	RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX,
+	INCOMING_CONNECTION_HEARTBEAT_TIMEOUT, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX,
 };
 
 /// Spawn a named OS thread.
@@ -82,92 +87,54 @@ pub const MAX_INACTIVITY_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 /// How often to check for "stale" connections
 pub const ACTIVITY_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Per-peer in-flight message limit for the incoming-path channels between the
-/// listening thread, the control loop and the muxer. These stages have fast
-/// consumers and stay near-empty in normal operation (~1 message per peer), so
-/// this allowance comfortably absorbs bursts from concurrent ceremonies while
-/// ensuring a single flooding peer can only ever fill its own slots and never
-/// crowd out honest peers. Messages over the limit are dropped rather than
-/// blocking.
-pub const INCOMING_MESSAGE_PER_PEER_LIMIT: usize = 100;
-
-#[derive(Clone)]
-pub struct X25519KeyPair {
-	pub public_key: XPublicKey,
-	pub secret_key: StaticSecret,
-}
-
-#[derive(Debug)]
-pub enum PeerUpdate {
-	Registered(PeerInfo),
-	Deregistered(AccountId, EdPublicKey),
-}
-
+/// ZMQ's internal peer representation. In addition to the shared [`PeerInfo`] fields it
+/// carries the x25519 (CURVE) public key derived from the peer's Ed25519 key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PeerInfo {
+pub struct ZmqPeerInfo {
 	pub account_id: AccountId,
+	pub ed_pubkey: [u8; 32],
 	pub pubkey: XPublicKey,
 	pub ip: Ipv6Addr,
 	pub port: Port,
 }
 
-impl PeerInfo {
-	pub fn new(
-		account_id: AccountId,
-		ed_public_key: EdPublicKey,
-		ip: Ipv6Addr,
-		port: Port,
-	) -> Self {
-		let ed_public_key = ed25519_dalek::VerifyingKey::from_bytes(&ed_public_key.0).unwrap();
-		let x_public_key = ed25519_public_key_to_x25519_public_key(&ed_public_key);
-
-		PeerInfo { account_id, pubkey: x_public_key, ip, port }
-	}
-
+impl ZmqPeerInfo {
 	pub fn zmq_endpoint(&self) -> String {
 		format!("tcp://[{}]:{}", self.ip, self.port)
 	}
 }
 
-impl std::fmt::Display for PeerInfo {
+impl TryFrom<PeerInfo> for ZmqPeerInfo {
+	type Error = anyhow::Error;
+
+	/// Derives the x25519 CURVE key from the peer's Ed25519 key, failing (rather than
+	/// panicking) if the registered key is not a valid Ed25519 point.
+	fn try_from(peer: PeerInfo) -> Result<Self, Self::Error> {
+		let ed_public_key = ed25519_dalek::VerifyingKey::from_bytes(&peer.ed_pubkey)
+			.map_err(|e| anyhow::anyhow!("invalid Ed25519 key for {}: {e}", peer.account_id))?;
+		let pubkey = ed25519_public_key_to_x25519_public_key(&ed_public_key);
+
+		Ok(ZmqPeerInfo {
+			account_id: peer.account_id,
+			ed_pubkey: peer.ed_pubkey,
+			pubkey,
+			ip: peer.ip,
+			port: peer.port,
+		})
+	}
+}
+
+impl std::fmt::Display for ZmqPeerInfo {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(
 			f,
-			"PeerInfo {{ account_id: {}, pubkey: {}, ip: {}, port: {} }}",
+			"ZmqPeerInfo {{ account_id: {}, pubkey: {}, ip: {}, port: {} }}",
 			self.account_id,
 			pk_to_string(&self.pubkey),
 			self.ip,
 			self.port,
 		)
 	}
-}
-
-pub fn ed25519_secret_key_to_x25519_secret_key(
-	ed25519_sk: &ed25519_dalek::SecretKey,
-) -> x25519_dalek::StaticSecret {
-	use sha2::{Digest, Sha512};
-	let mut h: Sha512 = Sha512::new();
-	let mut hash: [u8; 64] = [0u8; 64];
-	let mut digest: [u8; 32] = [0u8; 32];
-
-	h.update(ed25519_sk);
-	hash.copy_from_slice(h.finalize().as_slice());
-
-	digest.copy_from_slice(&hash[..32]);
-	x25519_dalek::StaticSecret::from(digest)
-}
-
-pub fn ed25519_public_key_to_x25519_public_key(
-	ed25519_pk: &ed25519_dalek::VerifyingKey,
-) -> x25519_dalek::PublicKey {
-	use curve25519_dalek::edwards::CompressedEdwardsY;
-	let ed_point = CompressedEdwardsY::from_slice(&ed25519_pk.to_bytes())
-		.expect("VerifyingKey::to_bytes returns 32 bytes.")
-		.decompress()
-		.unwrap();
-	let x_point = ed_point.to_montgomery();
-
-	x25519_dalek::PublicKey::from(x_point.to_bytes())
 }
 
 struct ReconnectContext {
@@ -243,7 +210,7 @@ struct ConnectionStateInfo {
 	// Last time we received an instruction to send a message
 	// to this node
 	last_activity: Cell<tokio::time::Instant>,
-	info: PeerInfo,
+	info: ZmqPeerInfo,
 }
 
 struct ActiveConnectionWrapper {
@@ -291,7 +258,7 @@ struct P2PContext {
 	/// NOTE: we don't use BTreeMap here because XPublicKey doesn't implement Ord.
 	x25519_to_account_id: HashMap<XPublicKey, AccountId>,
 	/// Channel through which we send incoming messages to the multisig
-	incoming_message_sender: FairSender<AccountId, Vec<u8>>,
+	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
 	reconnect_context: ReconnectContext,
 	/// This is how we communicate with the "monitor" thread
 	monitor_handle: monitor::MonitorHandle,
@@ -318,9 +285,10 @@ pub async fn start(
 	port: Port,
 	current_peers: Vec<PeerInfo>,
 	our_account_id: AccountId,
-	incoming_message_sender: FairSender<AccountId, Vec<u8>>,
-	outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
+	shutdown: oneshot::Receiver<()>,
 ) -> anyhow::Result<()> {
 	debug!("Our derived x25519 pubkey: {}", pk_to_string(&p2p_key.encryption_key.public_key));
 
@@ -329,7 +297,10 @@ pub async fn start(
 
 	debug!("Registering peer info for {} peers", current_peers.len());
 	for peer_info in current_peers {
-		context.add_or_update_peer(peer_info);
+		match ZmqPeerInfo::try_from(peer_info) {
+			Ok(peer_info) => context.add_or_update_peer(peer_info),
+			Err(e) => warn!("Ignoring peer registration with invalid key: {e}"),
+		}
 	}
 
 	let incoming_message_receiver_ed25519 = context.start_listening_thread(port)?;
@@ -341,10 +312,13 @@ pub async fn start(
 			peer_update_receiver,
 			monitor_event_receiver,
 			reconnect_receiver,
+			shutdown,
 		)
 		.instrument(info_span!("p2p"))
 		.await;
 
+	// `context` is dropped here, whose `Drop` stops the native listening thread and releases
+	// the ZMQ socket, so a subsequently-started transport can take over.
 	Ok(())
 }
 
@@ -358,7 +332,7 @@ impl P2PContext {
 	fn spawn(
 		key: X25519KeyPair,
 		our_account_id: AccountId,
-		incoming_message_sender: FairSender<AccountId, Vec<u8>>,
+		incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
 	) -> (Self, UnboundedReceiver<MonitorEvent>, UnboundedReceiver<AccountId>) {
 		let zmq_context = zmq::Context::new();
 
@@ -389,16 +363,21 @@ impl P2PContext {
 
 	async fn control_loop(
 		mut self,
-		mut outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+		mut outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 		mut incoming_message_receiver: FairReceiver<XPublicKey, Vec<u8>>,
 		mut peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 		mut monitor_event_receiver: UnboundedReceiver<MonitorEvent>,
 		mut reconnect_receiver: UnboundedReceiver<AccountId>,
+		mut shutdown: oneshot::Receiver<()>,
 	) {
 		let mut check_activity_interval = make_periodic_tick(ACTIVITY_CHECK_INTERVAL, false);
 
 		loop {
 			tokio::select! {
+				_ = &mut shutdown => {
+					info!("Shutting down ZMQ transport");
+					break
+				}
 				Some(messages) = outgoing_message_receiver.recv() => {
 					self.send_messages(messages);
 				}
@@ -423,15 +402,15 @@ impl P2PContext {
 		}
 	}
 
-	fn send_messages(&mut self, messages: OutgoingMultisigStageMessages) {
+	fn send_messages(&mut self, messages: OutgoingMessage) {
 		match messages {
-			OutgoingMultisigStageMessages::Broadcast(account_ids, payload) => {
-				trace!("Broadcasting a message to all {} peers", account_ids.len());
-				for acc_id in account_ids {
+			OutgoingMessage::Broadcast { recipients, payload } => {
+				trace!("Broadcasting a message to all {} peers", recipients.len());
+				for acc_id in recipients {
 					self.send_message(acc_id, payload.clone());
 				}
 			},
-			OutgoingMultisigStageMessages::Private(messages) => {
+			OutgoingMessage::Private { messages } => {
 				trace!("Sending private messages to all {} peers", messages.len());
 				for (acc_id, payload) in messages {
 					self.send_message(acc_id, payload);
@@ -473,7 +452,10 @@ impl P2PContext {
 
 	fn on_peer_update(&mut self, update: PeerUpdate) {
 		match update {
-			PeerUpdate::Registered(peer_info) => self.add_or_update_peer(peer_info),
+			PeerUpdate::Registered(peer_info) => match ZmqPeerInfo::try_from(peer_info) {
+				Ok(peer_info) => self.add_or_update_peer(peer_info),
+				Err(e) => warn!("Ignoring peer registration with invalid key: {e}"),
+			},
 			PeerUpdate::Deregistered(account_id, _pubkey) =>
 				self.handle_peer_deregistration(account_id),
 		}
@@ -482,12 +464,7 @@ impl P2PContext {
 	fn forward_incoming_message(&mut self, pubkey: XPublicKey, payload: Vec<u8>) {
 		if let Some(acc_id) = self.x25519_to_account_id.get(&pubkey) {
 			trace!("Received a message from {acc_id}");
-			// Drop rather than block the control loop. A peer over its in-flight
-			// limit can only crowd out its own messages.
-			self.incoming_message_sender.try_send_or_drop(acc_id.clone(), payload, || {
-				P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
-				warn!("Dropping incoming p2p message from {acc_id}: over its in-flight limit");
-			});
+			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
 			P2P_BAD_MSG.inc(&["unknown_x25519_key"]);
 			warn!("Received a message for an unknown x25519 key: {}", pk_to_string(&pubkey));
@@ -589,7 +566,7 @@ impl P2PContext {
 		}
 	}
 
-	fn connect_to_peer(&mut self, peer: PeerInfo, previous_activity: tokio::time::Instant) {
+	fn connect_to_peer(&mut self, peer: ZmqPeerInfo, previous_activity: tokio::time::Instant) {
 		let account_id = peer.account_id.clone();
 
 		let socket = OutgoingSocket::new(&self.zmq_context, &self.key, &peer.pubkey);
@@ -616,7 +593,7 @@ impl P2PContext {
 		}
 	}
 
-	fn add_or_update_peer(&mut self, peer: PeerInfo) {
+	fn add_or_update_peer(&mut self, peer: ZmqPeerInfo) {
 		if peer.account_id == self.our_account_id {
 			// nothing to do
 			return
@@ -693,12 +670,8 @@ impl P2PContext {
 		socket.set_curve_server(true).unwrap();
 		socket.set_curve_secretkey(&self.key.secret_key.to_bytes()).unwrap();
 		socket.set_handshake_ivl(HANDSHAKE_TIMEOUT.as_millis() as i32).unwrap();
-
-		// Disconnect any peer that sends a message larger than this. This mirrors the
-		// cap applied to outgoing DEALER sockets and bounds a single inbound allocation.
-		socket.set_maxmsgsize(MAX_MESSAGE_SIZE).unwrap();
-		// Bound how many messages ZMQ buffers per peer before dropping further input.
-		socket.set_rcvhwm(INCOMING_MESSAGES_BUFFER_SIZE).unwrap();
+		socket.set_maxmsgsize(socket::MAX_MESSAGE_SIZE).unwrap();
+		socket.set_rcvhwm(socket::INCOMING_MESSAGES_BUFFER_SIZE).unwrap();
 
 		// Listen on all interfaces
 		let endpoint = format!("tcp://0.0.0.0:{port}");
@@ -716,59 +689,55 @@ impl P2PContext {
 		info!("Started listening for incoming p2p connections on: {endpoint}");
 
 		let (incoming_message_sender, incoming_message_receiver) =
-			fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
+			fair_channel::<XPublicKey, Vec<u8>>(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let stop_thread = self.stop_thread.clone();
 
 		// This OS thread is for incoming messages
 		// TODO: combine this with the authentication thread?
-		spawn_named("p2p-incoming", move || loop {
-			if stop_thread.load(Ordering::Relaxed) {
-				break
-			}
+		spawn_named("p2p-incoming", move || {
+			loop {
+				if stop_thread.load(Ordering::Relaxed) {
+					break
+				}
 
-			let mut parts = match receive_multipart(&socket) {
-				Ok(parts) => parts,
-				Err(zmq::Error::EAGAIN) => {
-					std::thread::sleep(Duration::from_millis(100));
-					continue
-				},
-				Err(e) => panic!("Failed to receive multipart: {e}"),
-			};
+				let mut parts = match receive_multipart(&socket) {
+					Ok(parts) => parts,
+					Err(zmq::Error::EAGAIN) => {
+						std::thread::sleep(Duration::from_millis(100));
+						continue
+					},
+					Err(e) => panic!("Failed to receive multipart: {e}"),
+				};
 
-			P2P_MSG_RECEIVED.inc();
-			// We require that all messages exchanged between
-			// peers only consist of one part. ZMQ dealer
-			// sockets automatically prepend a sender id
-			// (which we ignore) to every message, giving
-			// us a 2 part message.
-			if parts.len() == 2 {
-				let msg = &mut parts[1];
+				P2P_MSG_RECEIVED.inc();
+				// We require that all messages exchanged between
+				// peers only consist of one part. ZMQ dealer
+				// sockets automatically prepend a sender id
+				// (which we ignore) to every message, giving
+				// us a 2 part message.
+				if parts.len() == 2 {
+					let msg = &mut parts[1];
 
-				// This value is ZMQ convention for the public
-				// key of message's origin
-				const PUBLIC_KEY_TAG: &str = "User-Id";
-				let pubkey = msg.gets(PUBLIC_KEY_TAG).expect("pubkey is always present");
+					// This value is ZMQ convention for the public
+					// key of message's origin
+					const PUBLIC_KEY_TAG: &str = "User-Id";
+					let pubkey = msg.gets(PUBLIC_KEY_TAG).expect("pubkey is always present");
 
-				let pubkey: [u8; 32] = hex::decode(pubkey).unwrap().try_into().unwrap();
-				let pubkey = XPublicKey::from(pubkey);
+					let pubkey: [u8; 32] = hex::decode(pubkey).unwrap().try_into().unwrap();
+					let pubkey = XPublicKey::from(pubkey);
 
-				// Drop the message rather than block the listening thread. A peer
-				// over its in-flight limit can only crowd out its own messages; a
-				// `Closed` error just means we are shutting down.
-				incoming_message_sender.try_send_or_drop(pubkey, msg.to_vec(), || {
-					P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
+					incoming_message_sender.try_send_or_drop(pubkey, msg.to_vec(), || {
+						P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
+						warn!("Dropping incoming message: per-peer limit reached");
+					});
+				} else {
+					P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
 					warn!(
-						"Dropping incoming p2p message: sender {} is over its in-flight limit",
-						pk_to_string(&pubkey),
-					);
-				});
-			} else {
-				P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
-				warn!(
-					"Ignoring a multipart message with unexpected number of parts ({})",
-					parts.len()
-				)
+						"Ignoring a multipart message with unexpected number of parts ({})",
+						parts.len()
+					)
+				}
 			}
 		});
 

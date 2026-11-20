@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod multisig_adapter;
 mod peer_info_submitter;
+#[cfg(test)]
+mod tests;
 
 use std::{
 	net::{IpAddr, Ipv4Addr},
@@ -30,21 +33,19 @@ use engine_sc_client::{
 	stream_api::{StreamApi, FINALIZED},
 };
 
-use engine_p2p::{
-	core::{PeerInfo, PeerUpdate},
-	MultisigMessageReceiver, MultisigMessageSender,
-};
+pub use engine_p2p::{PeerInfo, PeerUpdate};
+
+pub use multisig_adapter::{MultisigChannels, MultisigMessageReceiver, MultisigMessageSender};
 
 use anyhow::Context;
-use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto};
-use engine_p2p::muxer::P2PMuxer;
 use futures::{Future, FutureExt, StreamExt};
 use sp_core::H256;
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
-use tracing::{error, info_span, Instrument};
+use tracing::{error, info, info_span, Instrument};
 use zeroize::Zeroizing;
 
 use cf_utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
+use engine_p2p::fair_channel::fair_channel;
 
 pub async fn start<StateChainClient, BlockStream: StreamApi<FINALIZED>>(
 	state_chain_client: Arc<StateChainClient>,
@@ -52,14 +53,7 @@ pub async fn start<StateChainClient, BlockStream: StreamApi<FINALIZED>>(
 	settings: P2PSettings,
 	initial_block_hash: H256,
 ) -> anyhow::Result<(
-	MultisigMessageSender<EvmCrypto>,
-	MultisigMessageReceiver<EvmCrypto>,
-	MultisigMessageSender<PolkadotCrypto>,
-	MultisigMessageReceiver<PolkadotCrypto>,
-	MultisigMessageSender<BitcoinCrypto>,
-	MultisigMessageReceiver<BitcoinCrypto>,
-	MultisigMessageSender<SolanaCrypto>,
-	MultisigMessageReceiver<SolanaCrypto>,
+	MultisigChannels,
 	oneshot::Receiver<()>,
 	impl Future<Output = anyhow::Result<()>>,
 )>
@@ -92,26 +86,34 @@ where
 	let own_peer_info = current_peers.iter().find(|pi| pi.account_id == our_account_id).cloned();
 
 	let (incoming_message_sender, incoming_message_receiver) =
-		engine_p2p::fair_channel::fair_channel(engine_p2p::core::INCOMING_MESSAGE_PER_PEER_LIMIT);
+		fair_channel(engine_p2p::INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 	let (outgoing_message_sender, outgoing_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+	// Carries the newly-selected transport from the monitor to the supervisor when governance
+	// changes the network-wide transport, so it can be restarted in-process.
+	let (transport_restart_sender, transport_restart_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	let (p2p_ready_sender, p2p_ready_receiver) = oneshot::channel();
 
-	let (
-		eth_outgoing_sender,
-		eth_incoming_receiver,
-		dot_outgoing_sender,
-		dot_incoming_receiver,
-		btc_outgoing_sender,
-		btc_incoming_receiver,
-		sol_outgoing_sender,
-		sol_incoming_receiver,
-		muxer_future,
-	) = P2PMuxer::start(incoming_message_receiver, outgoing_message_sender);
+	// Create multisig channels with topic muxer
+	let (multisig_channels, muxer_future) =
+		MultisigChannels::new(incoming_message_receiver, outgoing_message_sender);
+
+	// Read the network-wide P2P transport selection from the State Chain. If it later
+	// changes, the monitor task below shuts the engine down so it restarts on the new
+	// transport, keeping the whole validator set on a single (wire-incompatible) transport.
+	let initial_transport = state_chain_client
+		.storage_value::<pallet_cf_environment::P2pTransportValue<state_chain_runtime::Runtime>>(
+			initial_block_hash,
+		)
+		.await
+		.context("Failed to read the P2P transport setting from the State Chain")?;
+	info!("P2P transport selected by the State Chain: {initial_transport}");
 
 	let fut = task_scope(move |scope| {
 		async move {
@@ -130,14 +132,20 @@ where
 
 					p2p_ready_sender.send(()).unwrap();
 
-					engine_p2p::core::start(
+					// The supervisor owns the muxer-facing channels and (re)starts the
+					// transport in-process whenever the monitor signals a change, so a
+					// transport switch does not disturb the muxer or the multisig ceremonies
+					// above it.
+					engine_p2p::supervisor::run_transport_supervisor(
+						to_engine_transport(initial_transport),
 						node_key,
 						settings.port,
-						current_peers,
 						our_account_id,
+						current_peers,
 						incoming_message_sender,
 						outgoing_message_receiver,
 						peer_update_receiver,
+						transport_restart_receiver,
 					)
 					.await?;
 
@@ -155,9 +163,10 @@ where
 					state_chain_client,
 					sc_block_stream,
 					peer_update_sender,
+					transport_restart_sender,
+					initial_transport,
 				)
-				.await;
-				Ok(())
+				.await
 			});
 
 			Ok(())
@@ -165,18 +174,15 @@ where
 		.boxed()
 	});
 
-	Ok((
-		eth_outgoing_sender,
-		eth_incoming_receiver,
-		dot_outgoing_sender,
-		dot_incoming_receiver,
-		btc_outgoing_sender,
-		btc_incoming_receiver,
-		sol_outgoing_sender,
-		sol_incoming_receiver,
-		p2p_ready_receiver,
-		fut,
-	))
+	Ok((multisig_channels, p2p_ready_receiver, fut))
+}
+
+/// Maps the on-chain transport selection to the engine's transport enum.
+fn to_engine_transport(transport: cf_primitives::P2pTransport) -> engine_p2p::Transport {
+	match transport {
+		cf_primitives::P2pTransport::Zmq => engine_p2p::Transport::Zmq,
+		cf_primitives::P2pTransport::Quic => engine_p2p::Transport::Quic,
+	}
 }
 
 /// Monitors the State Chain for peer registration events and sends them to the P2P client.
@@ -186,12 +192,16 @@ async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamAp
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-) where
+	transport_restart_sender: UnboundedSender<engine_p2p::Transport>,
+	initial_transport: cf_primitives::P2pTransport,
+) -> anyhow::Result<()>
+where
 	StateChainClient: StorageApi + 'static + Send + Sync,
 {
 	use state_chain_runtime::Runtime;
 	type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
+	let mut current_transport = initial_transport;
 	let mut sc_block_stream = Box::pin(sc_block_stream);
 	loop {
 		match sc_block_stream.next().await {
@@ -225,6 +235,28 @@ async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamAp
 						}
 					}
 				}
+
+				// If governance has changed the network-wide transport, ask the supervisor to
+				// restart the transport in-process on the new selection. We only act on a
+				// confirmed change; a transient read error leaves the current transport running.
+				if let Ok(on_chain_transport) = state_chain_client
+					.storage_value::<pallet_cf_environment::P2pTransportValue<Runtime>>(
+						current_block.hash,
+					)
+					.await
+				{
+					if on_chain_transport != current_transport {
+						info!(
+							"P2P transport changed from {current_transport} to {on_chain_transport}; \
+							 restarting the transport in-process"
+						);
+						// If the supervisor has gone away the engine is already shutting down,
+						// so a send error here is benign.
+						let _ =
+							transport_restart_sender.send(to_engine_transport(on_chain_transport));
+						current_transport = on_chain_transport;
+					}
+				}
 			},
 			None => {
 				error!("Exiting as State Chain block stream ended");
@@ -232,4 +264,5 @@ async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamAp
 			},
 		}
 	}
+	Ok(())
 }

@@ -38,6 +38,7 @@ import type {
   CfPrimitivesSemVer,
   CfPrimitivesNetworkEnvironment,
   CfPrimitivesChainflipNetwork,
+  CfPrimitivesP2pTransport,
   PalletCfFlipFlipAccount,
   PalletCfFlipOpaqueCallIndex,
   PalletCfFlipOnChargeTransactionFeeScalingRateConfig,
@@ -860,6 +861,15 @@ export interface ChainStorage extends GenericChainStorage {
      * @param {Callback<boolean> =} callback
      **/
     electionVoteBatchingDisabled: GenericStorageQuery<() => boolean>;
+
+    /**
+     * The P2P transport the validator engines should use. Coordinated network-wide via
+     * governance; defaults to ZMQ. The two transports are not wire-compatible, so this must
+     * be the same across the whole set, and changing it requires engines to restart.
+     *
+     * @param {Callback<CfPrimitivesP2pTransport> =} callback
+     **/
+    p2pTransportValue: GenericStorageQuery<() => CfPrimitivesP2pTransport>;
 
     /**
      * Generic pallet storage query
