@@ -22,4 +22,6 @@ jobs:
         env:
           CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
           CF_HETZNER_API_TOKEN: ${{ secrets.CF_HETZNER_API_TOKEN }}
-        run: ./ci/scripts/manage_hetzner_bouncer_runner.sh cleanup-stale 10800
+        # Bouncer runners are provisioned in parallel with the build, so a server's age includes
+        # the build (up to 80 min) and the bouncer (up to 120 min) as well as setup and teardown.
+        run: ./ci/scripts/manage_hetzner_bouncer_runner.sh cleanup-stale 18000

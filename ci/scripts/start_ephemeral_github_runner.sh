@@ -63,4 +63,38 @@ rm -f \
   /var/lib/cloud/instance/user-data.txt.i
 unset RUNNER_REGISTRATION_TOKEN
 
+# Localnet dependencies are installed here so that this work happens while the binaries are still
+# building rather than on the bouncer job's critical path. This runs after the registration token
+# is removed so that third-party install scripts can't read it, and before `run.sh` so that the
+# runner only comes online once setup is done.
+if [[ "${INSTALL_LOCALNET_DEPS:-}" == "true" ]]; then
+  : "${SOLANA_VERSION:?SOLANA_VERSION is required when INSTALL_LOCALNET_DEPS is true}"
+
+  curl --fail --silent --show-error --location https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+    >/etc/apt/trusted.gpg.d/ngrok.asc
+  echo "deb https://ngrok-agent.s3.amazonaws.com buster main" >/etc/apt/sources.list.d/ngrok.list
+  apt-get update
+  apt-get install --yes bc ngrok postgresql-client xxd
+
+  npm install --global wscat
+
+  # Downloaded to a file first, as a failed download inside `sh -c "$(curl ...)"` doesn't trip `set -e`.
+  curl --fail --silent --show-error --location \
+    "https://release.anza.xyz/$SOLANA_VERSION/install" --output /tmp/solana-install.sh
+  runuser --user runner -- env HOME=/home/runner sh /tmp/solana-install.sh
+  rm /tmp/solana-install.sh
+
+  # Best effort: the localnet pulls again on startup, so a failure here only costs time.
+  if [[ -n "${LOCALNET_COMPOSE_URL:-}" ]]; then
+    if curl --fail --silent --show-error --location "$LOCALNET_COMPOSE_URL" \
+      --output /tmp/localnet-docker-compose.yml; then
+      NODE_COUNT="${LOCALNET_NODE_COUNT:-1-node}" LOCALNET_SPEED_SETTING=default \
+        docker compose -f /tmp/localnet-docker-compose.yml pull --quiet --ignore-pull-failures \
+        || echo "Pre-pulling localnet images failed" >&2
+    else
+      echo "Failed to download $LOCALNET_COMPOSE_URL, skipping image pre-pull" >&2
+    fi
+  fi
+fi
+
 exec runuser --user runner -- ./run.sh
