@@ -25,10 +25,6 @@ env:
   SOLANA_VERSION: v2.1.13
   NODE_COUNT: "1-node"
   CHAIN: "dev"
-  # Chains and assets introduced in the current release, consumed by bouncer/tests/rpc_tests.ts
-  # to skip unknown assets to the old runtime at upgrade boundaries.
-  NEW_RELEASED_CHAINS: ""
-  NEW_RELEASED_ASSETS: ""
 
 permissions:
   packages: read
