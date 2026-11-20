@@ -829,6 +829,54 @@ mod bond_expiry {
 			}
 		});
 	}
+
+	const BOND: u128 = 100;
+	const DEMOTED_BID: u128 = 80;
+	const STAYING_AUTHORITY: u64 = 1;
+	const DEMOTED_VALIDATOR: u64 = 2;
+
+	/// Runs an epoch with both validators as authorities, followed by an epoch in which
+	/// `DEMOTED_VALIDATOR` is one of its operator's delegators. Returns the authority epoch.
+	fn demote_validator_to_delegator() -> EpochIndex {
+		ValidatorPallet::transition_to_next_epoch(vec![STAYING_AUTHORITY, DEMOTED_VALIDATOR], BOND);
+		let authority_epoch = ValidatorPallet::current_epoch();
+
+		DelegationSnapshot::<u64, u128> {
+			operator: 456,
+			validators: [(STAYING_AUTHORITY, BOND)].into_iter().collect(),
+			delegators: [(DEMOTED_VALIDATOR, DEMOTED_BID)].into_iter().collect(),
+			delegation_fee_bps: 0,
+		}
+		.register_for_epoch::<Test>(authority_epoch + 1);
+		ValidatorPallet::transition_to_next_epoch(vec![STAYING_AUTHORITY], BOND);
+
+		authority_epoch
+	}
+
+	/// A demoted validator is still a keyholder for the previous epoch, so its bond must not drop
+	/// to its lower delegator bid until that epoch expires.
+	#[test]
+	fn demoted_validator_keeps_authority_bond_while_still_keyholder() {
+		new_test_ext().execute_with(|| {
+			demote_validator_to_delegator();
+
+			assert_eq!(MockBonderFor::<Test>::get_bond(&DEMOTED_VALIDATOR), BOND);
+		});
+	}
+
+	/// Expiring the previous epoch must not release the bond backing the demoted validator's
+	/// delegation in the current epoch.
+	#[test]
+	fn demoted_validator_keeps_delegator_bond_after_previous_epoch_expires() {
+		new_test_ext().execute_with(|| {
+			let authority_epoch = demote_validator_to_delegator();
+
+			ValidatorPallet::expire_epoch(authority_epoch);
+
+			assert_eq!(MockBonderFor::<Test>::get_bond(&STAYING_AUTHORITY), BOND);
+			assert_eq!(MockBonderFor::<Test>::get_bond(&DEMOTED_VALIDATOR), DEMOTED_BID);
+		});
+	}
 }
 
 #[test]
