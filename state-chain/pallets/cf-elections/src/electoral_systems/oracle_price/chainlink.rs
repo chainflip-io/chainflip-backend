@@ -104,6 +104,9 @@ where
 }
 
 // Used for the price API exposed to other pallets.
+// Returns the newest price across all sources, together with the best status among them: the
+// newest price is never older than any fresh source's price, so it's only stale once every source
+// is stale.
 pub fn get_latest_price_with_statechain_encoding<T>(
 	state: &OraclePriceTracker<T>,
 	chainlink_assetpair: ChainlinkAssetpair,
@@ -111,19 +114,29 @@ pub fn get_latest_price_with_statechain_encoding<T>(
 where
 	T: OPTypes<AssetPair = ChainlinkAssetpair, Price = ChainlinkPrice>,
 {
-	state
-		.chain_states
-		.get_latest_asset_state(chainlink_assetpair)
-		.and_then(|asset_state| {
-			Some((
-				chainlink_price_to_statechain_price(
-					&asset_state.price.median,
-					chainlink_assetpair,
-				)?
-				.into(),
-				asset_state.price_status,
-			))
-		})
+	let (asset_state, price_status) =
+		get_latest_asset_state_with_aggregate_status(&state.chain_states, chainlink_assetpair)?;
+	Some((
+		chainlink_price_to_statechain_price(&asset_state.price.median, chainlink_assetpair)?.into(),
+		price_status,
+	))
+}
+
+fn get_latest_asset_state_with_aggregate_status<T: OPTypes>(
+	chain_states: &ExternalChainStates<T>,
+	asset: T::AssetPair,
+) -> Option<(&AssetState<T>, PriceStatus)> {
+	use PriceStatus::*;
+
+	let latest = chain_states.get_latest_asset_state(asset.clone())?;
+	let status = chain_states.get_asset_states(asset).fold(Stale, |status, state| {
+		match (status, state.price_status) {
+			(UpToDate, _) | (_, UpToDate) => UpToDate,
+			(MaybeStale, _) | (_, MaybeStale) => MaybeStale,
+			_ => Stale,
+		}
+	});
+	Some((latest, status))
 }
 
 pub fn chainlink_price_to_statechain_price(
@@ -221,19 +234,19 @@ where
 		None => Either::Right(all::<ChainlinkAssetpair>()),
 	}
 	.filter_map(|assetpair: ChainlinkAssetpair| {
-		state.chain_states.get_latest_asset_state(assetpair).and_then(|asset_state| {
-			let from_unit = assetpair.to_price_unit();
+		let (asset_state, price_status) =
+			get_latest_asset_state_with_aggregate_status(&state.chain_states, assetpair)?;
+		let from_unit = assetpair.to_price_unit();
 
-			let price: StatechainPrice =
-				chainlink_price_to_statechain_price(&asset_state.price.median, assetpair)?;
-			Some(OraclePrice {
-				price: price.into(),
-				updated_at_oracle_timestamp: asset_state.timestamp.median.seconds,
-				updated_at_statechain_block: asset_state.updated_at_statechain_block,
-				base_asset: from_unit.base_asset,
-				quote_asset: from_unit.quote_asset,
-				price_status: asset_state.price_status,
-			})
+		let price: StatechainPrice =
+			chainlink_price_to_statechain_price(&asset_state.price.median, assetpair)?;
+		Some(OraclePrice {
+			price: price.into(),
+			updated_at_oracle_timestamp: asset_state.timestamp.median.seconds,
+			updated_at_statechain_block: asset_state.updated_at_statechain_block,
+			base_asset: from_unit.base_asset,
+			quote_asset: from_unit.quote_asset,
+			price_status,
 		})
 	})
 	.collect()
@@ -242,9 +255,148 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::electoral_systems::oracle_price::{
+		primitives::{Aggregated, Seconds, UnixTime},
+		state_machine::tests::MockTypes,
+	};
 	use cf_amm_math::mul_div_floor_checked;
 	use core::ops::Sub;
 	use sp_core::U256;
+
+	fn asset_state(
+		timestamp: u64,
+		price: u32,
+		price_status: PriceStatus,
+		updated_at_statechain_block: u32,
+	) -> AssetState<MockTypes> {
+		let timestamp = UnixTime { seconds: timestamp };
+		let price = ChainlinkPrice::integer(price);
+		AssetState {
+			timestamp: Aggregated { median: timestamp, iq_range: timestamp..=timestamp },
+			price: Aggregated { median: price.clone(), iq_range: price.clone()..=price },
+			price_status,
+			updated_at_statechain_block,
+			..Default::default()
+		}
+	}
+
+	#[test]
+	fn missing_oracle_prices_remain_unavailable() {
+		let state = OraclePriceTracker::<MockTypes>::default();
+		assert_eq!(state.chain_states.get_asset_states(ChainlinkAssetpair::UsdcUsd).count(), 0);
+		assert!(state.chain_states.get_latest_asset_state(ChainlinkAssetpair::UsdcUsd).is_none());
+		assert!(get_latest_price_with_statechain_encoding(&state, ChainlinkAssetpair::UsdcUsd)
+			.is_none());
+		assert!(get_latest_oracle_prices(&state, None).is_empty());
+	}
+
+	#[test]
+	fn latest_bsc_price_stays_usable_until_all_available_sources_are_stale() {
+		use ChainlinkAssetpair::BtcUsd;
+		use PriceStatus::*;
+
+		let mut state = OraclePriceTracker::<MockTypes>::default();
+		state
+			.chain_states
+			.arbitrum
+			.price
+			.insert(BtcUsd, asset_state(1_000, 100_000, Stale, 10));
+		state
+			.chain_states
+			.bsc
+			.price
+			.insert(BtcUsd, asset_state(1_100, 101_000, Stale, 20));
+		let arbitrum_settings = ExternalChainSettings {
+			up_to_date_timeout: Seconds(1_860),
+			maybe_stale_timeout: Seconds(60),
+			..Default::default()
+		};
+		let bsc_settings = ExternalChainSettings {
+			up_to_date_timeout: Seconds(90),
+			maybe_stale_timeout: Seconds(30),
+			..Default::default()
+		};
+
+		let now = UnixTime { seconds: 1_300 };
+		state.chain_states.arbitrum.update_price_state(&now, &arbitrum_settings);
+		state.chain_states.bsc.update_price_state(&now, &bsc_settings);
+		assert_eq!(state.chain_states.bsc.price.get(&BtcUsd).unwrap().price_status, Stale);
+		assert_eq!(state.chain_states.arbitrum.price.get(&BtcUsd).unwrap().price_status, UpToDate);
+
+		let (price, status) = get_latest_price_with_statechain_encoding(&state, BtcUsd).unwrap();
+		assert_eq!(status, UpToDate);
+		let rpc_prices = get_latest_oracle_prices(&state, Some((PriceAsset::Btc, PriceAsset::Usd)));
+		let rpc_price = rpc_prices.first().unwrap();
+		assert_eq!(rpc_price.price, price);
+		assert_eq!(rpc_price.price_status, UpToDate);
+		assert_eq!(rpc_price.updated_at_oracle_timestamp, 1_100);
+		assert_eq!(rpc_price.updated_at_statechain_block, 20);
+
+		let now = UnixTime { seconds: 5_000 };
+		state.chain_states.arbitrum.update_price_state(&now, &arbitrum_settings);
+		state.chain_states.bsc.update_price_state(&now, &bsc_settings);
+		assert_eq!(get_latest_price_with_statechain_encoding(&state, BtcUsd), Some((price, Stale)));
+		let rpc_prices = get_latest_oracle_prices(&state, Some((PriceAsset::Btc, PriceAsset::Usd)));
+		let rpc_price = rpc_prices.first().unwrap();
+		assert_eq!(rpc_price.price, price);
+		assert_eq!(rpc_price.price_status, Stale);
+		assert_eq!(rpc_price.updated_at_oracle_timestamp, 1_100);
+	}
+
+	proptest! {
+		#[test]
+		fn newest_price_and_aggregate_status_are_independent(
+			sources in prop::array::uniform3(prop::option::of((
+				prop_oneof![Just(0u64), Just(u64::MAX), any::<u64>()],
+				1u32..1_000_000,
+				any::<PriceStatus>(),
+				any::<u32>(),
+			)))
+		) {
+			use ChainlinkAssetpair::*;
+			use PriceStatus::*;
+
+			let mut state = OraclePriceTracker::<MockTypes>::default();
+			for (chain, source) in all::<ExternalPriceChain>().zip(sources) {
+				if let Some((timestamp, price, status, block)) = source {
+					state.chain_states[chain].price.insert(UsdcUsd, asset_state(timestamp, price, status, block));
+				}
+			}
+			state.chain_states.ethereum.price.insert(EthUsd, asset_state(0, 1, UpToDate, 0));
+
+			let encoded = get_latest_price_with_statechain_encoding(&state, UsdcUsd);
+			let all_rpc_prices = get_latest_oracle_prices(&state, None);
+			let rpc_prices: Vec<_> = all_rpc_prices.iter().filter(|price| price.base_asset == PriceAsset::Usdc).collect();
+			prop_assert_eq!(state.chain_states.get_asset_states(UsdcUsd).count(), sources.iter().flatten().count());
+
+			match sources.iter().flatten().max_by_key(|source| source.0) {
+				None => {
+					prop_assert!(encoded.is_none());
+					prop_assert!(rpc_prices.is_empty());
+				},
+				Some(&(timestamp, price, _, block)) => {
+					let expected_status = if sources.iter().flatten().any(|source| source.2 == UpToDate) {
+						UpToDate
+					} else if sources.iter().flatten().any(|source| source.2 == MaybeStale) {
+						MaybeStale
+					} else {
+						Stale
+					};
+					let expected_price: Price = chainlink_price_to_statechain_price(&ChainlinkPrice::integer(price), UsdcUsd).unwrap().into();
+					let (price, status) = encoded.unwrap();
+					prop_assert_eq!(price, expected_price);
+					prop_assert_eq!(status, expected_status);
+					prop_assert_eq!(status == Stale, sources.iter().flatten().all(|source| source.2 == Stale));
+					prop_assert_eq!(rpc_prices.len(), 1);
+					let rpc_price = rpc_prices.first().unwrap();
+					prop_assert_eq!(rpc_price.price, expected_price);
+					prop_assert_eq!(rpc_price.price_status, expected_status);
+					prop_assert_eq!(rpc_price.updated_at_oracle_timestamp, timestamp);
+					prop_assert_eq!(rpc_price.updated_at_statechain_block, block);
+				},
+			}
+		}
+	}
 
 	#[test]
 	#[expect(clippy::inconsistent_digit_grouping)]

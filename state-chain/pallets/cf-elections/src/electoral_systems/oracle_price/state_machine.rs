@@ -245,9 +245,15 @@ derive_common_traits! {
 }
 
 impl<T: OPTypes> ExternalChainStates<T> {
+	pub fn get_asset_states(
+		&self,
+		asset: T::AssetPair,
+	) -> impl Iterator<Item = &AssetState<T>> + '_ {
+		all::<ExternalPriceChain>().filter_map(move |chain| self[chain].price.get(&asset))
+	}
+
 	pub fn get_latest_asset_state(&self, asset: T::AssetPair) -> Option<&AssetState<T>> {
-		all::<ExternalPriceChain>()
-			.filter_map(|chain| self[chain].price.get(&asset))
+		self.get_asset_states(asset)
 			.max_by_key(|price_state| price_state.timestamp.median)
 	}
 }
