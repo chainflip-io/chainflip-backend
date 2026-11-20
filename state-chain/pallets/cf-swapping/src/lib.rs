@@ -40,9 +40,9 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AffiliateRegistry, AssetConverter, BalanceApi,
 	Bonding, BrokerRecoveryApi, ChainflipNetworkInfo, ChannelIdAllocator, DepositApi,
 	DeregistrationHooks, ExpiryBehaviour, FeePayment, FundingInfo, FundingSource,
-	GetMinimumFunding, IngressEgressFeeApi, LendingSwapType, PriceFeedApi, PriceLimitsAndExpiry,
-	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
-	SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
+	GetMinimumFunding, IngressEgressFeeApi, LendingSwapType, MoveFlipToGateway, PriceFeedApi,
+	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi, WithdrawalAddressRestriction,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -688,6 +688,9 @@ pub mod pallet {
 			Amount = <Self as Chainflip>::Amount,
 		>;
 
+		/// Earmarks Flip held in the Vault for transfer to the State Chain Gateway.
+		type MoveFlipToGateway: MoveFlipToGateway;
+
 		type PoolPriceApi: PoolPriceProvider;
 
 		type PriceFeedApi: PriceFeedApi;
@@ -732,10 +735,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CollectedRejectedFunds<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
-
-	/// FLIP ready to be sent to gateway.
-	#[pallet::storage]
-	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	/// Interval at which we buy FLIP from swap fees in order to distribute as rewards.
 	#[pallet::storage]
@@ -3207,13 +3206,11 @@ pub mod pallet {
 			amount: AssetAmount,
 		) -> AssetAmount {
 			// Add flip that was just distributed to validators, to be sent to the gateway
-			FlipToBeSentToGateway::<T>::mutate(|total| {
-				total.saturating_accrue(amount);
-			});
+			T::MoveFlipToGateway::add_flip_to_be_sent_to_gateway(amount);
 			match with_storage_layer(|| {
 				T::EgressHandler::schedule_egress(
 					cf_chains::assets::any::Asset::Flip,
-					FlipToBeSentToGateway::<T>::take(),
+					T::MoveFlipToGateway::take_flip_to_be_sent_to_gateway(),
 					ForeignChainAddress::Eth(state_chain_gateway_address),
 					None,
 				)
@@ -3229,7 +3226,7 @@ pub mod pallet {
 				)
 			}) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld, .. }) => {
-					FlipToBeSentToGateway::<T>::put(fee_withheld);
+					T::MoveFlipToGateway::add_flip_to_be_sent_to_gateway(fee_withheld);
 					Self::deposit_event(Event::SentFlipToGateway {
 						amount: egress_amount,
 						egress_id,
@@ -3589,14 +3586,6 @@ impl<T: Config> DeregistrationHooks for PendingSwapDeregistrationCheck<T> {
 		);
 
 		Ok(())
-	}
-}
-
-impl<T: Config> cf_traits::MoveFlipToGateway for Pallet<T> {
-	fn add_flip_to_be_sent_to_gateway(amount: AssetAmount) {
-		FlipToBeSentToGateway::<T>::mutate(|total| {
-			total.saturating_accrue(amount);
-		});
 	}
 }
 
