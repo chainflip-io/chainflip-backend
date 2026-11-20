@@ -2161,7 +2161,13 @@ export type PalletCfAccountRolesCall =
   | {
       name: 'AsSubAccount';
       params: { subAccountIndex: number; call: StateChainRuntimeRuntimeCall };
-    };
+    }
+  /**
+   * Enables or disables [`Call::spawn_sub_account`] and [`Call::as_sub_account`].
+   *
+   * The dispatch origin of this function must be governance.
+   **/
+  | { name: 'SetSubAccountsEnabled'; params: { enabled: boolean } };
 
 export type PalletCfAccountRolesCallLike =
   /**
@@ -2195,7 +2201,13 @@ export type PalletCfAccountRolesCallLike =
   | {
       name: 'AsSubAccount';
       params: { subAccountIndex: number; call: StateChainRuntimeRuntimeCallLike };
-    };
+    }
+  /**
+   * Enables or disables [`Call::spawn_sub_account`] and [`Call::as_sub_account`].
+   *
+   * The dispatch origin of this function must be governance.
+   **/
+  | { name: 'SetSubAccountsEnabled'; params: { enabled: boolean } };
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -13519,7 +13531,8 @@ export type PalletCfAccountRolesEvent =
   | {
       name: 'SubAccountCallExecuted';
       data: { accountId: AccountId32; subAccountId: AccountId32; subAccountIndex: number };
-    };
+    }
+  | { name: 'SubAccountsEnabledSet'; data: { enabled: boolean } };
 
 /**
  * The `Event` enum of this pallet
@@ -18011,7 +18024,11 @@ export type PalletCfAccountRolesError =
   /**
    * Failed to derive the sub-account id.
    **/
-  | 'SubAccountIdDerivationFailed';
+  | 'SubAccountIdDerivationFailed'
+  /**
+   * Sub-accounts are currently disabled.
+   **/
+  | 'SubAccountsDisabled';
 
 export type PalletTransactionPaymentReleases = 'V1Ancient' | 'V2';
 

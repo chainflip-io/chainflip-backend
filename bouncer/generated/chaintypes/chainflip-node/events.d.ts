@@ -653,6 +653,11 @@ export interface ChainEvents extends GenericChainEvents {
       'SubAccountCallExecuted',
       { accountId: AccountId32; subAccountId: AccountId32; subAccountIndex: number }
     >;
+    SubAccountsEnabledSet: GenericPalletEvent<
+      'AccountRoles',
+      'SubAccountsEnabledSet',
+      { enabled: boolean }
+    >;
 
     /**
      * Generic pallet event

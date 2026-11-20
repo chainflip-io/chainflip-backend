@@ -1061,6 +1061,18 @@ export interface ChainStorage extends GenericChainStorage {
     vanityNames: GenericStorageQuery<() => Array<[AccountId32, Bytes]>>;
 
     /**
+     * Whether [`Call::spawn_sub_account`] and [`Call::as_sub_account`] are enabled.
+     *
+     * Sub-accounts are disabled pending a redesign; governance can enable them, e.g. on testnets.
+     * An unset value reads as `false` (`ValueQuery` over `bool`), so they are disabled on any
+     * chain where governance hasn't explicitly enabled them, without needing a migration or
+     * genesis config.
+     *
+     * @param {Callback<boolean> =} callback
+     **/
+    subAccountsEnabled: GenericStorageQuery<() => boolean>;
+
+    /**
      * Generic pallet storage query
      **/
     [storage: string]: GenericStorageQuery;
