@@ -919,36 +919,46 @@ pub trait DeregistrationHooks {
 	type AccountId;
 	type Error: Into<DispatchError>;
 
-	/// Checks for deregistration eligibility
+	/// Rejects the deregistration if the account still holds state that would be lost or
+	/// orphaned. Runs before the role is removed, regardless of which role is being deregistered.
 	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error>;
 
-	/// Called on successful deregistration to possibly cleanup other state associated to the
-	/// deregistered account
+	/// Cleans up state associated with the account once the role has been removed. Must not fail:
+	/// `check` is the place to reject a deregistration.
 	fn on_deregistered(_account_id: &Self::AccountId, _account_role: AccountRole) {}
 }
 
-impl<
-		A: DeregistrationHooks,
-		B: DeregistrationHooks<AccountId = A::AccountId>,
-		C: DeregistrationHooks<AccountId = A::AccountId>,
-	> DeregistrationHooks for (A, B, C)
-{
-	type AccountId = A::AccountId;
-	type Error = DispatchError;
+/// Implements [DeregistrationHooks] for tuples, so that every hook is listed once and both `check`
+/// and `on_deregistered` are forwarded to it. Checks run in tuple order and stop at the first
+/// error.
+macro_rules! impl_deregistration_hooks_for_tuples {
+	() => {};
+	($first:ident $(, $rest:ident)*) => {
+		impl<
+			$first: DeregistrationHooks,
+			$($rest: DeregistrationHooks<AccountId = $first::AccountId>,)*
+		> DeregistrationHooks for ($first, $($rest,)*)
+		{
+			type AccountId = $first::AccountId;
+			type Error = DispatchError;
 
-	fn check(account_id: &Self::AccountId) -> Result<(), DispatchError> {
-		A::check(account_id)
-			.map_err(Into::into)
-			.and_then(|()| B::check(account_id).map_err(Into::into))
-			.and_then(|()| C::check(account_id).map_err(Into::into))
-	}
+			fn check(account_id: &Self::AccountId) -> Result<(), DispatchError> {
+				$first::check(account_id).map_err(Into::into)?;
+				$($rest::check(account_id).map_err(Into::into)?;)*
+				Ok(())
+			}
 
-	fn on_deregistered(account_id: &Self::AccountId, account_role: AccountRole) {
-		A::on_deregistered(account_id, account_role);
-		B::on_deregistered(account_id, account_role);
-		C::on_deregistered(account_id, account_role);
-	}
+			fn on_deregistered(account_id: &Self::AccountId, account_role: AccountRole) {
+				$first::on_deregistered(account_id, account_role);
+				$($rest::on_deregistered(account_id, account_role);)*
+			}
+		}
+
+		impl_deregistration_hooks_for_tuples!($($rest),*);
+	};
 }
+
+impl_deregistration_hooks_for_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
 
 #[derive(
 	PartialEqNoBound,

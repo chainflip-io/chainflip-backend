@@ -273,9 +273,9 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 
 	/// Deregister the account role for some account id.
 	///
-	/// This is required in order to be able to redeem all funds. Callers should ensure that any
-	/// state associated with the account is cleaned up before calling this function. For example:
-	/// LPs should withdraw all liquidity.
+	/// This is required in order to be able to redeem all funds. Eligibility is enforced by
+	/// [Config::DeregistrationHooks] (e.g. LPs must have withdrawn all liquidity), and any state
+	/// associated with the role is cleaned up by its `on_deregistered` hook.
 	#[frame_support::transactional]
 	fn deregister_account_role(
 		account_id: &T::AccountId,

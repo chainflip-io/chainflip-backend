@@ -602,7 +602,7 @@ fn deregistration_check() {
 		.then_execute_with(|_| deploy_strategy())
 		.then_execute_with_keep_context(|_| {
 			assert!(matches!(
-				TradingStrategyDeregistrationCheck::<Test>::check(&LP),
+				TradingStrategyDeregistrationHooks::<Test>::check(&LP),
 				Err(Error::<Test>::LpHasActiveStrategies)
 			));
 		})
@@ -612,7 +612,7 @@ fn deregistration_check() {
 				*strategy_id
 			));
 
-			assert_ok!(TradingStrategyDeregistrationCheck::<Test>::check(&LP));
+			assert_ok!(TradingStrategyDeregistrationHooks::<Test>::check(&LP));
 		});
 }
 

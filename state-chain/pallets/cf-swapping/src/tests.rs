@@ -1436,7 +1436,7 @@ fn broker_local_deregistration_check_ignores_broker_balances() {
 		<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 100);
 
 		// Account free-balance checks are handled by the asset-balances deregistration check.
-		assert_ok!(BrokerDeregistrationCheck::<Test>::check(&BROKER));
+		assert_ok!(BrokerDeregistrationHooks::<Test>::check(&BROKER));
 
 		assert_ok!(Swapping::withdraw(
 			OriginTrait::signed(BROKER),
@@ -1467,7 +1467,7 @@ fn broker_deregistration_checks_private_channels() {
 		assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
 
 		assert!(matches!(
-			BrokerDeregistrationCheck::<Test>::check(&BROKER),
+			BrokerDeregistrationHooks::<Test>::check(&BROKER),
 			Err(Error::<Test>::PrivateChannelExistsForBroker)
 		));
 
@@ -1532,7 +1532,7 @@ mod deregistration_checks {
 				))),
 			);
 
-			assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT));
+			assert_ok!(PendingSwapDeregistrationHooks::<Test>::check(&LP_ACCOUNT));
 		});
 	}
 
@@ -1545,10 +1545,10 @@ mod deregistration_checks {
 			);
 
 			assert!(matches!(
-				PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
+				PendingSwapDeregistrationHooks::<Test>::check(&LP_ACCOUNT),
 				Err(Error::<Test>::PendingSwapRequest)
 			));
-			assert_ok!(PendingSwapDeregistrationCheck::<Test>::check(&BOB));
+			assert_ok!(PendingSwapDeregistrationHooks::<Test>::check(&BOB));
 		});
 	}
 
@@ -1564,7 +1564,7 @@ mod deregistration_checks {
 			);
 
 			assert!(matches!(
-				PendingSwapDeregistrationCheck::<Test>::check(&LP_ACCOUNT),
+				PendingSwapDeregistrationHooks::<Test>::check(&LP_ACCOUNT),
 				Err(Error::<Test>::PendingSwapRequest)
 			));
 		});
@@ -2757,7 +2757,7 @@ mod affiliates {
 			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
 
 			assert!(matches!(
-				BrokerDeregistrationCheck::<Test>::check(&BROKER),
+				BrokerDeregistrationHooks::<Test>::check(&BROKER),
 				Err(Error::<Test>::AffiliateEarnedFeesNotWithdrawn)
 			));
 

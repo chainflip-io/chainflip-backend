@@ -16,20 +16,23 @@
 
 //! Contains tests related to Accounts in the runtime
 
-use crate::network;
+use crate::{genesis, network, network::register_refund_addresses};
 use cf_chains::evm::Address as EvmAddress;
-use cf_primitives::AccountRole;
-use cf_traits::EpochInfo;
+use cf_primitives::{AccountRole, AffiliateShortId, ForeignChain, FLIPPERINOS_PER_FLIP};
+use cf_traits::{EpochInfo, FundAccount, FundingSource, RefundAddressRegistry};
 use codec::{Decode, Encode};
 use frame_support::{assert_noop, assert_ok};
 use pallet_cf_account_roles::VanityNames;
+use pallet_cf_asset_balances::{whitelist::PendingChange, PendingChanges};
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_reputation::Reputations;
+use pallet_cf_swapping::{AffiliateAccountDetails, AffiliateIdMapping};
 use pallet_cf_validator::{AccountPeerMapping, MappedPeers};
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_session::{runtime_decl_for_session_keys::SessionKeysV2, OpaqueGeneratedSessionKeys};
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, Block, Funding, Reputation, Runtime, RuntimeOrigin, Validator,
+	opaque::SessionKeys, AccountId, AssetBalances, Block, Funding, LiquidityProvider, Reputation,
+	Runtime, RuntimeOrigin, Swapping, System, Validator,
 };
 
 /// Keys and proof as the node's `author_rotateKeysWithOwner` RPC produces them for the CLI: via
@@ -132,5 +135,147 @@ fn account_deletion_removes_relevant_storage_items() {
 		assert!(!vanity_names.contains_key(&backup_node));
 		assert_eq!(pallet_cf_account_roles::AccountRoles::<Runtime>::get(&backup_node), None);
 		assert_eq!(Reputations::<Runtime>::get(backup_node).online_blocks, 0);
+	});
+}
+
+// The cleanup below lives in `on_deregistered`, so it only runs if the hook is part of
+// `RuntimeDeregistrationHooks`.
+#[test]
+fn broker_deregistration_reaps_affiliates() {
+	const BROKER: AccountId = AccountId::new([0x41; 32]);
+
+	genesis::with_test_defaults()
+		.with_additional_accounts(&[(BROKER, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP)])
+		.build()
+		.execute_with(|| {
+			assert_ok!(Swapping::register_affiliate(
+				RuntimeOrigin::signed(BROKER),
+				Default::default()
+			));
+			let affiliate = AffiliateIdMapping::<Runtime>::get(&BROKER, AffiliateShortId(0))
+				.expect("Affiliate must be registered");
+			assert!(System::account_exists(&affiliate));
+
+			assert_ok!(Swapping::deregister_as_broker(RuntimeOrigin::signed(BROKER)));
+
+			assert!(!System::account_exists(&affiliate));
+			assert_eq!(AffiliateAccountDetails::<Runtime>::iter_prefix(&BROKER).count(), 0);
+			assert_eq!(AffiliateIdMapping::<Runtime>::iter_prefix(&BROKER).count(), 0);
+		});
+}
+
+#[test]
+fn lp_deregistration_keeps_refund_addresses_and_clears_pending_withdrawal_changes() {
+	const LP: AccountId = AccountId::new([0x42; 32]);
+
+	genesis::with_test_defaults()
+		.with_additional_accounts(&[(LP, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP)])
+		.build()
+		.execute_with(|| {
+			register_refund_addresses(&LP);
+			assert!(AssetBalances::get_refund_address(&LP, ForeignChain::Ethereum).is_some());
+			// A pending change that doesn't block deregistration, unlike an active whitelist.
+			PendingChanges::<Runtime>::mutate(|pending| {
+				pending.entry(u64::MAX).or_default().push((LP, PendingChange::Timelock(1)))
+			});
+
+			assert_ok!(LiquidityProvider::deregister_lp_account(RuntimeOrigin::signed(LP)));
+
+			// Kept until the account is killed, so funds credited while closing can be refunded.
+			assert!(AssetBalances::get_refund_address(&LP, ForeignChain::Ethereum).is_some());
+			assert!(!PendingChanges::<Runtime>::get()
+				.values()
+				.flatten()
+				.any(|(account_id, _)| *account_id == LP));
+		});
+}
+
+#[test]
+fn operator_deregistration_releases_validators_and_delegators() {
+	use pallet_cf_validator::{
+		DelegationAcceptance, DelegationAmount, DelegationChoice, ManagedValidators,
+		OperatorChoice, OperatorSettings, OperatorSettingsLookup,
+	};
+
+	const OPERATOR: AccountId = AccountId::new([0x43; 32]);
+	const VALIDATOR: AccountId = AccountId::new([0x44; 32]);
+	const DELEGATOR: AccountId = AccountId::new([0x45; 32]);
+
+	genesis::with_test_defaults()
+		.with_additional_accounts(&[(VALIDATOR, AccountRole::Validator, 5 * FLIPPERINOS_PER_FLIP)])
+		.build()
+		.execute_with(|| {
+			network::new_account(&OPERATOR, AccountRole::Operator);
+			assert_ok!(Validator::update_operator_settings(
+				RuntimeOrigin::signed(OPERATOR),
+				OperatorSettings {
+					fee_bps: 2000,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
+			));
+			assert_ok!(Validator::claim_validator(RuntimeOrigin::signed(OPERATOR), VALIDATOR));
+			assert_ok!(Validator::accept_operator(RuntimeOrigin::signed(VALIDATOR), OPERATOR));
+			Funding::fund_account(
+				DELEGATOR,
+				MinimumFunding::<Runtime>::get(),
+				FundingSource::EthTransaction {
+					tx_hash: Default::default(),
+					funder: Default::default(),
+				},
+			);
+			assert_ok!(Validator::delegate(
+				RuntimeOrigin::signed(DELEGATOR),
+				OPERATOR,
+				DelegationAmount::Max
+			));
+
+			assert_ok!(Validator::deregister_as_operator(RuntimeOrigin::signed(OPERATOR)));
+
+			assert_eq!(
+				pallet_cf_account_roles::AccountRoles::<Runtime>::get(&OPERATOR),
+				Some(AccountRole::Unregistered)
+			);
+			assert_eq!(OperatorChoice::<Runtime>::get(&VALIDATOR), None);
+			assert!(ManagedValidators::<Runtime>::get(&OPERATOR).is_empty());
+			assert!(OperatorSettingsLookup::<Runtime>::get(&OPERATOR).is_none());
+			assert!(DelegationChoice::<Runtime>::get(&DELEGATOR).is_none());
+			// Losing the operator doesn't deregister the delegator.
+			assert_eq!(
+				pallet_cf_account_roles::AccountRoles::<Runtime>::get(&DELEGATOR),
+				Some(AccountRole::LiquidityProvider)
+			);
+		});
+}
+
+#[test]
+fn validator_deregistration_clears_peer_mapping_operator_and_max_bid() {
+	use pallet_cf_validator::{ManagedValidators, OperatorChoice, ValidatorMaxBid};
+
+	const OPERATOR: AccountId = AccountId::new([0x46; 32]);
+	const VALIDATOR: AccountId = AccountId::new([0x47; 32]);
+
+	genesis::with_test_defaults().build().execute_with(|| {
+		network::new_account(&OPERATOR, AccountRole::Operator);
+		network::new_account(&VALIDATOR, AccountRole::Validator);
+		network::setup_peer_mapping(&VALIDATOR);
+		let (peer_id, _, _) = AccountPeerMapping::<Runtime>::get(&VALIDATOR).unwrap();
+		assert_ok!(Validator::claim_validator(RuntimeOrigin::signed(OPERATOR), VALIDATOR));
+		assert_ok!(Validator::accept_operator(RuntimeOrigin::signed(VALIDATOR), OPERATOR));
+		assert_ok!(Validator::set_validator_max_bid(
+			RuntimeOrigin::signed(VALIDATOR),
+			Some(u128::MAX),
+		));
+
+		assert_ok!(Validator::deregister_as_validator(RuntimeOrigin::signed(VALIDATOR)));
+
+		assert_eq!(
+			pallet_cf_account_roles::AccountRoles::<Runtime>::get(&VALIDATOR),
+			Some(AccountRole::Unregistered)
+		);
+		assert!(AccountPeerMapping::<Runtime>::get(&VALIDATOR).is_none());
+		assert!(!MappedPeers::<Runtime>::contains_key(peer_id));
+		assert_eq!(OperatorChoice::<Runtime>::get(&VALIDATOR), None);
+		assert!(!ManagedValidators::<Runtime>::get(&OPERATOR).contains(&VALIDATOR));
+		assert_eq!(ValidatorMaxBid::<Runtime>::get(&VALIDATOR), None);
 	});
 }

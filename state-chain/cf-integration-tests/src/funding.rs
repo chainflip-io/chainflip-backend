@@ -338,7 +338,13 @@ fn full_redemption_deregisters_liquidity_provider() {
 			pallet_cf_account_roles::AccountRoles::<Runtime>::get(&LP),
 			Some(AccountRole::Unregistered)
 		);
-		// The deregistration hook cleans up the LP's refund addresses.
+		// Refund addresses outlive deregistration and are only cleaned up once the account is
+		// reaped.
+		assert!(pallet_cf_asset_balances::RefundAddresses::<Runtime>::iter_prefix(&LP)
+			.next()
+			.is_some());
+		assert_ok!(Funding::redeemed(LP.clone(), LP_BALANCE / 2, Default::default()));
+		assert!(!frame_system::Pallet::<Runtime>::account_exists(&LP));
 		assert!(pallet_cf_asset_balances::RefundAddresses::<Runtime>::iter_prefix(&LP)
 			.next()
 			.is_none());

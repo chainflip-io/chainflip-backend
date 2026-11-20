@@ -1000,9 +1000,12 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub struct PoolsDeregistrationCheck<T>(sp_std::marker::PhantomData<T>);
+/// This pallet's deregistration hooks, in run order.
+pub type PalletDeregistrationHooks<T> = PoolsDeregistrationHooks<T>;
 
-impl<T: Config> DeregistrationHooks for PoolsDeregistrationCheck<T> {
+pub struct PoolsDeregistrationHooks<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> DeregistrationHooks for PoolsDeregistrationHooks<T> {
 	type AccountId = T::AccountId;
 	type Error = Error<T>;
 
