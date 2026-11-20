@@ -51,6 +51,7 @@ pub trait WeightInfo {
 	fn set_vanity_name() -> Weight;
 	fn spawn_sub_account() -> Weight;
 	fn as_sub_account() -> Weight;
+	fn set_sub_accounts_enabled() -> Weight;
 }
 
 /// Weights for pallet_cf_account_roles using the Substrate node and recommended hardware.
@@ -116,6 +117,16 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(15_753_000, 3529)
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 	}
+	/// Storage: `AccountRoles::SubAccountsEnabled` (r:0 w:1)
+	/// Proof: `AccountRoles::SubAccountsEnabled` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn set_sub_accounts_enabled() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 10_000_000 picoseconds.
+		Weight::from_parts(10_000_000, 0)
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -179,5 +190,15 @@ impl WeightInfo for () {
 		// Minimum execution time: 15_440_000 picoseconds.
 		Weight::from_parts(15_753_000, 3529)
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
+	}
+	/// Storage: `AccountRoles::SubAccountsEnabled` (r:0 w:1)
+	/// Proof: `AccountRoles::SubAccountsEnabled` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn set_sub_accounts_enabled() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 10_000_000 picoseconds.
+		Weight::from_parts(10_000_000, 0)
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 }

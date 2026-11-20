@@ -57,6 +57,8 @@ mod benchmarks {
 	#[benchmark]
 	fn spawn_sub_account() {
 		let (caller, balance) = create_funded_parent_account::<T>(1000);
+		SubAccountsEnabled::<T>::put(true);
+
 		#[extrinsic_call]
 		spawn_sub_account(RawOrigin::Signed(caller.clone()), 1, (balance / 2).into());
 	}
@@ -65,6 +67,7 @@ mod benchmarks {
 	fn as_sub_account() {
 		let (caller, balance) = create_funded_parent_account::<T>(1000);
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
+		SubAccountsEnabled::<T>::put(true);
 
 		assert_ok!(Pallet::<T>::spawn_sub_account(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -74,6 +77,16 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		as_sub_account(RawOrigin::Signed(caller), 1, call);
+	}
+
+	#[benchmark]
+	fn set_sub_accounts_enabled() {
+		let origin = <T as Config>::EnsureGovernance::try_successful_origin().unwrap();
+
+		#[extrinsic_call]
+		set_sub_accounts_enabled(origin as OriginFor<T>, true);
+
+		assert!(SubAccountsEnabled::<T>::get());
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
