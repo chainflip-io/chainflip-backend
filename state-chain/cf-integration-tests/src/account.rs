@@ -233,7 +233,7 @@ fn operator_deregistration_releases_validators_and_delegators() {
 
 			assert_eq!(
 				pallet_cf_account_roles::AccountRoles::<Runtime>::get(&OPERATOR),
-				Some(AccountRole::Unregistered)
+				Some(AccountRole::AccountClosing)
 			);
 			assert_eq!(OperatorChoice::<Runtime>::get(&VALIDATOR), None);
 			assert!(ManagedValidators::<Runtime>::get(&OPERATOR).is_empty());
@@ -270,7 +270,7 @@ fn validator_deregistration_clears_peer_mapping_operator_and_max_bid() {
 
 		assert_eq!(
 			pallet_cf_account_roles::AccountRoles::<Runtime>::get(&VALIDATOR),
-			Some(AccountRole::Unregistered)
+			Some(AccountRole::AccountClosing)
 		);
 		assert!(AccountPeerMapping::<Runtime>::get(&VALIDATOR).is_none());
 		assert!(!MappedPeers::<Runtime>::contains_key(peer_id));
