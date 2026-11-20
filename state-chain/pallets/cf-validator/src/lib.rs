@@ -1115,41 +1115,10 @@ pub mod pallet {
 			settings: OperatorSettings,
 		) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
-
-			ensure!(
-				settings.fee_bps >= MinimumOperatorFee::<T>::get(),
-				Error::<T>::OperatorFeeTooLow
-			);
-			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
-
-			if let Some(current_settings) = OperatorSettingsLookup::<T>::get(&operator) {
-				match (current_settings.delegation_acceptance, settings.delegation_acceptance) {
-					(DelegationAcceptance::Allow, DelegationAcceptance::Deny) => {
-						Exceptions::<T>::try_mutate(&operator, |allowed| {
-							allowed.clear();
-							// Any existing delegators need be added to the allowed list.
-							for (delegator, (assigned_operator, _)) in DelegationChoice::<T>::iter()
-							{
-								if assigned_operator == operator {
-									allowed
-										.try_insert(delegator)
-										.map_err(|_| Error::<T>::TooManyExceptions)?;
-								}
-							}
-							Ok::<_, Error<T>>(())
-						})?;
-					},
-					(DelegationAcceptance::Deny, DelegationAcceptance::Allow) => {
-						Exceptions::<T>::remove(&operator);
-					},
-					_ => {},
-				}
-			}
-
-			OperatorSettingsLookup::<T>::insert(&operator, settings.clone());
-
-			Self::deposit_event(Event::OperatorSettingsUpdated { operator, settings });
-			Ok(())
+			// Delegators can't react to a change once the auction is underway, and a keygen
+			// retry re-runs the auction against the live settings.
+			ensure!(!Self::is_auction_phase(), Error::<T>::AuctionPhase);
+			Self::set_operator_settings(operator, settings)
 		}
 
 		/// Block a delegator.
@@ -1266,7 +1235,7 @@ pub mod pallet {
 			settings: OperatorSettings,
 			vanity_name: VanityName,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin.clone())?;
+			let account_id = ensure_signed(origin)?;
 			ensure!(
 				settings.fee_bps >= MinimumOperatorFee::<T>::get(),
 				Error::<T>::OperatorFeeTooLow
@@ -1276,8 +1245,7 @@ pub mod pallet {
 
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
 			T::AccountRoleRegistry::set_vanity_name(&account_id, vanity_name)?;
-			Self::update_operator_settings(origin, settings)?;
-			Ok(())
+			Self::set_operator_settings(account_id, settings)
 		}
 
 		/// Executed by an operator to deregister as an operator.
@@ -2218,6 +2186,39 @@ impl<T: Config> Pallet<T> {
 
 	pub fn is_bidding(account_id: &T::AccountId) -> bool {
 		ActiveBidder::<T>::get().contains(account_id)
+	}
+
+	fn set_operator_settings(operator: T::AccountId, settings: OperatorSettings) -> DispatchResult {
+		ensure!(settings.fee_bps >= MinimumOperatorFee::<T>::get(), Error::<T>::OperatorFeeTooLow);
+		ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
+
+		if let Some(current_settings) = OperatorSettingsLookup::<T>::get(&operator) {
+			match (current_settings.delegation_acceptance, settings.delegation_acceptance) {
+				(DelegationAcceptance::Allow, DelegationAcceptance::Deny) => {
+					Exceptions::<T>::try_mutate(&operator, |allowed| {
+						allowed.clear();
+						// Any existing delegators need be added to the allowed list.
+						for (delegator, (assigned_operator, _)) in DelegationChoice::<T>::iter() {
+							if assigned_operator == operator {
+								allowed
+									.try_insert(delegator)
+									.map_err(|_| Error::<T>::TooManyExceptions)?;
+							}
+						}
+						Ok::<_, Error<T>>(())
+					})?;
+				},
+				(DelegationAcceptance::Deny, DelegationAcceptance::Allow) => {
+					Exceptions::<T>::remove(&operator);
+				},
+				_ => {},
+			}
+		}
+
+		OperatorSettingsLookup::<T>::insert(&operator, settings.clone());
+
+		Self::deposit_event(Event::OperatorSettingsUpdated { operator, settings });
+		Ok(())
 	}
 
 	pub fn is_auction_phase() -> bool {

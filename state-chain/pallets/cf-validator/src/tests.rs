@@ -2504,6 +2504,52 @@ mod operator {
 	}
 
 	#[test]
+	fn cannot_update_operator_settings_during_auction_phase() {
+		new_test_ext().execute_with(|| {
+			const NEW_OPERATOR_SETTINGS: OperatorSettings = OperatorSettings {
+				fee_bps: MAX_OPERATOR_FEE,
+				delegation_acceptance: DelegationAcceptance::Allow,
+			};
+
+			// A keygen retry re-runs the auction against live operator settings.
+			CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+			// A new operator has no delegators, so registering is still allowed.
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			assert_noop!(
+				ValidatorPallet::update_operator_settings(
+					OriginTrait::signed(ALICE),
+					NEW_OPERATOR_SETTINGS
+				),
+				Error::<Test>::AuctionPhase
+			);
+
+			CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+			CurrentEpochStartedAt::<Test>::set(1_000);
+			EpochDuration::<Test>::set(100);
+			RedemptionPeriodAsPercentage::<Test>::set(Percent::from_percent(85));
+			System::set_block_number(1085);
+			assert_noop!(
+				ValidatorPallet::update_operator_settings(
+					OriginTrait::signed(ALICE),
+					NEW_OPERATOR_SETTINGS
+				),
+				Error::<Test>::AuctionPhase
+			);
+
+			System::set_block_number(1084);
+			assert_ok!(ValidatorPallet::update_operator_settings(
+				OriginTrait::signed(ALICE),
+				NEW_OPERATOR_SETTINGS
+			));
+			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(NEW_OPERATOR_SETTINGS));
+		});
+	}
+
+	#[test]
 	fn exceptions_list_is_reset_when_operator_settings_are_updated() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
