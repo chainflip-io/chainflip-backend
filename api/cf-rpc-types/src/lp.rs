@@ -155,7 +155,7 @@ pub struct LiquidityDepositChannelDetails {
 /// A withdrawal-whitelist destination for RPC input: an internal account, or an external address
 /// given as a human-readable string plus its chain (parsed to an on-chain address by the API).
 /// Mirrors the pallet's `AccountOrAddress`.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum WhitelistDestinationRpc {
 	InternalAccount(AccountId32),
 	ExternalAddress { chain: ForeignChain, address: AddressString },
