@@ -15,19 +15,87 @@ require_environment() {
   : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 }
 
+# Callers capture the response, so the error body has to go to stderr to reach the job log.
 hcloud_api() {
-  curl --fail-with-body --silent --show-error \
+  local body
+  if ! body=$(curl --fail-with-body --silent --show-error \
     --header "Authorization: Bearer $CF_HETZNER_API_TOKEN" \
     --header "Content-Type: application/json" \
-    "$@"
+    "$@"); then
+    echo "Hetzner API request failed: $body" >&2
+    return 1
+  fi
+  printf '%s\n' "$body"
 }
 
 github_api() {
-  curl --fail-with-body --silent --show-error \
+  local body
+  if ! body=$(curl --fail-with-body --silent --show-error \
     --header "Accept: application/vnd.github+json" \
     --header "Authorization: Bearer $CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN" \
     --header "X-GitHub-Api-Version: 2022-11-28" \
-    "$@"
+    "$@"); then
+    echo "GitHub API request failed: $body" >&2
+    return 1
+  fi
+  printf '%s\n' "$body"
+}
+
+# Concurrent CI runs can exhaust the project's server quota. Capacity frees up as other runs
+# finish, so wait for it instead of failing the run.
+create_hcloud_server() {
+  local request=$1
+  # SECONDS is a bash builtin counting seconds since the shell started, so it keeps advancing.
+  local deadline=$((SECONDS + ${HETZNER_CAPACITY_WAIT_SECONDS:-1200}))
+  local error_code
+  local response
+  local status
+
+  while true; do
+    if ! response=$(curl --silent --show-error --write-out $'\n%{http_code}' \
+      --request POST \
+      --header "Authorization: Bearer $CF_HETZNER_API_TOKEN" \
+      --header "Content-Type: application/json" \
+      --data-binary "$request" \
+      "$HCLOUD_API_URL/servers"); then
+      echo "Failed to request creation of Hetzner server" >&2
+      return 1
+    fi
+    status=${response##*$'\n'}
+    response=${response%$'\n'*}
+
+    if [[ "$status" =~ ^2[0-9][0-9]$ ]]; then
+      printf '%s\n' "$response"
+      return 0
+    fi
+
+    error_code=$(jq --raw-output '.error.code // empty' <<<"$response" 2>/dev/null || true)
+    if [[ "$error_code" =~ ^(resource_limit_exceeded|rate_limit_exceeded)$ ]] \
+      && ((SECONDS < deadline)); then
+      echo "Hetzner $error_code, retrying in 30s" >&2
+      sleep 30
+      continue
+    fi
+
+    echo "Failed to create Hetzner server (HTTP $status): $response" >&2
+    return 1
+  done
+}
+
+# Distinguishes a server that never booted from a bootstrap script that failed.
+report_runner_state() {
+  local runner_name=$1
+  local server_id=$2
+
+  echo "Hetzner server $server_id:" >&2
+  hcloud_api "$HCLOUD_API_URL/servers/$server_id" \
+    | jq --compact-output '.server | {status, created, ipv4: .public_net.ipv4.ip}' >&2 || true
+  hcloud_api "$HCLOUD_API_URL/servers/$server_id/actions?sort=started" \
+    | jq --compact-output '.actions[] | {command, status, started, finished, error}' >&2 || true
+  echo "GitHub runner $runner_name:" >&2
+  github_api "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runners?name=$runner_name" \
+    | jq --compact-output --arg name "$runner_name" \
+      '[.runners[] | select(.name == $name) | {status, busy}]' >&2 || true
 }
 
 delete_hcloud_resource() {
@@ -220,12 +288,18 @@ create_runner() {
 Description=Ephemeral GitHub Actions runner
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=900
+StartLimitBurst=3
 
 [Service]
 Type=simple
 EnvironmentFile=/etc/actions-runner.env
 ExecStart=/usr/local/sbin/start-ephemeral-github-runner
 TimeoutStartSec=0
+# The bootstrap is idempotent until registration, after which the env file is removed and a
+# restart fails fast.
+Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
@@ -239,7 +313,8 @@ EOF
     --arg service "$runner_service" \
     '"#cloud-config\nwrite_files:\n  - path: /usr/local/sbin/start-ephemeral-github-runner\n    encoding: b64\n    permissions: '\''0755'\''\n    content: \($script)\n  - path: /etc/actions-runner.env\n    encoding: b64\n    permissions: '\''0600'\''\n    content: \($environment)\n  - path: /etc/systemd/system/actions-runner.service\n    encoding: b64\n    permissions: '\''0644'\''\n    content: \($service)\nruncmd:\n  - [systemctl, daemon-reload]\n  - [systemctl, enable, --now, actions-runner.service]\n"')
 
-  response=$(jq --null-input \
+  local server_request
+  server_request=$(jq --null-input \
     --arg image "${HETZNER_IMAGE:-ubuntu-24.04}" \
     --arg location "${HETZNER_LOCATION:-fsn1}" \
     --arg name "$runner_name" \
@@ -257,8 +332,8 @@ EOF
       firewalls:[{firewall:$firewall_id}],
       public_net:{enable_ipv4:true,enable_ipv6:false},
       start_after_create:true
-    }' \
-    | hcloud_api --request POST --data-binary @- "$HCLOUD_API_URL/servers")
+    }')
+  response=$(create_hcloud_server "$server_request")
   server_id=$(jq --exit-status --raw-output '.server.id' <<<"$response")
 
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
@@ -280,6 +355,7 @@ EOF
   done
 
   echo "Timed out waiting for ephemeral runner $runner_name" >&2
+  report_runner_state "$runner_name" "$server_id"
   return 1
 }
 

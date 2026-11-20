@@ -48,7 +48,7 @@ permissions:
 jobs:
   provision-bouncer-runner:
     runs-on: namespace-profile-default-light
-    timeout-minutes: 15
+    timeout-minutes: 35
     outputs:
       runner-label: ${{ steps.provision.outputs.runner-label }}
       runner-name: ${{ steps.provision.outputs.runner-name }}
