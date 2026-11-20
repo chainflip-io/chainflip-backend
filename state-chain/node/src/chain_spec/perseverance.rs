@@ -35,7 +35,9 @@ use pallet_cf_elections::generic_tools::Array;
 use sc_service::ChainType;
 use sol_prim::consts::{const_address, const_hash};
 use sp_core::{H160, H256};
-use state_chain_runtime::chainflip::witnessing::generic_elections::ChainlinkOraclePriceSettings;
+use state_chain_runtime::chainflip::witnessing::generic_elections::{
+	oracle_feeds, ChainlinkOraclePriceSettings,
+};
 
 pub struct Config;
 
@@ -392,50 +394,11 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	),
 	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
 		arb_address_checker: H160(hex_literal::hex!("564e411634189E68ecD570400eBCF783b4aF8688")),
-		arb_oracle_feeds: Array {
-			array: [
-				H160(hex_literal::hex!("56a43EB56Da12C0dc1D972ACb089c06a5dEF8e69")),
-				H160(hex_literal::hex!("d30e2101a97dcbAeBCBC04F14C3f624E67A35165")),
-				H160(hex_literal::hex!("32377717BC9F9bA8Db45A244bCE77e7c0Cc5A775")),
-				H160(hex_literal::hex!("0153002d20B96532C639313c2d54c3dA09109309")),
-				H160(hex_literal::hex!("80EDee6f667eCc9f63a0a6f55578F870651f06A4")),
-				// There is no WBTC price feed in testnet - using BTC instead
-				H160(hex_literal::hex!("56a43EB56Da12C0dc1D972ACb089c06a5dEF8e69")),
-				H160(hex_literal::hex!("53ab995fBb01C617aa1256698aD55b417168bfF9")),
-				// There is no DOT price feed in testnet - using SOL instead
-				H160(hex_literal::hex!("32377717BC9F9bA8Db45A244bCE77e7c0Cc5A775")),
-			],
-		},
+		arb_oracle_feeds: Array { array: oracle_feeds::for_network(CHAINFLIP_NETWORK).arbitrum },
 		eth_address_checker: H160(hex_literal::hex!("26061f315570bddf11d9055411a3d811c5ff0148")),
-		eth_oracle_feeds: Array {
-			array: [
-				H160(hex_literal::hex!("1b44F3514812d835EB1BDB0acB33d3fA3351Ee43")),
-				H160(hex_literal::hex!("694AA1769357215DE4FAC081bf1f309aDC325306")),
-				// There is no SOL price feed in testnet - using ETH instead
-				H160(hex_literal::hex!("694AA1769357215DE4FAC081bf1f309aDC325306")),
-				H160(hex_literal::hex!("A2F78ab2355fe2f984D808B5CeE7FD0A93D5270E")),
-				// There is no USDT price feed in testnet - using USDC instead
-				H160(hex_literal::hex!("A2F78ab2355fe2f984D808B5CeE7FD0A93D5270E")),
-				// There is no CBBTC price feed in testnet - using BTC instead
-				H160(hex_literal::hex!("1b44F3514812d835EB1BDB0acB33d3fA3351Ee43")),
-				// There is no BNB price feed in testnet - using ETH instead
-				H160(hex_literal::hex!("694AA1769357215DE4FAC081bf1f309aDC325306")),
-			],
-		},
+		eth_oracle_feeds: Array { array: oracle_feeds::for_network(CHAINFLIP_NETWORK).ethereum },
 		bsc_address_checker: H160(hex_literal::hex!("0fDA3D36ce05531F1cb14E519672dd52C314Fd28")),
-		bsc_oracle_feeds: Array {
-			array: [
-				H160(hex_literal::hex!("5741306c21795FdCBb9b265Ea0255F499DFe515C")),
-				H160(hex_literal::hex!("143db3CEEfbdfe5631aDD3E50f7614B6ba708BA7")),
-				// There is no SOL price feed in testnet - using BNB instead
-				H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
-				H160(hex_literal::hex!("90c069C4538adAc136E051052E14c1cD799C41B7")),
-				H160(hex_literal::hex!("Eca2605f0BCF2BA5966372C99837b1F182d3D620")),
-				H160(hex_literal::hex!("135deD16bFFEB51E01afab45362D3C4be31AA2B0")),
-				H160(hex_literal::hex!("2514895c72f50D8bd4B4F9b1110F0D6bD2c97526")),
-				H160(hex_literal::hex!("EA8731FD0685DB8AeAde9EcAE90C4fdf1d8164ed")),
-			],
-		},
+		bsc_oracle_feeds: Array { array: oracle_feeds::for_network(CHAINFLIP_NETWORK).bsc },
 	},
 };
 

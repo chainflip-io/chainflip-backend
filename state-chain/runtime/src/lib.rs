@@ -487,9 +487,8 @@ pub type PalletMigrations = (
 	pallet_cf_elections::migrations::PalletMigration<Runtime, AssethubInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BscInstance>,
-	// Reset the generic oracle state before its storage-version bump.
-	migrations::oracle_price_bsc::VersionedMigration,
-	pallet_cf_elections::migrations::PalletMigration<Runtime, ()>,
+	// The generic oracle storage-version bump is handled by MigrationsForV2_4.
+	pallet_cf_elections::migrations::PalletMigration<Runtime, (), ()>,
 );
 
 pub struct NoopMigration;
@@ -537,6 +536,7 @@ macro_rules! instanced_migrations {
 pub type MigrationsForV2_4 = (
 	migrations::remove_emissions_storage::RemoveEmissionsStorage,
 	migrations::safe_mode::SafeModeMigration,
+	migrations::oracle_price_bsc::VersionedMigration,
 );
 
 #[cfg(test)]

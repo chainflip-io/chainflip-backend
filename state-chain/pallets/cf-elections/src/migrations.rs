@@ -20,15 +20,23 @@ use frame_support::migrations::VersionedMigration;
 
 mod vote_storage_migration;
 
-pub type PalletMigration<T, I> = (
-	VersionedMigration<
-		9,
-		STORAGE_VERSION_U16,
-		NoopRuntimeUpgrade,
-		Pallet<T, I>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T, I>>,
+/// Versioned migrations can be replaced with `()` when the runtime handles the storage-version
+/// upgrade separately, while retaining vote cleanup on every upgrade.
+pub type PalletMigration<
+	T,
+	I,
+	VersionedMigrations = (
+		VersionedMigration<
+			9,
+			STORAGE_VERSION_U16,
+			NoopRuntimeUpgrade,
+			Pallet<T, I>,
+			<T as frame_system::Config>::DbWeight,
+		>,
+		PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T, I>>,
+	),
+> = (
+	VersionedMigrations,
 	// NOTE: Keep this migration. It clears out old votes that may be invalid after the upgrade.
 	AlwaysRunMigration<vote_storage_migration::VoteStorageMigration<T, I>>,
 );

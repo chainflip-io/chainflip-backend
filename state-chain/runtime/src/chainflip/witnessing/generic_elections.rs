@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod oracle_feeds;
+
 use cf_amm::math::Price;
 use cf_primitives::chains::assets::any;
 use cf_runtime_utilities::log_or_panic;
@@ -303,7 +305,7 @@ pub fn initial_state(
 		unsynchronised_settings: (OraclePriceSettings {
 			arbitrum: ExternalChainSettings {
 				up_to_date_timeout: Seconds(60),
-				maybe_stale_timeout: Seconds(30),
+				maybe_stale_timeout: Seconds(60),
 				minimal_price_deviation: BasisPoints(10),
 				up_to_date_timeout_overrides: [
 					(ChainlinkAssetpair::BtcUsd, Seconds(1800 + 60)),
@@ -316,21 +318,11 @@ pub fn initial_state(
 					(ChainlinkAssetpair::DotUsd, Seconds(86400 + 60)),
 				]
 				.into(),
-				maybe_stale_timeout_overrides: [
-					(ChainlinkAssetpair::BtcUsd, Seconds(60)),
-					(ChainlinkAssetpair::EthUsd, Seconds(60)),
-					(ChainlinkAssetpair::UsdtUsd, Seconds(60)),
-					(ChainlinkAssetpair::UsdcUsd, Seconds(60)),
-					(ChainlinkAssetpair::SolUsd, Seconds(60)),
-					(ChainlinkAssetpair::BnbUsd, Seconds(60)),
-					(ChainlinkAssetpair::WbtcUsd, Seconds(60)),
-					(ChainlinkAssetpair::DotUsd, Seconds(60)),
-				]
-				.into(),
+				maybe_stale_timeout_overrides: Default::default(),
 			},
 			ethereum: ExternalChainSettings {
 				up_to_date_timeout: Seconds(60),
-				maybe_stale_timeout: Seconds(30),
+				maybe_stale_timeout: Seconds(60),
 				minimal_price_deviation: BasisPoints(10),
 				up_to_date_timeout_overrides: [
 					(ChainlinkAssetpair::BtcUsd, Seconds(3600 + 60)),
@@ -342,20 +334,11 @@ pub fn initial_state(
 					(ChainlinkAssetpair::BnbUsd, Seconds(86400 + 60)),
 				]
 				.into(),
-				maybe_stale_timeout_overrides: [
-					(ChainlinkAssetpair::BtcUsd, Seconds(60)),
-					(ChainlinkAssetpair::EthUsd, Seconds(60)),
-					(ChainlinkAssetpair::UsdtUsd, Seconds(60)),
-					(ChainlinkAssetpair::UsdcUsd, Seconds(60)),
-					(ChainlinkAssetpair::SolUsd, Seconds(60)),
-					(ChainlinkAssetpair::CbbtcUsd, Seconds(60)),
-					(ChainlinkAssetpair::BnbUsd, Seconds(60)),
-				]
-				.into(),
+				maybe_stale_timeout_overrides: Default::default(),
 			},
 			bsc: ExternalChainSettings {
 				up_to_date_timeout: Seconds(60),
-				maybe_stale_timeout: Seconds(30),
+				maybe_stale_timeout: Seconds(60),
 				minimal_price_deviation: BasisPoints(10),
 				up_to_date_timeout_overrides: [
 					(ChainlinkAssetpair::BtcUsd, Seconds(60 + 30)),
@@ -365,17 +348,11 @@ pub fn initial_state(
 					(ChainlinkAssetpair::SolUsd, Seconds(600 + 60)),
 					(ChainlinkAssetpair::TrxUsd, Seconds(600 + 60)),
 					(ChainlinkAssetpair::DotUsd, Seconds(600 + 60)),
-					(ChainlinkAssetpair::BnbUsd, Seconds(30 + 30)),
 				]
 				.into(),
 				maybe_stale_timeout_overrides: [
 					(ChainlinkAssetpair::BtcUsd, Seconds(30)),
 					(ChainlinkAssetpair::EthUsd, Seconds(30)),
-					(ChainlinkAssetpair::UsdtUsd, Seconds(60)),
-					(ChainlinkAssetpair::UsdcUsd, Seconds(60)),
-					(ChainlinkAssetpair::SolUsd, Seconds(60)),
-					(ChainlinkAssetpair::TrxUsd, Seconds(60)),
-					(ChainlinkAssetpair::DotUsd, Seconds(60)),
 					(ChainlinkAssetpair::BnbUsd, Seconds(30)),
 				]
 				.into(),
