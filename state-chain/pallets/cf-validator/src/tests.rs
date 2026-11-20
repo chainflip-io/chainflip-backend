@@ -887,6 +887,26 @@ fn validator_registration_min_stake() {
 	});
 }
 
+#[test]
+fn registered_validators_must_retain_minimum_stake() {
+	new_test_ext().then_execute_with_checks(|| {
+		const ID: u64 = 42;
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			RawOrigin::Root.into(),
+			PalletConfigUpdate::MinimumValidatorStake { min_stake: 10_000 },
+		));
+		let min_stake = MinimumValidatorStake::<Test>::get();
+		assert_eq!(min_stake, 10_000 * FLIPPERINOS_PER_FLIP);
+		MockFlip::credit_funds(&ID, min_stake);
+
+		assert_eq!(ValidatorPallet::required_stake(&ID), 0);
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ID)));
+		assert_eq!(ValidatorPallet::required_stake(&ID), min_stake);
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ID)));
+		assert_eq!(ValidatorPallet::required_stake(&ID), 0);
+	});
+}
+
 const CANDIDATES: Range<u64> = 4..14;
 const AUTHORITIES: Range<u64> = 0..10;
 

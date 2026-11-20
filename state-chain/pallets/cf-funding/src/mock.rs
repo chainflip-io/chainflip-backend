@@ -142,6 +142,7 @@ impl ApiCall<EvmCrypto> for MockRegisterRedemption {
 
 parameter_types! {
 	pub static CanRedeem: HashMap<AccountId, bool> = HashMap::new();
+	pub static RequiredStake: HashMap<AccountId, u128> = HashMap::new();
 	pub static IsBiddingInCurrentAuction: bool = false;
 }
 
@@ -172,6 +173,10 @@ impl RedemptionCheck for MockRedemptionChecker {
 			Err(BIDDING_ERR)
 		}
 	}
+
+	fn required_stake(validator_id: &Self::ValidatorId) -> Self::Amount {
+		RequiredStake::get().get(validator_id).copied().unwrap_or_default()
+	}
 }
 
 impl MockRedemptionChecker {
@@ -179,6 +184,12 @@ impl MockRedemptionChecker {
 		let mut can_redeem_map = CanRedeem::get();
 		can_redeem_map.insert(validator_id, can_redeem);
 		CanRedeem::set(can_redeem_map);
+	}
+
+	pub fn set_required_stake(validator_id: AccountId, amount: u128) {
+		let mut map = RequiredStake::get();
+		map.insert(validator_id, amount);
+		RequiredStake::set(map);
 	}
 
 	fn is_unrestricted(validator_id: &AccountId) -> bool {

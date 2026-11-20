@@ -312,6 +312,11 @@ pub trait RedemptionCheck {
 	fn can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> bool {
 		Self::ensure_can_transfer(source, dest).is_ok()
 	}
+
+	/// The stake an account must keep while its current role requires one (e.g. the minimum
+	/// stake of a registered validator). Withdrawals and transfers may not take the account below
+	/// it; deregistering is the way out.
+	fn required_stake(validator_id: &Self::ValidatorId) -> Self::Amount;
 }
 
 pub trait Funding {

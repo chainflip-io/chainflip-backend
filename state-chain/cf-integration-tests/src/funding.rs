@@ -272,6 +272,78 @@ fn min_auction_bid_qualification() {
 }
 
 #[test]
+fn registered_validator_must_retain_minimum_stake() {
+	use cf_traits::{FundAccount, FundingSource};
+
+	const VALIDATOR: AccountId = AccountId::new([0xe2; 32]);
+	const MIN_STAKE_IN_FLIP: u32 = 1_000;
+	const MIN_STAKE: FlipBalance = MIN_STAKE_IN_FLIP as FlipBalance * FLIPPERINOS_PER_FLIP;
+	const EXCESS: FlipBalance = 100 * FLIPPERINOS_PER_FLIP;
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		assert_ok!(Validator::update_pallet_config(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			pallet_cf_validator::PalletConfigUpdate::MinimumValidatorStake {
+				min_stake: MIN_STAKE_IN_FLIP
+			}
+		));
+		Funding::fund_account(
+			VALIDATOR.clone(),
+			MIN_STAKE + EXCESS,
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
+		);
+		assert_ok!(Validator::register_as_validator(RuntimeOrigin::signed(VALIDATOR.clone())));
+
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(VALIDATOR.clone()),
+				RedemptionAmount::Exact(EXCESS + 1),
+				ETH_DUMMY_ADDR,
+				None,
+			),
+			Error::<Runtime>::BelowRequiredStake
+		);
+		let recipient = Validator::current_authorities().first().cloned().unwrap();
+		assert_noop!(
+			Funding::rebalance(
+				RuntimeOrigin::signed(VALIDATOR.clone()),
+				recipient,
+				None,
+				RedemptionAmount::Exact(EXCESS + 1),
+			),
+			Error::<Runtime>::BelowRequiredStake
+		);
+
+		// Redeeming the max only takes what is above the minimum stake.
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(VALIDATOR.clone()),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR,
+			None,
+		));
+		assert_eq!(Flip::balance(&VALIDATOR), MIN_STAKE);
+		assert_ok!(Funding::redeemed(
+			VALIDATOR.clone(),
+			EXCESS - pallet_cf_funding::RedemptionTax::<Runtime>::get(),
+			Default::default()
+		));
+
+		// Deregistering removes the required stake, so the rest can be redeemed.
+		assert_ok!(Validator::deregister_as_validator(RuntimeOrigin::signed(VALIDATOR.clone())));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(VALIDATOR.clone()),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR,
+			None,
+		));
+		assert_eq!(Flip::balance(&VALIDATOR), 0);
+	});
+}
+
+#[test]
 fn full_redemption_deregisters_liquidity_provider() {
 	use cf_chains::address::EncodedAddress;
 	use cf_primitives::{AccountRole, Asset, AssetAmount};

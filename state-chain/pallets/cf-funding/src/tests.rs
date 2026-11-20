@@ -395,6 +395,108 @@ fn cannot_redeem_bond() {
 }
 
 #[test]
+fn cannot_withdraw_below_required_stake() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), 0));
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), 1));
+		const AMOUNT: u128 = 200;
+		const REQUIRED_STAKE: u128 = 150;
+		const EXCESS: u128 = AMOUNT - REQUIRED_STAKE;
+
+		for account in [ALICE, BOB] {
+			Funding::fund_account(
+				account,
+				AMOUNT,
+				FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+			);
+		}
+		MockRedemptionChecker::set_required_stake(ALICE, REQUIRED_STAKE);
+
+		// Every way of moving funds out of the account respects the required stake.
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				(EXCESS + 1).into(),
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
+			Error::<Test>::BelowRequiredStake
+		);
+		assert_noop!(
+			Funding::rebalance(RuntimeOrigin::signed(ALICE), BOB, None, (EXCESS + 1).into()),
+			Error::<Test>::BelowRequiredStake
+		);
+		assert_noop!(
+			frame_support::storage::with_storage_layer(|| Funding::spawn_sub_account(
+				&ALICE,
+				0,
+				EXCESS + 1
+			)),
+			Error::<Test>::BelowRequiredStake
+		);
+
+		// Only the excess is redeemable, both as reported by the RPC and via `Max`.
+		let estimate =
+			|| Redemption::<Test>::for_rpc(&ALICE).map(|r| r.redeem_amount).unwrap_or_default();
+		assert_eq!(estimate(), EXCESS);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
+		assert_eq!(Flip::total_balance_of(&ALICE), REQUIRED_STAKE);
+		assert_ok!(Funding::redeemed(ALICE, EXCESS, Default::default()));
+		assert_eq!(estimate(), 0);
+
+		// Once no stake is required (e.g. after deregistering), the rest can be withdrawn.
+		MockRedemptionChecker::set_required_stake(ALICE, 0);
+		assert_eq!(estimate(), REQUIRED_STAKE);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
+		assert_eq!(Flip::total_balance_of(&ALICE), 0);
+	});
+}
+
+#[test]
+fn larger_of_bond_and_required_stake_applies() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), 0));
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), 1));
+		const AMOUNT: u128 = 200;
+		const LOW: u128 = 50;
+		const HIGH: u128 = 120;
+
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+		let estimate =
+			|| Redemption::<Test>::for_rpc(&ALICE).map(|r| r.redeem_amount).unwrap_or_default();
+		let redeem = |amount: u128| {
+			Funding::redeem(RuntimeOrigin::signed(ALICE), amount.into(), ETH_DUMMY_ADDR, None)
+		};
+
+		// Only the larger of the two stays in the account, whichever one it is.
+		for (bond, required_stake, error) in [
+			(HIGH, LOW, Error::<Test>::BondViolation),
+			(LOW, HIGH, Error::<Test>::BelowRequiredStake),
+		] {
+			Bonder::<Test>::update_bond(&ALICE, bond);
+			MockRedemptionChecker::set_required_stake(ALICE, required_stake);
+
+			assert_eq!(estimate(), AMOUNT - HIGH);
+			assert_noop!(redeem(AMOUNT - HIGH + 1), error);
+		}
+	});
+}
+
+#[test]
 fn can_only_redeem_if_redemption_check_passes() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
