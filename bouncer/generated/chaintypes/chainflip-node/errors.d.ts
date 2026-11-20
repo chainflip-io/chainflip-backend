@@ -334,6 +334,11 @@ export interface ChainErrors extends GenericChainErrors {
     SubAccountIdDerivationFailed: GenericPalletError;
 
     /**
+     * Sub-accounts are currently disabled.
+     **/
+    SubAccountsDisabled: GenericPalletError;
+
+    /**
      * Generic pallet error
      **/
     [error: string]: GenericPalletError;

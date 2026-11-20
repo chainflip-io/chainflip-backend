@@ -101,6 +101,15 @@ pub mod pallet {
 	pub type VanityNames<T: Config> =
 		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
 
+	/// Whether [`Call::spawn_sub_account`] and [`Call::as_sub_account`] are enabled.
+	///
+	/// Sub-accounts are disabled pending a redesign; governance can enable them, e.g. on testnets.
+	/// An unset value reads as `false` (`ValueQuery` over `bool`), so they are disabled on any
+	/// chain where governance hasn't explicitly enabled them, without needing a migration or
+	/// genesis config.
+	#[pallet::storage]
+	pub type SubAccountsEnabled<T: Config> = StorageValue<_, bool, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -127,6 +136,9 @@ pub mod pallet {
 			sub_account_id: T::AccountId,
 			sub_account_index: SubAccountIndex,
 		},
+		SubAccountsEnabledSet {
+			enabled: bool,
+		},
 	}
 
 	#[pallet::error]
@@ -141,6 +153,8 @@ pub mod pallet {
 		FailedToExecuteCallOnBehalfOfSubAccount,
 		/// Failed to derive the sub-account id.
 		SubAccountIdDerivationFailed,
+		/// Sub-accounts are currently disabled.
+		SubAccountsDisabled,
 	}
 
 	#[pallet::genesis_config]
@@ -203,6 +217,7 @@ pub mod pallet {
 			initial_amount: T::Amount,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
+			ensure!(SubAccountsEnabled::<T>::get(), Error::<T>::SubAccountsDisabled);
 			let sub_account_id =
 				T::SpawnAccount::spawn_sub_account(&account_id, sub_account_index, initial_amount)?;
 			Self::deposit_event(Event::SubAccountCreated {
@@ -227,6 +242,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
 			let account_id = ensure_signed(origin.clone())?;
+			ensure!(SubAccountsEnabled::<T>::get(), Error::<T>::SubAccountsDisabled);
 			let sub_account_id =
 				T::SpawnAccount::derive_sub_account_id(&account_id, sub_account_index)?;
 			ensure!(
@@ -241,6 +257,18 @@ pub mod pallet {
 				sub_account_index,
 			});
 			Ok(().into())
+		}
+
+		/// Enables or disables [`Call::spawn_sub_account`] and [`Call::as_sub_account`].
+		///
+		/// The dispatch origin of this function must be governance.
+		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::set_sub_accounts_enabled())]
+		pub fn set_sub_accounts_enabled(origin: OriginFor<T>, enabled: bool) -> DispatchResult {
+			<T as Config>::EnsureGovernance::ensure_origin(origin)?;
+			SubAccountsEnabled::<T>::put(enabled);
+			Self::deposit_event(Event::SubAccountsEnabledSet { enabled });
+			Ok(())
 		}
 	}
 }
