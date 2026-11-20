@@ -374,7 +374,7 @@ fn process_tuple(
 ) -> Result<(bool, Vec<Eip712DomainType>, Vec<(String, Value)>), &'static str> {
 	let (type_fields_and_ids, modified_values): (Vec<_>, Vec<_>) = tuple_types
 		.into_iter()
-		.zip(values.into_iter())
+		.zip(values)
 		.enumerate()
 		.map(|(i, (ty, value))| -> Result<_, &'static str> {
 			let (type_name, value) = recursively_construct_types(value, ty, types)?;

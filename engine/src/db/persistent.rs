@@ -122,7 +122,7 @@ impl PersistentKeyDB {
 	) {
 		self.kv_db
 			.put_data(&keygen_data_prefix::<C>(), &key_id, &keygen_result_info)
-			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
+			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", key_id, e));
 	}
 
 	pub fn load_keys<C: ChainSigning>(&self) -> HashMap<KeyId, KeygenResultInfo<C::CryptoScheme>> {
@@ -281,8 +281,7 @@ fn create_backup(path: &Path, schema_version: u32) -> Result<String, anyhow::Err
 		"backup_v{}_{}_{}",
 		schema_version,
 		chrono::Utc::now().to_rfc3339(),
-		&path
-			.file_name()
+		path.file_name()
 			.expect("Should have file name")
 			.to_os_string()
 			.into_string()
@@ -303,7 +302,7 @@ fn create_backup_with_directory_name(
 		std::fs::create_dir_all(&backups_path).with_context(|| {
 			format!(
 				"Failed to create backup directory {}",
-				&backups_path.to_str().expect("Should get backup path as str")
+				backups_path.to_str().expect("Should get backup path as str")
 			)
 		})?;
 	}

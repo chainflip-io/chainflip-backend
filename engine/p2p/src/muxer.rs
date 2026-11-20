@@ -110,7 +110,7 @@ impl<'a> TagPlusMessage<'a> {
 		let tag_num = u16::from_be_bytes(*tag);
 
 		let tag: ChainTag = num_traits::FromPrimitive::from_u16(tag_num)
-			.ok_or_else(|| anyhow!("unknown tag: {:?}", &tag_num))?;
+			.ok_or_else(|| anyhow!("unknown tag: {:?}", tag_num))?;
 
 		Ok(TagPlusMessage { tag, payload })
 	}

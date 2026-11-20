@@ -113,7 +113,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
 
             impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, H> {
-                pub fn with_identifiers<R, F: for<'a> FnOnce(
+                pub fn with_identifiers<R, F: FnOnce(
                     ($(
                         Vec<ElectionIdentifierOf<$electoral_system>>,
                     )*)
