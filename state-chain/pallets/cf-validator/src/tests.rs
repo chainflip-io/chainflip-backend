@@ -3558,6 +3558,146 @@ pub mod auction_optimization {
 		}
 	}
 
+	/// Models legacy associations that exceed the registration cap.
+	fn setup_legacy_operator(operator: ValidatorId, validators: Vec<Bid<ValidatorId, Amount>>) {
+		setup_operator(operator, Vec::new());
+		add_bids(validators.clone());
+		for Bid { bidder_id, .. } in &validators {
+			OperatorChoice::<Test>::insert(bidder_id, operator);
+		}
+		ManagedValidators::<Test>::insert(
+			operator,
+			validators.into_iter().map(|bid| bid.bidder_id).collect::<BTreeSet<_>>(),
+		);
+	}
+
+	#[test]
+	fn auction_caps_legacy_operators_and_replaces_failed_validator() {
+		new_test_ext().execute_with(|| {
+			ActiveBidder::<Test>::kill();
+			MockEpochInfo::set_epoch(GENESIS_EPOCH);
+			AuctionParameters::<Test>::put(SetSizeParameters {
+				min_size: 45,
+				max_size: 45,
+				max_expansion: 45,
+			});
+			for (operator, start) in [(OP_1, 100), (OP_2, 200)] {
+				setup_legacy_operator(
+					operator,
+					(start..start + 25).map(|bidder_id| Bid { bidder_id, amount: 100 }).collect(),
+				);
+			}
+			let independents: BTreeSet<_> = (300..305).collect();
+			add_bids(
+				independents.iter().map(|&bidder_id| Bid { bidder_id, amount: 110 }).collect(),
+			);
+
+			ValidatorPallet::start_authority_rotation();
+			let next_epoch = CurrentEpoch::<Test>::get() + 1;
+			for (operator, start) in [(OP_1, 100), (OP_2, 200)] {
+				let snapshot = DelegationSnapshots::<Test>::get(next_epoch, operator).unwrap();
+				assert_eq!(
+					snapshot.validators,
+					(start + 5..start + 25).map(|id| (id, 100)).collect()
+				);
+				assert_eq!(snapshot.delegators, (start..start + 5).map(|id| (id, 100)).collect());
+				assert_eq!(snapshot.total_available_bid(), 2500);
+				assert_eq!(snapshot.avg_bid(), 125);
+				assert_eq!(ManagedValidators::<Test>::get(operator).len(), 25);
+			}
+
+			// A failed retained validator must free a place for an excess validator on re-auction.
+			MockKeyRotatorA::failed([124]);
+			ValidatorPallet::on_initialize(1);
+
+			let RotationPhase::KeygensInProgress(state) = CurrentRotationPhase::<Test>::get()
+			else {
+				panic!("expected keygen to restart");
+			};
+			let winners: BTreeSet<_> = state.primary_candidates.into_iter().collect();
+			assert_eq!(winners.len(), 45);
+			assert_eq!(state.bond, 110);
+			assert!(independents.is_subset(&winners));
+			assert!(!winners.contains(&124));
+			assert!(winners.contains(&104));
+			for operator in [OP_1, OP_2] {
+				let snapshot = DelegationSnapshots::<Test>::get(next_epoch, operator).unwrap();
+				assert_eq!(snapshot.validators.len(), MAX_VALIDATORS_PER_OPERATOR);
+				assert!(snapshot.validators.keys().all(|id| winners.contains(id)));
+				assert_eq!(snapshot.total_available_bid(), 2500);
+			}
+			let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OP_1).unwrap();
+			assert_eq!(snapshot.delegators.get(&124), Some(&100));
+			assert_eq!(ValidatorToOperator::<Test>::get(next_epoch, 124), None);
+			assert_eq!(ValidatorToOperator::<Test>::get(next_epoch, 104), Some(OP_1));
+		});
+	}
+
+	#[test]
+	fn operator_cap_uses_capped_bids_after_excluding_banned_validators() {
+		new_test_ext().execute_with(|| {
+			setup_legacy_operator(
+				OP_1,
+				(100..121)
+					.map(|bidder_id| Bid {
+						bidder_id,
+						amount: if bidder_id == 100 { 1000 } else { 100 },
+					})
+					.collect(),
+			);
+			assert_ok!(ValidatorPallet::set_validator_max_bid(
+				RuntimeOrigin::signed(100),
+				Some(50)
+			));
+
+			for excluded in [BTreeSet::new(), BTreeSet::from([120])] {
+				let (snapshots, _) = ValidatorPallet::build_delegation_snapshots::<
+					<Test as Config>::KeygenQualification,
+				>(&excluded);
+				let snapshot = snapshots.get(&OP_1).unwrap();
+				assert_eq!(snapshot.validators.len(), MAX_VALIDATORS_PER_OPERATOR);
+				assert_eq!(snapshot.total_available_bid(), 2050);
+				if excluded.is_empty() {
+					assert_eq!(snapshot.delegators, BTreeMap::from([(100, 50)]));
+				} else {
+					assert_eq!(snapshot.delegators, BTreeMap::from([(120, 100)]));
+					assert_eq!(snapshot.validators.get(&100), Some(&50));
+				}
+			}
+		});
+	}
+
+	#[test]
+	fn auction_rejects_insufficient_bidders_after_operator_cap() {
+		new_test_ext().execute_with(|| {
+			ActiveBidder::<Test>::kill();
+			AuctionParameters::<Test>::put(SetSizeParameters {
+				min_size: 21,
+				max_size: 25,
+				max_expansion: 25,
+			});
+			setup_legacy_operator(
+				OP_1,
+				(100..125).map(|bidder_id| Bid { bidder_id, amount: 100 }).collect(),
+			);
+
+			assert_matches!(
+				ValidatorPallet::run_initial_auction(&Default::default()),
+				Err(AuctionError::NotEnoughBidders)
+			);
+			assert_matches!(
+				ValidatorPallet::resolve_auction_iteratively(&Default::default()),
+				Err(AuctionError::NotEnoughBidders)
+			);
+			System::reset_events();
+			ValidatorPallet::start_authority_rotation();
+			assert_rotation_aborted();
+			assert!(
+				DelegationSnapshots::<Test>::get(CurrentEpoch::<Test>::get() + 1, OP_1).is_none()
+			);
+		});
+	}
+
 	#[test]
 	fn operator_sacrifices_its_lowest_capped_bidder() {
 		// The operator's pool averages its members' bids, so a pool averaging below the bond wins

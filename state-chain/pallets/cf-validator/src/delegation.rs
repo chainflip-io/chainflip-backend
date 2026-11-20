@@ -316,6 +316,23 @@ where
 		self.total_available_bid() / Bid::from(self.validators.len() as u32)
 	}
 
+	/// Excess validators contribute as delegators, preserving the operator's total bid.
+	pub(crate) fn enforce_validator_limit(&mut self) {
+		let excess = self.validators.len().saturating_sub(MAX_VALIDATORS_PER_OPERATOR);
+		if excess == 0 {
+			return;
+		}
+
+		let mut validators = self.validators.clone().into_iter().collect::<Vec<_>>();
+		validators.sort_unstable_by(|(id_a, bid_a), (id_b, bid_b)| {
+			bid_a.cmp(bid_b).then_with(|| id_a.cmp(id_b))
+		});
+		for (validator, amount) in validators.into_iter().take(excess) {
+			self.validators.remove(&validator);
+			self.delegators.insert(validator, amount);
+		}
+	}
+
 	fn move_lowest_validator_to_delegator(&mut self) {
 		if let Some((validator, amount)) =
 			self.validators.clone().into_iter().min_by_key(|(_, v)| *v)
@@ -550,6 +567,53 @@ mod tests {
 	}
 
 	proptest! {
+		#[test]
+		fn validator_limit_preserves_bids_and_keeps_highest_bidders(
+			validator_bids in prop::collection::vec(1u128..10_000, 0..60),
+			delegator_bids in prop::collection::vec(1u128..10_000, 0..20),
+		) {
+			let mut snapshot = DelegationSnapshot::<ValidatorId, u128> {
+				operator: 0,
+				validators: validator_bids.into_iter().enumerate()
+					.map(|(i, bid)| (i as u64 + 100, bid)).collect(),
+				delegators: delegator_bids.into_iter().enumerate()
+					.map(|(i, bid)| (i as u64 + 1000, bid)).collect(),
+				delegation_fee_bps: 2000,
+			};
+			let original = snapshot.clone();
+			let original_bids: BTreeMap<_, _> = original.validators.clone().into_iter()
+				.chain(original.delegators.clone()).collect();
+
+			snapshot.enforce_validator_limit();
+
+			prop_assert_eq!(
+				snapshot.validators.len(),
+				original.validators.len().min(MAX_VALIDATORS_PER_OPERATOR)
+			);
+			prop_assert_eq!(snapshot.total_available_bid(), original.total_available_bid());
+			let remaining_bids: BTreeMap<_, _> = snapshot.validators.clone().into_iter()
+				.chain(snapshot.delegators.clone()).collect();
+			prop_assert_eq!(remaining_bids, original_bids);
+			prop_assert!(snapshot.validators.keys().all(|id| !snapshot.delegators.contains_key(id)));
+			prop_assert!(original.delegators.iter()
+				.all(|(id, bid)| snapshot.delegators.get(id) == Some(bid)));
+			let highest_demoted_bid = snapshot.delegators.iter()
+				.filter(|(id, _)| original.validators.contains_key(id))
+				.map(|(_, bid)| bid)
+				.max();
+			if let (Some(lowest_retained), Some(highest_demoted)) =
+				(snapshot.validators.values().min(), highest_demoted_bid)
+			{
+				prop_assert!(lowest_retained >= highest_demoted);
+			}
+			if original.validators.len() <= MAX_VALIDATORS_PER_OPERATOR {
+				prop_assert_eq!(&snapshot, &original);
+			}
+			let capped = snapshot.clone();
+			snapshot.enforce_validator_limit();
+			prop_assert_eq!(snapshot, capped);
+		}
+
 		#[test]
 		fn distribute_always_sums_to_total(
 			validator_amounts in prop::collection::vec(flipperinos(1_000_000), 1..10),
