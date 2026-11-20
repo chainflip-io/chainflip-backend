@@ -51,6 +51,7 @@ import type {
   SpConsensusGrandpaEquivocationProof,
   StateChainRuntimeChainflipKeyOwnerProofCurrentSessionProof,
   PalletCfGovernanceExecutionMode,
+  PalletCfGovernanceCouncil,
   CfTraitsSafeModeEmergencyPreset,
   PalletCfTokenholderGovernanceProposal,
   StateChainRuntimeChainflipOffencesOffence,
@@ -2054,32 +2055,6 @@ export interface ChainTx<
     >;
 
     /**
-     * Sets a new set of governance members
-     * **Can only be called via the Governance Origin**
-     *
-     * Sets a new set of governance members. Note that this can be called with an empty vector
-     * to remove the possibility to govern the chain at all.
-     *
-     * @param {Array<AccountId32Like>} newMembers
-     * @param {number} newThreshold
-     **/
-    newMembershipSet: GenericTxCall<
-      (
-        newMembers: Array<AccountId32Like>,
-        newThreshold: number,
-      ) => ChainSubmittableExtrinsic<
-        {
-          pallet: 'Governance';
-          palletCall: {
-            name: 'NewMembershipSet';
-            params: { newMembers: Array<AccountId32Like>; newThreshold: number };
-          };
-        },
-        ChainKnownTypes
-      >
-    >;
-
-    /**
      * Performs a runtime upgrade of the Chainflip runtime
      * **Can only be called via the Governance Origin**
      *
@@ -2203,7 +2178,31 @@ export interface ChainTx<
     >;
 
     /**
+     * Replaces the council.
+     * **Can only be called via the Governance Origin**
+     *
+     * Expires all active proposals, since they were approved under the old council.
+     *
+     * @param {PalletCfGovernanceCouncil} newCouncil
+     **/
+    setCouncil: GenericTxCall<
+      (newCouncil: PalletCfGovernanceCouncil) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'Governance';
+          palletCall: {
+            name: 'SetCouncil';
+            params: { newCouncil: PalletCfGovernanceCouncil };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Lets any single governance member switch off parts of the protocol without a vote.
+     *
+     * A member is any individual in the council, however deeply nested and whatever their
+     * weight: no group has to reach quorum.
      *
      * Presets can only switch settings off. Switching them back on needs a governance vote.
      * Applying a preset that is already in force is a no-op.

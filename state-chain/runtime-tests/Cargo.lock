@@ -1212,6 +1212,7 @@ dependencies = [
  "hex-literal",
  "log",
  "parity-scale-codec",
+ "scale-info",
  "sp-core",
  "sp-io",
  "sp-runtime",

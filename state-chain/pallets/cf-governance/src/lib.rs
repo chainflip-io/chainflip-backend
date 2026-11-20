@@ -19,8 +19,12 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 #![allow(clippy::allow_attributes)]
 
+pub mod council;
 pub mod migrations;
 
+pub use council::{Council, InvalidCouncil, MAX_DEPTH};
+
+use cf_runtime_utilities::DepthLimited;
 use cf_traits::{
 	AuthoritiesCfeVersions, CompatibleCfeVersions, EmergencyPreset, EmergencySafeMode,
 	MAX_EMERGENCY_PRESETS,
@@ -45,7 +49,7 @@ pub use weights::WeightInfo;
 /// Hash over (call, nonce, runtime_version)
 pub type GovCallHash = [u8; 32];
 
-pub const STORAGE_VERSION_U16: u16 = 3;
+pub const STORAGE_VERSION_U16: u16 = 4;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[cfg(test)]
@@ -57,7 +61,7 @@ macro_rules! ensure_governance_member {
 	($origin:ident) => {{
 		let account_id = ensure_signed($origin)?;
 		let council = Members::<T>::get();
-		ensure!(council.members.contains(&account_id), Error::<T>::NotMember);
+		ensure!(council.is_member(&account_id), Error::<T>::NotMember);
 		(council, account_id)
 	}};
 }
@@ -83,7 +87,6 @@ pub mod pallet {
 		error::BadOrigin,
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
-		DefaultNoBound,
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
@@ -118,35 +121,6 @@ pub mod pallet {
 		pub approved: BTreeSet<AccountId>,
 		/// Proposal is pre authorised.
 		pub execution: ExecutionMode,
-	}
-
-	#[derive(
-		Encode,
-		Decode,
-		DecodeWithMemTracking,
-		TypeInfo,
-		Clone,
-		RuntimeDebug,
-		PartialEq,
-		Eq,
-		DefaultNoBound,
-	)]
-	pub struct GovernanceCouncil<AccountId> {
-		/// Set of accounts which are members of governance.
-		pub members: BTreeSet<AccountId>,
-		/// Number of approvals required for a proposal to pass.
-		#[codec(compact)]
-		pub threshold: u32,
-	}
-
-	impl<A> GovernanceCouncil<A> {
-		pub fn is_valid(&self) -> bool {
-			!self.members.is_empty() && (self.threshold as usize) <= self.members.len()
-		}
-
-		pub fn is_approved(&self, proposal: &Proposal<A>) -> bool {
-			(proposal.approved.len() as u32) >= self.threshold
-		}
 	}
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -222,9 +196,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ExpiryTime<T> = StorageValue<_, Timestamp, ValueQuery>;
 
-	/// Accounts in the current governance set.
+	/// The body whose approvals decide governance proposals.
 	#[pallet::storage]
-	pub type Members<T: Config> = StorageValue<_, GovernanceCouncil<T::AccountId>, ValueQuery>;
+	pub type Members<T: Config> = StorageValue<_, Council<T::AccountId>, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -259,8 +233,9 @@ pub mod pallet {
 		GovKeyCallHashWhitelisted { call_hash: GovCallHash },
 		/// Failed GovKey call
 		GovKeyCallExecutionFailed { call_hash: GovCallHash, error: DispatchError },
-		/// New governance council set
-		NewGovernanceCouncil { new_council: GovernanceCouncil<T::AccountId> },
+		/// The council was replaced. Carries the flattened members rather than the
+		/// council itself: the event schema generator can't express a recursive type (PRO-3155).
+		NewCouncil { members: BTreeSet<AccountId<T>> },
 		/// A governance member applied emergency safe-mode presets.
 		EmergencyPresetsApplied { member: T::AccountId, presets: EmergencyPresets },
 	}
@@ -281,8 +256,8 @@ pub mod pallet {
 		CallHashNotWhitelisted,
 		/// Insufficient number of CFEs are at the target version to receive the runtime upgrade.
 		NotEnoughAuthoritiesCfesAtTargetVersion,
-		/// The provided council is invalid: either empty or threshold > members.len()
-		InvalidCouncil,
+		/// The council can never reach quorum, or exceeds the size limits.
+		InvalidCouncil(InvalidCouncil),
 		/// At least one emergency preset must be given.
 		NoEmergencyPresets,
 	}
@@ -302,45 +277,7 @@ pub mod pallet {
 			let id = Self::push_proposal(call, execution);
 			Self::deposit_event(Event::Proposed(id));
 
-			Self::inner_approve(council, account_id, id)
-		}
-
-		/// Sets a new set of governance members
-		/// **Can only be called via the Governance Origin**
-		///
-		/// Sets a new set of governance members. Note that this can be called with an empty vector
-		/// to remove the possibility to govern the chain at all.
-		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::new_membership_set())]
-		pub fn new_membership_set(
-			origin: OriginFor<T>,
-			new_members: BTreeSet<T::AccountId>,
-			new_threshold: u32,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			let new_council = GovernanceCouncil { members: new_members, threshold: new_threshold };
-			ensure!(new_council.is_valid(), Error::<T>::InvalidCouncil);
-
-			// Updating the membership set invalidates all existing proposals
-			for proposal_id in ActiveProposals::<T>::take() {
-				Proposals::<T>::remove(proposal_id.proposal_id);
-				Self::deposit_event(Event::Expired(proposal_id.proposal_id));
-			}
-
-			Members::<T>::mutate(|old_council| {
-				for member in old_council.members.difference(&new_council.members) {
-					<frame_system::Pallet<T>>::dec_sufficients(member);
-				}
-				for member in new_council.members.difference(&old_council.members) {
-					<frame_system::Pallet<T>>::inc_sufficients(member);
-				}
-				*old_council = new_council.clone();
-			});
-
-			Self::deposit_event(Event::NewGovernanceCouncil { new_council });
-
-			Ok(())
+			Self::inner_approve(&council, account_id, id)
 		}
 
 		/// Performs a runtime upgrade of the Chainflip runtime
@@ -376,7 +313,7 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::approve(), DispatchClass::Operational))]
 		pub fn approve(origin: OriginFor<T>, approved_id: ProposalId) -> DispatchResult {
 			let (council, account_id) = ensure_governance_member!(origin);
-			Self::inner_approve(council, account_id, approved_id)
+			Self::inner_approve(&council, account_id, approved_id)
 		}
 
 		/// **Can only be called via the Governance Origin**
@@ -465,7 +402,43 @@ pub mod pallet {
 			}
 		}
 
+		/// Replaces the council.
+		/// **Can only be called via the Governance Origin**
+		///
+		/// Expires all active proposals, since they were approved under the old council.
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::set_council())]
+		pub fn set_council(
+			origin: OriginFor<T>,
+			new_council: DepthLimited<Council<T::AccountId>, MAX_DEPTH>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			let DepthLimited(new_council) = new_council;
+			new_council.validate().map_err(Error::<T>::InvalidCouncil)?;
+
+			for proposal_id in ActiveProposals::<T>::take() {
+				Proposals::<T>::remove(proposal_id.proposal_id);
+				Self::deposit_event(Event::Expired(proposal_id.proposal_id));
+			}
+
+			let old_members = Members::<T>::get().members();
+			let new_members = new_council.members();
+			for member in old_members.difference(&new_members) {
+				<frame_system::Pallet<T>>::dec_sufficients(member);
+			}
+			for member in new_members.difference(&old_members) {
+				<frame_system::Pallet<T>>::inc_sufficients(member);
+			}
+			Members::<T>::put(new_council);
+
+			Self::deposit_event(Event::NewCouncil { members: new_members });
+			Ok(())
+		}
+
 		/// Lets any single governance member switch off parts of the protocol without a vote.
+		///
+		/// A member is any individual in the council, however deeply nested and whatever their
+		/// weight: no group has to reach quorum.
 		///
 		/// Presets can only switch settings off. Switching them back on needs a governance vote.
 		/// Applying a preset that is already in force is a no-op.
@@ -503,13 +476,22 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
+			// `construct_runtime!` generates a test that builds `RuntimeGenesisConfig::default()`,
+			// which has no members, so that case leaves governance disabled instead of panicking.
+			let council = if self.members.is_empty() {
+				Council::default()
+			} else {
+				Council::simple_group(
+					u8::try_from(self.members.len().div_ceil(2)).unwrap_or(u8::MAX),
+					self.members.iter().cloned(),
+				)
+				.and_then(|council| council.validate().map(|()| council))
+				.expect("The genesis council must be valid")
+			};
 			for member in &self.members {
 				<frame_system::Pallet<T>>::inc_sufficients(member);
 			}
-			Members::<T>::set(GovernanceCouncil {
-				members: self.members.clone(),
-				threshold: (self.members.len() as u32).div_ceil(2),
-			});
+			Members::<T>::set(council);
 			ExpiryTime::<T>::set(self.expiry_span);
 		}
 	}
@@ -562,7 +544,7 @@ where
 
 impl<T: Config> Pallet<T> {
 	pub fn inner_approve(
-		council: GovernanceCouncil<T::AccountId>,
+		council: &Council<T::AccountId>,
 		who: T::AccountId,
 		approved_id: ProposalId,
 	) -> Result<(), DispatchError> {
@@ -579,7 +561,7 @@ impl<T: Config> Pallet<T> {
 			Ok(proposal.clone())
 		})?;
 
-		if council.is_approved(&proposal) {
+		if council.quorum_reached(&proposal.approved) {
 			if proposal.execution == ExecutionMode::Manual {
 				PreAuthorisedGovCalls::<T>::insert(approved_id, proposal.call);
 			} else {
