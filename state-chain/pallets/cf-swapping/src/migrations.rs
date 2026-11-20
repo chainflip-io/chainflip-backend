@@ -21,6 +21,7 @@ use frame_support::migrations::VersionedMigration;
 
 mod remove_flip_to_burn;
 mod remove_maximum_swap_amount;
+mod reschedule_stuck_swaps;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
@@ -34,6 +35,13 @@ pub type PalletMigration<T> = (
 		18,
 		19,
 		remove_maximum_swap_amount::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		19,
+		20,
+		reschedule_stuck_swaps::RescheduleStuckSwaps<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
