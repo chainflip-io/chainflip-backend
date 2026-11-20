@@ -1236,6 +1236,26 @@ export interface ChainTx<
     >;
 
     /**
+     * Enables or disables [`Call::spawn_sub_account`] and [`Call::as_sub_account`].
+     *
+     * The dispatch origin of this function must be governance.
+     *
+     * @param {boolean} enabled
+     **/
+    setSubAccountsEnabled: GenericTxCall<
+      (enabled: boolean) => ChainSubmittableExtrinsic<
+        {
+          pallet: 'AccountRoles';
+          palletCall: {
+            name: 'SetSubAccountsEnabled';
+            params: { enabled: boolean };
+          };
+        },
+        ChainKnownTypes
+      >
+    >;
+
+    /**
      * Generic pallet tx call
      **/
     [callName: string]: GenericTxCall<TxCall<ChainKnownTypes>>;

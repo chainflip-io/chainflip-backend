@@ -247,10 +247,64 @@ fn on_deregistered_sees_the_role_being_deregistered() {
 	});
 }
 
+fn enable_sub_accounts() {
+	assert_ok!(AccountRolesPallet::set_sub_accounts_enabled(OriginFor::<Test>::root(), true));
+}
+
+#[test]
+fn sub_accounts_are_disabled_by_default() {
+	new_test_ext().execute_with(|| {
+		const SUB_ACCOUNT_INDEX: u8 = 0;
+		assert!(!SubAccountsEnabled::<Test>::get());
+
+		// Spawn the sub-account directly so that the only failure reason is the flag.
+		MockSpawnAccount::spawn_sub_account(&ALICE, SUB_ACCOUNT_INDEX, 0).unwrap();
+
+		assert_noop!(
+			AccountRolesPallet::spawn_sub_account(RuntimeOrigin::signed(ALICE), 1, 0),
+			Error::<Test>::SubAccountsDisabled
+		);
+		assert_noop!(
+			AccountRolesPallet::as_sub_account(
+				RuntimeOrigin::signed(ALICE),
+				SUB_ACCOUNT_INDEX,
+				Box::new(RuntimeCall::System(frame_system::Call::remark { remark: vec![] })),
+			),
+			Error::<Test>::SubAccountsDisabled
+		);
+	});
+}
+
+#[test]
+fn only_governance_can_toggle_sub_accounts() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			AccountRolesPallet::set_sub_accounts_enabled(RuntimeOrigin::signed(ALICE), true),
+			sp_runtime::traits::BadOrigin
+		);
+
+		enable_sub_accounts();
+		assert!(SubAccountsEnabled::<Test>::get());
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::MockAccountRoles(Event::SubAccountsEnabledSet { enabled: true })
+		);
+		assert_ok!(AccountRolesPallet::spawn_sub_account(RuntimeOrigin::signed(ALICE), 0, 0));
+
+		assert_ok!(AccountRolesPallet::set_sub_accounts_enabled(OriginFor::<Test>::root(), false));
+		assert!(!SubAccountsEnabled::<Test>::get());
+		assert_noop!(
+			AccountRolesPallet::spawn_sub_account(RuntimeOrigin::signed(ALICE), 1, 0),
+			Error::<Test>::SubAccountsDisabled
+		);
+	});
+}
+
 #[test]
 fn spawn_sub_account() {
 	new_test_ext().execute_with(|| {
 		const SUB_ACCOUNT_INDEX: u8 = 0;
+		enable_sub_accounts();
 		assert_ok!(AccountRolesPallet::spawn_sub_account(RuntimeOrigin::signed(ALICE), SUB_ACCOUNT_INDEX, 0));
 		assert_has_matching_event!(
 			Test,
@@ -267,6 +321,7 @@ fn spawn_sub_account() {
 fn execute_as_sub_account() {
 	new_test_ext().execute_with(|| {
 		const SUB_ACCOUNT_INDEX: u8 = 1;
+		enable_sub_accounts();
 
 		let sub_account_id = MockSpawnAccount::spawn_sub_account(&ALICE, SUB_ACCOUNT_INDEX, 0)
 			.expect("Sub-account ID derivation should not fail");
