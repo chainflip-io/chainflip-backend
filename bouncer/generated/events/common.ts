@@ -577,11 +577,6 @@ export const cfPrimitivesWitnessingTaskName = simpleEnum([
   'Bsc',
 ]);
 
-export const palletCfGovernanceGovernanceCouncil = z.object({
-  members: z.array(accountId),
-  threshold: z.number(),
-});
-
 export const cfTraitsSafeModeEmergencyPreset = z.discriminatedUnion('__kind', [
   z.object({
     __kind: z.literal('DisableDepositChannelCreation'),
