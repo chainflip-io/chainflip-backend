@@ -605,8 +605,86 @@ mod transfer {
 #[cfg(test)]
 mod test_flip_reward_distribution {
 	use super::*;
-	use crate::{FlipToDistribute, ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID};
+	use crate::{
+		FlipToDistribute, PendingRewardDistribution, ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID,
+	};
 	use cf_traits::{mocks::rewards_distribution::MockRewardsDistribution, FeePayment};
+	use frame_support::{traits::Hooks, weights::Weight};
+
+	/// Ends epoch 1 and pays out its rewards in a single block.
+	fn distribute_in_full() -> FlipBalance {
+		let bridged = Flip::trigger_flip_reward_distribution(1);
+		Flip::on_idle(1, Weight::MAX);
+		assert!(PendingRewardDistribution::<Test>::get().is_none());
+		bridged
+	}
+
+	/// Pays epoch 1's rewards to ALICE, BOB and CHARLIE, who only has a reward to collect.
+	fn set_beneficiaries() {
+		frame_system::Provider::<Test>::created(&CHARLIE).unwrap();
+		MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
+	}
+
+	fn read_weight() -> frame_support::weights::RuntimeDbWeight {
+		<<Test as frame_system::Config>::DbWeight as Get<_>>::get()
+	}
+
+	/// Idle weight for one distribution step that pays `payees` of a group of three.
+	fn idle_weight_for(payees: u32) -> Weight {
+		read_weight()
+			.reads(1)
+			.saturating_add(<() as WeightInfo>::continue_reward_distribution(payees, 3))
+	}
+
+	#[test]
+	fn rewards_are_paid_out_as_idle_weight_allows() {
+		new_test_ext().execute_with(|| {
+			<Flip as FeePayment>::bridge_in_to_onchain_reserve(300u128);
+			set_beneficiaries();
+			Flip::trigger_flip_reward_distribution(1);
+
+			// Fees accruing after the epoch ended are left for the next distribution.
+			<Flip as FeePayment>::bridge_in_to_onchain_reserve(30u128);
+			assert_eq!(Flip::pending_rewards(), 30);
+
+			Flip::on_idle(1, idle_weight_for(0));
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 0);
+
+			Flip::on_idle(2, idle_weight_for(2));
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 100);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&BOB), 100);
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&CHARLIE), 0);
+			assert_eq!(PendingRewardDistribution::<Test>::get().unwrap().undistributed, 100);
+			assert_eq!(Flip::pending_rewards(), 30);
+
+			Flip::on_idle(3, idle_weight_for(2));
+			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&CHARLIE), 100);
+			assert!(PendingRewardDistribution::<Test>::get().is_none());
+			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 30);
+			assert_eq!(Flip::pending_rewards(), 30);
+		});
+	}
+
+	#[test]
+	fn accounts_reaped_before_being_paid_forfeit_their_share() {
+		new_test_ext().execute_with(|| {
+			<Flip as FeePayment>::bridge_in_to_onchain_reserve(300u128);
+			MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
+			distribute_in_full();
+
+			assert_eq!(Flip::total_balance_of(&ALICE), 200);
+			assert_eq!(Flip::total_balance_of(&BOB), 150);
+			assert!(!Account::<Test>::contains_key(CHARLIE));
+			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), 100);
+		});
+	}
+
+	#[test]
+	fn on_idle_without_pending_distribution_only_reads_it() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(Flip::on_idle(1, Weight::MAX), read_weight().reads(1));
+		});
+	}
 
 	#[test]
 	fn distributes_offchain_and_onchain_rewards_evenly() {
@@ -614,8 +692,8 @@ mod test_flip_reward_distribution {
 			Flip::add_to_offchain_flip_to_be_distributed(300i128);
 			<Flip as FeePayment>::bridge_in_to_onchain_reserve(300u128);
 
-			MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
-			let bridged = Flip::trigger_flip_reward_distribution(1);
+			set_beneficiaries();
+			let bridged = distribute_in_full();
 
 			// 300 offchain bridged in + 300 onchain = 600 total; 600 / 3 = 200 each
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 200);
@@ -639,8 +717,8 @@ mod test_flip_reward_distribution {
 			Flip::add_to_offchain_flip_to_be_distributed(1i128);
 			<Flip as FeePayment>::bridge_in_to_onchain_reserve(201u128);
 
-			MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
-			let bridged = Flip::trigger_flip_reward_distribution(1);
+			set_beneficiaries();
+			let bridged = distribute_in_full();
 
 			// All authorities get the same truncated share — no winner receives the remainder
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 67);
@@ -661,8 +739,8 @@ mod test_flip_reward_distribution {
 			Flip::add_to_offchain_flip_to_be_distributed(-100i128);
 			<Flip as FeePayment>::bridge_in_to_onchain_reserve(300u128);
 
-			MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
-			let bridged = Flip::trigger_flip_reward_distribution(1);
+			set_beneficiaries();
+			let bridged = distribute_in_full();
 
 			// Only onchain: 100 each
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 100);
@@ -683,8 +761,8 @@ mod test_flip_reward_distribution {
 			Flip::add_to_offchain_flip_to_be_distributed(300i128);
 			// Reserve not set → defaults to 0
 
-			MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
-			let bridged = Flip::trigger_flip_reward_distribution(1);
+			set_beneficiaries();
+			let bridged = distribute_in_full();
 
 			// 100 offchain each, 0 onchain
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 100);
@@ -712,8 +790,8 @@ mod test_flip_reward_distribution {
 			assert_eq!(OffchainFunds::<Test>::get(), offchain_before - AMOUNT);
 			assert_eq!(Reserve::<Test>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID), AMOUNT);
 
-			MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
-			let bridged = Flip::trigger_flip_reward_distribution(1);
+			set_beneficiaries();
+			let bridged = distribute_in_full();
 			assert_eq!(bridged, 0);
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&ALICE), 100);
 			assert_eq!(MockRewardsDistribution::<Test>::get_assigned_rewards(&BOB), 100);
@@ -759,8 +837,8 @@ mod test_flip_reward_distribution {
 
 				let total_funds_before = total_funds();
 
-				MockRewardsDistribution::<Test>::set_beneficiaries(1, vec![ALICE, BOB, CHARLIE]);
-				let bridged = Flip::trigger_flip_reward_distribution(1);
+				set_beneficiaries();
+				let bridged = distribute_in_full();
 
 				// Distribution only moves funds between the reserve, validator balances, and the
 				// FlipToDistribute offchain-accounting offset - no funds are created or destroyed.

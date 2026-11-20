@@ -944,7 +944,7 @@ impl_runtime_apis! {
 
 					let mut reward_pool: Vec<AccountReward<FlipBalance>> = Vec::new();
 
-					// Mirrors `DelegatedRewardsDistribution::distribute_all`: snapshot validators
+					// Mirrors `DelegatedRewardsDistribution::distribute`: snapshot validators
 					// are drained out of `authority_set` as we go, leaving only independent
 					// authorities, which get their full share directly after the loop below.
 					let mut authorities_to_reward: BTreeSet<&AccountId> = authorities.iter().collect();

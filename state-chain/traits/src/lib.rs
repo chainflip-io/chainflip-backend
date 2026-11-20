@@ -358,18 +358,42 @@ pub trait AccountInfo {
 	fn liquid_funds(account_id: &Self::AccountId) -> Self::Amount;
 }
 
+/// A unit of work [RewardsDistribution::distribute] needs approval for before doing it.
+#[derive(Debug, PartialEq, Eq)]
+pub enum DistributionStep<'a, AccountId, Balance> {
+	/// Reading the next group of recipients from storage.
+	ReadGroup,
+	/// Computing the cuts of a group of `payees` recipients.
+	LoadGroup { payees: u32 },
+	/// Paying `amount` to `account`, one recipient of a group of `group_size`.
+	Pay { account: &'a AccountId, amount: Balance, group_size: u32 },
+}
+
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	type Balance;
 	type AccountId;
+	/// Where a partial distribution stopped.
+	type Cursor: Parameter + MaxEncodedLen;
 
 	/// Splits `total_amount` evenly across `epoch_index`'s complete set of reward recipients
 	/// (e.g. that epoch's full authority set), as determined by the implementation.
-	fn distribute_all(
+	///
+	/// Each step is passed to `step`, which carries it out (for [DistributionStep::Pay], by
+	/// paying the recipient) and returns `true`, or returns `false` to pause the distribution
+	/// before it. Starts from `resume_from`, or from the first recipient if `None`. Returns where
+	/// to resume, or `None` once every recipient has been paid.
+	fn distribute(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
-		settle: impl FnMut(&Self::AccountId, Self::Balance),
-	);
+		resume_from: Option<Self::Cursor>,
+		step: impl FnMut(DistributionStep<'_, Self::AccountId, Self::Balance>) -> bool,
+	) -> Option<Self::Cursor>;
+
+	/// Registers `payee_count` reward recipients for `epoch_index`, arranged to make
+	/// [Self::distribute] as expensive as possible.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark_payees(epoch_index: EpochIndex, payee_count: u32);
 }
 
 /// A representation of the current network state for this heartbeat interval.

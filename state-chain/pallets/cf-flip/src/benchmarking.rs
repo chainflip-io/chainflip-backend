@@ -17,7 +17,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
 
-use cf_primitives::{AccountRole, Asset};
+use cf_primitives::{AccountRole, Asset, FLIPPERINOS_PER_FLIP};
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -71,6 +71,43 @@ mod benchmarks {
 		}
 
 		assert_eq!(Pallet::<T>::slashing_rate(), slashing_rate)
+	}
+
+	#[benchmark]
+	fn continue_reward_distribution(p: Linear<1, 1_000>, n: Linear<1_000, 20_000>) {
+		const EPOCH: EpochIndex = 1;
+		T::RewardsDistribution::setup_benchmark_payees(EPOCH, n);
+
+		let total: T::Balance = (u128::from(n) * FLIPPERINOS_PER_FLIP).into();
+		TotalIssuance::<T>::mutate(|issuance| *issuance += total);
+		OffchainFunds::<T>::mutate(|funds| *funds += total);
+		Pallet::<T>::bridge_in_to_distribution_reserve(total);
+		PendingRewardDistribution::<T>::put(RewardDistributionProgress {
+			epoch_index: EPOCH,
+			total,
+			undistributed: total,
+			resume_from: None,
+		});
+
+		// Only payees have a cost, and it dwarfs that of storage reads, so exactly `p` of them fit.
+		const PAYEE_WEIGHT: u64 = 1_000_000_000_000;
+		let mut meter = WeightMeter::with_limit(Weight::from_parts(
+			u64::from(p) * PAYEE_WEIGHT + PAYEE_WEIGHT / 2,
+			u64::MAX,
+		));
+
+		let funded_accounts =
+			|| Account::<T>::iter_values().filter(|account| !account.total().is_zero()).count();
+		let funded_before = funded_accounts();
+
+		#[block]
+		{
+			Pallet::<T>::continue_reward_distribution(&mut meter, |payees, _| {
+				Weight::from_parts(u64::from(payees) * PAYEE_WEIGHT, 0)
+			});
+		}
+
+		assert_eq!(funded_accounts() - funded_before, p as usize);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);

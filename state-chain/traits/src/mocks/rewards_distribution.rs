@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{MockPallet, MockPalletStorage};
-use crate::{Chainflip, RewardsDistribution};
+use crate::{Chainflip, DistributionStep, RewardsDistribution};
 use cf_primitives::EpochIndex;
 
 pub struct MockRewardsDistribution<T>(core::marker::PhantomData<T>);
@@ -27,20 +27,34 @@ impl<T> MockPallet for MockRewardsDistribution<T> {
 impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 	type Balance = T::Amount;
 	type AccountId = T::AccountId;
+	type Cursor = u32;
 
-	fn distribute_all(
+	fn distribute(
 		epoch_index: EpochIndex,
 		total_amount: Self::Balance,
-		mut settle: impl FnMut(&Self::AccountId, Self::Balance),
-	) {
+		resume_from: Option<u32>,
+		mut step: impl FnMut(DistributionStep<'_, Self::AccountId, Self::Balance>) -> bool,
+	) -> Option<u32> {
 		let beneficiaries: sp_std::vec::Vec<Self::AccountId> =
 			<Self as MockPalletStorage>::get_storage(b"BENEFICIARIES", epoch_index)
 				.unwrap_or_default();
 		if beneficiaries.is_empty() {
-			return;
+			return None;
 		}
-		let per_beneficiary_amount = total_amount / (beneficiaries.len() as u32).into();
-		for beneficiary in &beneficiaries {
+		let count = beneficiaries.len() as u32;
+		let start = resume_from.unwrap_or_default();
+		if !step(DistributionStep::LoadGroup { payees: count }) {
+			return Some(start);
+		}
+		let per_beneficiary_amount = total_amount / count.into();
+		for (settled, beneficiary) in (0..).zip(beneficiaries.iter().skip(start as usize)) {
+			if !step(DistributionStep::Pay {
+				account: beneficiary,
+				amount: per_beneficiary_amount,
+				group_size: count,
+			}) {
+				return Some(start + settled);
+			}
 			<Self as MockPalletStorage>::mutate_storage(
 				b"REWARDS",
 				beneficiary,
@@ -49,8 +63,18 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 					*balance = Some(current_balance + per_beneficiary_amount);
 				},
 			);
-			settle(beneficiary, per_beneficiary_amount);
 		}
+		None
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_benchmark_payees(epoch_index: EpochIndex, payee_count: u32) {
+		let payees: sp_std::vec::Vec<T::AccountId> =
+			(0..payee_count).map(|i| frame_benchmarking::account("payee", i, 0)).collect();
+		for payee in &payees {
+			frame_system::Pallet::<T>::inc_providers(payee);
+		}
+		Self::set_beneficiaries(epoch_index, payees);
 	}
 }
 
