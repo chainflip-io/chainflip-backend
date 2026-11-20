@@ -64,9 +64,10 @@ where
 {
 	// `None` means that the ceremony is not yet authorised (but may start delaying messages)
 	stage: Option<DynStage<Ceremony>>,
-	// Note that because we use a map here, the number of messages
-	// that can be delayed from any one party is limited to one per stage.
-	delayed_messages: BTreeMap<AccountId, Ceremony::Data>,
+	// Messages that arrived before the stage they are addressed to. Keyed by stage as well as
+	// sender because a party can be more than one stage ahead of us (see `should_delay`), but
+	// still limited to one message per party per stage.
+	delayed_messages: BTreeMap<(AccountId, Ceremony::CeremonyStageName), Ceremony::Data>,
 	/// This will fire on stage timeout
 	timeout_handle: Pin<Box<tokio::time::Sleep>>,
 	outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
@@ -298,8 +299,20 @@ where
 					return None
 				}
 
-				// Check if we should delay this message for the next stage to use
-				if Ceremony::Data::should_delay(stage.get_stage_name(), &data) {
+				// The stage was finalised without this message, either early (the missing messages
+				// could no longer change its outcome) or on timeout, so it is no longer needed.
+				let current_stage = stage.get_stage_name();
+				let message_stage = data.stage_name();
+				if message_stage < current_stage {
+					debug!(
+						from_id = sender_id.to_string(),
+						"Ignoring {data} for stage {message_stage}: already finalised, now in stage {current_stage}",
+					);
+					return None
+				}
+
+				// Check if we should delay this message for a later stage to use
+				if Ceremony::Data::should_delay(current_stage, &data) {
 					self.add_delayed(sender_id, data);
 					return None
 				}
@@ -315,7 +328,7 @@ where
 		None
 	}
 
-	/// Process previously delayed messages (which arrived one stage too early)
+	/// Process previously delayed messages (which arrived before their stage)
 	// NOTE: Need this boxed to help with async recursion
 	fn process_delayed(&mut self) -> BoxFuture<'_, OptionalCeremonyReturn<Ceremony>> {
 		async {
@@ -323,12 +336,12 @@ where
 
 			if !messages.is_empty() {
 				debug!(
-					from_ids = format_iterator(messages.keys()).to_string(),
+					from_ids = format_iterator(messages.keys().map(|(id, _)| id)).to_string(),
 					"Processing {} delayed messages",
 					messages.len(),
 				);
 			}
-			for (id, m) in messages {
+			for ((id, _), m) in messages {
 				if let Some(result) = self.process_or_delay_message(id, m).await {
 					return Some(result)
 				}
@@ -339,7 +352,7 @@ where
 		.boxed()
 	}
 
-	/// Delay message to be processed in the next stage
+	/// Delay message to be processed in the stage it is addressed to
 	fn add_delayed(&mut self, id: AccountId, m: Ceremony::Data) {
 		let party_and_stage = match &self.stage {
 			Some(stage) => format!("party [{id}] during stage {}", stage.get_stage_name()),
@@ -347,7 +360,7 @@ where
 		};
 		let total_delayed = self.delayed_messages.len() + 1;
 
-		match self.delayed_messages.entry(id) {
+		match self.delayed_messages.entry((id, m.stage_name())) {
 			btree_map::Entry::Occupied(_) => {
 				self.metrics.bad_message.inc(&["redundant_delayed_msg"]);
 				warn!("Ignoring a redundant delayed message from {party_and_stage}");

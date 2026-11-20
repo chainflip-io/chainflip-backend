@@ -169,6 +169,22 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 			},
 		}
 	}
+
+	fn stage_name(&self) -> KeygenStageName {
+		match self {
+			KeygenData::PubkeyShares0(_) => KeygenStageName::PubkeyShares0,
+			KeygenData::HashComm1(_) => KeygenStageName::HashCommitments1,
+			KeygenData::VerifyHashComm2(_) => KeygenStageName::VerifyHashCommitmentsBroadcast2,
+			KeygenData::CoeffComm3(_) => KeygenStageName::CoefficientCommitments3,
+			KeygenData::VerifyCoeffComm4(_) => KeygenStageName::VerifyCommitmentsBroadcast4,
+			KeygenData::SecretShares5(_) => KeygenStageName::SecretSharesStage5,
+			KeygenData::Complaints6(_) => KeygenStageName::ComplaintsStage6,
+			KeygenData::VerifyComplaints7(_) => KeygenStageName::VerifyComplaintsBroadcastStage7,
+			KeygenData::BlameResponse8(_) => KeygenStageName::BlameResponsesStage8,
+			KeygenData::VerifyBlameResponses9(_) =>
+				KeygenStageName::VerifyBlameResponsesBroadcastStage9,
+		}
+	}
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]

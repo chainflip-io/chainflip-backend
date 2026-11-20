@@ -21,7 +21,8 @@ use crate::{
 		gen_keygen_data_verify_hash_comm2, get_key_data_for_test,
 		helpers::{ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_SIGNING_SEED},
 		signing::{
-			gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage4, SigningData,
+			gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage3,
+			gen_signing_data_stage4, SigningData,
 		},
 		SigningFailureReason,
 	},
@@ -306,6 +307,55 @@ async fn should_ignore_duplicate_delayed_message() {
 
 	// The message should have been ignored and not added to the delayed messages
 	assert_eq!(stage_1_state.delayed_messages.len(), 1);
+}
+
+/// Parties can be up to two stages ahead of us, so we must hold a message for each of those stages
+/// from the same party.
+#[tokio::test]
+async fn should_delay_messages_for_two_stages_ahead() {
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let sender_account_id = ACCOUNT_IDS[1].clone();
+	let participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
+
+	let (mut stage_1_state, _) =
+		gen_stage_1_signing_state(our_account_id, participants.clone()).await;
+
+	for message in
+		[gen_signing_data_stage2(participants.len() as u32, 1), gen_signing_data_stage3(1)]
+	{
+		assert_eq!(
+			stage_1_state.process_or_delay_message(sender_account_id.clone(), message).await,
+			None
+		);
+	}
+
+	assert_eq!(stage_1_state.delayed_messages.len(), 2);
+}
+
+/// A message for a stage we have already finalised is dropped without affecting the current stage.
+#[tokio::test]
+async fn should_ignore_message_for_finalised_stage() {
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let sender_account_id = ACCOUNT_IDS[1].clone();
+	// With only 2 participants, the sender's stage 1 message completes stage 1.
+	let participants = BTreeSet::from_iter([our_account_id.clone(), sender_account_id.clone()]);
+
+	let (mut ceremony_runner, _outgoing_p2p_receiver) =
+		gen_stage_1_signing_state(our_account_id, participants).await;
+
+	assert_eq!(
+		ceremony_runner
+			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1(1))
+			.await,
+		None
+	);
+	assert_eq!(
+		ceremony_runner.stage.as_ref().unwrap().get_stage_name(),
+		SigningStageName::VerifyCommitmentsBroadcast2
+	);
+
+	ensure_message_is_ignored(&mut ceremony_runner, sender_account_id, gen_signing_data_stage1(1))
+		.await;
 }
 
 #[tokio::test]
