@@ -16,7 +16,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{evm::Address, ForeignChain};
-use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
+use cf_traits::{
+	AccountRoleRegistry, BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment,
+	FundingInfo,
+};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{pallet_prelude::*, traits::StorageVersion, DebugNoBound};
 use sp_std::{cmp::PartialEq, vec::Vec};
@@ -190,7 +193,7 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::submit_proposal())]
 		pub fn submit_proposal(origin: OriginFor<T>, proposal: Proposal) -> DispatchResult {
-			let proposer = ensure_signed(origin)?;
+			let proposer = T::AccountRoleRegistry::ensure_signed_not_closing(origin)?;
 			if let Proposal::SetGovernanceKey(chain, ref key) = proposal {
 				ensure!(
 					T::AnyChainGovKeyBroadcaster::is_govkey_compatible(chain, key),
@@ -211,7 +214,7 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::back_proposal(Backers::<T>::decode_non_dedup_len(proposal).unwrap_or_default() as u32))]
 		pub fn back_proposal(origin: OriginFor<T>, proposal: Proposal) -> DispatchResult {
-			let backer = ensure_signed(origin)?;
+			let backer = T::AccountRoleRegistry::ensure_signed_not_closing(origin)?;
 			Backers::<T>::try_mutate_exists(proposal, |maybe_backers| match maybe_backers {
 				Some(backers) => {
 					if !backers.insert(backer) {

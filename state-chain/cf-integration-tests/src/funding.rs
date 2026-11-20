@@ -408,7 +408,7 @@ fn full_redemption_deregisters_liquidity_provider() {
 		));
 		assert_eq!(
 			pallet_cf_account_roles::AccountRoles::<Runtime>::get(&LP),
-			Some(AccountRole::Unregistered)
+			Some(AccountRole::AccountClosing)
 		);
 		// Refund addresses outlive deregistration and are only cleaned up once the account is
 		// reaped.
@@ -420,6 +420,94 @@ fn full_redemption_deregisters_liquidity_provider() {
 		assert!(pallet_cf_asset_balances::RefundAddresses::<Runtime>::iter_prefix(&LP)
 			.next()
 			.is_none());
+	});
+}
+
+#[test]
+fn closing_account_funded_while_redeeming_is_kept_until_redeemed_again() {
+	use cf_traits::{FundAccount, FundingSource};
+	use state_chain_runtime::Swapping;
+
+	const BROKER: AccountId = AccountId::new([0xe6; 32]);
+	const BALANCE: FlipBalance = 100 * FLIPPERINOS_PER_FLIP;
+	const TOP_UP: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
+
+	let fund = |amount| {
+		Funding::fund_account(
+			BROKER,
+			amount,
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
+		)
+	};
+	let redeem_all = || {
+		Funding::redeem(RuntimeOrigin::signed(BROKER), RedemptionAmount::Max, ETH_DUMMY_ADDR, None)
+	};
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		network::new_account(&BROKER, AccountRole::Broker);
+		fund(BALANCE - Flip::balance(&BROKER));
+		assert_ok!(Swapping::deregister_as_broker(RuntimeOrigin::signed(BROKER)));
+		assert_ok!(redeem_all());
+
+		// Funds arrive through the Gateway while the redemption is pending, so the account must
+		// not be reaped once it settles.
+		fund(TOP_UP);
+		assert_ok!(Funding::redeemed(BROKER, BALANCE, Default::default()));
+		assert_eq!(
+			pallet_cf_account_roles::AccountRoles::<Runtime>::get(BROKER),
+			Some(AccountRole::AccountClosing)
+		);
+		assert_eq!(Flip::balance(&BROKER), TOP_UP);
+
+		// The account stays terminal, but can redeem the rest without being deregistered again.
+		assert_noop!(
+			Swapping::register_as_broker(RuntimeOrigin::signed(BROKER)),
+			pallet_cf_account_roles::Error::<Runtime>::AccountAlreadyDeregistered
+		);
+		assert_ok!(redeem_all());
+		assert_ok!(Funding::redeemed(BROKER, TOP_UP, Default::default()));
+		assert!(!frame_system::Pallet::<Runtime>::account_exists(&BROKER));
+	});
+}
+
+#[test]
+fn closing_account_can_redeem_again_after_its_redemption_expires() {
+	use cf_traits::{FundAccount, FundingSource};
+	use state_chain_runtime::Swapping;
+
+	const BROKER: AccountId = AccountId::new([0xe7; 32]);
+	const BALANCE: FlipBalance = 100 * FLIPPERINOS_PER_FLIP;
+
+	let redeem_all = || {
+		Funding::redeem(RuntimeOrigin::signed(BROKER), RedemptionAmount::Max, ETH_DUMMY_ADDR, None)
+	};
+
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		network::new_account(&BROKER, AccountRole::Broker);
+		Funding::fund_account(
+			BROKER,
+			BALANCE - Flip::balance(&BROKER),
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
+		);
+		assert_ok!(Swapping::deregister_as_broker(RuntimeOrigin::signed(BROKER)));
+		assert_ok!(redeem_all());
+
+		assert_ok!(Funding::redemption_expired(BROKER, Default::default()));
+		assert_eq!(
+			pallet_cf_account_roles::AccountRoles::<Runtime>::get(BROKER),
+			Some(AccountRole::AccountClosing)
+		);
+		assert_eq!(Flip::balance(&BROKER), BALANCE);
+
+		assert_ok!(redeem_all());
+		assert_ok!(Funding::redeemed(BROKER, BALANCE, Default::default()));
+		assert!(!frame_system::Pallet::<Runtime>::account_exists(&BROKER));
 	});
 }
 

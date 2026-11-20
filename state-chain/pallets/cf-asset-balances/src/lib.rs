@@ -112,10 +112,7 @@ impl_pallet_safe_mode!(PalletSafeMode; reconciliation_enabled);
 pub mod pallet {
 	use cf_chains::{dot::PolkadotCrypto, ForeignChain};
 	use cf_primitives::EgressId;
-	use frame_system::{
-		ensure_signed,
-		pallet_prelude::{BlockNumberFor, OriginFor},
-	};
+	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 
 	use super::*;
 	#[pallet::config]
@@ -356,7 +353,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			change: WhitelistChange<T::AccountId, EncodedAddress>,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_signed_not_closing(origin)?;
 
 			let decode = |destination: AccountOrAddress<T::AccountId, EncodedAddress>| {
 				destination
@@ -394,7 +391,7 @@ pub mod pallet {
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::set_whitelist_timelock())]
 		pub fn set_whitelist_timelock(origin: OriginFor<T>, duration: Seconds) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_signed_not_closing(origin)?;
 			ensure!(
 				duration <= MaxWhitelistTimelock::<T>::get(),
 				Error::<T>::TimelockExceedsMaximum

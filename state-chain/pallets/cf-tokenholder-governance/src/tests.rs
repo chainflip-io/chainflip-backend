@@ -126,6 +126,40 @@ fn fees_are_burned_on_successful_proposal() {
 }
 
 #[test]
+fn closing_accounts_cannot_submit_or_back_proposals() {
+	use cf_traits::{
+		mocks::account_role_registry::{MockAccountRoleRegistry, ALREADY_DEREGISTERED_ERROR},
+		AccountRoleRegistry,
+	};
+
+	new_test_ext().execute_with(|| {
+		let gov_key_proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
+		assert_ok!(TokenholderGovernance::submit_proposal(
+			RuntimeOrigin::signed(ALICE),
+			gov_key_proposal.clone()
+		));
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_account_role(
+				&BOB,
+				cf_primitives::AccountRole::Unregistered
+			)
+		);
+
+		assert_noop!(
+			TokenholderGovernance::submit_proposal(
+				RuntimeOrigin::signed(BOB),
+				Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![2; 32])
+			),
+			ALREADY_DEREGISTERED_ERROR
+		);
+		assert_noop!(
+			TokenholderGovernance::back_proposal(RuntimeOrigin::signed(BOB), gov_key_proposal),
+			ALREADY_DEREGISTERED_ERROR
+		);
+	});
+}
+
+#[test]
 fn cannot_back_proposal_twice() {
 	new_test_ext().execute_with(|| {
 		let gov_key_proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);

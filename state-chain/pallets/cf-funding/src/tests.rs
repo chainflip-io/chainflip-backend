@@ -2010,7 +2010,56 @@ fn full_redemption_deregisters_liquidity_provider() {
 			ETH_DUMMY_ADDR,
 			Default::default()
 		));
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
+			&ALICE,
+			AccountRole::AccountClosing
+		));
+
+		assert_ok!(Funding::redeemed(
+			ALICE,
+			FUNDING_AMOUNT - PARTIAL_AMOUNT - REDEMPTION_TAX,
+			TX_HASH
+		));
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			0,
+			"Account should have been reaped on final redemption."
+		);
+	});
+}
+
+#[test]
+fn full_redemption_deregisters_unregistered_account() {
+	const FUNDING_AMOUNT: FlipBalance = 100;
+	const PARTIAL_AMOUNT: FlipBalance = 50;
+	new_test_ext().execute_with(|| {
+		Funding::fund_account(
+			ALICE,
+			FUNDING_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+
+		// A partial redemption leaves the account unregistered.
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			PARTIAL_AMOUNT.into(),
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(ALICE, PARTIAL_AMOUNT, TX_HASH));
 		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(&ALICE));
+
+		// Redeeming the remaining balance deregisters the account.
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
+			&ALICE,
+			AccountRole::AccountClosing
+		));
 
 		assert_ok!(Funding::redeemed(
 			ALICE,
@@ -2382,8 +2431,47 @@ pub mod rebalancing {
 				RedemptionAmount::Max
 			));
 
-			assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(
-				&ALICE
+			assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
+				&ALICE,
+				AccountRole::AccountClosing
+			));
+			assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
+			assert_eq!(Flip::total_balance_of(&BOB), AMOUNT + MIN_FUNDING);
+		});
+	}
+
+	#[test]
+	fn closing_account_can_only_move_funds_out() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+
+			assert_ok!(setup_test(
+				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None), AccountSetup::new(BOB)],
+				vec![]
+			));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_account_role(
+					&ALICE,
+					AccountRole::Unregistered
+				)
+			);
+
+			assert_noop!(
+				Funding::bind_redeem_address(OriginTrait::signed(ALICE), ETH_DUMMY_ADDR),
+				cf_traits::mocks::account_role_registry::ALREADY_DEREGISTERED_ERROR
+			);
+			assert_noop!(
+				Funding::bind_executor_address(OriginTrait::signed(ALICE), ETH_DUMMY_ADDR),
+				cf_traits::mocks::account_role_registry::ALREADY_DEREGISTERED_ERROR
+			);
+
+			// Rebalancing is allowed, so a retiring validator can move its stake to another one
+			// it owns.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				None,
+				RedemptionAmount::Max
 			));
 			assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 			assert_eq!(Flip::total_balance_of(&BOB), AMOUNT + MIN_FUNDING);

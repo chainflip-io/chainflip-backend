@@ -2062,6 +2062,32 @@ fn should_expire_all_previous_epochs() {
 	});
 }
 
+#[test]
+fn closing_accounts_cannot_manage_delegation() {
+	use cf_traits::mocks::account_role_registry::ALREADY_DEREGISTERED_ERROR;
+
+	new_test_ext().execute_with(|| {
+		const CLOSING: u64 = 1_000;
+		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_account_role(
+			&CLOSING,
+			AccountRole::Unregistered
+		));
+
+		assert_noop!(
+			ValidatorPallet::delegate(OriginTrait::signed(CLOSING), ALICE, DelegationAmount::Max),
+			ALREADY_DEREGISTERED_ERROR
+		);
+		assert_noop!(
+			ValidatorPallet::undelegate(OriginTrait::signed(CLOSING), DelegationAmount::Max),
+			ALREADY_DEREGISTERED_ERROR
+		);
+		assert_noop!(
+			ValidatorPallet::remove_validator(OriginTrait::signed(CLOSING), ALICE),
+			ALREADY_DEREGISTERED_ERROR
+		);
+	});
+}
+
 #[cfg(test)]
 mod operator {
 	use cf_test_utilities::assert_has_event;

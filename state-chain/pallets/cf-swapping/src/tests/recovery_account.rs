@@ -17,7 +17,10 @@
 use super::*;
 use crate::{BrokerRecoveryAccount, DeleteRecoveryAccount};
 use cf_primitives::AccountRole;
-use cf_traits::{mocks::account_role_registry::MockAccountRoleRegistry, BrokerRecoveryApi};
+use cf_traits::{
+	mocks::account_role_registry::{MockAccountRoleRegistry, ALREADY_DEREGISTERED_ERROR},
+	BrokerRecoveryApi,
+};
 use frame_support::traits::OnKilledAccount;
 
 const LP: u64 = 1_001;
@@ -109,9 +112,11 @@ fn link_survives_broker_deregistration() {
 		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)));
 		assert_eq!(BrokerRecoveryAccount::<Test>::get(BROKER), Some(LP));
 
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&BROKER)
-			.unwrap();
-		assert_noop!(link(BROKER, OTHER_LP), Error::<Test>::RecoveryAccountAlreadyLinked);
+		// A deregistered broker can't register again to link a different recovery account.
+		assert_noop!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&BROKER),
+			ALREADY_DEREGISTERED_ERROR
+		);
 		assert_eq!(Swapping::recovery_account(&BROKER), Some(LP));
 	});
 }

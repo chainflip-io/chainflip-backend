@@ -1057,6 +1057,7 @@ impl_runtime_apis! {
 							AccountRole::LiquidityProvider => RuntimeApiAccountInfo::LiquidityProvider(Box::new(Self::cf_liquidity_provider_info(account_id, ShouldSweep::No))),
 							AccountRole::Validator => RuntimeApiAccountInfo::Validator(Box::new(Self::cf_validator_info(&account_id))),
 							AccountRole::Operator => RuntimeApiAccountInfo::Operator(Box::new(Self::cf_operator_info(&account_id))),
+							AccountRole::AccountClosing => RuntimeApiAccountInfo::AccountClosing,
 						};
 					Some(RuntimeApiAccountInfoWrapper { common_items, role: role_specific })
 				} else {

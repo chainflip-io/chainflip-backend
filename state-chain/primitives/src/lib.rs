@@ -338,6 +338,14 @@ pub enum AccountRole {
 	/// Operators are responsible for managing delegated stake and validators signed up to their
 	/// account.
 	Operator,
+	/// Terminal state: the account can no longer take a role and is reaped once its funds are
+	/// gone. Deregistration checks have already passed on the way in, so they don't apply here.
+	///
+	/// A closing account can only:
+	/// - `redeem`: withdraw its FLIP to Ethereum, partly or fully.
+	/// - `rebalance`: move its stake to another account it owns.
+	/// - `as_sub_account`: empty its sub-accounts, so their funds aren't locked.
+	AccountClosing,
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

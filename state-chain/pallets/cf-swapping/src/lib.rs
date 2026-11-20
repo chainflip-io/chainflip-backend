@@ -3704,8 +3704,8 @@ impl<T: Config> BrokerRecoveryApi for Pallet<T> {
 	}
 }
 
-/// Removes the recovery account link when the broker account is reaped. Deregistering as a broker
-/// keeps the link, so it can't be cleared by deregistering and registering again.
+/// Removes the recovery account link when the broker account is reaped. The link outlives
+/// deregistration, so it stays in place while the account is closing.
 pub struct DeleteRecoveryAccount<T: Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> OnKilledAccount<T::AccountId> for DeleteRecoveryAccount<T> {

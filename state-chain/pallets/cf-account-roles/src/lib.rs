@@ -33,6 +33,7 @@ use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, DeregistrationHooks, SpawnAccount, VanityName};
 use frame_support::{
 	dispatch::GetDispatchInfo,
+	ensure,
 	pallet_prelude::{DispatchResult, StorageVersion},
 	traits::{EnsureOrigin, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait},
 };
@@ -140,6 +141,11 @@ pub mod pallet {
 		FailedToExecuteCallOnBehalfOfSubAccount,
 		/// Failed to derive the sub-account id.
 		SubAccountIdDerivationFailed,
+		/// The role is not assignable: it is an account lifecycle state, not one that can be
+		/// registered or deregistered.
+		RoleNotAssignable,
+		/// The account has been deregistered and can no longer take a role.
+		AccountAlreadyDeregistered,
 	}
 
 	#[pallet::genesis_config]
@@ -179,7 +185,8 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_vanity_name())]
 		pub fn set_vanity_name(origin: OriginFor<T>, name: VanityName) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id =
+				<Pallet<T> as AccountRoleRegistry<T>>::ensure_signed_not_closing(origin)?;
 			<Pallet<T> as AccountRoleRegistry<T>>::set_vanity_name(&account_id, name.clone())?;
 			Ok(())
 		}
@@ -201,7 +208,8 @@ pub mod pallet {
 			sub_account_index: SubAccountIndex,
 			initial_amount: T::Amount,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id =
+				<Pallet<T> as AccountRoleRegistry<T>>::ensure_signed_not_closing(origin)?;
 			let sub_account_id =
 				T::SpawnAccount::spawn_sub_account(&account_id, sub_account_index, initial_amount)?;
 			Self::deposit_event(Event::SubAccountCreated {
@@ -225,6 +233,8 @@ pub mod pallet {
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
+			// Not `ensure_signed_not_closing`: a closing account must be able to empty its
+			// sub-accounts.
 			let account_id = ensure_signed(origin.clone())?;
 			let sub_account_id =
 				T::SpawnAccount::derive_sub_account_id(&account_id, sub_account_index)?;
@@ -254,6 +264,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
+		ensure!(is_role_assignable(account_role), Error::<T>::RoleNotAssignable);
 		AccountRoles::<T>::try_mutate(account_id, |old_account_role| {
 			match old_account_role.replace(account_role) {
 				Some(AccountRole::Unregistered) => {
@@ -263,6 +274,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 					});
 					Ok(())
 				},
+				Some(AccountRole::AccountClosing) => Err(Error::<T>::AccountAlreadyDeregistered),
 				Some(_) => Err(Error::<T>::AccountRoleAlreadyRegistered),
 				None => Err(Error::<T>::UnknownAccount),
 			}
@@ -271,23 +283,30 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		Ok(())
 	}
 
-	/// Deregister the account role for some account id.
+	/// Moves an account that currently holds `account_role` into the terminal
+	/// [AccountRole::AccountClosing] state, from which it can only redeem its funds.
+	/// `account_role` may be [AccountRole::Unregistered].
 	///
-	/// This is required in order to be able to redeem all funds. Eligibility is enforced by
-	/// [Config::DeregistrationHooks] (e.g. LPs must have withdrawn all liquidity), and any state
-	/// associated with the role is cleaned up by its `on_deregistered` hook.
+	/// Eligibility is enforced by [Config::DeregistrationHooks] (e.g. LPs must have withdrawn all
+	/// liquidity), and any state associated with the previous role is cleaned up by its
+	/// `on_deregistered` hook.
 	#[frame_support::transactional]
 	fn deregister_account_role(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
+		match AccountRoles::<T>::get(account_id) {
+			Some(AccountRole::AccountClosing) =>
+				return Err(Error::<T>::AccountAlreadyDeregistered.into()),
+			Some(role) if role == account_role => {},
+			_ => return Err(Error::<T>::UnknownAccount.into()),
+		}
 		T::DeregistrationHooks::check(account_id).map_err(Into::into)?;
-		AccountRoles::<T>::try_mutate(account_id, |role| {
-			role.replace(AccountRole::Unregistered)
-				.filter(|r| *r == account_role)
-				.ok_or(Error::<T>::UnknownAccount)
-		})?;
-		<frame_system::Pallet<T>>::dec_consumers(account_id);
+		AccountRoles::<T>::insert(account_id, AccountRole::AccountClosing);
+		// Assignable roles hold a consumer reference from `register_account_role`.
+		if is_role_assignable(account_role) {
+			<frame_system::Pallet<T>>::dec_consumers(account_id);
+		}
 		T::DeregistrationHooks::on_deregistered(account_id, account_role);
 
 		Self::deposit_event(Event::AccountRoleDeregistered {
@@ -323,12 +342,34 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		role: AccountRole,
 	) -> Result<T::AccountId, BadOrigin> {
 		match role {
-			AccountRole::Unregistered => Err(BadOrigin),
+			AccountRole::Unregistered | AccountRole::AccountClosing => Err(BadOrigin),
 			AccountRole::Validator => ensure_validator::<T>(origin),
 			AccountRole::LiquidityProvider => ensure_liquidity_provider::<T>(origin),
 			AccountRole::Broker => ensure_broker::<T>(origin),
 			AccountRole::Operator => ensure_operator::<T>(origin),
 		}
+	}
+
+	fn ensure_signed_not_closing(
+		origin: T::RuntimeOrigin,
+	) -> Result<T::AccountId, frame_support::sp_runtime::DispatchError> {
+		let account_id = ensure_signed(origin)?;
+		ensure!(
+			!Self::has_account_role(&account_id, AccountRole::AccountClosing),
+			Error::<T>::AccountAlreadyDeregistered
+		);
+		Ok(account_id)
+	}
+}
+
+/// Whether the role can be taken by registering, and given up by deregistering.
+fn is_role_assignable(role: AccountRole) -> bool {
+	match role {
+		AccountRole::Validator |
+		AccountRole::LiquidityProvider |
+		AccountRole::Broker |
+		AccountRole::Operator => true,
+		AccountRole::Unregistered | AccountRole::AccountClosing => false,
 	}
 }
 

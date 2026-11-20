@@ -855,6 +855,8 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 		role: AccountRole,
 	) -> Result<T::AccountId, BadOrigin>;
 
+	fn ensure_signed_not_closing(origin: T::RuntimeOrigin) -> Result<T::AccountId, DispatchError>;
+
 	fn ensure_broker(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Broker)
 	}

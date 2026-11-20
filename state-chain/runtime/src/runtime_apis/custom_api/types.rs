@@ -953,6 +953,7 @@ pub enum RuntimeApiAccountInfo {
 	LiquidityProvider(Box<LiquidityProviderInfo>),
 	Validator(Box<ValidatorInfo>),
 	Operator(Box<OperatorInfo<FlipBalance>>),
+	AccountClosing,
 }
 
 #[derive(

@@ -5126,7 +5126,7 @@ export type PalletCfIngressEgressPalletConfigUpdateEthereum =
   | { type: 'SetChannelCleanupRetryEthereum'; value: { retryBlocks: bigint } };
 
 export type CfPrimitivesAccountRole =
-  'Unregistered' | 'Validator' | 'LiquidityProvider' | 'Broker' | 'Operator';
+  'Unregistered' | 'Validator' | 'LiquidityProvider' | 'Broker' | 'Operator' | 'AccountClosing';
 
 /**
  * Contains a variant per dispatchable extrinsic that this pallet has.
@@ -18011,7 +18011,16 @@ export type PalletCfAccountRolesError =
   /**
    * Failed to derive the sub-account id.
    **/
-  | 'SubAccountIdDerivationFailed';
+  | 'SubAccountIdDerivationFailed'
+  /**
+   * The role is not assignable: it is an account lifecycle state, not one that can be
+   * registered or deregistered.
+   **/
+  | 'RoleNotAssignable'
+  /**
+   * The account has been deregistered and can no longer take a role.
+   **/
+  | 'AccountAlreadyDeregistered';
 
 export type PalletTransactionPaymentReleases = 'V1Ancient' | 'V2';
 
@@ -22588,7 +22597,8 @@ export type StateChainRuntimeRuntimeApisCustomApiTypesRuntimeApiAccountInfo =
       value: StateChainRuntimeRuntimeApisCustomApiTypesLiquidityProviderInfo;
     }
   | { type: 'Validator'; value: StateChainRuntimeRuntimeApisCustomApiTypesValidatorInfo }
-  | { type: 'Operator'; value: StateChainRuntimeRuntimeApisCustomApiTypesOperatorInfo };
+  | { type: 'Operator'; value: StateChainRuntimeRuntimeApisCustomApiTypesOperatorInfo }
+  | { type: 'AccountClosing' };
 
 export type StateChainRuntimeRuntimeApisCustomApiTypesRewardDistributionEstimate = {
   epochIndex: number;

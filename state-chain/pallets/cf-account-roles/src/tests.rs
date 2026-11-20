@@ -237,12 +237,177 @@ fn on_deregistered_sees_the_role_being_deregistered() {
 			&ALICE
 		));
 
-		// `on_deregistered` must be told the role that was deregistered, not `Unregistered`
+		// `on_deregistered` must be told the role that was deregistered, not `AccountClosing`
 		// - i.e. it must receive the role explicitly, since by the time the hook runs it has
-		// already been cleared from storage.
+		// already been replaced in storage.
 		assert_eq!(
 			MockDeregistrationHooks::role_at_on_deregistered(&ALICE),
 			Some(AccountRole::LiquidityProvider),
+		);
+	});
+}
+
+#[test]
+fn deregistration_moves_the_account_to_closing() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		AccountRolesPallet::register_as_broker(&ALICE).unwrap();
+		assert_eq!(frame_system::Pallet::<Test>::consumers(&ALICE), 1);
+
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_as_broker(&ALICE));
+
+		assert_eq!(AccountRoles::<Test>::get(ALICE), Some(AccountRole::AccountClosing));
+		assert_eq!(frame_system::Pallet::<Test>::consumers(&ALICE), 0);
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::MockAccountRoles(Event::AccountRoleDeregistered {
+				account_id: ALICE,
+				role: AccountRole::Broker,
+			})
+		);
+
+		// Terminal: the account can neither take a role nor be deregistered again.
+		assert_noop!(
+			AccountRolesPallet::register_as_liquidity_provider(&ALICE),
+			Error::<Test>::AccountAlreadyDeregistered
+		);
+		assert_noop!(
+			<Pallet<Test> as AccountRoleRegistry<_>>::deregister_as_broker(&ALICE),
+			Error::<Test>::AccountAlreadyDeregistered
+		);
+	});
+}
+
+#[test]
+fn unregistered_account_can_be_deregistered() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		assert_eq!(frame_system::Pallet::<Test>::consumers(&ALICE), 0);
+
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(
+			&ALICE,
+			AccountRole::Unregistered
+		));
+
+		assert_eq!(AccountRoles::<Test>::get(ALICE), Some(AccountRole::AccountClosing));
+		// An unregistered account holds no consumer reference, so none is released.
+		assert_eq!(frame_system::Pallet::<Test>::consumers(&ALICE), 0);
+		assert_eq!(
+			MockDeregistrationHooks::role_at_on_deregistered(&ALICE),
+			Some(AccountRole::Unregistered),
+		);
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::MockAccountRoles(Event::AccountRoleDeregistered {
+				account_id: ALICE,
+				role: AccountRole::Unregistered,
+			})
+		);
+	});
+}
+
+#[test]
+fn deregistering_an_unregistered_account_runs_the_checks() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		MockDeregistrationHooks::set_should_fail(&ALICE, true);
+
+		assert!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(
+			&ALICE,
+			AccountRole::Unregistered
+		)
+		.is_err());
+		assert_eq!(AccountRoles::<Test>::get(ALICE), Some(AccountRole::Unregistered));
+	});
+}
+
+#[test]
+fn deregistering_requires_the_current_role() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		AccountRolesPallet::register_as_broker(&ALICE).unwrap();
+
+		assert_noop!(
+			<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(
+				&ALICE,
+				AccountRole::Unregistered
+			),
+			Error::<Test>::UnknownAccount
+		);
+	});
+}
+
+#[test]
+fn only_assignable_roles_can_be_registered() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+
+		for role in [AccountRole::Unregistered, AccountRole::AccountClosing] {
+			assert_noop!(
+				AccountRolesPallet::register_account_role(&ALICE, role),
+				Error::<Test>::RoleNotAssignable
+			);
+		}
+	});
+}
+
+#[test]
+fn closing_accounts_do_not_pass_role_origin_checks() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(
+			&ALICE,
+			AccountRole::Unregistered
+		));
+
+		assert!(<Pallet<Test> as AccountRoleRegistry<_>>::ensure_account_role(
+			OriginFor::<Test>::signed(ALICE),
+			AccountRole::AccountClosing
+		)
+		.is_err());
+	});
+}
+
+#[test]
+fn ensure_signed_not_closing_rejects_only_closing_accounts() {
+	new_test_ext().execute_with(|| {
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		<Provider<Test> as HandleLifetime<u64>>::created(&BOB).unwrap();
+		AccountRolesPallet::register_as_broker(&BOB).unwrap();
+
+		assert_noop!(
+			<Pallet<Test> as AccountRoleRegistry<_>>::ensure_signed_not_closing(
+				OriginFor::<Test>::none()
+			),
+			sp_runtime::traits::BadOrigin
+		);
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::ensure_signed_not_closing(
+			OriginFor::<Test>::signed(ALICE)
+		));
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::ensure_signed_not_closing(
+			OriginFor::<Test>::signed(BOB)
+		));
+
+		assert_ok!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(
+			&ALICE,
+			AccountRole::Unregistered
+		));
+		assert_noop!(
+			<Pallet<Test> as AccountRoleRegistry<_>>::ensure_signed_not_closing(
+				OriginFor::<Test>::signed(ALICE)
+			),
+			Error::<Test>::AccountAlreadyDeregistered
+		);
+		assert_noop!(
+			AccountRolesPallet::set_vanity_name(
+				OriginFor::<Test>::signed(ALICE),
+				"Alice".as_bytes().to_vec().try_into().unwrap()
+			),
+			Error::<Test>::AccountAlreadyDeregistered
+		);
+		assert_noop!(
+			AccountRolesPallet::spawn_sub_account(OriginFor::<Test>::signed(ALICE), 0, 100),
+			Error::<Test>::AccountAlreadyDeregistered
 		);
 	});
 }

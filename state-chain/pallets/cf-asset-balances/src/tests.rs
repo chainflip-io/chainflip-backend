@@ -738,6 +738,36 @@ mod withdrawal_whitelist {
 	}
 
 	#[test]
+	fn closing_accounts_cannot_change_their_whitelist() {
+		use cf_traits::{
+			mocks::account_role_registry::{MockAccountRoleRegistry, ALREADY_DEREGISTERED_ERROR},
+			AccountRoleRegistry,
+		};
+
+		new_test_ext().execute_with(|| {
+			let who = account(1);
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_account_role(
+					&who,
+					cf_primitives::AccountRole::Unregistered
+				)
+			);
+
+			assert_noop!(
+				Pallet::<Test>::set_whitelist_timelock(RuntimeOrigin::signed(who.clone()), 0),
+				ALREADY_DEREGISTERED_ERROR
+			);
+			assert_noop!(
+				Pallet::<Test>::update_whitelist(
+					RuntimeOrigin::signed(who.clone()),
+					WhitelistChange::Allow(AccountOrAddress::InternalAccount(account(2)))
+				),
+				ALREADY_DEREGISTERED_ERROR
+			);
+		});
+	}
+
+	#[test]
 	fn set_whitelist_timelock_enforces_maximum_and_emits() {
 		new_test_ext().execute_with(|| {
 			let who = account(1);

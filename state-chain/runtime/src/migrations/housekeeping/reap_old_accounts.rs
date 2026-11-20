@@ -61,6 +61,7 @@ impl OnRuntimeUpgrade for Migration {
 						// in its own storage layer to undo partial changes if it fails.
 						Some(role) => with_storage_layer(|| match role {
 							AccountRole::Unregistered => Err("Account is unregistered".into()),
+							AccountRole::AccountClosing => Err("Account is closing".into()),
 							AccountRole::Validator => {
 								// To compensate for the consumer that we *should* have added.
 								frame_system::Consumer::<Runtime>::created(&account_id).expect("Can only fail if no providers or too many consumers, checked above.");
