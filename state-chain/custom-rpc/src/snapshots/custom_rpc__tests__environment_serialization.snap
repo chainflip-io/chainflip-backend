@@ -762,6 +762,45 @@ expression: to_pretty_json(&env)
           }
         }
       }
+    },
+    "minimum_order_amounts": {
+      "Arbitrum": {
+        "ETH": 1000,
+        "USDC": 1000,
+        "USDT": 1000
+      },
+      "Assethub": {
+        "DOT": 1000,
+        "USDC": 1000,
+        "USDT": 1000
+      },
+      "Bitcoin": {
+        "BTC": 1000
+      },
+      "Bsc": {
+        "BNB": 1000,
+        "USDT": 1000
+      },
+      "Ethereum": {
+        "CBBTC": 1000,
+        "ETH": 1000,
+        "FLIP": 1000,
+        "USDC": 1000,
+        "USDT": 1000,
+        "WBTC": 1000
+      },
+      "Polkadot": {
+        "DOT": 1000
+      },
+      "Solana": {
+        "SOL": 1000,
+        "USDC": 1000,
+        "USDT": 1000
+      },
+      "Tron": {
+        "TRX": 1000,
+        "USDT": 1000
+      }
     }
   },
   "swapping": {
