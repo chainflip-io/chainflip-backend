@@ -25,7 +25,10 @@ pub mod migrations;
 pub use council::{Council, InvalidCouncil, MAX_DEPTH};
 
 use cf_runtime_utilities::DepthLimited;
-use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
+use cf_traits::{
+	AuthoritiesCfeVersions, CompatibleCfeVersions, EmergencyPreset, EmergencySafeMode,
+	MAX_EMERGENCY_PRESETS,
+};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
@@ -64,6 +67,12 @@ macro_rules! ensure_governance_member {
 }
 
 pub type ProposalId = u32;
+
+pub type EmergencyPresets = frame_support::BoundedBTreeSet<
+	EmergencyPreset,
+	frame_support::traits::ConstU32<MAX_EMERGENCY_PRESETS>,
+>;
+
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
@@ -141,6 +150,8 @@ pub mod pallet {
 		type CompatibleCfeVersions: CompatibleCfeVersions;
 		/// For getting current authorities' CFE versions.
 		type AuthoritiesCfeVersions: AuthoritiesCfeVersions;
+		/// Applies emergency safe-mode presets.
+		type EmergencySafeMode: EmergencySafeMode;
 	}
 
 	#[pallet::pallet]
@@ -223,6 +234,8 @@ pub mod pallet {
 		/// The council was replaced. Carries the flattened members rather than the
 		/// council itself: the event schema generator can't express a recursive type (PRO-3155).
 		NewCouncil { members: BTreeSet<AccountId<T>> },
+		/// A governance member applied emergency safe-mode presets.
+		EmergencyPresetsApplied { member: T::AccountId, presets: EmergencyPresets },
 	}
 
 	#[pallet::error]
@@ -243,28 +256,26 @@ pub mod pallet {
 		NotEnoughAuthoritiesCfesAtTargetVersion,
 		/// The council can never reach quorum, or exceeds the size limits.
 		InvalidCouncil(InvalidCouncil),
+		/// At least one emergency preset must be given.
+		NoEmergencyPresets,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Propose a governance ensured extrinsic
-		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(0)]
 		#[pallet::weight((T::WeightInfo::propose_governance_extrinsic(), DispatchClass::Operational))]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
 			execution: ExecutionMode,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let (council, account_id) = ensure_governance_member!(origin);
 
 			let id = Self::push_proposal(call, execution);
 			Self::deposit_event(Event::Proposed(id));
 
-			Self::inner_approve(&council, account_id, id)?;
-
-			// Governance member don't pay fees
-			Ok(Pays::No.into())
+			Self::inner_approve(&council, account_id, id)
 		}
 
 		/// Performs a runtime upgrade of the Chainflip runtime
@@ -296,17 +307,11 @@ pub mod pallet {
 
 		/// Approve a proposal by a given proposal id
 		/// Approve a Proposal.
-		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::WeightInfo::approve(), DispatchClass::Operational))]
-		pub fn approve(
-			origin: OriginFor<T>,
-			approved_id: ProposalId,
-		) -> DispatchResultWithPostInfo {
+		pub fn approve(origin: OriginFor<T>, approved_id: ProposalId) -> DispatchResult {
 			let (council, account_id) = ensure_governance_member!(origin);
-			Self::inner_approve(&council, account_id, approved_id)?;
-			// Governance members don't pay transaction fees
-			Ok(Pays::No.into())
+			Self::inner_approve(&council, account_id, approved_id)
 		}
 
 		/// **Can only be called via the Governance Origin**
@@ -425,6 +430,28 @@ pub mod pallet {
 			Members::<T>::put(new_council);
 
 			Self::deposit_event(Event::NewCouncil { members: new_members });
+
+			Ok(())
+		}
+
+		/// Lets any single governance member switch off parts of the protocol without a vote.
+		///
+		/// A member is any individual in the council, however deeply nested and whatever their
+		/// weight: no group has to reach quorum.
+		///
+		/// Presets can only switch settings off. Switching them back on needs a governance vote.
+		/// Applying a preset that is already in force is a no-op.
+		#[pallet::call_index(9)]
+		#[pallet::weight((T::WeightInfo::apply_emergency_presets(), DispatchClass::Operational))]
+		pub fn apply_emergency_presets(
+			origin: OriginFor<T>,
+			presets: EmergencyPresets,
+		) -> DispatchResult {
+			let (_, member) = ensure_governance_member!(origin);
+			ensure!(!presets.is_empty(), Error::<T>::NoEmergencyPresets);
+
+			T::EmergencySafeMode::apply(&presets);
+			Self::deposit_event(Event::EmergencyPresetsApplied { member, presets });
 
 			Ok(())
 		}

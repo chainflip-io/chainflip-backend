@@ -817,6 +817,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 	type CompatibleCfeVersions = Environment;
 	type AuthoritiesCfeVersions = Validator;
+	type EmergencySafeMode = RuntimeSafeMode;
 }
 
 parameter_types! {

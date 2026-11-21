@@ -515,3 +515,81 @@ fn set_council_calls_decode_up_to_max_depth() {
 	let too_deep = call(Council::SimpleGroup { threshold: 1, members: bounded_vec![deepest] });
 	assert!(RuntimeCall::decode(&mut &too_deep.encode()[..]).is_err());
 }
+
+mod emergency_presets {
+	use super::*;
+	use crate::EmergencyPresets;
+	use cf_primitives::ForeignChain;
+	use cf_traits::{mocks::safe_mode::MockEmergencySafeMode, EmergencyPreset};
+
+	fn presets(presets: impl IntoIterator<Item = EmergencyPreset>) -> EmergencyPresets {
+		presets.into_iter().collect::<BTreeSet<_>>().try_into().unwrap()
+	}
+
+	#[test]
+	fn member_can_apply_presets() {
+		new_test_ext().execute_with(|| {
+			let applied = presets([
+				EmergencyPreset::DisableDepositChannelCreation(ForeignChain::Bitcoin),
+				EmergencyPreset::DisableLpWithdrawals,
+			]);
+
+			assert_ok!(Governance::apply_emergency_presets(
+				RuntimeOrigin::signed(ALICE),
+				applied.clone()
+			));
+
+			assert_eq!(MockEmergencySafeMode::applied_presets(), applied.clone().into_inner());
+			assert_eq!(
+				last_event::<Test>(),
+				RuntimeEvent::Governance(Event::EmergencyPresetsApplied {
+					member: ALICE,
+					presets: applied,
+				}),
+			);
+		});
+	}
+
+	#[test]
+	fn nested_group_member_can_apply_presets() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Governance::set_council(
+				crate::RawOrigin::GovernanceApproval.into(),
+				nested_council().into(),
+			));
+			// One of seven in an inner group that itself can't reach the council's threshold.
+			const INNER_GROUP_MEMBER: u64 = 102;
+			let applied = presets([EmergencyPreset::DisableInternalSwaps]);
+
+			assert_ok!(Governance::apply_emergency_presets(
+				RuntimeOrigin::signed(INNER_GROUP_MEMBER),
+				applied.clone()
+			));
+
+			assert_eq!(MockEmergencySafeMode::applied_presets(), applied.into_inner());
+		});
+	}
+
+	#[test]
+	fn non_member_cannot_apply_presets() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Governance::apply_emergency_presets(
+					RuntimeOrigin::signed(NOT_GOV_MEMBER),
+					presets([EmergencyPreset::DisableInternalSwaps]),
+				),
+				Error::<Test>::NotMember
+			);
+		});
+	}
+
+	#[test]
+	fn empty_preset_set_is_rejected() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Governance::apply_emergency_presets(RuntimeOrigin::signed(ALICE), presets([])),
+				Error::<Test>::NoEmergencyPresets
+			);
+		});
+	}
+}
