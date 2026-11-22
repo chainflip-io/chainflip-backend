@@ -41,12 +41,21 @@ jobs:
       upload-name: "chainflip-backend-bin-try-runtime"
       binary-subdir: release
 
+  provision-bouncer-runner:
+    uses: ./.github/workflows/_39_provision_bouncer_runner.yml
+    secrets: inherit
   post-check:
-    needs: [build]
+    needs: [build, provision-bouncer-runner]
+    # Runs even when the build fails, so that the provisioned runner is destroyed.
+    if: ${{ always() && needs.provision-bouncer-runner.result != 'skipped' }}
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
       full-bouncer: true
+      build-result: ${{ needs.build.result }}
+      runner-label: ${{ needs.provision-bouncer-runner.outputs.runner-label }}
+      runner-name: ${{ needs.provision-bouncer-runner.outputs.runner-name }}
+      server-id: ${{ needs.provision-bouncer-runner.outputs.server-id }}
   test-benchmarks:
     needs: [build-benchmarks]
     uses: ./.github/workflows/_41_test_benchmarks.yml
