@@ -73,34 +73,12 @@ impl TronRpcClient {
 		Ok(async move {
 			let evm_rpc_client = evm_rpc_client_fut.await;
 
-			let client = Self {
+			Ok(Self {
 				http_provider,
 				http_endpoint,
 				json_rpc_endpoint: json_rpc_endpoint_clone,
 				evm_rpc_client,
-			};
-
-			// Verify the HTTP API node has the historical balance query feature enabled.
-			// Use a block behind the tip to avoid a race where the node hasn't caught up
-			// to the latest block yet, especially since it might be a different node.
-			let block_number = client
-				.get_block_number()
-				.await
-				.context("Failed to get block number during startup check")?
-				.saturating_sub(20);
-			let block = client
-				.block(block_number)
-				.await
-				.context("Failed to get block during startup check")?;
-			client
-				.get_block_balances(
-					i64::try_from(block_number)?,
-					block.header.hash.into_sp_core(),
-				)
-				.await
-				.context("HTTP API node does not support getBlockBalance — ensure the node has the historical balance query feature enabled")?;
-
-			Ok(client)
+			})
 		})
 	}
 
