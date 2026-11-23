@@ -27,28 +27,25 @@ use jsonrpsee::{
 	http_client::{HttpClient, HttpClientBuilder},
 };
 use subxt::{
-	backend::{
-		legacy::{
-			rpc_methods::{BlockDetails, Bytes},
-			LegacyRpcMethods,
-		},
-		rpc::{RawRpcFuture, RawRpcSubscription, RawValue, RpcClient, RpcClientT},
+	backend::LegacyBackend,
+	config::RpcConfigFor,
+	error::OnlineClientAtBlockError,
+	rpcs::{
+		self as subxt_rpcs,
+		client::{RawRpcFuture, RawRpcSubscription, RawValue, RpcClient, RpcClientT},
+		methods::legacy::{BlockDetails, Bytes, LegacyRpcMethods},
 	},
-	error::BlockError,
-	events::{Events, EventsClient},
-	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
 };
 use url::Url;
 
 use anyhow::{anyhow, Result};
 use cf_utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
-use codec::Decode;
 use tracing::{error, warn};
 
 use crate::{
 	constants::RPC_RETRY_CONNECTION_INTERVAL,
-	dot::PolkadotHeader,
+	dot::{PolkadotEvents, PolkadotHeader},
 	witness::hub::assethub::{self, runtime_types::pallet_assets::types::AccountStatus},
 };
 
@@ -147,10 +144,7 @@ pub struct DotRpcClientBuilder {
 #[derive(Clone)]
 pub struct DotRpcClient {
 	online_client: OnlineClient<PolkadotConfig>,
-	rpc_methods: LegacyRpcMethods<PolkadotConfig>,
-	// OnlineClient clones share mutable metadata, so we need this lock to ensure
-	// that a metadata update and event reads don't interfere with each other between tasks.
-	events_lock: Arc<tokio::sync::Mutex<()>>,
+	rpc_methods: LegacyRpcMethods<RpcConfigFor<PolkadotConfig>>,
 }
 
 impl DotRpcClientBuilder {
@@ -186,11 +180,15 @@ impl DotRpcClientBuilder {
 			let rpc_client = PolkadotHttpClient::new(&url).map(RpcClient::new);
 
 			let maybe_online_client: anyhow::Result<_> = match rpc_client {
-				Ok(rpc_client) =>
-					OnlineClient::<PolkadotConfig>::from_rpc_client(rpc_client.clone())
-						.await
-						.map(move |a| (rpc_client, a))
-						.map_err(|e| e.into()),
+				Ok(rpc_client) => OnlineClient::<PolkadotConfig>::from_backend_with_config(
+					// Historic types are only needed for blocks with pre-V14 metadata.
+					PolkadotConfig::builder().use_historic_types(false).build(),
+					// The HTTP client doesn't support the subscriptions other backends need.
+					Arc::new(LegacyBackend::builder().build(rpc_client.clone())),
+				)
+				.await
+				.map(move |a| (rpc_client, a))
+				.map_err(|e| e.into()),
 				Err(e) => Err(e),
 			};
 
@@ -222,19 +220,7 @@ impl DotRpcClientBuilder {
 			}
 		};
 
-		DotRpcClient {
-			online_client,
-			rpc_methods: LegacyRpcMethods::new(rpc_client),
-			events_lock: Arc::new(tokio::sync::Mutex::new(())),
-		}
-	}
-}
-
-impl DotRpcClient {
-	pub async fn metadata(&self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
-		let resp = self.rpc_methods.state_get_metadata(Some(block_hash)).await?;
-		let metadata = subxt::Metadata::decode(&mut &resp.into_raw()[..])?;
-		Ok(metadata)
+		DotRpcClient { online_client, rpc_methods: LegacyRpcMethods::new(rpc_client) }
 	}
 }
 
@@ -255,7 +241,7 @@ impl DotRpcApi for DotRpcClient {
 	async fn block(
 		&self,
 		block_hash: PolkadotHash,
-	) -> Result<Option<BlockDetails<PolkadotConfig>>> {
+	) -> Result<Option<BlockDetails<RpcConfigFor<PolkadotConfig>>>> {
 		Ok(self.rpc_methods.chain_get_block(Some(block_hash)).await?)
 	}
 
@@ -263,55 +249,30 @@ impl DotRpcApi for DotRpcClient {
 		Ok(self.block(block_hash).await?.map(|block| block.block.extrinsics))
 	}
 
-	// TODO: When witnessing is catching up we query blocks in batches. It's possible that when
-	// a batch is made over a runtime boundary that the metadata will need to be queried more than
-	// necessary, as the order within the batch is not necessarily guaranteed. Because we limit
-	// Polkadot to 32 concurrent requests and runtime upgrades are infrequent this should not be an
-	// issue in reality, but probably worth solving at some point.
 	async fn events(
 		&self,
 		block_hash: PolkadotHash,
 		parent_hash: PolkadotHash,
-	) -> Result<Option<Events<PolkadotConfig>>> {
-		let _events_guard = self.events_lock.lock().await;
+	) -> Result<Option<PolkadotEvents>> {
+		// Events are encoded using the runtime that executed the block, which is the one in the
+		// parent block's state: in a runtime upgrade block the new runtime is only in the state at
+		// the end of the block.
+		let at_parent = match self.online_client.at_block(parent_hash).await {
+			Ok(at_parent) => at_parent,
+			Err(OnlineClientAtBlockError::BlockHeaderNotFound { .. }) => return Ok(None),
+			Err(e) => return Err(e.into()),
+		};
 
-		// We need to get the runtime version at the previous block instead the desired block
-		// because the events in the block are encoded using the previous block's runtime version,
-		// not the desired block's runtime version. This is caused by the `state_getRuntimeVersion`
-		// RPC returning the value of the runtime at the end of the block, not the beginning.
-		let chain_runtime_version = self.runtime_version(Some(parent_hash)).await?;
+		let event_bytes = self
+			.rpc_methods
+			.state_get_storage(
+				&frame_support::storage::storage_prefix(b"System", b"Events"),
+				Some(block_hash),
+			)
+			.await?
+			.unwrap_or_default();
 
-		let client_runtime_version = self.online_client.runtime_version();
-
-		// We set the metadata and runtime version we need to decode this block's events.
-		// The metadata from the OnlineClient is used within the EventsClient to decode the
-		// events.
-		if chain_runtime_version.spec_version != client_runtime_version.spec_version ||
-			chain_runtime_version.transaction_version !=
-				client_runtime_version.transaction_version
-		{
-			tracing::debug!(
-				"Setting runtime version of {chain_runtime_version:?} and metadata for block {:?}",
-				block_hash
-			);
-			let new_metadata = self.metadata(parent_hash).await?;
-
-			self.online_client.set_runtime_version(subxt::client::RuntimeVersion {
-				spec_version: chain_runtime_version.spec_version,
-				transaction_version: chain_runtime_version.transaction_version,
-			});
-			self.online_client.set_metadata(new_metadata);
-		}
-
-		// If we've succeeded in getting the current runtime version then we assume
-		// the connection is stable (or has just been refreshed), no need to retry again.
-		match EventsClient::new(self.online_client.clone()).at(block_hash).await {
-			Ok(events) => Ok(Some(events)),
-			Err(e) => match e {
-				subxt::Error::Block(BlockError::NotFound(_)) => Ok(None),
-				_ => Err(e.into()),
-			},
-		}
+		Ok(Some(Arc::new(at_parent.events().from_bytes(event_bytes))))
 	}
 
 	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> Result<RuntimeVersion> {
@@ -326,16 +287,12 @@ impl DotRpcApi for DotRpcClient {
 	/// Submits a raw encoded extrinsic, returning its hash once it is accepted into the
 	/// transaction pool.
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		//we need to use `author_submit_extrinsic` because despite its name, Subxt 0.42’s submit()
-		// uses a subscription to wait for the first transaction status.
+		// We use `author_submit_extrinsic` because subxt's submit() uses a subscription to wait
+		// for the first transaction status, which the HTTP client doesn't support.
 		match self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await {
 			Err(subxt_rpcs::Error::User(user_error))
 				if user_error.code == POOL_ALREADY_IMPORTED =>
-				Ok(subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
-					self.online_client.clone(),
-					encoded_bytes,
-				)
-				.hash()),
+				Ok(sp_crypto_hashing::blake2_256(&encoded_bytes).into()),
 			result => Ok(result?),
 		}
 	}
@@ -346,15 +303,17 @@ impl DotRpcApi for DotRpcClient {
 		asset: HubAsset,
 		block_hash: PolkadotHash,
 	) -> Result<u128> {
-		let account_id = account_id.0.into();
+		let account_id = subxt::utils::AccountId32(account_id.0);
 		Ok(match asset {
 			HubAsset::HubDot => {
-				let query = assethub::storage().system().account(&account_id);
 				self.online_client
-					.storage()
-					.at(block_hash)
-					.fetch(&query)
+					.at_block(block_hash)
 					.await?
+					.storage()
+					.try_fetch(assethub::storage().system().account(), (account_id,))
+					.await?
+					.map(|value| value.decode())
+					.transpose()?
 					.map(|account_info| {
 						account_info.data.free.saturating_sub(account_info.data.frozen)
 					})
@@ -367,12 +326,14 @@ impl DotRpcApi for DotRpcClient {
 					HubAsset::HubUsdt => ASSETHUB_USDT_ASSET_ID,
 					HubAsset::HubDot => unreachable!(),
 				};
-				let query = assethub::storage().assets().account(id, &account_id);
 				self.online_client
-					.storage()
-					.at(block_hash)
-					.fetch(&query)
+					.at_block(block_hash)
 					.await?
+					.storage()
+					.try_fetch(assethub::storage().assets().account(), (id, account_id))
+					.await?
+					.map(|value| value.decode())
+					.transpose()?
 					.map(|asset_account| {
 						// `AccountStatus` is a subxt-generated enum that does not derive
 						// `PartialEq`, so use `matches!` rather than `==`.

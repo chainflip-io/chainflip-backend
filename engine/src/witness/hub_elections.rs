@@ -119,7 +119,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 		let Some(finalized_header) = self.client.header(finalized_hash).await? else {
 			return Err(anyhow::anyhow!("Got None as header for hash {finalized_hash}."))
 		};
-		let finalized_height = finalized_header.number;
+		let finalized_height = u32::try_from(finalized_header.number)?;
 		let range = block_witness_range(ASSETHUB_WITNESS_PERIOD, finalized_height);
 		let block_witness_range = BlockWitnessRange::try_new(block_witness_root(
 			ASSETHUB_WITNESS_PERIOD,
@@ -155,7 +155,7 @@ impl WitnessClient<AssethubChain> for AssethubVoter {
 		let headers = self.continuous_headers_for_block_range(witness_range).await?;
 		let block_headers =
 			future::join_all(headers.into_iter().map(|(block_hash, header)| async move {
-				let finalized_block_height = header.number;
+				let finalized_block_height = u32::try_from(header.number)?;
 
 				if finalized_block_height == 0 {
 					// the genesis block (height 0) has 0x00...00 as parent hash. But this block

@@ -17,10 +17,12 @@
 use crate::subxt_state_chain_config::{cf_static_runtime, StateChainConfig};
 use codec::Decode;
 use frame_system::DispatchEventInfo;
+use scale_info::{form::PortableForm, Variant};
 use sp_runtime::{DispatchError, Either};
+use std::sync::Arc;
 use subxt::{
-	events::StaticEvent,
-	ext::{scale_decode, subxt_core::events::EventMetadataDetails},
+	client::OfflineClientAtBlock, error::EventsError, events::DecodeAsEvent, ext::scale_decode,
+	metadata::PalletMetadata, ArcMetadata, OfflineClient,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -43,90 +45,125 @@ impl From<subxt::Error> for DynamicEventError {
 	}
 }
 
+impl From<EventsError> for DynamicEventError {
+	fn from(e: EventsError) -> Self {
+		subxt::Error::from(e).into()
+	}
+}
+
+/// An event decoded from a block's event records. Owns its bytes so that it can outlive the
+/// [subxt::events::Events] it was decoded from.
 #[derive(Debug, Clone)]
 pub struct DynamicEvent {
-	event: subxt::events::EventDetails<StateChainConfig>,
-	static_metadata: subxt::Metadata,
+	pallet_name: String,
+	event_name: String,
+	pallet_index: u8,
+	event_index: u8,
+	field_bytes: Vec<u8>,
+	current_metadata: ArcMetadata,
+	static_metadata: ArcMetadata,
 }
 
 impl DynamicEvent {
-	pub fn event_static_metadata<E: StaticEvent>(
+	fn event_metadata(
+		metadata: &subxt::Metadata,
+		pallet_index: u8,
+		event_index: u8,
+	) -> Option<(PalletMetadata<'_>, &Variant<PortableForm>)> {
+		let pallet = metadata.pallet_by_event_index(pallet_index)?;
+		let variant = pallet.event_variant_by_index(event_index)?;
+		Some((pallet, variant))
+	}
+
+	fn decode_fields<E: DecodeAsEvent>(
 		&self,
-	) -> Result<EventMetadataDetails<'_>, DynamicEventError> {
+		bytes: &mut &[u8],
+		variant: &Variant<PortableForm>,
+		metadata: &subxt::Metadata,
+	) -> Result<E, DynamicEventError> {
+		let mut fields = variant
+			.fields
+			.iter()
+			.map(|f| scale_decode::Field::new(f.ty.id, f.name.as_deref()));
+		E::decode_as_fields(bytes, &mut fields, metadata.types()).map_err(|reason| {
+			EventsError::CannotDecodeEventFields {
+				pallet_name: self.pallet_name.clone(),
+				event_name: self.event_name.clone(),
+				reason,
+			}
+			.into()
+		})
+	}
+
+	pub fn as_event<E: DecodeAsEvent>(&self) -> Result<Option<E>, DynamicEventError> {
+		if !E::is_event(&self.pallet_name, &self.event_name) {
+			return Ok(None);
+		}
+		let (_, variant) =
+			Self::event_metadata(&self.current_metadata, self.pallet_index, self.event_index)
+				.ok_or(EventsError::CannotFindVariantWithIndex {
+					pallet_name: self.pallet_name.clone(),
+					variant_index: self.event_index,
+				})?;
+		self.decode_fields(&mut &self.field_bytes[..], variant, &self.current_metadata)
+			.map(Some)
+	}
+
+	pub fn as_event_strict<E: DecodeAsEvent>(&self) -> Result<Option<E>, DynamicEventError> {
+		if !E::is_event(&self.pallet_name, &self.event_name) {
+			return Ok(None);
+		}
+		let (_, current_variant) =
+			Self::event_metadata(&self.current_metadata, self.pallet_index, self.event_index)
+				.ok_or(EventsError::CannotFindVariantWithIndex {
+					pallet_name: self.pallet_name.clone(),
+					variant_index: self.event_index,
+				})?;
+
 		// Make sure the event is still known to the static metadata. i.e. it was not removed in a
 		// newer runtime version
-		if self.event.variant_name() != E::EVENT {
-			return Err(DynamicEventError::EventUnknownToStaticMetadata);
-		}
-		let pallet_metadata = self
+		let static_variant = self
 			.static_metadata
-			.pallet_by_name(E::PALLET)
-			.ok_or_else(|| DynamicEventError::EventUnknownToStaticMetadata)?;
+			.pallet_by_name(&self.pallet_name)
+			.and_then(|pallet| pallet.event_variant_by_index(self.event_index))
+			.filter(|variant| variant.name == self.event_name)
+			.ok_or(DynamicEventError::EventUnknownToStaticMetadata)?;
 
-		let variant_metadata = pallet_metadata
-			.event_variant_by_index(self.event.variant_index())
-			.ok_or_else(|| DynamicEventError::EventUnknownToStaticMetadata)?;
+		// Decode the fields using the old static metadata
+		let mut bytes = &self.field_bytes[..];
+		let decoded = self.decode_fields(&mut bytes, static_variant, &self.static_metadata)?;
 
-		Ok(EventMetadataDetails { pallet: pallet_metadata, variant: variant_metadata })
-	}
+		// **STRICT NAMES CHECK **: Ensure decoded fields match old static metadata fields
+		let static_field_names: Vec<_> =
+			static_variant.fields.iter().map(|f| f.name.as_deref()).collect();
 
-	pub fn as_event<E: StaticEvent>(&self) -> Result<Option<E>, DynamicEventError> {
-		Ok(self.event.as_event::<E>()?)
-	}
+		let actual_field_names: Vec<_> =
+			current_variant.fields.iter().map(|f| f.name.as_deref()).collect();
 
-	pub fn as_event_strict<E: StaticEvent>(&self) -> Result<Option<E>, DynamicEventError> {
-		let ev_metadata = self.event.event_metadata();
-		if ev_metadata.pallet.name() == E::PALLET && ev_metadata.variant.name == E::EVENT {
-			let ev_static_metadata = self.event_static_metadata::<E>()?;
-
-			// Decode the fields using the old static metadata
-			let mut bytes = self.event.field_bytes(); // Get the event's field bytes
-			let mut static_fields = ev_static_metadata
-				.variant
-				.fields
-				.iter()
-				.map(|f| scale_decode::Field::new(f.ty.id, f.name.as_deref()));
-
-			let decoded =
-				E::decode_as_fields(&mut bytes, &mut static_fields, self.static_metadata.types())
-					.map_err(subxt::Error::from)?;
-
-			// **STRICT NAMES CHECK **: Ensure decoded fields match old static metadata fields
-			let static_field_names: Vec<_> =
-				ev_static_metadata.variant.fields.iter().map(|f| f.name.as_deref()).collect();
-
-			let actual_field_names: Vec<_> =
-				ev_metadata.variant.fields.iter().map(|f| f.name.as_deref()).collect();
-
-			if static_field_names != actual_field_names {
-				return Err(DynamicEventError::EventDecodeError(format!(
-					"{} event strict fields check failed: expected {:?}, got {:?}",
-					E::EVENT,
-					static_field_names,
-					actual_field_names
-				)));
-			}
-
-			// **STRICT BYTE CHECK**: Ensure no extra bytes remain
-			if !bytes.is_empty() {
-				return Err(DynamicEventError::EventDecodeError(format!(
-					"{} event strict byte check failed",
-					E::EVENT
-				)));
-			}
-
-			Ok(Some(decoded))
-		} else {
-			Ok(None)
+		if static_field_names != actual_field_names {
+			return Err(DynamicEventError::EventDecodeError(format!(
+				"{} event strict fields check failed: expected {:?}, got {:?}",
+				self.event_name, static_field_names, actual_field_names
+			)));
 		}
+
+		// **STRICT BYTE CHECK**: Ensure no extra bytes remain
+		if !bytes.is_empty() {
+			return Err(DynamicEventError::EventDecodeError(format!(
+				"{} event strict byte check failed",
+				self.event_name
+			)));
+		}
+
+		Ok(Some(decoded))
 	}
 
 	pub fn pallet_name(&self) -> &str {
-		self.event.pallet_name()
+		&self.pallet_name
 	}
 
 	pub fn variant_name(&self) -> &str {
-		self.event.variant_name()
+		&self.event_name
 	}
 }
 
@@ -157,12 +194,12 @@ impl DynamicEvents {
 	///     extra bytes remain.
 	///   * False: leniently tries to decode the event, it doesn't fail if extra fields are added to
 	///     the event.
-	pub fn find_static_event<E: StaticEvent>(
+	pub fn find_static_event<E: DecodeAsEvent>(
 		&self,
 		is_strict: bool,
 	) -> Result<Option<E>, DynamicEventError> {
 		for event in self.events.iter() {
-			if (event.pallet_name(), event.variant_name()) == (E::PALLET, E::EVENT) {
+			if E::is_event(event.pallet_name(), event.variant_name()) {
 				return if is_strict { event.as_event_strict::<E>() } else { event.as_event::<E>() }
 			}
 		}
@@ -171,13 +208,13 @@ impl DynamicEvents {
 
 	/// Finds all events of type E, parameter `is_strict` determines if the events should be decoded
 	/// strictly.
-	pub fn find_all_static_events<E: StaticEvent>(
+	pub fn find_all_static_events<E: DecodeAsEvent>(
 		&self,
 		is_strict: bool,
 	) -> Result<Vec<E>, DynamicEventError> {
 		self.events
 			.iter()
-			.filter(|event| (event.pallet_name(), event.variant_name()) == (E::PALLET, E::EVENT))
+			.filter(|event| E::is_event(event.pallet_name(), event.variant_name()))
 			.filter_map(|event| {
 				if is_strict {
 					event.as_event_strict::<E>().transpose()
@@ -218,14 +255,19 @@ impl DynamicEvents {
 }
 
 pub struct EventsDecoder {
-	current_metadata: subxt::Metadata,
-	static_metadata: subxt::Metadata,
+	current: OfflineClientAtBlock<StateChainConfig>,
+	static_metadata: ArcMetadata,
 }
 
 impl EventsDecoder {
 	pub fn new(opaque_metadata: &sp_core::OpaqueMetadata) -> Self {
 		let current_metadata = subxt::Metadata::decode(&mut opaque_metadata.as_ref())
 			.expect("Runtime metadata should be valid.");
+		let current = OfflineClient::new_with_config(StateChainConfig::with_fixed_metadata(
+			Arc::new(current_metadata),
+		))
+		.at_block(0u64)
+		.expect("Fixed metadata config always resolves a block.");
 
 		// Get the compile time static metadata
 		let static_opaque_metadata = state_chain_runtime::Runtime::metadata_at_version(15)
@@ -233,7 +275,7 @@ impl EventsDecoder {
 		let static_metadata = subxt::Metadata::decode(&mut static_opaque_metadata.as_ref())
 			.expect("Runtime metadata should be valid.");
 
-		Self { current_metadata, static_metadata }
+		Self { current, static_metadata: Arc::new(static_metadata) }
 	}
 
 	pub fn decode_extrinsic_events(
@@ -245,20 +287,21 @@ impl EventsDecoder {
 			return Ok(DynamicEvents { events: vec![] });
 		};
 
-		let evs = subxt::events::Events::<StateChainConfig>::decode_from(
-			events_bytes,
-			self.current_metadata.clone(),
-		);
+		let evs = self.current.events().from_bytes(events_bytes);
 
 		let mut events = vec![];
 
 		for event in evs.iter() {
-			let event_details = event?;
+			let event = event?;
 
-			if event_details.phase() == subxt::events::Phase::ApplyExtrinsic(extrinsic_index as u32)
-			{
+			if event.phase() == subxt::events::Phase::ApplyExtrinsic(extrinsic_index as u32) {
 				events.push(DynamicEvent {
-					event: event_details,
+					pallet_name: event.pallet_name().to_owned(),
+					event_name: event.event_name().to_owned(),
+					pallet_index: event.pallet_index(),
+					event_index: event.event_index(),
+					field_bytes: event.field_bytes().to_vec(),
+					current_metadata: self.current.metadata(),
 					static_metadata: self.static_metadata.clone(),
 				});
 			}
