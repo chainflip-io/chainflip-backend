@@ -124,6 +124,17 @@ fn set_default_test_bids() {
 	add_bids([&WINNING_BIDS[..], &LOSING_BIDS[..], &[UNQUALIFIED_BID]].concat());
 }
 
+fn link_validators_to_operator(
+	operator: ValidatorId,
+	validators: impl IntoIterator<Item = ValidatorId>,
+) {
+	for validator in validators {
+		assert_ok!(ValidatorPallet::claim_validator(RuntimeOrigin::signed(operator), validator));
+		assert_ok!(ValidatorPallet::accept_operator(RuntimeOrigin::signed(validator), operator));
+		assert_eq!(OperatorChoice::<Test>::get(validator), Some(operator));
+	}
+}
+
 #[test]
 fn changing_epoch_block_size() {
 	new_test_ext().then_execute_with_checks(|| {
@@ -2467,16 +2478,29 @@ mod operator {
 			));
 
 			// The delegation may be part of a pending snapshot, so it must stay in place until
-			// the rotation completes and the delegator is bonded.
-			CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
-			assert_noop!(
-				ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB),
-				Error::<Test>::RotationInProgress
-			);
-			assert_noop!(
-				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
-				Error::<Test>::RotationInProgress
-			);
+			// the rotation completes and the delegator is bonded. Snapshots are registered for the
+			// incoming epoch, so the unexpired-snapshot check alone doesn't cover this.
+			for phase in [
+				RotationPhase::KeygensInProgress(Default::default()),
+				RotationPhase::KeyHandoversInProgress(Default::default()),
+				RotationPhase::ActivatingKeys(Default::default()),
+				RotationPhase::NewKeysActivated(Default::default()),
+				RotationPhase::SessionRotating(Default::default(), Default::default()),
+			] {
+				CurrentRotationPhase::<Test>::set(phase);
+				assert_noop!(
+					ValidatorPallet::undelegate(OriginTrait::signed(BOB), DelegationAmount::Max),
+					Error::<Test>::RotationInProgress
+				);
+				assert_noop!(
+					ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB),
+					Error::<Test>::RotationInProgress
+				);
+				assert_noop!(
+					ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
+					Error::<Test>::RotationInProgress
+				);
+			}
 
 			CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
 			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
@@ -2998,17 +3022,7 @@ mod delegation {
 					}
 				}
 
-				for bid in WINNING_BIDS {
-					assert_ok!(ValidatorPallet::claim_validator(
-						OriginTrait::signed(OPERATOR),
-						bid.bidder_id
-					));
-					assert_ok!(ValidatorPallet::accept_operator(
-						OriginTrait::signed(bid.bidder_id),
-						OPERATOR
-					));
-					assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
-				}
+				link_validators_to_operator(OPERATOR, WINNING_BIDS.map(|bid| bid.bidder_id));
 
 				set_default_test_bids();
 
@@ -3606,17 +3620,7 @@ pub mod auction_optimization {
 			OPERATOR_SETTINGS,
 			vanity()
 		));
-		for Bid { bidder_id, .. } in validators {
-			assert_ok!(ValidatorPallet::claim_validator(
-				RuntimeOrigin::signed(operator),
-				bidder_id
-			));
-			assert_ok!(ValidatorPallet::accept_operator(
-				RuntimeOrigin::signed(bidder_id),
-				operator
-			));
-			assert!(OperatorChoice::<Test>::get(bidder_id).is_some());
-		}
+		link_validators_to_operator(operator, validators.into_iter().map(|bid| bid.bidder_id));
 	}
 
 	#[test]
@@ -4419,16 +4423,7 @@ mod keygen_failure_with_delegation {
 					.collect(),
 			);
 
-			for validator in validators {
-				assert_ok!(ValidatorPallet::claim_validator(
-					OriginTrait::signed(operator),
-					validator
-				));
-				assert_ok!(ValidatorPallet::accept_operator(
-					OriginTrait::signed(validator),
-					operator
-				));
-			}
+			link_validators_to_operator(operator, validators);
 		}
 	}
 
