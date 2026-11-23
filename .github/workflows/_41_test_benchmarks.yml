@@ -17,6 +17,9 @@ jobs:
       runner-label: ${{ steps.provision.outputs.runner-label }}
       runner-name: ${{ steps.provision.outputs.runner-name }}
       server-id: ${{ steps.provision.outputs.server-id }}
+      # "Re-run failed jobs" reuses these outputs without re-provisioning, so the
+      # dependent job needs to know which attempt the runner belongs to.
+      run-attempt: ${{ github.run_attempt }}
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,15 +42,24 @@ jobs:
     # this job rather than hidden behind a skip. A skipped job counts as a passing
     # required check, which would hide provisioning failures.
     if: ${{ !cancelled() }}
-    # The ephemeral runner label is unique per run, so it identifies the runner on its own.
-    # Fall back to a hosted runner when there is none to target, otherwise the job waits
+    # The ephemeral runner label is unique per run attempt, so it identifies the runner on its own.
+    # Fall back to a hosted runner when there is none to target (provisioning failed, or the
+    # runner belongs to an earlier attempt and has been destroyed), otherwise the job waits
     # on a label that matches nothing until it times out.
-    runs-on: ${{ needs.provision-benchmarks-runner.result == 'success' && needs.provision-benchmarks-runner.outputs.runner-label || 'namespace-profile-default-light' }}
+    runs-on: ${{ needs.provision-benchmarks-runner.result == 'success' && needs.provision-benchmarks-runner.outputs.run-attempt == github.run_attempt && needs.provision-benchmarks-runner.outputs.runner-label || 'namespace-profile-default-light' }}
     timeout-minutes: 60
     steps:
       - name: Fail if runner provisioning failed 🚨
         if: ${{ needs.provision-benchmarks-runner.result != 'success' }}
         run: exit 1
+
+      - name: Fail if runner is from an earlier attempt 🚨
+        if: ${{ needs.provision-benchmarks-runner.result == 'success' && needs.provision-benchmarks-runner.outputs.run-attempt != github.run_attempt }}
+        env:
+          PROVISIONED_ATTEMPT: ${{ needs.provision-benchmarks-runner.outputs.run-attempt }}
+        run: |
+          echo "::error::The runner was provisioned in attempt ${PROVISIONED_ATTEMPT} and has since been destroyed. Re-run the provision-benchmarks-runner job (which re-runs this one) instead of 'Re-run failed jobs'."
+          exit 1
 
       - name: Checkout 🛒
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
