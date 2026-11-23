@@ -874,7 +874,7 @@ pub mod pallet {
 								} else {
 									log::error!(
 										"Handover resulted in an unexpected key: {:?}",
-										&reported_new_agg_key
+										reported_new_agg_key
 									);
 									Err(Default::default())
 								}

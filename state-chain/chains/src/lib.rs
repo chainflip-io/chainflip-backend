@@ -16,7 +16,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(step_trait)]
-#![feature(split_array)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(trait_alias)]
 use crate::{
@@ -204,8 +203,9 @@ pub mod witness_period {
 				let distance = end.root - start.root;
 				debug_assert!(distance % C::WITNESS_PERIOD == Zero::zero());
 				let steps: u64 = (distance / C::WITNESS_PERIOD).into();
-				let steps_usize: usize = steps.saturating_cast();
-				let overflow_check = if steps_usize.saturating_cast::<u64>() == steps {
+				let steps_usize: usize = SaturatingCast::saturating_cast(steps);
+				let overflow_check = if SaturatingCast::saturating_cast::<u64>(steps_usize) == steps
+				{
 					Some(steps_usize)
 				} else {
 					None
@@ -249,10 +249,10 @@ pub mod witness_period {
 	#[duplicate::duplicate_item(Integer; [ u8 ]; [ u16 ]; [ u32 ])]
 	impl SaturatingStep for Integer {
 		fn saturating_forward(self, count: usize) -> Self {
-			self.saturating_add(count.saturating_cast::<Integer>())
+			self.saturating_add(SaturatingCast::saturating_cast::<Integer>(count))
 		}
 		fn saturating_backward(self, count: usize) -> Self {
-			self.saturating_sub(count.saturating_cast::<Integer>())
+			self.saturating_sub(SaturatingCast::saturating_cast::<Integer>(count))
 		}
 		fn into_range_inclusive(self) -> RangeInclusive<u64> {
 			self.into()..=self.into()
@@ -260,10 +260,10 @@ pub mod witness_period {
 	}
 	impl SaturatingStep for u64 {
 		fn saturating_forward(self, count: usize) -> Self {
-			self.saturating_add(count.saturating_cast::<u64>())
+			self.saturating_add(SaturatingCast::saturating_cast::<u64>(count))
 		}
 		fn saturating_backward(self, count: usize) -> Self {
-			self.saturating_sub(count.saturating_cast::<u64>())
+			self.saturating_sub(SaturatingCast::saturating_cast::<u64>(count))
 		}
 		fn into_range_inclusive(self) -> RangeInclusive<u64> {
 			self..=self

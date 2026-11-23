@@ -96,7 +96,7 @@ impl<T: Ord + Copy + Step + Bounded> RleBitmap<T> {
 	}
 
 	pub fn invert(&mut self) {
-		for (_, value) in self.rle_bitmap.iter_mut() {
+		for value in self.rle_bitmap.values_mut() {
 			*value = !*value;
 		}
 	}

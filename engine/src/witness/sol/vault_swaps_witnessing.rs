@@ -333,7 +333,7 @@ async fn get_program_swap_event_accounts_data(
 
 	Ok(program_swap_event_accounts
 		.into_iter()
-		.zip(account_infos.into_iter())
+		.zip(account_infos)
 		.map(|(account, account_info)| {
 			Ok((
 				account,

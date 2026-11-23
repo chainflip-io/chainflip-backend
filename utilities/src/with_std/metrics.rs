@@ -629,7 +629,7 @@ mod test {
 					async move {
 						let resp = reqwest::get(&format!(
 							"http://{}:{}/{}",
-							&prometheus_settings.hostname, &prometheus_settings.port, path
+							prometheus_settings.hostname, prometheus_settings.port, path
 						))
 						.await
 						.unwrap();

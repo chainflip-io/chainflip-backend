@@ -28,6 +28,7 @@ RUN set -eux; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
+# Newer pnpm majors fail to install on jammy's node 12. CI jobs that need node/pnpm use the setup actions.
 RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update; \
@@ -37,26 +38,28 @@ RUN set -eux; \
     command -v node; \
     command -v npm; \
     npm --version; \
-    npm install -g pnpm; \
+    npm install -g pnpm@10; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
+ARG LLVM_VERSION=20
 RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
-    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update; \
-    curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -; \
+    install -d -m 0755 /etc/apt/keyrings; \
+    curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg; \
     DEBIAN_CODENAME="$(lsb_release -sc)"; \
-    echo "deb http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" > "/etc/apt/sources.list.d/llvm-toolchain-${DEBIAN_CODENAME}-14.list"; \
-    echo "deb-src http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" >> "/etc/apt/sources.list.d/llvm-toolchain-${DEBIAN_CODENAME}-14.list"; \
+    LLVM_REPO="llvm-toolchain-${DEBIAN_CODENAME}-${LLVM_VERSION}"; \
+    echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] https://apt.llvm.org/${DEBIAN_CODENAME}/ ${LLVM_REPO} main" > "/etc/apt/sources.list.d/${LLVM_REPO}.list"; \
+    echo "deb-src [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] https://apt.llvm.org/${DEBIAN_CODENAME}/ ${LLVM_REPO} main" >> "/etc/apt/sources.list.d/${LLVM_REPO}.list"; \
     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update; \
-    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 -y install --no-install-recommends clang-14 lldb-14 lld-14 libclang-14-dev; \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 -y install --no-install-recommends "clang-${LLVM_VERSION}" "lldb-${LLVM_VERSION}" "lld-${LLVM_VERSION}" "libclang-${LLVM_VERSION}-dev"; \
     apt-get autoremove -y; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
 # Set a links to clang and ldd
-RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-14 100; \
-    update-alternatives --install /usr/bin/ld ld /usr/bin/ld.lld-14 100;
+RUN update-alternatives --install /usr/bin/cc cc "/usr/bin/clang-${LLVM_VERSION}" 100; \
+    update-alternatives --install /usr/bin/ld ld "/usr/bin/ld.lld-${LLVM_VERSION}" 100;
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y

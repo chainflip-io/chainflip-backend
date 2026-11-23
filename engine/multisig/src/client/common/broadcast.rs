@@ -114,7 +114,7 @@ where
 	BroadcastStage<C, Stage>: CeremonyStage<C>,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "BroadcastStage({})", &self.get_stage_name())
+		write!(f, "BroadcastStage({})", self.get_stage_name())
 	}
 }
 
