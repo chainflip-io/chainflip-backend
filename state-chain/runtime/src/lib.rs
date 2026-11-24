@@ -566,6 +566,7 @@ pub type MigrationsForV2_3 = (
 	migrations::broker_withdrawal_addresses_to_asset_balances::Migration,
 	migrations::refund_addresses_to_asset_balances::Migration,
 	migrations::bsc_witness_safety_margin::BscWitnessSafetyMargin,
+	migrations::network_lockdown::Migration,
 );
 
 #[cfg(test)]

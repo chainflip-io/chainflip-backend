@@ -110,12 +110,15 @@ pub enum PalletConfigUpdate {
 	MinimumOperatorFee {
 		minimum_operator_fee_in_bps: u32,
 	},
+	NetworkLockdown {
+		enabled: bool,
+	},
 }
 
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const STORAGE_VERSION_U16: u16 = 10;
+pub const STORAGE_VERSION_U16: u16 = 11;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
@@ -421,6 +424,12 @@ pub mod pallet {
 	pub type OperatorChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
+	/// While enabled, only validators managed by an existing operator can register a peer id, and
+	/// no new operators can register. Every node with a peer mapping is admitted to the engines'
+	/// p2p network, so this keeps unknown nodes off it.
+	#[pallet::storage]
+	pub type NetworkLockdown<T: Config> = StorageValue<_, bool, ValueQuery>;
+
 	/// Maps validators to their operators for each epoch.
 	#[pallet::storage]
 	pub type ValidatorToOperator<T: Config> = StorageDoubleMap<
@@ -588,6 +597,10 @@ pub mod pallet {
 		StillDelegating,
 		/// The operator's list of delegation exceptions is full.
 		TooManyExceptions,
+		/// During network lockdown, only validators managed by an operator can register a peer id.
+		PeerRegistrationLocked,
+		/// New operators cannot register during network lockdown.
+		OperatorRegistrationLocked,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -781,6 +794,9 @@ pub mod pallet {
 				PalletConfigUpdate::MinimumOperatorFee { minimum_operator_fee_in_bps } => {
 					MinimumOperatorFee::<T>::set(minimum_operator_fee_in_bps);
 				},
+				PalletConfigUpdate::NetworkLockdown { enabled } => {
+					NetworkLockdown::<T>::set(enabled);
+				},
 			}
 
 			Self::deposit_event(Event::PalletConfigUpdated { update });
@@ -849,6 +865,10 @@ pub mod pallet {
 			// TODO Consider ensuring is non-private IP / valid IP
 
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			ensure!(
+				!NetworkLockdown::<T>::get() || OperatorChoice::<T>::contains_key(&account_id),
+				Error::<T>::PeerRegistrationLocked
+			);
 
 			// Note: this signature is necessary to prevent "rogue key" attacks (by ensuring
 			// that `account_id` holds the corresponding secret key for `peer_id`)
@@ -939,32 +959,8 @@ pub mod pallet {
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_validator())]
 		pub fn deregister_as_validator(origin: OriginFor<T>) -> DispatchResult {
-			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
-
-			let validator_id = ValidatorIdOf::<T>::from_ref(&account_id);
-
-			// Revoke any active GRANDPA delegation before purging keys.
-			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
-				let _ = T::GrandpaDelegation::remove_vote_delegation(grandpa_key);
-			}
-
-			// This can only error if the validator didn't register any keys, in which case we want
-			// to continue with the deregistration anyway.
-			let _ = pallet_session::Pallet::<T>::purge_keys(origin);
-
-			if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
-				MappedPeers::<T>::remove(peer_id);
-				T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
-			}
-
-			Self::do_remove_from_operator(account_id.clone());
-
-			ClaimedValidators::<T>::remove(&account_id);
-			ValidatorMaxBid::<T>::remove(&account_id);
-
-			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
-
-			Ok(())
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			Self::do_deregister_validator(&account_id)
 		}
 
 		/// Signals a non-bidding node's intent to start bidding, and participate in the
@@ -1246,6 +1242,7 @@ pub mod pallet {
 			vanity_name: VanityName,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
+			ensure!(!NetworkLockdown::<T>::get(), Error::<T>::OperatorRegistrationLocked);
 			ensure!(
 				settings.fee_bps >= MinimumOperatorFee::<T>::get(),
 				Error::<T>::OperatorFeeTooLow
@@ -1707,6 +1704,58 @@ impl<T: Config> Pallet<T> {
 			});
 			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
 		}
+	}
+
+	/// Removes the account's peer mapping and tells the engines to drop the peer. Returns whether
+	/// a mapping existed.
+	pub fn revoke_peer_mapping(account_id: &T::AccountId) -> bool {
+		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(account_id) {
+			MappedPeers::<T>::remove(peer_id);
+			T::CfePeerRegistration::peer_deregistered(
+				ValidatorIdOf::<T>::from_ref(account_id).clone(),
+				peer_id,
+			);
+			true
+		} else {
+			false
+		}
+	}
+
+	fn do_deregister_validator(account_id: &T::AccountId) -> DispatchResult {
+		let validator_id = ValidatorIdOf::<T>::from_ref(account_id);
+
+		// Revoke any active GRANDPA delegation before purging keys.
+		if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
+			let _ = T::GrandpaDelegation::remove_vote_delegation(grandpa_key);
+		}
+
+		// This can only error if the validator didn't register any keys, in which case we want
+		// to continue with the deregistration anyway.
+		let _ = pallet_session::Pallet::<T>::purge_keys(
+			frame_system::RawOrigin::Signed(account_id.clone()).into(),
+		);
+
+		Self::revoke_peer_mapping(account_id);
+		Self::do_remove_from_operator(account_id.clone());
+
+		ClaimedValidators::<T>::remove(account_id);
+		ValidatorMaxBid::<T>::remove(account_id);
+
+		T::AccountRoleRegistry::deregister_as_validator(account_id)
+	}
+
+	/// Deregisters a validator without its consent, withdrawing it from the auction first. Key
+	/// holders are refused, the usual deregistration checks still apply, and all changes are
+	/// reverted if any of them fail. The account keeps its funds.
+	pub fn force_deregister_validator(account_id: &T::AccountId) -> DispatchResult {
+		ensure!(
+			!EpochHistory::<T>::is_keyholder(ValidatorIdOf::<T>::from_ref(account_id)),
+			Error::<T>::StillKeyHolder
+		);
+		frame_support::storage::with_storage_layer(|| {
+			ActiveBidder::<T>::mutate(|bidders| bidders.remove(account_id));
+			Self::do_deregister_validator(account_id)
+		})
 	}
 
 	/// Makes the transition to the next epoch.

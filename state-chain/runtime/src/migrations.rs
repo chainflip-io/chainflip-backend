@@ -23,5 +23,6 @@ pub mod bsc_integration;
 pub mod bsc_witness_safety_margin;
 pub mod failed_broadcast_chain;
 pub mod housekeeping;
+pub mod network_lockdown;
 pub mod refund_addresses_to_asset_balances;
 pub mod safe_mode;

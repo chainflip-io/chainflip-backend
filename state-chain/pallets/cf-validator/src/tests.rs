@@ -5111,3 +5111,124 @@ mod grandpa_delegation {
 		});
 	}
 }
+
+mod network_lockdown {
+	use super::*;
+	use sp_core::{Encode, Pair};
+
+	const OPERATOR: u64 = 1001;
+	const MANAGED: u64 = 2001;
+	const INDEPENDENT: u64 = 2002;
+
+	fn peer_key(seed: &str) -> sp_core::ed25519::Pair {
+		sp_core::ed25519::Pair::from_legacy_string(seed, None)
+	}
+
+	fn register_peer(account_id: u64, key: &sp_core::ed25519::Pair, port: u16) -> DispatchResult {
+		ValidatorPallet::register_peer_id(
+			RuntimeOrigin::signed(account_id),
+			key.public(),
+			port,
+			10,
+			key.sign(&account_id.encode()[..]),
+		)
+	}
+
+	fn set_lockdown(enabled: bool) {
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			RuntimeOrigin::root(),
+			PalletConfigUpdate::NetworkLockdown { enabled }
+		));
+	}
+
+	#[test]
+	fn restricts_peer_and_operator_registration() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OPERATOR),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			register_validator(MANAGED);
+			register_validator(INDEPENDENT);
+			register_validator(ALICE);
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OPERATOR), MANAGED));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(MANAGED), OPERATOR));
+			let alice_key = peer_key("alice");
+			assert_ok!(register_peer(ALICE, &alice_key, 8078));
+
+			set_lockdown(true);
+
+			assert_noop!(
+				ValidatorPallet::register_as_operator(
+					OriginTrait::signed(BOB),
+					OPERATOR_SETTINGS,
+					vanity()
+				),
+				Error::<Test>::OperatorRegistrationLocked
+			);
+			assert_noop!(
+				register_peer(INDEPENDENT, &peer_key("independent"), 8078),
+				Error::<Test>::PeerRegistrationLocked
+			);
+			// An independent validator keeps its existing mapping but can't submit one at all.
+			assert_noop!(
+				register_peer(ALICE, &alice_key, 8078),
+				Error::<Test>::PeerRegistrationLocked
+			);
+			assert_noop!(
+				register_peer(ALICE, &alice_key, 8079),
+				Error::<Test>::PeerRegistrationLocked
+			);
+			assert!(ValidatorPallet::node_peer_id(&ALICE).is_some());
+
+			assert_ok!(register_peer(MANAGED, &peer_key("managed"), 8078));
+
+			set_lockdown(false);
+			assert_ok!(register_peer(INDEPENDENT, &peer_key("independent"), 8078));
+		});
+	}
+
+	#[test]
+	fn force_deregister_validator() {
+		new_test_ext().execute_with(|| {
+			let alice_key = peer_key("alice");
+			add_bids(vec![Bid { bidder_id: ALICE, amount: 100 }]);
+			assert_ok!(register_peer(ALICE, &alice_key, 8078));
+			MockCfeInterface::take_events::<ValidatorId>();
+
+			assert_ok!(ValidatorPallet::force_deregister_validator(&ALICE));
+
+			assert!(!ActiveBidder::<Test>::get().contains(&ALICE));
+			assert!(!<Roles as AccountRoleRegistry<Test>>::has_account_role(
+				&ALICE,
+				AccountRole::Validator
+			));
+			assert_eq!(ValidatorPallet::node_peer_id(&ALICE), None);
+			assert_eq!(ValidatorPallet::mapped_peer(&alice_key.public()), None);
+			assert_eq!(
+				MockCfeInterface::take_events(),
+				vec![MockCfeEvent::PeerIdDeregistered {
+					account_id: ALICE,
+					pubkey: alice_key.public()
+				}]
+			);
+		});
+	}
+
+	#[test]
+	fn force_deregister_validator_reverts_for_key_holders() {
+		new_test_ext().execute_with(|| {
+			let alice_key = peer_key("alice");
+			add_bids(vec![Bid { bidder_id: ALICE, amount: 100 }]);
+			assert_ok!(register_peer(ALICE, &alice_key, 8078));
+			EpochHistory::<Test>::activate_epoch(&ALICE, 1, 10);
+
+			assert_noop!(
+				ValidatorPallet::force_deregister_validator(&ALICE),
+				Error::<Test>::StillKeyHolder
+			);
+			assert!(ActiveBidder::<Test>::get().contains(&ALICE));
+		});
+	}
+}
