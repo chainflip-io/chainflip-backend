@@ -28,8 +28,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { fundingFundedEvent } from 'generated/events/funding/funded';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { fundingSCCallExecutedEvent } from 'generated/events/funding/sCCallExecuted';
-import { validatorDelegatedEvent } from 'generated/events/validator/delegated';
-import { validatorUndelegatedEvent } from 'generated/events/validator/undelegated';
+import { validatorDelegationPlanUpdatedEvent } from 'generated/events/validator/delegationPlanUpdated';
 import { fundingRedemptionRequestedEvent } from 'generated/events/funding/redemptionRequested';
 
 const evmCallDetails = z.object({
@@ -131,10 +130,11 @@ export async function testDelegate(testContext: TestContext) {
         event.scCall.call.__kind === 'Delegate' &&
         event.scCall.call.operator === operator.address,
     ),
-    validatorDelegated: validatorDelegatedEvent.refine(
+    delegationPlanUpdated: validatorDelegationPlanUpdatedEvent.refine(
       (event) =>
         event.delegator === externalChainToScAccount(wallet.address) &&
-        event.operator === operator.address,
+        event.reason === 'SetByUser' &&
+        event.newPlan?.operators.some(([op]) => op === operator.address) === true,
     ),
   });
 
@@ -148,10 +148,12 @@ export async function testDelegate(testContext: TestContext) {
     scCallExecuted: fundingSCCallExecutedEvent.refine(
       (event) => event.ethTxHash === undelegateTxHash && event.scCall.call.__kind === 'Undelegate',
     ),
-    validatorDelegated: validatorUndelegatedEvent.refine(
+    delegationPlanUpdated: validatorDelegationPlanUpdatedEvent.refine(
       (event) =>
         event.delegator === externalChainToScAccount(wallet.address) &&
-        event.operator === operator.address,
+        event.reason === 'SetByUser' &&
+        !event.newPlan &&
+        event.oldPlan?.operators.some(([op]) => op === operator.address) === true,
     ),
   });
 

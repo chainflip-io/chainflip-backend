@@ -28,8 +28,8 @@ use crate::{
 use cf_primitives::{AccountRole, FlipBalance, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountInfo, EpochInfo, FeePayment, FundAccount, FundingSource};
 use frame_support::assert_ok;
-use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
-use sp_runtime::{traits::Zero, PerU16};
+use pallet_cf_validator::{DelegationAcceptance, DelegationChangeReason, MaxBid, OperatorSettings};
+use sp_runtime::{traits::Zero, PerU16, Permill};
 use state_chain_runtime::{Balance, Flip, Funding, Runtime, RuntimeEvent, System, Validator};
 
 pub(crate) fn setup_delegation(
@@ -341,11 +341,15 @@ fn delegator_can_split_stake_across_two_operators() {
 			);
 			assert_ok!(Validator::delegate_multi(
 				RuntimeOrigin::signed(delegator.clone()),
-				pallet_cf_validator::DelegationPlan::try_from_map(BTreeMap::from_iter([
-					(operator_a.clone(), BID_TO_A),
-					(operator_b.clone(), BID_TO_B),
-				]))
-				.unwrap()
+				pallet_cf_validator::DelegationPlan {
+					shares: BTreeMap::from_iter([
+						(operator_a.clone(), Permill::from_percent(40)),
+						(operator_b.clone(), Permill::from_percent(60)),
+					])
+					.try_into()
+					.unwrap(),
+					max_bid: MaxBid::AmountWithCompounding(BID_TO_A + BID_TO_B),
+				}
 			));
 
 			testnet.move_to_the_next_epoch();
@@ -358,8 +362,8 @@ fn delegator_can_split_stake_across_two_operators() {
 				pallet_cf_validator::DelegationSnapshots::<Runtime>::get(epoch_index, &operator_b)
 					.expect("operator_b snapshot should be registered on new epoch");
 
-			// The delegator's stake must be split exactly as pledged across both operators, not
-			// dropped or double-counted.
+			// The delegator's stake must be split by share across both operators, not dropped or
+			// double-counted.
 			assert_eq!(snapshot_a.delegators.get(&delegator), Some(&BID_TO_A));
 			assert_eq!(snapshot_b.delegators.get(&delegator), Some(&BID_TO_B));
 
@@ -409,5 +413,20 @@ fn delegator_can_split_stake_across_two_operators() {
 				Flip::balance(&delegator),
 				delegator_pre_balance + share_from_a + share_from_b
 			);
+
+			// The plan compounds, so both rewards are added to its amount.
+			assert_eq!(
+				pallet_cf_validator::DelegationChoice::<Runtime>::get(&delegator)
+					.unwrap()
+					.max_bid,
+				MaxBid::AmountWithCompounding(BID_TO_A + BID_TO_B + share_from_a + share_from_b)
+			);
+			assert!(events.iter().any(|event| matches!(
+				event,
+				RuntimeEvent::Validator(pallet_cf_validator::Event::DelegationPlanUpdated {
+					reason: DelegationChangeReason::RewardAutoDelegated,
+					..
+				})
+			)));
 		});
 }

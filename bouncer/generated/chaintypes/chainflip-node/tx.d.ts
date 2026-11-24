@@ -1669,12 +1669,15 @@ export interface ChainTx<
     >;
 
     /**
-     * Delegate to a single operator.
+     * Delegate to a single operator, which then receives 100% of the delegated amount.
      *
-     * This extrinsic is only valid for delegators whose plan has at most one
-     * entry. A delegator with entries for two or more operators (only reachable via
-     * [`Self::delegate_multi`]) must use `delegate_multi` instead, since "switch operator"
-     * is ambiguous once the plan has more than one entry.
+     * `Max` delegates the current balance; `Some(x)` adds `x` to the current amount, capped at
+     * the balance. Either way the plan keeps its compounding choice (a new plan doesn't
+     * compound), and an `AllWithCompounding` plan stays as it is since it already delegates
+     * everything. Delegating to a different operator moves the current amount to it.
+     *
+     * Only valid for delegators with at most one operator; others use
+     * [`Self::delegate_multi`].
      *
      * @param {AccountId32Like} operator
      * @param {PalletCfValidatorDelegationDelegationAmount} increase
@@ -1699,11 +1702,11 @@ export interface ChainTx<
     >;
 
     /**
-     * Undelegate from the sole operator a delegator currently delegates to.
+     * Reduce the delegated amount of a delegator with at most one operator.
      *
-     * Only valid for delegators whose plan has at most one entry, mirroring `delegate`.
-     * A delegator with entries for two or more operators must use `delegate_multi` and
-     * submit a plan that omits the operator(s) to undelegate from.
+     * `Max`, or a decrease that leaves less than the minimum delegation, undelegates fully.
+     * Decreasing an `AllWithCompounding` plan turns it into a compounding fixed amount.
+     * Delegators with several operators use [`Self::delegate_multi`].
      *
      * @param {PalletCfValidatorDelegationDelegationAmount} decrease
      **/
@@ -1721,19 +1724,12 @@ export interface ChainTx<
     >;
 
     /**
-     * Sets `delegator`'s complete delegation plan across one or more operators in a single
-     * call: `plan` becomes their entire new plan, stored exactly as submitted, replacing
-     * whatever existed before. Any operator the delegator was previously delegating to but
-     * that's absent from `plan` is fully undelegated; an empty `plan` undelegates
-     * everything.
+     * Sets the delegator's complete plan, replacing any previous one. An empty plan
+     * undelegates from every operator.
      *
-     * Unlike `delegate`, which clamps an over-large increase to the balance, this doesn't
-     * check `plan`'s total against the delegator's funding balance at all -- an
-     * over-subscribed plan (total > balance) is accepted as-is and resolved at
-     * auction-resolution time instead, the same way an existing plan is affected by a
-     * balance reduction after the fact (e.g. slashing): `build_delegation_snapshots`
-     * prorates each entry proportionally to whatever balance is actually available. The
-     * total must still be at least the minimum funding amount if `plan` is non-empty.
+     * Shares must sum to exactly 100%. A fixed amount must be at least the minimum funding
+     * amount and at most the current balance; with `AllWithCompounding` the balance must be
+     * at least the minimum.
      *
      * @param {PalletCfValidatorDelegationDelegationPlan} plan
      **/

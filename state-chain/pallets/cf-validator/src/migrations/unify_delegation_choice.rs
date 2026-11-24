@@ -14,27 +14,26 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//! `DelegationChoice: StorageMap<delegator, (operator, max_bid)>` only ever supported a single
-//! operator relation per delegator. To support multi-operator delegation, its value is reshaped
-//! in place into `DelegationChoice: StorageMap<delegator, DelegationPlan>`, where `DelegationPlan`
-//! holds a full `operator -> max_bid` set instead of a single pair. This migration translates each
-//! pre-existing single-relation entry into the equivalent one-entry plan, preserving all
-//! delegator/operator/max_bid data exactly.
+//! Reshapes `DelegationChoice` from a single `(operator, max_bid)` per delegator into a
+//! `DelegationPlan`. Each entry becomes `{operator: 100%}` with
+//! `AmountWithoutCompounding(max_bid)`, which resolves to the same bid as before. One
+//! `DelegationPlanUpdated` event (reason `Migrated`) is emitted per delegator so that indexers get
+//! a starting plan to compare later changes against.
 
-use crate::{Config, DelegationChoice, DelegationPlan};
+#[cfg(any(test, feature = "try-runtime"))]
+use crate::DelegationChoice;
+use crate::{Config, DelegationChangeReason, DelegationPlan, MaxBid, Pallet};
 use frame_support::{
 	pallet_prelude::Weight,
 	sp_runtime::Saturating,
 	traits::{Get, UncheckedOnRuntimeUpgrade},
 };
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
+use sp_std::{marker::PhantomData, vec::Vec};
 
 #[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
-#[cfg(feature = "try-runtime")]
-use sp_std::vec::Vec;
 
 /// Shared with `assign_lp_role_to_delegators` -- both migrations read/write the same
 /// pre-version-11 `DelegationChoice` storage item.
@@ -58,17 +57,13 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		let mut entries_migrated: u64 = 0;
 
-		for (delegator, (operator, max_bid)) in old::DelegationChoice::<T>::drain() {
-			DelegationChoice::<T>::insert(
+		// Collected first: the old and new items share a storage key.
+		let old_entries: Vec<_> = old::DelegationChoice::<T>::drain().collect();
+		for (delegator, (operator, max_bid)) in old_entries {
+			Pallet::<T>::set_delegation_plan(
 				&delegator,
-				DelegationPlan::try_from_map(BTreeMap::from([(operator, max_bid)])).unwrap_or_else(
-					|_| {
-						cf_runtime_utilities::log_or_panic!(
-							"migrated delegator relation exceeded MaxOperatorsPerDelegator"
-						);
-						Default::default()
-					},
-				),
+				Some(DelegationPlan::single(operator, MaxBid::AmountWithoutCompounding(max_bid))),
+				DelegationChangeReason::Migrated,
 			);
 			entries_migrated.saturating_accrue(1);
 		}
@@ -96,8 +91,8 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			let plan = DelegationChoice::<T>::get(&delegator)
 				.ok_or(DispatchError::Other("expected migrated DelegationChoice entry"))?;
 			frame_support::ensure!(
-				plan.get(&operator) == Some(&max_bid),
-				DispatchError::Other("migrated max_bid did not match its pre-upgrade value")
+				plan == DelegationPlan::single(operator, MaxBid::AmountWithoutCompounding(max_bid)),
+				DispatchError::Other("migrated plan did not match its pre-upgrade value")
 			);
 		}
 		frame_support::ensure!(
@@ -111,7 +106,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{new_test_ext, MockFlip, Test, ALICE, BOB};
+	use crate::mock::{new_test_ext, MockFlip, RuntimeEvent, System, Test, ALICE, BOB};
 
 	const OTHER_DELEGATOR: u64 = 102;
 
@@ -133,13 +128,29 @@ mod tests {
 
 			assert_eq!(
 				DelegationChoice::<Test>::get(ALICE).unwrap(),
-				DelegationPlan::try_from_map(BTreeMap::from([(BOB, 1_000)])).unwrap()
+				DelegationPlan::single(BOB, MaxBid::AmountWithoutCompounding(1_000))
 			);
 			assert_eq!(
 				DelegationChoice::<Test>::get(OTHER_DELEGATOR).unwrap(),
-				DelegationPlan::try_from_map(BTreeMap::from([(BOB, 500)])).unwrap()
+				DelegationPlan::single(BOB, MaxBid::AmountWithoutCompounding(500))
 			);
 			assert_eq!(DelegationChoice::<Test>::iter().count(), 2);
+
+			// Indexers get each delegator's starting plan.
+			System::assert_has_event(RuntimeEvent::ValidatorPallet(
+				crate::Event::DelegationPlanUpdated {
+					delegator: ALICE,
+					old_plan: None,
+					new_plan: Some(
+						DelegationPlan::<_, _, crate::DelegationPlanLimitsOf<Test>>::single(
+							BOB,
+							MaxBid::AmountWithoutCompounding(1_000),
+						)
+						.details(1_000),
+					),
+					reason: DelegationChangeReason::Migrated,
+				},
+			));
 		});
 	}
 

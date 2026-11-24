@@ -1405,9 +1405,9 @@ export interface ChainStorage extends GenericChainStorage {
     >;
 
     /**
-     * Maps a delegator to its live plan: the set of operators it delegates to and the max
-     * bid pledged to each. The sum of all of a delegator's max bids is capped at its funding
-     * balance. The key is always removed entirely once a delegator's plan becomes empty.
+     * Maps a delegator to its live plan: how much it delegates and each operator's share. The key
+     * is removed once the plan has no operators left. Only written via
+     * [`Pallet::set_delegation_plan`], which emits `DelegationPlanUpdated`.
      *
      * @param {AccountId32Like} arg
      * @param {Callback<PalletCfValidatorDelegationDelegationPlan | undefined> =} callback

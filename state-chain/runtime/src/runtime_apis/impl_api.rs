@@ -812,10 +812,9 @@ impl_runtime_apis! {
 			should_sweep: ShouldSweep,
 		) -> RpcAccountInfoCommonItems<FlipBalance> {
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
-			// Operator -> bid, for every operator this account currently delegates to (a
-			// delegator's plan may hold entries for multiple operators simultaneously). Mirrors
-			// `build_delegation_snapshots`: in case total in delegation plan exceed balance,
-			// prorate every entry's share of the balance proportionally to what it was pledged
+			// Operator -> bid at the current balance, for every operator in this account's plan.
+			// Mirrors `build_delegation_snapshots`, except that operators not bidding this epoch
+			// are included.
 			let upcoming_delegation_status: BTreeMap<AccountId, FlipBalance> =
 				pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
 					.map(|plan| plan.resolve_bids(flip_account.total(), |_| true))
@@ -903,7 +902,7 @@ impl_runtime_apis! {
 				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
 					account_id,
 					AssociationToOperator::Delegator,
-					|account_id, max_bid| pallet_cf_flip::Pallet::<Runtime>::balance(account_id).min(max_bid.unwrap_or(u128::MAX))
+					|_, bid| bid.unwrap_or_default()
 				),
 				active_delegation: pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
 					Validator::current_epoch(),
@@ -2196,11 +2195,12 @@ impl_runtime_apis! {
 			let caller_id = EthereumAccount(caller).into_account_id();
 			let required_deposit = match call {
 				EthereumSCApi::Delegation { call: DelegationApi::Delegate { increase: DelegationAmount::Some(ref increase), .. } } => {
+					let balance = pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id);
 					pallet_cf_validator::DelegationChoice::<Runtime>::get(&caller_id)
-						.map(|plan| plan.total())
+						.map(|plan| plan.reserved(balance))
 						.unwrap_or_default()
 						.saturating_add(*increase)
-						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id))
+						.saturating_sub(balance)
 				},
 				_ => 0,
 			};

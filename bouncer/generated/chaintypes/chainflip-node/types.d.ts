@@ -2421,39 +2421,35 @@ export type PalletCfValidatorCall =
    **/
   | { name: 'DeregisterAsOperator' }
   /**
-   * Delegate to a single operator.
+   * Delegate to a single operator, which then receives 100% of the delegated amount.
    *
-   * This extrinsic is only valid for delegators whose plan has at most one
-   * entry. A delegator with entries for two or more operators (only reachable via
-   * [`Self::delegate_multi`]) must use `delegate_multi` instead, since "switch operator"
-   * is ambiguous once the plan has more than one entry.
+   * `Max` delegates the current balance; `Some(x)` adds `x` to the current amount, capped at
+   * the balance. Either way the plan keeps its compounding choice (a new plan doesn't
+   * compound), and an `AllWithCompounding` plan stays as it is since it already delegates
+   * everything. Delegating to a different operator moves the current amount to it.
+   *
+   * Only valid for delegators with at most one operator; others use
+   * [`Self::delegate_multi`].
    **/
   | {
       name: 'Delegate';
       params: { operator: AccountId32; increase: PalletCfValidatorDelegationDelegationAmount };
     }
   /**
-   * Undelegate from the sole operator a delegator currently delegates to.
+   * Reduce the delegated amount of a delegator with at most one operator.
    *
-   * Only valid for delegators whose plan has at most one entry, mirroring `delegate`.
-   * A delegator with entries for two or more operators must use `delegate_multi` and
-   * submit a plan that omits the operator(s) to undelegate from.
+   * `Max`, or a decrease that leaves less than the minimum delegation, undelegates fully.
+   * Decreasing an `AllWithCompounding` plan turns it into a compounding fixed amount.
+   * Delegators with several operators use [`Self::delegate_multi`].
    **/
   | { name: 'Undelegate'; params: { decrease: PalletCfValidatorDelegationDelegationAmount } }
   /**
-   * Sets `delegator`'s complete delegation plan across one or more operators in a single
-   * call: `plan` becomes their entire new plan, stored exactly as submitted, replacing
-   * whatever existed before. Any operator the delegator was previously delegating to but
-   * that's absent from `plan` is fully undelegated; an empty `plan` undelegates
-   * everything.
+   * Sets the delegator's complete plan, replacing any previous one. An empty plan
+   * undelegates from every operator.
    *
-   * Unlike `delegate`, which clamps an over-large increase to the balance, this doesn't
-   * check `plan`'s total against the delegator's funding balance at all -- an
-   * over-subscribed plan (total > balance) is accepted as-is and resolved at
-   * auction-resolution time instead, the same way an existing plan is affected by a
-   * balance reduction after the fact (e.g. slashing): `build_delegation_snapshots`
-   * prorates each entry proportionally to whatever balance is actually available. The
-   * total must still be at least the minimum funding amount if `plan` is non-empty.
+   * Shares must sum to exactly 100%. A fixed amount must be at least the minimum funding
+   * amount and at most the current balance; with `AllWithCompounding` the balance must be
+   * at least the minimum.
    **/
   | { name: 'DelegateMulti'; params: { plan: PalletCfValidatorDelegationDelegationPlan } }
   | { name: 'ReportWitnessingTaskRestart'; params: { task: CfPrimitivesWitnessingTaskName } }
@@ -2597,39 +2593,35 @@ export type PalletCfValidatorCallLike =
    **/
   | { name: 'DeregisterAsOperator' }
   /**
-   * Delegate to a single operator.
+   * Delegate to a single operator, which then receives 100% of the delegated amount.
    *
-   * This extrinsic is only valid for delegators whose plan has at most one
-   * entry. A delegator with entries for two or more operators (only reachable via
-   * [`Self::delegate_multi`]) must use `delegate_multi` instead, since "switch operator"
-   * is ambiguous once the plan has more than one entry.
+   * `Max` delegates the current balance; `Some(x)` adds `x` to the current amount, capped at
+   * the balance. Either way the plan keeps its compounding choice (a new plan doesn't
+   * compound), and an `AllWithCompounding` plan stays as it is since it already delegates
+   * everything. Delegating to a different operator moves the current amount to it.
+   *
+   * Only valid for delegators with at most one operator; others use
+   * [`Self::delegate_multi`].
    **/
   | {
       name: 'Delegate';
       params: { operator: AccountId32Like; increase: PalletCfValidatorDelegationDelegationAmount };
     }
   /**
-   * Undelegate from the sole operator a delegator currently delegates to.
+   * Reduce the delegated amount of a delegator with at most one operator.
    *
-   * Only valid for delegators whose plan has at most one entry, mirroring `delegate`.
-   * A delegator with entries for two or more operators must use `delegate_multi` and
-   * submit a plan that omits the operator(s) to undelegate from.
+   * `Max`, or a decrease that leaves less than the minimum delegation, undelegates fully.
+   * Decreasing an `AllWithCompounding` plan turns it into a compounding fixed amount.
+   * Delegators with several operators use [`Self::delegate_multi`].
    **/
   | { name: 'Undelegate'; params: { decrease: PalletCfValidatorDelegationDelegationAmount } }
   /**
-   * Sets `delegator`'s complete delegation plan across one or more operators in a single
-   * call: `plan` becomes their entire new plan, stored exactly as submitted, replacing
-   * whatever existed before. Any operator the delegator was previously delegating to but
-   * that's absent from `plan` is fully undelegated; an empty `plan` undelegates
-   * everything.
+   * Sets the delegator's complete plan, replacing any previous one. An empty plan
+   * undelegates from every operator.
    *
-   * Unlike `delegate`, which clamps an over-large increase to the balance, this doesn't
-   * check `plan`'s total against the delegator's funding balance at all -- an
-   * over-subscribed plan (total > balance) is accepted as-is and resolved at
-   * auction-resolution time instead, the same way an existing plan is affected by a
-   * balance reduction after the fact (e.g. slashing): `build_delegation_snapshots`
-   * prorates each entry proportionally to whatever balance is actually available. The
-   * total must still be at least the minimum funding amount if `plan` is non-empty.
+   * Shares must sum to exactly 100%. A fixed amount must be at least the minimum funding
+   * amount and at most the current balance; with `AllWithCompounding` the balance must be
+   * at least the minimum.
    **/
   | { name: 'DelegateMulti'; params: { plan: PalletCfValidatorDelegationDelegationPlan } }
   | { name: 'ReportWitnessingTaskRestart'; params: { task: CfPrimitivesWitnessingTaskName } }
@@ -2692,9 +2684,14 @@ export type PalletCfValidatorDelegationDelegationAmount =
   | { type: 'Some'; value: bigint };
 
 export type PalletCfValidatorDelegationDelegationPlan = {
-  type: 'Fixed';
-  value: Array<[AccountId32, bigint]>;
+  shares: Array<[AccountId32, Permill]>;
+  maxBid: PalletCfValidatorDelegationMaxBid;
 };
+
+export type PalletCfValidatorDelegationMaxBid =
+  | { type: 'AllWithCompounding' }
+  | { type: 'AmountWithCompounding'; value: bigint }
+  | { type: 'AmountWithoutCompounding'; value: bigint };
 
 export type CfPrimitivesWitnessingTaskName =
   | 'Ethereum'
@@ -13672,32 +13669,21 @@ export type PalletCfValidatorEvent =
       data: { operator: AccountId32; settings: PalletCfValidatorDelegationOperatorSettings };
     }
   /**
-   * An account has undelegated from an operator.
-   **/
-  | { name: 'Undelegated'; data: { delegator: AccountId32; operator: AccountId32; maxBid: bigint } }
-  /**
-   * An account has delegated to an operator.
-   **/
-  | { name: 'Delegated'; data: { delegator: AccountId32; operator: AccountId32; maxBid: bigint } }
-  /**
    * The undelegation process of an delegator has been finalized.
    **/
   | { name: 'UnDelegationFinalized'; data: { delegator: AccountId32; epoch: number } }
   /**
-   * The maximum bit of an delegator was updated. If the value is None it means that the
-   * max_bid has been removed entirly.
-   **/
-  | {
-      name: 'MaxBidUpdated';
-      data: { delegator: AccountId32; change: PalletCfValidatorDelegationChange };
-    }
-  /**
-   * A delegator submitted a new full delegation plan via `delegate_multi`. `plan` is the
-   * plan that was actually stored (after dropping zero-amount entries).
+   * A delegator's plan changed. `None` means no plan: not delegating before, or fully
+   * undelegated after.
    **/
   | {
       name: 'DelegationPlanUpdated';
-      data: { delegator: AccountId32; plan: PalletCfValidatorDelegationDelegationPlan };
+      data: {
+        delegator: AccountId32;
+        oldPlan?: PalletCfValidatorDelegationDelegationPlanDetails | undefined;
+        newPlan?: PalletCfValidatorDelegationDelegationPlanDetails | undefined;
+        reason: PalletCfValidatorDelegationDelegationChangeReason;
+      };
     }
   /**
    * A validator reported that a witnessing task crashed and was restarted.
@@ -13722,9 +13708,20 @@ export type PalletCfValidatorRotationState = {
   newEpochIndex: number;
 };
 
-export type PalletCfValidatorDelegationChange =
-  | { type: 'Increase'; value: bigint }
-  | { type: 'Decrease'; value: bigint };
+export type PalletCfValidatorDelegationDelegationPlanDetails = {
+  operators: Array<[AccountId32, PalletCfValidatorDelegationOperatorAllocation]>;
+  maxBid: PalletCfValidatorDelegationMaxBid;
+  stakingTarget: bigint;
+};
+
+export type PalletCfValidatorDelegationOperatorAllocation = { share: Permill; amount: bigint };
+
+export type PalletCfValidatorDelegationDelegationChangeReason =
+  | 'SetByUser'
+  | 'RewardAutoDelegated'
+  | 'RemovedByOperator'
+  | 'AccountReaped'
+  | 'Migrated';
 
 /**
  * The `Event` enum of this pallet
@@ -18248,10 +18245,14 @@ export type PalletCfValidatorError =
    **/
   | 'MultiOperatorDelegator'
   /**
-   * A `delegate_multi` plan is invalid if any entry has a zero amount, or if a non-empty
-   * plan's total is below the minimum funding amount.
+   * A non-empty `delegate_multi` plan is invalid if any share is zero or the shares don't
+   * sum to exactly 100%.
    **/
-  | 'InvalidDelegationPlan';
+  | 'InvalidDelegationPlan'
+  /**
+   * A fixed delegation amount can't exceed the delegator's balance.
+   **/
+  | 'DelegationAmountExceedsBalance';
 
 export type SpStakingOffenceOffenceSeverity = Perbill;
 

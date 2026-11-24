@@ -17,7 +17,7 @@ use crate::{
 	AuctionOutcome, Config, DelegationSnapshots, HistoricalAuthorities, HistoricalBonds, Pallet,
 	ValidatorToOperator,
 };
-use cf_primitives::{AssetAmount, EpochIndex, ONE_AS_BASIS_POINTS};
+use cf_primitives::{EpochIndex, ONE_AS_BASIS_POINTS};
 use cf_traits::{EpochInfo, RewardsDistribution, Slashing};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
@@ -25,7 +25,7 @@ use frame_support::{
 	sp_runtime::{
 		helpers_128bit::multiply_by_rational_with_rounding,
 		traits::{AtLeast32BitUnsigned, Zero},
-		FixedPointOperand, Perquintill, Rounding, Saturating,
+		Permill, Rounding, Saturating,
 	},
 	traits::{Get, IsType},
 	BoundedBTreeMap, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
@@ -86,23 +86,6 @@ impl<T> DelegationAmount<T> {
 	}
 }
 
-#[derive(
-	Debug,
-	Clone,
-	Copy,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-)]
-pub enum Change<T> {
-	Increase(T),
-	Decrease(T),
-}
-
 /// Represents a validator's default stance on accepting delegations
 #[derive(
 	Copy,
@@ -152,16 +135,63 @@ pub struct OperatorSettings {
 /// so that the plan's own methods can enforce them without every caller threading them through.
 pub trait DelegationPlanLimits {
 	type MaxOperators: Get<u32>;
-
-	/// The minimum total a non-empty plan must pledge.
-	fn minimum_total() -> AssetAmount;
 }
 
-/// A delegator's live delegation plan: the set of operators it delegates to and the exact
-/// amount pledged to each. `delegate_multi` stores this exactly as submitted -- an
-/// over-subscribed plan (total pledged > balance) isn't rejected or scaled down at submission
-/// time, it's resolved at auction-resolution time instead (`build_delegation_snapshots` prorates
-/// each entry proportionally to whatever balance is actually available).
+/// How much a delegator delegates in total, and whether rewards are added to it.
+///
+/// There is deliberately no "all without compounding": rewards are paid into the balance, so
+/// delegating the whole balance always includes them.
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
+pub enum MaxBid<Amount> {
+	/// The whole balance at auction time.
+	AllWithCompounding,
+	/// Up to this amount. Each epoch's rewards are added to it.
+	AmountWithCompounding(Amount),
+	/// Up to this amount. Rewards above it stay in the free balance.
+	AmountWithoutCompounding(Amount),
+}
+
+impl<Amount: Copy + Ord> MaxBid<Amount> {
+	/// The fixed amount, or `None` for [`MaxBid::AllWithCompounding`].
+	pub fn amount(&self) -> Option<Amount> {
+		match self {
+			MaxBid::AllWithCompounding => None,
+			MaxBid::AmountWithCompounding(amount) | MaxBid::AmountWithoutCompounding(amount) =>
+				Some(*amount),
+		}
+	}
+
+	/// The fixed amount, or `balance` for [`MaxBid::AllWithCompounding`]. A fixed amount can
+	/// exceed the balance after a slash; submission never allows it.
+	pub fn staking_target(&self, balance: Amount) -> Amount {
+		self.amount().unwrap_or(balance)
+	}
+
+	/// The amount actually delegated at `balance`.
+	pub fn resolve(&self, balance: Amount) -> Amount {
+		core::cmp::min(self.staking_target(balance), balance)
+	}
+}
+
+/// A delegator's live delegation plan: how much to delegate, and the share of it each operator
+/// receives.
+///
+/// Shares must sum to exactly 100% when a plan is submitted. A stored plan can sum to less after
+/// an operator removes the delegator: the removed share is left undelegated rather than moved to
+/// operators the delegator didn't choose.
 #[derive(
 	CloneNoBound,
 	PartialEqNoBound,
@@ -176,211 +206,186 @@ pub trait DelegationPlanLimits {
 )]
 #[scale_info(skip_type_params(L))]
 #[serde(
-	bound = "Account: Ord + Serialize + for<'a> Deserialize<'a>, Value: Serialize + for<'a> Deserialize<'a>"
+	bound = "Account: Ord + Serialize + for<'a> Deserialize<'a>, Amount: Serialize + for<'a> Deserialize<'a>"
 )]
-pub enum DelegationPlan<
+pub struct DelegationPlan<
 	Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
-	Value: Clone + PartialEq + Eq + core::fmt::Debug,
+	Amount: Clone + PartialEq + Eq + core::fmt::Debug,
 	L: DelegationPlanLimits,
 > {
-	Fixed(BoundedBTreeMap<Account, Value, L::MaxOperators>),
-	// v2, appended later:
-	// Proportional(BoundedBTreeMap<Account, Perbill, L::MaxOperators>),
+	pub shares: BoundedBTreeMap<Account, Permill, L::MaxOperators>,
+	pub max_bid: MaxBid<Amount>,
 }
 
 impl<
 		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
-		Value: Clone + PartialEq + Eq + core::fmt::Debug,
+		Amount: Copy + PartialEq + Eq + core::fmt::Debug + AtLeast32BitUnsigned,
 		L: DelegationPlanLimits,
-	> Default for DelegationPlan<Account, Value, L>
+	> DelegationPlan<Account, Amount, L>
 {
-	fn default() -> Self {
-		Self::Fixed(Default::default())
-	}
-}
-
-impl<
-		Account: Ord + Clone + PartialEq + Eq + core::fmt::Debug,
-		Value: Clone + PartialEq + Eq + core::fmt::Debug + Zero,
-		L: DelegationPlanLimits,
-	> DelegationPlan<Account, Value, L>
-{
-	pub fn len(&self) -> usize {
-		match self {
-			Self::Fixed(entries) => entries.len(),
+	/// A plan delegating everything covered by `max_bid` to a single operator.
+	pub fn single(operator: Account, max_bid: MaxBid<Amount>) -> Self {
+		let mut shares = BoundedBTreeMap::new();
+		// `MaxOperators` is at least 1 for any usable configuration.
+		if shares.try_insert(operator, Permill::one()).is_err() {
+			cf_runtime_utilities::log_or_panic!("MaxOperators must allow at least one operator");
 		}
+		Self { shares, max_bid }
+	}
+
+	pub fn len(&self) -> usize {
+		self.shares.len()
 	}
 
 	pub fn is_empty(&self) -> bool {
-		self.len() == 0
+		self.shares.is_empty()
 	}
 
-	/// The operators this plan delegates to.
 	pub fn iter_operators(&self) -> impl Iterator<Item = &Account> {
-		match self {
-			Self::Fixed(entries) => entries.keys(),
-		}
+		self.shares.keys()
 	}
 
-	/// The amount pledged to `operator`, if this plan has an entry for it.
-	pub fn get(&self, operator: &Account) -> Option<&Value> {
-		match self {
-			Self::Fixed(entries) => entries.get(operator),
-		}
+	/// Removes `operator`'s share, if any. Returns whether the plan changed.
+	pub fn remove_operator(&mut self, operator: &Account) -> bool {
+		self.shares.remove(operator).is_some()
 	}
 
-	/// The sum of every entry's amount.
-	pub fn total(&self) -> Value
-	where
-		Value: Copy + Sum<Value>,
-	{
-		match self {
-			Self::Fixed(entries) => entries.values().copied().sum(),
-		}
+	/// Checks a submitted plan's shares. An empty plan is valid: it undelegates. Otherwise every
+	/// share must be non-zero and the shares must sum to exactly 100%. The amount is checked
+	/// against the minimum and the balance by the caller, which knows the balance.
+	pub fn is_valid_submission(&self) -> bool {
+		self.shares.is_empty() ||
+			(self.shares.values().all(|share| !share.is_zero()) &&
+				self.shares.values().map(|share| u64::from(share.deconstruct())).sum::<u64>() ==
+					u64::from(Permill::one().deconstruct()))
 	}
 
-	/// Each operator this plan delegates to, with the amount pledged to it.
-	pub fn iter(&self) -> impl Iterator<Item = (&Account, &Value)> {
-		match self {
-			Self::Fixed(entries) => entries.iter(),
-		}
+	/// The amount of `balance` reserved by this plan, which can't be redeemed while delegating.
+	pub fn reserved(&self, balance: Amount) -> Amount {
+		self.max_bid.staking_target(balance)
 	}
 
-	/// Removes `operator`'s entry, if any, returning its amount. Fails, leaving the plan
-	/// unchanged, if the result would no longer be `is_valid` (e.g. the remaining total falls
-	/// below the minimum).
-	#[expect(clippy::result_unit_err)]
-	pub fn try_remove_operator(&mut self, operator: &Account) -> Result<Option<Value>, ()>
-	where
-		Value: Copy + Into<AssetAmount>,
-	{
-		let mut updated = self.clone();
-		let removed = match &mut updated {
-			Self::Fixed(entries) => entries.remove(operator),
-		};
-		if !updated.is_valid() {
-			return Err(());
-		}
-		*self = updated;
-		Ok(removed)
-	}
-
-	/// Inserts (or replaces) `operator`'s entry. Fails, leaving the plan unchanged, if the plan
-	/// is already at its bound and `operator` isn't already an entry, or if the result would no
-	/// longer be `is_valid`.
-	#[expect(clippy::result_unit_err)]
-	pub fn try_add_operator(&mut self, operator: Account, value: Value) -> Result<Option<Value>, ()>
-	where
-		Value: Copy + Into<AssetAmount>,
-	{
-		let mut updated = self.clone();
-		let previous = match &mut updated {
-			Self::Fixed(entries) => entries.try_insert(operator, value).map_err(|_| ())?,
-		};
-		if !updated.is_valid() {
-			return Err(());
-		}
-		*self = updated;
-		Ok(previous)
-	}
-
-	/// The plan's sole entry, or `None` if the plan is empty. Fails if the plan has more than one
-	/// entry.
-	#[expect(clippy::result_unit_err)]
-	pub fn get_only_member(&self) -> Result<Option<(Account, Value)>, ()> {
-		match self {
-			Self::Fixed(entries) => {
-				let mut iter = entries.iter();
-				match (iter.next(), iter.next()) {
-					(None, _) => Ok(None),
-					(Some((operator, value)), None) => Ok(Some((operator.clone(), value.clone()))),
-					(Some(_), Some(_)) => Err(()),
-				}
-			},
-		}
-	}
-
-	/// Resolves each `is_live` entry's amount against `balance`: if the live entries' total
-	/// fits within `balance`, each passes through unchanged; otherwise each is scaled down
-	/// proportionally, rounded down per entry so the resolved total never exceeds `balance`.
-	/// Entries that aren't `is_live`, or that resolve to zero, are omitted -- a zero bid can't
-	/// claim anything either way.
+	/// Each live operator's bid at `balance`: its share of the delegated amount, rounded down.
+	/// A share whose operator isn't live stays undelegated rather than moving to another
+	/// operator. Zero bids are omitted.
 	pub fn resolve_bids(
 		&self,
-		balance: Value,
+		balance: Amount,
 		is_live: impl Fn(&Account) -> bool,
-	) -> BTreeMap<Account, Value>
-	where
-		Value: Copy + AtLeast32BitUnsigned + FixedPointOperand + From<u64>,
-	{
-		match self {
-			Self::Fixed(entries) => {
-				let live: Vec<(&Account, Value)> = entries
-					.iter()
-					.filter(|(operator, _)| is_live(operator))
-					.map(|(operator, bid)| (operator, *bid))
-					.collect();
+	) -> BTreeMap<Account, Amount> {
+		let delegated = self.max_bid.resolve(balance);
+		self.shares
+			.iter()
+			.filter(|(operator, _)| is_live(operator))
+			.filter_map(|(operator, share)| {
+				let bid = share.mul_floor(delegated);
+				(!bid.is_zero()).then(|| (operator.clone(), bid))
+			})
+			.collect()
+	}
 
-				// `is_valid` (enforced by `delegate_multi` at submission time) already rejects
-				// any plan whose total doesn't fit in `Value`, and `live` is a subset of that
-				// plan, so this checked sum should never actually overflow.
-				let total_committed = live
-					.iter()
-					.try_fold(Value::zero(), |acc, (_, bid)| acc.checked_add(bid))
-					.unwrap_or_else(|| {
-						cf_runtime_utilities::log_or_panic!(
-							"plan's total overflowed Value -- unreachable, `is_valid` rejects this at submission time"
-						);
-						Value::max_value()
-					});
-
-				live.into_iter()
-					.filter_map(|(operator, bid)| {
-						let resolved = if total_committed <= balance {
-							bid
-						} else {
-							Perquintill::from_rational(bid, total_committed).mul_floor(balance)
-						};
-						(!resolved.is_zero()).then(|| (operator.clone(), resolved))
-					})
-					.collect()
-			},
+	/// The plan after `reward` is compounded into it, or `None` if this plan doesn't compound a
+	/// fixed amount (with [`MaxBid::AllWithCompounding`] the reward is already in the balance).
+	pub fn with_compounded_reward(&self, reward: Amount) -> Option<Self> {
+		match self.max_bid {
+			MaxBid::AmountWithCompounding(amount) if !reward.is_zero() => Some(Self {
+				shares: self.shares.clone(),
+				max_bid: MaxBid::AmountWithCompounding(amount.saturating_add(reward)),
+			}),
+			_ => None,
 		}
 	}
 
-	///  A plan is invalid if:
-	/// - any entry's amount is zero a delegator should omit an operator entirely rather than
-	///   include it with nothing pledged
-	/// - a non-empty plan's total falls below `L::minimum_total()`
-	/// - the total doesn't even fit in `AssetAmount`. This is the only place a plan's total is
-	///   allowed to not fit -- rejecting it here means every other consumer of a *stored* plan
-	///   (which only ever got there via this check) can safely assume its total fits within
-	///   `Value`, without needing to re-guard against overflow.
-	pub fn is_valid(&self) -> bool
-	where
-		Value: Copy + Into<AssetAmount>,
-	{
-		match self {
-			Self::Fixed(entries) =>
-				entries.values().all(|amount| !amount.is_zero()) &&
-					(entries.is_empty() ||
-						match entries
-							.values()
-							.copied()
-							.try_fold(0u128, |acc, amount| acc.checked_add(amount.into()))
-						{
-							Some(total) => total >= L::minimum_total(),
-							None => false,
-						}),
+	/// The plan as reported in events, with each operator's share converted to FLIP.
+	pub fn details(&self, balance: Amount) -> DelegationPlanDetails<Account, Amount> {
+		let staking_target = self.max_bid.staking_target(balance);
+		DelegationPlanDetails {
+			operators: self
+				.shares
+				.iter()
+				.map(|(operator, share)| {
+					(
+						operator.clone(),
+						OperatorAllocation {
+							share: *share,
+							amount: share.mul_floor(staking_target),
+						},
+					)
+				})
+				.collect(),
+			max_bid: self.max_bid,
+			staking_target,
 		}
 	}
+}
 
-	/// Builds a `Fixed` plan directly from an `account -> value` map. Fails if `entries` doesn't
-	/// fit within the bound `L::MaxOperators`.
-	#[expect(clippy::result_unit_err)]
-	pub fn try_from_map(entries: BTreeMap<Account, Value>) -> Result<Self, ()> {
-		Ok(Self::Fixed(entries.try_into()?))
-	}
+/// One operator's part of a [`DelegationPlanDetails`].
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub struct OperatorAllocation<Amount> {
+	pub share: Permill,
+	/// `share` × the plan's staking target, rounded down.
+	pub amount: Amount,
+}
+
+/// A delegation plan as reported in [`crate::Event::DelegationPlanUpdated`], with FLIP amounts so
+/// consumers don't need to reproduce the share arithmetic.
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub struct DelegationPlanDetails<Account: Ord, Amount> {
+	pub operators: BTreeMap<Account, OperatorAllocation<Amount>>,
+	pub max_bid: MaxBid<Amount>,
+	/// The fixed amount, or the balance at the time of the event for
+	/// [`MaxBid::AllWithCompounding`].
+	pub staking_target: Amount,
+}
+
+/// Why a delegation plan changed.
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub enum DelegationChangeReason {
+	/// The delegator submitted a change.
+	SetByUser,
+	/// Rewards were added to an [`MaxBid::AmountWithCompounding`] plan.
+	RewardAutoDelegated,
+	/// An operator blocked the delegator or deregistered.
+	RemovedByOperator,
+	/// The delegator's account was reaped.
+	AccountReaped,
+	/// The plan was created by a storage migration.
+	Migrated,
 }
 
 /// A snapshot of delegations to an operator for a specific epoch, including all
@@ -656,6 +661,8 @@ where
 			return;
 		}
 		let per_authority_amount = total_amount / (authorities_to_reward.len() as u32).into();
+		// A delegator can earn from several operators' snapshots; its compounded total is the sum.
+		let mut delegator_rewards: BTreeMap<T::AccountId, T::Amount> = BTreeMap::new();
 
 		// Snapshots are registered for *all* operators at auction resolution, including those
 		// whose pooled stake didn't clear the bond: their last remaining validator is never
@@ -680,13 +687,33 @@ where
 				);
 			}
 			let total = per_authority_amount.saturating_mul(authority_count.into());
-			snapshot
-				.distribute(total, bond)
-				.for_each(|(account, amount)| settle(account, amount));
+			snapshot.distribute(total, bond).for_each(|(account, amount)| {
+				if snapshot.delegators.contains_key(account) {
+					delegator_rewards
+						.entry(account.clone())
+						.and_modify(|sum| sum.saturating_accrue(amount))
+						.or_insert(amount);
+				}
+				settle(account, amount)
+			});
 		}
 
 		for authority in &authorities_to_reward {
 			settle(authority, per_authority_amount);
+		}
+
+		// Rewards for this epoch are already in the balance; compounding plans also raise their
+		// target by the same amount so the reward is delegated from the next auction on.
+		for (delegator, reward) in delegator_rewards {
+			if let Some(compounded) = crate::DelegationChoice::<T>::get(&delegator)
+				.and_then(|plan| plan.with_compounded_reward(reward))
+			{
+				Pallet::<T>::set_delegation_plan(
+					&delegator,
+					Some(compounded),
+					DelegationChangeReason::RewardAutoDelegated,
+				);
+			}
 		}
 	}
 }
@@ -767,7 +794,6 @@ mod tests {
 	use super::*;
 	use crate::{mock::*, DelegationPlanOf};
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
-	use cf_traits::{mocks::minimum_funding::MockMinimumFundingProvider, GetMinimumFunding};
 	use proptest::{prelude::*, proptest};
 
 	proptest! {
@@ -970,143 +996,141 @@ mod tests {
 		}
 	}
 
+	/// Splits `Permill::one()` into `weights.len()` non-zero shares that sum to exactly 100%, with
+	/// any rounding remainder going to the first share.
+	fn shares_from_weights(weights: &[u32]) -> Vec<Permill> {
+		let total: u64 = weights.iter().map(|w| u64::from(*w)).sum();
+		let one = u64::from(Permill::one().deconstruct());
+		let mut parts: Vec<u64> = weights.iter().map(|w| u64::from(*w) * one / total).collect();
+		let assigned: u64 = parts.iter().sum();
+		parts[0] += one - assigned;
+		parts.into_iter().map(|p| Permill::from_parts(p as u32)).collect()
+	}
+
+	fn plan_from(
+		operators_and_weights: Vec<(u64, u32)>,
+		max_bid: MaxBid<u128>,
+	) -> DelegationPlanOf<Test> {
+		let operators_and_weights: BTreeMap<u64, u32> = operators_and_weights.into_iter().collect();
+		let weights: Vec<u32> = operators_and_weights.values().copied().collect();
+		let shares = operators_and_weights.keys().copied().zip(shares_from_weights(&weights));
+		DelegationPlan { shares: shares.collect::<BTreeMap<_, _>>().try_into().unwrap(), max_bid }
+	}
+
+	fn max_bid_strategy() -> impl Strategy<Value = MaxBid<u128>> {
+		prop_oneof![
+			Just(MaxBid::AllWithCompounding),
+			(1u128..1_000_000_000_000u128).prop_map(MaxBid::AmountWithCompounding),
+			(1u128..1_000_000_000_000u128).prop_map(MaxBid::AmountWithoutCompounding),
+		]
+	}
+
 	proptest! {
 		#[test]
-		fn is_valid_matches_reference_computation(
-			entries in prop::collection::vec((1u64..1000, 0u128..1_000_000_000_000u128), 0..20),
+		fn is_valid_submission_matches_reference_computation(
+			shares in prop::collection::btree_map(1u64..1000, 0u32..=1_000_000u32, 0..10),
+			max_bid in max_bid_strategy(),
 		) {
-			let map: BTreeMap<u64, u128> = entries.into_iter().collect();
-			let plan = DelegationPlanOf::<Test>::try_from_map(map.clone()).unwrap();
+			let plan = DelegationPlanOf::<Test> {
+				shares: shares
+					.iter()
+					.map(|(operator, parts)| (*operator, Permill::from_parts(*parts)))
+					.collect::<BTreeMap<_, _>>()
+					.try_into()
+					.unwrap(),
+				max_bid,
+			};
 
-			let minimum_total = MockMinimumFundingProvider::get_min_funding_amount();
-			let has_zero_entry = map.values().any(|amount| *amount == 0);
-			// Safe: bounded generator, well within u128's range regardless of how many entries.
-			let total: u128 = map.values().sum();
-			let expected = !has_zero_entry && (map.is_empty() || total >= minimum_total);
+			let expected = shares.is_empty() ||
+				(shares.values().all(|parts| *parts > 0) &&
+					shares.values().map(|parts| u64::from(*parts)).sum::<u64>() == 1_000_000);
 
-			prop_assert_eq!(
-				plan.is_valid(), expected,
-				"is_valid() disagreed with the reference computation for {:?}", map
-			);
+			prop_assert_eq!(plan.is_valid_submission(), expected);
 		}
 	}
 
 	proptest! {
 		#[test]
-		fn try_add_operator_either_commits_a_valid_plan_or_leaves_it_unchanged(
-			existing in prop::collection::vec((1u64..1000, 1u128..1_000_000_000_000u128), 0..20),
-			operator in 1u64..1000,
-			value in 1u128..1_000_000_000_000u128,
+		fn resolve_bids_never_exceed_the_delegated_amount_or_any_share(
+			operators in prop::collection::vec((1u64..1000, 1u32..1000), 1..10),
+			max_bid in max_bid_strategy(),
+			balance in 0u128..2_000_000_000_000u128,
+			live_mask in prop::collection::vec(any::<bool>(), 10),
 		) {
-			let plan_before =
-				DelegationPlanOf::<Test>::try_from_map(existing.into_iter().collect()).unwrap();
-			let mut plan = plan_before.clone();
+			let plan = plan_from(operators, max_bid);
+			let live: BTreeSet<u64> = plan
+				.iter_operators()
+				.zip(&live_mask)
+				.filter_map(|(operator, live)| live.then_some(*operator))
+				.collect();
+			let delegated = max_bid.resolve(balance);
 
-			match plan.try_add_operator(operator, value) {
-				Ok(_) => {
-					prop_assert!(
-						plan.is_valid(),
-						"try_add_operator committed a plan that fails its own validity check"
-					);
-					prop_assert_eq!(
-						plan.get(&operator), Some(&value),
-						"the committed entry doesn't match what was inserted"
-					);
-				},
-				Err(()) => {
-					prop_assert_eq!(
-						plan, plan_before,
-						"try_add_operator mutated the plan despite returning an error"
-					);
-				},
+			let bids = plan.resolve_bids(balance, |operator| live.contains(operator));
+
+			prop_assert!(bids.values().sum::<u128>() <= delegated);
+			prop_assert!(delegated <= balance);
+			for (operator, bid) in &bids {
+				prop_assert!(live.contains(operator), "non-live operator {} got a bid", operator);
+				// A non-live operator's share is never redistributed to the others.
+				prop_assert_eq!(*bid, plan.shares[operator].mul_floor(delegated));
 			}
 		}
 	}
 
 	proptest! {
 		#[test]
-		fn resolve_bids_sum_never_exceeds_balance(
-			entries in prop::collection::vec((1u64..1000, 1u128..1_000_000_000_000u128), 1..20),
+		fn only_amount_with_compounding_absorbs_rewards(
+			operators in prop::collection::vec((1u64..1000, 1u32..1000), 1..10),
+			max_bid in max_bid_strategy(),
+			reward in 0u128..1_000_000_000u128,
+		) {
+			let plan = plan_from(operators, max_bid);
+
+			match (max_bid, plan.with_compounded_reward(reward)) {
+				(MaxBid::AmountWithCompounding(amount), Some(compounded)) => {
+					prop_assert!(reward > 0);
+					prop_assert_eq!(compounded.shares, plan.shares);
+					prop_assert_eq!(
+						compounded.max_bid,
+						MaxBid::AmountWithCompounding(amount + reward)
+					);
+				},
+				(MaxBid::AmountWithCompounding(_), None) => prop_assert_eq!(reward, 0),
+				(_, compounded) => prop_assert!(compounded.is_none()),
+			}
+		}
+	}
+
+	proptest! {
+		#[test]
+		fn details_amounts_never_exceed_the_staking_target(
+			operators in prop::collection::vec((1u64..1000, 1u32..1000), 1..10),
+			max_bid in max_bid_strategy(),
 			balance in 0u128..2_000_000_000_000u128,
 		) {
-			// Proptest, I1: for arbitrary plans and balances, the sum of effective bids never
-			// exceeds the balance.
-			let map: BTreeMap<u64, u128> = entries.into_iter().collect();
-			let plan = DelegationPlanOf::<Test>::try_from_map(map).unwrap();
+			let plan = plan_from(operators, max_bid);
+			let details = plan.details(balance);
 
-			let resolved = plan.resolve_bids(balance, |_| true);
-			let resolved_total: u128 = resolved.values().sum();
-
+			prop_assert_eq!(details.staking_target, max_bid.staking_target(balance));
+			prop_assert_eq!(details.max_bid, max_bid);
 			prop_assert!(
-				resolved_total <= balance,
-				"resolved total {} exceeds balance {}", resolved_total, balance
+				details.operators.values().map(|a| a.amount).sum::<u128>() <=
+					details.staking_target
 			);
-		}
-	}
-
-	proptest! {
-		#[test]
-		fn resolve_bids_scale_down_respects_individual_caps(
-			entries in prop::collection::vec((1u64..1000, 1u128..1_000_000_000_000u128), 1..20),
-			balance in 0u128..2_000_000_000_000u128,
-		) {
-			// Proptest, degradation: pro-rata scale-down never exceeds any individual cap and
-			// never sums above the balance (mirrors `validator_bond_amounts_capped`).
-			let map: BTreeMap<u64, u128> = entries.into_iter().collect();
-			let total_committed: u128 = map.values().sum();
-			let plan = DelegationPlanOf::<Test>::try_from_map(map.clone()).unwrap();
-
-			let resolved = plan.resolve_bids(balance, |_| true);
-
-			for (operator, resolved_bid) in &resolved {
-				prop_assert!(
-					*resolved_bid <= map[operator],
-					"operator {} resolved to {} above its own bid {}",
-					operator, resolved_bid, map[operator]
-				);
-			}
-
-			let resolved_total: u128 = resolved.values().sum();
-			if total_committed <= balance {
-				prop_assert_eq!(resolved_total, total_committed);
-			} else {
-				prop_assert!(resolved_total <= balance);
+			for (operator, allocation) in &details.operators {
+				prop_assert_eq!(allocation.share, plan.shares[operator]);
 			}
 		}
 	}
 
-	proptest! {
-		#[test]
-		fn resolve_bids_slashing_never_exceeds_the_delegators_own_pool_allocation(
-			entries in prop::collection::vec((1u64..1000, 1u128..1_000_000_000_000u128), 2..20),
-			// A fraction (1-99%) of the committed total, so `balance` always ends up strictly
-			// less than `total_committed` -- simulating a balance reduction from slashing that
-			// leaves the delegator's plan over-subscribed.
-			shortfall_percent in 1u32..100,
-		) {
-			// Proptest, slashing bound: a delegator can never be attributed, at any one
-			// operator, more than what they originally allocated to it -- regardless of how
-			// much of their balance a slash consumed.
-			let map: BTreeMap<u64, u128> = entries.into_iter().collect();
-			let total_committed: u128 = map.values().sum();
-			prop_assume!(total_committed > 0);
-			let balance = total_committed * (100 - shortfall_percent) as u128 / 100;
+	#[test]
+	fn slashed_amount_plan_delegates_the_whole_balance() {
+		let plan = plan_from(vec![(1, 3), (2, 1)], MaxBid::AmountWithoutCompounding(800));
 
-			let plan = DelegationPlanOf::<Test>::try_from_map(map.clone()).unwrap();
-			let resolved = plan.resolve_bids(balance, |_| true);
-
-			for (operator, original_bid) in &map {
-				let resolved_bid = resolved.get(operator).copied().unwrap_or(0);
-				prop_assert!(
-					resolved_bid <= *original_bid,
-					"operator {} was attributed {} but the delegator only ever pledged {} to it",
-					operator, resolved_bid, original_bid
-				);
-			}
-
-			let resolved_total: u128 = resolved.values().sum();
-			prop_assert!(resolved_total <= balance);
-		}
+		assert_eq!(plan.resolve_bids(1_000, |_| true), BTreeMap::from([(1, 600), (2, 200)]));
+		assert_eq!(plan.resolve_bids(700, |_| true), BTreeMap::from([(1, 525), (2, 175)]));
+		// Operator 2 not bidding: its share stays undelegated.
+		assert_eq!(plan.resolve_bids(1_000, |op| *op == 1), BTreeMap::from([(1, 600)]));
 	}
 
 	#[test]

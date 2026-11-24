@@ -30,7 +30,7 @@ use cf_utilities::assert_matches;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	sp_runtime::{Digest, DigestItem},
+	sp_runtime::{Digest, DigestItem, Permill},
 	storage_alias,
 	traits::{OnNewAccount, UnfilteredDispatchable},
 };
@@ -39,7 +39,7 @@ use sp_application_crypto::RuntimeAppPublic;
 use sp_consensus_grandpa::AuthoritySignature;
 use sp_std::{collections::btree_map::BTreeMap, vec};
 
-use delegation::{DelegationAcceptance, DelegationPlan, OperatorSettings};
+use delegation::{DelegationAcceptance, DelegationPlan, MaxBid, OperatorSettings};
 
 mod p2p_crypto {
 	use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
@@ -650,24 +650,27 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T>::delegate_multi(
 			RawOrigin::Signed(delegator.clone()).into(),
-			DelegationPlan::try_from_map(BTreeMap::from([(
+			DelegationPlan::single(
 				operator_a.clone(),
-				(500 * FLIPPERINOS_PER_FLIP).into()
-			)]))
-			.unwrap(),
+				MaxBid::AmountWithoutCompounding((500 * FLIPPERINOS_PER_FLIP).into())
+			),
 		));
 
 		#[extrinsic_call]
 		delegate_multi(
 			RawOrigin::Signed(delegator.clone()),
-			DelegationPlan::try_from_map(BTreeMap::from([
-				(operator_a, (250 * FLIPPERINOS_PER_FLIP).into()),
-				(operator_b.clone(), (250 * FLIPPERINOS_PER_FLIP).into()),
-			]))
-			.unwrap(),
+			DelegationPlan {
+				shares: BTreeMap::from([
+					(operator_a, Permill::from_percent(50)),
+					(operator_b.clone(), Permill::from_percent(50)),
+				])
+				.try_into()
+				.unwrap(),
+				max_bid: MaxBid::AmountWithCompounding((500 * FLIPPERINOS_PER_FLIP).into()),
+			},
 		);
 
-		assert!(DelegationChoice::<T>::get(&delegator).unwrap().get(&operator_b).is_some());
+		assert!(DelegationChoice::<T>::get(&delegator).unwrap().shares.contains_key(&operator_b));
 	}
 
 	#[benchmark]

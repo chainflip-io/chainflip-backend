@@ -525,15 +525,30 @@ export const palletCfValidatorDelegationOperatorSettings = z.object({
   delegationAcceptance: palletCfValidatorDelegationDelegationAcceptance,
 });
 
-export const palletCfValidatorDelegationChange = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('Increase'), value: numberOrHex }),
-  z.object({ __kind: z.literal('Decrease'), value: numberOrHex }),
+export const palletCfValidatorDelegationOperatorAllocation = z.object({
+  share: z.number(),
+  amount: numberOrHex,
+});
+
+export const palletCfValidatorDelegationMaxBid = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('AllWithCompounding') }),
+  z.object({ __kind: z.literal('AmountWithCompounding'), value: numberOrHex }),
+  z.object({ __kind: z.literal('AmountWithoutCompounding'), value: numberOrHex }),
 ]);
 
-export const palletCfValidatorDelegationDelegationPlan = z.object({
-  __kind: z.literal('Fixed'),
-  value: z.array(z.tuple([accountId, numberOrHex])),
+export const palletCfValidatorDelegationDelegationPlanDetails = z.object({
+  operators: z.array(z.tuple([accountId, palletCfValidatorDelegationOperatorAllocation])),
+  maxBid: palletCfValidatorDelegationMaxBid,
+  stakingTarget: numberOrHex,
 });
+
+export const palletCfValidatorDelegationDelegationChangeReason = simpleEnum([
+  'SetByUser',
+  'RewardAutoDelegated',
+  'RemovedByOperator',
+  'AccountReaped',
+  'Migrated',
+]);
 
 export const cfPrimitivesWitnessingTaskName = simpleEnum([
   'Ethereum',

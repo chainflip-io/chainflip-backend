@@ -36,8 +36,8 @@ import type {
   CfPrimitivesSemVer,
   PalletCfValidatorPalletConfigUpdate,
   PalletCfValidatorDelegationOperatorSettings,
-  PalletCfValidatorDelegationChange,
-  PalletCfValidatorDelegationDelegationPlan,
+  PalletCfValidatorDelegationDelegationPlanDetails,
+  PalletCfValidatorDelegationDelegationChangeReason,
   CfPrimitivesWitnessingTaskName,
   SpConsensusGrandpaAppPublic,
   PalletCfGovernanceGovernanceCouncil,
@@ -836,24 +836,6 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * An account has undelegated from an operator.
-     **/
-    Undelegated: GenericPalletEvent<
-      'Validator',
-      'Undelegated',
-      { delegator: AccountId32; operator: AccountId32; maxBid: bigint }
-    >;
-
-    /**
-     * An account has delegated to an operator.
-     **/
-    Delegated: GenericPalletEvent<
-      'Validator',
-      'Delegated',
-      { delegator: AccountId32; operator: AccountId32; maxBid: bigint }
-    >;
-
-    /**
      * The undelegation process of an delegator has been finalized.
      **/
     UnDelegationFinalized: GenericPalletEvent<
@@ -863,23 +845,18 @@ export interface ChainEvents extends GenericChainEvents {
     >;
 
     /**
-     * The maximum bit of an delegator was updated. If the value is None it means that the
-     * max_bid has been removed entirly.
-     **/
-    MaxBidUpdated: GenericPalletEvent<
-      'Validator',
-      'MaxBidUpdated',
-      { delegator: AccountId32; change: PalletCfValidatorDelegationChange }
-    >;
-
-    /**
-     * A delegator submitted a new full delegation plan via `delegate_multi`. `plan` is the
-     * plan that was actually stored (after dropping zero-amount entries).
+     * A delegator's plan changed. `None` means no plan: not delegating before, or fully
+     * undelegated after.
      **/
     DelegationPlanUpdated: GenericPalletEvent<
       'Validator',
       'DelegationPlanUpdated',
-      { delegator: AccountId32; plan: PalletCfValidatorDelegationDelegationPlan }
+      {
+        delegator: AccountId32;
+        oldPlan?: PalletCfValidatorDelegationDelegationPlanDetails | undefined;
+        newPlan?: PalletCfValidatorDelegationDelegationPlanDetails | undefined;
+        reason: PalletCfValidatorDelegationDelegationChangeReason;
+      }
     >;
 
     /**

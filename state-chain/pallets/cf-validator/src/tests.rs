@@ -19,7 +19,7 @@
 use core::ops::Range;
 
 use crate::{mock::*, Error, *};
-use cf_test_utilities::{assert_event_sequence, last_event};
+use cf_test_utilities::{assert_event_sequence, assert_events_eq, last_event};
 use cf_traits::{
 	mocks::{
 		bonding::MockBonderFor,
@@ -39,7 +39,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use quickcheck::TestResult;
 use quickcheck_macros::quickcheck;
-use sp_runtime::testing::UintAuthorityId;
+use sp_runtime::{testing::UintAuthorityId, Permill};
 use sp_std::vec;
 
 const NOBODY: u64 = 999; // Non-existent account for testing
@@ -1973,25 +1973,55 @@ fn should_expire_all_previous_epochs() {
 	});
 }
 
-/// Test helper mirroring the old single-valued `DelegationChoice::get` for delegators whose
-/// plan has (at most) one entry -- most existing tests only ever exercise that case.
+/// The `(operator, fixed amount)` of a delegator with a single-operator, fixed-amount plan.
 #[cfg(test)]
 fn single_plan_entry(delegator: u64) -> Option<(u64, u128)> {
 	DelegationChoice::<Test>::get(delegator).map(|plan| {
-		assert_eq!(
-			plan.len(),
-			1,
-			"single_plan_entry() test helper only supports a single-entry delegator"
-		);
+		assert_eq!(plan.len(), 1, "single_plan_entry() only supports single-operator plans");
 		let operator = plan.iter_operators().next().unwrap();
-		(*operator, *plan.get(operator).unwrap())
+		(*operator, plan.max_bid.amount().expect("single_plan_entry() needs a fixed amount"))
 	})
 }
 
-/// Builds a `delegate_multi` input plan from per-operator amounts.
+/// A single-operator plan for a fixed amount without compounding, as `delegate` creates it.
 #[cfg(test)]
-fn fixed_plan(entries: impl IntoIterator<Item = (u64, u128)>) -> DelegationPlanOf<Test> {
-	DelegationPlan::try_from_map(entries.into_iter().collect()).unwrap()
+fn fixed_plan(operator: u64, amount: u128) -> DelegationPlanOf<Test> {
+	DelegationPlan::single(operator, MaxBid::AmountWithoutCompounding(amount))
+}
+
+/// Builds a plan from `(operator, share in percent)` pairs.
+#[cfg(test)]
+fn plan_with_shares(
+	shares: impl IntoIterator<Item = (u64, u32)>,
+	max_bid: MaxBid<u128>,
+) -> DelegationPlanOf<Test> {
+	DelegationPlan {
+		shares: shares
+			.into_iter()
+			.map(|(operator, percent)| (operator, Permill::from_percent(percent)))
+			.collect::<BTreeMap<_, _>>()
+			.try_into()
+			.unwrap(),
+		max_bid,
+	}
+}
+
+/// The `DelegationPlanUpdated` event for a change from `old` to `new`, with amounts computed at
+/// the delegator's current balance.
+#[cfg(test)]
+fn plan_updated(
+	delegator: u64,
+	old: Option<DelegationPlanOf<Test>>,
+	new: Option<DelegationPlanOf<Test>>,
+	reason: DelegationChangeReason,
+) -> RuntimeEvent {
+	let balance = MockFlip::balance(&delegator);
+	RuntimeEvent::ValidatorPallet(Event::DelegationPlanUpdated {
+		delegator,
+		old_plan: old.map(|plan| plan.details(balance)),
+		new_plan: new.map(|plan| plan.details(balance)),
+		reason,
+	})
 }
 
 #[cfg(test)]
@@ -2033,26 +2063,24 @@ mod operator {
 			// Allow BOB again
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
-			assert_event_sequence!(
+			assert_events_eq!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
 					operator: ALICE,
 					delegator: BOB,
 				}),
-				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
-					delegator: BOB,
-					change: Change::Increase(BID),
-				}),
-				RuntimeEvent::ValidatorPallet(Event::Delegated {
-					operator: ALICE,
-					delegator: BOB,
-					max_bid: BID
-				}),
-				RuntimeEvent::ValidatorPallet(Event::Undelegated {
-					operator: ALICE,
-					delegator: BOB,
-					max_bid: BID
-				}),
+				plan_updated(
+					BOB,
+					None,
+					Some(fixed_plan(ALICE, BID)),
+					DelegationChangeReason::SetByUser
+				),
+				plan_updated(
+					BOB,
+					Some(fixed_plan(ALICE, BID)),
+					None,
+					DelegationChangeReason::RemovedByOperator
+				),
 				RuntimeEvent::ValidatorPallet(Event::DelegatorBlocked {
 					operator: ALICE,
 					delegator: BOB,
@@ -2103,26 +2131,24 @@ mod operator {
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
 			assert!(single_plan_entry(BOB).is_none());
 
-			assert_event_sequence!(
+			assert_events_eq!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
 					operator: ALICE,
 					delegator: BOB,
 				}),
-				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
-					delegator: BOB,
-					change: Change::Increase(BID),
-				}),
-				RuntimeEvent::ValidatorPallet(Event::Delegated {
-					operator: ALICE,
-					delegator: BOB,
-					max_bid: BID
-				}),
-				RuntimeEvent::ValidatorPallet(Event::Undelegated {
-					operator: ALICE,
-					delegator: BOB,
-					max_bid: BID
-				}),
+				plan_updated(
+					BOB,
+					None,
+					Some(fixed_plan(ALICE, BID)),
+					DelegationChangeReason::SetByUser
+				),
+				plan_updated(
+					BOB,
+					Some(fixed_plan(ALICE, BID)),
+					None,
+					DelegationChangeReason::RemovedByOperator
+				),
 				RuntimeEvent::ValidatorPallet(Event::DelegatorBlocked {
 					operator: ALICE,
 					delegator: BOB,
@@ -2465,12 +2491,12 @@ mod delegation {
 				DelegationAmount::Max
 			));
 			assert_eq!(single_plan_entry(ALICE), Some((BOB, BID)));
-			// Should emit MaxBidUpdated and Delegated events
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Delegated {
-				delegator: ALICE,
-				operator: BOB,
-				max_bid: BID,
-			}));
+			System::assert_last_event(plan_updated(
+				ALICE,
+				None,
+				Some(fixed_plan(BOB, BID)),
+				DelegationChangeReason::SetByUser,
+			));
 		});
 	}
 
@@ -2528,14 +2554,8 @@ mod delegation {
 				INDEPENDENT_VALIDATOR
 			)));
 
-			DelegationChoice::<Test>::insert(
-				ALICE,
-				DelegationPlan::try_from_map(BTreeMap::from([(BOB, BID)])).unwrap(),
-			);
-			DelegationChoice::<Test>::insert(
-				INDEPENDENT_VALIDATOR,
-				DelegationPlan::try_from_map(BTreeMap::from([(BOB, BID)])).unwrap(),
-			);
+			DelegationChoice::<Test>::insert(ALICE, fixed_plan(BOB, BID));
+			DelegationChoice::<Test>::insert(INDEPENDENT_VALIDATOR, fixed_plan(BOB, BID));
 
 			let (snapshots, independent_bidders) = ValidatorPallet::build_delegation_snapshots::<
 				<Test as crate::Config>::KeygenQualification,
@@ -2604,26 +2624,20 @@ mod delegation {
 				DelegationAmount::Max,
 			));
 			assert_eq!(single_plan_entry(ALICE), None);
-			assert_event_sequence!(
+			assert_events_eq!(
 				Test,
-				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
-					delegator: ALICE,
-					change: Change::Increase(BID),
-				}),
-				RuntimeEvent::ValidatorPallet(Event::Delegated {
-					delegator: ALICE,
-					operator: BOB,
-					max_bid: BID
-				}),
-				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
-					delegator: ALICE,
-					change: Change::Decrease(BID),
-				}),
-				RuntimeEvent::ValidatorPallet(Event::Undelegated {
-					delegator: ALICE,
-					operator: BOB,
-					max_bid: BID
-				}),
+				plan_updated(
+					ALICE,
+					None,
+					Some(fixed_plan(BOB, BID)),
+					DelegationChangeReason::SetByUser
+				),
+				plan_updated(
+					ALICE,
+					Some(fixed_plan(BOB, BID)),
+					None,
+					DelegationChangeReason::SetByUser
+				),
 			);
 		});
 	}
@@ -3154,17 +3168,14 @@ mod delegation {
 				DelegationAmount::Some(DELEGATION_AMOUNT)
 			));
 			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, DELEGATION_AMOUNT)));
-			assert_event_sequence!(
+			assert_events_eq!(
 				Test,
-				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
-					delegator: DELEGATOR,
-					change: Change::Increase(DELEGATION_AMOUNT)
-				}),
-				RuntimeEvent::ValidatorPallet(Event::Delegated {
-					delegator: DELEGATOR,
-					operator: BOB,
-					max_bid: DELEGATION_AMOUNT
-				}),
+				plan_updated(
+					DELEGATOR,
+					None,
+					Some(fixed_plan(BOB, DELEGATION_AMOUNT)),
+					DelegationChangeReason::SetByUser
+				),
 			);
 
 			System::reset_events();
@@ -3175,11 +3186,11 @@ mod delegation {
 				DelegationAmount::Some(DELEGATION_AMOUNT)
 			));
 
-			cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
-				Event::MaxBidUpdated {
-					delegator: DELEGATOR,
-					change: Change::Increase(DELEGATION_AMOUNT),
-				},
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(fixed_plan(BOB, DELEGATION_AMOUNT)),
+				Some(fixed_plan(BOB, DELEGATION_AMOUNT * 2)),
+				DelegationChangeReason::SetByUser,
 			));
 
 			// Delegate to different operator with no increase in max_bid
@@ -3195,19 +3206,11 @@ mod delegation {
 			));
 			assert_eq!(single_plan_entry(DELEGATOR), Some((ALICE, DELEGATION_AMOUNT * 2)));
 
-			cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
-				Event::Undelegated {
-					delegator: DELEGATOR,
-					operator: BOB,
-					max_bid: DELEGATION_AMOUNT * 2,
-				},
-			));
-			cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
-				Event::Delegated {
-					delegator: DELEGATOR,
-					operator: ALICE,
-					max_bid: DELEGATION_AMOUNT * 2,
-				},
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(fixed_plan(BOB, DELEGATION_AMOUNT * 2)),
+				Some(fixed_plan(ALICE, DELEGATION_AMOUNT * 2)),
+				DelegationChangeReason::SetByUser,
 			));
 		});
 	}
@@ -3241,10 +3244,12 @@ mod delegation {
 				DelegationAmount::Some(300)
 			));
 			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, 700))); // Still delegated
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
-				delegator: DELEGATOR,
-				change: Change::Decrease(300),
-			}));
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(fixed_plan(BOB, 1000)),
+				Some(fixed_plan(BOB, 700)),
+				DelegationChangeReason::SetByUser,
+			));
 
 			// Decrement again
 			assert_ok!(ValidatorPallet::undelegate(
@@ -3252,10 +3257,12 @@ mod delegation {
 				DelegationAmount::Some(200)
 			));
 			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, 500))); // Still delegated
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
-				delegator: DELEGATOR,
-				change: Change::Decrease(200),
-			}));
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(fixed_plan(BOB, 700)),
+				Some(fixed_plan(BOB, 500)),
+				DelegationChangeReason::SetByUser,
+			));
 
 			// Decrement to exactly zero - should fully undelegate
 			assert_ok!(ValidatorPallet::undelegate(
@@ -3268,11 +3275,12 @@ mod delegation {
 				None,
 				"delegation should be removed after decrementing to zero"
 			);
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
-				delegator: DELEGATOR,
-				operator: BOB,
-				max_bid: 500,
-			}));
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(fixed_plan(BOB, 500)),
+				None,
+				DelegationChangeReason::SetByUser,
+			));
 		});
 	}
 
@@ -3305,11 +3313,12 @@ mod delegation {
 				DelegationAmount::Some(BALANCE * 2)
 			));
 			assert_eq!(single_plan_entry(DELEGATOR), None);
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
-				delegator: DELEGATOR,
-				operator: BOB,
-				max_bid: BALANCE,
-			}));
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(fixed_plan(BOB, BALANCE)),
+				None,
+				DelegationChangeReason::SetByUser,
+			));
 		});
 	}
 
@@ -3343,10 +3352,12 @@ mod delegation {
 				DelegationAmount::Some(300)
 			));
 			assert_eq!(single_plan_entry(DELEGATOR), Some((BOB, 700)));
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
-				delegator: DELEGATOR,
-				change: Change::Decrease(300),
-			}));
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(fixed_plan(BOB, 1000)),
+				Some(fixed_plan(BOB, 700)),
+				DelegationChangeReason::SetByUser,
+			));
 		});
 	}
 
@@ -3418,44 +3429,82 @@ mod delegation {
 
 			// Check that delegation data is cleaned up
 			assert_eq!(single_plan_entry(DELEGATOR), None);
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
-				delegator: DELEGATOR,
-				operator: BOB,
-				max_bid: 500,
-			}));
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(fixed_plan(BOB, 500)),
+				None,
+				DelegationChangeReason::AccountReaped,
+			));
 		});
 	}
 
+	fn register_operators(operators: impl IntoIterator<Item = u64>) {
+		for operator in operators {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(operator),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+		}
+	}
+
+	/// Registers each operator with one bidding validator, so that both get a snapshot.
+	fn register_operators_with_validators(pairs: impl IntoIterator<Item = (u64, u64)>) {
+		const VALIDATOR_BID: u128 = 1_000;
+		for (operator, validator) in pairs {
+			register_operators([operator]);
+			MockFlip::credit_funds(&validator, VALIDATOR_BID);
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(validator)));
+			assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(validator)));
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(operator), validator));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(validator), operator));
+		}
+	}
+
+	fn delegator_bids(delegator: u64) -> BTreeMap<u64, u128> {
+		let (snapshots, _) = ValidatorPallet::build_delegation_snapshots::<
+			<Test as crate::Config>::KeygenQualification,
+		>(&Default::default());
+		snapshots
+			.into_iter()
+			.filter_map(|(operator, snapshot)| {
+				snapshot.delegators.get(&delegator).map(|bid| (operator, *bid))
+			})
+			.collect()
+	}
+
+	const OPERATOR_A: u64 = 200;
+	const OPERATOR_B: u64 = 201;
+	const VALIDATOR_A: u64 = 210;
+	const VALIDATOR_B: u64 = 211;
+	const DELEGATOR: u64 = 5000;
+
 	#[test]
 	fn can_delegate_to_multiple_operators_via_delegate_multi() {
-		const OPERATOR_A: u64 = 200;
-		const OPERATOR_B: u64 = 201;
-		const DELEGATOR: u64 = 5000;
-		const BID_TO_A: u128 = 400;
-		const BID_TO_B: u128 = 600;
-
+		const BALANCE: u128 = 1_000;
 		new_test_ext().execute_with(|| {
-			for operator in [OPERATOR_A, OPERATOR_B] {
-				assert_ok!(ValidatorPallet::register_as_operator(
-					OriginTrait::signed(operator),
-					OPERATOR_SETTINGS,
-					vanity()
-				));
-			}
-			MockFlip::credit_funds(&DELEGATOR, BID_TO_A + BID_TO_B);
+			register_operators([OPERATOR_A, OPERATOR_B]);
+			MockFlip::credit_funds(&DELEGATOR, BALANCE);
+			System::reset_events();
 
+			let plan = plan_with_shares(
+				[(OPERATOR_A, 40), (OPERATOR_B, 60)],
+				MaxBid::AmountWithoutCompounding(BALANCE),
+			);
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
+				plan.clone()
 			));
 
-			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
-				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
-			);
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(plan.clone()));
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				None,
+				Some(plan),
+				DelegationChangeReason::SetByUser,
+			));
 
-			// Legacy `delegate`/`undelegate` no longer apply once the plan has more than one
-			// entry -- ambiguous which one they'd act on.
+			// The single-operator extrinsics are ambiguous once there are several operators.
 			assert_noop!(
 				ValidatorPallet::delegate(
 					OriginTrait::signed(DELEGATOR),
@@ -3472,250 +3521,158 @@ mod delegation {
 	}
 
 	#[test]
-	fn blocking_delegator_drops_whole_plan_if_remainder_is_below_minimum() {
-		const OPERATOR_A: u64 = 200;
-		const OPERATOR_B: u64 = 201;
-		const DELEGATOR_BELOW: u64 = 5000;
-		const DELEGATOR_ABOVE: u64 = 5001;
-
-		let minimum = MockMinimumFundingProvider::get_min_funding_amount();
-		let bid_to_a = minimum / 2 + 10;
-		let small_bid_to_b = minimum / 2 + 10;
-		let large_bid_to_b = minimum;
-
-		new_test_ext().execute_with(|| {
-			for operator in [OPERATOR_A, OPERATOR_B] {
-				assert_ok!(ValidatorPallet::register_as_operator(
-					OriginTrait::signed(operator),
-					OPERATOR_SETTINGS,
-					vanity()
-				));
-			}
-			for (delegator, bid_to_b) in
-				[(DELEGATOR_BELOW, small_bid_to_b), (DELEGATOR_ABOVE, large_bid_to_b)]
-			{
-				// `block_delegator` requires the delegator to exist.
-				frame_system::Pallet::<Test>::inc_providers(&delegator);
-				MockFlip::credit_funds(&delegator, bid_to_a + bid_to_b);
-				assert_ok!(ValidatorPallet::delegate_multi(
-					OriginTrait::signed(delegator),
-					fixed_plan([(OPERATOR_A, bid_to_a), (OPERATOR_B, bid_to_b)])
-				));
-			}
-			System::reset_events();
-
-			// Removing A would leave a plan below the minimum, so the delegator is fully
-			// undelegated rather than left with an invalid plan.
-			assert_ok!(ValidatorPallet::block_delegator(
-				OriginTrait::signed(OPERATOR_A),
-				DELEGATOR_BELOW
-			));
-			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR_BELOW), None);
-			for (operator, max_bid) in [(OPERATOR_A, bid_to_a), (OPERATOR_B, small_bid_to_b)] {
-				System::assert_has_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
-					delegator: DELEGATOR_BELOW,
-					operator,
-					max_bid,
-				}));
-			}
-
-			// The remainder still meets the minimum, so only A is removed.
-			System::reset_events();
-			assert_ok!(ValidatorPallet::block_delegator(
-				OriginTrait::signed(OPERATOR_A),
-				DELEGATOR_ABOVE
-			));
-			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR_ABOVE),
-				Some(fixed_plan([(OPERATOR_B, large_bid_to_b)]))
-			);
-			System::assert_has_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
-				delegator: DELEGATOR_ABOVE,
-				operator: OPERATOR_A,
-				max_bid: bid_to_a,
-			}));
-			assert_eq!(
-				System::events()
-					.iter()
-					.filter(|record| matches!(
-						record.event,
-						RuntimeEvent::ValidatorPallet(Event::Undelegated { .. })
-					))
-					.count(),
-				1
-			);
-		});
-	}
-
-	#[test]
-	fn delegate_multi_accepts_plan_exceeding_balance() {
-		const OPERATOR_A: u64 = 200;
-		const OPERATOR_B: u64 = 201;
-		const DELEGATOR: u64 = 5000;
+	fn delegate_multi_rejects_invalid_plans() {
 		const BALANCE: u128 = 1_000;
-		const REQUESTED_TO_A: u128 = 1_400;
-		const REQUESTED_TO_B: u128 = 600;
-
 		new_test_ext().execute_with(|| {
-			for operator in [OPERATOR_A, OPERATOR_B] {
-				assert_ok!(ValidatorPallet::register_as_operator(
-					OriginTrait::signed(operator),
-					OPERATOR_SETTINGS,
-					vanity()
-				));
-			}
+			register_operators([OPERATOR_A, OPERATOR_B]);
 			MockFlip::credit_funds(&DELEGATOR, BALANCE);
+			let min = MockMinimumFundingProvider::get_min_funding_amount();
+			assert!(min > 1 && min <= BALANCE, "test assumes 1 < min <= BALANCE");
 
-			// The plan asks for more (2000) than the delegator's balance (1000) -- stored
-			// exactly as submitted rather than rejected or scaled down here; over-subscription
-			// is only resolved later, at auction-resolution time
-			// (`snapshot_prorates_a_multi_operator_delegator_after_balance_shrinks` covers that).
-			assert_ok!(ValidatorPallet::delegate_multi(
-				OriginTrait::signed(DELEGATOR),
-				fixed_plan([(OPERATOR_A, REQUESTED_TO_A), (OPERATOR_B, REQUESTED_TO_B)])
-			));
-			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
-				fixed_plan([(OPERATOR_A, REQUESTED_TO_A), (OPERATOR_B, REQUESTED_TO_B)])
+			for (plan, error) in [
+				// Shares sum to less than 100%.
+				(
+					plan_with_shares(
+						[(OPERATOR_A, 40), (OPERATOR_B, 50)],
+						MaxBid::AmountWithoutCompounding(BALANCE),
+					),
+					Error::<Test>::InvalidDelegationPlan,
+				),
+				// A zero share.
+				(
+					plan_with_shares(
+						[(OPERATOR_A, 100), (OPERATOR_B, 0)],
+						MaxBid::AmountWithoutCompounding(BALANCE),
+					),
+					Error::<Test>::InvalidDelegationPlan,
+				),
+				// Amount below the minimum: same error as `delegate` and as `AllWithCompounding`
+				// below.
+				(
+					plan_with_shares([(OPERATOR_A, 100)], MaxBid::AmountWithCompounding(min - 1)),
+					Error::<Test>::DelegationAmountBelowMinimum,
+				),
+				// Amount above the balance.
+				(
+					plan_with_shares(
+						[(OPERATOR_A, 100)],
+						MaxBid::AmountWithoutCompounding(BALANCE + 1),
+					),
+					Error::<Test>::DelegationAmountExceedsBalance,
+				),
+			] {
+				assert_noop!(
+					ValidatorPallet::delegate_multi(OriginTrait::signed(DELEGATOR), plan),
+					error
+				);
+			}
+
+			// `AllWithCompounding` needs a balance of at least the minimum.
+			const POOR_DELEGATOR: u64 = 5001;
+			MockFlip::credit_funds(&POOR_DELEGATOR, min - 1);
+			assert_noop!(
+				ValidatorPallet::delegate_multi(
+					OriginTrait::signed(POOR_DELEGATOR),
+					plan_with_shares([(OPERATOR_A, 100)], MaxBid::AllWithCompounding),
+				),
+				Error::<Test>::DelegationAmountBelowMinimum
 			);
 		});
 	}
 
 	#[test]
-	fn delegate_multi_checks_minimum_against_the_plan_total_not_each_entry() {
-		const OPERATOR_A: u64 = 200;
-		const OPERATOR_B: u64 = 201;
-		const DELEGATOR: u64 = 5000;
-
+	fn blocking_a_delegator_leaves_the_removed_share_undelegated() {
+		const BALANCE: u128 = 1_000;
 		new_test_ext().execute_with(|| {
-			for operator in [OPERATOR_A, OPERATOR_B] {
-				assert_ok!(ValidatorPallet::register_as_operator(
-					OriginTrait::signed(operator),
-					OPERATOR_SETTINGS,
-					vanity()
-				));
-			}
-
-			let min_bid = MockMinimumFundingProvider::get_min_funding_amount();
-			let half_of_min: u128 = min_bid / 2;
-			assert!(half_of_min > 0 && half_of_min < min_bid, "test assumes min_bid is even");
-
-			MockFlip::credit_funds(&DELEGATOR, min_bid);
-
-			// Each individual entry is below the minimum, but the plan's total is not -- this
-			// must succeed, since only the aggregate is checked against the minimum.
+			register_operators([OPERATOR_A, OPERATOR_B]);
+			// `block_delegator` requires the delegator to exist.
+			frame_system::Pallet::<Test>::inc_providers(&DELEGATOR);
+			MockFlip::credit_funds(&DELEGATOR, BALANCE);
+			let max_bid = MaxBid::AmountWithoutCompounding(BALANCE);
+			let plan = plan_with_shares([(OPERATOR_A, 40), (OPERATOR_B, 60)], max_bid);
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				fixed_plan([(OPERATOR_A, half_of_min), (OPERATOR_B, min_bid - half_of_min)])
+				plan.clone()
 			));
+
+			assert_ok!(ValidatorPallet::block_delegator(
+				OriginTrait::signed(OPERATOR_A),
+				DELEGATOR
+			));
+			let remaining = plan_with_shares([(OPERATOR_B, 60)], max_bid);
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(remaining.clone()));
+			System::assert_has_event(plan_updated(
+				DELEGATOR,
+				Some(plan),
+				Some(remaining.clone()),
+				DelegationChangeReason::RemovedByOperator,
+			));
+			// B keeps 60%: the 40% that A had stays undelegated.
 			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
-				fixed_plan([(OPERATOR_A, half_of_min), (OPERATOR_B, min_bid - half_of_min)])
+				remaining.resolve_bids(BALANCE, |_| true),
+				BTreeMap::from([(OPERATOR_B, 600)])
 			);
 
-			// A plan whose total itself falls below the minimum is still rejected.
-			assert_noop!(
-				ValidatorPallet::delegate_multi(
-					OriginTrait::signed(DELEGATOR),
-					fixed_plan([(OPERATOR_A, half_of_min)])
-				),
-				Error::<Test>::InvalidDelegationPlan
-			);
-		});
-	}
-
-	#[test]
-	fn delegate_multi_rejects_zero_amount_entries() {
-		const OPERATOR_A: u64 = 200;
-		const OPERATOR_B: u64 = 201;
-		const DELEGATOR: u64 = 5000;
-		const BID: u128 = 1_000;
-
-		new_test_ext().execute_with(|| {
-			for operator in [OPERATOR_A, OPERATOR_B] {
-				assert_ok!(ValidatorPallet::register_as_operator(
-					OriginTrait::signed(operator),
-					OPERATOR_SETTINGS,
-					vanity()
-				));
-			}
-			MockFlip::credit_funds(&DELEGATOR, BID);
-
-			// A zero-amount entry is invalid -- the caller should omit the operator entirely
-			// rather than include it with nothing pledged.
-			assert_noop!(
-				ValidatorPallet::delegate_multi(
-					OriginTrait::signed(DELEGATOR),
-					fixed_plan([(OPERATOR_A, BID), (OPERATOR_B, 0)])
-				),
-				Error::<Test>::InvalidDelegationPlan
-			);
-			assert!(DelegationChoice::<Test>::get(DELEGATOR).is_none());
+			// Removing the last operator removes the plan.
+			assert_ok!(ValidatorPallet::block_delegator(
+				OriginTrait::signed(OPERATOR_B),
+				DELEGATOR
+			));
+			assert!(!DelegationChoice::<Test>::contains_key(DELEGATOR));
+			System::assert_has_event(plan_updated(
+				DELEGATOR,
+				Some(remaining),
+				None,
+				DelegationChangeReason::RemovedByOperator,
+			));
 		});
 	}
 
 	#[test]
 	fn delegate_multi_plan_updates_and_removes_entries() {
-		const OPERATOR_A: u64 = 200;
-		const OPERATOR_B: u64 = 201;
-		const DELEGATOR: u64 = 5000;
-		const BID_TO_A: u128 = 400;
-		const BID_TO_B: u128 = 600;
-
+		const BALANCE: u128 = 1_000;
 		new_test_ext().execute_with(|| {
-			for operator in [OPERATOR_A, OPERATOR_B] {
-				assert_ok!(ValidatorPallet::register_as_operator(
-					OriginTrait::signed(operator),
-					OPERATOR_SETTINGS,
-					vanity()
-				));
-			}
-			MockFlip::credit_funds(&DELEGATOR, BID_TO_A + BID_TO_B);
+			register_operators([OPERATOR_A, OPERATOR_B]);
+			MockFlip::credit_funds(&DELEGATOR, BALANCE);
+			let first = plan_with_shares(
+				[(OPERATOR_A, 40), (OPERATOR_B, 60)],
+				MaxBid::AmountWithoutCompounding(BALANCE),
+			);
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
+				first.clone()
 			));
 
-			// Submitting a new plan that still includes OPERATOR_B unchanged, but reduces
-			// OPERATOR_A, leaves OPERATOR_B untouched.
+			// Dropping A moves everything to B; the LP role stays while delegating.
+			let second = plan_with_shares([(OPERATOR_B, 100)], MaxBid::AmountWithCompounding(800));
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				fixed_plan([(OPERATOR_A, BID_TO_A - 100), (OPERATOR_B, BID_TO_B)])
+				second.clone()
 			));
-			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
-				fixed_plan([(OPERATOR_A, BID_TO_A - 100), (OPERATOR_B, BID_TO_B)])
-			);
-
-			// Omitting OPERATOR_A from the next plan fully undelegates it; the delegator is
-			// still delegating (to OPERATOR_B) so the LP role must not be dropped.
-			assert_ok!(ValidatorPallet::delegate_multi(
-				OriginTrait::signed(DELEGATOR),
-				fixed_plan([(OPERATOR_B, BID_TO_B)])
-			));
-			assert_eq!(
-				DelegationChoice::<Test>::get(DELEGATOR).unwrap(),
-				fixed_plan([(OPERATOR_B, BID_TO_B)])
-			);
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(
-				Event::DelegationPlanUpdated {
-					delegator: DELEGATOR,
-					plan: DelegationPlan::try_from_map(BTreeMap::from([(OPERATOR_B, BID_TO_B)]))
-						.unwrap(),
-				},
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(second.clone()));
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(first),
+				Some(second.clone()),
+				DelegationChangeReason::SetByUser,
 			));
 			assert!(<Roles as AccountRoleRegistry<Test>>::has_account_role(
 				&DELEGATOR,
 				AccountRole::LiquidityProvider
 			));
 
-			// An empty plan fully undelegates everything and deregisters the LP role,
-			// mirroring `undelegate`'s behaviour.
+			// An empty plan undelegates everything and deregisters the LP role, like `undelegate`.
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				fixed_plan([])
+				plan_with_shares([], MaxBid::AllWithCompounding)
 			));
 			assert!(!DelegationChoice::<Test>::contains_key(DELEGATOR));
+			System::assert_last_event(plan_updated(
+				DELEGATOR,
+				Some(second),
+				None,
+				DelegationChangeReason::SetByUser,
+			));
 			assert!(!<Roles as AccountRoleRegistry<Test>>::has_account_role(
 				&DELEGATOR,
 				AccountRole::LiquidityProvider
@@ -3724,124 +3681,121 @@ mod delegation {
 	}
 
 	#[test]
-	fn snapshot_splits_a_multi_operator_delegator_bid_across_both_operators() {
-		const BID: u128 = 1_000;
-		const OPERATOR_A: u64 = 200;
-		const OPERATOR_B: u64 = 201;
-		const VALIDATOR_A: u64 = 210;
-		const VALIDATOR_B: u64 = 211;
-		const DELEGATOR: u64 = 5000;
-		const BID_TO_A: u128 = 400;
-		const BID_TO_B: u128 = 600;
-
+	fn resubmitting_the_same_plan_emits_no_event() {
 		new_test_ext().execute_with(|| {
-			for (operator, validator) in [(OPERATOR_A, VALIDATOR_A), (OPERATOR_B, VALIDATOR_B)] {
-				assert_ok!(ValidatorPallet::register_as_operator(
-					OriginTrait::signed(operator),
-					OPERATOR_SETTINGS,
-					vanity()
-				));
-				MockFlip::credit_funds(&validator, BID);
-				assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(
-					validator
-				)));
-				assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(validator)));
-				assert_ok!(ValidatorPallet::claim_validator(
-					OriginTrait::signed(operator),
-					validator
-				));
-				assert_ok!(ValidatorPallet::accept_operator(
-					OriginTrait::signed(validator),
-					operator
-				));
-			}
-
-			MockFlip::credit_funds(&DELEGATOR, BID_TO_A + BID_TO_B);
+			register_operators([OPERATOR_A]);
+			MockFlip::credit_funds(&DELEGATOR, 1_000);
+			let plan = plan_with_shares([(OPERATOR_A, 100)], MaxBid::AmountWithoutCompounding(500));
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
+				plan.clone()
+			));
+			System::reset_events();
+
+			assert_ok!(ValidatorPallet::delegate_multi(OriginTrait::signed(DELEGATOR), plan));
+			assert!(System::events().is_empty());
+		});
+	}
+
+	#[test]
+	fn snapshot_splits_the_delegated_amount_by_share() {
+		new_test_ext().execute_with(|| {
+			register_operators_with_validators([
+				(OPERATOR_A, VALIDATOR_A),
+				(OPERATOR_B, VALIDATOR_B),
+			]);
+			MockFlip::credit_funds(&DELEGATOR, 1_000);
+			assert_ok!(ValidatorPallet::delegate_multi(
+				OriginTrait::signed(DELEGATOR),
+				plan_with_shares(
+					[(OPERATOR_A, 40), (OPERATOR_B, 60)],
+					MaxBid::AmountWithoutCompounding(800)
+				)
 			));
 
-			let (snapshots, _independent_bidders) = ValidatorPallet::build_delegation_snapshots::<
-				<Test as crate::Config>::KeygenQualification,
-			>(&Default::default());
-
 			assert_eq!(
-				snapshots.get(&OPERATOR_A).unwrap().delegators.get(&DELEGATOR),
-				Some(&BID_TO_A)
+				delegator_bids(DELEGATOR),
+				BTreeMap::from([(OPERATOR_A, 320), (OPERATOR_B, 480)])
 			);
+
+			// After a slash below the amount, the whole (smaller) balance is delegated.
+			assert!(MockFlip::try_debit_funds(&DELEGATOR, 500).is_some());
 			assert_eq!(
-				snapshots.get(&OPERATOR_B).unwrap().delegators.get(&DELEGATOR),
-				Some(&BID_TO_B)
+				delegator_bids(DELEGATOR),
+				BTreeMap::from([(OPERATOR_A, 200), (OPERATOR_B, 300)])
 			);
 		});
 	}
 
 	#[test]
-	fn snapshot_prorates_a_multi_operator_delegator_after_balance_shrinks() {
-		const BID: u128 = 1_000;
-		const OPERATOR_A: u64 = 200;
-		const OPERATOR_B: u64 = 201;
-		const VALIDATOR_A: u64 = 210;
-		const VALIDATOR_B: u64 = 211;
-		const DELEGATOR: u64 = 5000;
-		const BID_TO_A: u128 = 400;
-		const BID_TO_B: u128 = 600;
-
+	fn all_with_compounding_follows_the_balance() {
 		new_test_ext().execute_with(|| {
-			for (operator, validator) in [(OPERATOR_A, VALIDATOR_A), (OPERATOR_B, VALIDATOR_B)] {
-				assert_ok!(ValidatorPallet::register_as_operator(
-					OriginTrait::signed(operator),
-					OPERATOR_SETTINGS,
-					vanity()
-				));
-				MockFlip::credit_funds(&validator, BID);
-				assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(
-					validator
-				)));
-				assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(validator)));
-				assert_ok!(ValidatorPallet::claim_validator(
-					OriginTrait::signed(operator),
-					validator
-				));
-				assert_ok!(ValidatorPallet::accept_operator(
-					OriginTrait::signed(validator),
-					operator
-				));
-			}
-
-			MockFlip::credit_funds(&DELEGATOR, BID_TO_A + BID_TO_B);
+			register_operators_with_validators([
+				(OPERATOR_A, VALIDATOR_A),
+				(OPERATOR_B, VALIDATOR_B),
+			]);
+			MockFlip::credit_funds(&DELEGATOR, 1_000);
 			assert_ok!(ValidatorPallet::delegate_multi(
 				OriginTrait::signed(DELEGATOR),
-				fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
+				plan_with_shares([(OPERATOR_A, 40), (OPERATOR_B, 60)], MaxBid::AllWithCompounding)
+			));
+			assert_eq!(
+				delegator_bids(DELEGATOR),
+				BTreeMap::from([(OPERATOR_A, 400), (OPERATOR_B, 600)])
+			);
+
+			MockFlip::credit_funds(&DELEGATOR, 500);
+			assert_eq!(
+				delegator_bids(DELEGATOR),
+				BTreeMap::from([(OPERATOR_A, 600), (OPERATOR_B, 900)])
+			);
+
+			// The whole balance is reserved, so nothing can be redeemed.
+			assert_noop!(
+				<ValidatorPallet as RedemptionCheck>::ensure_can_redeem_amount(&DELEGATOR, 1),
+				Error::<Test>::StillBidding
+			);
+		});
+	}
+
+	#[test]
+	fn delegate_keeps_the_compounding_choice() {
+		new_test_ext().execute_with(|| {
+			register_operators([OPERATOR_A, OPERATOR_B]);
+			MockFlip::credit_funds(&DELEGATOR, 1_000);
+			assert_ok!(ValidatorPallet::delegate_multi(
+				OriginTrait::signed(DELEGATOR),
+				plan_with_shares([(OPERATOR_A, 100)], MaxBid::AmountWithCompounding(500))
 			));
 
-			// Simulate a slash: the delegator's balance drops below the sum of its two max
-			// bids (both plan entries were valid when written, so this can only happen after
-			// the fact). Each entry should be prorated proportionally, not just capped
-			// independently -- otherwise the same shrunk balance would be double-counted.
-			const NEW_BALANCE: u128 = 500;
-			assert!(MockFlip::try_debit_funds(&DELEGATOR, (BID_TO_A + BID_TO_B) - NEW_BALANCE)
-				.is_some());
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				OPERATOR_B,
+				DelegationAmount::Some(200)
+			));
+			assert_eq!(
+				DelegationChoice::<Test>::get(DELEGATOR),
+				Some(DelegationPlan::single(OPERATOR_B, MaxBid::AmountWithCompounding(700)))
+			);
 
-			let (snapshots, _independent_bidders) = ValidatorPallet::build_delegation_snapshots::<
-				<Test as crate::Config>::KeygenQualification,
-			>(&Default::default());
-
-			let bid_a = *snapshots.get(&OPERATOR_A).unwrap().delegators.get(&DELEGATOR).unwrap();
-			let bid_b = *snapshots.get(&OPERATOR_B).unwrap().delegators.get(&DELEGATOR).unwrap();
-
-			assert_eq!(bid_a + bid_b, NEW_BALANCE);
-			// Proportional to the original 400:600 split.
-			assert_eq!(bid_a, NEW_BALANCE * BID_TO_A / (BID_TO_A + BID_TO_B));
+			// Decreasing an `AllWithCompounding` plan turns it into a compounding amount.
+			assert_ok!(ValidatorPallet::delegate_multi(
+				OriginTrait::signed(DELEGATOR),
+				plan_with_shares([(OPERATOR_A, 100)], MaxBid::AllWithCompounding)
+			));
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(100)
+			));
+			assert_eq!(
+				DelegationChoice::<Test>::get(DELEGATOR),
+				Some(DelegationPlan::single(OPERATOR_A, MaxBid::AmountWithCompounding(900)))
+			);
 		});
 	}
 
 	#[test]
 	fn delegate_multi_to_multiple_operators_sums_bond_after_rotation() {
-		const OPERATOR_A: u64 = 200;
-		const OPERATOR_B: u64 = 201;
-		const DELEGATOR: u64 = 5000;
 		const BID_TO_A: u128 = 1_000;
 		const BID_TO_B: u128 = 1_500;
 
@@ -3861,7 +3815,10 @@ mod delegation {
 				MockFlip::credit_funds(&DELEGATOR, BID_TO_A + BID_TO_B);
 				assert_ok!(ValidatorPallet::delegate_multi(
 					OriginTrait::signed(DELEGATOR),
-					fixed_plan([(OPERATOR_A, BID_TO_A), (OPERATOR_B, BID_TO_B)])
+					plan_with_shares(
+						[(OPERATOR_A, 40), (OPERATOR_B, 60)],
+						MaxBid::AmountWithoutCompounding(BID_TO_A + BID_TO_B)
+					)
 				));
 
 				// `WINNING_BIDS` accounts already hold the Validator role from genesis (see
@@ -3904,8 +3861,7 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				// a delegator appearing in two operators' snapshots must
-				// be bonded for the SUM of both plan entries
+				// A delegator in two operators' snapshots is bonded for the sum of both bids.
 				assert_eq!(MockBonderFor::<Test>::get_bond(&DELEGATOR), BID_TO_A + BID_TO_B);
 			});
 	}
@@ -4526,6 +4482,98 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		// Verify total
 		let total_minted: u128 = minted.values().sum();
 		assert_eq!(total_minted, REWARD_AMOUNT);
+	});
+}
+
+#[test]
+fn distribute_all_compounds_rewards_into_amount_with_compounding_plans() {
+	use crate::delegation::DelegatedRewardsDistribution;
+	use cf_traits::RewardsDistribution;
+
+	new_test_ext().execute_with(|| {
+		const EPOCH: u32 = 10;
+		const BOND: u128 = 1_000_000;
+		const BALANCE: u128 = 1_000_000;
+		const OPERATOR_A: u64 = 200;
+		const OPERATOR_B: u64 = 201;
+		const VALIDATOR_A: u64 = 100;
+		const VALIDATOR_B: u64 = 101;
+		const COMPOUNDING: u64 = 300;
+		const NOT_COMPOUNDING: u64 = 301;
+		const ALL: u64 = 302;
+
+		crate::HistoricalBonds::<Test>::insert(EPOCH, BOND);
+		crate::HistoricalAuthorities::<Test>::insert(EPOCH, vec![VALIDATOR_A, VALIDATOR_B]);
+
+		let compounding = plan_with_shares(
+			[(OPERATOR_A, 50), (OPERATOR_B, 50)],
+			MaxBid::AmountWithCompounding(BALANCE),
+		);
+		let not_compounding =
+			plan_with_shares([(OPERATOR_A, 100)], MaxBid::AmountWithoutCompounding(BALANCE));
+		let all = plan_with_shares([(OPERATOR_B, 100)], MaxBid::AllWithCompounding);
+		for (delegator, plan) in
+			[(COMPOUNDING, &compounding), (NOT_COMPOUNDING, &not_compounding), (ALL, &all)]
+		{
+			MockFlip::credit_funds(&delegator, BALANCE);
+			DelegationChoice::<Test>::insert(delegator, plan.clone());
+		}
+
+		for (operator, validator, other_delegator) in
+			[(OPERATOR_A, VALIDATOR_A, NOT_COMPOUNDING), (OPERATOR_B, VALIDATOR_B, ALL)]
+		{
+			DelegationSnapshot::<u64, u128> {
+				operator,
+				validators: [(validator, BOND / 2)].into_iter().collect(),
+				delegators: [(COMPOUNDING, BALANCE / 2), (other_delegator, BALANCE)]
+					.into_iter()
+					.collect(),
+				delegation_fee_bps: 2000,
+			}
+			.register_for_epoch::<Test>(EPOCH);
+		}
+		System::reset_events();
+
+		let mut rewards = BTreeMap::<u64, u128>::new();
+		DelegatedRewardsDistribution::<Test>::distribute_all(
+			EPOCH,
+			1_000_000,
+			|account, amount| {
+				MockFlip::credit_funds(account, amount);
+				*rewards.entry(*account).or_default() += amount;
+			},
+		);
+
+		// The reward from both operators is added to the compounding amount.
+		let reward = rewards[&COMPOUNDING];
+		assert!(reward > 0);
+		let compounded = plan_with_shares(
+			[(OPERATOR_A, 50), (OPERATOR_B, 50)],
+			MaxBid::AmountWithCompounding(BALANCE + reward),
+		);
+		assert_eq!(DelegationChoice::<Test>::get(COMPOUNDING), Some(compounded.clone()));
+		System::assert_has_event(plan_updated(
+			COMPOUNDING,
+			Some(compounding),
+			Some(compounded),
+			DelegationChangeReason::RewardAutoDelegated,
+		));
+
+		// The other plans are unchanged: one doesn't compound, the other already follows the
+		// balance.
+		assert!(rewards[&NOT_COMPOUNDING] > 0 && rewards[&ALL] > 0);
+		assert_eq!(DelegationChoice::<Test>::get(NOT_COMPOUNDING), Some(not_compounding));
+		assert_eq!(DelegationChoice::<Test>::get(ALL), Some(all));
+		assert_eq!(
+			System::events()
+				.iter()
+				.filter(|record| matches!(
+					record.event,
+					RuntimeEvent::ValidatorPallet(Event::DelegationPlanUpdated { .. })
+				))
+				.count(),
+			1
+		);
 	});
 }
 

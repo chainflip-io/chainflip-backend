@@ -560,10 +560,15 @@ export interface ChainErrors extends GenericChainErrors {
     MultiOperatorDelegator: GenericPalletError;
 
     /**
-     * A `delegate_multi` plan is invalid if any entry has a zero amount, or if a non-empty
-     * plan's total is below the minimum funding amount.
+     * A non-empty `delegate_multi` plan is invalid if any share is zero or the shares don't
+     * sum to exactly 100%.
      **/
     InvalidDelegationPlan: GenericPalletError;
+
+    /**
+     * A fixed delegation amount can't exceed the delegator's balance.
+     **/
+    DelegationAmountExceedsBalance: GenericPalletError;
 
     /**
      * Generic pallet error
