@@ -301,7 +301,7 @@ pub enum PalletConfigUpdate {
 	SetMinimumOrderAmount { asset: Asset, amount: AssetAmount },
 }
 
-pub const STORAGE_VERSION_U16: u16 = 11;
+pub const STORAGE_VERSION_U16: u16 = 12;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[frame_support::pallet]

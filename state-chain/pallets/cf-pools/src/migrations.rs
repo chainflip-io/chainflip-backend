@@ -20,6 +20,7 @@ use frame_support::migrations::VersionedMigration;
 
 mod remove_fixed_pools;
 mod rename_minimum_order_amount;
+mod scheduled_limit_order_backing;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
@@ -33,6 +34,13 @@ pub type PalletMigration<T> = (
 		10,
 		11,
 		remove_fixed_pools::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		11,
+		12,
+		scheduled_limit_order_backing::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
