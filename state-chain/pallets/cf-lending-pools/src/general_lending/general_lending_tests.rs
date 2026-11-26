@@ -448,6 +448,7 @@ fn basic_general_lending() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					// The pool's value has increased by pool's origination fee
 					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
 					// The available amount has been decreased not only by the loan's principal, but
@@ -496,6 +497,7 @@ fn basic_general_lending() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: INIT_POOL_AMOUNT + origination_fee_pool + pool_interest_1,
 					available_amount: INIT_POOL_AMOUNT -
 						PRINCIPAL - origination_fee_network -
@@ -537,6 +539,7 @@ fn basic_general_lending() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: INIT_POOL_AMOUNT + origination_fee_pool + pool_interest_1,
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL + REPAYMENT_AMOUNT -
 						origination_fee_network -
@@ -570,6 +573,7 @@ fn basic_general_lending() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: INIT_POOL_AMOUNT +
 						origination_fee_pool +
 						pool_interest_1 + pool_interest_2,
@@ -611,6 +615,7 @@ fn basic_general_lending() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: INIT_POOL_AMOUNT +
 						origination_fee_pool +
 						pool_interest_1 + pool_interest_2,
@@ -1288,6 +1293,7 @@ fn basic_loan_aggregation() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: INIT_POOL_AMOUNT +
 						origination_fee_pool_1 +
 						origination_fee_pool_2,
@@ -1371,6 +1377,7 @@ fn basic_loan_aggregation() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: INIT_POOL_AMOUNT +
 						origination_fee_pool_1 +
 						origination_fee_pool_2 +
@@ -1670,6 +1677,7 @@ fn basic_liquidation() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: INIT_POOL_AMOUNT + origination_fee_pool + liquidation_fee_pool_1,
 					// Note that liquidation fee is available immediately since is paid from the
 					// liquidation's output:
@@ -1819,6 +1827,7 @@ fn basic_liquidation() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: expected_total_amount,
 					// All of the funds should be available:
 					available_amount: expected_total_amount,
@@ -1951,6 +1960,7 @@ fn soft_liquidation_escalates_to_hard() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					// The pool's value has increased by pool's origination fee
 					total_amount: total_amount_in_pool,
 					// The available amount has been decreased not only by the loan's principal, but
@@ -2131,6 +2141,7 @@ fn liquidation_with_outstanding_principal() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL - origination_fee_network,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
@@ -2183,6 +2194,7 @@ fn liquidation_with_outstanding_principal() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: new_total_amount,
 					available_amount: new_total_amount,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
@@ -3354,6 +3366,7 @@ fn repaying_more_than_necessary() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
+					order_commitments: Default::default(),
 					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
 					available_amount: INIT_POOL_AMOUNT + origination_fee_pool,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),

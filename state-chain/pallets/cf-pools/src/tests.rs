@@ -21,8 +21,8 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{
-	assert_events_eq, assert_events_match, assert_matching_event_count, assert_no_matching_event,
-	last_event,
+	assert_events_eq, assert_events_match, assert_has_matching_event, assert_matching_event_count,
+	assert_no_matching_event, last_event,
 };
 use cf_traits::{
 	mocks::{asset_withholding::MockAssetWithholding, balance_api::MockBalance},
@@ -241,6 +241,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			100,
 			None,
 			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
@@ -252,6 +253,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			100_000,
 			None,
 			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
@@ -261,6 +263,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			1,
 			Some(tick),
 			10_000,
+			None,
 			None,
 			None,
 		));
@@ -497,6 +500,7 @@ fn can_execute_scheduled_limit_order_updates() {
 				amount,
 				Some(dispatch_at),
 				None,
+				None,
 			)
 		},
 	);
@@ -546,6 +550,7 @@ fn scheduled_set_replaces_existing_set_for_same_order() {
 				FIRST_AMOUNT,
 				Some(DISPATCH_AT),
 				None,
+				None,
 			));
 			assert_ok!(LiquidityPools::set_limit_order(
 				RuntimeOrigin::signed(ALICE),
@@ -556,6 +561,7 @@ fn scheduled_set_replaces_existing_set_for_same_order() {
 				Some(101),
 				SECOND_AMOUNT,
 				Some(DISPATCH_AT),
+				None,
 				None,
 			));
 
@@ -569,6 +575,7 @@ fn scheduled_set_replaces_existing_set_for_same_order() {
 					option_tick: Some(101),
 					sell_amount: SECOND_AMOUNT,
 					close_order_at: None,
+					backing: None,
 				}
 			);
 		})
@@ -616,6 +623,7 @@ fn scheduled_close_replaces_existing_close_for_same_order() {
 				AMOUNT,
 				None,
 				Some(CLOSE_ORDER_AT),
+				None,
 			));
 			assert_ok!(LiquidityPools::set_limit_order(
 				RuntimeOrigin::signed(ALICE),
@@ -627,6 +635,7 @@ fn scheduled_close_replaces_existing_close_for_same_order() {
 				AMOUNT,
 				None,
 				Some(CLOSE_ORDER_AT),
+				None,
 			));
 
 			assert_eq!(ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, CLOSE_ORDER_AT)), 1);
@@ -678,6 +687,7 @@ fn scheduled_set_does_not_override_different_order() {
 				FIRST_AMOUNT,
 				Some(DISPATCH_AT),
 				None,
+				None,
 			));
 			assert_ok!(LiquidityPools::set_limit_order(
 				RuntimeOrigin::signed(ALICE),
@@ -688,6 +698,7 @@ fn scheduled_set_does_not_override_different_order() {
 				Some(101),
 				SECOND_AMOUNT,
 				Some(DISPATCH_AT),
+				None,
 				None,
 			));
 
@@ -702,6 +713,7 @@ fn scheduled_set_does_not_override_different_order() {
 					option_tick: Some(100),
 					sell_amount: FIRST_AMOUNT,
 					close_order_at: None,
+					backing: None,
 				}
 			);
 			assert_eq!(scheduled_updates[1].id, SECOND_ORDER_ID);
@@ -711,6 +723,7 @@ fn scheduled_set_does_not_override_different_order() {
 					option_tick: Some(101),
 					sell_amount: SECOND_AMOUNT,
 					close_order_at: None,
+					backing: None,
 				}
 			);
 		})
@@ -841,6 +854,7 @@ fn can_get_all_pool_orders() {
 			500_000,
 			None,
 			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
@@ -850,6 +864,7 @@ fn can_get_all_pool_orders() {
 			5,
 			Some(1000),
 			600_000,
+			None,
 			None,
 			None,
 		));
@@ -863,6 +878,7 @@ fn can_get_all_pool_orders() {
 			700_000,
 			None,
 			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
@@ -872,6 +888,7 @@ fn can_get_all_pool_orders() {
 			7,
 			Some(1000),
 			800_000,
+			None,
 			None,
 			None,
 		));
@@ -1166,6 +1183,7 @@ fn test_cancel_orders_batch() {
 			5_000,
 			None,
 			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
@@ -1175,6 +1193,7 @@ fn test_cancel_orders_batch() {
 			1,
 			Some(TICK + POOL_FEE_BPS as Tick),
 			15_000,
+			None,
 			None,
 			None,
 		));
@@ -1322,6 +1341,7 @@ fn limit_order_proceeds_credited_on_fill() {
 					amount,
 					None,
 					None,
+					None,
 				));
 			}
 		}
@@ -1371,6 +1391,7 @@ fn limit_order_proceeds_credited_on_fill() {
 			6_666,
 			None,
 			None,
+			None,
 		));
 		assert_eq!(get_balance(&ALICE), (0, 20_000));
 		assert_eq!(limit_order_amounts::<Test>(ASSET, Side::Sell), vec![(ALICE, 1, 6_666)]);
@@ -1407,6 +1428,7 @@ fn limit_order_dust_is_withheld_in_the_input_asset() {
 					0,
 					Some(tick),
 					order_amount,
+					None,
 					None,
 					None,
 				));
@@ -1455,6 +1477,7 @@ fn failed_swap_does_not_withhold_rounding_dust() {
 				id,
 				Some(tick),
 				amount,
+				None,
 				None,
 				None,
 			));
@@ -1506,6 +1529,7 @@ fn failed_swap_does_not_pay_out_limit_orders() {
 				id,
 				Some(tick),
 				10_000,
+				None,
 				None,
 				None,
 			));
@@ -1640,6 +1664,7 @@ fn test_limit_order_auto_close() {
 					AMOUNT,
 					None,
 					Some(0), // Block 0 will always be in the past
+					None,
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);
@@ -1658,6 +1683,7 @@ fn test_limit_order_auto_close() {
 					// should be rejected
 					Some(DISPATCH_AT),
 					Some(DISPATCH_AT),
+					None,
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);
@@ -1673,6 +1699,7 @@ fn test_limit_order_auto_close() {
 					// Schedule the call for after the close order, so it should be rejected
 					Some(DISPATCH_AT),
 					Some(DISPATCH_AT - 1),
+					None,
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);
@@ -1688,6 +1715,7 @@ fn test_limit_order_auto_close() {
 					Some(DISPATCH_AT),
 					// Schedule the close order for too far in the future
 					Some((SCHEDULE_CLOSE_LIMIT_BLOCKS as u64) + 2),
+					None,
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);
@@ -1703,6 +1731,7 @@ fn test_limit_order_auto_close() {
 				AMOUNT,
 				Some(DISPATCH_AT),
 				Some(CLOSE_ORDER_AT),
+				None,
 			));
 
 			// Check that the event for scheduling the opening of the order is emitted
@@ -1795,6 +1824,7 @@ fn cancel_all_limit_orders_for_account() {
 				AMOUNT,
 				None,
 				None,
+				None,
 			));
 		}
 
@@ -1850,6 +1880,7 @@ fn cancel_all_pool_positions() {
 					ORDER_ID + i as u64,
 					Some(100),
 					5_000,
+					None,
 					None,
 					None,
 				));
@@ -1918,6 +1949,7 @@ fn test_get_limit_orders() {
 			0,
 			Some(0),
 			AMOUNT,
+			None,
 			None,
 			None,
 		));
@@ -2017,6 +2049,7 @@ mod minimum_limit_order_amount {
 			0,
 			Some(0),
 			sell_amount,
+			None,
 			None,
 			None,
 		)
@@ -2507,6 +2540,7 @@ fn mint_orders(tick: Tick, ids: core::ops::Range<u64>, sell_amount: AssetAmount)
 			sell_amount,
 			None,
 			None,
+			None,
 		));
 	}
 }
@@ -2542,6 +2576,7 @@ mod swap_fill_limit {
 			0,
 			Some(tick),
 			sell_amount,
+			None,
 			None,
 			None,
 		));
@@ -2629,4 +2664,65 @@ mod swap_fill_limit {
 			assert_eq!(filled, credited);
 		});
 	}
+}
+
+mod supply_backed_limit_orders {
+	use super::*;
+
+	type Lending = cf_traits::mocks::lending_pools::MockLendingOrderApi<u64>;
+
+	#[test]
+	fn fills_from_lending_supply() {
+		const SUPPLY: AssetAmount = 1_000;
+		const ORDER: AssetAmount = 400;
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Eth,
+				STABLE_ASSET,
+				0,
+				Price::at_tick_zero(),
+			));
+			Lending::add_supply(&ALICE, Asset::Eth, SUPPLY);
+
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Eth,
+				STABLE_ASSET,
+				Side::Sell,
+				0,
+				Some(0),
+				ORDER,
+				None,
+				None,
+				Some(Backing::LendingSupply),
+			));
+
+			// The order is promised out of the supply position; the free balance is untouched.
+			assert_eq!(MockBalance::get_balance(&ALICE, Asset::Eth), 0);
+			assert_eq!(Lending::committed(&ALICE, Asset::Eth), ORDER);
+			assert_eq!(Lending::supply_position(&ALICE, Asset::Eth), SUPPLY);
+
+			// At tick 0 this buys the whole order.
+			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, ORDER).unwrap();
+
+			assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), ORDER);
+			assert_eq!(Lending::committed(&ALICE, Asset::Eth), 0);
+			assert_eq!(Lending::supply_position(&ALICE, Asset::Eth), SUPPLY - ORDER);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LiquidityPools(Event::LimitOrderFilled {
+					lp: ALICE,
+					side: Side::Sell,
+					sold_amount: ORDER,
+					bought_amount: ORDER,
+					remaining_amount: 0,
+					..
+				})
+			);
+		});
+	}
+
+	// TODO: lots more tests for supply-backed orders
 }

@@ -16,6 +16,7 @@
 
 #![cfg(test)]
 
+use crate::common::UnlimitedSupply;
 use cf_utilities::assert_ok;
 use core::convert::Infallible;
 use sp_core::crypto::AccountId32;
@@ -36,8 +37,8 @@ fn lp(id: u32) -> AccountId32 {
 
 /// Swaps as much of `amount` as the pool will take, returning the output and what is left.
 fn swap(pool_state: &mut PoolState, order: Side, amount: Amount) -> (Amount, Amount) {
-	let (SwapExecutionOutcome { output_amount, .. }, remaining_input_amount) =
-		pool_state.swap_to_price(order, amount, PoolState::inner_worst_price(order));
+	let (SwapExecutionOutcome { output_amount, .. }, remaining_input_amount) = pool_state
+		.swap_to_price(order, amount, PoolState::inner_worst_price(order), &mut UnlimitedSupply);
 	(output_amount, remaining_input_amount)
 }
 
@@ -68,7 +69,8 @@ fn test_basic_swaps() {
 					&LiquidityProvider::from([0; 32]),
 					!order,
 					0,
-					amount
+					amount,
+					limit_orders::Backing::Pool
 				)),
 				limit_orders::Position::new(amount)
 			);
@@ -152,7 +154,8 @@ fn test_basic_swaps() {
 					&LiquidityProvider::from([0; 32]),
 					!order,
 					0,
-					limit_order_liquidity
+					limit_order_liquidity,
+					limit_orders::Backing::Pool
 				)),
 				limit_orders::Position::new(limit_order_liquidity)
 			);
@@ -212,7 +215,8 @@ fn test_basic_swaps() {
 					&LiquidityProvider::from([0; 32]),
 					!order,
 					0,
-					limit_order_liquidity
+					limit_order_liquidity,
+					limit_orders::Backing::Pool
 				)),
 				limit_orders::Position::new(limit_order_liquidity)
 			);
@@ -247,7 +251,8 @@ fn alternating_range_and_limit_orders() {
 	let limit_order_amount: Amount = 1_000_000.into();
 
 	let mut pool = PoolState::new(500, Price::at_tick_zero()).unwrap();
-	pool.mint_limit_order(&LP, Side::Buy, 0, limit_order_amount).unwrap();
+	pool.mint_limit_order(&LP, Side::Buy, 0, limit_order_amount, limit_orders::Backing::Pool)
+		.unwrap();
 
 	pool.collect_and_mint_range_order(
 		&LP,
@@ -257,14 +262,15 @@ fn alternating_range_and_limit_orders() {
 	)
 	.unwrap();
 
-	pool.mint_limit_order(&LP, Side::Buy, 10, limit_order_amount).unwrap();
+	pool.mint_limit_order(&LP, Side::Buy, 10, limit_order_amount, limit_orders::Backing::Pool)
+		.unwrap();
 
 	assert_eq!(pool.limit_order(&LP, Side::Buy, 0).unwrap().amount, limit_order_amount);
 	assert_eq!(pool.limit_order(&LP, Side::Buy, 10).unwrap().amount, limit_order_amount);
 	assert_eq!(pool.range_order(&LP, TICK_RANGE).unwrap().0.fees.base, 0.into());
 
 	let SwapExecutionOutcome { limit_order_fills, .. } =
-		pool.swap(Side::Sell, 3_000_000.into(), None).unwrap();
+		pool.swap(Side::Sell, 3_000_000.into(), None, &mut UnlimitedSupply).unwrap();
 
 	// Check that all three orders have been used in the swap:
 	assert_eq!(limit_order_fills.len(), 2);
@@ -279,13 +285,19 @@ fn limit_order_dust_is_accumulated_across_prices() {
 	let mut pool = PoolState::new(0, Price::from_tick(69_082).unwrap()).unwrap();
 	for tick in [69_082, 69_083] {
 		for id in [0u8, 1] {
-			pool.mint_limit_order(&AccountId32::new([id; 32]), Side::Sell, tick, 1.into())
-				.unwrap();
+			pool.mint_limit_order(
+				&AccountId32::new([id; 32]),
+				Side::Sell,
+				tick,
+				1.into(),
+				limit_orders::Backing::Pool,
+			)
+			.unwrap();
 		}
 	}
 
 	// Each tick sells two satoshis for 2,001 micro-USDC. Each LP receives 1,000.
-	let outcome = pool.swap(Side::Buy, 4_002.into(), None).unwrap();
+	let outcome = pool.swap(Side::Buy, 4_002.into(), None, &mut UnlimitedSupply).unwrap();
 	assert_eq!(outcome.output_amount, 4.into());
 	assert_eq!(outcome.limit_order_input_dust, 2.into());
 	assert_eq!(outcome.limit_order_fills.len(), 4);
@@ -367,14 +379,21 @@ fn fill_limit_holds_across_switches_to_range_orders() {
 	for tick in -(orders / 2)..(orders / 2) {
 		let mut key = [2u8; 32];
 		key[0..4].copy_from_slice(&tick.to_be_bytes());
-		pool.mint_limit_order(&AccountId32::new(key), Side::Buy, tick, 1_000.into())
-			.unwrap();
+		pool.mint_limit_order(
+			&AccountId32::new(key),
+			Side::Buy,
+			tick,
+			1_000.into(),
+			limit_orders::Backing::Pool,
+		)
+		.unwrap();
 	}
 
 	let (unlimited, _) = pool.clone().swap_to_price(
 		Side::Sell,
 		3_000_000.into(),
 		PoolState::inner_worst_price(Side::Sell),
+		&mut UnlimitedSupply,
 	);
 	assert!(
 		unlimited.limit_order_fills.len() > limit_orders::MAX_FILLS_PER_SWAP as usize,
@@ -384,7 +403,12 @@ fn fill_limit_holds_across_switches_to_range_orders() {
 
 	// Bounded, and allowed to fall short, so as to see how far it got.
 	let limited = pool
-		.inner_swap::<BaseToQuote>(3_000_000.into(), None, limit_orders::FillQuota::bounded())
+		.inner_swap::<BaseToQuote>(
+			3_000_000.into(),
+			None,
+			limit_orders::FillQuota::bounded(),
+			&mut UnlimitedSupply,
+		)
 		.outcome;
 	assert_eq!(limited.limit_order_fills.len(), limit_orders::UNFILTERED_FILLS_PER_SWAP as usize);
 }
@@ -410,15 +434,28 @@ fn limit_orders_past_the_range_price_are_judged_when_reached() {
 	.unwrap();
 	// Dust ahead of the range orders uses up the swap's unfiltered fills.
 	for id in 1..=limit_orders::UNFILTERED_FILLS_PER_SWAP {
-		pool.mint_limit_order(&lp(id), Side::Sell, -10, 1.into()).unwrap();
+		pool.mint_limit_order(&lp(id), Side::Sell, -10, 1.into(), limit_orders::Backing::Pool)
+			.unwrap();
 	}
 	// Too small for a fill against the whole input, but not against what is left of it once the
 	// range orders have taken it to tick 50.
-	pool.mint_limit_order(&lp_with_small_order, Side::Sell, 50, 5.into()).unwrap();
-	pool.mint_limit_order(&lp(0), Side::Sell, 100, 1_000_000.into()).unwrap();
+	pool.mint_limit_order(
+		&lp_with_small_order,
+		Side::Sell,
+		50,
+		5.into(),
+		limit_orders::Backing::Pool,
+	)
+	.unwrap();
+	pool.mint_limit_order(&lp(0), Side::Sell, 100, 1_000_000.into(), limit_orders::Backing::Pool)
+		.unwrap();
 
-	let report =
-		pool.inner_swap::<QuoteToBase>(12_000.into(), None, limit_orders::FillQuota::bounded());
+	let report = pool.inner_swap::<QuoteToBase>(
+		12_000.into(),
+		None,
+		limit_orders::FillQuota::bounded(),
+		&mut UnlimitedSupply,
+	);
 
 	assert!(report.remaining_input_amount.is_zero());
 	assert!(
@@ -436,7 +473,8 @@ fn limit_orders_past_the_range_price_are_judged_when_reached() {
 fn pool_of_limit_orders(count: u32) -> PoolState {
 	let mut pool = PoolState::new(0, Price::at_tick_zero()).unwrap();
 	for id in 0..count {
-		pool.mint_limit_order(&lp(id), Side::Sell, 0, 1_000.into()).unwrap();
+		pool.mint_limit_order(&lp(id), Side::Sell, 0, 1_000.into(), limit_orders::Backing::Pool)
+			.unwrap();
 	}
 	pool
 }
@@ -447,24 +485,33 @@ fn pool_of_limit_orders(count: u32) -> PoolState {
 fn reaching_fill_limit_reports_error() {
 	// Sanity check that an empty pool error is reported
 	assert_eq!(
-		pool_of_limit_orders(10).swap(Side::Buy, 100_000.into(), None).err(),
+		pool_of_limit_orders(10)
+			.swap(Side::Buy, 100_000.into(), None, &mut UnlimitedSupply)
+			.err(),
 		Some(SwapError::InsufficientLiquidity),
 	);
 
 	// A book past the limit: the liquidity is there, just not all reachable in one swap.
 	let count = limit_orders::MAX_FILLS_PER_SWAP + 10;
 	assert_eq!(
-		pool_of_limit_orders(count).swap(Side::Buy, (count * 1_000).into(), None).err(),
+		pool_of_limit_orders(count)
+			.swap(Side::Buy, (count * 1_000).into(), None, &mut UnlimitedSupply)
+			.err(),
 		Some(SwapError::MaxFillsExceeded),
 	);
 
 	// Buying out what one swap can reach lets the next reach the rest.
 	let mut pool = pool_of_limit_orders(count);
 	let first = pool
-		.swap(Side::Buy, (limit_orders::MAX_FILLS_PER_SWAP * 1_000).into(), None)
+		.swap(
+			Side::Buy,
+			(limit_orders::MAX_FILLS_PER_SWAP * 1_000).into(),
+			None,
+			&mut UnlimitedSupply,
+		)
 		.unwrap();
 	assert_eq!(first.limit_order_fills.len(), limit_orders::MAX_FILLS_PER_SWAP as usize);
-	let second = pool.swap(Side::Buy, (10 * 1_000).into(), None).unwrap();
+	let second = pool.swap(Side::Buy, (10 * 1_000).into(), None, &mut UnlimitedSupply).unwrap();
 	assert_eq!(second.limit_order_fills.len(), 10);
 	assert_eq!(pool.limit_orders(Side::Sell).count(), 0);
 }
@@ -478,6 +525,7 @@ fn swap_to_price_is_not_fill_limited() {
 		Side::Buy,
 		Amount::MAX,
 		PoolState::inner_worst_price(Side::Buy),
+		&mut UnlimitedSupply,
 	);
 	assert_eq!(outcome.limit_order_fills.len(), count as usize);
 }
@@ -534,7 +582,7 @@ mod price_impact {
 		{
 			for (size, output) in SWAPS {
 				let result = pool_with_range_order()
-					.swap(Side::Buy, size.into(), limit)
+					.swap(Side::Buy, size.into(), limit, &mut UnlimitedSupply)
 					.map(|outcome| outcome.output_amount);
 				let expected = if size < first_rejected {
 					Ok(output.into())
@@ -559,9 +607,12 @@ mod price_impact {
 		const DUST_TICK: Tick = -1_000;
 
 		let mut pool = pool_with_range_order();
-		pool.mint_limit_order(&lp(1), Side::Sell, DUST_TICK, 1.into()).unwrap();
+		pool.mint_limit_order(&lp(1), Side::Sell, DUST_TICK, 1.into(), limit_orders::Backing::Pool)
+			.unwrap();
 
-		let outcome = pool.swap(Side::Buy, SWAP_AMOUNT.into(), Some(LIMIT)).unwrap();
+		let outcome = pool
+			.swap(Side::Buy, SWAP_AMOUNT.into(), Some(LIMIT), &mut UnlimitedSupply)
+			.unwrap();
 
 		// The swap traded the dust, so it really did start 1,000 ticks in front of the rest.
 		assert!(outcome.limit_order_fills.iter().any(|fill| fill.tick == DUST_TICK));
@@ -578,23 +629,34 @@ mod price_impact {
 		const DUST_TICK: Tick = -10;
 
 		assert_eq!(
-			pool_with_range_order().swap(Side::Buy, SWAP_AMOUNT.into(), Some(LIMIT)).err(),
+			pool_with_range_order()
+				.swap(Side::Buy, SWAP_AMOUNT.into(), Some(LIMIT), &mut UnlimitedSupply)
+				.err(),
 			Some(SwapError::PriceImpactLimitExceeded),
 		);
 
 		// More dust than the swap fills unfiltered, ahead of the range orders.
 		let mut pool = pool_with_range_order();
 		for id in 1..=UNFILTERED_FILLS_PER_SWAP + 10 {
-			pool.mint_limit_order(&lp(id), Side::Sell, DUST_TICK, 1.into()).unwrap();
+			pool.mint_limit_order(
+				&lp(id),
+				Side::Sell,
+				DUST_TICK,
+				1.into(),
+				limit_orders::Backing::Pool,
+			)
+			.unwrap();
 		}
 
 		assert_eq!(
-			pool.clone().swap(Side::Buy, SWAP_AMOUNT.into(), Some(LIMIT)).err(),
+			pool.clone()
+				.swap(Side::Buy, SWAP_AMOUNT.into(), Some(LIMIT), &mut UnlimitedSupply)
+				.err(),
 			Some(SwapError::PriceImpactLimitExceeded),
 		);
 
 		// The same swap without a limit, to check that it passes dust over.
-		let outcome = pool.swap(Side::Buy, SWAP_AMOUNT.into(), None).unwrap();
+		let outcome = pool.swap(Side::Buy, SWAP_AMOUNT.into(), None, &mut UnlimitedSupply).unwrap();
 		// The dust beyond the swap's unfiltered fills is still in the book.
 		assert_eq!(pool.limit_orders(Side::Sell).count(), 10);
 

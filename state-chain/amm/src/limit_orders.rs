@@ -1424,7 +1424,11 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 1000.into())]);
 		assert_eq!(
 			state.position::<QuoteToBase>(&lp(1), 0),
-			Some(Position { amount: 1000.into(), original_amount: 1000.into() })
+			Some(Position {
+				amount: 1000.into(),
+				original_amount: 1000.into(),
+				backing: Backing::Pool,
+			})
 		);
 	}
 
@@ -1464,11 +1468,19 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 375.into())]);
 		assert_eq!(
 			state.position::<QuoteToBase>(&lp(1), 0),
-			Some(Position { amount: 125.into(), original_amount: 1000.into() })
+			Some(Position {
+				amount: 125.into(),
+				original_amount: 1000.into(),
+				backing: Backing::Pool,
+			})
 		);
 		assert_eq!(
 			state.position::<QuoteToBase>(&lp(2), 0),
-			Some(Position { amount: 250.into(), original_amount: 2000.into() })
+			Some(Position {
+				amount: 250.into(),
+				original_amount: 2000.into(),
+				backing: Backing::Pool,
+			})
 		);
 	}
 
@@ -1521,7 +1533,11 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<QuoteToBase>(), vec![(0, 400.into())]);
 		assert_eq!(
 			state.position::<QuoteToBase>(&lp(2), 0),
-			Some(Position { amount: 400.into(), original_amount: 400.into() })
+			Some(Position {
+				amount: 400.into(),
+				original_amount: 400.into(),
+				backing: Backing::Pool,
+			})
 		);
 	}
 
@@ -1707,7 +1723,11 @@ mod migration_tests {
 		assert_eq!(state.liquidity::<BaseToQuote>(), vec![(tick, 500.into())]);
 		assert_eq!(
 			state.position::<BaseToQuote>(&lp(2), tick),
-			Some(Position { amount: 500.into(), original_amount: 1000.into() })
+			Some(Position {
+				amount: 500.into(),
+				original_amount: 1000.into(),
+				backing: Backing::Pool,
+			})
 		);
 		assert_eq!(unclaimed_liquidity, PoolPairsMap::default());
 	}

@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{limit_orders, range_orders};
+use crate::{common::UnlimitedSupply, limit_orders, range_orders};
 use cf_amm_math::{
 	mul_div, mul_div_ceil_checked, mul_div_floor_checked, test_utilities::rng_u256_inclusive_bound,
 	MAX_TICK, MIN_TICK,
@@ -322,7 +322,7 @@ fn random_amount(rng: &mut impl rand::Rng, max: Amount) -> Amount {
 /// A selection that leaves every order taking part, i.e. the behaviour of a swap against a book
 /// no larger than one swap will settle.
 fn all_participating(orders: &Orders<LiquidityProvider>) -> EligibleOrders<LiquidityProvider> {
-	EligibleOrders::select(orders, &FillQuota::Unlimited, Amount::MAX)
+	EligibleOrders::select(orders, &FillQuota::Unlimited, Amount::MAX, &UnlimitedSupply)
 		.expect("the test books all hold orders")
 }
 
@@ -357,7 +357,7 @@ fn swap_with_fill_quota<SD: SwapDirection>(
 				..
 			},
 		..
-	} = pool_state.swap::<SD>(amount, sqrt_price_limit, 0, &mut quota, None);
+	} = pool_state.swap::<SD>(amount, sqrt_price_limit, 0, &mut quota, None, &mut UnlimitedSupply);
 
 	assert_eq!(
 		total_of(&fills, |fill| fill.sold_amount),
@@ -380,8 +380,8 @@ fn huge_orders_are_partially_filled_pro_rata() {
 	fn inner<SD: SwapDirection + limit_orders::SwapDirection>() {
 		let quarter = Amount::MAX / 4;
 		let mut pool_state = PoolState::new();
-		assert_ok!(pool_state.mint::<SD>(&lp(0), 0, quarter));
-		assert_ok!(pool_state.mint::<SD>(&lp(1), 0, quarter));
+		assert_ok!(pool_state.mint::<SD>(&lp(0), 0, quarter, Backing::Pool));
+		assert_ok!(pool_state.mint::<SD>(&lp(1), 0, quarter, Backing::Pool));
 
 		// Tick zero prices one for one, and the orders are equal, so the swap buys what it pays
 		// in and the two split it evenly.
@@ -406,7 +406,7 @@ fn extreme_prices_do_not_panic_however_large_the_order() {
 	fn inner<SD: SwapDirection + limit_orders::SwapDirection>(tick: Tick) {
 		let mut pool_state = PoolState::new();
 		let minted = Amount::MAX / 2;
-		assert_ok!(pool_state.mint::<SD>(&lp(0), tick, minted));
+		assert_ok!(pool_state.mint::<SD>(&lp(0), tick, minted, Backing::Pool));
 
 		let (output, _remaining, _fills) = swap::<SD>(&mut pool_state, Amount::MAX / 2, None);
 
@@ -425,7 +425,7 @@ fn mint() {
 		for good in [MIN_TICK, MAX_TICK] {
 			let mut pool_state = PoolState::new();
 			assert_eq!(
-				assert_ok!(pool_state.mint::<SD>(&lp(0), good, 1000.into())),
+				assert_ok!(pool_state.mint::<SD>(&lp(0), good, 1000.into(), Backing::Pool)),
 				Position::new(1000.into())
 			);
 		}
@@ -433,7 +433,7 @@ fn mint() {
 		for bad in [MIN_TICK - 1, MAX_TICK + 1] {
 			let mut pool_state = PoolState::new();
 			assert_matches!(
-				pool_state.mint::<SD>(&lp(0), bad, 1000.into()),
+				pool_state.mint::<SD>(&lp(0), bad, 1000.into(), Backing::Pool),
 				Err(PositionError::InvalidTick)
 			);
 		}
@@ -441,19 +441,22 @@ fn mint() {
 		// No amount is too large to mint: an invalid tick is the only way minting fails.
 		for good in [Amount::one(), Amount::MAX / 2, Amount::MAX] {
 			let mut pool_state = PoolState::new();
-			assert_eq!(assert_ok!(pool_state.mint::<SD>(&lp(0), 0, good)), Position::new(good));
+			assert_eq!(
+				assert_ok!(pool_state.mint::<SD>(&lp(0), 0, good, Backing::Pool)),
+				Position::new(good)
+			);
 		}
 
 		// Minting nothing reports the existing order, and errors if there isn't one.
 		{
 			let mut pool_state = PoolState::new();
 			assert_matches!(
-				pool_state.mint::<SD>(&lp(0), 0, Amount::zero()),
+				pool_state.mint::<SD>(&lp(0), 0, Amount::zero(), Backing::Pool),
 				Err(PositionError::NonExistent)
 			);
-			assert_ok!(pool_state.mint::<SD>(&lp(0), 0, 1000.into()));
+			assert_ok!(pool_state.mint::<SD>(&lp(0), 0, 1000.into(), Backing::Pool));
 			assert_eq!(
-				assert_ok!(pool_state.mint::<SD>(&lp(0), 0, Amount::zero())),
+				assert_ok!(pool_state.mint::<SD>(&lp(0), 0, Amount::zero(), Backing::Pool)),
 				Position::new(1000.into())
 			);
 		}
@@ -489,7 +492,7 @@ fn burn() {
 			let tick = 120;
 			let amount = U256::from(1000);
 			assert_eq!(
-				assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount)),
+				assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount, Backing::Pool)),
 				Position::new(amount)
 			);
 			assert_eq!(
@@ -504,12 +507,12 @@ fn burn() {
 			let mut pool_state = PoolState::new();
 			let tick = 120;
 			let amount = U256::from(1000);
-			assert_ok!(pool_state.mint::<SD>(&lp(1), tick, 56.into()));
+			assert_ok!(pool_state.mint::<SD>(&lp(1), tick, 56.into(), Backing::Pool));
 			assert_eq!(
-				assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount)),
+				assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount, Backing::Pool)),
 				Position::new(amount)
 			);
-			assert_ok!(pool_state.mint::<SD>(&lp(2), tick, 16.into()));
+			assert_ok!(pool_state.mint::<SD>(&lp(2), tick, 16.into(), Backing::Pool));
 			assert_eq!(
 				assert_ok!(pool_state.burn::<SD>(&lp(0), tick, amount)),
 				(amount, Position::default())
@@ -521,7 +524,7 @@ fn burn() {
 			let mut pool_state = PoolState::new();
 			let tick = 0;
 			let amount = U256::from(1000);
-			assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount));
+			assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount, Backing::Pool));
 
 			let (output, remaining, fills) = swap::<SD>(&mut pool_state, amount, None);
 			assert_eq!(output, amount);
@@ -534,6 +537,7 @@ fn burn() {
 					sold_amount: amount,
 					bought_amount: amount,
 					remaining_amount: Amount::zero(),
+					backing: Backing::Pool,
 				}]
 			);
 
@@ -548,7 +552,7 @@ fn burn() {
 			let tick = 0;
 			let amount = U256::from(1000);
 			let swapped = U256::from(600);
-			assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount));
+			assert_ok!(pool_state.mint::<SD>(&lp(0), tick, amount, Backing::Pool));
 
 			let (output, _remaining, fills) = swap::<SD>(&mut pool_state, swapped, None);
 			assert_eq!(output, swapped);
@@ -560,6 +564,7 @@ fn burn() {
 					sold_amount: swapped,
 					bought_amount: swapped,
 					remaining_amount: amount - swapped,
+					backing: Backing::Pool,
 				}]
 			);
 
@@ -583,23 +588,23 @@ fn swap_consumes_orders() {
 		let output = swapped;
 		{
 			let mut pool_state = PoolState::new();
-			assert_ok!(pool_state.mint::<SD>(&lp(0), 0, 1000.into()));
+			assert_ok!(pool_state.mint::<SD>(&lp(0), 0, 1000.into(), Backing::Pool));
 			assert_eq!(swap::<SD>(&mut pool_state, swapped, None).0, output);
 		}
 		{
 			// One lp with the same order minted twice.
 			let mut pool_state = PoolState::new();
 			let tick = 0;
-			assert_ok!(pool_state.mint::<SD>(&lp(0), tick, 500.into()));
-			assert_ok!(pool_state.mint::<SD>(&lp(0), tick, 500.into()));
+			assert_ok!(pool_state.mint::<SD>(&lp(0), tick, 500.into(), Backing::Pool));
+			assert_ok!(pool_state.mint::<SD>(&lp(0), tick, 500.into(), Backing::Pool));
 			assert_eq!(swap::<SD>(&mut pool_state, swapped, None).0, output);
 		}
 		{
 			// Two lps at the same price.
 			let mut pool_state = PoolState::new();
 			let tick = 0;
-			assert_ok!(pool_state.mint::<SD>(&lp(1), tick, 500.into()));
-			assert_ok!(pool_state.mint::<SD>(&lp(2), tick, 500.into()));
+			assert_ok!(pool_state.mint::<SD>(&lp(1), tick, 500.into(), Backing::Pool));
+			assert_ok!(pool_state.mint::<SD>(&lp(2), tick, 500.into(), Backing::Pool));
 			assert_eq!(swap::<SD>(&mut pool_state, swapped, None).0, output);
 		}
 	}
@@ -615,7 +620,12 @@ fn swap_consumes_orders() {
 			(U256::from(150000000)..=U256::from(150002000), 1),
 		] {
 			let mut pool_state = PoolState::new();
-			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), tick, 100000000.into()));
+			assert_ok!(pool_state.mint::<BaseToQuote>(
+				&lp(0),
+				tick,
+				100000000.into(),
+				Backing::Pool
+			));
 			assert_ok!(pool_state.mint::<BaseToQuote>(
 				&lp(0),
 				offset +
@@ -624,7 +634,8 @@ fn swap_consumes_orders() {
 					)
 					.unwrap()
 					.to_tick(),
-				100000000.into()
+				100000000.into(),
+				Backing::Pool
 			));
 			let (output, remaining, _fills) =
 				swap::<BaseToQuote>(&mut pool_state, 75000000.into(), None);
@@ -639,7 +650,12 @@ fn swap_consumes_orders() {
 			(U256::from(119998000)..=U256::from(120000000), 1),
 		] {
 			let mut pool_state = PoolState::new();
-			assert_ok!(pool_state.mint::<QuoteToBase>(&lp(0), tick, 100000000.into()));
+			assert_ok!(pool_state.mint::<QuoteToBase>(
+				&lp(0),
+				tick,
+				100000000.into(),
+				Backing::Pool
+			));
 			assert_ok!(pool_state.mint::<QuoteToBase>(
 				&lp(0),
 				offset +
@@ -648,7 +664,8 @@ fn swap_consumes_orders() {
 					)
 					.unwrap()
 					.to_tick(),
-				100000000.into()
+				100000000.into(),
+				Backing::Pool
 			));
 			let (output, remaining, _fills) =
 				swap::<QuoteToBase>(&mut pool_state, 180000000.into(), None);
@@ -661,7 +678,7 @@ fn swap_consumes_orders() {
 	{
 		let mut pool_state = PoolState::new();
 		let tick = 0;
-		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), tick, 100.into()));
+		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), tick, 100.into(), Backing::Pool));
 		assert_ok!(pool_state.mint::<BaseToQuote>(
 			&lp(0),
 			SqrtPrice::try_from_raw(
@@ -669,7 +686,8 @@ fn swap_consumes_orders() {
 			)
 			.unwrap()
 			.to_tick(),
-			100.into()
+			100.into(),
+			Backing::Pool
 		));
 		let (output, remaining, _fills) = swap::<BaseToQuote>(&mut pool_state, 150.into(), None);
 		assert_eq!((output, remaining), (200.into(), 24.into()));
@@ -677,7 +695,7 @@ fn swap_consumes_orders() {
 	{
 		let mut pool_state = PoolState::new();
 		let tick = 0;
-		assert_ok!(pool_state.mint::<QuoteToBase>(&lp(0), tick, 100.into()));
+		assert_ok!(pool_state.mint::<QuoteToBase>(&lp(0), tick, 100.into(), Backing::Pool));
 		assert_ok!(pool_state.mint::<QuoteToBase>(
 			&lp(0),
 			SqrtPrice::try_from_raw(
@@ -685,7 +703,8 @@ fn swap_consumes_orders() {
 			)
 			.unwrap()
 			.to_tick(),
-			100.into()
+			100.into(),
+			Backing::Pool
 		));
 		let (output, remaining, _fills) = swap::<QuoteToBase>(&mut pool_state, 550.into(), None);
 		assert_eq!((output, remaining), (200.into(), 50.into()));
@@ -698,9 +717,9 @@ fn fills_are_split_pro_rata() {
 	// 1.0001^6932 ~ 2, so this input buys exactly twice as much as it pays in.
 	let tick = 6932;
 	let mut pool_state = PoolState::new();
-	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), tick, 1000.into()));
-	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(1), tick, 2000.into()));
-	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(2), tick, 7000.into()));
+	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), tick, 1000.into(), Backing::Pool));
+	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(1), tick, 2000.into(), Backing::Pool));
+	assert_ok!(pool_state.mint::<BaseToQuote>(&lp(2), tick, 7000.into(), Backing::Pool));
 
 	let (output, remaining, fills) = swap::<BaseToQuote>(&mut pool_state, 1000.into(), None);
 	assert_eq!((output, remaining), (2000.into(), Amount::zero()));
@@ -715,6 +734,7 @@ fn fills_are_split_pro_rata() {
 				sold_amount: 1400.into(),
 				bought_amount: 700.into(),
 				remaining_amount: 5600.into(),
+				backing: Backing::Pool,
 			},
 			Fill {
 				lp: lp(1),
@@ -722,6 +742,7 @@ fn fills_are_split_pro_rata() {
 				sold_amount: 400.into(),
 				bought_amount: 200.into(),
 				remaining_amount: 1600.into(),
+				backing: Backing::Pool,
 			},
 			Fill {
 				lp: lp(0),
@@ -729,6 +750,7 @@ fn fills_are_split_pro_rata() {
 				sold_amount: 200.into(),
 				bought_amount: 100.into(),
 				remaining_amount: 800.into(),
+				backing: Backing::Pool,
 			},
 		]
 	);
@@ -757,7 +779,7 @@ fn check_fragmented_book_fills<SD: SwapDirection>(small_order_amount: u128, inpu
 		let lp = order_lp(id);
 		let amount = Amount::from(small_order_amount) *
 			Amount::from(if lp == last_lp { small_order_count } else { 1 });
-		assert_ok!(pool_state.mint::<SD>(&lp, tick, amount));
+		assert_ok!(pool_state.mint::<SD>(&lp, tick, amount, Backing::Pool));
 		totals.insert(lp, (amount, Amount::zero(), Amount::zero()));
 	}
 
@@ -818,7 +840,7 @@ fn zero_output_swap_withholds_input_without_filling_orders() {
 	fn inner<SD: SwapDirection>(tick: Tick, order_amount: u128) {
 		let mut pool_state = PoolState::new();
 		for id in 0..3 {
-			assert_ok!(pool_state.mint::<SD>(&lp(id), tick, order_amount.into()));
+			assert_ok!(pool_state.mint::<SD>(&lp(id), tick, order_amount.into(), Backing::Pool));
 		}
 		let before = pool_state.orders.clone();
 
@@ -866,7 +888,7 @@ fn fills_conserve_liquidity_for_arbitrary_books() {
 			// Distinct ids at a price, so no two orders merge into one position.
 			for id in 0..rng.gen_range(1u16..20) {
 				let amount = random_amount(&mut rng, scale);
-				assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), tick, amount));
+				assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), tick, amount, Backing::Pool));
 				minted += amount;
 			}
 			best_tick = tick;
@@ -920,7 +942,7 @@ fn can_handle_zero_share_order_fill() {
 
 	let mut pool_state = PoolState::new();
 	for id in 0..order_count {
-		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), tick, 1.into()));
+		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), tick, 1.into(), Backing::Pool));
 	}
 
 	// One less than the liquidity available, so a share floored against the total would be zero
@@ -943,9 +965,9 @@ fn can_handle_zero_share_order_fill() {
 fn filled_orders_are_removed() {
 	let (near, far) = (0, 120);
 	let mut pool_state = PoolState::new();
-	assert_ok!(pool_state.mint::<QuoteToBase>(&lp(0), near, 1000.into()));
-	assert_ok!(pool_state.mint::<QuoteToBase>(&lp(1), near, 1000.into()));
-	assert_ok!(pool_state.mint::<QuoteToBase>(&lp(2), far, 1000.into()));
+	assert_ok!(pool_state.mint::<QuoteToBase>(&lp(0), near, 1000.into(), Backing::Pool));
+	assert_ok!(pool_state.mint::<QuoteToBase>(&lp(1), near, 1000.into(), Backing::Pool));
+	assert_ok!(pool_state.mint::<QuoteToBase>(&lp(2), far, 1000.into(), Backing::Pool));
 
 	// Enough to take the whole of the nearest price and nothing else.
 	let (_output, _remaining, fills) = swap::<QuoteToBase>(&mut pool_state, 2000.into(), None);
@@ -965,7 +987,7 @@ fn filled_orders_are_removed() {
 fn boundary_tick_limit_order_consumed_without_price_limit() {
 	for tick in [MIN_TICK, MAX_TICK] {
 		let mut pool_state = PoolState::new();
-		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), tick, 1000.into()));
+		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), tick, 1000.into(), Backing::Pool));
 		assert_eq!(
 			swap::<BaseToQuote>(&mut pool_state, Amount::MAX, None).0,
 			1000.into(),
@@ -985,7 +1007,9 @@ fn every_price_in_the_range_can_be_swapped_out() {
 
 	for tick in MIN_TICK..=MAX_TICK {
 		assert_eq!(
-			pool_state.mint::<BaseToQuote>(&lp(0), tick, liquidity_per_price).unwrap(),
+			pool_state
+				.mint::<BaseToQuote>(&lp(0), tick, liquidity_per_price, Backing::Pool)
+				.unwrap(),
 			Position::new(liquidity_per_price)
 		);
 	}
@@ -994,7 +1018,14 @@ fn every_price_in_the_range_can_be_swapped_out() {
 		liquidity_per_price * (1 + MAX_TICK - MIN_TICK),
 		std::iter::repeat_with(|| {
 			pool_state
-				.swap::<BaseToQuote>(Amount::MAX, None, 0, &mut FillQuota::Unlimited, None)
+				.swap::<BaseToQuote>(
+					Amount::MAX,
+					None,
+					0,
+					&mut FillQuota::Unlimited,
+					None,
+					&mut UnlimitedSupply,
+				)
 				.report
 				.outcome
 				.output_amount
@@ -1022,6 +1053,7 @@ fn fill_orders_handles_zero_amounts() {
 				participants,
 				sold.into(),
 				bought.into(),
+				&mut UnlimitedSupply,
 				&mut fills
 			),
 			Amount::zero()
@@ -1033,16 +1065,22 @@ fn fill_orders_handles_zero_amounts() {
 		fill_with(orders, &participants, sold, bought)
 	};
 
-	// A zero-amount order on its own: nothing to fill, and the order is dropped.
+	// A zero-amount order on its own: nothing to fill, and the order is dropped. Selection passes
+	// over a price with nothing to deliver, so the participants are set by hand.
 	let mut orders = Orders::from([(lp(0), Position::new(Amount::zero()))]);
-	assert!(fill_orders(&mut orders, 0, 0).is_empty());
+	let only_zero =
+		EligibleOrders { orders: vec![(lp(0), Amount::zero())], available: Amount::zero() };
+	assert!(fill_with(&mut orders, &only_zero, 0, 0).is_empty());
 	assert!(orders.is_empty());
 
 	// A zero-amount order visited before a real one must not affect what the real one is filled
 	// for. Selection puts the largest first, so the visiting order is set by hand.
 	let mut orders =
 		Orders::from([(lp(0), Position::new(Amount::zero())), (lp(1), Position::new(1000.into()))]);
-	let zero_first = EligibleOrders { orders: vec![lp(0), lp(1)], available: 1000.into() };
+	let zero_first = EligibleOrders {
+		orders: vec![(lp(0), Amount::zero()), (lp(1), 1000.into())],
+		available: 1000.into(),
+	};
 	assert_eq!(
 		fill_with(&mut orders, &zero_first, 400, 800),
 		vec![Fill {
@@ -1051,24 +1089,34 @@ fn fill_orders_handles_zero_amounts() {
 			sold_amount: 400.into(),
 			bought_amount: 800.into(),
 			remaining_amount: 600.into(),
+			backing: Backing::Pool,
 		}]
 	);
 	assert_eq!(
 		orders,
-		Orders::from([(lp(1), Position { amount: 600.into(), original_amount: 1000.into() })])
+		Orders::from([(
+			lp(1),
+			Position { amount: 600.into(), original_amount: 1000.into(), backing: Backing::Pool }
+		)])
 	);
 
 	// The same, with the zero-amount order visited after the remaining liquidity has run out.
+	// Selection leaves out orders with nothing to deliver, so the visiting order is set by hand.
 	let mut orders =
 		Orders::from([(lp(0), Position::new(1000.into())), (lp(1), Position::new(Amount::zero()))]);
+	let zero_last = EligibleOrders {
+		orders: vec![(lp(0), 1000.into()), (lp(1), Amount::zero())],
+		available: 1000.into(),
+	};
 	assert_eq!(
-		fill_orders(&mut orders, 1000, 2000),
+		fill_with(&mut orders, &zero_last, 1000, 2000),
 		vec![Fill {
 			lp: lp(0),
 			tick,
 			sold_amount: 1000.into(),
 			bought_amount: 2000.into(),
 			remaining_amount: Amount::zero(),
+			backing: Backing::Pool,
 		}]
 	);
 	assert!(orders.is_empty());
@@ -1136,7 +1184,7 @@ mod fill_proptests {
 			let mut orders = before.clone();
 			let mut fills = Vec::new();
 			let dust =
-				fill_orders(&mut orders, sqrt_price, &participants, sold, bought, &mut fills);
+				fill_orders(&mut orders, sqrt_price, &participants, sold, bought, &mut UnlimitedSupply, &mut fills);
 
 			// All sold liquidity reaches the swap; consumed input funds LP proceeds and surplus.
 			prop_assert_eq!(total_of(&fills, |fill| fill.sold_amount), sold);
@@ -1206,11 +1254,16 @@ mod fill_limit_tests {
 		// One more piece of dust at the best price than there are unfiltered fills, all of it far
 		// too small to get past the filter, and one order behind it to make up the rest.
 		for id in 0..=UNFILTERED_FILLS_PER_SWAP as u16 {
-			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), 1, 1.into()));
+			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), 1, 1.into(), Backing::Pool));
 		}
-		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(u16::MAX), 0, 1_000_000.into()));
+		assert_ok!(pool_state.mint::<BaseToQuote>(
+			&lp(u16::MAX),
+			0,
+			1_000_000.into(),
+			Backing::Pool
+		));
 		let report = pool_state
-			.swap::<BaseToQuote>(500_000.into(), None, 0, &mut quota(), None)
+			.swap::<BaseToQuote>(500_000.into(), None, 0, &mut quota(), None, &mut UnlimitedSupply)
 			.report;
 		// Every unfiltered fill goes to dust, the dust left after them is passed over, and the
 		// order behind is filled.
@@ -1226,9 +1279,9 @@ mod fill_limit_tests {
 		let mut pool_state = PoolState::new();
 		// The wall holds the best price, ahead of the liquidity the swap is really after.
 		for id in 0..wall {
-			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), 1, 1.into()));
+			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), 1, 1.into(), Backing::Pool));
 		}
-		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(wall), 0, 1_000_000.into()));
+		assert_ok!(pool_state.mint::<BaseToQuote>(&lp(wall), 0, 1_000_000.into(), Backing::Pool));
 
 		let (output, remaining, fills) =
 			swap_with_fill_quota::<BaseToQuote>(&mut pool_state, 1_000_000.into(), None, quota());
@@ -1250,7 +1303,8 @@ mod fill_limit_tests {
 				assert_ok!(pool_state.mint::<BaseToQuote>(
 					&lp(id),
 					tick,
-					random_amount(&mut rng, 1000.into())
+					random_amount(&mut rng, 1000.into()),
+					Backing::Pool
 				));
 			}
 		}
@@ -1277,7 +1331,7 @@ mod fill_limit_tests {
 		// actually being enforced.
 		let mut pool_state = PoolState::new();
 		for id in 0..(MAX_FILLS_PER_SWAP as u16 + 10) {
-			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), 0, 1000.into()));
+			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), 0, 1000.into(), Backing::Pool));
 		}
 		let (_output, remaining, fills) = swap_with_fill_quota::<BaseToQuote>(
 			&mut pool_state,
@@ -1294,12 +1348,24 @@ mod fill_limit_tests {
 	fn unreached_limit_orders_are_not_counted_as_excluded() {
 		let mut pool_state = PoolState::new();
 		for tick in [0, 1, 2] {
-			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(tick as u16), tick, 1000.into()));
+			assert_ok!(pool_state.mint::<BaseToQuote>(
+				&lp(tick as u16),
+				tick,
+				1000.into(),
+				Backing::Pool
+			));
 		}
 
 		// Buys out the best price and stops, leaving the two worse ones untouched.
 		let mut quota = FillQuota::bounded();
-		let outcome = pool_state.swap::<BaseToQuote>(1000.into(), None, 0, &mut quota, None);
+		let outcome = pool_state.swap::<BaseToQuote>(
+			1000.into(),
+			None,
+			0,
+			&mut quota,
+			None,
+			&mut UnlimitedSupply,
+		);
 
 		assert!(outcome.report.remaining_input_amount.is_zero(), "the swap must be satisfied");
 		assert_eq!(outcome.report.excluded_limit_order_count, 0);
@@ -1312,7 +1378,7 @@ mod fill_limit_tests {
 		let count = MAX_FILLS_PER_SWAP as u16 + 5;
 		let mut pool_state = PoolState::new();
 		for id in 0..count {
-			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), 0, 1000.into()));
+			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id), 0, 1000.into(), Backing::Pool));
 		}
 		// The book holds enough, but only across more orders than one swap can fill when using the
 		// quota.
@@ -1321,7 +1387,8 @@ mod fill_limit_tests {
 		assert!(unlimited_remaining.is_zero(), "the book must hold enough to fill the swap");
 
 		let mut quota = FillQuota::bounded();
-		let outcome = pool_state.swap::<BaseToQuote>(input, None, 0, &mut quota, None);
+		let outcome =
+			pool_state.swap::<BaseToQuote>(input, None, 0, &mut quota, None, &mut UnlimitedSupply);
 
 		assert!(!outcome.report.remaining_input_amount.is_zero(), "the swap must fall short");
 		assert!(
@@ -1416,16 +1483,29 @@ mod fill_limit_tests {
 	/// fill, is passed over without anything being chosen.
 	#[test]
 	fn select_passes_over_a_price_it_cannot_use() {
-		assert!(EligibleOrders::select(&book(&[]), &quota(), 1_000.into()).is_none());
+		assert!(
+			EligibleOrders::select(&book(&[]), &quota(), 1_000.into(), &UnlimitedSupply).is_none()
+		);
 
 		// 750 fills left to buy 750,000, so the first fill has to sell 1,000.
 		let quota = filtered_quota(750);
-		assert!(EligibleOrders::select(&book(&[999, 999, 500]), &quota, 750_000.into()).is_none());
+		assert!(EligibleOrders::select(
+			&book(&[999, 999, 500]),
+			&quota,
+			750_000.into(),
+			&UnlimitedSupply
+		)
+		.is_none());
 
 		// Try the next price with a single order that can clear the bar, and it is chosen.
-		let chosen =
-			EligibleOrders::select(&book(&[999, 1_000, 500]), &quota, 750_000.into()).unwrap();
-		assert_eq!(chosen.orders, vec![lp(1)]);
+		let chosen = EligibleOrders::select(
+			&book(&[999, 1_000, 500]),
+			&quota,
+			750_000.into(),
+			&UnlimitedSupply,
+		)
+		.unwrap();
+		assert_eq!(chosen.orders, vec![(lp(1), 1_000.into())]);
 		assert_eq!(chosen.available, 1_000.into());
 	}
 
@@ -1433,23 +1513,36 @@ mod fill_limit_tests {
 	#[test]
 	fn select_shares_the_last_price_between_every_order_it_has_fills_for() {
 		// Every order clears the bar, which starts at 100,000 / 750 = 133 and only falls.
-		let chosen =
-			EligibleOrders::select(&book(&[200; 700]), &filtered_quota(750), 100_000.into())
-				.unwrap();
+		let chosen = EligibleOrders::select(
+			&book(&[200; 700]),
+			&filtered_quota(750),
+			100_000.into(),
+			&UnlimitedSupply,
+		)
+		.unwrap();
 		assert_eq!(chosen.count(), 700);
 
 		// With fewer fills than orders, as many as there are fills.
-		let chosen =
-			EligibleOrders::select(&book(&[200; 700]), &filtered_quota(600), 100_000.into())
-				.unwrap();
+		let chosen = EligibleOrders::select(
+			&book(&[200; 700]),
+			&filtered_quota(600),
+			100_000.into(),
+			&UnlimitedSupply,
+		)
+		.unwrap();
 		assert_eq!(chosen.count(), 600);
 
 		// Orders far below the starting bar are still taken once the largest has covered
 		// the swap, because from then on there is nothing left to buy and the bar is zero.
 		let mut amounts = vec![1; 500];
 		amounts.insert(0, 100_000);
-		let chosen =
-			EligibleOrders::select(&book(&amounts), &filtered_quota(400), 100_000.into()).unwrap();
+		let chosen = EligibleOrders::select(
+			&book(&amounts),
+			&filtered_quota(400),
+			100_000.into(),
+			&UnlimitedSupply,
+		)
+		.unwrap();
 		assert_eq!(chosen.count(), 400);
 	}
 
@@ -1461,21 +1554,32 @@ mod fill_limit_tests {
 			&book(&[100, 50, 100, 300, 100, 100]),
 			&filtered_quota(3),
 			500.into(),
+			&UnlimitedSupply,
 		)
 		.unwrap();
 		// The largest is first followed by the first two 100s, leaving out the other two and the
 		// 50.
-		assert_eq!(chosen.orders, vec![lp(3), lp(0), lp(2)]);
+		assert_eq!(
+			chosen.orders,
+			vec![(lp(3), 300.into()), (lp(0), 100.into()), (lp(2), 100.into())]
+		);
 		assert_eq!(chosen.available, 500.into());
 	}
 
 	/// With no limit, every order at the price takes part.
 	#[test]
 	fn select_with_no_limit_takes_everything() {
-		let chosen =
-			EligibleOrders::select(&book(&[5, 1, 9, 3]), &FillQuota::Unlimited, Amount::zero())
-				.unwrap();
-		assert_eq!(chosen.orders, vec![lp(2), lp(0), lp(3), lp(1)]);
+		let chosen = EligibleOrders::select(
+			&book(&[5, 1, 9, 3]),
+			&FillQuota::Unlimited,
+			Amount::zero(),
+			&UnlimitedSupply,
+		)
+		.unwrap();
+		assert_eq!(
+			chosen.orders,
+			vec![(lp(2), 9.into()), (lp(0), 5.into()), (lp(3), 3.into()), (lp(1), 1.into())]
+		);
 		assert_eq!(chosen.available, 18.into());
 	}
 
@@ -1488,14 +1592,20 @@ mod fill_limit_tests {
 			let mut pool_state = PoolState::new();
 			// Dust at a better price uses up the unfiltered fills first.
 			for id in 0..UNFILTERED_FILLS_PER_SWAP as u16 {
-				assert_ok!(pool_state.mint::<BaseToQuote>(&lp(10_000 + id), 1, 1.into()));
+				assert_ok!(pool_state.mint::<BaseToQuote>(
+					&lp(10_000 + id),
+					1,
+					1.into(),
+					Backing::Pool
+				));
 			}
-			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), 0, 1_000.into()));
+			assert_ok!(pool_state.mint::<BaseToQuote>(&lp(0), 0, 1_000.into(), Backing::Pool));
 			for id in 0..pieces {
 				assert_ok!(pool_state.mint::<BaseToQuote>(
 					&lp(1 + id as u16),
 					0,
-					(1_000 / pieces).into()
+					(1_000 / pieces).into(),
+					Backing::Pool
 				));
 			}
 			let (_, _, fills) =
@@ -1531,7 +1641,12 @@ mod fill_limit_tests {
 		fn pool_of(book: &[(Tick, Amount)]) -> PoolState {
 			let mut pool_state = PoolState::new();
 			for (id, (tick, amount)) in book.iter().enumerate() {
-				assert_ok!(pool_state.mint::<BaseToQuote>(&lp(id as u16), *tick, *amount));
+				assert_ok!(pool_state.mint::<BaseToQuote>(
+					&lp(id as u16),
+					*tick,
+					*amount,
+					Backing::Pool
+				));
 			}
 			pool_state
 		}

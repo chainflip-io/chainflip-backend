@@ -334,7 +334,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
               },
               {
                 "name": "range_orders",
-                "type": 32,
+                "type": 33,
                 "typeName": "range_orders::PoolState<LiquidityProvider>"
               }
             ]
@@ -377,12 +377,12 @@ expression: "scale_info::PortableRegistry::from(registry)"
               },
               {
                 "name": "total_swap_inputs",
-                "type": 31,
+                "type": 32,
                 "typeName": "PoolPairsMap<Amount>"
               },
               {
                 "name": "total_swap_outputs",
-                "type": 31,
+                "type": 32,
                 "typeName": "PoolPairsMap<Amount>"
               }
             ]
@@ -442,7 +442,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
           "composite": {
             "fields": [
               {
-                "type": 29
+                "type": 30
               }
             ]
           }
@@ -518,7 +518,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
           "composite": {
             "fields": [
               {
-                "type": 27
+                "type": 28
               }
             ]
           }
@@ -545,6 +545,11 @@ expression: "scale_info::PortableRegistry::from(registry)"
                 "name": "original_amount",
                 "type": 23,
                 "typeName": "Amount"
+              },
+              {
+                "name": "backing",
+                "type": 27,
+                "typeName": "Backing"
               }
             ]
           }
@@ -554,15 +559,39 @@ expression: "scale_info::PortableRegistry::from(registry)"
     {
       "id": 27,
       "type": {
+        "path": [
+          "cf_amm",
+          "limit_orders",
+          "Backing"
+        ],
         "def": {
-          "sequence": {
-            "type": 28
+          "variant": {
+            "variants": [
+              {
+                "name": "Pool",
+                "index": 0
+              },
+              {
+                "name": "LendingSupply",
+                "index": 1
+              }
+            ]
           }
         }
       }
     },
     {
       "id": 28,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 29
+          }
+        }
+      }
+    },
+    {
+      "id": 29,
       "type": {
         "def": {
           "tuple": [
@@ -573,17 +602,17 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 29,
+      "id": 30,
       "type": {
         "def": {
           "sequence": {
-            "type": 30
+            "type": 31
           }
         }
       }
     },
     {
-      "id": 30,
+      "id": 31,
       "type": {
         "def": {
           "tuple": [
@@ -594,7 +623,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 31,
+      "id": 32,
       "type": {
         "path": [
           "cf_amm",
@@ -626,7 +655,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 32,
+      "id": 33,
       "type": {
         "path": [
           "cf_amm",
@@ -644,7 +673,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
             "fields": [
               {
                 "name": "fee_hundredth_pips",
-                "type": 33,
+                "type": 34,
                 "typeName": "u32"
               },
               {
@@ -659,37 +688,37 @@ expression: "scale_info::PortableRegistry::from(registry)"
               },
               {
                 "name": "current_liquidity",
-                "type": 34,
+                "type": 35,
                 "typeName": "Liquidity"
               },
               {
                 "name": "global_fee_growth",
-                "type": 31,
+                "type": 32,
                 "typeName": "PoolPairsMap<FeeGrowthQ128F128>"
               },
               {
                 "name": "liquidity_map",
-                "type": 35,
+                "type": 36,
                 "typeName": "BTreeMap<Tick, TickDelta>"
               },
               {
                 "name": "positions",
-                "type": 40,
+                "type": 41,
                 "typeName": "BTreeMap<(LiquidityProvider, Tick, Tick), Position>"
               },
               {
                 "name": "total_fees_earned",
-                "type": 31,
+                "type": 32,
                 "typeName": "PoolPairsMap<Amount>"
               },
               {
                 "name": "total_swap_inputs",
-                "type": 31,
+                "type": 32,
                 "typeName": "PoolPairsMap<Amount>"
               },
               {
                 "name": "total_swap_outputs",
-                "type": 31,
+                "type": 32,
                 "typeName": "PoolPairsMap<Amount>"
               }
             ]
@@ -698,7 +727,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 33,
+      "id": 34,
       "type": {
         "def": {
           "primitive": "u32"
@@ -706,7 +735,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 34,
+      "id": 35,
       "type": {
         "def": {
           "primitive": "u128"
@@ -714,7 +743,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 35,
+      "id": 36,
       "type": {
         "path": [
           "BTreeMap"
@@ -726,14 +755,14 @@ expression: "scale_info::PortableRegistry::from(registry)"
           },
           {
             "name": "V",
-            "type": 36
+            "type": 37
           }
         ],
         "def": {
           "composite": {
             "fields": [
               {
-                "type": 38
+                "type": 39
               }
             ]
           }
@@ -741,7 +770,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 36,
+      "id": 37,
       "type": {
         "path": [
           "cf_amm",
@@ -753,17 +782,17 @@ expression: "scale_info::PortableRegistry::from(registry)"
             "fields": [
               {
                 "name": "liquidity_delta",
-                "type": 37,
+                "type": 38,
                 "typeName": "i128"
               },
               {
                 "name": "liquidity_gross",
-                "type": 34,
+                "type": 35,
                 "typeName": "u128"
               },
               {
                 "name": "fee_growth_outside",
-                "type": 31,
+                "type": 32,
                 "typeName": "PoolPairsMap<FeeGrowthQ128F128>"
               }
             ]
@@ -772,7 +801,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 37,
+      "id": 38,
       "type": {
         "def": {
           "primitive": "i128"
@@ -780,28 +809,28 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 38,
+      "id": 39,
       "type": {
         "def": {
           "sequence": {
-            "type": 39
+            "type": 40
           }
         }
       }
     },
     {
-      "id": 39,
+      "id": 40,
       "type": {
         "def": {
           "tuple": [
             5,
-            36
+            37
           ]
         }
       }
     },
     {
-      "id": 40,
+      "id": 41,
       "type": {
         "path": [
           "BTreeMap"
@@ -809,18 +838,18 @@ expression: "scale_info::PortableRegistry::from(registry)"
         "params": [
           {
             "name": "K",
-            "type": 41
+            "type": 42
           },
           {
             "name": "V",
-            "type": 42
+            "type": 43
           }
         ],
         "def": {
           "composite": {
             "fields": [
               {
-                "type": 43
+                "type": 44
               }
             ]
           }
@@ -828,7 +857,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 41,
+      "id": 42,
       "type": {
         "def": {
           "tuple": [
@@ -840,7 +869,7 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 42,
+      "id": 43,
       "type": {
         "path": [
           "cf_amm",
@@ -852,17 +881,17 @@ expression: "scale_info::PortableRegistry::from(registry)"
             "fields": [
               {
                 "name": "liquidity",
-                "type": 34,
+                "type": 35,
                 "typeName": "Liquidity"
               },
               {
                 "name": "last_fee_growth_inside",
-                "type": 31,
+                "type": 32,
                 "typeName": "PoolPairsMap<FeeGrowthQ128F128>"
               },
               {
                 "name": "accumulative_fees",
-                "type": 31,
+                "type": 32,
                 "typeName": "PoolPairsMap<Amount>"
               },
               {
@@ -876,22 +905,22 @@ expression: "scale_info::PortableRegistry::from(registry)"
       }
     },
     {
-      "id": 43,
+      "id": 44,
       "type": {
         "def": {
           "sequence": {
-            "type": 44
+            "type": 45
           }
         }
       }
     },
     {
-      "id": 44,
+      "id": 45,
       "type": {
         "def": {
           "tuple": [
-            41,
-            42
+            42,
+            43
           ]
         }
       }

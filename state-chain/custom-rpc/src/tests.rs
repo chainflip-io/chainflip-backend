@@ -857,6 +857,7 @@ fn lp_events_serialization() {
 			sell_amount_total: 23456,
 			collected_fees: 123,
 			bought_amount: 456,
+			backing: Default::default(),
 		},
 		PoolEvent::LimitOrderFilled {
 			lp: ID_1,

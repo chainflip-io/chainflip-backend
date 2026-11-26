@@ -62,6 +62,9 @@ impl pallet_cf_pools::Config for Test {
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type RefundAddressRegistry = MockRefundAddressRegistry;
 	type LpStats = MockLpStatsApi;
+	type Lending = cf_traits::mocks::lending_pools::MockLendingOrderApi<
+		<Test as frame_system::Config>::AccountId,
+	>;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 }

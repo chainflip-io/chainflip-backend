@@ -323,6 +323,7 @@ pub fn set_limit_order(
 		sell_amount,
 		None, // Dispatch now
 		None, // No expiration
+		None, // Backed by the LP's balance
 	));
 	let new_sell_balance =
 		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, sell_asset);

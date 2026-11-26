@@ -170,7 +170,8 @@ fn can_close_strategy_with_fully_executed_orders() {
 				Some(10),
 				AMOUNT * 3,
 				None,
-				None
+				None,
+				None,
 			));
 
 			// This swap will fully consume strategy's order so it will be removed
