@@ -587,6 +587,7 @@ impl pallet_cf_pools::Config for Runtime {
 	type LpStats = LiquidityProvider;
 	type RefundAddressRegistry = AssetBalances;
 	type SwapRequestHandler = Swapping;
+	type Lending = LendingPools;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = ();
 }

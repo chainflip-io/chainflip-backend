@@ -61,9 +61,9 @@ use cf_primitives::{
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
-	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationHooks, PoolApi, PriceFeedApi,
-	RefundAddressRegistry, SafeMode, SafeModeSet, SwapOutputAction, SwapRequestHandler,
-	SwapRequestType,
+	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationHooks, LendingOrderApi, PoolApi,
+	PriceFeedApi, RefundAddressRegistry, SafeMode, SafeModeSet, SwapOutputAction,
+	SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	fail,
@@ -234,6 +234,8 @@ pub enum SupplyRemovedActionType {
 	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
 	/// than was required.
 	SystemLiquidation,
+	/// A swap filled a limit order backed by this supply.
+	LimitOrder,
 }
 
 /// Indicates how the action of repaying a loan was triggered.
@@ -455,6 +457,16 @@ pub mod pallet {
 		LendingPoolCreated {
 			asset: Asset,
 		},
+		OrderSupplyCommitted {
+			lender_id: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+		},
+		OrderSupplyReleased {
+			lender_id: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+		},
 		LendingFundsAdded {
 			lender_id: T::AccountId,
 			asset: Asset,
@@ -596,6 +608,8 @@ pub mod pallet {
 		InvalidZeroBrokerFee,
 		/// Provided broker does not exist.
 		UnknownBroker,
+		/// The LP's supply position does not cover what its limit orders would be promised.
+		InsufficientSupplyForOrder,
 	}
 
 	#[pallet::hooks]
@@ -1022,6 +1036,74 @@ impl<T: Config> DeregistrationHooks for PoolsDeregistrationCheck<T> {
 		}
 
 		ensure!(!LoanAccounts::<T>::contains_key(account_id), Error::<T>::LendingFundsRemaining);
+
+		Ok(())
+	}
+}
+
+impl<T: Config> LendingOrderApi for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	type OrderBudget = general_lending::OrderBudget<T>;
+
+	fn order_budget(asset: Asset) -> Self::OrderBudget {
+		general_lending::OrderBudget::new(asset)
+	}
+
+	fn commit_supply_to_order(
+		lp: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		GeneralLendingPools::<T>::try_mutate(asset, |maybe_pool| {
+			let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
+			pool.commit_to_order(lp, amount).map_err(Error::<T>::from)?;
+			Ok::<_, DispatchError>(())
+		})?;
+
+		Self::deposit_event(Event::<T>::OrderSupplyCommitted {
+			lender_id: lp.clone(),
+			asset,
+			amount,
+		});
+
+		Ok(())
+	}
+
+	fn release_order_commitment(lp: &Self::AccountId, asset: Asset, amount: AssetAmount) {
+		let released = GeneralLendingPools::<T>::mutate(asset, |maybe_pool| {
+			maybe_pool
+				.as_mut()
+				.map(|pool| pool.release_order_commitment(lp, amount))
+				.unwrap_or_default()
+		});
+
+		if released > 0 {
+			Self::deposit_event(Event::<T>::OrderSupplyReleased {
+				lender_id: lp.clone(),
+				asset,
+				amount: released,
+			});
+		}
+	}
+
+	fn withdraw_for_order_fill(
+		lp: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		GeneralLendingPools::<T>::try_mutate(asset, |maybe_pool| {
+			let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
+			pool.withdraw_for_order_fill(lp, amount).map_err(Error::<T>::from)?;
+			Ok::<_, DispatchError>(())
+		})?;
+
+		Self::deposit_event(Event::<T>::LendingFundsRemoved {
+			lender_id: lp.clone(),
+			asset,
+			unlocked_amount: amount,
+			action_type: SupplyRemovedActionType::LimitOrder,
+		});
 
 		Ok(())
 	}

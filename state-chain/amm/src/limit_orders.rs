@@ -52,7 +52,7 @@ use scale_info::TypeInfo;
 use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
-use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase};
+use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase, SupplyBudget};
 use cf_amm_math::{
 	is_tick_valid, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE,
 	MIN_SQRT_PRICE,
@@ -245,6 +245,8 @@ pub enum PositionError {
 	InvalidTick,
 	/// Position referenced does not exist
 	NonExistent,
+	/// The position exists with a different backing, which it keeps for as long as it exists
+	BackingMismatch,
 }
 
 /// A swap has bought a certain amount of an order's liquidity, the proceeds are owed to the LP
@@ -260,6 +262,39 @@ pub struct Fill<LiquidityProvider> {
 	/// The liquidity left in the order afterwards. Zero means the order was filled in its
 	/// entirety and no longer exists.
 	pub remaining_amount: Amount,
+	/// What the order sold had to be drawn out of.
+	pub backing: Backing,
+}
+
+/// What provides an order's liquidity, and so what a swap has to draw on to buy into it.
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialEq,
+	Eq,
+)]
+pub enum Backing {
+	/// Debited from the LP's balance and held against the order until it is bought.
+	#[default]
+	Pool,
+	/// Held in a lending supply pool, which lends it out like any other supply. A swap can only
+	/// buy into the order as far as that pool has liquidity to give.
+	LendingSupply,
+}
+
+impl Backing {
+	fn is_supply_backed(&self) -> bool {
+		matches!(self, Backing::LendingSupply)
+	}
 }
 
 /// The result of swapping against the limit orders of a pool.
@@ -328,8 +363,9 @@ impl FillQuota {
 
 /// The orders at one price that take part in a fill, and the liquidity they provide between them.
 struct EligibleOrders<LiquidityProvider> {
-	/// Largest first, which is the order they are filled in.
-	orders: Vec<LiquidityProvider>,
+	/// Each with the liquidity it can deliver. Largest first, which is the order they are filled
+	/// in.
+	orders: Vec<(LiquidityProvider, Amount)>,
 	available: Amount,
 }
 
@@ -342,20 +378,27 @@ impl<LiquidityProvider: Ord + Clone> EligibleOrders<LiquidityProvider> {
 	/// time the swap reached it, so how many fills the orders use reflects what buying them is
 	/// worth rather than however many of them happen to be sitting there.
 	///
+	/// Orders are weighed by what they can deliver rather than what they hold, so supply-backed
+	/// orders the lending pool cannot fund are filtered out like any other order too small to be
+	/// worth a fill.
+	///
 	/// This only decides who takes part. What they are each sold is still split between them in
-	/// proportion to what they hold, by [fill_orders].
+	/// proportion to what they can deliver, by [fill_orders].
 	///
 	/// This function never panics.
 	fn select(
 		orders: &Orders<LiquidityProvider>,
 		quota: &FillQuota,
 		wanted: Amount,
+		supply_budget: &dyn SupplyBudget<LiquidityProvider>,
 	) -> Option<Self> {
+		let deliverable = deliverable_amounts(orders, supply_budget);
+
 		// The largest order has to clear the bar for the first fill before any other can. Checking
 		// that first means a price whose orders are all too small, which is what a book stuffed
 		// with dust is made of, costs a scan rather than a sort.
-		let largest = orders.values().map(|position| position.amount).max()?;
-		if largest < quota.minimum_amount(wanted)? {
+		let largest = deliverable.iter().map(|(_, amount)| *amount).max()?;
+		if largest.is_zero() || largest < quota.minimum_amount(wanted)? {
 			return None
 		}
 
@@ -369,8 +412,10 @@ impl<LiquidityProvider: Ord + Clone> EligibleOrders<LiquidityProvider> {
 
 		// The walk can take no more orders than the swap has fills left, so only that many of the
 		// largest need putting in order: pick them out, drop the rest, then sort just those.
-		let mut candidates =
-			orders.iter().map(|(lp, position)| (lp, position.amount)).collect::<Vec<_>>();
+		let mut candidates = deliverable
+			.into_iter()
+			.filter(|(_, amount)| !amount.is_zero())
+			.collect::<Vec<_>>();
 		let reachable = quota.remaining() as usize;
 		if reachable < candidates.len() {
 			candidates.select_nth_unstable_by(reachable.saturating_sub(1), largest_first);
@@ -400,7 +445,7 @@ impl<LiquidityProvider: Ord + Clone> EligibleOrders<LiquidityProvider> {
 
 		Some(Self {
 			available: sold,
-			orders: candidates.into_iter().map(|(lp, _)| lp.clone()).collect(),
+			orders: candidates.into_iter().map(|(lp, amount)| (lp.clone(), amount)).collect(),
 		})
 	}
 
@@ -431,10 +476,12 @@ pub struct Position {
 	pub amount: Amount,
 	/// The liquidity this position provided as of its last non-zero mint or burn.
 	pub original_amount: Amount,
+	/// What provides this order's liquidity.
+	pub backing: Backing,
 }
 impl Position {
 	pub fn new(amount: Amount) -> Self {
-		Self { amount, original_amount: amount }
+		Self { amount, original_amount: amount, backing: Backing::Pool }
 	}
 }
 
@@ -510,6 +557,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		range_orders_pool_fee_hundredth_pips: u32,
 		quota: &mut FillQuota,
 		from: Option<SqrtPrice>,
+		supply_budget: &mut dyn SupplyBudget<LiquidityProvider>,
 	) -> SwapOutcome<LiquidityProvider> {
 		let mut total_output_amount = U256::zero();
 		let mut total_input_amount = U256::zero();
@@ -542,9 +590,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let price = Price::from(sqrt_price);
 			let desired_output = SD::output_amount_floor(amount, price);
 			// Filter the orders using the ongoing quota (anti-spam)
-			let Some(participants) =
-				EligibleOrders::select(orders, quota, desired_output.unwrap_or_default())
-			else {
+			let Some(participants) = EligibleOrders::select(
+				orders,
+				quota,
+				desired_output.unwrap_or_default(),
+				&*supply_budget,
+			) else {
 				// No orders worth filling at this price, so the swap passes over them and moves on
 				// to the next price.
 				excluded_orders = excluded_orders.saturating_add(orders.len() as u32);
@@ -572,6 +623,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				&participants,
 				sold_amount,
 				bought_amount,
+				supply_budget,
 				&mut fills,
 			));
 
@@ -628,6 +680,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
+		backing: Backing,
 	) -> Result<Position, PositionError> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		let orders = &mut self.orders[!SD::INPUT_SIDE];
@@ -640,7 +693,19 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.ok_or(PositionError::NonExistent)
 		}
 
-		let position = orders.entry(sqrt_price).or_default().entry(lp.clone()).or_default();
+		if orders
+			.get(&sqrt_price)
+			.and_then(|orders| orders.get(lp))
+			.is_some_and(|position| position.backing != backing)
+		{
+			return Err(PositionError::BackingMismatch)
+		}
+
+		let position = orders
+			.entry(sqrt_price)
+			.or_default()
+			.entry(lp.clone())
+			.or_insert_with(|| Position { backing, ..Default::default() });
 		position.amount = position.amount.saturating_add(amount);
 		position.original_amount = position.amount;
 
@@ -743,6 +808,47 @@ fn liquidity_of<LiquidityProvider: Ord>(orders: &Orders<LiquidityProvider>) -> A
 		.fold(Amount::zero(), |total, position| total.saturating_add(position.amount))
 }
 
+/// What each of a set of orders can deliver to a swap. An order the pool holds delivers all of
+/// it. A supply-backed order delivers what the budget grants it, which never exceeds what it holds
+/// and is shared between orders drawing on the same backing, and where the lending pool cannot
+/// cover all of those claims at once, what it can cover is shared out in proportion to them, so a
+/// shortfall costs each order the same fraction.
+fn deliverable_amounts<'a, LiquidityProvider: Ord>(
+	orders: &'a Orders<LiquidityProvider>,
+	supply_budget: &dyn SupplyBudget<LiquidityProvider>,
+) -> Vec<(&'a LiquidityProvider, Amount)> {
+	let claims = orders
+		.iter()
+		.filter(|(_, position)| position.backing.is_supply_backed())
+		.map(|(lp, position)| (lp, position.amount))
+		.collect::<Vec<_>>();
+	let mut granted = supply_budget.allocate(&claims);
+
+	let claimed = granted
+		.values()
+		.fold(Amount::zero(), |total, amount| total.saturating_add(*amount));
+	let pool_liquidity = supply_budget.total_available();
+	if claimed > pool_liquidity {
+		for amount in granted.values_mut() {
+			*amount = mul_div_floor_checked(*amount, pool_liquidity, claimed).unwrap_or_default();
+		}
+	}
+
+	orders
+		.iter()
+		.map(|(lp, position)| {
+			(
+				lp,
+				if position.backing.is_supply_backed() {
+					granted.get(lp).copied().unwrap_or_default()
+				} else {
+					position.amount
+				},
+			)
+		})
+		.collect()
+}
+
 /// Buys `sold_amount` of the participating orders' liquidity for `bought_amount` of the other
 /// asset, splitting the liquidity bought across them in proportion to the liquidity each of them
 /// provides and paying each of them for it at the fill's rate, and appending the result to
@@ -764,6 +870,7 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 	participants: &EligibleOrders<LiquidityProvider>,
 	sold_amount: Amount,
 	bought_amount: Amount,
+	supply_budget: &mut dyn SupplyBudget<LiquidityProvider>,
 	fills: &mut Vec<Fill<LiquidityProvider>>,
 ) -> Amount {
 	debug_assert!(sold_amount <= participants.available);
@@ -773,28 +880,32 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 	let mut remaining_sold = sold_amount;
 	let mut remaining_bought = bought_amount;
 
-	for lp in &participants.orders {
+	for (lp, deliverable) in &participants.orders {
 		let Some(position) = orders.get_mut(lp) else { continue };
 
 		// The share is taken against what is left rather than the total, so that rounding dust
 		// rolls forward and the last order takes exactly what remains. The division cannot fail:
 		// every order holds a non-zero amount, so the remaining liquidity is non-zero for as long
 		// as there is an order left to fill.
-		let sold = mul_div_floor_checked(remaining_sold, position.amount, remaining_available)
+		let sold = mul_div_floor_checked(remaining_sold, *deliverable, remaining_available)
 			.unwrap_or_default();
 		// Paying only for the actual sale bounds underpayment and prevents any order from
 		// collecting another order's rounding dust. A zero-output swap pays no LP.
 		let bought = mul_div_floor_checked(sold, bought_amount, sold_amount).unwrap_or_default();
 
 		// Cannot underflow: `remaining_sold` never exceeds `remaining_available`, which bounds
-		// an order's share of it by the liquidity that order provides.
-		debug_assert!(sold <= position.amount);
-		remaining_available = remaining_available.saturating_sub(position.amount);
+		// an order's share of it by the liquidity that order can deliver.
+		debug_assert!(sold <= *deliverable);
+		remaining_available = remaining_available.saturating_sub(*deliverable);
 		if !sold.is_zero() || !bought.is_zero() {
 			remaining_sold = remaining_sold.saturating_sub(sold);
 			remaining_bought = remaining_bought.saturating_sub(bought);
 
 			position.amount = position.amount.saturating_sub(sold);
+			if position.backing.is_supply_backed() && !sold.is_zero() {
+				// Safe to draw down mid-walk: what each order delivers was fixed by `select`.
+				supply_budget.take(lp, sold);
+			}
 
 			fills.push(Fill {
 				lp: lp.clone(),
@@ -802,6 +913,7 @@ fn fill_orders<LiquidityProvider: Ord + Clone>(
 				sold_amount: sold,
 				bought_amount: bought,
 				remaining_amount: position.amount,
+				backing: position.backing,
 			});
 		}
 
@@ -996,6 +1108,8 @@ pub mod legacy_support {
 							Position {
 								amount: remaining_amount,
 								original_amount: position.original_amount,
+								// No order predates supply-backed orders.
+								backing: Backing::Pool,
 							},
 						);
 					}

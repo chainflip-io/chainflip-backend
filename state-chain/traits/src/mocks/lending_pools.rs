@@ -23,7 +23,10 @@ use crate::{
 	LendingSwapType,
 };
 
-use cf_primitives::{Asset, AssetAmount, BasisPoints, PrewitnessedDepositId, SwapRequestId};
+use cf_amm::math::Amount;
+use cf_primitives::{
+	Asset, AssetAmount, BasisPoints, OrderId, PrewitnessedDepositId, SwapRequestId,
+};
 use frame_support::{pallet_prelude::*, sp_runtime::Percent};
 
 use super::{MockPallet, MockPalletStorage};
@@ -188,5 +191,154 @@ impl LendingSystemApi for MockLendingSystemApi {
 					LiquidationSwapOutcome { borrower_id, loan_id, output_amount },
 				),
 		}
+	}
+}
+
+/// A minimal stand-in for the lending pool: a supply position and a promised amount per
+/// (account, asset), plus a pool-wide cap on what a swap can draw. Interest, borrowing and LTV
+/// are not modelled — tests set the caps directly.
+pub struct MockLendingOrderApi<AccountId = u64>(sp_std::marker::PhantomData<AccountId>);
+
+impl<AccountId> MockPallet for MockLendingOrderApi<AccountId> {
+	const PREFIX: &'static [u8] = b"MOCK_LENDING_SUPPLY";
+}
+
+const SUPPLY_POSITION: &[u8] = b"SUPPLY_POSITION";
+const COMMITMENTS: &[u8] = b"COMMITMENTS";
+const POOL_LIQUIDITY: &[u8] = b"POOL_LIQUIDITY";
+
+impl<AccountId: codec::Encode + codec::Decode + Ord + Clone> MockLendingOrderApi<AccountId> {
+	/// Gives `who` a supply position to open orders against.
+	pub fn add_supply(who: &AccountId, asset: Asset, amount: AssetAmount) {
+		Self::mutate_storage::<(&AccountId, Asset), _, _, _, _>(
+			SUPPLY_POSITION,
+			&(who, asset),
+			|position| {
+				let position: &mut AssetAmount = position.get_or_insert_with(|| 0);
+				*position = position.saturating_add(amount);
+			},
+		);
+	}
+
+	pub fn supply_position(who: &AccountId, asset: Asset) -> AssetAmount {
+		Self::get_storage(SUPPLY_POSITION, (who, asset)).unwrap_or_default()
+	}
+
+	/// How much of `who`'s position is promised to open orders.
+	pub fn committed(who: &AccountId, asset: Asset) -> AssetAmount {
+		Self::commitments(asset).get(who).copied().unwrap_or_default()
+	}
+
+	/// Caps what the pool will hand over to fills, standing in for supply that has been lent out.
+	pub fn set_pool_liquidity(asset: Asset, amount: AssetAmount) {
+		Self::put_storage(POOL_LIQUIDITY, asset, amount);
+	}
+
+	fn commitments(asset: Asset) -> BTreeMap<AccountId, AssetAmount> {
+		Self::get_storage(COMMITMENTS, asset).unwrap_or_default()
+	}
+
+	fn mutate_commitments(asset: Asset, f: impl FnOnce(&mut BTreeMap<AccountId, AssetAmount>)) {
+		Self::mutate_storage::<Asset, _, _, _, _>(COMMITMENTS, &asset, |commitments| {
+			f(commitments.get_or_insert_with(BTreeMap::new))
+		})
+	}
+}
+
+impl<AccountId: codec::Encode + codec::Decode + Ord + Clone> crate::LendingOrderApi
+	for MockLendingOrderApi<AccountId>
+{
+	type AccountId = AccountId;
+
+	type OrderBudget = MockOrderBudget<AccountId>;
+
+	fn order_budget(asset: Asset) -> Self::OrderBudget {
+		MockOrderBudget {
+			pool_liquidity: Self::get_storage(POOL_LIQUIDITY, asset).unwrap_or(AssetAmount::MAX),
+			available: Self::commitments(asset),
+		}
+	}
+
+	fn commit_supply_to_order(
+		lp: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> frame_support::sp_runtime::DispatchResult {
+		let position = Self::supply_position(lp, asset);
+		let committed = Self::committed(lp, asset).saturating_add(amount);
+		if committed > position {
+			return Err(frame_support::sp_runtime::DispatchError::Other("Insufficient supply"));
+		}
+
+		Self::mutate_commitments(asset, |commitments| {
+			commitments.insert(lp.clone(), committed);
+		});
+
+		Ok(())
+	}
+
+	fn release_order_commitment(lp: &Self::AccountId, asset: Asset, amount: AssetAmount) {
+		Self::mutate_commitments(asset, |commitments| {
+			if let Some(committed) = commitments.get_mut(lp) {
+				*committed = committed.saturating_sub(amount);
+				if *committed == 0 {
+					commitments.remove(lp);
+				}
+			}
+		})
+	}
+
+	fn withdraw_for_order_fill(
+		lp: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> frame_support::sp_runtime::DispatchResult {
+		if Self::committed(lp, asset) < amount || Self::supply_position(lp, asset) < amount {
+			return Err(frame_support::sp_runtime::DispatchError::Other("Insufficient liquidity"));
+		}
+
+		Self::mutate_storage::<(&AccountId, Asset), _, _, _, _>(
+			SUPPLY_POSITION,
+			&(lp, asset),
+			|position| {
+				let position: &mut AssetAmount = position.get_or_insert_with(|| 0);
+				*position = position.saturating_sub(amount);
+			},
+		);
+		Self::release_order_commitment(lp, asset, amount);
+
+		Ok(())
+	}
+}
+
+/// The mock's view of a pool for one swap. Commitments stand in for the real per-lender limit;
+/// LTV is not modelled.
+pub struct MockOrderBudget<AccountId> {
+	pool_liquidity: AssetAmount,
+	available: BTreeMap<AccountId, AssetAmount>,
+}
+
+impl<AccountId: Ord> cf_amm::common::SupplyBudget<(AccountId, OrderId)>
+	for MockOrderBudget<AccountId>
+{
+	fn allocate<'a>(
+		&self,
+		claims: &[(&'a (AccountId, OrderId), Amount)],
+	) -> BTreeMap<&'a (AccountId, OrderId), Amount> {
+		cf_amm::common::allocate_per_account(claims, |lp| {
+			self.available.get(lp).copied().unwrap_or_default().into()
+		})
+	}
+
+	fn total_available(&self) -> Amount {
+		self.pool_liquidity.into()
+	}
+
+	fn take(&mut self, (lp, _id): &(AccountId, OrderId), amount: Amount) {
+		let amount = amount.try_into().unwrap_or(AssetAmount::MAX);
+		if let Some(available) = self.available.get_mut(lp) {
+			*available = available.saturating_sub(amount);
+		}
+		self.pool_liquidity = self.pool_liquidity.saturating_sub(amount);
 	}
 }

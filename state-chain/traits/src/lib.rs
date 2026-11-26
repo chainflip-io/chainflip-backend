@@ -1312,6 +1312,43 @@ pub trait BalanceApi {
 	}
 }
 
+/// Lets the pools pallet back a limit order with a position an LP already holds in a lending
+/// supply pool, so the order's liquidity goes on earning lending interest while it waits to be
+/// filled.
+///
+/// The funds stay in the pool and behave like any other supply — lent out, earning, counting as
+/// collateral — until an order actually fills. Opening an order only promises them; a swap can
+/// buy into it as far as the pool has liquidity and the LP's own loans leave room.
+pub trait LendingOrderApi {
+	type AccountId;
+
+	/// What supply-backed orders can draw out of one asset's pool over a single swap.
+	type OrderBudget: cf_amm::common::SupplyBudget<(Self::AccountId, cf_primitives::OrderId)>;
+
+	/// Opens a view of `asset`'s pool for the duration of one swap leg.
+	fn order_budget(asset: Asset) -> Self::OrderBudget;
+
+	/// Promises `amount` of the LP's existing supply position to an order it is opening. Fails if
+	/// the LP has not supplied that much, or has already promised it elsewhere.
+	fn commit_supply_to_order(
+		lp: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult;
+
+	/// Releases a promise for an order that was reduced or cancelled. The supply never left the
+	/// pool, so nothing is paid out and this cannot fail.
+	fn release_order_commitment(lp: &Self::AccountId, asset: Asset, amount: AssetAmount);
+
+	/// Pays `amount` out of the LP's position to a swap that has bought into its order. Fails if
+	/// the pool cannot cover it, which aborts the swap rather than paying out what isn't there.
+	fn withdraw_for_order_fill(
+		lp: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult;
+}
+
 /// Restricts which destinations an account may withdraw or transfer funds to, based on a
 /// per-account whitelist by the asset-balances pallet.
 ///

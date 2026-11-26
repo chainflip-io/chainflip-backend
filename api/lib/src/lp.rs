@@ -486,6 +486,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					sell_amount,
 					close_order_at,
 					dispatch_at,
+					backing: None,
 				},
 				wait_for,
 			)

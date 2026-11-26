@@ -198,6 +198,11 @@ where
 			.collect()
 	}
 
+	// The mock only holds orders backed by the LP's balance.
+	fn cancel_supply_backed_limit_orders(_who: &Self::AccountId, _asset: Asset) -> DispatchResult {
+		Ok(())
+	}
+
 	fn cancel_all_limit_orders(who: &Self::AccountId) -> frame_support::dispatch::DispatchResult {
 		Self::mutate_value(
 			LIMIT_ORDERS,

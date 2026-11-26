@@ -161,6 +161,11 @@ pub trait PoolApi {
 
 	fn cancel_all_limit_orders(account: &Self::AccountId) -> DispatchResult;
 
+	/// Closes the account's limit orders that sell `asset` out of its lending supply position,
+	/// releasing what they had promised of it.
+	fn cancel_supply_backed_limit_orders(account: &Self::AccountId, asset: Asset)
+		-> DispatchResult;
+
 	#[cfg(feature = "runtime-benchmarks")]
 	fn create_pool(
 		base_asset: Asset,

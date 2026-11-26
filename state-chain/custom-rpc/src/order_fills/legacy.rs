@@ -310,6 +310,7 @@ mod tests {
 			sell_amount_total: 0,
 			collected_fees: 0,
 			bought_amount: 0,
+			backing: Default::default(),
 		};
 
 		assert_matches!(
@@ -518,12 +519,18 @@ mod tests {
 					.bytes("state_call", json!(["CustomRuntimeApi_cf_lp_events", "0x", hash]))
 					.expect("lp events");
 
-				let fills = order_fills_from_block_updates(
-					&PoolsAtBlock::legacy(previous_pools),
-					&PoolsAtBlock::legacy(pools),
-					Vec::<pallet_cf_pools::Event<Runtime>>::decode(&mut &lp_events[..])
-						.expect("lp events decode"),
-				);
+				let fills =
+					order_fills_from_block_updates(
+						&PoolsAtBlock::legacy(previous_pools),
+						&PoolsAtBlock::legacy(pools),
+						Vec::<
+							state_chain_runtime::runtime_apis::types::before_version_22::PoolsEvent,
+						>::decode(&mut &lp_events[..])
+						.expect("lp events decode")
+						.into_iter()
+						.map(Into::into)
+						.collect(),
+					);
 
 				assert_eq!(
 					sorted(fills.fills),

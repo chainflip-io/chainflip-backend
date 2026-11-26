@@ -76,6 +76,7 @@ mod benchmarks {
 				1_000,
 				None,
 				None,
+				None,
 			));
 		}
 	}
@@ -211,6 +212,7 @@ mod benchmarks {
 			1_000,
 			None,
 			Some(BlockNumberFor::<T>::from(SCHEDULE_OPEN_LIMIT_BLOCKS)),
+			None,
 		);
 	}
 
@@ -236,6 +238,7 @@ mod benchmarks {
 			10_000,
 			None,
 			None,
+			None,
 		));
 		assert_ok!(Pallet::<T>::set_limit_order(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -245,6 +248,7 @@ mod benchmarks {
 			1,
 			Some(0),
 			10_000,
+			None,
 			None,
 			None,
 		));

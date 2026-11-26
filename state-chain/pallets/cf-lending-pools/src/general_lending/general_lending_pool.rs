@@ -30,12 +30,18 @@ where
 	/// Maps lenders to their shares in the pool; each lender is effectively owed their `share` *
 	/// `total_amount` of the pool's asset.
 	pub lender_shares: BTreeMap<AccountId, Perquintill>,
+	/// How much of each lender's position is promised to their open limit orders. The funds stay
+	/// in the pool and behave like any other supply — lent out, earning interest, counting as
+	/// collateral — until an order actually fills; this only records what is already spoken for,
+	/// so it cannot be withdrawn or promised twice.
+	pub order_commitments: BTreeMap<AccountId, AssetAmount>,
 }
 
 #[derive(PartialEq, Debug)]
 pub enum LendingPoolError {
 	LenderNotFoundInPool,
 	InsufficientLiquidity,
+	InsufficientSupplyForOrder,
 }
 
 impl<T: Config> From<LendingPoolError> for Error<T> {
@@ -43,6 +49,7 @@ impl<T: Config> From<LendingPoolError> for Error<T> {
 		match error {
 			LendingPoolError::InsufficientLiquidity => Error::<T>::InsufficientLiquidity,
 			LendingPoolError::LenderNotFoundInPool => Error::<T>::LenderNotFoundInPool,
+			LendingPoolError::InsufficientSupplyForOrder => Error::<T>::InsufficientSupplyForOrder,
 		}
 	}
 }
@@ -62,7 +69,12 @@ where
 	AccountId: Decode + Encode + Ord + Clone,
 {
 	pub fn new() -> Self {
-		Self { total_amount: 0, available_amount: 0, lender_shares: BTreeMap::new() }
+		Self {
+			total_amount: 0,
+			available_amount: 0,
+			lender_shares: BTreeMap::new(),
+			order_commitments: BTreeMap::new(),
+		}
 	}
 
 	/// Adds funds increasing `lender`'s share in the pool.
@@ -86,9 +98,25 @@ where
 
 	/// Remove funds owed to `lender` reducing their share in the pool. The funds are removed
 	/// partially if the pool does not have enough available.
+	///
+	/// Whatever the lender has promised to open limit orders stays put: it is spoken for, and is
+	/// only paid out when an order actually fills.
 	pub fn remove_funds(
 		&mut self,
 		lender: &AccountId,
+		amount: Option<AssetAmount>,
+	) -> Result<WithdrawnAndRemainingAmounts, LendingPoolError> {
+		let committed = self.order_commitments.get(lender).copied().unwrap_or_default();
+		self.withdraw(lender, committed, amount)
+	}
+
+	/// The shared part of [Self::remove_funds] and [Self::withdraw_for_order_fill].
+	/// `committed_to_orders` is held back from what the lender may draw on, and the withdrawal is
+	/// bounded by the pool's liquidity.
+	fn withdraw(
+		&mut self,
+		lender: &AccountId,
+		committed_to_orders: AssetAmount,
 		amount: Option<AssetAmount>,
 	) -> Result<WithdrawnAndRemainingAmounts, LendingPoolError> {
 		let share = self
@@ -97,10 +125,11 @@ where
 			.ok_or(LendingPoolError::LenderNotFoundInPool)?;
 
 		let total_owed_amount = *share * self.total_amount;
+		let withdrawable_owed_amount = total_owed_amount.saturating_sub(committed_to_orders);
 
-		// Amount requested, but capped by the total amount owed to the lender:
-		let required_amount = core::cmp::min(total_owed_amount, amount.unwrap_or(u128::MAX));
-		// This is further capped by the amount available in the pool:
+		// Amount requested, but capped by the amount owed to the lender that isn't committed:
+		let required_amount = core::cmp::min(withdrawable_owed_amount, amount.unwrap_or(u128::MAX));
+		// This is further capped by the pool's liquidity:
 		let amount_to_withdraw = core::cmp::min(required_amount, self.available_amount);
 
 		let old_total_amount = self.total_amount;
@@ -148,6 +177,74 @@ where
 		Ok(())
 	}
 
+	/// Promises `amount` of the lender's position to an open limit order, failing if their
+	/// position does not cover what they have already promised elsewhere. No funds move: the
+	/// supply stays in the pool, borrowable and earning, until an order fills.
+	pub fn commit_to_order(
+		&mut self,
+		lender: &AccountId,
+		amount: AssetAmount,
+	) -> Result<(), LendingPoolError> {
+		let position = self.get_supply_position_for_account(lender)?;
+		let committed = self.order_commitments.get(lender).copied().unwrap_or_default();
+
+		let new_committed = committed.saturating_add(amount);
+		if new_committed > position {
+			return Err(LendingPoolError::InsufficientSupplyForOrder);
+		}
+
+		self.order_commitments.insert(lender.clone(), new_committed);
+
+		Ok(())
+	}
+
+	/// Releases a promise made by [Self::commit_to_order], for an order that was reduced or
+	/// cancelled. The supply itself never left the pool, so nothing is paid out. Returns how much
+	/// was released.
+	pub fn release_order_commitment(
+		&mut self,
+		lender: &AccountId,
+		amount: AssetAmount,
+	) -> AssetAmount {
+		let Some(committed) = self.order_commitments.get_mut(lender) else {
+			return 0;
+		};
+
+		let released = core::cmp::min(*committed, amount);
+		committed.saturating_reduce(released);
+		if *committed == 0 {
+			self.order_commitments.remove(lender);
+		}
+
+		released
+	}
+
+	/// Pays out `amount` of the lender's position to a swap that has bought into their order,
+	/// releasing the matching promise. The asset leaves the pool with the swap, so unlike
+	/// [Self::remove_funds] nothing is credited back to the lender.
+	///
+	/// Fails if the pool cannot cover it in full: the caller is mid-swap, and half a fill would
+	/// leave the pool owing lenders more than it holds.
+	pub fn withdraw_for_order_fill(
+		&mut self,
+		lender: &AccountId,
+		amount: AssetAmount,
+	) -> Result<(), LendingPoolError> {
+		let committed = self.order_commitments.get(lender).copied().unwrap_or_default();
+		if committed < amount {
+			return Err(LendingPoolError::InsufficientSupplyForOrder);
+		}
+
+		let withdrawn = self.withdraw(lender, 0, Some(amount))?.withdrawn_amount;
+		if withdrawn < amount {
+			return Err(LendingPoolError::InsufficientLiquidity);
+		}
+
+		self.release_order_commitment(lender, amount);
+
+		Ok(())
+	}
+
 	pub fn get_utilisation(&self) -> Permill {
 		let in_use = self.total_amount.saturating_sub(self.available_amount);
 
@@ -186,6 +283,8 @@ where
 	/// lenders. Called when a loan's `owed_principal` can't be repaid (e.g. liquidation
 	/// collateral fell short).
 	pub fn write_off_unrecoverable_debt(&mut self, amount: AssetAmount) {
+		// Order commitments are left as they are: everything that reads them caps them by the
+		// lender's (now smaller) position.
 		self.total_amount.saturating_reduce(amount);
 	}
 

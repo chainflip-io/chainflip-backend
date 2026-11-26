@@ -15,11 +15,72 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_amm_math::*;
-use cf_primitives::{Asset, STABLE_ASSET};
+use cf_primitives::{Asset, OrderId, STABLE_ASSET};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
+use sp_std::collections::btree_map::BTreeMap;
+
+/// How much of what a swap is buying can be drawn out of a lending supply pool on behalf of the
+/// orders that sell out of one.
+///
+/// Bounded two ways: by what each LP has left backing its own orders, and by what the pool has
+/// liquidity for at all. Whatever a swap cannot draw on is passed over as if the order were not
+/// there, in price selection as much as in execution.
+pub trait SupplyBudget<LiquidityProvider> {
+	/// What each of `claims`, an order and the amount it holds, can deliver right now. Orders
+	/// drawing on the same backing share it, rather than each being offered all of it. An order
+	/// left out can deliver nothing.
+	fn allocate<'a>(
+		&self,
+		claims: &[(&'a LiquidityProvider, Amount)],
+	) -> BTreeMap<&'a LiquidityProvider, Amount>;
+
+	/// The most the lending pool can give up in total, however the orders divide it up.
+	fn total_available(&self) -> Amount;
+
+	/// Records that `lp` sold `amount` out of the lending pool.
+	fn take(&mut self, lp: &LiquidityProvider, amount: Amount);
+}
+
+/// Shares each account's availability out across its orders in turn, so that between them they
+/// never claim more than it has. For budgets whose orders are keyed by `(account, order id)`.
+pub fn allocate_per_account<'a, AccountId: Ord>(
+	claims: &[(&'a (AccountId, OrderId), Amount)],
+	available: impl Fn(&AccountId) -> Amount,
+) -> BTreeMap<&'a (AccountId, OrderId), Amount> {
+	let mut remaining = BTreeMap::<&AccountId, Amount>::new();
+	claims
+		.iter()
+		.map(|&(order, amount)| {
+			let (account, _id) = order;
+			let left = remaining.entry(account).or_insert_with(|| available(account));
+			let granted = core::cmp::min(amount, *left);
+			*left = left.saturating_sub(granted);
+			(order, granted)
+		})
+		.collect()
+}
+
+/// A budget that never runs out, for callers that want the orders as they stand rather than as
+/// much of them as could be funded right now.
+pub struct UnlimitedSupply;
+
+impl<LiquidityProvider: Ord> SupplyBudget<LiquidityProvider> for UnlimitedSupply {
+	fn allocate<'a>(
+		&self,
+		claims: &[(&'a LiquidityProvider, Amount)],
+	) -> BTreeMap<&'a LiquidityProvider, Amount> {
+		claims.iter().copied().collect()
+	}
+
+	fn total_available(&self) -> Amount {
+		Amount::MAX
+	}
+
+	fn take(&mut self, _lp: &LiquidityProvider, _amount: Amount) {}
+}
 
 pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1_000_000;
 pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;

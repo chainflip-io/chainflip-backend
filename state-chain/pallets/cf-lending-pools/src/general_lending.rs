@@ -13,11 +13,15 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use cf_amm_math::Price;
-use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId, ONE_AS_BASIS_POINTS};
+use cf_amm::common::{allocate_per_account, SupplyBudget};
+use cf_amm_math::{Amount, Price};
+use cf_primitives::{
+	AccountRole, Beneficiary, DcaParameters, OrderId, SwapRequestId, ONE_AS_BASIS_POINTS,
+};
 use cf_traits::{
 	ExpiryBehaviour, LendingSwapType, NetworkFeeApi, PriceLimitsAndExpiry, RefundAddressRegistry,
 };
+use core::cell::RefCell;
 use frame_support::{
 	fail,
 	sp_runtime::{
@@ -137,6 +141,40 @@ pub struct LoanAccount<T: Config> {
 enum SurplusOrDeficit {
 	Surplus(AssetAmount),
 	Deficit,
+}
+
+/// An account's collateral and debt in USD, priced together. Both the LTV and the collateral
+/// surplus derive from these two figures, so taking them once prices the account once.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct UsdValuation {
+	collateral: AssetAmount,
+	owed: AssetAmount,
+}
+
+impl UsdValuation {
+	fn ltv(&self) -> FixedU64 {
+		if self.collateral == 0 {
+			return if self.owed == 0 { FixedU64::zero() } else { FixedU64::max_value() };
+		}
+
+		// Saturating: `from_rational` panics once owed/collateral exceeds ~1.8e10 (dust
+		// collateral against a large unrecovered debt), and every consumer treats any LTV
+		// above 100% identically.
+		FixedU64::saturating_from_rational(self.owed, self.collateral)
+	}
+
+	/// `None` if the target LTV is zero, which would demand unbounded collateral.
+	fn surplus_or_deficit(&self, ltv_threshold_target: Permill) -> Option<SurplusOrDeficit> {
+		let collateral_required_in_usd = FixedU64::from(ltv_threshold_target)
+			.reciprocal()
+			.map(|ltv_inverted| ltv_inverted.saturating_mul_int(self.owed))?;
+
+		Some(if collateral_required_in_usd >= self.collateral {
+			SurplusOrDeficit::Deficit
+		} else {
+			SurplusOrDeficit::Surplus(self.collateral - collateral_required_in_usd)
+		})
+	}
 }
 
 #[derive(
@@ -561,22 +599,20 @@ impl<T: Config> LoanAccount<T> {
 
 	/// Computes account's LTV (Loan-to-Value) ratio. Takes liquidations into account.
 	/// Returns error if oracle prices are not available, or if collateral is zero.
+	/// Prices the account's collateral and debt together, for callers that need both the LTV and
+	/// the collateral surplus.
+	pub(super) fn usd_valuation(
+		&self,
+		price_cache: &OraclePriceCache<T>,
+	) -> Result<UsdValuation, Error<T>> {
+		Ok(UsdValuation {
+			collateral: self.total_collateral_usd_value(price_cache)?,
+			owed: self.total_owed_usd_value(price_cache)?,
+		})
+	}
+
 	pub fn derive_ltv(&self, price_cache: &OraclePriceCache<T>) -> Result<FixedU64, Error<T>> {
-		let collateral = self.total_collateral_usd_value(price_cache)?;
-		let owed = self.total_owed_usd_value(price_cache)?;
-
-		if collateral == 0 {
-			if owed == 0 {
-				return Ok(FixedU64::zero());
-			} else {
-				return Ok(FixedU64::max_value());
-			}
-		}
-
-		// Saturating: `from_rational` panics once owed/collateral exceeds ~1.8e10 (dust
-		// collateral against a large unrecovered debt), and every consumer treats any LTV
-		// above 100% identically.
-		Ok(FixedU64::saturating_from_rational(owed, collateral))
+		Ok(self.usd_valuation(price_cache)?.ltv())
 	}
 
 	pub fn check_low_ltv_penalty_and_collect_interest(
@@ -628,20 +664,10 @@ impl<T: Config> LoanAccount<T> {
 		ltv_threshold_target: Permill,
 		price_cache: &OraclePriceCache<T>,
 	) -> Result<SurplusOrDeficit, Error<T>> {
-		let collateral_value_in_usd = self.total_collateral_usd_value(price_cache)?;
-		let loan_value_in_usd = self.total_owed_usd_value(price_cache)?;
-
-		let collateral_required_in_usd = FixedU64::from(ltv_threshold_target)
-			.reciprocal()
-			.map(|ltv_inverted| ltv_inverted.saturating_mul_int(loan_value_in_usd))
+		self.usd_valuation(price_cache)?
+			.surplus_or_deficit(ltv_threshold_target)
 			// This fails if the ltv target erroneously set to 0:
-			.ok_or(Error::<T>::InvalidConfigurationParameters)?;
-
-		if collateral_required_in_usd >= collateral_value_in_usd {
-			Ok(SurplusOrDeficit::Deficit)
-		} else {
-			Ok(SurplusOrDeficit::Surplus(collateral_value_in_usd - collateral_required_in_usd))
-		}
+			.ok_or(Error::<T>::InvalidConfigurationParameters)
 	}
 
 	/// Collect just enough collateral from supply pools to cover the outstanding debt
@@ -716,6 +742,20 @@ impl<T: Config> LoanAccount<T> {
 			total_required_with_buffer_usd,
 			&positions_with_usd,
 		) {
+			// Close any supply-backed limit orders so we can liquidate the collateral
+			if GeneralLendingPools::<T>::get(asset)
+				.is_some_and(|pool| pool.order_commitments.contains_key(&self.borrower_id))
+			{
+				if let Err(error) = frame_support::storage::with_storage_layer(|| {
+					T::PoolApi::cancel_supply_backed_limit_orders(&self.borrower_id, asset)
+				}) {
+					log_or_panic!(
+						"Failed to close supply-backed limit orders of {:?} in {asset}: {error:?}",
+						self.borrower_id
+					);
+				}
+			}
+
 			Pallet::<T>::mutate_existing_pool(asset, |pool| {
 				if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
 					pool.remove_funds(&self.borrower_id, Some(amount_to_request))
@@ -1287,7 +1327,7 @@ impl<T: Config> GeneralLoan<T> {
 	pub fn settle(self, via_liquidation: bool) {
 		if self.owed_principal > 0 {
 			Pallet::<T>::mutate_existing_pool(self.asset, |pool| {
-				pool.write_off_unrecoverable_debt(self.owed_principal);
+				pool.write_off_unrecoverable_debt(self.owed_principal)
 			});
 		}
 
@@ -2105,13 +2145,136 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+/// A view of one asset's lending pool for the duration of a swap: what it can give up in total,
+/// and what each lender's supply-backed orders can draw on.
+///
+/// Working out what a lender has available means pricing its whole loan book, so that is done the
+/// first time one of its orders is reached and then kept — a swap walks past far more orders than
+/// it fills, and several of them may belong to the same lender. The shared [OraclePriceCache] means
+/// an asset is priced once however many lenders reference it.
+pub struct OrderBudget<T: Config> {
+	asset: Asset,
+	pool: LendingPool<T::AccountId>,
+	config: LendingConfiguration,
+	price_cache: OraclePriceCache<T>,
+	pool_liquidity: AssetAmount,
+	availability_cache: RefCell<BTreeMap<T::AccountId, AssetAmount>>,
+}
+
+impl<T: Config> OrderBudget<T> {
+	pub fn new(asset: Asset) -> Self {
+		let pool = GeneralLendingPools::<T>::get(asset).unwrap_or_else(LendingPool::new);
+
+		Self {
+			asset,
+			pool_liquidity: pool.available_amount,
+			pool,
+			config: LendingConfig::<T>::get(),
+			price_cache: OraclePriceCache::<T>::default(),
+			availability_cache: RefCell::new(BTreeMap::new()),
+		}
+	}
+
+	fn available(&self, lender: &T::AccountId) -> AssetAmount {
+		if let Some(available) = self.availability_cache.borrow().get(lender) {
+			return *available;
+		}
+
+		// Derived outside the borrow above: it reads storage and prices the loan book, and must
+		// not be holding the map while it does.
+		let available = self.derive_available(lender);
+		self.availability_cache.borrow_mut().insert(lender.clone(), available);
+
+		available
+	}
+
+	fn derive_available(&self, lender: &T::AccountId) -> AssetAmount {
+		let Some(committed) = self.pool.order_commitments.get(lender) else {
+			return 0;
+		};
+
+		let promised = self
+			.pool
+			.get_supply_position_for_account(lender)
+			.map(|position| core::cmp::min(*committed, position))
+			.unwrap_or_default();
+
+		core::cmp::min(
+			promised,
+			withdrawable_within_target_ltv::<T>(
+				lender,
+				self.asset,
+				&self.config,
+				&self.price_cache,
+			),
+		)
+	}
+}
+
+impl<T: Config> SupplyBudget<(T::AccountId, OrderId)> for OrderBudget<T> {
+	fn allocate<'a>(
+		&self,
+		claims: &[(&'a (T::AccountId, OrderId), Amount)],
+	) -> BTreeMap<&'a (T::AccountId, OrderId), Amount> {
+		allocate_per_account(claims, |lender| self.available(lender).into())
+	}
+
+	fn total_available(&self) -> Amount {
+		self.pool_liquidity.into()
+	}
+
+	fn take(&mut self, (lender, _id): &(T::AccountId, OrderId), amount: Amount) {
+		// Saturating rather than failing: the amount came out of the orders, which are bounded by
+		// what this budget reported in the first place.
+		let amount = amount.try_into().unwrap_or(AssetAmount::MAX);
+		// Selling out of the position takes from what secures the lender's loans as much as from
+		// what backs its orders, so what it has available comes down along with the pool's
+		// liquidity.
+		if let Some(available) = self.availability_cache.get_mut().get_mut(lender) {
+			*available = available.saturating_sub(amount);
+		}
+		self.pool_liquidity = self.pool_liquidity.saturating_sub(amount);
+	}
+}
+
+/// What `lender` could take out of `asset`'s pool without pushing its loans past the target LTV.
+/// Unbounded for a lender that has not borrowed.
+///
+/// Zero where that cannot be established: a stale or missing oracle price leaves no way to say
+/// what the withdrawal would do to the account, and a liquidation is already spending its
+/// collateral. The lender's orders are passed over rather than guessed at.
+fn withdrawable_within_target_ltv<T: Config>(
+	lender: &T::AccountId,
+	asset: Asset,
+	config: &LendingConfiguration,
+	price_cache: &OraclePriceCache<T>,
+) -> AssetAmount {
+	let Some(loan_account) = LoanAccounts::<T>::get(lender) else {
+		return AssetAmount::MAX;
+	};
+
+	if loan_account.liquidation_status != LiquidationStatus::NoLiquidation {
+		return 0;
+	}
+
+	match loan_account
+		.calculate_collateral_surplus_or_deficit(config.ltv_thresholds.target, price_cache)
+	{
+		Ok(SurplusOrDeficit::Surplus(surplus_usd)) =>
+			price_cache.amount_from_usd_value(asset, surplus_usd).unwrap_or_default(),
+		Ok(SurplusOrDeficit::Deficit) | Err(_) => 0,
+	}
+}
+
 pub fn is_zero_collateral(collateral: &BTreeMap<Asset, AssetAmount>) -> bool {
 	collateral.values().all(|amount| *amount == 0)
 }
 
 /// Returns the account's supply positions across all lending pools. Supply positions are
 /// treated as collateral, so they are reported for any account that has supplied funds,
-/// regardless of whether it has taken out a loan.
+/// regardless of whether it has taken out a loan. Supply promised to an open limit order is
+/// included: it is only paid out when the order fills, and until then it secures loans like the
+/// rest of the position.
 pub fn get_collateral_in_supply_pools<T: Config>(
 	account_id: &T::AccountId,
 ) -> BTreeMap<Asset, AssetAmount> {

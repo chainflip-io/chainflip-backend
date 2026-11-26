@@ -91,7 +91,24 @@ where
 		}
 	}
 
-	let lp_events = client.runtime_api().cf_lp_events(hash).map_err(CfApiError::from)?;
+	let lp_events = {
+		use sp_api::ApiExt;
+		let api = client.runtime_api();
+		let api_version = api
+			.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
+			.map_err(CfApiError::from)?
+			.unwrap_or_default();
+		if api_version < 22 {
+			#[expect(deprecated)]
+			api.cf_lp_events_before_version_22(hash)
+				.map_err(CfApiError::from)?
+				.into_iter()
+				.map(Into::into)
+				.collect()
+		} else {
+			api.cf_lp_events(hash).map_err(CfApiError::from)?
+		}
+	};
 
 	Ok(BlockUpdate::<OrderFills> {
 		block_hash: hash,

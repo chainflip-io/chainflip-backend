@@ -27,6 +27,7 @@ cf-primitives = { workspace = true }
 cf-chains = { workspace = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true }
+cf-amm = { workspace = true }
 cf-amm-math = { workspace = true }
 
 
@@ -49,6 +50,7 @@ cf-amm-math = { workspace = true, features = ["test"] }
 [features]
 default = ["std"]
 std = [
+	"cf-amm/std",
 	"cf-primitives/std",
 	"cf-traits/std",
 	"nanorand/std",

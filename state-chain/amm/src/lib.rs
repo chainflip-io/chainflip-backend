@@ -24,7 +24,7 @@ use cf_amm_math::{mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use common::{
 	nth_root_of_integer_as_fixed_point, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase,
-	SetFeesError, Side, SwapDirection, ONE_IN_HUNDREDTH_PIPS,
+	SetFeesError, Side, SupplyBudget, SwapDirection, ONE_IN_HUNDREDTH_PIPS,
 };
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
@@ -275,22 +275,27 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// the pool changed for the caller to roll back. It fills no more than
 	/// [limit_orders::MAX_FILLS_PER_SWAP] limit orders. The caller must pay out the returned fills.
 	///
+	/// `supply_budget` is how much of the bought asset the lending pool can give up to
+	/// supply-backed orders over this swap; orders it cannot fund are filtered out.
+	///
 	/// This function never panics.
 	pub fn swap(
 		&mut self,
 		order: Side,
 		sold_amount: Amount,
 		maximum_price_impact: Option<u32>,
+		supply_budget: &mut dyn SupplyBudget<LiquidityProvider>,
 	) -> Result<SwapExecutionOutcome<LiquidityProvider>, SwapError> {
 		let tick_before = self.current_price(order).map(|(_, _, tick)| tick);
 
 		// Do the swap
 		let quota = limit_orders::FillQuota::bounded();
-		let SwapReport { outcome, remaining_input_amount, excluded_limit_order_count } =
-			match order.to_sold_pair() {
-				Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, None, quota),
-				Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, None, quota),
-			};
+		let SwapReport { outcome, remaining_input_amount, excluded_limit_order_count } = match order
+			.to_sold_pair()
+		{
+			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, None, quota, supply_budget),
+			Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, None, quota, supply_budget),
+		};
 
 		// Error if the swap did not fully complete
 		if !remaining_input_amount.is_zero() {
@@ -348,12 +353,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		sold_amount: Amount,
 		sqrt_price_limit: SqrtPrice,
+		supply_budget: &mut dyn SupplyBudget<LiquidityProvider>,
 	) -> (SwapExecutionOutcome<LiquidityProvider>, Amount) {
 		let quota = limit_orders::FillQuota::Unlimited;
 		let limit = Some(sqrt_price_limit);
 		let SwapReport { outcome, remaining_input_amount, .. } = match order.to_sold_pair() {
-			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, limit, quota),
-			Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, limit, quota),
+			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, limit, quota, supply_budget),
+			Pairs::Quote =>
+				self.inner_swap::<QuoteToBase>(sold_amount, limit, quota, supply_budget),
 		};
 		(outcome, remaining_input_amount)
 	}
@@ -365,6 +372,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPrice>,
 		quota: limit_orders::FillQuota,
+		supply_budget: &mut dyn SupplyBudget<LiquidityProvider>,
 	) -> SwapReport<LiquidityProvider> {
 		let mut total_output_amount = Amount::zero();
 
@@ -429,6 +437,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 								Some(range_orders_sqrt_price),
 								range_orders_fee,
 								&mut progress,
+								supply_budget,
 							)
 						}
 					},
@@ -437,6 +446,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						sqrt_price_limit,
 						range_orders_fee,
 						&mut progress,
+						supply_budget,
 					),
 					(None, Some(_)) => self.swap_range_orders::<SD>(amount, sqrt_price_limit),
 					(None, None) => break,
@@ -473,6 +483,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		sqrt_price_limit: Option<SqrtPrice>,
 		range_orders_fee: u32,
 		progress: &mut LimitOrderExecutionProgress<LiquidityProvider>,
+		supply_budget: &mut dyn SupplyBudget<LiquidityProvider>,
 	) -> (Amount, Amount, Option<SqrtPrice>) {
 		let limit_orders::SwapOutcome {
 			report: SwapReport { outcome, remaining_input_amount, excluded_limit_order_count },
@@ -483,6 +494,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			range_orders_fee,
 			&mut progress.quota,
 			progress.best_sqrt_price,
+			supply_budget,
 		);
 
 		progress.best_sqrt_price = next_fillable_sqrt_price;
@@ -519,10 +531,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
+		backing: limit_orders::Backing,
 	) -> Result<limit_orders::Position, limit_orders::PositionError> {
 		match order.to_sold_pair() {
-			Pairs::Base => self.limit_orders.mint::<QuoteToBase>(lp, tick, sold_amount),
-			Pairs::Quote => self.limit_orders.mint::<BaseToQuote>(lp, tick, sold_amount),
+			Pairs::Base => self.limit_orders.mint::<QuoteToBase>(lp, tick, sold_amount, backing),
+			Pairs::Quote => self.limit_orders.mint::<BaseToQuote>(lp, tick, sold_amount, backing),
 		}
 	}
 

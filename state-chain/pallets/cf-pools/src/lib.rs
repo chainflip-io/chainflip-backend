@@ -18,7 +18,7 @@
 
 use cf_amm::{
 	common::{AskBidMap, AssetPair, LimitOrder, PoolPairsMap, Side},
-	limit_orders::{self, Position},
+	limit_orders::{self, Backing, Position},
 	math::{Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
 	PoolState,
@@ -28,7 +28,7 @@ use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASS
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
-	DeregistrationHooks, LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
+	DeregistrationHooks, LendingOrderApi, LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
 use cf_utilities::select::Select;
 use sp_runtime::Saturating;
@@ -103,8 +103,16 @@ struct LimitOrderUpdate<T: Config> {
 
 #[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 enum LimitOrderUpdateDetails<BlockNumber: sp_std::fmt::Debug> {
-	Update { option_tick: Option<Tick>, amount_change: IncreaseOrDecrease<AssetAmount> },
-	Set { option_tick: Option<Tick>, sell_amount: AssetAmount, close_order_at: Option<BlockNumber> },
+	Update {
+		option_tick: Option<Tick>,
+		amount_change: IncreaseOrDecrease<AssetAmount>,
+	},
+	Set {
+		option_tick: Option<Tick>,
+		sell_amount: AssetAmount,
+		close_order_at: Option<BlockNumber>,
+		backing: Option<Backing>,
+	},
 	Close,
 }
 
@@ -124,7 +132,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 
 	pub fn dispatch(self) -> (Weight, DispatchResult) {
 		let (weight, result) = match self.details {
-			LimitOrderUpdateDetails::Set { option_tick, sell_amount, close_order_at } => {
+			LimitOrderUpdateDetails::Set { option_tick, sell_amount, close_order_at, backing } => {
 				let result = Pallet::<T>::set_limit_order(
 					OriginTrait::signed(self.lp.clone()),
 					self.base_asset,
@@ -135,6 +143,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 					sell_amount,
 					None, // Dispatch now
 					close_order_at,
+					backing,
 				);
 				(T::WeightInfo::set_limit_order(), result)
 			},
@@ -391,6 +400,9 @@ pub mod pallet {
 
 		type SwapRequestHandler: SwapRequestHandler;
 
+		/// Lending supply pools, used to fund supply-backed limit orders.
+		type Lending: LendingOrderApi<AccountId = Self::AccountId>;
+
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
 
@@ -512,6 +524,9 @@ pub mod pallet {
 		PriceImpactLimitExceeded,
 		/// The swap could not be filled because it reached the max number of order fills.
 		MaxFillsExceeded,
+		/// The order already exists with a different backing. An order keeps what it was opened
+		/// with; close it and open a new one to change it.
+		OrderBackingMismatch,
 	}
 
 	#[pallet::event]
@@ -552,6 +567,8 @@ pub mod pallet {
 			// backwards compatibility. They will always be 0.
 			collected_fees: AssetAmount,
 			bought_amount: AssetAmount,
+			/// What provides the order's liquidity.
+			backing: Backing,
 		},
 		AssetSwapped {
 			from: Asset,
@@ -874,6 +891,13 @@ pub mod pallet {
 		/// two limit orders with the same order_id in the same pool, one to buy Eth and one to sell
 		/// Eth for example.
 		/// `dispatch_at` specifies the block at which to schedule the update.
+		///
+		/// `backing` is what provides the order's liquidity. [Backing::LendingSupply] promises
+		/// `sell_amount` of the LP's existing supply position in the sold asset's lending pool
+		/// rather than debiting its balance: it keeps earning interest and securing loans until the
+		/// order fills, and a swap can only buy into the order as far as that pool has liquidity
+		/// and the LP's loans leave room. `None` keeps an existing order's backing, and opens a new
+		/// one as [Backing::Pool]. An existing order cannot change its backing.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_limit_order())]
 		pub fn set_limit_order(
@@ -886,6 +910,7 @@ pub mod pallet {
 			sell_amount: AssetAmount,
 			dispatch_at: Option<BlockNumberFor<T>>,
 			close_order_at: Option<BlockNumberFor<T>>,
+			backing: Option<Backing>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().limit_order_update_enabled,
@@ -909,6 +934,7 @@ pub mod pallet {
 						option_tick,
 						sell_amount,
 						close_order_at,
+						backing,
 					},
 				}
 				.schedule_or_dispatch(Some(dispatch_at))?;
@@ -921,6 +947,7 @@ pub mod pallet {
 					id,
 					option_tick,
 					sell_amount,
+					backing,
 				)?;
 
 				if let Some(close_order_at) = close_order_at {
@@ -1046,7 +1073,7 @@ pub mod pallet {
 										side,
 										id,
 										previous_tick,
-										IncreaseOrDecrease::Decrease(Amount::MAX),
+										LimitOrderChange::close(),
 										NoOpStatus::Allow,
 									)?;
 									Ok(())
@@ -1131,6 +1158,10 @@ impl<T: Config> SwappingApi for Pallet<T> {
 			} else {
 				let input_amount: Amount = input_amount.into();
 
+				// Supply-backed orders sell out of the lending pool, so the swap can only buy into
+				// them as far as that pool has liquidity and their own LP still has backing them.
+				let mut supply_budget = T::Lending::order_budget(to);
+
 				let cf_amm::SwapExecutionOutcome {
 					output_amount,
 					limit_order_fills,
@@ -1138,7 +1169,12 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					..
 				} = pool
 					.pool_state
-					.swap(side, input_amount, MaximumPriceImpact::<T>::get(asset_pair))
+					.swap(
+						side,
+						input_amount,
+						MaximumPriceImpact::<T>::get(asset_pair),
+						&mut supply_budget,
+					)
 					.map_err(|error| match error {
 						cf_amm::SwapError::InsufficientLiquidity =>
 							Error::<T>::InsufficientLiquidity,
@@ -1200,13 +1236,24 @@ impl<T: Config> PoolApi for Pallet<T> {
 				Ok(orders) => orders,
 				Err(_) => continue,
 			};
-			for ask in pool_orders.limit_orders.asks {
-				result[base_asset] = result[base_asset]
-					.saturating_add(ask.sell_amount.saturated_into::<AssetAmount>());
-			}
-			for bid in pool_orders.limit_orders.bids {
-				result[Asset::Usdc] = result[Asset::Usdc]
-					.saturating_add(bid.sell_amount.saturated_into::<AssetAmount>());
+			// Supply-backed orders are left out: their liquidity is still in the lending pool, and
+			// is accounted for there.
+			if let Some((asset_pair, pool)) = asset_pair_try_from::<T>(base_asset, Asset::Usdc)
+				.ok()
+				.and_then(|asset_pair| Some((asset_pair, Pools::<T>::get(asset_pair)?)))
+			{
+				for (sold_pair, cache) in pool.limit_orders_cache.as_ref() {
+					let sold_asset = asset_pair.assets()[sold_pair];
+					for (id, tick) in cache.get(who).into_iter().flatten() {
+						if let Some(Position { amount, backing: Backing::Pool, .. }) = pool
+							.pool_state
+							.limit_order(&(who.clone(), *id), sold_pair.sell_order(), *tick)
+						{
+							result[sold_asset] = result[sold_asset]
+								.saturating_add(amount.saturated_into::<AssetAmount>());
+						}
+					}
+				}
 			}
 			for range_order in pool_orders.range_orders {
 				let pair = Self::pool_range_order_liquidity_value(
@@ -1230,38 +1277,14 @@ impl<T: Config> PoolApi for Pallet<T> {
 	}
 
 	fn cancel_all_limit_orders(account: &Self::AccountId) -> DispatchResult {
-		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation).
-		// Note that we read one pool at a time to optimise memory usage.
-		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
-			let mut pool = Pools::<T>::get(asset_pair).unwrap();
+		Self::cancel_limit_orders(account, None)
+	}
 
-			for (asset, orders) in pool
-				.limit_orders_cache
-				.as_ref()
-				.into_iter()
-				.filter_map(|(asset, cache)| {
-					cache.get(account).cloned().map(|orders| (asset, orders))
-				})
-				.collect::<Vec<_>>()
-			{
-				for (id, tick) in orders {
-					Self::inner_update_limit_order_at_tick(
-						&mut pool,
-						account,
-						&asset_pair,
-						asset.sell_order(),
-						id,
-						tick,
-						IncreaseOrDecrease::Decrease(Amount::MAX),
-						crate::NoOpStatus::Allow,
-					)?;
-				}
-			}
-
-			Pools::<T>::insert(asset_pair, pool);
-		}
-
-		Ok(())
+	fn cancel_supply_backed_limit_orders(
+		account: &Self::AccountId,
+		asset: Asset,
+	) -> DispatchResult {
+		Self::cancel_limit_orders(account, Some(asset))
 	}
 
 	fn update_limit_order(
@@ -1542,6 +1565,19 @@ enum NoOpStatus {
 	Error,
 }
 
+/// A change to the size of a limit order. Only an increase says what backs the order: a decrease
+/// draws on whatever backing the order already has.
+enum LimitOrderChange {
+	Increase { amount: Amount, backing: Backing },
+	Decrease(Amount),
+}
+
+impl LimitOrderChange {
+	fn close() -> Self {
+		Self::Decrease(Amount::MAX)
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	fn create_pool(
 		base_asset: any::Asset,
@@ -1627,9 +1663,13 @@ impl<T: Config> Pallet<T> {
 		id: OrderId,
 		tick: Tick,
 		sold_amount: Amount,
+		backing: Backing,
 		noop_status: NoOpStatus,
 	) -> Result<Position, DispatchError> {
-		match pool.pool_state.mint_limit_order(&(lp.clone(), id), side, tick, sold_amount) {
+		match pool
+			.pool_state
+			.mint_limit_order(&(lp.clone(), id), side, tick, sold_amount, backing)
+		{
 			Ok(ok) => Ok(ok),
 			Err(error) => Err(match error {
 				limit_orders::PositionError::NonExistent =>
@@ -1639,6 +1679,7 @@ impl<T: Config> Pallet<T> {
 						Error::<T>::OrderDoesNotExist
 					},
 				limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
+				limit_orders::PositionError::BackingMismatch => Error::<T>::OrderBackingMismatch,
 			}
 			.into()),
 		}
@@ -1707,19 +1748,31 @@ impl<T: Config> Pallet<T> {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
+		backing: Option<Backing>,
 	) -> DispatchResult {
 		ensure!(
 			T::SafeMode::get().limit_order_update_enabled,
 			Error::<T>::UpdatingLimitOrdersDisabled
 		);
 		Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
-			let tick = match (
-				pool.limit_orders_cache[side.to_sold_pair()]
-					.get(lp)
-					.and_then(|limit_orders| limit_orders.get(&id))
-					.copied(),
-				option_tick,
-			) {
+			let existing_tick = pool.limit_orders_cache[side.to_sold_pair()]
+				.get(lp)
+				.and_then(|limit_orders| limit_orders.get(&id))
+				.copied();
+			// An order keeps what it was opened with, so that funding sources never mix within one
+			// order.
+			let backing = match (existing_tick, backing) {
+				(Some(tick), backing) => {
+					let current = Self::backing_of(pool, lp, side, id, tick);
+					ensure!(
+						backing.is_none_or(|backing| backing == current),
+						Error::<T>::OrderBackingMismatch
+					);
+					current
+				},
+				(None, backing) => backing.unwrap_or_default(),
+			};
+			let tick = match (existing_tick, option_tick) {
 				(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 				(None, Some(tick)) => Ok(tick),
 				(Some(previous_tick), option_new_tick) => {
@@ -1730,7 +1783,7 @@ impl<T: Config> Pallet<T> {
 						side,
 						id,
 						previous_tick,
-						IncreaseOrDecrease::Decrease(Amount::MAX),
+						LimitOrderChange::close(),
 						NoOpStatus::Error,
 					)?;
 
@@ -1744,7 +1797,7 @@ impl<T: Config> Pallet<T> {
 				side,
 				id,
 				tick,
-				IncreaseOrDecrease::Increase(sell_amount.into()),
+				LimitOrderChange::Increase { amount: sell_amount.into(), backing },
 				NoOpStatus::Allow,
 			)?;
 
@@ -1774,6 +1827,9 @@ impl<T: Config> Pallet<T> {
 				.get(lp)
 				.and_then(|limit_orders| limit_orders.get(&id))
 				.copied();
+			let backing = existing_tick
+				.map(|tick| Self::backing_of(pool, lp, side, id, tick))
+				.unwrap_or_default();
 
 			let tick = match (existing_tick, option_tick) {
 				(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
@@ -1787,7 +1843,7 @@ impl<T: Config> Pallet<T> {
 							side,
 							id,
 							previous_tick,
-							IncreaseOrDecrease::Decrease(Amount::MAX),
+							LimitOrderChange::close(),
 							NoOpStatus::Error,
 						)?;
 						Self::inner_update_limit_order_at_tick(
@@ -1797,7 +1853,10 @@ impl<T: Config> Pallet<T> {
 							side,
 							id,
 							new_tick,
-							IncreaseOrDecrease::Increase(withdrawn_asset_amount.into()),
+							LimitOrderChange::Increase {
+								amount: withdrawn_asset_amount.into(),
+								backing,
+							},
 							NoOpStatus::Allow,
 						)?;
 					}
@@ -1812,7 +1871,12 @@ impl<T: Config> Pallet<T> {
 				side,
 				id,
 				tick,
-				amount_change.map(|amount| amount.into()),
+				match amount_change {
+					IncreaseOrDecrease::Increase(amount) =>
+						LimitOrderChange::Increase { amount: amount.into(), backing },
+					IncreaseOrDecrease::Decrease(amount) =>
+						LimitOrderChange::Decrease(amount.into()),
+				},
 				NoOpStatus::Error,
 			)?;
 			Self::ensure_min_limit_order_amount(base_asset, quote_asset, side, remaining_amount)?;
@@ -1832,11 +1896,13 @@ impl<T: Config> Pallet<T> {
 		side: Side,
 		id: OrderId,
 		tick: Tick,
-		sold_amount_change: IncreaseOrDecrease<Amount>,
+		change: LimitOrderChange,
 		noop_status: NoOpStatus,
 	) -> Result<(AssetAmount, AssetAmount), DispatchError> {
-		let (sold_amount_change, position_info) = match sold_amount_change {
-			IncreaseOrDecrease::Increase(sold_amount) => {
+		let sold_asset = asset_pair.assets()[side.to_sold_pair()];
+
+		let (sold_amount_change, position_info) = match change {
+			LimitOrderChange::Increase { amount: sold_amount, backing } => {
 				let position_info = Self::mint_limit_order_with_dispatch_error(
 					pool,
 					lp,
@@ -1844,19 +1910,20 @@ impl<T: Config> Pallet<T> {
 					id,
 					tick,
 					sold_amount,
+					backing,
 					noop_status,
 				)?;
 
 				let debited_amount: AssetAmount = sold_amount.try_into()?;
-				T::LpBalance::try_debit_account(
-					lp,
-					asset_pair.assets()[side.to_sold_pair()],
-					debited_amount,
-				)?;
+				if backing == Backing::LendingSupply {
+					T::Lending::commit_supply_to_order(lp, sold_asset, debited_amount)?;
+				} else {
+					T::LpBalance::try_debit_account(lp, sold_asset, debited_amount)?;
+				}
 
 				(IncreaseOrDecrease::Increase(debited_amount), position_info)
 			},
-			IncreaseOrDecrease::Decrease(sold_amount) => {
+			LimitOrderChange::Decrease(sold_amount) => {
 				let (sold_amount, position_info) = match pool.pool_state.burn_limit_order(
 					&(lp.clone(), id),
 					side,
@@ -1872,15 +1939,16 @@ impl<T: Config> Pallet<T> {
 								Error::<T>::OrderDoesNotExist
 							},
 						limit_orders::PositionError::InvalidTick => Error::InvalidTick,
+						limit_orders::PositionError::BackingMismatch => Error::OrderBackingMismatch,
 					}),
 				}?;
 
 				let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
-				T::LpBalance::credit_account(
-					lp,
-					asset_pair.assets()[side.to_sold_pair()],
-					withdrawn_amount,
-				);
+				if position_info.backing == Backing::LendingSupply {
+					T::Lending::release_order_commitment(lp, sold_asset, withdrawn_amount);
+				} else {
+					T::LpBalance::credit_account(lp, sold_asset, withdrawn_amount);
+				}
 
 				(IncreaseOrDecrease::Decrease(withdrawn_amount), position_info)
 			},
@@ -1900,6 +1968,7 @@ impl<T: Config> Pallet<T> {
 				sell_amount_total: position_info.amount.try_into()?,
 				collected_fees: 0,
 				bought_amount: 0,
+				backing: position_info.backing,
 			});
 		}
 
@@ -2086,6 +2155,7 @@ impl<T: Config> Pallet<T> {
 				id,
 				tick,
 				sell_amount,
+				Backing::Pool,
 				NoOpStatus::Error,
 			)?;
 
@@ -2178,6 +2248,12 @@ impl<T: Config> Pallet<T> {
 		// drain pool (so the calculated amounts here are guaranteed to reflect the accurate
 		// maximum_bough_amounts)
 
+		// The book shows what a swap could actually take, so supply-backed orders count only as
+		// far as their lending pool could fund them. Each side is bounded by the asset its orders
+		// sell.
+		let mut base_supply_budget = T::Lending::order_budget(base_asset);
+		let mut quote_supply_budget = T::Lending::order_budget(quote_asset);
+
 		Ok(PoolOrderbook {
 			asks: {
 				let mut pool_state = pool_state.clone();
@@ -2191,7 +2267,12 @@ impl<T: Config> Pallet<T> {
 								output_amount: sold_base_amount, ..
 							},
 							remaining_quote_amount,
-						) = pool_state.swap_to_price(Side::Buy, Amount::MAX, sqrt_price);
+						) = pool_state.swap_to_price(
+							Side::Buy,
+							Amount::MAX,
+							sqrt_price,
+							&mut base_supply_budget,
+						);
 
 						let bought_quote_amount = Amount::MAX - remaining_quote_amount;
 
@@ -2221,7 +2302,12 @@ impl<T: Config> Pallet<T> {
 								output_amount: sold_quote_amount, ..
 							},
 							remaining_base_amount,
-						) = pool_state.swap_to_price(Side::Sell, Amount::MAX, sqrt_price);
+						) = pool_state.swap_to_price(
+							Side::Sell,
+							Amount::MAX,
+							sqrt_price,
+							&mut quote_supply_budget,
+						);
 
 						let bought_base_amount = Amount::MAX - remaining_base_amount;
 
@@ -2443,6 +2529,7 @@ impl<T: Config> Pallet<T> {
 		let sold_pair = !swap_side.to_sold_pair();
 		let order_side = sold_pair.sell_order();
 		let bought_asset = asset_pair.assets()[!sold_pair];
+		let sold_asset = asset_pair.assets()[sold_pair];
 
 		for limit_orders::Fill {
 			lp: (lp, id),
@@ -2450,9 +2537,20 @@ impl<T: Config> Pallet<T> {
 			sold_amount,
 			bought_amount,
 			remaining_amount,
+			backing,
 		} in fills
 		{
 			let bought_amount: AssetAmount = bought_amount.try_into()?;
+
+			// A supply-backed order sells out of its lending position, so what the swap bought
+			// has to leave the lending pool. The proceeds are paid to the LP either way.
+			//
+			// The budget the swap was bounded by is read from the same state, so this should
+			// always be covered; failing the whole swap is the safe way to be wrong, since the
+			// alternative is paying out an asset the pool does not hold.
+			if backing == Backing::LendingSupply {
+				T::Lending::withdraw_for_order_fill(&lp, sold_asset, sold_amount.try_into()?)?;
+			}
 
 			if !bought_amount.is_zero() {
 				T::LpBalance::try_credit_account(&lp, bought_asset, bought_amount)?;
@@ -2508,6 +2606,73 @@ impl<T: Config> Pallet<T> {
 		} else {
 			limit_orders.entry(lp.clone()).or_default().insert(id, tick);
 		}
+	}
+
+	/// Closes the account's limit orders: all of them, or with `only_supply_backed_in` only the
+	/// supply-backed ones selling that asset.
+	fn cancel_limit_orders(
+		account: &T::AccountId,
+		only_supply_backed_in: Option<Asset>,
+	) -> DispatchResult {
+		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation).
+		// Note that we read one pool at a time to optimise memory usage.
+		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
+			let Some(mut pool) = Pools::<T>::get(asset_pair) else { continue };
+
+			let to_cancel = pool
+				.limit_orders_cache
+				.as_ref()
+				.into_iter()
+				.filter_map(|(sold_pair, cache)| {
+					cache.get(account).map(|orders| (sold_pair, orders.clone()))
+				})
+				.flat_map(|(sold_pair, orders)| {
+					orders.into_iter().map(move |(id, tick)| (sold_pair, id, tick))
+				})
+				.filter(|(sold_pair, id, tick)| {
+					only_supply_backed_in.is_none_or(|asset| {
+						asset_pair.assets()[*sold_pair] == asset &&
+							Self::backing_of(&pool, account, sold_pair.sell_order(), *id, *tick) ==
+								Backing::LendingSupply
+					})
+				})
+				.collect::<Vec<_>>();
+
+			if to_cancel.is_empty() {
+				continue;
+			}
+
+			for (sold_pair, id, tick) in to_cancel {
+				Self::inner_update_limit_order_at_tick(
+					&mut pool,
+					account,
+					&asset_pair,
+					sold_pair.sell_order(),
+					id,
+					tick,
+					LimitOrderChange::close(),
+					crate::NoOpStatus::Allow,
+				)?;
+			}
+
+			Pools::<T>::insert(asset_pair, pool);
+		}
+
+		Ok(())
+	}
+
+	/// What provides the liquidity of the order at `tick`.
+	fn backing_of(
+		pool: &Pool<T>,
+		lp: &T::AccountId,
+		side: Side,
+		id: OrderId,
+		tick: Tick,
+	) -> Backing {
+		pool.pool_state
+			.limit_order(&(lp.clone(), id), side, tick)
+			.map(|position| position.backing)
+			.unwrap_or_default()
 	}
 }
 
@@ -2569,7 +2734,7 @@ impl<T: Config> cf_traits::PoolOrdersManager for Pallet<T> {
 							sold_pair.sell_order(),
 							*order_id,
 							*previous_tick,
-							IncreaseOrDecrease::Decrease(Amount::MAX),
+							LimitOrderChange::close(),
 							NoOpStatus::Allow,
 						)?;
 					}

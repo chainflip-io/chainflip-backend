@@ -527,6 +527,7 @@ where
 						sell_amount: try_parse_number_or_hex(sell_amount)?,
 						close_order_at,
 						dispatch_at,
+						backing: None,
 					}),
 					wait_for.unwrap_or_default(),
 					false,
